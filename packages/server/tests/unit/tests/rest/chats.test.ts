@@ -452,6 +452,37 @@ describe('Chats', () => {
       expect(response.status).toBe(400);
       expect(response.body.error).toBeDefined();
     });
+
+    test('user without chats:CreateChatCompletion returns 403', async () => {
+      // A stateless completion is authorized against the AI provider's own
+      // project — the only project such a call belongs to. Before this gate the
+      // route ran on `requireAuth` alone, so the declared action was never
+      // enforced on this branch.
+      const response = await authenticatedTestClient(noPermToken)
+        .post('/api/v1/chat/completions')
+        .send({
+          ai_provider_id: aiProviderId,
+          messages: [{ role: 'user', content: 'Hello' }],
+        });
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('FORBIDDEN');
+    });
+
+    test('user without chats:CreateChatCompletion returns 403 when streaming', async () => {
+      // The gate runs before the SSE headers are written, so the caller gets a
+      // JSON 403 rather than an error frame inside a 200 stream.
+      const response = await authenticatedTestClient(noPermToken)
+        .post('/api/v1/chat/completions')
+        .send({
+          ai_provider_id: aiProviderId,
+          messages: [{ role: 'user', content: 'Hello' }],
+          stream: true,
+        });
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('FORBIDDEN');
+    });
   });
 
   describe('POST /api/v1/chat/completions - chat_id with mocked AI', () => {

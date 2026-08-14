@@ -1,6 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import { getAiProvider } from 'src/lib/aiProviders';
 import type { ChatMessageInput, MappedChat } from 'src/lib/chats';
 import {
   createChat,
@@ -16,7 +17,9 @@ import { buildSrn } from 'src/lib/iam';
 
 import {
   parsePagination,
+  type ProjectOwned,
   requireAuth,
+  requireProjectAccess,
   resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
@@ -161,6 +164,46 @@ chatsRouter.delete('/chats/:chat_id', async (ctx: Context) => {
 });
 
 /**
+ * Authorizes a stateless completion.
+ *
+ * Such a call belongs to no chat, so it is checked against the AI provider's
+ * own project — the only project it has. Until #998 this branch ran on
+ * `requireAuth` alone: `chats:CreateChatCompletion` was declared in the
+ * permission catalog and enforced for `chat_id`, but any authenticated
+ * principal could complete against any provider it could name.
+ *
+ * The provider is loaded first so an unknown `ai_provider_id` keeps answering
+ * `404`, as it did when the lib raised it after the (absent) permission check.
+ */
+const requireStatelessCompletionAccess = async (args: {
+  ctx: Context;
+  aiProviderId: string;
+}): Promise<void> => {
+  const provider: ProjectOwned | null = await getAiProvider({
+    id: args.aiProviderId,
+  });
+
+  if (!provider) {
+    throw new DomainError('RESOURCE_NOT_FOUND', 'AI provider not found');
+  }
+
+  // A provider whose project cannot be resolved is not authorizable against
+  // one. Passing the `undefined` through would read as "no project named" and
+  // fall back to the caller's entire scope — the #801 widening, in the one
+  // place it would be least visible.
+  if (!provider.project_id) {
+    throw new DomainError('FORBIDDEN', 'Forbidden');
+  }
+
+  await requireProjectAccess({
+    ctx: args.ctx,
+    projectPublicId: provider.project_id,
+    action: 'chats:CreateChatCompletion',
+    resourceType: 'chat',
+  });
+};
+
+/**
  * Parses the wire `messages` array into lib inputs, expanding the `document_id`
  * form into the internal `documentId` one.
  */
@@ -258,10 +301,12 @@ chatsRouter.post('/chat/completions', async (ctx: Context) => {
     throw new DomainError('VALIDATION_FAILED', targetError);
   }
 
-  // An unknown chat_id is left to the lib, which already produces the
-  // established 400 / SSE-error behavior for a missing chat. Only a chat that
-  // exists is permission-checked.
+  // Both targets are gated on the same action, each against the project the
+  // call belongs to.
   if (chatId) {
+    // An unknown chat_id is left to the lib, which already produces the
+    // established 400 / SSE-error behavior for a missing chat. Only a chat that
+    // exists is permission-checked.
     const chat = await findChat({ id: chatId });
     if (
       chat &&
@@ -269,6 +314,11 @@ chatsRouter.post('/chat/completions', async (ctx: Context) => {
     ) {
       return;
     }
+  } else {
+    await requireStatelessCompletionAccess({
+      ctx,
+      aiProviderId: aiProviderId as string,
+    });
   }
 
   if (stream) {

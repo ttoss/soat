@@ -301,7 +301,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: Forbidden — no permission on the chat named by `chat_id`
+          description: >-
+            Forbidden — the caller lacks `chats:CreateChatCompletion` on the
+            project the call belongs to: the chat's project for `chat_id`, the
+            AI provider's project for `ai_provider_id`.
           content:
             application/json:
               schema:
