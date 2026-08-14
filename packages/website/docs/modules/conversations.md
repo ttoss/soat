@@ -146,7 +146,7 @@ A conversation transitions between `open` and `closed`. Use `PATCH /conversation
 soat create-conversation --project-id proj_ABC --name "Support Thread"
 soat add-conversation-message \
   --conversation-id conv_01 \
-  --content "Hello, I need help." \
+  --message "Hello, I need help." \
   --role user
 ```
 

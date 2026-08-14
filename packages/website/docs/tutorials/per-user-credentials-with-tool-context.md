@@ -592,7 +592,7 @@ let finished;
 do {
   await new Promise((r) => setTimeout(r, 1000));
   ({ data: finished } = await adminSoat.orchestrations.getOrchestrationRun({
-    path: { orchestration_id: ORCHESTRATION_ID, orchestration_run_id: RUN_ID },
+    path: { orchestration_run_id: RUN_ID },
   }));
 } while (!['succeeded', 'failed'].includes(finished.status));
 console.log(finished.status); // "succeeded"

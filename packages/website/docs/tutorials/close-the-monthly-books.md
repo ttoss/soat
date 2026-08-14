@@ -581,12 +581,12 @@ CLEAN_RUN_ID=$(soat start-orchestration-run \
 echo "CLEAN_RUN_ID: $CLEAN_RUN_ID"
 
 # → retry 60
-soat get-orchestration-run --orchestration-id "$CLOSE_ORCH_ID" --orchestration-run-id "$CLEAN_RUN_ID" | jq -e '.status == "succeeded"'
+soat get-orchestration-run --orchestration-run-id "$CLEAN_RUN_ID" | jq -e '.status == "succeeded"'
 
-soat get-orchestration-run --orchestration-id "$CLOSE_ORCH_ID" --orchestration-run-id "$CLEAN_RUN_ID" \
+soat get-orchestration-run --orchestration-run-id "$CLEAN_RUN_ID" \
   | jq '{status, total_variance: .state.total_variance, close_note: .state.close_note}'
 
-soat get-orchestration-run --orchestration-id "$CLOSE_ORCH_ID" --orchestration-run-id "$CLEAN_RUN_ID" \
+soat get-orchestration-run --orchestration-run-id "$CLEAN_RUN_ID" \
   | jq '[.node_executions[] | {node_id, status}]'
 ```
 
@@ -695,16 +695,16 @@ echo "EXCEPTION_RUN_ID: $EXCEPTION_RUN_ID"
 
 # This path calls the model, so it settles more slowly than the clean run.
 # → retry 120
-soat get-orchestration-run --orchestration-id "$CLOSE_ORCH_ID" --orchestration-run-id "$EXCEPTION_RUN_ID" | jq -e '.status == "succeeded"'
+soat get-orchestration-run --orchestration-run-id "$EXCEPTION_RUN_ID" | jq -e '.status == "succeeded"'
 
-soat get-orchestration-run --orchestration-id "$CLOSE_ORCH_ID" --orchestration-run-id "$EXCEPTION_RUN_ID" \
+soat get-orchestration-run --orchestration-run-id "$EXCEPTION_RUN_ID" \
   | jq '{status, bank_variance: .state.bank_variance, total_variance: .state.total_variance}'
 
 # The memo is free text from the model — its wording varies, its presence does not.
-soat get-orchestration-run --orchestration-id "$CLOSE_ORCH_ID" --orchestration-run-id "$EXCEPTION_RUN_ID" \
+soat get-orchestration-run --orchestration-run-id "$EXCEPTION_RUN_ID" \
   | jq -r '.state.memo'
 
-EXCEPTION_VARIANCE=$(soat get-orchestration-run --orchestration-id "$CLOSE_ORCH_ID" --orchestration-run-id "$EXCEPTION_RUN_ID" | jq -r '.state.total_variance')
+EXCEPTION_VARIANCE=$(soat get-orchestration-run --orchestration-run-id "$EXCEPTION_RUN_ID" | jq -r '.state.total_variance')
 echo "EXCEPTION_VARIANCE: $EXCEPTION_VARIANCE"
 ```
 

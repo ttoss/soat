@@ -425,7 +425,7 @@ The application supplies the `context.*` values guards evaluate over. If the gua
 ```bash
 soat create-agent-generation --wait true \
   --agent-id agent_01 \
-  --prompt "Raise the campaign budget to 450" \
+  --messages '[{"role":"user","content":"Raise the campaign budget to 450"}]' \
   --guardrail-context '{"max_daily_budget": 500, "cost_ceiling": 1000}'
 ```
 

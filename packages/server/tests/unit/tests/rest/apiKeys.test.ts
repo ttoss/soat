@@ -118,8 +118,43 @@ describe('API Keys', () => {
       expect(response.body.key_prefix).toBe(response.body.key.slice(0, 8));
       expect(response.body.created_at).toBeDefined();
       expect(response.body.updated_at).toBeDefined();
-      // raw key is only returned at creation — no user_id/project_id/policy_ids in create response
-      expect(response.body.user_id).toBeUndefined();
+      expect(response.body.user_id).toBe(aliceId);
+      expect(response.body.project_id).toBe(projectId);
+      expect(response.body.policy_ids).toEqual([policyId]);
+    });
+
+    /**
+     * The create response is the only one that ever carries the raw key, so it
+     * is the only chance a caller has to confirm the blast radius of the
+     * credential it just minted. An absent `project_id` is `undefined`, which a
+     * caller cannot distinguish from the `null` that means "unscoped, spans
+     * every project the owner can reach" — the failure direction reads as less
+     * confinement than reality.
+     *
+     * The spec has always promised these fields: the 201 is `ApiKeyCreated`,
+     * which is `allOf[ApiKeyRecord, {key}]`, and `ApiKeyRecord` declares
+     * `user_id` / `project_id` / `policy_ids`. `GET` and `LIST` return them;
+     * only create omitted them, because it spread the 5-field base mapper.
+     */
+    test('a scoped key reports its scope on the create response', async () => {
+      const response = await authenticatedTestClient(aliceToken)
+        .post('/api/v1/api-keys')
+        .send({ name: 'Scope Echo Key', project_id: projectId });
+
+      expect(response.status).toBe(201);
+      expect(response.body.project_id).toBe(projectId);
+      expect(response.body.user_id).toBe(aliceId);
+      expect(response.body.policy_ids).toEqual([]);
+    });
+
+    test('an unscoped key reports a null project_id on create, not an absent one', async () => {
+      const response = await authenticatedTestClient(aliceToken)
+        .post('/api/v1/api-keys')
+        .send({ name: 'Unscoped Echo Key' });
+
+      expect(response.status).toBe(201);
+      expect(response.body).toHaveProperty('project_id');
+      expect(response.body.project_id).toBeNull();
     });
 
     test('user can create a minimal API key with just name and project', async () => {

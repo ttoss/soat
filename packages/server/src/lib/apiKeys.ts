@@ -76,8 +76,21 @@ export const createApiKey = async (args: {
     keyHash,
   });
 
+  /* The spec's `ApiKeyCreated` is `allOf[ApiKeyRecord, {key}]`, so create owes
+   * the same scope fields `GET`/`LIST` return — and it is the only response that
+   * ever carries the raw key, so it is the only chance the caller has to confirm
+   * what it just minted. Reloading the associations (rather than spreading the
+   * bare `mapApiKey`) is what makes `project_id` an explicit `null` for an
+   * unscoped key instead of an absent field indistinguishable from one. */
+  await apiKey.reload({
+    include: [
+      { model: db.User, as: 'user' },
+      { model: db.Project, as: 'project' },
+    ],
+  });
+
   return {
-    ...mapApiKey(apiKey),
+    ...(await mapApiKeyWithAssociations(apiKey as ApiKeyWithAssociations)),
     key, // Return the full key only once at creation
   };
 };

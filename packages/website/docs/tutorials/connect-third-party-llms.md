@@ -374,7 +374,6 @@ Create a [session](/docs/modules/sessions#examples) and send a message through t
 SESSION_ID=$(soat create-session --agent-id "$AGENT_ID" | jq -r '.id')
 
 soat add-session-message \
-  --agent-id "$AGENT_ID" \
   --session-id "$SESSION_ID" \
   --message "Summarize why model routing matters in one paragraph."
 ```

@@ -430,7 +430,6 @@ echo "RUN_ID: $RUN_ID"
 
 ```bash
 soat get-orchestration-run \
-  --orchestration-id "$ORCHESTRATION_ID" \
   --orchestration-run-id "$RUN_ID" | jq '{status, state: {results: .state.results, summary: .state.summary}, nodes: [.node_executions[] | {node_id, node_type, status}]}'
 ```
 

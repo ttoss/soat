@@ -1536,7 +1536,9 @@ describe('Documents', () => {
         .post('/api/v1/api-keys')
         .send({ name: 'docs unscoped key', policy_ids: [policyId] });
       expect(keyRes.status).toBe(201);
-      expect(keyRes.body.project_id).toBeUndefined();
+      // An unscoped key reports `project_id: null` — the create response now
+      // carries the scope fields the spec's `ApiKeyCreated` always declared.
+      expect(keyRes.body.project_id).toBeNull();
       unscopedKey = keyRes.body.key as string;
 
       const createRes = await authenticatedTestClient(userToken)
