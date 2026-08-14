@@ -7,7 +7,7 @@ import TabItem from '@theme/TabItem';
 
 # Conversations
 
-The Conversations module represents a multi-party dialogue within a project. A Conversation groups ordered messages, each carrying an explicit `role` (`user`, `assistant`, or `system`) and an optional reference to an [Actor](./actors.md) for authorship tracking.
+The Conversations module represents a multi-party dialogue within a project. A Conversation groups ordered messages, each carrying an explicit `role` (`user` or `assistant`) and an optional reference to an [Actor](./actors.md) for authorship tracking.
 
 ## Overview
 
@@ -45,7 +45,7 @@ Conversations are identified by an `id` prefixed with `conv_`. The internal data
 | Field         | Type           | Description                                                                                                                |
 | ------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `document_id` | string         | ID of the Document attached as a message                                                                                   |
-| `role`        | string         | Role of the message: `user`, `assistant`, or `system`                                                                      |
+| `role`        | string         | Role of the message: `user` or `assistant`. Writes refuse `system` with `400 SYSTEM_MESSAGE_NOT_ALLOWED`; reads may still return it on rows written before that rule |
 | `actor_id`    | string \| null | Optional ID of the Actor who authored the message; `null` for messages not tied to an actor                                |
 | `agent_id`    | string \| null | Optional ID of the Agent that generated this message; `null` for non-generated messages                                    |
 | `position`    | integer        | Zero-based position of the message in the conversation                                                                     |
@@ -62,7 +62,9 @@ The pair `(conversation_id, position)` is uniquely indexed. See [Message orderin
 
 ### Messages
 
-Messages are ordered references to Documents within a conversation. Each message has a `role` (`user`, `assistant`, or `system`) and an optional `actor_id` for authorship tracking. Each document can appear at most once per conversation — adding the same document twice returns `409 Conflict`.
+Messages are ordered references to Documents within a conversation. Each message has a `role` (`user` or `assistant`) and an optional `actor_id` for authorship tracking. Each document can appear at most once per conversation — adding the same document twice returns `409 Conflict`.
+
+A `role: "system"` message is refused with `400 SYSTEM_MESSAGE_NOT_ALLOWED`: stored history feeds [agent generations](./agents.md#instructions), so a system entry here would let conversation data rewrite the generating agent's prompt. System content belongs to the agent's `instructions` field or the [actor persona](./actors.md).
 
 When listing messages, each entry includes the full text `content` of the underlying document, the message `role`, the optional authoring `actor_id`, and the optional `agent_id` of the Agent that generated it (set for `assistant` messages produced by `POST /conversations/:id/generate`, `null` otherwise). See it end to end in [Chat with an LLM - Step 7 (View the conversation history)](/docs/tutorials/chat-with-llm#step-7--view-the-conversation-history).
 

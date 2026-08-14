@@ -172,7 +172,7 @@ export const ERROR_CODES = {
   SYSTEM_MESSAGE_NOT_ALLOWED: {
     httpStatus: 400,
     description:
-      "A system message was supplied in `messages` on a surface that owns its own system prompt. An agent's system prompt is its `instructions` field; accepting one from the request would let a caller replace it. Mirrors the AI SDK, whose `allowSystemInMessages` defaults to false for the same reason.",
+      'A `role: "system"` entry was supplied in `messages`. System content never travels as a message on any SOAT surface — it goes in the dedicated channel instead (`system_message` on completions, the agent\'s `instructions` field on generations). Mirrors the AI SDK, whose `allowSystemInMessages` defaults to false because a system entry in a caller-supplied array is a prompt-injection vector.',
   },
   TOOL_CALL_NOT_SUPPORTED: {
     httpStatus: 422,

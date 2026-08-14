@@ -20,9 +20,9 @@ import {
   type ExtractionMessage,
   fireMemoryExtraction,
 } from 'src/lib/memoryExtraction';
-import { hasSystemMessage } from 'src/lib/modelMessages';
 
 import { requireAuth, resolveReadProjectIds } from './helpers';
+import { assertNoSystemMessage } from './systemMessageGuard';
 
 const pipeStreamToResponse = async (
   stream: ReadableStream,
@@ -124,30 +124,16 @@ const validateGenerateBody = (body: {
 
 /**
  * An agent's system prompt is its `instructions` field, so a `role: "system"`
- * entry in a generation request is refused rather than accommodated.
- *
- * This is deliberately at the REST boundary: `messages` here came from the
- * request, whereas internal callers legitimately build system content of their
- * own — a session generation reaches the same agent path through
- * `conversationGeneration`, which prepends the actor persona as a system
- * message. A guard further down would reject those flows too.
+ * entry in a generation request is refused (`systemMessageGuard.ts` carries
+ * the surface-wide rule and why it sits at the REST boundary).
  *
  * It used to be resolved by position rather than by rule: `instructions` was
  * taken from the *first* system message of the combined history, so a caller's
  * system message won on an agent whose `instructions` was empty and was silently
- * dropped on one where it was set. Refusing it mirrors the AI SDK, which defaults
- * `allowSystemInMessages` to false because a system message inside a
- * caller-supplied array is a prompt-injection vector.
+ * dropped on one where it was set.
  */
-const assertNoSystemMessage = (messages: unknown): void => {
-  if (!Array.isArray(messages)) return;
-  if (!hasSystemMessage(messages)) return;
-
-  throw new DomainError(
-    'SYSTEM_MESSAGE_NOT_ALLOWED',
-    "A system message is not accepted in `messages`. An agent's system prompt is its `instructions` field \u2014 set it with `update-agent --instructions`, or create a separate agent."
-  );
-};
+const AGENT_SYSTEM_MESSAGE_REMEDY =
+  "An agent's system prompt is its `instructions` field \u2014 set it with `update-agent --instructions`, or create a separate agent.";
 
 export const agentGenerationRouter = new Router<Context>();
 
@@ -234,7 +220,10 @@ agentGenerationRouter.post(
     if (bodyError) {
       throw new DomainError('VALIDATION_FAILED', bodyError);
     }
-    assertNoSystemMessage(body.messages);
+    assertNoSystemMessage({
+      messages: body.messages,
+      remedy: AGENT_SYSTEM_MESSAGE_REMEDY,
+    });
 
     const generationArgs = buildGenerationArgs({ ctx, body, projectIds });
 

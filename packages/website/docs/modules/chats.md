@@ -44,9 +44,9 @@ Both endpoints support SSE streaming via `stream: true`. To see a completion dri
 
 Each message in the `messages` array sent to the completions endpoint:
 
-| Field         | Type                              | Description                                                               |
-| ------------- | --------------------------------- | ------------------------------------------------------------------------- |
-| `role`        | `system` \| `user` \| `assistant` | Identifies the author of the message                                      |
+| Field         | Type                   | Description                                                               |
+| ------------- | ---------------------- | ------------------------------------------------------------------------- |
+| `role`        | `user` \| `assistant`  | Identifies the author of the message. `system` is refused — see [System Instructions](#system-instructions) |
 | `content`     | string                            | Text body _(use this or `document_id`, not both)_                         |
 | `document_id` | string                            | Public ID of a document — the server resolves its content before the call |
 
@@ -54,24 +54,17 @@ Each message in the `messages` array sent to the completions endpoint:
 
 ### System Instructions
 
-System content never travels as a message. Both completion endpoints send it to the provider as its `instructions` argument, which is the only place the underlying [AI SDK](https://ai-sdk.dev/docs/reference/ai-sdk-core/generate-text) accepts it — `allowSystemInMessages` defaults to `false` there, because a system message inside a caller-supplied array is a prompt-injection vector.
+System content never travels as a message — one rule, on every SOAT surface. On a completion it goes in the `system_message` request field, and a `role: "system"` entry in `messages` is refused with `400 SYSTEM_MESSAGE_NOT_ALLOWED`.
 
-Two spellings reach the same place, and both are accepted on a completion:
+The server sends `system_message` to the provider as its `instructions` argument, which is the only place the underlying [AI SDK](https://ai-sdk.dev/docs/reference/ai-sdk-core/generate-text) accepts it — `allowSystemInMessages` defaults to `false` there and throws, because a system message inside a caller-supplied array is a prompt-injection vector. SOAT's wire contract is the same contract.
 
-| Supplied as | Effect |
-| --- | --- |
-| `system_message` (request field) | Sent as `instructions`. The clearer form. |
-| `role: "system"` entry in `messages` | Lifted out of `messages` and sent as `instructions`. |
-
-**Nothing is discarded when several are supplied.** The `instructions` argument carries an ordered list, so every system message is sent, in order — the `system_message` field first, then any in-array entries in their original positions. There is no precedence rule to remember and no silent truncation.
-
-> Agents are different: an agent's system prompt is its `instructions` field, and a `role: "system"` entry in an agent generation's `messages` is refused with `400 SYSTEM_MESSAGE_NOT_ALLOWED`. See [Agents](./agents.md#instructions).
+The same rule everywhere else: an agent's system prompt is its `instructions` field ([Agents](./agents.md#instructions)), and a conversation's stored history carries only `user` and `assistant` turns ([Conversations](./conversations.md)) — all three refuse a system entry with the same 400.
 
 #### Per-chat override
 
-A Chat stores a `system_message` applied to every completion on it. A single call replaces it by supplying its own system content — the `system_message` field, a `role: "system"` entry, or both. The Chat record is not modified.
+A Chat stores a `system_message` applied to every completion on it. A single call replaces it by supplying its own `system_message`. The Chat record is not modified.
 
-The stored prompt applies only when the request carries **no** system content at all. The two are never merged: combining them would produce a prompt neither the chat nor the caller wrote.
+The stored prompt applies only when the request carries none. The two are never merged: combining them would produce a prompt neither the chat nor the caller wrote.
 
 ### AI Provider Resolution
 

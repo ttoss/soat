@@ -21,8 +21,13 @@ import {
   resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
+import { assertNoSystemMessage } from './systemMessageGuard';
 
 export const chatsRouter = new Router<Context>();
+
+/** See `systemMessageGuard.ts` — system content travels only in `system_message`. */
+const CHAT_SYSTEM_MESSAGE_REMEDY =
+  'Send system content in the `system_message` field instead.';
 
 /**
  * Checks whether the caller can perform `action` on `chat`.
@@ -221,6 +226,7 @@ chatsRouter.post('/chats/:chat_id/completions', async (ctx: Context) => {
       'messages is required and must be a non-empty array'
     );
   }
+  assertNoSystemMessage({ messages, remedy: CHAT_SYSTEM_MESSAGE_REMEDY });
 
   const chatMessages = (messages as Record<string, unknown>[]).map(
     (message): ChatMessageInput => {
@@ -231,7 +237,7 @@ chatsRouter.post('/chats/:chat_id/completions', async (ctx: Context) => {
         };
       }
       return {
-        role: message.role as 'user' | 'assistant' | 'system',
+        role: message.role as 'user' | 'assistant',
         content: message.content as string,
       };
     }
@@ -354,6 +360,7 @@ chatsRouter.post('/chat/completions', async (ctx: Context) => {
       'messages is required and must be a non-empty array'
     );
   }
+  assertNoSystemMessage({ messages, remedy: CHAT_SYSTEM_MESSAGE_REMEDY });
 
   if (!aiProviderId || typeof aiProviderId !== 'string') {
     throw new DomainError('VALIDATION_FAILED', 'ai_provider_id is required');
