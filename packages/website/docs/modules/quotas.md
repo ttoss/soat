@@ -117,6 +117,11 @@ The `quota.exceeded` webhook fires **once per window per quota**, not once per a
 
 For the `requests` metric, rolling windows are implemented as fixed windows keyed by the truncated timestamp (`2026-07-07T12:31Z` for `rolling_1m`); `calendar_month` keys are `YYYY-MM`. Each `(quota, window)` is one row incremented with a single atomic `UPDATE … RETURNING`, so counters are correct across server replicas with no coordination. Every request that reaches the middleware increments the counter, including requests that are subsequently rejected.
 
+Two properties follow from that, and they are worth stating separately because they are easy to confuse:
+
+- **Within a window the limit is exact, at any concurrency.** The increment and the limit comparison are the same statement, so a request is always compared against a count that already includes itself and every request that reached the row before it. Requests arriving simultaneously cannot each read a stale count and all be admitted.
+- **Across a window boundary the count resets, not decays.** A fixed window is not a sliding one: a `rolling_1m` cap of 60 admits 60 requests at `12:00:59` and 60 more at `12:01:00`. Size a window for the burst you are willing to absorb, or use a longer window with a proportionally larger limit.
+
 ### Precedence
 
 When multiple quotas match a request (e.g. a project-wide cap and an API-key cap), **every** `enforce` quota is checked and any breach blocks (fail closed). The most specific scope (`actor` > `agent` > `api_key` > `project`) is the one reported in the error body for attribution; a more specific quota never loosens a broader one. `actor` ranks highest because it names one end user — the narrowest population a cap can address, and so the most actionable thing to report to a caller who was just blocked.
