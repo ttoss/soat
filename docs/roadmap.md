@@ -45,6 +45,12 @@ v1 user before this lands is permanently unauditable
 ([prd-memories.md 5c](./prd-memories.md#5c--provenance): "ships early on
 purpose"). Small change: two nullable FK columns plus mapper/spec/docs updates.
 
+Note for implementation: there are **four** writers, not two — the manual REST
+write and the orchestration memory-write node (`orchestrationNodeExecutors.ts`,
+`sourceType: 'orchestration'`) carry null provenance by design (no generation
+exists at either site). Name both explicitly in the tests so the null case is
+asserted, not just implied.
+
 ### RC-2 — Temporal invalidation schema + API shape (Memories Phase 5b)
 
 `invalidatedAt` + `supersededByEntryId` columns on `MemoryEntry`; the
@@ -58,17 +64,39 @@ for the pre-v1 period is unrecoverable), and the API shape (`action` values,
 bolted on later. The **LLM arbitration that populates it (5a) does not block**
 — it is internal write behavior and ships as v1.x (see below).
 
+Note for implementation: until 5a lands, **no public API path sets
+`invalidatedAt`** — the `superseded` action value and `include_invalidated`
+parameter ship without a producer. The exclusion tests (knowledge search, dedup
+shortlist, default listing) therefore cannot set up state through the API; seed
+`invalidatedAt` via a direct model write in the test's `beforeAll`, justified
+inline as the sanctioned exception ("no API producer until 5a"). Do not pull 5a
+forward for the sake of the tests.
+
 ### RC-3 — Pin knowledge search `score` semantics as implementation-defined
 
-A docs/spec-only change. Knowledge Phase 5 will replace the raw-cosine `score`
-with an RRF-fused value and recalibrate `min_score` defaults; if v1 documents
-`score` as cosine similarity, that later change is a semantic break of a frozen
-field.
+Knowledge Phase 5 will introduce an RRF-fused relevance value and recalibrate
+`min_score` defaults; if v1 freezes only today's cosine-named fields, that
+later change either breaks `min_score` semantics or forces a second filter
+parameter.
 
-**Deliverable:** the OpenAPI spec and the knowledge module doc describe `score`
-as an implementation-defined relevance ranking (higher is better, ordering is
-the contract, absolute values are not), with `similarity` reserved for raw
-cosine. `min_score` documented against `score` under the same caveat. No code.
+The shipped wire has **no `score` field**: results carry `similarity_score`
+(documented as cosine similarity, 0–1) and requests carry `min_score`
+(documented as a minimum similarity). An earlier version of this item said
+"docs-only, re-document `score`" — that field does not exist, so the item is a
+**minimal additive code change**, not docs-only.
+
+**Deliverable:**
+
+- Add `score` to both result variants in the OpenAPI spec and mappers — equal
+  to the cosine value today — documented as an implementation-defined relevance
+  ranking (higher is better, ordering is the contract, absolute values are
+  not). Regenerate SDK/CLI.
+- Keep `similarity_score` pinned as raw cosine similarity — its name asserts
+  cosine semantics, so it must never be redefined; Phase 5 keeps returning it
+  for debugging (the PRD's `similarity` field name aligns to `similarity_score`
+  — do not introduce a third name).
+- Re-document `min_score` as filtering on `score` under the
+  implementation-defined caveat, defaults recalibratable by Phase 5.
 
 ### RC-4 — Knowledge injection threat model in the module docs
 
@@ -96,7 +124,8 @@ Phase 6.)
 - [ ] RC-5 Entry-ID / page provenance in source tags
 
 Suggested order: RC-1 and RC-2 together (one migration, one spec/docs pass over
-the memories module), then RC-5, then RC-3 and RC-4 (docs-only) in one PR.
+the memories module), then RC-5, then RC-3 (small additive spec+code change)
+and RC-4 (docs-only) in one PR.
 
 ---
 

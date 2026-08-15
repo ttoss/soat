@@ -117,8 +117,9 @@ across sources by raw score. Three problems:
   `MemoryEntry.content`, run in parallel with the existing pgvector queries
 - **Reciprocal rank fusion** replaces the raw-score interleave in the merge step: each
   source × signal list (memory-vector, memory-lexical, document-vector, document-lexical)
-  contributes rank-based scores; the response `score` becomes the fused score, with the raw cosine
-  still returned as `similarity` for debugging
+  contributes rank-based scores; the response `score` (introduced by roadmap RC-3, cosine-valued
+  until this phase) becomes the fused score, with the raw cosine still returned as the shipped
+  `similarity_score` field for debugging
 - Optional rerank stage: `rerank: true` re-scores the top fused candidates against the query with
   a cross-encoder or LLM scorer before the final cut — off by default (latency/cost)
 - Recency/importance blend for memory results: fused rank × `updated_at` recency decay × entry
@@ -130,7 +131,7 @@ across sources by raw score. Three problems:
 
 - [ ] **Lexical recall:** a search for an exact rare token (e.g. `"SKU-4711"`) returns the chunk/entry containing it even when its cosine similarity alone would miss the cut — implemented via `websearch_to_tsquery` `tsvector` queries over `DocumentChunk.content` and `MemoryEntry.content`, run in parallel with the pgvector queries.
 - [ ] **RRF fusion pinned:** merged `score` is computed as `Σ 1 / (k + rank_i)` over the ranked lists a result appears in, with **`k = 60` as the default** (the literature default), configurable (e.g. an `rrf_k` request field or server-level default). A result appearing in more lists ranks higher, all else equal.
-- [ ] **Four fusion inputs** when both signals and both sources apply: document-vector, document-lexical, memory-vector, memory-lexical. Raw cosine is still returned per result as `similarity` for debugging; `score` is the fused value.
+- [ ] **Four fusion inputs** when both signals and both sources apply: document-vector, document-lexical, memory-vector, memory-lexical. Raw cosine is still returned per result as the shipped `similarity_score` field for debugging; `score` is the fused value.
 - [ ] **Rerank API shape:** `rerank: true` re-scores the top fused candidates before the final cut. Input: the query plus the candidate list — `{ query: string, candidates: [{ id, content }] }` (top-N fused, default N = 20, configurable). Output: reordered ids with scores — `[{ id, score }]`, descending. Off by default; the added latency/cost is documented, and a rerank-stage failure degrades to the fused order instead of failing the request.
 - [ ] **Recency/importance blend (memory only):** memory results' fused score is blended with an `updated_at` recency decay (configurable half-life, sane default documented) and — once prd-memories.md Phase 8 lands — entry `importance`. Document results are unaffected.
 - [ ] **No API break:** same endpoint; all new parameters additive and optional. `min_score` documented against the fused score with recalibrated defaults.
