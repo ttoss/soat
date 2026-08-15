@@ -19,6 +19,7 @@ import {
   planResourceChange,
 } from './formationsPlanHelpers';
 import {
+  type FormationError,
   type FormationEvent,
   formationEventToWire,
   type FormationTemplate,
@@ -40,6 +41,7 @@ export { getMissingParams } from './formationsHelpers';
 export { detectStaticMetadataViolations } from './formationsMetadata';
 export { deleteFormation } from './formationsTeardown';
 export type {
+  FormationError,
   FormationEvent,
   FormationTemplate,
   MappedFormation,
@@ -87,6 +89,7 @@ const mapFormation = (
     metadata: instance.metadata,
     resolved_metadata: instance.resolvedMetadata,
     resolved_parameters: instance.resolvedParameters,
+    error: (instance.error as FormationError | null) ?? null,
     ...(resources !== undefined ? { resources } : {}),
     created_at: instance.createdAt,
     updated_at: instance.updatedAt,

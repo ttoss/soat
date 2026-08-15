@@ -11,6 +11,13 @@ const FORMATION_COMMANDS = [
   'update-formation',
 ];
 
+/**
+ * The two commands that *deploy*. `validate-formation` and `plan-formation`
+ * report on a template without touching a resource, so their outcome is the
+ * payload, not an exit code.
+ */
+const DEPLOY_COMMANDS = ['create-formation', 'update-formation'];
+
 const TEMPLATE_PATH_FLAG = 'template-path';
 const TEMPLATE_FILE_FLAG = 'template-file';
 const ENV_FILE_FLAG = 'env-file';
@@ -168,9 +175,60 @@ const resolveParameterPair = (args: {
   return { key, value: resolveEnvRef({ value: rawValue, env }) };
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+};
+
+const readString = (value: unknown): string | undefined => {
+  return typeof value === 'string' && value ? value : undefined;
+};
+
+/** The reason line, from the response's `error` bag when it carries one. */
+const describeDeployReason = (args: {
+  error: Record<string, unknown> | undefined;
+  formationId: string | undefined;
+}): string => {
+  const reason = readString(args.error?.message);
+  if (!reason) {
+    return `No reason was reported on the response; run \`soat list-formation-events --formation-id ${args.formationId ?? '<id>'}\` for the operation history.`;
+  }
+
+  return `${readString(args.error?.code) ?? 'UNKNOWN'}: ${reason}`;
+};
+
+/**
+ * A deploy whose reconciliation failed, rendered for stderr.
+ *
+ * The server answers 2xx here on purpose — the operation ran, and partial
+ * failure is modelled on the resource — so the body's `status` is the only
+ * signal that anything went wrong. Turning it into a non-zero exit is what
+ * stops `&&` chains from reporting a deploy that deployed nothing (#1028).
+ */
+const describeFailedDeploy = (args: {
+  commandName: string;
+  data: unknown;
+}): string | null => {
+  const { commandName, data } = args;
+
+  if (!DEPLOY_COMMANDS.includes(commandName)) return null;
+  if (!isRecord(data) || data.status !== 'failed') return null;
+
+  const error = isRecord(data.error) ? data.error : undefined;
+  const meta = isRecord(error?.meta) ? error.meta : undefined;
+  const logicalId = readString(meta?.logical_id);
+  const at = logicalId ? ` at resource '${logicalId}'` : '';
+  const detail = describeDeployReason({
+    error,
+    formationId: readString(data.id),
+  });
+
+  return `${commandName}: the deploy failed${at} — the formation is 'failed'. ${detail}`;
+};
+
 export const formationsWrapper: Wrapper = {
   id: 'formations-wrapper',
   commands: FORMATION_COMMANDS,
+  failureMessage: describeFailedDeploy,
   helpFlags: [
     {
       name: 'template-path',

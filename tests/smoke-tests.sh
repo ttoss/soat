@@ -4718,6 +4718,41 @@ if ! printf '%s\n' "$FORMATION_UPDATE_RESP" | jq -e --arg id "$FORMATION_ID" '.i
 fi
 echo "Formation updated."
 
+# #1028: a deploy that fails to reconcile answers 2xx with `status: "failed"`.
+# The body must carry the reason, and the CLI must exit non-zero so an `&&`
+# chain does not report a deploy that deployed nothing.
+echo "--- Verifying a failed deploy is reported as a failure ---"
+set +e
+FAILED_DEPLOY_OUT=$($SOAT_CLI update-formation \
+  --formation_id "$FORMATION_ID" \
+  --template '{"resources":{"badProvider":{"type":"ai_provider","properties":{"name":"smoke-bad-provider","provider":"openai","default_model":"gpt-4o","secret_id":"sec_doesnotexist"}}}}' 2>/dev/null)
+FAILED_DEPLOY_EXIT=$?
+set -e
+if [ "$FAILED_DEPLOY_EXIT" -eq 0 ]; then
+  echo "ERROR: a failed deploy exited 0" >&2
+  printf '%s\n' "$FAILED_DEPLOY_OUT" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$FAILED_DEPLOY_OUT" | jq -e '.status == "failed" and (.error.code // "") != "" and (.error.message // "") != "" and .error.meta.logical_id == "badProvider"' >/dev/null 2>&1; then
+  echo "ERROR: a failed deploy did not explain itself on the response body" >&2
+  printf '%s\n' "$FAILED_DEPLOY_OUT" >&2
+  exit 1
+fi
+# Reading the wedged stack back is a successful read, and it still says why.
+if ! $SOAT_CLI get-formation --formation_id "$FORMATION_ID" \
+  | jq -e '.status == "failed" and .error.meta.logical_id == "badProvider"' >/dev/null 2>&1; then
+  echo "ERROR: get-formation did not report the stored failure" >&2
+  exit 1
+fi
+# A corrected re-apply recovers the stack and clears the error.
+if ! $SOAT_CLI update-formation --formation_id "$FORMATION_ID" \
+  --template '{"resources":{"myMemory":{"type":"memory","properties":{"name":"Smoke Formation Memory Updated"}}},"outputs":{"memoryId":{"ref":"myMemory"}}}' \
+  | jq -e '.status == "active" and .error == null' >/dev/null 2>&1; then
+  echo "ERROR: the corrected re-apply did not clear the failure" >&2
+  exit 1
+fi
+echo "Failed deploy reporting verified (non-zero exit, error on the body)."
+
 # Update reusing a secret parameter's previous value (use_previous_value)
 echo "--- Creating formation with a use_previous_value secret parameter ---"
 KEEP_TEMPLATE='{"parameters":{"XaiApiKey":{"type":"string","no_echo":true,"use_previous_value":true}},"resources":{"keepSecret":{"type":"secret","properties":{"name":"smoke-keep-secret","value":{"param":"XaiApiKey"}}},"keepMemory":{"type":"memory","properties":{"name":"keep-mem-original"}}}}'

@@ -17,6 +17,7 @@ import {
   getWrapperHelpFlags,
   parseFlagValue,
   parseUnknownWithRepeats,
+  resolveFailureMessage,
 } from './cli-wrappers/index.js';
 import { resolveClient, writeProfile } from './config.js';
 import { routes } from './generated/routes.js';
@@ -457,6 +458,18 @@ program
     }
 
     console.log(await formatResultData(result.data));
+
+    // A 2xx whose body reports its own operation as failed still exits
+    // non-zero. The payload is printed first, so `$(…)` capture and `| jq`
+    // pipelines are unaffected — only the exit code changes.
+    const failure = resolveFailureMessage({
+      commandName,
+      data: result.data,
+    });
+    if (failure) {
+      console.error(failure);
+      process.exit(1);
+    }
   });
 
 export const runCli = async (args: string[]) => {

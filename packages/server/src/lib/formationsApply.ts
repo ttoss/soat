@@ -22,10 +22,11 @@ import {
   resolveFormationOutputs,
 } from './formationsResolve';
 import { applyDeleteResource } from './formationsResourceHandlers';
-import type {
-  FormationEvent,
-  FormationTemplate,
-  ResourceDeclaration,
+import {
+  formationErrorCode,
+  type FormationEvent,
+  type FormationTemplate,
+  type ResourceDeclaration,
 } from './formationsTypes';
 
 const log = createDebug('soat:formations');
@@ -219,6 +220,7 @@ const runResourceChanges = async (args: {
         resourceType: decl.type,
         action: existing ? 'update' : 'create',
         errorMessage: errorMsg,
+        errorCode: formationErrorCode(error),
         rollbackEvents,
       });
       return false;
@@ -253,6 +255,10 @@ const finalizeSucceededFormation = async (args: {
   await operation.update({ status: 'succeeded', events });
   await formation.update({
     status: 'active',
+    // A deploy that succeeds retires the previous failure: `error` describes
+    // the current status, not the stack's history (that is what the operation
+    // list is for).
+    error: null,
     outputs,
     template,
     resolvedMetadata: resolveFormationMetadata(
