@@ -2,16 +2,15 @@
 
 ## Implementation Status
 
-Only outstanding work is tracked here. Shipped functionality (Phases 1–4, the
-container/entry CRUD, tags, agent read/write, and automatic extraction) is documented in
-the [Memory module docs](../packages/website/docs/modules/memories.md).
+Only outstanding work is tracked here. Shipped functionality — Phases 1–4 (container/entry CRUD,
+tags, agent read/write, automatic extraction) plus the provenance and temporal-invalidation schema
+that landed with the v1 RC — is documented in the
+[Memory module docs](../packages/website/docs/modules/memories.md).
 
 | Component                      | Status         | Notes                                                                                                                            |
 | ------------------------------ | -------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | Merge consolidation (LLM)      | 🟡 Partial    | Agent-tool + extraction merges consolidate into a single fact via the LLM (`memoryConsolidationCompletion.ts`), concat fallback; manual REST writes still concatenate (Phase 5) |
 | Write algorithm v2 (arbitrated)| ❌ Not started | Top-K shortlist + LLM decision (add/update/supersede/skip); real merge replaces the v1 concatenation shortcut (Phase 5)          |
-| Temporal invalidation          | ❌ Not started | `invalidatedAt` + `supersededByEntryId` on MemoryEntry; contradictions retire old facts instead of rewriting them (Phase 5)      |
-| Entry provenance               | ❌ Not started | `sourceGenerationId` / `sourceConversationId` on MemoryEntry; every fact auditable back to its source turn (Phase 5)             |
 | MemoryEntity model             | ❌ Not started | Project-scoped extracted nouns/objects with `mey_` prefix, embedding column, optional `actorId` FK; deduplicated across memories (Phase 6) |
 | MemoryEntityEdge model         | ❌ Not started | First-class entity→entity edges: subject, canonical predicate, object, provenance entry, validity (Phase 6)                      |
 | Entity extraction on write     | ❌ Not started | Async, off the request path; LLM extracts subject/predicate/object triples after the entry persists (Phase 6)                    |
@@ -22,20 +21,23 @@ the [Memory module docs](../packages/website/docs/modules/memories.md).
 
 ## Implementation Phases
 
-### Phase 5 — Write Algorithm v2 (LLM-Arbitrated, Temporal) 🟡 In progress
+### Phase 5 — Write Algorithm v2 (LLM-Arbitrated) 🟡 In progress
 
-**Goal:** Replace the v1 threshold-decided, concatenation-merge write path with an LLM-arbitrated
-decision over a shortlist of similar entries; add temporal invalidation (supersede) so
-contradictions retire old facts instead of rewriting them; and record provenance so every entry is
-auditable back to the conversation that produced it.
+**Goal:** Replace the v1 threshold-decided write path with an LLM-arbitrated decision over a
+shortlist of similar entries, so contradictions retire old facts through the supersede path
+instead of coexisting with them.
 
-> **Delivered so far:** the **merge consolidation** step for writes with an agent context (the
-> `write_memory` tool and automatic extraction) — an LLM consolidates both facts into a single
-> atomic entry instead of concatenating (`memoryConsolidationCompletion.ts`, best-effort with a
-> concat fallback). **Still pending:** the top-K shortlist + full add/update/supersede/skip
-> arbitration, temporal invalidation, provenance, and consolidation for the manual REST write path
-> (which has no agent context to resolve a provider — see the
-> [merge provider decision](#5a--llm-arbitrated-write-decision) below).
+> **Already shipped:** the **merge consolidation** step for writes with an agent context (the
+> `write_memory` tool and automatic extraction), which consolidates both facts into a single atomic
+> entry instead of concatenating (`memoryConsolidationCompletion.ts`, best-effort with a concat
+> fallback); and the **temporal-invalidation and provenance schema** — `invalidatedAt`,
+> `supersededByEntryId`, `sourceGenerationId`, `sourceConversationId`, the `superseded` action
+> value, `include_invalidated`, and the exclusion of invalidated entries from listing, dedup and
+> knowledge search (see the [Memory module docs](../packages/website/docs/modules/memories.md)).
+>
+> **Still pending — this phase:** the top-K shortlist + full add/update/supersede/skip arbitration
+> that *populates* that schema, and consolidation for the manual REST write path (which has no
+> agent context to resolve a provider).
 
 **Motivation:** v1 has three structural problems (see
 [Known v1 Limitations](#known-v1-limitations-addressed-by-phase-5)): the concatenation merge
@@ -86,27 +88,8 @@ STEP 5 — RETURN { action: "created" | "updated" | "superseded" | "skipped", en
   `shortlist_threshold` bounds the candidate set, and the cosine score no longer decides
   create-vs-update.
 
-#### 5b — Temporal invalidation (supersede)
-
-- New `MemoryEntry` columns: `invalidatedAt` (timestamp; `null` = currently valid) and
-  `supersededByEntryId` (FK → MemoryEntry).
-- Invalidated entries are excluded from knowledge search, extraction dedup, and the arbitration
-  shortlist by default; entry listing gains `include_invalidated` for audit.
-- Nothing is silently destroyed: supersede preserves the full history chain
-  (old entry → `supersededByEntryId` → replacement). `DELETE` remains available for hard removal.
-
-#### 5c — Provenance
-
-- New `MemoryEntry` columns: `sourceGenerationId` and `sourceConversationId` (nullable FKs),
-  populated by the `write_memory` tool and extraction write paths; exposed as
-  `source_generation_id` / `source_conversation_id`.
-- Answers "why does the agent believe this" — every agent/extraction fact links back to the turn
-  that produced it, pairing with the extraction summary already stored on
-  `generation.metadata.extraction`.
-- Ships early on purpose: provenance cannot be backfilled once entries exist.
-
-**Unlocks:** Trustworthy memory. Contradictions resolve instead of accumulating, merged facts stay
-atomic, superseded knowledge remains auditable, and every fact traces to its source conversation.
+**Unlocks:** Trustworthy memory — contradictions resolve into the shipped supersede chain instead
+of accumulating, and merged facts stay atomic.
 
 ---
 
@@ -137,7 +120,7 @@ atomic, superseded knowledge remains auditable, and every fact traces to its sou
 - Entities live at **project level**, not memory level — enabling cross-memory graph traversal ("find everything about Pedro across all memories")
 - `MemoryEntityEdge` model — a first-class **entity → entity** edge: `{ subjectEntityId, predicate, objectEntityId, entryId, invalidatedAt }`. The entry is the edge's **provenance** (which fact asserted it), not a party to it. This keeps triples unambiguous: "Pedro owns Company X and Maria owns Company Y" in one entry produces two edges whose subject/object pairing is explicit — an entry↔entity join table would produce four same-verb mention rows that cannot be re-paired into triples
 - **Canonical predicates** — extraction normalizes verbs to a canonical snake_case predicate before storage (`"is the owner of"` → `owns`). Free-form labels fragment the graph and make `predicate` filters miss; the predicate set is open, but normalization is mandatory
-- **Edge validity** — edges carry `invalidatedAt`; when an entry is superseded (Phase 5b) or deleted, the edges it asserted are invalidated/removed with it
+- **Edge validity** — edges carry `invalidatedAt`; when an entry is superseded or deleted, the edges it asserted are invalidated/removed with it
 - CRUD endpoints for entities: `GET/PUT/DELETE /api/v1/entities` (project-scoped, not nested under memories), plus `GET /api/v1/entities/{entity_id}/edges`
 - Entity deduplication by embedding similarity within a project (same two-threshold pattern as entries)
 
@@ -319,13 +302,11 @@ harness-independent, checkable criteria (verified with unit/REST tests per
   making an arbitration LLM call.
 - A write with an empty shortlist (no candidate ≥ `shortlist_threshold`) creates an entry without
   making an arbitration LLM call.
-- A supersede sets `invalidated_at` and `superseded_by_entry_id` on the old entry, creates the
-  replacement, and returns `action: "superseded"`; the superseded entry no longer appears in
-  knowledge search or default entry listing, and reappears with `include_invalidated=true`.
+- An arbitrated supersede sets `invalidated_at` and `superseded_by_entry_id` on the old entry,
+  creates the replacement, and returns `action: "superseded"`. (That the superseded entry then
+  drops out of listing, dedup and knowledge search already ships and is covered.)
 - If the arbitration LLM call fails, the write still completes under v1 fallback semantics — a
   failed arbitration never loses a write.
-- Agent- and extraction-written entries carry `source_generation_id` (and
-  `source_conversation_id` where applicable); manual entries carry neither.
 
 **Phase 6 — Entity graph:**
 
@@ -434,8 +415,10 @@ merge. Phase 5 replaces the decision and merge steps for the reasons below:
   to keep entries atomic.
 - **No contradiction resolution.** Concatenation appends conflicting statements; worse, a
   contradicting fact phrased differently can score below the update threshold and simply coexist
-  ("Pedro works at Company X" / "Pedro left Company X"). There is no delete/invalidate operation —
-  state-of-the-art pipelines (e.g. Mem0) arbitrate add / update / delete / no-op per write.
+  ("Pedro works at Company X" / "Pedro left Company X"). The invalidate operation itself now
+  exists — supersede columns, API shape and retrieval exclusion all ship — but nothing decides
+  *when* to use it; state-of-the-art pipelines (e.g. Mem0) arbitrate add / update / delete / no-op
+  per write, which is what this phase adds.
 - **Top-1 comparison only.** A new fact can overlap several existing entries; v1 considers only
   the single best match.
 - **Thresholds are embedding-model-coupled.** Cosine cutoffs are not portable across embedding
@@ -448,9 +431,9 @@ set, and the create/update/supersede decision moves to an LLM.
 
 ## Data Model (Pending Work)
 
-The `Memory` and `MemoryEntry` base tables are shipped. Phase 5 adds columns to `MemoryEntry`
-(`sourceGenerationId`, `sourceConversationId`, `invalidatedAt`, `supersededByEntryId`) and Phase 8
-adds `importance`, `lastAccessedAt`, `accessCount`. The tables below are new in Phase 6.
+The `Memory` and `MemoryEntry` tables are shipped, including the provenance and temporal-
+invalidation columns. Phase 8 adds `importance`, `lastAccessedAt` and `accessCount`. The tables
+below are new in Phase 6.
 
 ### MemoryEntity Table (Phase 6)
 
@@ -507,10 +490,8 @@ Entity and edge creation is automatic (via async extraction during `writeMemoryE
 
 ## REST API (Pending Work)
 
-All body fields use `snake_case` per project convention. Phase 5 adds `superseded` to the `action`
-values returned by the write endpoint (`POST /api/v1/memories/{memory_id}/entries`) and an
-`include_invalidated` query parameter on entry listing (invalidated entries are excluded by
-default).
+All body fields use `snake_case` per project convention. No pending phase changes the shipped
+entry endpoints; the tables below are new in Phase 6.
 
 ### Entity Operations (Phase 6)
 
