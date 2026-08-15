@@ -143,13 +143,40 @@ while IFS= read -r line; do
     continue
   fi
 
-  # Helper: count single quotes in CURRENT_CMD to detect unclosed strings
-  _sq_open() { printf '%s' "$CURRENT_CMD" | tr -cd "'" | wc -c; }
+  # Helper: does CURRENT_CMD end inside an unterminated quoted string?
+  #
+  # Prints 1 while a quote is still open, so the next line is joined onto this
+  # command instead of dispatched as its own — which is what lets a tutorial
+  # spread a JSON argument over several lines.
+  #
+  # This used to count every `'` in the accumulated text and call an odd total
+  # "open". A counter cannot tell a quote from an apostrophe: one `Alice's`
+  # inside a *double*-quoted argument made the total odd, so the runner swallowed
+  # every following line and died on `unexpected EOF` at the end of the tutorial,
+  # blaming a command that had already run fine. Tracking which quote is open
+  # makes the two cases distinguishable, and covers `"` spanning lines for free.
+  _open_quote() {
+    printf '%s' "$CURRENT_CMD" | awk '
+      BEGIN { q = "" }
+      {
+        n = length($0)
+        for (i = 1; i <= n; i++) {
+          c = substr($0, i, 1)
+          # A backslash escapes the next character outside quotes and inside
+          # double quotes; inside single quotes shell treats it literally.
+          if ((q == "" || q == "\"") && c == "\\") { i++; continue }
+          if (q == "") { if (c == "\047" || c == "\"") q = c }
+          else if (c == q) { q = "" }
+        }
+      }
+      END { print (q == "" ? 0 : 1) }
+    '
+  }
 
-  # Empty line → flush current command (unless inside an unclosed single-quoted string)
+  # Empty line → flush current command (unless inside an unclosed quoted string)
   if [[ -z "$line" ]]; then
     if [[ -n "$CURRENT_CMD" ]]; then
-      if (( $(_sq_open) % 2 == 1 )); then
+      if [ "$(_open_quote)" = 1 ]; then
         CURRENT_CMD+=$'\n'
       else
         _flush_cmd "$CURRENT_CMD" "$CURRENT_ANNOTATION"
@@ -172,8 +199,8 @@ while IFS= read -r line; do
       continue
     fi
 
-    # If we're inside an unclosed single-quoted string, keep accumulating
-    if (( $(_sq_open) % 2 == 1 )); then
+    # If we're inside an unclosed quoted string, keep accumulating
+    if [ "$(_open_quote)" = 1 ]; then
       CURRENT_CMD+=$'\n'
     else
       _flush_cmd "$CURRENT_CMD" "$CURRENT_ANNOTATION"

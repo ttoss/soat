@@ -85,6 +85,23 @@ A key's `project_id` binding is enforced **before**, and independently of, the o
 
 This means a single project-scoped key cannot both create a new project **and** provision resources inside it: create the project, then mint a key scoped to the new project (or use an unscoped key, bounded by IAM policy) to deploy into it. A cross-project resource write returns `403 API_KEY_PROJECT_SCOPE` (above) rather than silently succeeding.
 
+### The boundary covers key management itself
+
+Key creation is self-service — any authenticated caller may mint a key for themselves — so the project binding has to guard the credential being written, not only the resources being read. Requests made **with a project-scoped credential** are therefore confined on this module too:
+
+| Operation | Behavior under a credential scoped to `proj_A` |
+| --- | --- |
+| `POST /api-keys` with no `project_id` | Mints a key scoped to `proj_A` (the [implicit project id](#implicit-project-id)) |
+| `POST /api-keys` with `project_id: proj_B` | `403 API_KEY_PROJECT_SCOPE` |
+| `POST /api-keys` with `project_id: null` | `403` — minting an **unscoped** key requires an unscoped credential |
+| `GET` / `PUT` / `DELETE /api-keys/{id}` for a key in `proj_B`, or for an unscoped key | `403 API_KEY_PROJECT_SCOPE` |
+| `PUT /api-keys/{id}` moving a `proj_A` key to `proj_B`, or clearing its scope | `403` — both ends of a re-scope are checked |
+| `GET /api-keys` (list) | Returns only keys scoped to `proj_A` |
+
+Without this, the boundary would be exactly one call deep: a key confined to `proj_A` could mint an unscoped key for the same owning user and operate anywhere. Rotation still works — a scoped key can mint and delete keys **within its own project**.
+
+Owner-or-admin still applies on top: the project check decides *which* keys a credential can see, and the owner check decides whether it may act on them.
+
 ### Policy Attachment
 
 Policies listed in `policy_ids` are loaded from the global [Policies](./policies.md) store. `policy_ids` is the list of policy public IDs (`pol_`-prefixed) attached to the key; the REST API accepts and returns these public IDs.

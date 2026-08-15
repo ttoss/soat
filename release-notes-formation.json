@@ -1,0 +1,60 @@
+{
+"resources": {
+"provider": {
+"type": "ai_provider",
+"properties": {
+"name": "Local Ollama",
+"provider": "ollama",
+"default_model": "qwen2.5:0.5b"
+}
+},
+"agent": {
+"type": "agent",
+"properties": {
+"name": "Release Notes Writer",
+"ai_provider_id": { "ref": "provider" },
+"instructions": "Summarize the change in one sentence."
+}
+},
+"suite": {
+"type": "dataset",
+"properties": {
+"name": "release-notes-suite",
+"description": "Cases every release must still pass"
+}
+},
+"emptyFileCase": {
+"type": "dataset_item",
+"properties": {
+"dataset_id": { "ref": "suite" },
+"input": [{ "role": "user", "content": "We fixed a crash when uploading a 0-byte file." }],
+"expected_output": "Fixed a crash when uploading an empty file."
+}
+},
+"passkeyCase": {
+"type": "dataset_item",
+"properties": {
+"dataset_id": { "ref": "suite" },
+"input": [{ "role": "user", "content": "Login now supports passkeys." }],
+"expected_output": "Added passkey support to login."
+}
+},
+"gate": {
+"type": "eval",
+"properties": {
+"name": "release-notes-gate",
+"agent_id": { "ref": "agent" },
+"dataset_id": { "ref": "suite" },
+"scorers": [
+{ "type": "json_logic", "expression": { "!=": [{ "var": "output" }, ""] } }
+],
+"pass_threshold": 1
+}
+}
+},
+"outputs": {
+"agent_id": { "ref": "agent" },
+"eval_id": { "ref": "gate" },
+"dataset_id": { "ref": "suite" }
+}
+}

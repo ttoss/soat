@@ -43,10 +43,16 @@ import { recordAuthorizationDecision } from 'src/middleware/audit';
  *
  * No-op when the credential is unscoped, or when the requested project matches
  * the credential's project.
+ *
+ * `null` is a *target*, not an absence: it means the request names no project at
+ * all — minting an unscoped API key, or managing one. A confined credential must
+ * be refused there too, or the boundary is one `POST /api-keys` deep (#1038).
+ * Pass `undefined`-as-`null` only when the route has genuinely resolved the
+ * target to "no project"; a route with nothing to check should not call this.
  */
-const assertCredentialProjectScope = (args: {
+export const assertCredentialProjectScope = (args: {
   ctx: Context;
-  requestedProjectPublicId: string;
+  requestedProjectPublicId: string | null;
   action: string;
 }): void => {
   const { ctx, requestedProjectPublicId } = args;
@@ -61,12 +67,18 @@ const assertCredentialProjectScope = (args: {
   recordAuthorizationDecision(ctx, { action: args.action, allowed: false });
 
   const credential = authUser.apiKeyProjectPublicId ? 'API key' : 'OAuth token';
+  const reason =
+    requestedProjectPublicId === null
+      ? `cannot create or manage an unscoped credential. Use an unscoped ` +
+        `credential to do that.`
+      : `cannot access project '${requestedProjectPublicId}'. Mint a key ` +
+        `scoped to '${requestedProjectPublicId}' (or an unscoped key) to ` +
+        `operate there.`;
+
   // Meta keys are snake_case to match the external REST contract.
   throw new DomainError(
     'API_KEY_PROJECT_SCOPE',
-    `This ${credential} is scoped to project '${scopedProject}' and cannot ` +
-      `access project '${requestedProjectPublicId}'. Mint a key scoped to ` +
-      `'${requestedProjectPublicId}' (or an unscoped key) to operate there.`,
+    `This ${credential} is scoped to project '${scopedProject}' and ${reason}`,
     {
       scoped_project: scopedProject,
       requested_project: requestedProjectPublicId,
