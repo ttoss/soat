@@ -109,6 +109,7 @@ describe('Traces REST API', () => {
       projectId: internalProjectId,
       projectPublicId: projectId,
       agentId: 'agt_traces_rest_001',
+      generationId: 'gen_test_steps',
       steps: [{ type: 'text-delta', text: 'hello' }],
     });
 
@@ -117,6 +118,7 @@ describe('Traces REST API', () => {
       projectId: internalProjectId,
       projectPublicId: projectId,
       agentId: 'agt_traces_rest_002',
+      generationId: 'gen_test_steps',
       steps: [{ type: 'text-delta', text: 'world' }],
       parentTraceId: traceId,
       rootTraceId: traceId,
@@ -483,6 +485,7 @@ describe('Traces REST API', () => {
         projectId: internalProjectId,
         projectPublicId: projectId,
         agentId: 'agt_traces_rest_001',
+        generationId: 'gen_test_steps',
         steps: [{ type: 'text-delta', text: 'root secret' }],
       });
       await saveTrace({
@@ -490,6 +493,7 @@ describe('Traces REST API', () => {
         projectId: internalProjectId,
         projectPublicId: projectId,
         agentId: 'agt_traces_rest_002',
+        generationId: 'gen_test_steps',
         steps: [{ type: 'text-delta', text: 'child secret' }],
         parentTraceId: rootId,
         rootTraceId: rootId,

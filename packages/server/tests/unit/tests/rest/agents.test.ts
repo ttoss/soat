@@ -998,6 +998,7 @@ describe('Agents', () => {
         projectId: project!.id as number,
         projectPublicId: projectId,
         agentId: blockedAgentId,
+        generationId: 'gen_test_steps',
         steps: [{ type: 'text-delta', text: 'hello' }],
       });
 
@@ -1039,6 +1040,7 @@ describe('Agents', () => {
         projectId: project!.id as number,
         projectPublicId: projectId,
         agentId: blockedAgentId,
+        generationId: 'gen_test_steps',
         steps: [{ type: 'text-delta', text: 'hello' }],
       });
       const trace = await db.Trace.findOne({ where: { publicId: traceId } });
@@ -1091,6 +1093,7 @@ describe('Agents', () => {
         projectId: project!.id as number,
         projectPublicId: projectId,
         agentId: forceAgentId,
+        generationId: 'gen_test_steps',
         steps: [{ type: 'text-delta', text: 'hello' }],
       });
       const trace = await db.Trace.findOne({ where: { publicId: traceId } });
@@ -1154,6 +1157,7 @@ describe('Agents', () => {
         projectId: project!.id as number,
         projectPublicId: projectId,
         agentId: forceAgentId,
+        generationId: 'gen_test_steps',
         steps: [{ type: 'text-delta', text: 'hello' }],
       });
       const trace = await db.Trace.findOne({ where: { publicId: traceId } });
@@ -1206,6 +1210,7 @@ describe('Agents', () => {
         projectId: project!.id as number,
         projectPublicId: projectId,
         agentId: agentAId,
+        generationId: 'gen_test_steps',
         steps: [{ type: 'text-delta', text: 'parent' }],
       });
       const traceA = await db.Trace.findOne({ where: { publicId: traceAId } });
@@ -1216,6 +1221,7 @@ describe('Agents', () => {
         projectId: project!.id as number,
         projectPublicId: projectId,
         agentId: agentBId,
+        generationId: 'gen_test_steps',
         steps: [{ type: 'text-delta', text: 'child' }],
         parentTraceId: traceAId,
         rootTraceId: traceAId,
@@ -1538,7 +1544,6 @@ describe('Agents', () => {
       );
       expect(getRes.body.tool_bindings).toEqual([{ tool_id: clientToolId }]);
     });
-
   });
 
   // ── Generation ───────────────────────────────────────────────────────────

@@ -1590,7 +1590,10 @@ components:
           x-soat-ref: traces
           type: string
           x-soat-server-managed: true
-          description: Optional trace ID to group generations
+          description: >-
+            Optional trace ID to group generations. Each generation appends its
+            own steps to the trace's steps object, and `step_count` covers them
+            all.
         parent_trace_id:
           x-soat-ref: traces
           type: string

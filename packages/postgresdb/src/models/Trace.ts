@@ -115,6 +115,18 @@ export class Trace extends Model {
   @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 0 })
   declare stepCount: number;
 
+  // How the steps object is divided between the generations grouped under this
+  // trace, in the order they first wrote: `[{ generationId, stepCount }]`. The
+  // object is the concatenation of these segments, so a caller-supplied
+  // `trace_id` reused by a second generation appends its steps instead of
+  // replacing the first generation's (#1024), while a generation that writes
+  // again — the tool-outputs continuation — rewrites only its own slice.
+  //
+  // Skeleton, not content: public ids and counters, the same class as
+  // `stepCount`. Reset by a purge because the object it indexes is deleted.
+  @Column({ type: DataType.JSONB, allowNull: false, defaultValue: [] })
+  declare stepSegments: { generationId: string; stepCount: number }[];
+
   // Structured error payload recorded when a generation in this trace fails
   // (e.g. upstream AI provider errors). Cleared by a content purge: an error
   // payload can carry a tool's request/response bodies, so it is content and

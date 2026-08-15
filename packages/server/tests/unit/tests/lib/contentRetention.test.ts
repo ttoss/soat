@@ -69,6 +69,7 @@ describe('sweepExpiredTraceContent', () => {
       projectId: args.projectDbId,
       projectPublicId: args.projectPublicId,
       agentId: agent.publicId,
+      generationId: 'gen_test_steps',
       steps: [{ type: 'text-delta', text: 'case content' }],
     });
 
@@ -275,6 +276,7 @@ describe('sweepExpiredTraceContent', () => {
       projectId: retainedProjectDbId,
       projectPublicId: retainedProjectId,
       agentId: (await agentFor(retainedProjectDbId)).publicId,
+      generationId: 'gen_test_steps',
       steps: [{ type: 'text-delta', text: 'root' }],
     });
     await saveTrace({
@@ -282,6 +284,7 @@ describe('sweepExpiredTraceContent', () => {
       projectId: retainedProjectDbId,
       projectPublicId: retainedProjectId,
       agentId: (await agentFor(retainedProjectDbId)).publicId,
+      generationId: 'gen_test_steps',
       steps: [{ type: 'text-delta', text: 'child' }],
       parentTraceId: rootId,
       rootTraceId: rootId,

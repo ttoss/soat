@@ -1303,6 +1303,7 @@ resources:
         projectId: project!.id as number,
         projectPublicId: projectId,
         agentId,
+        generationId: 'gen_test_steps',
         steps: [{ type: 'text-delta', text: 'hello' }],
       });
 
@@ -1398,6 +1399,7 @@ resources:
         projectId: project!.id as number,
         projectPublicId: projectId,
         agentId: retainedAgentId,
+        generationId: 'gen_test_steps',
         steps: [{ type: 'text-delta', text: 'hello' }],
       });
 

@@ -96,6 +96,7 @@ const fireStreamEndSideEffects = (args: {
     projectId: args.typedAgent.project.id as number,
     projectPublicId: args.typedAgent.project.publicId,
     agentId: args.agentId,
+    generationId: args.generationId,
     steps: serializeSteps(args.steps),
     parentTraceId: args.parentTraceId,
     rootTraceId: args.rootTraceId,

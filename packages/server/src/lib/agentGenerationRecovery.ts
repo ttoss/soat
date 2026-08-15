@@ -42,6 +42,7 @@ export const buildDepthGuardResult = (args: {
     projectId: args.projectId,
     projectPublicId: args.projectPublicId,
     agentId: args.agentId,
+    generationId: args.generationId,
     steps: [{ type: 'depth_guard', message: 'Maximum call depth reached' }],
     parentTraceId: args.parentTraceId ?? null,
     rootTraceId: args.rootTraceId ?? null,

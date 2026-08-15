@@ -255,6 +255,7 @@ export const buildCompletedGenerationResult = async (args: {
     projectId: args.typedAgent.project.id as number,
     projectPublicId: args.typedAgent.project.publicId,
     agentId: args.agentId,
+    generationId: args.generationId,
     steps: serializedStepsCompleted,
     parentTraceId: args.parentTraceId ?? null,
     rootTraceId: args.rootTraceId ?? null,

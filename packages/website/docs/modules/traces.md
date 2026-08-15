@@ -30,7 +30,7 @@ Every time an agent runs a generation, SOAT automatically records a trace: the s
 | `project_id`      | string         | Project the trace belongs to                                                           |
 | `agent_id`        | string         | Agent that produced the trace                                                          |
 | `file_id`         | string \| null | ID of the file containing the serialized steps (JSON array)                            |
-| `step_count`      | number         | Number of reasoning steps recorded                                                     |
+| `step_count`      | number         | Number of reasoning steps recorded, across every generation grouped under the trace    |
 | `parent_trace_id` | string \| null | ID of the immediate parent trace; `null` when this trace is itself the root            |
 | `root_trace_id`   | string \| null | ID of the root trace in a multi-agent chain; `null` when this trace is itself the root |
 | `error`           | object \| null | Structured error payload recorded when a generation in this trace failed; `null` otherwise |
@@ -48,6 +48,17 @@ When a generation in a trace fails (e.g. the upstream AI provider returns an err
 ### Step Serialization and File Linkage
 
 Each trace stores the raw step objects produced by the Vercel AI SDK `generateText` call, as a file at `/traces/{traceId}.json` in the project's file storage; `file_id` points to it, so it can be downloaded via the Files API. `Error` instances are serialized to plain objects (`message`, `name`, enumerable properties) so tool failures are preserved faithfully.
+
+### Grouping Generations Under One Trace
+
+`POST /agents/{agent_id}/generate` accepts a `trace_id`. Passing one that already exists groups the new generation with the earlier ones instead of starting a chain — use it when several turns are one logical run and `parent_trace_id` / `root_trace_id` would misrepresent them as nested calls.
+
+- **The steps object is the concatenation of every grouped generation's steps**, in the order the generations first wrote. A second generation appends; it never replaces what the first one recorded.
+- **`step_count` counts them all**, so it stays the length of the object `file_id` points at.
+- **A generation that writes twice rewrites only its own slice.** This is what a run paused on a client tool does: the tool-outputs continuation re-sends the turn's earlier steps along with the new ones, and they replace — rather than duplicate — the ones already recorded.
+- **Sub-agent calls are not grouping.** An agent-to-agent call gets a trace of its own, linked through `parent_trace_id` / `root_trace_id` — see [Trace Ancestry Model](#trace-ancestry-model).
+
+Concurrent generations sharing one `trace_id` are serialized per server process. If several servers write to the same `trace_id` at the same moment, one turn's steps can still be lost; sequential turns — the ordinary grouping flow — are unaffected.
 
 ### Debugging Joins (Trace, Generation, Session)
 
