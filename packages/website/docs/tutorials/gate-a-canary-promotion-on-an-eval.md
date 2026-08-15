@@ -452,8 +452,8 @@ soat promote-agent-release --agent-id "$AGENT_ID"
 const { error } = await adminSoat.agentVersions.promoteAgentRelease({
   path: { agent_id: AGENT_ID },
 });
-console.log(error.code); // PROMOTION_GATE_UNMET (409)
-console.log(error.meta); // { promotion_gate: EVAL_ID, agent_version: 2 }
+console.log(error.error.code); // PROMOTION_GATE_UNMET (409)
+console.log(error.error.meta); // { promotion_gate: EVAL_ID, agent_version: 2 }
 ```
 
 </TabItem>
@@ -506,7 +506,7 @@ console.log(stableRun.agent_version, stableRun.passed); // 1 true
 const { error: still } = await adminSoat.agentVersions.promoteAgentRelease({
   path: { agent_id: AGENT_ID },
 });
-console.log(still.code); // PROMOTION_GATE_UNMET — the green run was version 1
+console.log(still.error.code); // PROMOTION_GATE_UNMET — the green run was version 1
 ```
 
 </TabItem>

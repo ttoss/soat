@@ -384,7 +384,7 @@ const { error } = await adminSoat.tools.createTool({
     },
   },
 });
-console.log(error.code); // VALIDATION_FAILED (400)
+console.log(error.error.code); // VALIDATION_FAILED (400)
 ```
 
 </TabItem>
@@ -394,7 +394,7 @@ console.log(error.code); // VALIDATION_FAILED (400)
 curl -s -X POST "$SOAT_BASE_URL/api/v1/tools" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"bad-upload\",\"type\":\"http\",\"execute\":{\"url\":\"https://my-bucket.s3.us-east-1.amazonaws.com/upload\",\"method\":\"POST\",\"body_mode\":\"multipart\",\"auth\":{\"type\":\"aws_sigv4\",\"region\":\"us-east-1\",\"service\":\"s3\",\"access_key_id\":\"{{secret:$AWS_KEY_ID_SECRET}}\",\"secret_access_key\":\"{{secret:$AWS_SECRET_SECRET}}\"}}}" \
-  | jq '{code}'   # VALIDATION_FAILED
+  | jq '{code: .error.code}'   # VALIDATION_FAILED
 ```
 
 </TabItem>

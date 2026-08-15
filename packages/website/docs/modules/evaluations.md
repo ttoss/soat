@@ -175,12 +175,12 @@ promotes a real turn instead:
 
 ```bash
 soat create-dataset-item-from-generation \
-  --dataset_id "$DATASET_ID" \
-  --generation_id "$GENERATION_ID"
+  --dataset-id "$DATASET_ID" \
+  --generation-id "$GENERATION_ID"
 ```
 
 The generation's stored input messages become the item's `input`, and its own answer
-becomes `expected_output` — pass `--expected_output` to override it, or `null` to store the
+becomes `expected_output` — pass `--expected-output` to override it, or `null` to store the
 item with no reference answer. `source_generation_id` records where the item came from.
 
 What the item stores is a **copy**, not a view. It keeps working after the source
@@ -379,41 +379,41 @@ suite runnable, and also what makes deleting the item the only way to erase it.
 Create a dataset and add a case:
 
 ```bash
-soat create-dataset --project_id "$PROJECT_ID" --name billing-regressions
+soat create-dataset --project-id "$PROJECT_ID" --name billing-regressions
 
-soat create-dataset-item --dataset_id "$DATASET_ID" \
+soat create-dataset-item --dataset-id "$DATASET_ID" \
   --input '[{"role":"user","content":"When is my invoice issued?"}]' \
-  --expected_output "On the first of each month." \
+  --expected-output "On the first of each month." \
   --metadata '{"topic":"billing"}'
 ```
 
 Bind an eval and gate it at an 80% pass rate:
 
 ```bash
-soat create-eval --project_id "$PROJECT_ID" --name billing-regression-suite \
-  --agent_id "$AGENT_ID" --dataset_id "$DATASET_ID" \
+soat create-eval --project-id "$PROJECT_ID" --name billing-regression-suite \
+  --agent-id "$AGENT_ID" --dataset-id "$DATASET_ID" \
   --scorers '[{"type":"contains","value":"first of each month"}]' \
-  --pass_threshold 0.8
+  --pass-threshold 0.8
 ```
 
 Run it synchronously and read the per-item results:
 
 ```bash
-soat start-eval-run --eval_id "$EVAL_ID" --wait true
-soat list-eval-results --eval_id "$EVAL_ID" --eval_run_id "$RUN_ID"
+soat start-eval-run --eval-id "$EVAL_ID" --wait true
+soat list-eval-results --eval-id "$EVAL_ID" --eval-run-id "$RUN_ID"
 ```
 
 Queue a larger run and poll for the verdict:
 
 ```bash
-soat start-eval-run --eval_id "$EVAL_ID" --wait false   # → status: queued
-soat get-eval-run --eval_id "$EVAL_ID" --eval_run_id "$RUN_ID"
-soat cancel-eval-run --eval_id "$EVAL_ID" --eval_run_id "$RUN_ID"
+soat start-eval-run --eval-id "$EVAL_ID" --wait false   # → status: queued
+soat get-eval-run --eval-id "$EVAL_ID" --eval-run-id "$RUN_ID"
+soat cancel-eval-run --eval-id "$EVAL_ID" --eval-run-id "$RUN_ID"
 ```
 
 Evaluate a specific archived version against a baseline — the shape a promotion gate uses:
 
 ```bash
-soat start-eval-run --eval_id "$EVAL_ID" --wait true \
-  --agent_version 3 --baseline_run_id "$BASELINE_RUN_ID"
+soat start-eval-run --eval-id "$EVAL_ID" --wait true \
+  --agent-version 3 --baseline-run-id "$BASELINE_RUN_ID"
 ```
