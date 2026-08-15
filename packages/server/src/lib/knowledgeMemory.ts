@@ -18,6 +18,12 @@ export type MemoryKnowledgeResult = {
   memory_name: string;
   content: string;
   tags: string[] | null;
+  /**
+   * Implementation-defined relevance ranking — higher is better. The ordering
+   * it produces is the contract; the absolute value is not, and the formula
+   * behind it may change. `similarity_score` stays pinned to raw cosine.
+   */
+  score?: number;
   similarity_score?: number;
   created_at: Date;
   updated_at: Date;
@@ -100,9 +106,11 @@ const mapEntry = (
     memory_name: memory.name,
     content: entry.content,
     tags: entry.tags ?? null,
+    // Single-signal ranking today, so `score` is the cosine value. Both fields
+    // are absent without a query, where there is no ranking signal at all.
     ...(similarityScore === undefined
       ? {}
-      : { similarity_score: similarityScore }),
+      : { score: similarityScore, similarity_score: similarityScore }),
     created_at: entry.createdAt,
     updated_at: entry.updatedAt,
   };
@@ -149,7 +157,9 @@ const resolveMemorySearchBySemantic = async (args: {
   if (args.minScore === undefined) return results;
   const { minScore } = args;
   return results.filter((r) => {
-    return (r.similarity_score ?? 0) >= minScore;
+    // Filters on `score`, the documented ranking, so a future change to how
+    // `score` is computed carries `min_score` with it automatically.
+    return (r.score ?? 0) >= minScore;
   });
 };
 

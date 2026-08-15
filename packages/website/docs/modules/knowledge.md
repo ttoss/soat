@@ -34,7 +34,8 @@ A `KnowledgeResult` is a discriminated union on `source_type`. All results share
 | ------------- | -------------------------- | -------------------------------------------------------- |
 | `source_type` | `"document"` \| `"memory"` | Discriminant for the knowledge source type               |
 | `content`     | `string\|null`             | Text content of the result                               |
-| `similarity_score` | `number`              | Semantic similarity score (0–1); only present when `query` is used |
+| `score`       | `number`                   | Relevance ranking; only present when `query` is used — see [Relevance scoring](#relevance-scoring) |
+| `similarity_score` | `number`              | Raw cosine similarity (0–1); only present when `query` is used |
 | `created_at`  | `string`                   | ISO 8601 creation timestamp                              |
 | `updated_at`  | `string`                   | ISO 8601 last-updated timestamp                          |
 
@@ -74,11 +75,60 @@ The `POST /knowledge/search` endpoint accepts the following filters. At least on
 | `document_paths` | `string[]` | Filter document results to paths starting with these prefixes                              |
 | `document_ids`   | `string[]` | Filter document results to specific document IDs                                           |
 
-When `query` is set, results include a `similarity_score` field and are ordered by descending relevance; `min_score` and `limit` apply additional controls. For a walkthrough, see [Agent with Persistent Memory — Step 12 (Query the knowledge layer directly)](/docs/tutorials/memories-agent#step-12--query-the-knowledge-layer-directly).
+When `query` is set, results include `score` and `similarity_score` and are ordered by descending `score`; `min_score` and `limit` apply additional controls. For a walkthrough, see [Agent with Persistent Memory — Step 12 (Query the knowledge layer directly)](/docs/tutorials/memories-agent#step-12--query-the-knowledge-layer-directly).
 
 Which sources a request searches follows from its filters: document results are included whenever `query`, `document_paths`, or `document_ids` is passed; memory entries whenever `memory_ids` or `memory_tags` is passed. Passing a `query` together with a memory filter searches both sources at once — the result sets are merged and ranked together by descending similarity before `limit` is applied. `memory_ids` and `memory_tags` combine with union semantics.
 
 `memory_tags` matches at **entry granularity**: an entry is returned when its parent memory's tags match the globs or when the entry's own `tags` match — see [Memories — Entry-Level Tag Filtering](./memories.md#entry-level-tag-filtering).
+
+### Relevance scoring
+
+Two fields come back on every result of a `query` search, and they are **not** the same
+contract:
+
+| Field | Contract |
+| --- | --- |
+| `score` | **Implementation-defined** relevance ranking, higher is better. The *ordering* it produces is the contract; the absolute value is not. Results are sorted by it and `min_score` filters on it. |
+| `similarity_score` | Raw **cosine similarity** (0–1) between the query embedding and the result. Pinned to that meaning — it is never redefined. |
+
+Today the ranking is single-signal, so the two are equal. That is an implementation
+detail, not a guarantee: a later hybrid ranking would fuse several signals into `score`
+while `similarity_score` keeps reporting the cosine value for debugging.
+
+What this means in practice:
+
+- **Compare, don't interpret.** `score` is meaningful *relative to other results in the
+  same response*. Do not persist it, compare it across releases, or show it to end users
+  as a percentage.
+- **`min_score` is a deployment-tuned knob, not a portable constant.** It filters on
+  `score`, so a threshold tuned against today's ranking is not guaranteed to select the
+  same results after the ranking changes. Pin the value per deployment and re-tune it when
+  you upgrade.
+- **Need a stable number?** Read `similarity_score`.
+
+### Injected knowledge is untrusted input
+
+Retrieved knowledge is partly **user-derived** — a memory entry written by
+[automatic extraction](./memories.md#automatic-extraction) contains whatever the user
+said in the turn it was extracted from. The platform treats it as data, never as
+instruction, and enforces that in two places:
+
+- **It is never injected with the `system` role.** [Agent knowledge injection](./agents.md#knowledge-config)
+  delivers results as a `user` message inside a fenced `<knowledge>` block, preceded by a
+  preamble framing the contents as reference material. The agent's own `instructions`
+  remain the only system-authored input. Without this, a phrase a user said once could
+  come back as a system-level instruction in every later generation — a persistent
+  escalation path, not a one-turn prompt injection.
+- **Extraction runs tool-less.** The fact-extraction completion is a plain text completion
+  with no tools and no knowledge injection of its own, so text quoted from a conversation
+  cannot trigger an agent side effect while it is being turned into memory entries.
+
+**What this does not do:** it does not make retrieved content safe to act on. A tool call
+an agent makes after reading injected knowledge is still authorized only by that agent's
+[boundary policy](./agents.md) and [guardrails](./guardrails.md) — the fencing lowers the
+chance a model treats retrieved text as an instruction, it does not authorize anything.
+Scope an agent's boundary policy on the assumption that anything in its reachable memories
+and documents may influence what it tries to do.
 
 ### Project Scoping
 

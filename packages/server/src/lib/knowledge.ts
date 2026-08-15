@@ -34,6 +34,7 @@ export type QueryDocumentResult = {
   tags?: Record<string, string>;
   content: string | null;
   page?: number;
+  score?: number;
   similarity_score?: number;
   created_at: Date;
   updated_at: Date;
@@ -54,6 +55,12 @@ export type KnowledgeResult =
       tags?: Record<string, string>;
       content: string | null;
       page?: number;
+      /**
+       * Implementation-defined relevance ranking — higher is better. The
+       * ordering it produces is the contract; the absolute value is not.
+       * `similarity_score` stays pinned to raw cosine.
+       */
+      score?: number;
       similarity_score?: number;
       created_at: Date;
       updated_at: Date;
@@ -163,6 +170,8 @@ const mapChunkResult = (
     ...pickDocumentFields(base),
     content: chunk.content,
     page: chunk.pageNumber ?? undefined,
+    // Single-signal ranking today, so `score` is the cosine value.
+    score: similarityScore,
     similarity_score: similarityScore,
     created_at: chunk.createdAt,
     updated_at: chunk.updatedAt,
@@ -319,7 +328,9 @@ export const resolveDocumentSearch = async (args: {
   if (!config.search || config.minScore === undefined) return mapped;
   const minScore = config.minScore;
   return mapped.filter((r) => {
-    return (r.similarity_score ?? -1) >= minScore;
+    // Filters on `score`, the documented ranking, so a future change to how
+    // `score` is computed carries `min_score` with it automatically.
+    return (r.score ?? -1) >= minScore;
   });
 };
 
@@ -407,6 +418,7 @@ export const searchKnowledge = async (
       tags: doc.tags,
       content: doc.content,
       page: doc.page,
+      score: doc.score,
       similarity_score: doc.similarity_score,
       created_at: doc.created_at,
       updated_at: doc.updated_at,
@@ -417,8 +429,10 @@ export const searchKnowledge = async (
 
   if (args.query) {
     allResults.sort((a, b) => {
-      const aScore = a.similarity_score ?? 0;
-      const bScore = b.similarity_score ?? 0;
+      // Ordering is defined against `score` — the field whose ranking is the
+      // contract — not against the raw cosine kept for debugging.
+      const aScore = a.score ?? 0;
+      const bScore = b.score ?? 0;
       return bScore - aScore;
     });
   }

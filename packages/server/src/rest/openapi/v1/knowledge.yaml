@@ -45,7 +45,12 @@ paths:
                   example: 'customer communication preferences'
                 min_score:
                   type: number
-                  description: Minimum similarity score (0–1). Results with lower scores are excluded. Only applies when `query` is provided.
+                  description: >-
+                    Minimum `score` a result must reach to be returned. Filters on the
+                    implementation-defined `score`, not on `similarity_score`, so the
+                    cutoff follows the ranking. Only applies when `query` is provided.
+                    Because the scale behind `score` is not part of the contract, treat a
+                    tuned value as tied to the deployment rather than portable.
                   minimum: 0
                   maximum: 1
                   example: 0.5
@@ -202,9 +207,19 @@ components:
           type: string
           nullable: true
           description: Full text content of the document
+        score:
+          type: number
+          description: >-
+            Implementation-defined relevance ranking — higher is better. The **ordering**
+            it produces is the contract; the absolute value is not, and the formula behind
+            it may change (a future hybrid ranking would fuse several signals here). It is
+            the field `min_score` filters on and the field results are sorted by. Only
+            present when `query` was provided. Use `similarity_score` when you need the raw
+            cosine value.
+          example: 0.82
         similarity_score:
           type: number
-          description: Semantic similarity score (0–1). Only present when `query` was provided.
+          description: Raw cosine similarity (0–1) between the query and this result. Pinned to that meaning — unlike `score`, it is never redefined. Only present when `query` was provided.
           minimum: 0
           maximum: 1
           example: 0.82
@@ -249,9 +264,19 @@ components:
         content:
           type: string
           description: Text content of the memory entry
+        score:
+          type: number
+          description: >-
+            Implementation-defined relevance ranking — higher is better. The **ordering**
+            it produces is the contract; the absolute value is not, and the formula behind
+            it may change (a future hybrid ranking would fuse several signals here). It is
+            the field `min_score` filters on and the field results are sorted by. Only
+            present when `query` was provided. Use `similarity_score` when you need the raw
+            cosine value.
+          example: 0.79
         similarity_score:
           type: number
-          description: Semantic similarity score (0–1). Only present when `query` was provided.
+          description: Raw cosine similarity (0–1) between the query and this result. Pinned to that meaning — unlike `score`, it is never redefined. Only present when `query` was provided.
           minimum: 0
           maximum: 1
           example: 0.79

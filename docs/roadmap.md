@@ -117,11 +117,14 @@ Phase 6.)
 
 ### RC checklist
 
-- [ ] RC-1 Memory entry provenance (5c)
-- [ ] RC-2 Temporal invalidation schema + `superseded` / `include_invalidated` API shape (5b)
-- [ ] RC-3 `score` documented as implementation-defined
-- [ ] RC-4 Threat model in module docs
-- [ ] RC-5 Entry-ID / page provenance in source tags
+- [x] RC-1 Memory entry provenance (5c) — #1025
+- [x] RC-2 Temporal invalidation schema + `superseded` / `include_invalidated` API shape (5b) — #1025
+- [x] RC-3 `score` documented as implementation-defined
+- [x] RC-4 Threat model in module docs
+- [x] RC-5 Entry-ID / page provenance in source tags — #1030
+
+**The RC list is complete** — nothing here blocks cutting the v1 RC. Everything
+below this line is additive and ships after it.
 
 Suggested order: RC-1 and RC-2 together (one migration, one spec/docs pass over
 the memories module), then RC-5, then RC-3 (small additive spec+code change)

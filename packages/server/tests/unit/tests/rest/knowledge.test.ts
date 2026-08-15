@@ -318,6 +318,84 @@ describe('Knowledge', () => {
       expect(memResult.content).toBe('The sky is blue on a clear day.');
     });
 
+    test('returns score alongside similarity_score for both source types', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send({
+          project_id: projectId,
+          query: 'anything',
+          memory_ids: [memoryId],
+        });
+
+      expect(response.status).toBe(200);
+      const doc = response.body.results.find((r: { source_type: string }) => {
+        return r.source_type === 'document';
+      });
+      const memory = response.body.results.find(
+        (r: { source_type: string }) => {
+          return r.source_type === 'memory';
+        }
+      );
+
+      // `score` is the ranking the ordering and `min_score` are defined
+      // against; `similarity_score` stays pinned to raw cosine. They are equal
+      // today because the ranking is single-signal.
+      expect(doc.score).toBeDefined();
+      expect(doc.score).toBe(doc.similarity_score);
+      expect(memory.score).toBeDefined();
+      expect(memory.score).toBe(memory.similarity_score);
+    });
+
+    test('results are ordered by descending score', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send({ project_id: projectId, query: 'anything' });
+
+      expect(response.status).toBe(200);
+      const scores = response.body.results.map((r: { score: number }) => {
+        return r.score;
+      });
+      expect(scores.length).toBeGreaterThan(0);
+      for (const score of scores) {
+        expect(typeof score).toBe('number');
+      }
+      expect(
+        [...scores].sort((a: number, b: number) => {
+          return b - a;
+        })
+      ).toEqual(scores);
+    });
+
+    test('omits score when no query is provided', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send({ project_id: projectId, memory_ids: [memoryId] });
+
+      expect(response.status).toBe(200);
+      expect(response.body.results.length).toBeGreaterThan(0);
+      // Without a query there is no ranking signal, so neither field applies.
+      expect(response.body.results[0].score).toBeUndefined();
+      expect(response.body.results[0].similarity_score).toBeUndefined();
+    });
+
+    test('min_score filters on score', async () => {
+      const above = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send({ project_id: projectId, query: 'anything', min_score: 0 });
+      expect(above.status).toBe(200);
+      expect(above.body.results.length).toBeGreaterThan(0);
+      for (const result of above.body.results) {
+        expect(result.score).toBeGreaterThanOrEqual(0);
+      }
+
+      // A threshold above any achievable score filters everything out.
+      const below = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send({ project_id: projectId, query: 'anything', min_score: 1.5 });
+      expect(below.status).toBe(200);
+      expect(below.body.results).toHaveLength(0);
+    });
+
     test('excludes invalidated memory entries', async () => {
       // A memory of its own, so invalidating an entry cannot affect any other
       // test in this file.
