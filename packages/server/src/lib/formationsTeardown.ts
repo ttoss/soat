@@ -21,7 +21,11 @@ import {
   applyDeleteResource,
   findResourceDeletionBlocker,
 } from './formationsResourceHandlers';
-import type { FormationEvent, FormationTemplate } from './formationsTypes';
+import {
+  buildFormationError,
+  type FormationEvent,
+  type FormationTemplate,
+} from './formationsTypes';
 
 const log = createDebug('soat:formations');
 
@@ -154,7 +158,7 @@ export const performResourceDeletions = async (
  * way to learn which resource blocked — nor that resolving it and deleting again
  * is all that stands between them and a clean stack.
  */
-export const throwDeletionFailure = (args: {
+export const buildDeletionFailure = (args: {
   formationId: string;
   events: FormationEvent[];
   /**
@@ -164,7 +168,7 @@ export const throwDeletionFailure = (args: {
    * about to retry is still whole.
    */
   intact?: boolean;
-}): never => {
+}): DomainError => {
   const failures = args.events
     .filter((event) => {
       return event.status === 'failed';
@@ -187,11 +191,20 @@ export const throwDeletionFailure = (args: {
     ? `No resource was deleted — the formation is unchanged and still 'active'. Resolve these and delete it again.`
     : `The formation is left in 'delete_failed'; resolve these and delete it again.`;
 
-  throw new DomainError(
+  return new DomainError(
     'FORMATION_DELETE_FAILED',
     `Formation '${args.formationId}' could not be fully deleted; ${String(failures.length)} resource(s) could not be removed: ${named}. ${outcome}`,
     { failures }
   );
+};
+
+/** `buildDeletionFailure`, for the callers that have nothing left to record. */
+export const throwDeletionFailure = (args: {
+  formationId: string;
+  events: FormationEvent[];
+  intact?: boolean;
+}): never => {
+  throw buildDeletionFailure(args);
 };
 
 /**
@@ -253,9 +266,18 @@ export const deleteFormation = async (args: {
   const { events, hasError } = await performResourceDeletions(orderedResources);
 
   if (hasError) {
-    await operation.update({ status: 'failed', events });
-    await formation.update({ status: 'delete_failed' });
-    throwDeletionFailure({ formationId: args.id, events });
+    // A wedged stack answers `409` here, but the row survives the request — so
+    // the same failure is stored, and a later `get-formation` explains the
+    // `delete_failed` it reports instead of just naming it (#1028).
+    const failure = buildDeletionFailure({ formationId: args.id, events });
+    const error = buildFormationError({
+      code: failure.code,
+      message: failure.message,
+      ...(failure.meta !== undefined ? { meta: failure.meta } : {}),
+    });
+    await operation.update({ status: 'failed', events, error });
+    await formation.update({ status: 'delete_failed', error });
+    throw failure;
   }
 
   await operation.update({ status: 'succeeded', events });

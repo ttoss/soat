@@ -75,6 +75,7 @@ SOAT detects that `MyAgent` depends on `MyProvider` and `MyMemory` through the `
 | `metadata`   | object   | Static annotations stored on the record (supplied at create/update). Not a substitution site — `sub`/`param`/`ref` expressions are rejected (use `template.metadata` instead) |
 | `resolved_metadata`   | object   | The template's top-level `metadata` after `sub`/`param`/`ref` substitution at the last deploy (null when the template declares no metadata) |
 | `resolved_parameters` | object   | Parameter values applied at the last deploy, for auditability (`no_echo` values masked as `***`; null when the template declares no parameters) |
+| `error`      | object   | Why the formation is `failed` / `delete_failed`, as `{ code, message, meta }` — the same shape an error response uses. Null in every other status, and cleared by the next successful deploy |
 | `resources`  | array    | Resources managed by the formation                                             |
 | `created_at` | string   | ISO 8601 creation timestamp                                                    |
 | `updated_at` | string   | ISO 8601 last-updated timestamp                                                |
@@ -100,7 +101,7 @@ Every deploy (create, update, delete) creates one of these records; `GET /api/v1
 | `status`         | string | `pending` \| `running` \| `succeeded` \| `failed`     |
 | `plan`           | object | Planned changes computed before execution             |
 | `events`         | array  | Per-resource event log with timestamp, action, status |
-| `error`          | object | Error details if operation failed                     |
+| `error`          | object | Why this operation failed, as `{ code, message, meta }` — the same bag the formation carries while that failure is its current state. Null otherwise |
 | `created_at`     | string | ISO 8601 creation timestamp                           |
 | `updated_at`     | string | ISO 8601 last-updated timestamp                       |
 
@@ -369,6 +370,54 @@ Once a resource reaches `deleted`, it is a tombstone kept for audit history —
 removed from the template; a later no-op reconcile never re-lists it.
 `plan-formation` previews the pending removal as a `delete` action, so the two
 always agree on the same set of changes.
+
+### A Failed Deploy Still Answers 2xx
+
+A formation deploy is a **reconciler**, so the two failure kinds are reported
+differently:
+
+| What went wrong | How it is reported |
+| --- | --- |
+| The template's **shape** — an unknown field, a missing required property, a bad `ref` | `400 VALIDATION_FAILED`, nothing is deployed |
+| The **reconciliation** — a resource the platform refused to create or update | `201`/`200` with `status: "failed"` and a populated `error` |
+
+The second is not an error response, because the operation genuinely ran:
+resources may have been created and walked back, and partial failure is state on
+the stack. So **`2xx` means the deploy was attempted, not that it worked** — read
+`status`.
+
+`error` on that response says why, without a second call:
+
+```json
+{
+  "id": "form_V1StGXR8Z5jdHi6B",
+  "status": "failed",
+  "error": {
+    "code": "VALIDATION_FAILED",
+    "message": "dataset_id is immutable: item 'dsit_…' belongs to 'dset_…'. Declare a new dataset_item instead.",
+    "meta": { "logical_id": "case1", "resource_type": "dataset_item" }
+  }
+}
+```
+
+It stays readable on `get-formation` for as long as the stack is `failed`, and
+the next successful deploy clears it. `list-formation-events` remains the
+history — every operation, each with the same `error` bag.
+
+**The CLI exits non-zero on that body.** `create-formation` and
+`update-formation` still print the payload to stdout (so `$(…)` capture and
+`| jq` are unaffected), then write the reason to stderr and exit `1`:
+
+```bash
+soat update-formation --formation-id "$F" --template "$T" && echo "deployed"
+# update-formation: the deploy failed at resource 'case1' — the formation is
+# 'failed'. VALIDATION_FAILED: dataset_id is immutable: …
+# (exit 1 — "deployed" is not printed)
+```
+
+Reads are unaffected: `get-formation` on a `failed` stack is a successful read
+and exits `0`. So is `plan-formation` / `validate-formation`, whose outcome is
+their payload.
 
 ### Rollback on a Failed Deploy
 

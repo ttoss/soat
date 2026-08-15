@@ -84,6 +84,13 @@ export class Formation extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare resolvedParameters: Record<string, string> | null;
 
+  // Why the last deploy (or teardown) failed, in the platform error shape
+  // `{ code, message, meta? }`. Written whenever the formation enters `failed`
+  // or `delete_failed`, cleared on the next successful apply — so a caller that
+  // reads a failed formation is told why without a second call (#1028).
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare error: Record<string, unknown> | null;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

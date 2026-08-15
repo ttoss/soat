@@ -398,6 +398,7 @@ describe('formationsApplyHelpers', () => {
       resourceType: 'memory',
       action: 'create',
       errorMessage: 'creation failed',
+      errorCode: 'VALIDATION_FAILED',
     });
 
     expect(events).toHaveLength(1);
@@ -412,11 +413,16 @@ describe('formationsApplyHelpers', () => {
     await operation.reload();
     await formation.reload();
     expect(operation.status).toBe('failed');
-    expect(operation.error).toEqual({
+    const error = {
+      code: 'VALIDATION_FAILED',
       message: 'creation failed',
-      logicalId: 'provider',
-    });
+      meta: { logical_id: 'provider', resource_type: 'memory' },
+    };
+    expect(operation.error).toEqual(error);
     expect(operation.events).toEqual(events);
     expect(formation.status).toBe('failed');
+    // The same bag lands on the formation, so the deploy response explains its
+    // own `status: 'failed'` without a second call (#1028).
+    expect(formation.error).toEqual(error);
   });
 });

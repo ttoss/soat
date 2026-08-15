@@ -534,6 +534,121 @@ resources:
       expect(resource.physical_resource_id).toBeNull();
     });
 
+    // A deploy answers 2xx even when it fails — the operation ran, and partial
+    // failure is state on the resource. That is only defensible if the response
+    // the caller already holds says *why*; before #1028 the reason lived solely
+    // on a `list-formation-events` call the caller had to know to make.
+    test('a failed deploy explains itself on the response body', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `deploy-error-body-${Date.now()}`,
+          template: {
+            resources: {
+              MyProvider: {
+                type: 'ai_provider',
+                properties: {
+                  name: 'error-body-provider',
+                  provider: 'openai',
+                  default_model: 'gpt-4o',
+                  secret_id: 'sec_nonexistent',
+                },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('failed');
+      // A bare `Error` from the resource handler has no code to report, so the
+      // bag says so rather than inventing one.
+      expect(res.body.error).toEqual({
+        code: 'UNKNOWN',
+        message: expect.stringContaining('sec_nonexistent'),
+        meta: { logical_id: 'MyProvider', resource_type: 'ai_provider' },
+      });
+
+      // The same failure is readable later, without a second endpoint.
+      const get = await authenticatedTestClient(userToken).get(
+        `/api/v1/formations/${res.body.id}`
+      );
+      expect(get.status).toBe(200);
+      expect(get.body.error).toEqual(res.body.error);
+
+      // …and on the operation history, in the identical shape.
+      const events = await authenticatedTestClient(userToken).get(
+        `/api/v1/formations/${res.body.id}/events`
+      );
+      expect(events.status).toBe(200);
+      expect(events.body.data[0].error).toEqual(res.body.error);
+    });
+
+    test('a successful deploy reports no error', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `deploy-no-error-${Date.now()}`,
+          template: simpleTemplate,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('active');
+      expect(res.body.error).toBeNull();
+
+      const list = await authenticatedTestClient(userToken).get(
+        `/api/v1/formations?project_id=${projectId}`
+      );
+      const listed = list.body.data.find((f: { id: string }) => {
+        return f.id === res.body.id;
+      });
+      expect(listed.error).toBeNull();
+
+      await authenticatedTestClient(userToken).delete(
+        `/api/v1/formations/${res.body.id}`
+      );
+    });
+
+    test('a corrected re-apply clears the error it recovered from', async () => {
+      const providerName = `recovered-provider-${Date.now()}`;
+      const template = (secretId: string | null) => {
+        return {
+          resources: {
+            RecoveredProvider: {
+              type: 'ai_provider',
+              properties: {
+                name: providerName,
+                provider: 'openai',
+                default_model: 'gpt-4o',
+                secret_id: secretId,
+              },
+            },
+          },
+        };
+      };
+
+      const failed = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `recovered-formation-${Date.now()}`,
+          template: template('sec_nonexistent'),
+        });
+      expect(failed.status).toBe(201);
+      expect(failed.body.error.code).toBe('UNKNOWN');
+
+      const fixed = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${failed.body.id}`)
+        .send({ template: template(null) });
+
+      expect(fixed.status).toBe(200);
+      expect(fixed.body.status).toBe('active');
+      // `error` describes the current status, not the stack's history — the
+      // operation list is what keeps the history.
+      expect(fixed.body.error).toBeNull();
+    });
+
     test('rolls back resources created earlier in the same failed apply', async () => {
       const memoryName = `rollback-mem-${Date.now()}`;
       const partiallyFailingTemplate = {
@@ -1236,6 +1351,17 @@ resources:
       );
       expect(getRes.status).toBe(200);
       expect(getRes.body.status).toBe('delete_failed');
+      // The 409 is gone once the request is over; the wedged stack still has
+      // to say why it is wedged when someone reads it back (#1028).
+      expect(getRes.body.error).toEqual({
+        code: 'FORMATION_DELETE_FAILED',
+        message: expect.stringContaining('CorruptedResource'),
+        meta: {
+          failures: [
+            expect.objectContaining({ logical_id: 'CorruptedResource' }),
+          ],
+        },
+      });
     });
 
     // The blocker an operator actually hits: an agent that has generated. The
@@ -4437,6 +4563,13 @@ resources:
       // The operation must not be reported as a success.
       expect(update.status).toBe(200);
       expect(update.body.status).toBe('failed');
+      // A coded failure keeps its code on the way out, so a caller can branch
+      // on it without parsing the message.
+      expect(update.body.error).toEqual({
+        code: 'VALIDATION_FAILED',
+        message: expect.stringMatching(/immutable/i),
+        meta: { logical_id: 'MyQuota', resource_type: 'quota' },
+      });
 
       // The physical quota keeps every one of its original values — including
       // the mutable ones, which must not be applied piecemeal on a failed op.

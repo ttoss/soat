@@ -14,7 +14,7 @@ import {
   applyDeleteResource,
   applyUpdateResource,
 } from './formationsResourceHandlers';
-import type { FormationEvent } from './formationsTypes';
+import { buildFormationError, type FormationEvent } from './formationsTypes';
 
 const log = createDebug('soat:formations');
 
@@ -244,6 +244,8 @@ export const failFormationOperation = async (args: {
   resourceType: string;
   action: 'create' | 'update';
   errorMessage: string;
+  /** `formationErrorCode(thrown)` — the code the failure is reported under. */
+  errorCode: string;
   /**
    * Events produced by the unwind that this failure triggered. They are
    * appended *after* the failure event so the operation history reads in the
@@ -262,10 +264,18 @@ export const failFormationOperation = async (args: {
     error: args.errorMessage,
   });
   if (args.rollbackEvents) args.events.push(...args.rollbackEvents);
+  // The same bag on both records: the operation is the history, the formation
+  // is what the deploy response returns, and a caller reading either gets the
+  // failure in the platform's `{ code, message, meta }` shape (#1028).
+  const error = buildFormationError({
+    code: args.errorCode,
+    message: args.errorMessage,
+    meta: { logical_id: args.logicalId, resource_type: args.resourceType },
+  });
   await args.operation.update({
     status: 'failed',
     events: args.events,
-    error: { message: args.errorMessage, logicalId: args.logicalId },
+    error,
   });
-  await args.formation.update({ status: 'failed' });
+  await args.formation.update({ status: 'failed', error });
 };

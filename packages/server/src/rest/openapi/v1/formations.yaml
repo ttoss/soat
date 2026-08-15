@@ -181,6 +181,14 @@ paths:
       description: >
         Validates the template, creates the formation record, then provisions
         all declared resources in dependency order.
+
+
+        A **template-shape** error is refused with `400`. A **deploy** failure
+        is not: the operation ran, so the formation is returned with `201` and
+        `status: "failed"`, and `error` explains why (the resources created
+        before the failure are rolled back). Read `status` — a `2xx` here means
+        the deploy was attempted, not that it worked. The `soat` CLI exits
+        non-zero on that body so `create-formation && …` does not lie.
       operationId: createFormation
       requestBody:
         required: true
@@ -276,6 +284,13 @@ paths:
         Applies a new template to the formation. Resources are created,
         updated, or deleted to reconcile the current state with the desired
         state.
+
+
+        A **template-shape** error is refused with `400`. A **deploy** failure
+        is not: the operation ran, so the formation is returned with `200` and
+        `status: "failed"`, and `error` explains why. Read `status` — a `2xx`
+        here means the deploy was attempted, not that it worked. The `soat` CLI
+        exits non-zero on that body so `update-formation && …` does not lie.
       operationId: updateFormation
       parameters:
         - name: formation_id
@@ -1909,6 +1924,16 @@ components:
             Parameter values applied at the last deploy, for auditability.
             `no_echo` parameters are masked (`***`). Null when the template
             declares no parameters.
+        error:
+          allOf:
+            - $ref: '#/components/schemas/FormationError'
+          nullable: true
+          description: >
+            Why the formation is `failed` or `delete_failed`, in the same
+            `{ code, message, meta }` shape as an error response. Null in every
+            other status, and cleared by the next successful deploy. This is the
+            reason a `2xx` deploy response can report `status: "failed"` without
+            a second call to `list-formation-events`.
         resources:
           type: array
           items:
@@ -1989,6 +2014,39 @@ components:
           items:
             $ref: '#/components/schemas/PlanChange'
 
+    FormationError:
+      type: object
+      description: >-
+        Why a deploy or teardown failed, in the one error shape the API has.
+        Carried on the formation itself and on the operation that failed.
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: >-
+            The failing operation's error code (`VALIDATION_FAILED`,
+            `RESOURCE_NOT_FOUND`, `FORMATION_DELETE_FAILED`, …), or `UNKNOWN`
+            when the underlying failure carried no code.
+          example: VALIDATION_FAILED
+        message:
+          type: string
+          description: The failure, as reported by the resource that raised it.
+          example: >-
+            dataset_id is immutable: item 'dsit_V1StGXR8Z5jdHi6B' belongs to
+            'dset_V1StGXR8Z5jdHi6B'. Declare a new dataset_item instead.
+        meta:
+          type: object
+          additionalProperties: true
+          description: >-
+            Context for the failure. A failed apply names the resource that
+            broke it (`logical_id`, `resource_type`); a failed teardown lists
+            every blocker under `failures`.
+          example:
+            logical_id: case1
+            resource_type: dataset_item
+
     FormationEvent:
       type: object
       properties:
@@ -2050,9 +2108,13 @@ components:
             - $ref: '#/components/schemas/PlanResult'
           nullable: true
         error:
-          type: object
-          additionalProperties: true
+          allOf:
+            - $ref: '#/components/schemas/FormationError'
           nullable: true
+          description: >-
+            Why this operation failed. Null for a succeeded or running
+            operation. The same bag the formation itself carries while that
+            failure is its current state.
         created_at:
           type: string
           format: date-time

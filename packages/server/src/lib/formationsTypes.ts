@@ -1,3 +1,5 @@
+import { DomainError } from '../errors';
+
 // ── Template Types ────────────────────────────────────────────────────────
 
 export type RefExpression = { ref: string };
@@ -150,6 +152,45 @@ export type FormationEvent = {
   error?: string;
 };
 
+/**
+ * Why a deploy or teardown failed, in the one error shape the API has —
+ * `{ code, message, meta? }`, the same envelope `errorLogger` writes for a 4xx.
+ *
+ * It is stored on the `FormationOperation` *and* on the formation itself, so
+ * the response a caller already holds explains its own `status: 'failed'`
+ * instead of pointing at a second call to `list-formation-events` (#1028).
+ * Being a stored bag it is written snake_case, like every other wire value.
+ */
+export type FormationError = {
+  code: string;
+  message: string;
+  meta?: Record<string, unknown>;
+};
+
+/**
+ * The error code a thrown value carries, for the `FormationError` bag.
+ *
+ * A `DomainError` names its own failure (`RESOURCE_NOT_FOUND`,
+ * `VALIDATION_FAILED`); anything else — a Sequelize validation, a bug — has no
+ * code to report, and mislabelling it would be worse than saying so. Mirrors
+ * `buildRunError` on the orchestration side.
+ */
+export const formationErrorCode = (error: unknown): string => {
+  return error instanceof DomainError ? error.code : 'UNKNOWN';
+};
+
+export const buildFormationError = (args: {
+  code: string;
+  message: string;
+  meta?: Record<string, unknown>;
+}): FormationError => {
+  return {
+    code: args.code,
+    message: args.message,
+    ...(args.meta !== undefined ? { meta: args.meta } : {}),
+  };
+};
+
 // ── Wire Types ────────────────────────────────────────────────────────────
 //
 // `PlanChange`/`FormationEvent` carry structural keys in camelCase
@@ -240,6 +281,11 @@ export type MappedFormation = {
   metadata: Record<string, unknown> | null;
   resolved_metadata: Record<string, unknown> | null;
   resolved_parameters: Record<string, string> | null;
+  /**
+   * Why the formation is `failed` / `delete_failed`. Null in every other
+   * status — a successful apply clears it.
+   */
+  error: FormationError | null;
   resources?: MappedFormationResource[];
   created_at: Date;
   updated_at: Date;
