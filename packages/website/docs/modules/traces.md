@@ -60,6 +60,22 @@ Each trace stores the raw step objects produced by the Vercel AI SDK `generateTe
 
 Concurrent generations sharing one `trace_id` are serialized per server process. If several servers write to the same `trace_id` at the same moment, one turn's steps can still be lost; sequential turns — the ordinary grouping flow — are unaffected.
 
+### Reading a Turn Back
+
+The steps object is the raw record, in the `ai` package's own shape. To read a turn
+without parsing it yourself, use the generation's transcript — an ordered projection of
+the same steps into a documented, stable schema:
+
+```bash
+soat get-generation-transcript --generation_id gen_abc
+```
+
+A transcript is scoped to one **turn**, which is why it is anchored on the generation
+rather than here: a trace can hold several generations, and `status`, `stop_reason` and
+`agent_version` are generation fields. A transcript reads back only the steps of its own
+generation's segment, so grouping several turns under one `trace_id` does not blur them
+together. See [Generations → Transcript](./generations.md#transcript).
+
 ### Debugging Joins (Trace, Generation, Session)
 
 Generation responses carry `generation_id` + `trace_id`; `GET /generations?trace_id=` returns all generations linked to a trace. Trace records do **not** include `session_id` — capture (`session_id`, `generation_id`, `trace_id`) from generation responses at your own boundary to correlate in both directions. See [Debug Session, Generation, and Trace History - Step 5](/docs/tutorials/debug-session-generation-trace-history#step-5---inspect-traces-for-each-generation).

@@ -8,6 +8,7 @@ import {
   listGenerations,
   updateGenerationMetadata,
 } from 'src/lib/generations';
+import { getGenerationTranscript } from 'src/lib/generationTranscript';
 
 import {
   requestPrincipalFromCtx,
@@ -86,6 +87,46 @@ generationsRouter.get('/generations/:generation_id', async (ctx: Context) => {
 
   ctx.body = generation;
 });
+
+/**
+ * @openapi
+ * GET /api/v1/generations/{generation_id}/transcript
+ * operationId: getGenerationTranscript
+ * Returns one generation's turn as an ordered transcript: what it was asked,
+ * each model step with its tool calls and results, and how it ended. Assembled
+ * at read time from the generation row and the trace's steps object — nothing
+ * is stored, so a transcript cannot outlive the content it projects.
+ */
+generationsRouter.get(
+  '/generations/:generation_id/transcript',
+  async (ctx: Context) => {
+    requireAuth(ctx);
+
+    const projectIds = await requireProjectAccess({
+      ctx,
+      action: 'generations:GetGeneration',
+      resourceType: 'generation',
+    });
+
+    // The response merges the generation's own columns with the trace's steps
+    // object, so the caller must be allowed to read both — otherwise
+    // `generations:GetGeneration` alone would silently widen to cover trace
+    // content (tool arguments and results) that is today only reachable through
+    // `GET /traces/{id}` plus the files API. Deriving authority from exactly the
+    // two resources the transcript projects also means it cannot drift from
+    // them later. Same dual-check shape as curating a dataset item (#1012).
+    await requireProjectAccess({
+      ctx,
+      action: 'traces:GetTrace',
+      resourceType: 'trace',
+    });
+
+    ctx.body = await getGenerationTranscript({
+      generationId: ctx.params.generation_id,
+      projectIds: projectIds ?? undefined,
+    });
+  }
+);
 
 /**
  * @openapi

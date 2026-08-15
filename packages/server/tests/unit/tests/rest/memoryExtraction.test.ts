@@ -125,6 +125,32 @@ describe('Memory Extraction', () => {
     }
   };
 
+  // `createGeneration` is mocked throughout this suite, so the flow never
+  // persists a Generation row. Provenance is a real FK, so the row — and the
+  // trace it requires — is seeded here for the mocked id to resolve against.
+  const seedGeneration = async (args: {
+    publicId: string;
+    agentId: string;
+  }): Promise<void> => {
+    const project = await db.Project.findOne({
+      where: { publicId: projectId },
+    });
+    const agent = await db.Agent.findOne({ where: { publicId: args.agentId } });
+    const trace = await db.Trace.create({
+      publicId: `trc_${args.publicId}`,
+      projectId: project!.id,
+      agentId: agent!.id,
+    });
+    await db.Generation.create({
+      publicId: args.publicId,
+      projectId: project!.id,
+      agentId: agent!.id,
+      traceId: trace.id,
+      status: 'completed',
+      startedAt: new Date(),
+    });
+  };
+
   const completedGeneration = (id: string, content: string) => {
     return {
       id,
@@ -220,6 +246,40 @@ describe('Memory Extraction', () => {
       expect(callArgs.agentId).toBe(agentId);
       expect(callArgs.prompt).toContain('I prefer to be contacted by email.');
       expect(callArgs.prompt).toContain('Noted, I will use email.');
+    });
+
+    test('records the generation and conversation that produced the fact', async () => {
+      const memoryId = await createMemory('Provenance Extraction Memory');
+      const agentId = await createAgent({
+        name: 'ProvenanceExtractionAgent',
+        knowledgeConfig: { write_memory_id: memoryId, extraction: true },
+      });
+      const convId = await createConversationWithMessage(
+        'My favourite colour is green.'
+      );
+      await seedGeneration({ publicId: 'gen_prov_1', agentId });
+
+      mockCreateGeneration.mockResolvedValueOnce(
+        completedGeneration('gen_prov_1', 'Noted.')
+      );
+      mockRunExtractionCompletion.mockResolvedValueOnce(
+        '["User favourite colour is green"]'
+      );
+
+      const res = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/conversations/${convId}/generate?wait=true`)
+        .send({ agent_id: agentId });
+      expect(res.status).toBe(200);
+
+      const entries = await waitForEntries(memoryId, 1);
+      expect(entries).toHaveLength(1);
+
+      const detail = await authenticatedTestClient(adminToken).get(
+        `/api/v1/memory-entries/${entries[0].id}`
+      );
+      expect(detail.status).toBe(200);
+      expect(detail.body.source_generation_id).toBe('gen_prov_1');
+      expect(detail.body.source_conversation_id).toBe(convId);
     });
 
     test('deduplicates extracted facts through the standard write algorithm', async () => {

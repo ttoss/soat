@@ -30,6 +30,8 @@ type GenerationRow = InstanceType<(typeof db)['Generation']> & {
     | null;
 };
 
+export type GenerationWithTrace = GenerationRow;
+
 const generations = makeResourceAccessor<GenerationRow>({
   model: () => {
     return db.Generation;
@@ -112,8 +114,26 @@ export const deriveTurnOutputText = (steps: unknown): string | null => {
   return null;
 };
 
+/**
+ * Loads a generation with the associations both turn readers need: the project
+ * and agent it belongs to, and the trace carrying its steps file.
+ *
+ * Shared so the two consumers resolve a generation the same way and only one
+ * of them has to know that the answer lives in a File hanging off the trace.
+ * Throws `GENERATION_NOT_FOUND` when the id is unknown or out of scope.
+ */
+export const loadGenerationWithTrace = async (args: {
+  generationId: string;
+  projectIds?: number[];
+}): Promise<GenerationWithTrace> => {
+  return generations.getByPublicId({
+    id: args.generationId,
+    projectIds: args.projectIds,
+  });
+};
+
 /** Reads and parses a trace's steps object. Null when it cannot be read. */
-const readTraceSteps = async (
+export const readTraceSteps = async (
   file: { storagePath: string; storageType: string } | null | undefined
 ): Promise<unknown> => {
   if (!file) return null;
@@ -161,8 +181,8 @@ export const getGenerationTurn = async (args: {
 }): Promise<GenerationTurn> => {
   log('getGenerationTurn: generationId=%s', args.generationId);
 
-  const generation = await generations.getByPublicId({
-    id: args.generationId,
+  const generation = await loadGenerationWithTrace({
+    generationId: args.generationId,
     projectIds: args.projectIds,
   });
 

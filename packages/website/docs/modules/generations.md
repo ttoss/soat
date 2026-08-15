@@ -140,13 +140,56 @@ A generation also stores the messages it was asked to answer, resolved (file and
 references already inlined) but without the agent's own instructions or knowledge
 injections — those are config, recoverable from `agent_version`.
 
-The record is not part of the API response; it exists so a real turn can be promoted into
+The record is not part of the generation response; it is served by
+[the transcript](#transcript) and it exists so a real turn can be promoted into
 an evaluation fixture with
 [`create-dataset-item-from-generation`](./evaluations.md#curating-items-from-production).
 It is **content**, not skeleton, so it follows the same rules as everything below: never
 written under zero-retention, cleared by a purge, and swept by retention. A generation
 whose input is gone can no longer be curated, and says so with
 `409 GENERATION_CONTENT_UNAVAILABLE`.
+
+### Transcript
+
+`GET /generations/{generation_id}/transcript` reads one turn back step by step: what it
+was asked, each model step with its tool calls and results, and how it ended.
+
+```bash
+soat get-generation-transcript --generation_id gen_abc
+```
+
+The transcript is **assembled at read time** from the generation record and the trace's
+steps object. There is no transcript table and no extra write on the generation path, so
+it always reflects the current records and can never outlive the content it projects.
+
+Requires `traces:GetTrace` in addition to `generations:GetGeneration`: the response merges
+content from both resources, so a single generations action would silently widen to cover
+trace content.
+
+Each entry in `steps` carries `index`, `text`, `finish_reason`, `tool_calls`,
+`tool_results` and `usage`. `args` on a call and `result` on a result are tool-owned
+payloads, returned as values — their keys are passed through exactly as recorded and are
+never inspected or rewritten.
+
+The stored steps are **projected**, never forwarded: their on-disk shape belongs to the
+`ai` package and changes with it, so putting it on the wire would freeze an internal
+detail of a dependency as a public contract.
+
+Two states return `200` with a skeleton rather than an error, so a caller never has to
+distinguish "no content" from "no such generation":
+
+| State | `status` | `input` / `output` | `steps` | `content_redacted_at` |
+|---|---|---|---|---|
+| Still running | `in_progress` | `null` | `[]` | `null` |
+| Never stored (zero-retention) | terminal | `null` | `[]` | set, principal `zero_retention` |
+| Erased by a purge or sweep | terminal | `null` | `[]` | set, purging principal |
+
+`step_count` survives all three, because it is a counter rather than content.
+
+A purged generation returns the skeleton even though the trace's steps object may still
+exist — see the warning under [Content Purge](#content-purge). The redaction marker
+governs the whole transcript, so an erased turn is never reconstituted from an adjacent
+record.
 
 ### Content Purge
 
