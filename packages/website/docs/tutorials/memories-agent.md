@@ -1,5 +1,5 @@
 ---
-description: "Give a SOAT agent long-term memory that persists across sessions."
+description: 'Give a SOAT agent long-term memory that persists across sessions.'
 keywords:
   - AI agent memory
   - long-term memory
@@ -324,7 +324,9 @@ soat create-memory-entry \
 const { data: e2 } = await MemoryEntries.createMemoryEntry({
   client: authClient,
   body: {
-    memory_id: MEMORY_ID, content: 'Alice prefers email over phone calls' },
+    memory_id: MEMORY_ID,
+    content: 'Alice prefers email over phone calls',
+  },
 });
 console.log(e2.action); // "skipped"
 ```
@@ -396,7 +398,7 @@ An unrelated fact is stored as a new entry.
 ```bash
 soat create-memory-entry \
   --memory-id "$MEMORY_ID" \
-  --content "Alice's fiscal year ends in March; she starts renewal discussions in January"
+  --content "The Alice Corp fiscal year ends in March; she starts renewal discussions in January"
 # → { "action": "created", ... }
 ```
 
@@ -409,7 +411,7 @@ const { data: e4 } = await MemoryEntries.createMemoryEntry({
   body: {
     memory_id: MEMORY_ID,
     content:
-      "Alice's fiscal year ends in March; she starts renewal discussions in January",
+      'The Alice Corp fiscal year ends in March; she starts renewal discussions in January',
   },
 });
 console.log(e4.action); // "created"
@@ -422,7 +424,7 @@ console.log(e4.action); // "created"
 curl -s -X POST "$SOAT_URL/api/v1/memory-entries" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"memory_id":"'"$MEMORY_ID"'","content":"Alice'\''s fiscal year ends in March; she starts renewal discussions in January"}' | jq .
+  -d '{"memory_id":"'"$MEMORY_ID"'","content":"The Alice Corp fiscal year ends in March; she starts renewal discussions in January"}' | jq .
 # → { "action": "created", ... }
 ```
 
@@ -442,7 +444,7 @@ After the four writes, the memory holds exactly **two entries** — the skipped 
 soat list-memory-entries --memory-id "$MEMORY_ID" | jq '[.data[] | .content]'
 # [
 #   "Alice prefers email, especially for billing inquiries; she checks it twice a day",
-#   "Alice's fiscal year ends in March; she starts renewal discussions in January"
+#   "The Alice Corp fiscal year ends in March; she starts renewal discussions in January"
 # ]
 ```
 
@@ -731,7 +733,7 @@ If the model called `write_memory`, you will see an entry with `"source_type": "
 
 ## Step 11 — Enable automatic extraction
 
-The `write_memory` tool depends on the model *deciding* to call it. [Automatic extraction](/docs/modules/memories#automatic-extraction) removes that dependency: after every completed turn the server extracts atomic facts from the transcript and writes them with `source: "extraction"`. Enable it by adding `extraction` to the agent's `knowledge_config`:
+The `write_memory` tool depends on the model _deciding_ to call it. [Automatic extraction](/docs/modules/memories#automatic-extraction) removes that dependency: after every completed turn the server extracts atomic facts from the transcript and writes them with `source: "extraction"`. Enable it by adding `extraction` to the agent's `knowledge_config`:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -808,7 +810,8 @@ await adminSoat.agents.createAgentGeneration({
     messages: [
       {
         role: 'user',
-        content: 'By the way, Alice signed a 2-year contract renewal last week.',
+        content:
+          'By the way, Alice signed a 2-year contract renewal last week.',
       },
     ],
   },
@@ -870,13 +873,13 @@ Expected output — note the two different `source_type` values:
 ```json
 { "score": 0.69, "similarity_score": 0.69, "source_type": "document", "content": "Alice Corp Support Policy: All priority-1 incidents must receive an initial response within 2 hours ..." }
 { "score": 0.62, "similarity_score": 0.62, "source_type": "memory", "content": "Alice prefers email, especially for billing inquiries; she checks it twice a day" }
-{ "score": 0.50, "similarity_score": 0.50, "source_type": "memory", "content": "Alice's fiscal year ends in March; she starts renewal discussions in January" }
+{ "score": 0.50, "similarity_score": 0.50, "source_type": "memory", "content": "The Alice Corp fiscal year ends in March; she starts renewal discussions in January" }
 ```
 
 Two scores come back, and they are different contracts — see
 [Relevance scoring](/docs/modules/knowledge#relevance-scoring):
 
-- **`score`** is the relevance ranking. Results are ordered by it and `min_score` filters on it. It is *implementation-defined*: the ordering is the contract, the number is not. Tune `min_score` against it for this deployment, and re-tune after an upgrade rather than treating a value as portable.
+- **`score`** is the relevance ranking. Results are ordered by it and `min_score` filters on it. It is _implementation-defined_: the ordering is the contract, the number is not. Tune `min_score` against it for this deployment, and re-tune after an upgrade rather than treating a value as portable.
 - **`similarity_score`** is the raw cosine similarity, pinned to that meaning. Read it when you need a stable number to compare or log.
 
 They are equal here because the ranking is currently single-signal.
@@ -900,7 +903,9 @@ const res = await fetch('http://localhost:5047/api/v1/knowledge/search', {
 });
 
 const { results } = await res.json();
-results.forEach((r) => console.log(r.score, r.similarity_score, r.source_type, r.content));
+results.forEach((r) =>
+  console.log(r.score, r.similarity_score, r.source_type, r.content)
+);
 ```
 
 </TabItem>
@@ -935,9 +940,21 @@ soat list-memory-entries --memory-id "$MEMORY_ID" \
 
 ```json
 [
-  { "source_type": "manual", "source_generation_id": null, "source_conversation_id": null },
-  { "source_type": "manual", "source_generation_id": null, "source_conversation_id": null },
-  { "source_type": "extraction", "source_generation_id": "gen_0dR2mJk8xQ1vTbLp", "source_conversation_id": null }
+  {
+    "source_type": "manual",
+    "source_generation_id": null,
+    "source_conversation_id": null
+  },
+  {
+    "source_type": "manual",
+    "source_generation_id": null,
+    "source_conversation_id": null
+  },
+  {
+    "source_type": "extraction",
+    "source_generation_id": "gen_0dR2mJk8xQ1vTbLp",
+    "source_conversation_id": null
+  }
 ]
 ```
 
