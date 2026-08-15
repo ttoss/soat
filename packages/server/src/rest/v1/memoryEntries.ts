@@ -149,6 +149,7 @@ memoryEntriesRouter.get('/memory-entries', async (ctx: Context) => {
 
   ctx.body = await listMemoryEntries({
     memoryId: memoryRowId,
+    includeInvalidated: ctx.query.include_invalidated === 'true',
     ...parsePagination(ctx),
   });
 });

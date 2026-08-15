@@ -57,6 +57,73 @@ describe('buildWriteMemoryTool', () => {
     expect((result as { entryId: string }).entryId).toBeDefined();
   });
 
+  test('records the generation that produced the fact', async () => {
+    // A real agent + generation row: provenance is a real FK, and
+    // `createGeneration` never runs here, so nothing else persists one.
+    const providerRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/ai-providers')
+      .send({
+        project_id: projectId,
+        name: 'ProvenanceProvider',
+        provider: 'ollama',
+        default_model: 'llama3.2',
+      });
+    const agentRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/agents')
+      .send({
+        project_id: projectId,
+        ai_provider_id: providerRes.body.id,
+        name: 'ProvenanceToolAgent',
+      });
+    const agentPublicId = agentRes.body.id as string;
+
+    const project = await db.Project.findOne({
+      where: { publicId: projectId },
+    });
+    const agent = await db.Agent.findOne({
+      where: { publicId: agentPublicId },
+    });
+    const trace = await db.Trace.create({
+      publicId: 'trc_wm_prov_1',
+      projectId: project!.id,
+      agentId: agent!.id,
+    });
+    await db.Generation.create({
+      publicId: 'gen_wm_prov_1',
+      projectId: project!.id,
+      agentId: agent!.id,
+      traceId: trace.id,
+      status: 'completed',
+      startedAt: new Date(),
+    });
+
+    const provenanceMemoryRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/memories')
+      .send({ project_id: projectId, name: 'Write Tool Provenance Memory' });
+
+    const writeMemoryTool = buildWriteMemoryTool({
+      writeMemoryId: provenanceMemoryRes.body.id,
+      agentId: agentPublicId,
+      generationId: 'gen_wm_prov_1',
+    });
+
+    const result = await writeMemoryTool.execute!(
+      { content: 'The deploy window is Tuesday.' },
+      {} as never
+    );
+
+    expect(result).toMatchObject({ action: 'created' });
+
+    const entryId = (result as { entryId: string }).entryId;
+    const detail = await authenticatedTestClient(adminToken).get(
+      `/api/v1/memory-entries/${entryId}`
+    );
+    expect(detail.status).toBe(200);
+    expect(detail.body.source_generation_id).toBe('gen_wm_prov_1');
+    // The tool has no conversation context — only the generation.
+    expect(detail.body.source_conversation_id).toBeNull();
+  });
+
   test('returns an error when the target memory does not exist', async () => {
     const writeMemoryTool = buildWriteMemoryTool({
       writeMemoryId: 'mem_nonexistent',
@@ -672,7 +739,7 @@ describe('buildKnowledgeTools — formation-deployed agent casing regression', (
     return {
       instructions: null,
       model: null,
-              maxSteps: null,
+      maxSteps: null,
       toolChoice: null,
       stopConditions: null,
       activeToolIds: null,

@@ -1,5 +1,7 @@
 import fs from 'node:fs';
 
+import { db } from 'src/db';
+
 import { storageDir } from '../../setupTests';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
@@ -314,6 +316,91 @@ describe('Knowledge', () => {
       expect(memResult.memory_id).toBe(memoryId);
       expect(memResult.memory_name).toBe('Knowledge Test Memory');
       expect(memResult.content).toBe('The sky is blue on a clear day.');
+    });
+
+    test('excludes invalidated memory entries', async () => {
+      // A memory of its own, so invalidating an entry cannot affect any other
+      // test in this file.
+      const memRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/memories')
+        .send({ project_id: projectId, name: 'Invalidation Search Memory' });
+      const isolatedMemoryId = memRes.body.id;
+
+      const entryRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/memory-entries')
+        .send({
+          memory_id: isolatedMemoryId,
+          content: 'This fact was later retired.',
+        });
+      expect(entryRes.status).toBe(201);
+
+      const memoryResults = (body: {
+        results: Array<{ source_type: string }>;
+      }) => {
+        return body.results.filter((r) => {
+          return r.source_type === 'memory';
+        });
+      };
+
+      const before = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send({ project_id: projectId, memory_ids: [isolatedMemoryId] });
+      expect(before.status).toBe(200);
+      expect(memoryResults(before.body)).toHaveLength(1);
+
+      // Seeded directly: no public API sets `invalidated_at` until Memories 5a
+      // ships the LLM arbitration that produces it (roadmap RC-2).
+      const entry = await db.MemoryEntry.findOne({
+        where: { publicId: entryRes.body.id },
+      });
+      entry!.invalidatedAt = new Date();
+      await entry!.save();
+
+      const after = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send({ project_id: projectId, memory_ids: [isolatedMemoryId] });
+
+      expect(after.status).toBe(200);
+      expect(memoryResults(after.body)).toHaveLength(0);
+    });
+
+    test('excludes invalidated memory entries from a semantic query', async () => {
+      const memRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/memories')
+        .send({ project_id: projectId, name: 'Invalidation Query Memory' });
+      const isolatedMemoryId = memRes.body.id;
+
+      const entryRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/memory-entries')
+        .send({
+          memory_id: isolatedMemoryId,
+          content: 'A retired fact about billing.',
+        });
+      expect(entryRes.status).toBe(201);
+
+      const entry = await db.MemoryEntry.findOne({
+        where: { publicId: entryRes.body.id },
+      });
+      entry!.invalidatedAt = new Date();
+      await entry!.save();
+
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send({
+          project_id: projectId,
+          memory_ids: [isolatedMemoryId],
+          query: 'billing',
+        });
+
+      // A query also ranks documents project-wide, so assert on the memory
+      // side specifically rather than on an empty result set.
+      expect(response.status).toBe(200);
+      const memoryHits = response.body.results.filter(
+        (r: { source_type: string }) => {
+          return r.source_type === 'memory';
+        }
+      );
+      expect(memoryHits).toHaveLength(0);
     });
 
     test('returns memory entries when searching by memory_tags', async () => {
