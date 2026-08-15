@@ -2,7 +2,6 @@ import {
   applySegment,
   locateSegment,
   readStepSegments,
-  sliceGenerationSteps,
   totalSegmentSteps,
 } from 'src/lib/traceStepSegments';
 
@@ -15,7 +14,8 @@ import {
  * trace is indexed at all — costs a full agent run per case through REST, and
  * whose failure signal there is a step count that looks plausible. The write
  * and read paths that use it are pinned end-to-end in `lib/agentTraces.test.ts`
- * and `rest/generationTranscript.test.ts`.
+ * and `rest/generationTranscript.test.ts`; `sliceGenerationSteps`, the read side
+ * of the same index, is covered in `lib/generationTranscript.test.ts`.
  */
 describe('readStepSegments', () => {
   test('returns the index as stored', () => {
@@ -110,46 +110,5 @@ describe('totalSegmentSteps', () => {
       ])
     ).toBe(5);
     expect(totalSegmentSteps([])).toBe(0);
-  });
-});
-
-describe('sliceGenerationSteps', () => {
-  const steps = ['a1', 'a2', 'b1'];
-  const segments = [
-    { generationId: 'gen_a', stepCount: 2 },
-    { generationId: 'gen_b', stepCount: 1 },
-  ];
-
-  test('returns only the generation own steps', () => {
-    expect(
-      sliceGenerationSteps({ steps, segments, generationId: 'gen_a' })
-    ).toEqual(['a1', 'a2']);
-    expect(
-      sliceGenerationSteps({ steps, segments, generationId: 'gen_b' })
-    ).toEqual(['b1']);
-  });
-
-  test('returns nothing for a generation that contributed no steps', () => {
-    // Still running, or failed before writing — not the same as owning them all.
-    expect(
-      sliceGenerationSteps({ steps, segments, generationId: 'gen_c' })
-    ).toEqual([]);
-  });
-
-  test('returns an unindexed object whole', () => {
-    // Every trace written before the index existed holds one turn, and a turn
-    // reader must keep reading it exactly as it did.
-    expect(
-      sliceGenerationSteps({ steps, segments: [], generationId: 'gen_a' })
-    ).toEqual(steps);
-    expect(
-      sliceGenerationSteps({ steps, segments: null, generationId: 'gen_a' })
-    ).toEqual(steps);
-  });
-
-  test('passes a non-array steps object through untouched', () => {
-    expect(
-      sliceGenerationSteps({ steps: null, segments, generationId: 'gen_a' })
-    ).toBeNull();
   });
 });
