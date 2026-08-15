@@ -415,7 +415,9 @@ describe('Agent versions', () => {
       const res = await authenticatedTestClient(noPermToken).post(
         `/api/v1/agents/${agentId}/versions/1/restore`
       );
-      expect(res.status).toBe(404);
+      // A write refuses an empty scope outright — the `GET` twin above still
+      // answers 404, but a restore the caller may not perform is a 403 (#1029).
+      expect(res.status).toBe(403);
 
       // The write must not have landed: the agent is still on version 1.
       const agent = await authenticatedTestClient(userToken).get(
@@ -627,9 +629,9 @@ describe('Agent versions', () => {
         .put(`/api/v1/agents/${agentId}/release`)
         .send({ stable_version: 1, canary_version: 2, canary_percent: 10 });
 
-      // 404 for the same reason as the read routes: no `project_id` to
-      // authorize against, so an unauthorized caller learns nothing.
-      expect(res.status).toBe(404);
+      // 403, not 404: the caller may write in no project at all, and the
+      // denial is decided before the body is even validated (#1029).
+      expect(res.status).toBe(403);
 
       // What matters is that no release was created.
       const agent = await authenticatedTestClient(userToken).get(
@@ -719,7 +721,7 @@ describe('Agent versions', () => {
         `/api/v1/agents/${agentId}/release/promote`
       );
 
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(403);
 
       // The rollout is untouched — an unauthorized call must not end it.
       const agent = await authenticatedTestClient(userToken).get(
@@ -735,7 +737,7 @@ describe('Agent versions', () => {
         `/api/v1/agents/${agentId}/release/abort`
       );
 
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(403);
 
       const agent = await authenticatedTestClient(userToken).get(
         `/api/v1/agents/${agentId}`

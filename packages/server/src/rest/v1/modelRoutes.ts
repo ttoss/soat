@@ -13,6 +13,7 @@ import { setAuditResourceHint } from 'src/middleware/audit';
 import {
   parsePagination,
   requireAuth,
+  requireProjectAccess,
   resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
@@ -91,7 +92,7 @@ modelRoutesRouter.get('/model-routes/:route_id', async (ctx: Context) => {
  *     $ref: 'openapi/v1/model-routes.yaml#/paths/~1api~1v1~1model-routes~1{route_id}/put'
  */
 modelRoutesRouter.put('/model-routes/:route_id', async (ctx: Context) => {
-  const projectIds = await resolveReadProjectIds({
+  const projectIds = await requireProjectAccess({
     ctx,
     action: 'model-routes:UpdateModelRoute',
     resourceType: 'model_route',
@@ -116,7 +117,7 @@ modelRoutesRouter.put('/model-routes/:route_id', async (ctx: Context) => {
  *     $ref: 'openapi/v1/model-routes.yaml#/paths/~1api~1v1~1model-routes~1{route_id}/delete'
  */
 modelRoutesRouter.delete('/model-routes/:route_id', async (ctx: Context) => {
-  const projectIds = await resolveReadProjectIds({
+  const projectIds = await requireProjectAccess({
     ctx,
     action: 'model-routes:DeleteModelRoute',
     resourceType: 'model_route',

@@ -1149,7 +1149,7 @@ describe('IngestionRules', () => {
       ).toBe(404);
     });
 
-    test('patch is 401 unauthenticated and 404 without permission (no accessible projects)', async () => {
+    test('patch is 401 unauthenticated and 403 without permission (no accessible projects)', async () => {
       expect(
         (
           await testClient
@@ -1163,10 +1163,10 @@ describe('IngestionRules', () => {
             .patch(`/api/v1/ingestion-rules/${ruleId}`)
             .send({ chunk_strategy: 'whole' })
         ).status
-      ).toBe(404);
+      ).toBe(403);
     });
 
-    test('delete is 401 unauthenticated and 404 without permission (no accessible projects)', async () => {
+    test('delete is 401 unauthenticated and 403 without permission (no accessible projects)', async () => {
       expect(
         (await testClient.delete(`/api/v1/ingestion-rules/${ruleId}`)).status
       ).toBe(401);
@@ -1176,7 +1176,7 @@ describe('IngestionRules', () => {
             `/api/v1/ingestion-rules/${ruleId}`
           )
         ).status
-      ).toBe(404);
+      ).toBe(403);
     });
 
     test('project-scoped API key without UpdateIngestionRule/DeleteIngestionRule permission returns 403', async () => {

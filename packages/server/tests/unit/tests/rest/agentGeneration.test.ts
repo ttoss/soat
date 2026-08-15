@@ -192,9 +192,17 @@ describe('Agent Generation Routes', () => {
       expect(response.status).toBe(400);
     });
 
-    test('returns 404 when user cannot access target agent', async () => {
+    test('returns 403 when the caller may generate in no project', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .post(`/api/v1/agents/${agentId}/generate?wait=true`)
+        .send({ messages: [{ role: 'user', content: 'hello' }] });
+
+      expect(response.status).toBe(403);
+    });
+
+    test('returns 404 when the target agent does not exist', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents/agent_missing/generate?wait=true')
         .send({ messages: [{ role: 'user', content: 'hello' }] });
 
       expect(response.status).toBe(404);
@@ -245,12 +253,13 @@ describe('Agent Generation Routes', () => {
       expect(response.body.id).toBeUndefined();
     });
 
-    test('depth guard: returns 404 when the agent is not accessible at max_call_depth 0', async () => {
+    test('depth guard: returns 404 when the agent does not exist at max_call_depth 0', async () => {
       // Exercises the depth-guard branch's own agent lookup/not-found throw,
       // a separate code path from the normal (non-depth-guard) not-found
-      // case covered above.
-      const response = await authenticatedTestClient(noPermToken)
-        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
+      // case covered above. The caller is authorized — an unauthorized one is
+      // now refused at the preamble and never reaches this branch (#1029).
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents/agent_missing/generate?wait=true')
         .send({
           messages: [{ role: 'user', content: 'hello' }],
           max_call_depth: 0,

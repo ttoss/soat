@@ -10,7 +10,11 @@ import {
   setAgentRelease,
 } from 'src/lib/agentVersions';
 
-import { parsePagination, resolveReadProjectIds } from './helpers';
+import {
+  parsePagination,
+  requireProjectAccess,
+  resolveReadProjectIds,
+} from './helpers';
 
 /**
  * Agent version history and staged rollout (the agents module doc — Versioning and Staged Rollout).
@@ -84,7 +88,7 @@ agentVersionsRouter.get(
 agentVersionsRouter.post(
   '/agents/:agent_id/versions/:version/restore',
   async (ctx: Context) => {
-    const projectIds = await resolveReadProjectIds({
+    const projectIds = await requireProjectAccess({
       ctx,
       action: 'agents:RestoreAgentVersion',
       resourceType: 'agent',
@@ -108,7 +112,7 @@ agentVersionsRouter.post(
  *     $ref: 'openapi/v1/agents.yaml#/paths/~1api~1v1~1agents~1{agent_id}~1release/put'
  */
 agentVersionsRouter.put('/agents/:agent_id/release', async (ctx: Context) => {
-  const projectIds = await resolveReadProjectIds({
+  const projectIds = await requireProjectAccess({
     ctx,
     action: 'agents:SetAgentRelease',
     resourceType: 'agent',
@@ -141,7 +145,7 @@ agentVersionsRouter.put('/agents/:agent_id/release', async (ctx: Context) => {
 agentVersionsRouter.post(
   '/agents/:agent_id/release/promote',
   async (ctx: Context) => {
-    const projectIds = await resolveReadProjectIds({
+    const projectIds = await requireProjectAccess({
       ctx,
       action: 'agents:SetAgentRelease',
       resourceType: 'agent',
@@ -163,7 +167,7 @@ agentVersionsRouter.post(
 agentVersionsRouter.post(
   '/agents/:agent_id/release/abort',
   async (ctx: Context) => {
-    const projectIds = await resolveReadProjectIds({
+    const projectIds = await requireProjectAccess({
       ctx,
       action: 'agents:SetAgentRelease',
       resourceType: 'agent',

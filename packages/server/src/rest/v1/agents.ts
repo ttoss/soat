@@ -15,7 +15,12 @@ import {
   assertGuardrailDetachAllowed,
   parseGuardrailIds,
 } from './guardrailAttach';
-import { parsePagination, requireAuth, resolveReadProjectIds } from './helpers';
+import {
+  parsePagination,
+  requireAuth,
+  requireProjectAccess,
+  resolveReadProjectIds,
+} from './helpers';
 
 export const agentsRouter = new Router<Context>();
 
@@ -100,7 +105,7 @@ const resolveAgentProjectId = async (
   projectPublicId: string | undefined
 ): Promise<number | 403 | 400> => {
   const authUser = ctx.authUser!;
-  const projectIds = await resolveReadProjectIds({
+  const projectIds = await requireProjectAccess({
     ctx,
     projectPublicId,
     action: 'agents:CreateAgent',
@@ -264,7 +269,7 @@ agentsRouter.get('/agents/:agent_id', async (ctx: Context) => {
 agentsRouter.put('/agents/:agent_id', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectIds = await resolveReadProjectIds({
+  const projectIds = await requireProjectAccess({
     ctx,
     action: 'agents:UpdateAgent',
     resourceType: 'agent',
@@ -276,7 +281,7 @@ agentsRouter.put('/agents/:agent_id', async (ctx: Context) => {
 agentsRouter.patch('/agents/:agent_id', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectIds = await resolveReadProjectIds({
+  const projectIds = await requireProjectAccess({
     ctx,
     action: 'agents:UpdateAgent',
     resourceType: 'agent',
@@ -288,7 +293,7 @@ agentsRouter.patch('/agents/:agent_id', async (ctx: Context) => {
 agentsRouter.delete('/agents/:agent_id', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectIds = await resolveReadProjectIds({
+  const projectIds = await requireProjectAccess({
     ctx,
     action: 'agents:DeleteAgent',
     resourceType: 'agent',

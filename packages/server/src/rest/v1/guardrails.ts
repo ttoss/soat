@@ -17,7 +17,12 @@ import {
 import { buildSrn } from 'src/lib/iam';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
-import { parsePagination, requireAuth, resolveReadProjectIds } from './helpers';
+import {
+  parsePagination,
+  requireAuth,
+  requireProjectAccess,
+  resolveReadProjectIds,
+} from './helpers';
 import { coerceToJsonObject } from './tools';
 
 export const guardrailsRouter = new Router<Context>();
@@ -52,7 +57,10 @@ const resolveGuardrailProjectId = async (
   projectPublicId?: string
 ): Promise<number> => {
   requireAuth(ctx);
-  const projectIds = await resolveReadProjectIds({
+  // `requireProjectAccess`, not the read helper: a caller permitted in zero
+  // projects cannot create here, and an empty scope must say so with a `403`
+  // rather than falling through to "project_id is required" (#1029).
+  const projectIds = await requireProjectAccess({
     ctx,
     projectPublicId,
     action,
@@ -158,7 +166,7 @@ guardrailsRouter.get('/guardrails/:guardrail_id', async (ctx: Context) => {
  *     $ref: 'openapi/v1/guardrails.yaml#/paths/~1api~1v1~1guardrails~1{guardrail_id}/patch'
  */
 guardrailsRouter.patch('/guardrails/:guardrail_id', async (ctx: Context) => {
-  const projectIds = await resolveReadProjectIds({
+  const projectIds = await requireProjectAccess({
     ctx,
     action: 'guardrails:UpdateGuardrail',
     resourceType: 'guardrail',
@@ -192,7 +200,7 @@ guardrailsRouter.patch('/guardrails/:guardrail_id', async (ctx: Context) => {
  *     $ref: 'openapi/v1/guardrails.yaml#/paths/~1api~1v1~1guardrails~1{guardrail_id}/delete'
  */
 guardrailsRouter.delete('/guardrails/:guardrail_id', async (ctx: Context) => {
-  const projectIds = await resolveReadProjectIds({
+  const projectIds = await requireProjectAccess({
     ctx,
     action: 'guardrails:DeleteGuardrail',
     resourceType: 'guardrail',
@@ -231,7 +239,7 @@ guardrailsRouter.delete('/guardrails/:guardrail_id', async (ctx: Context) => {
 guardrailsRouter.post(
   '/guardrails/:guardrail_id/evaluate',
   async (ctx: Context) => {
-    const projectIds = await resolveReadProjectIds({
+    const projectIds = await requireProjectAccess({
       ctx,
       action: 'guardrails:EvaluateGuardrail',
       resourceType: 'guardrail',
@@ -305,7 +313,7 @@ guardrailsRouter.get(
 guardrailsRouter.post(
   '/guardrails/:guardrail_id/versions/:version/restore',
   async (ctx: Context) => {
-    const projectIds = await resolveReadProjectIds({
+    const projectIds = await requireProjectAccess({
       ctx,
       action: 'guardrails:RestoreGuardrailVersion',
       resourceType: 'guardrail',

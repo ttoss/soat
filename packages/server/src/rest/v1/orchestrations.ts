@@ -48,7 +48,10 @@ const resolveAuth = async (
   projectPublicId?: string
 ): Promise<{ projectIds: number[]; primaryId: number }> => {
   requireAuth(ctx);
-  const projectIds = await resolveReadProjectIds({
+  // `requireProjectAccess`, not the read helper: a caller permitted in zero
+  // projects cannot create here, and an empty scope must say so with a `403`
+  // rather than falling through to "project_id is required" (#1029).
+  const projectIds = await requireProjectAccess({
     ctx,
     projectPublicId,
     action,
@@ -188,7 +191,7 @@ orchestrationsRouter.get(
 orchestrationsRouter.patch(
   '/orchestrations/:orchestration_id',
   async (ctx: Context) => {
-    const projectIds = await resolveReadProjectIds({
+    const projectIds = await requireProjectAccess({
       ctx,
       action: 'orchestrations:UpdateOrchestration',
       resourceType: 'orchestration',
@@ -215,7 +218,7 @@ orchestrationsRouter.patch(
 orchestrationsRouter.delete(
   '/orchestrations/:orchestration_id',
   async (ctx: Context) => {
-    const projectIds = await resolveReadProjectIds({
+    const projectIds = await requireProjectAccess({
       ctx,
       action: 'orchestrations:DeleteOrchestration',
       resourceType: 'orchestration',

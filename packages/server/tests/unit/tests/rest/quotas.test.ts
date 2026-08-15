@@ -51,7 +51,7 @@ describe('Quotas', () => {
   // A project-scoped API key whose policy excludes `excludedAction`, used to
   // exercise the `projectIds === null` (403) branch on routes that don't take a
   // `project_id` param (unlike `noPermToken`, which resolves to an empty project
-  // list and 404s instead).
+  // list — a 404 on a read, a 403 on a write).
   const createRestrictedApiKey = async (excludedAction: string) => {
     const allowedActions = QUOTA_ACTIONS.filter((action) => {
       return action !== excludedAction;
@@ -538,11 +538,13 @@ describe('Quotas', () => {
       expect(res.status).toBe(404);
     });
 
-    test('user with zero policies returns 404 (empty project list)', async () => {
+    test('user with zero policies returns 403 (empty project list)', async () => {
       const res = await authenticatedTestClient(noPermToken)
         .patch(`/api/v1/quotas/${quotaId}`)
         .send({ limit: 1 });
-      expect(res.status).toBe(404);
+      // A write refuses the empty scope outright; only the GET above 404s
+      // (#1029).
+      expect(res.status).toBe(403);
     });
 
     test('project-scoped API key without UpdateQuota returns 403', async () => {
@@ -580,7 +582,7 @@ describe('Quotas', () => {
       expect(res.status).toBe(404);
     });
 
-    test('user with zero policies returns 404 (empty project list)', async () => {
+    test('user with zero policies returns 403 (empty project list)', async () => {
       const created = await createQuota(userToken, {
         scope: 'project',
         metric: 'tokens',
@@ -590,7 +592,7 @@ describe('Quotas', () => {
       const res = await authenticatedTestClient(noPermToken).delete(
         `/api/v1/quotas/${created.body.id}`
       );
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(403);
     });
 
     test('project-scoped API key without DeleteQuota returns 403', async () => {
