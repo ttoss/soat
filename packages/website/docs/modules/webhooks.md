@@ -63,11 +63,13 @@ Webhooks are **outbound** — SOAT calls your endpoint when events occur. For th
 
 Each webhook subscribes to one or more event patterns using dot-separated hierarchy:
 
-| Pattern        | Matches                          |
-| -------------- | -------------------------------- |
-| `file.created` | Exactly the `file.created` event |
-| `file.*`       | Any event starting with `file.`  |
-| `*`            | Every event in the project       |
+| Pattern         | Matches                           |
+| --------------- | --------------------------------- |
+| `files.created` | Exactly the `files.created` event |
+| `files.*`       | Any event starting with `files.`  |
+| `*`             | Every event in the project        |
+
+Every event SOAT emits is listed in the [Webhook Events Reference](../webhook-events.md), which is generated from the server's event registry — a name that is not there is one no subscription will ever match.
 
 See it end to end in [Chat with an LLM - Step 9 (Create a session webhook subscription)](/docs/tutorials/chat-with-llm#step-9---create-a-session-webhook-subscription).
 
@@ -77,7 +79,7 @@ When an event matches a webhook, the server sends an HTTP POST to the webhook UR
 
 | Header             | Description                                                                |
 | ------------------ | -------------------------------------------------------------------------- |
-| `X-Soat-Event`     | The event type (e.g., `file.created`)                                      |
+| `X-Soat-Event`     | The event type (e.g., `files.created`)                                     |
 | `X-Soat-Delivery`  | Unique delivery ID                                                         |
 | `X-Soat-Signature` | HMAC-SHA256 hex digest of the request body, signed with the webhook secret |
 

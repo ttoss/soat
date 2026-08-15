@@ -186,5 +186,8 @@ const handleEvent = async (event: SoatEvent) => {
 };
 
 export const initializeDispatcher = () => {
-  onEvent(handleEvent);
+  // Deliberately unfiltered: a webhook can subscribe to `*`, and to the
+  // user-authored names an orchestration `emit_event` node produces, so this
+  // dispatcher is the one subscriber that must see every envelope on the bus.
+  onEvent({ handler: handleEvent });
 };

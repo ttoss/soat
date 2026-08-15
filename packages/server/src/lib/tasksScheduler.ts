@@ -3,12 +3,8 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { createScheduler, createSweep } from './scheduler';
-import {
-  emitTaskEvent,
-  mapTask,
-  taskIncludes,
-  type TaskInstance,
-} from './tasks';
+import { emitTaskEvent } from './taskEvents';
+import { mapTask, taskIncludes, type TaskInstance } from './tasks';
 
 const log = createDebug('soat:tasks');
 

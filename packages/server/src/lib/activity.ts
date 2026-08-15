@@ -10,6 +10,7 @@ import { EXCEPTION_EVENT_TYPES } from './exceptions';
 import { DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT } from './pagination';
 import { isPlainObject } from './plainObject';
 import { camelToSnakeKey, convertKeys } from './resource-inputs/normalizers';
+import { isSoatEventType, type SoatEventType } from './soatEvents';
 
 const log = createDebug('soat:activity');
 
@@ -344,16 +345,28 @@ const fileExceptionCreatedActivity = async (
   });
 };
 
-// No `.catch()` here: every handler below terminates in `emitActivityEntry`,
+/**
+ * The events this module records, keyed by name. A `Map` rather than an object
+ * literal so the keys stay typed as registered event names on both sides: the
+ * subscription below is derived from them, and a renamed event fails to compile
+ * here instead of quietly never matching.
+ */
+const ACTIVITY_HANDLERS = new Map<
+  SoatEventType,
+  (event: SoatEvent) => Promise<void>
+>([
+  [APPROVAL_EVENT_TYPES.approved, fileApprovalResolvedActivity],
+  [APPROVAL_EVENT_TYPES.rejected, fileApprovalResolvedActivity],
+  [EXCEPTION_EVENT_TYPES.created, fileExceptionCreatedActivity],
+]);
+
+// No `.catch()` here: every handler above terminates in `emitActivityEntry`,
 // which already swallows and logs its own failures (see its docstring) and
 // never rejects, so there is nothing left for this dispatcher to catch.
 const handleEvent = (event: SoatEvent): void => {
-  const handlers: Record<string, (e: SoatEvent) => Promise<void>> = {
-    [APPROVAL_EVENT_TYPES.approved]: fileApprovalResolvedActivity,
-    [APPROVAL_EVENT_TYPES.rejected]: fileApprovalResolvedActivity,
-    [EXCEPTION_EVENT_TYPES.created]: fileExceptionCreatedActivity,
-  };
-  const handler = handlers[event.type];
+  const handler = isSoatEventType(event.type)
+    ? ACTIVITY_HANDLERS.get(event.type)
+    : undefined;
   if (!handler) return;
   void handler(event);
 };
@@ -364,5 +377,5 @@ const handleEvent = (event: SoatEvent): void => {
  * `app.ts`, mirroring the exceptions listener.
  */
 export const initializeActivityListener = (): void => {
-  onEvent(handleEvent);
+  onEvent({ types: [...ACTIVITY_HANDLERS.keys()], handler: handleEvent });
 };

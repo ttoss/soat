@@ -1,8 +1,9 @@
 import createDebug from 'debug';
 
 import type { RequestPrincipal } from './principals';
+import { emitTaskEvent } from './taskEvents';
 import type { ActiveDispatch } from './tasks';
-import { emitTaskEvent, mapTask } from './tasks';
+import { mapTask } from './tasks';
 import {
   applyLocked,
   isStale,

@@ -1,4 +1,4 @@
-import { emitResourceEvent, resolveProjectPublicId } from './eventBus';
+import { emitCustomEvent, resolveProjectPublicId } from './eventBus';
 import { applyInputMapping } from './jsonLogicMapping';
 import { requireNodeField } from './orchestrationNodeFields';
 import type { NodeExecutionResult } from './orchestrationNodeTypes';
@@ -31,7 +31,9 @@ export const executeEmitEventNode = async (args: {
   // event to; nothing is emitted, but the node still completes.
   if (projectId !== undefined) {
     const projectPublicId = await resolveProjectPublicId({ projectId });
-    emitResourceEvent({
+    // The name is the template author's, not SOAT's, so this is the one emit
+    // site that cannot draw from the event registry (`soatEvents.ts`).
+    emitCustomEvent({
       type: eventType,
       projectId,
       projectPublicId,

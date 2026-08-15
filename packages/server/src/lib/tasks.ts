@@ -2,10 +2,10 @@ import createDebug from 'debug';
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
-import { emitResourceEvent, resolveProjectPublicId } from './eventBus';
 import type { ResourceIncludes } from './modelIncludes';
 import { paginatedList } from './pagination';
 import type { RequestPrincipal } from './principals';
+import { emitTaskEvent } from './taskEvents';
 import { runStateAutomation } from './tasksAutomation';
 import { resolveTaskDefinition } from './taskWorkflowDefinition';
 import {
@@ -193,27 +193,6 @@ export const listTasks = async (args: {
     map: (t) => {
       return mapTask(t);
     },
-  });
-};
-
-// ── Event emission ──────────────────────────────────────────────────────────
-
-export const emitTaskEvent = async (args: {
-  type: string;
-  projectId: number;
-  task: ReturnType<typeof mapTask>;
-  extra?: Record<string, unknown>;
-}): Promise<void> => {
-  const projectPublicId = await resolveProjectPublicId({
-    projectId: args.projectId,
-  });
-  emitResourceEvent({
-    type: args.type,
-    projectId: args.projectId,
-    projectPublicId,
-    resourceType: 'task',
-    resourceId: args.task.id,
-    data: { task: args.task, ...(args.extra ?? {}) },
   });
 };
 

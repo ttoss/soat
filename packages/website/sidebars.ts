@@ -280,6 +280,7 @@ const sidebars: SidebarsConfig = {
       label: 'Tool Context',
     },
     'permissions',
+    'webhook-events',
     'openapi-specs',
   ],
 };

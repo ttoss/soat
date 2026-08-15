@@ -13,6 +13,7 @@ import { getActiveStorageProvider, getStorageProvider } from './fileStorage';
 import { recoverStaleDocument } from './ingestionCallback';
 import { emptyPage, paginatedList } from './pagination';
 import { registerResourceFieldMap } from './policyCompiler';
+import type { SoatEventTypeFor } from './soatEvents';
 import { mergeTags } from './tags';
 
 export {
@@ -104,7 +105,7 @@ const buildDocumentQueryOptions = (args: {
 };
 
 const emitDocumentLifecycleEvent = (args: {
-  type: string;
+  type: SoatEventTypeFor<'document'>;
   doc: LoadedDoc;
   data: Record<string, unknown>;
 }) => {

@@ -9,8 +9,8 @@ import {
   type MappedApproval,
   registerApprovalResumeHandler,
 } from './approvals';
+import { emitTaskEvent } from './taskEvents';
 import {
-  emitTaskEvent,
   findTaskInstance,
   mapTask,
   type TaskInstance,

@@ -7,6 +7,7 @@ import { emitResourceEvent } from './eventBus';
 import { deleteStorageObjects } from './fileStorage';
 import { getGeneration, type PersistedGeneration } from './generations';
 import { makeResourceAccessor } from './resourceAccessor';
+import type { SoatEventTypeFor, SoatResourceType } from './soatEvents';
 import {
   PURGED_GENERATION_CONTENT,
   PURGED_TRACE_CONTENT,
@@ -57,10 +58,10 @@ const redactionColumns = (args: {
 
 // Fire-and-forget, matching every other emit site: a webhook subscriber must
 // never be able to fail the purge that already committed.
-const emitPurgeEvent = (args: {
-  type: string;
+const emitPurgeEvent = <R extends SoatResourceType>(args: {
+  type: SoatEventTypeFor<R>;
   projectId: number;
-  resourceType: string;
+  resourceType: R;
   resourceId: string;
   data: Record<string, unknown>;
 }): void => {

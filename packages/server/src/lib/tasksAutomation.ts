@@ -3,8 +3,9 @@ import createDebug from 'debug';
 import { DomainError } from '../errors';
 import { applyInputMapping, evaluateLogic } from './jsonLogicMapping';
 import type { RequestPrincipal } from './principals';
+import { emitTaskEvent } from './taskEvents';
 import type { ActiveDispatch } from './tasks';
-import { emitTaskEvent, mapTask, transitionTask } from './tasks';
+import { mapTask, transitionTask } from './tasks';
 import {
   applyLocked,
   loadTask,

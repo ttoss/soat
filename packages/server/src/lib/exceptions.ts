@@ -8,6 +8,11 @@ import { paginatedList, type PaginatedResult } from './pagination';
 import { isPlainObject } from './plainObject';
 import { camelToSnakeKey, convertKeys } from './resource-inputs/normalizers';
 import { makeResourceAccessor } from './resourceAccessor';
+import {
+  isSoatEventType,
+  type SoatEventType,
+  type SoatEventTypeFor,
+} from './soatEvents';
 import { isUniqueViolation } from './uniqueViolation';
 
 const log = createDebug('soat:exceptions');
@@ -120,7 +125,7 @@ export const mapException = (instance: ExceptionInstance) => {
 export type MappedException = ReturnType<typeof mapException>;
 
 const emitExceptionEvent = async (args: {
-  type: string;
+  type: SoatEventTypeFor<'exception'>;
   item: MappedException;
   projectId: number;
 }): Promise<void> => {
@@ -451,13 +456,25 @@ const fileGuardrailTripwireException = async (
   });
 };
 
+/**
+ * The events that auto-file an exception, keyed by name. A `Map` rather than an
+ * object literal so the keys stay typed as registered event names: the
+ * subscription below is derived from them, so a renamed event is a compile error
+ * here instead of a filer that quietly stops firing.
+ */
+const EXCEPTION_FILERS = new Map<
+  SoatEventType,
+  (event: SoatEvent) => Promise<void>
+>([
+  ['orchestration_runs.failed', fileRunFailedException],
+  ['approvals.expired', fileApprovalExpiredException],
+  ['guardrail.tripwire', fileGuardrailTripwireException],
+]);
+
 const handleEvent = (event: SoatEvent): void => {
-  const filers: Record<string, (e: SoatEvent) => Promise<void>> = {
-    'orchestration_runs.failed': fileRunFailedException,
-    'approvals.expired': fileApprovalExpiredException,
-    'guardrail.tripwire': fileGuardrailTripwireException,
-  };
-  const filer = filers[event.type];
+  const filer = isSoatEventType(event.type)
+    ? EXCEPTION_FILERS.get(event.type)
+    : undefined;
   if (!filer) return;
   filer(event).catch((error) => {
     log('handleEvent: failed to file exception for %s %o', event.type, error);
@@ -470,7 +487,7 @@ const handleEvent = (event: SoatEvent): void => {
  * webhook dispatcher.
  */
 export const initializeExceptionsListener = (): void => {
-  onEvent(handleEvent);
+  onEvent({ types: [...EXCEPTION_FILERS.keys()], handler: handleEvent });
 };
 
 /**
