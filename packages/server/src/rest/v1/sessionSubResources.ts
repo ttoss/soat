@@ -1,6 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import { forkSession, listSessionForks } from 'src/lib/sessionFork';
 import {
   addSessionMessage,
   generateSessionResponse,
@@ -9,6 +10,7 @@ import {
   updateSessionTags,
 } from 'src/lib/sessions';
 
+import { requireProjectAccess } from './helpers';
 import { checkSessionAccess } from './sessions';
 
 const sessionSubResourcesRouter = new Router<Context>();
@@ -159,6 +161,74 @@ sessionSubResourcesRouter.post(
     });
 
     ctx.body = result;
+  }
+);
+
+// ── Fork ─────────────────────────────────────────────────────────────────
+
+/**
+ * @openapi
+ * POST /api/v1/sessions/{session_id}/fork
+ * operationId: forkSession
+ * Branches a new session from a point in this session's history. The fork's
+ * messages reference the parent's documents rather than copying them, and the
+ * fork is created inert — no generation is triggered.
+ */
+sessionSubResourcesRouter.post(
+  '/sessions/:session_id/fork',
+  async (ctx: Context) => {
+    // Forking reads a session's full history and creates a new session, so the
+    // caller must hold both actions. `agents:CreateSession` alone would
+    // otherwise be a way to read history a principal cannot fetch through
+    // `GET /sessions/{id}` — the same dual check curating a generation uses.
+    const { agentId } = await checkSessionAccess(ctx, 'agents:GetSession');
+    await requireProjectAccess({
+      ctx,
+      action: 'agents:CreateSession',
+      resourceType: 'session',
+    });
+
+    const body = ctx.request.body as {
+      fork_at_position?: number;
+      agent_id?: string;
+      name?: string;
+      tags?: Record<string, string>;
+      tool_context?: Record<string, string> | null;
+    };
+
+    ctx.status = 201;
+    ctx.body = await forkSession({
+      agentId,
+      sessionId: ctx.params.session_id,
+      forkAtPosition: body.fork_at_position,
+      agentPublicId: body.agent_id,
+      name: body.name,
+      tags: body.tags,
+      toolContext: body.tool_context,
+    });
+  }
+);
+
+/**
+ * @openapi
+ * GET /api/v1/sessions/{session_id}/forks
+ * operationId: listSessionForks
+ * Lists the sessions forked directly from this one. One level of lineage —
+ * a fork of a fork is listed under its own parent, not here.
+ */
+sessionSubResourcesRouter.get(
+  '/sessions/:session_id/forks',
+  async (ctx: Context) => {
+    const { agentId } = await checkSessionAccess(ctx, 'agents:GetSession');
+
+    const { limit, offset } = ctx.query as Record<string, string | undefined>;
+
+    ctx.body = await listSessionForks({
+      agentId,
+      sessionId: ctx.params.session_id,
+      limit: limit ? Number(limit) : undefined,
+      offset: offset ? Number(offset) : undefined,
+    });
   }
 );
 

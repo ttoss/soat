@@ -27,6 +27,16 @@
       "description": "Delete a session"
     },
     {
+      "operationId": "forkSession",
+      "action": "agents:CreateSession",
+      "description": "Branch a new session from a point in a session's history (also requires agents:GetSession)"
+    },
+    {
+      "operationId": "listSessionForks",
+      "action": "agents:GetSession",
+      "description": "List the sessions forked from a session"
+    },
+    {
       "operationId": "addSessionMessage",
       "action": "agents:SendSessionMessage",
       "description": "Save a user message or trigger generation"

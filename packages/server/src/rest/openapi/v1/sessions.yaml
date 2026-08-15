@@ -347,6 +347,113 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /api/v1/sessions/{session_id}/fork:
+    post:
+      tags:
+        - Sessions
+      summary: Fork a session
+      description: >
+        Branches a new session from a point in this session's history: same
+        context, different continuation.
+
+
+        The fork gets its own conversation whose messages **reference the same
+        documents** as the parent rather than copying them, so there is one
+        stored copy of the content and a retention purge erases it from both.
+        Recorded tool results ride along on those messages and are **replayed**
+        as model input on the fork's next turn — forking never re-invokes a
+        tool, so exploring a "what if" cannot send an email or charge a card a
+        second time. The consequence to accept is that a forked turn sees the
+        tool data as it was, not as it is now.
+
+
+        The fork is created **inert**: `auto_generate` is false and no
+        generation is triggered. Drive it with the normal message and generate
+        endpoints. The fork has no actor — attach one only if the branch is
+        meant to be driven by the same end user, since
+        `single_session_per_actor` agents allow one open session per actor.
+      operationId: forkSession
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForkSessionRequest'
+      responses:
+        '201':
+          description: Fork created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionRecord'
+        '400':
+          description: >-
+            `fork_at_position` names no message in the parent conversation, or
+            `agent_id` is unknown or belongs to another project
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: VALIDATION_FAILED
+                  message: fork_at_position 9 does not exist in the parent conversation.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/sessions/{session_id}/forks:
+    get:
+      tags:
+        - Sessions
+      summary: List a session's forks
+      description: >
+        Returns the sessions forked directly from this one. One level of
+        lineage: a fork of a fork is listed under its own parent.
+      operationId: listSessionForks
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Paginated list of forks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SessionRecord'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /api/v1/sessions/{session_id}/tags:
     get:
       tags:
@@ -560,6 +667,61 @@ components:
           format: date-time
           nullable: true
           description: Timestamp of the last activity on the session (message added or response generated).
+        forked_from_session_id:
+          x-soat-ref: sessions
+          type: string
+          nullable: true
+          description: >
+            Public ID of the session this one was forked from, or null when it
+            was not forked. Also null once that parent is deleted — a fork
+            survives its parent and keeps its own history.
+          example: sess_V1StGXR8Z5jdHi6B
+        forked_from_position:
+          type: integer
+          nullable: true
+          description: >
+            The parent conversation position this session branched after, or
+            null when it is not a fork or was forked at the tip.
+          example: 7
+
+    ForkSessionRequest:
+      type: object
+      properties:
+        fork_at_position:
+          type: integer
+          minimum: 0
+          description: >
+            The parent conversation `position` to branch after. Messages at
+            positions 0..N are carried into the fork. Omit it to branch at the
+            tip (the whole history).
+          example: 7
+        agent_id:
+          x-soat-ref: agents
+          type: string
+          description: >
+            Agent the fork runs against. Defaults to the parent session's
+            agent; overriding it is the point of forking — same context, a
+            different agent or agent version. Must belong to the same project
+            as the session being forked.
+          example: agent_V1StGXR8Z5jdHi6B
+        name:
+          type: string
+          description: Optional name for the forked session
+          example: retry with stricter system prompt
+        tags:
+          type: object
+          additionalProperties:
+            type: string
+          description: Optional tags for the forked session
+        tool_context:
+          type: object
+          additionalProperties:
+            type: string
+          nullable: true
+          description: >
+            Overrides the parent's `tool_context` on the fork. Omit it and the
+            fork inherits the parent's, so the branch is faithful to the run it
+            came from.
 
     CreateSessionRequest:
       type: object

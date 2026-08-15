@@ -90,6 +90,44 @@ export class Session extends Model {
   )
   declare actor: Actor | null;
 
+  /**
+   * The session this one was forked from, when it was created by
+   * `POST /sessions/{id}/fork`.
+   *
+   * `ON DELETE SET NULL`: a fork is a real session with its own history, so
+   * deleting the parent orphans the lineage pointer rather than taking the
+   * fork with it.
+   */
+  @ForeignKey(() => {
+    return Session;
+  })
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+    field: 'forked_from_session_id',
+  })
+  declare forkedFromSessionId: number | null;
+
+  @BelongsTo(
+    () => {
+      return Session;
+    },
+    {
+      foreignKey: 'forkedFromSessionId',
+      as: 'forkedFrom',
+      onDelete: 'SET NULL',
+    }
+  )
+  declare forkedFrom: Session | null;
+
+  /** The parent conversation position the fork branched after. */
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+    field: 'forked_from_position',
+  })
+  declare forkedFromPosition: number | null;
+
   @Column({ type: DataType.STRING, defaultValue: 'open' })
   declare status: string;
 

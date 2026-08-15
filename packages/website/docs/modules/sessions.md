@@ -40,6 +40,8 @@ Sessions are a top-level resource at `/sessions`. Each session belongs to an [Ag
 | `message_delay_seconds`  | integer \| null | Debounce delay in seconds before the LLM is called after a user message. `null` means no delay (default).        |
 | `inactivity_ttl_seconds` | integer         | Seconds of inactivity before the session expires. `0` means never expires (default: `0`)                         |
 | `last_activity_at`       | string \| null  | ISO 8601 timestamp of the last user message; `null` until the first message is added                             |
+| `forked_from_session_id` | string \| null  | Public ID of the session this one was [forked](#forking) from; `null` when it is not a fork, or once the parent is deleted |
+| `forked_from_position`   | integer \| null | Parent conversation `position` this session branched after; `null` when it is not a fork or was forked at the tip |
 | `created_at`             | string          | ISO 8601 creation timestamp                                                                                      |
 | `updated_at`             | string          | ISO 8601 last-updated timestamp                                                                                  |
 
@@ -88,6 +90,45 @@ What deletion does **not** remove:
 - **Generations and traces.** A session's [generations and traces](./traces.md#debugging-joins-trace-generation-session) are not linked to the session or conversation record, so they are unaffected by session deletion and remain queryable via `GET /api/v1/traces/{trace_id}` after the session no longer exists.
 
 Delete these resources explicitly beforehand if you need a full cleanup.
+
+### Forking
+
+`POST /api/v1/sessions/{session_id}/fork` branches a new session from a point in an existing one: same context, different continuation. It answers "what if" — a support agent gave a bad answer at message 7, and you want to try a stricter prompt or a different agent version against *that exact* context without replaying the conversation by hand.
+
+```bash
+curl -X POST "$SOAT_URL/api/v1/sessions/$SESSION_ID/fork" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "fork_at_position": 7,
+        "agent_id": "agent_V1StGXR8Z5jdHi6B",
+        "name": "retry with stricter system prompt",
+        "tags": { "experiment": "prompt-v2" }
+      }'
+```
+
+| Field              | Default            | Meaning                                                                     |
+| ------------------ | ------------------ | --------------------------------------------------------------------------- |
+| `fork_at_position` | branch at the tip  | Parent `position` to branch **after**; positions `0..N` are carried over     |
+| `agent_id`         | the parent's agent | The agent the fork runs against. Must be in the same project                 |
+| `name`, `tags`     | —                  | Set on the new session                                                       |
+| `tool_context`     | inherited          | Overrides the parent's [tool context](#tool-context) on the fork             |
+
+**Fork by reference, not by copy.** The fork gets its own [conversation](./conversations.md) whose messages point at the **same [Document](./documents.md) rows** as the parent — only the ordering is duplicated. There is one stored copy of the content, so a retention purge erases it from parent and fork together, and the branch cannot drift from what actually happened.
+
+**Replay, never re-invoke.** Recorded tool calls and their results ride along on the copied messages and are replayed as model input on the fork's next turn. Forking never calls a tool, so exploring a "what if" cannot send an email or charge a card a second time. The trade-off is that a forked turn sees the tool data **as it was**, not as it is now — right for comparison, wrong for "resume this session for real".
+
+**The fork is inert.** `auto_generate` is `false` and no generation is triggered; drive the branch with the normal `POST .../messages` and `POST .../generate` endpoints. It also starts without an actor, because [single session per actor](#single-session-per-actor) allows one open session per (agent, actor) pair and inheriting the parent's actor would make forking impossible for exactly those agents.
+
+Lineage reads back on the session itself (`forked_from_session_id`, `forked_from_position`) and from the parent:
+
+```bash
+curl "$SOAT_URL/api/v1/sessions/$SESSION_ID/forks" -H "Authorization: Bearer $TOKEN"
+```
+
+That walks **one level**. Forking a fork is allowed and unbounded; each fork is listed under its own parent. Deleting a parent does not delete its forks — they keep their history and their `forked_from_session_id` becomes `null`.
+
+Forking requires both `agents:GetSession` and `agents:CreateSession`: it reads a session's full history and creates a new session, and neither permission alone should imply the other.
 
 ### Auto-Generate
 
