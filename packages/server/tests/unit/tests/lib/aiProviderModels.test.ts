@@ -2,11 +2,13 @@ import type { Server } from 'node:http';
 import { createServer } from 'node:http';
 
 import { DomainError } from 'src/errors';
-import type { FetchLike } from 'src/lib/aiProviderModels';
+import type { BedrockCredentials } from 'src/lib/agentModel';
+import type { BedrockListArgs, FetchLike } from 'src/lib/aiProviderModels';
 import {
   enumerateProviderModels,
   isModelListingSupported,
 } from 'src/lib/aiProviderModels';
+import { toBedrockClientConfig } from 'src/lib/bedrockModelCatalog';
 
 /**
  * A `fetch` stand-in. The HTTP call to a model provider is the one boundary
@@ -453,6 +455,193 @@ describe('enumerateProviderModels — malformed payloads', () => {
         fetchImpl,
       })
     ).resolves.toEqual([]);
+  });
+});
+
+describe('toBedrockClientConfig', () => {
+  // The AWS client is constructed behind a lazy import that cannot run in CI,
+  // so this branch — which decides how the request is *signed* — is asserted
+  // directly. Getting it wrong fails at AWS with a signing error, not here.
+  test('sends a Bedrock API key as a bearer token, not as credentials', () => {
+    expect(
+      toBedrockClientConfig({
+        region: 'us-east-1',
+        credentials: { region: 'us-east-1', apiKey: 'ABSKexample' },
+      })
+    ).toEqual({ region: 'us-east-1', token: { token: 'ABSKexample' } });
+  });
+
+  test('sends static IAM keys as credentials for SigV4', () => {
+    expect(
+      toBedrockClientConfig({
+        region: 'eu-west-1',
+        credentials: {
+          region: 'eu-west-1',
+          accessKeyId: 'AKIAEXAMPLE',
+          secretAccessKey: 'shh',
+          sessionToken: 'tok',
+        },
+      })
+    ).toEqual({
+      region: 'eu-west-1',
+      credentials: {
+        accessKeyId: 'AKIAEXAMPLE',
+        secretAccessKey: 'shh',
+        sessionToken: 'tok',
+      },
+    });
+  });
+
+  test('passes the ambient provider through when no secret selected one', () => {
+    const credentialProvider = (() => {
+      return Promise.resolve({ accessKeyId: 'a', secretAccessKey: 'b' });
+    }) as Extract<
+      BedrockCredentials,
+      { credentialProvider: unknown }
+    >['credentialProvider'];
+
+    expect(
+      toBedrockClientConfig({
+        region: 'us-east-1',
+        credentials: { region: 'us-east-1', credentialProvider },
+      })
+    ).toEqual({ region: 'us-east-1', credentials: credentialProvider });
+  });
+});
+
+describe('enumerateProviderModels — listing honors the linked secret (#1044)', () => {
+  test('bedrock signs the control-plane call with the secret IAM credentials', async () => {
+    let seen: BedrockListArgs | undefined;
+    await enumerateProviderModels({
+      provider: 'bedrock',
+      config: { region: 'us-east-1' },
+      secretValue: JSON.stringify({
+        accessKeyId: 'AKIAEXAMPLE',
+        secretAccessKey: 'shh',
+        sessionToken: 'tok',
+      }),
+      listFoundationModels: (args) => {
+        seen = args;
+        return Promise.resolve([]);
+      },
+    });
+
+    // Generation signs with these; listing used to ignore them and fall through
+    // to the ambient chain, so a correctly-configured record could not list.
+    expect(seen?.credentials).toEqual({
+      region: 'us-east-1',
+      accessKeyId: 'AKIAEXAMPLE',
+      secretAccessKey: 'shh',
+      sessionToken: 'tok',
+    });
+  });
+
+  test('bedrock carries a Bedrock API key as a bearer token', async () => {
+    let seen: BedrockListArgs | undefined;
+    await enumerateProviderModels({
+      provider: 'bedrock',
+      config: { region: 'us-east-1' },
+      secretValue: 'ABSKexample',
+      listFoundationModels: (args) => {
+        seen = args;
+        return Promise.resolve([]);
+      },
+    });
+
+    expect(seen?.credentials).toEqual({
+      region: 'us-east-1',
+      apiKey: 'ABSKexample',
+    });
+  });
+
+  test('bedrock still falls back to the ambient chain with no secret', async () => {
+    let seen: BedrockListArgs | undefined;
+    await enumerateProviderModels({
+      provider: 'bedrock',
+      config: { region: 'us-east-1' },
+      listFoundationModels: (args) => {
+        seen = args;
+        return Promise.resolve([]);
+      },
+    });
+
+    // The credential-less catalogue record documented in the module page has to
+    // keep working — that is what lets a caller browse before provisioning.
+    expect(seen?.credentials).toHaveProperty('credentialProvider');
+  });
+
+  test('vertex authenticates with the linked service account', async () => {
+    const { fetchImpl } = fakeFetch({
+      'https://us-central1-aiplatform.googleapis.com': {
+        body: { publisherModels: [] },
+      },
+    });
+    let seenOptions: unknown;
+
+    await enumerateProviderModels({
+      provider: 'vertex',
+      config: { project: 'p' },
+      secretValue: JSON.stringify({
+        client_email: 'vertex@example.iam.gserviceaccount.com',
+        private_key:
+          '-----BEGIN PRIVATE KEY-----\nx\n-----END PRIVATE KEY-----',
+        project_id: 'from-key-file',
+      }),
+      accessTokenProvider: (args) => {
+        seenOptions = args?.googleAuthOptions;
+        return Promise.resolve('ya29.test');
+      },
+      fetchImpl,
+    });
+
+    expect(seenOptions).toEqual({
+      credentials: {
+        client_email: 'vertex@example.iam.gserviceaccount.com',
+        private_key:
+          '-----BEGIN PRIVATE KEY-----\nx\n-----END PRIVATE KEY-----',
+      },
+    });
+  });
+
+  test('vertex takes the project from the service-account key file', async () => {
+    const { fetchImpl, calls } = fakeFetch({
+      'https://us-central1-aiplatform.googleapis.com': {
+        body: { publisherModels: [] },
+      },
+    });
+
+    // Generation resolves `config.project ?? secret.project_id`, so a record
+    // carrying only a key file generates fine. Listing used to throw here.
+    await enumerateProviderModels({
+      provider: 'vertex',
+      config: {},
+      secretValue: JSON.stringify({
+        client_email: 'vertex@example.iam.gserviceaccount.com',
+        private_key:
+          '-----BEGIN PRIVATE KEY-----\nx\n-----END PRIVATE KEY-----',
+        project_id: 'from-key-file',
+      }),
+      accessTokenProvider: () => {
+        return Promise.resolve('ya29.test');
+      },
+      fetchImpl,
+    });
+
+    expect(calls[0].url).toContain('/projects/from-key-file/');
+  });
+
+  test('vertex express mode cannot list, and says so', async () => {
+    // Express mode targets a global, project-less endpoint; the publisher-model
+    // listing URL is per-project, so there is nothing to call. Failing with a
+    // named reason beats a confusing 404 from a guessed URL.
+    await expect(
+      enumerateProviderModels({
+        provider: 'vertex',
+        config: {},
+        secretValue: 'AIzaExpressKey',
+        fetchImpl: fakeFetch({}).fetchImpl,
+      })
+    ).rejects.toThrow(DomainError);
   });
 });
 
