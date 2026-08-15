@@ -1,6 +1,7 @@
 import { db } from 'src/db';
 import { emitEvent } from 'src/lib/eventBus';
 import { asCustomEventName } from 'src/lib/soatEvents';
+import { sweepDueWebhookDeliveries } from 'src/lib/webhookDispatcher';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
@@ -68,6 +69,14 @@ describe('webhookDispatcher', () => {
   // already run for that event. This gives a deterministic sync point for
   // "this event should NOT reach a given webhook" assertions, without a
   // fixed sleep.
+  /**
+   * A sweep clock moved past any backoff this suite can schedule, so a claimed
+   * retry is due immediately instead of the test waiting out real seconds.
+   */
+  const pastAnyBackoff = () => {
+    return new Date(Date.now() + 10 * 60 * 1000);
+  };
+
   const waitForDispatchSync = async () => {
     const baseline = callsToUrl(SENTINEL_URL).length;
     await waitFor(() => {
@@ -367,12 +376,13 @@ describe('webhookDispatcher', () => {
   });
 
   test('dispatcher retries and marks delivery as failed when all fetch attempts throw', async () => {
+    const url = 'https://example.com/hook-retry-fail';
     fetchMock.mockRejectedValue(new Error('Network unreachable'));
 
     await createWebhook({
       project_id: projectId,
       name: 'Retry Failure Webhook',
-      url: 'https://example.com/hook-retry-fail',
+      url,
       events: ['files.created'],
     });
 
@@ -386,12 +396,21 @@ describe('webhookDispatcher', () => {
       timestamp: new Date().toISOString(),
     });
 
-    // MAX_ATTEMPTS = 3, retries fire back-to-back with no delay between them.
+    // The emitting process makes the first attempt and stops there; the retries
+    // are owned by the delivery row, so they only happen when a sweep claims
+    // it. Driving the sweep by hand is what the scheduler's timer does in
+    // production (`tests never import server.ts`).
     await waitFor(() => {
-      return callsToUrl('https://example.com/hook-retry-fail').length >= 3;
+      return callsToUrl(url).length >= 1;
     });
 
-    expect(callsToUrl('https://example.com/hook-retry-fail')).toHaveLength(3);
+    await waitFor(async () => {
+      await sweepDueWebhookDeliveries({ now: pastAnyBackoff() });
+      return callsToUrl(url).length >= 3;
+    });
+
+    // MAX_ATTEMPTS = 3, across the inline attempt plus two swept retries.
+    expect(callsToUrl(url)).toHaveLength(3);
   });
 
   test('an undecryptable secret records a failed delivery instead of vanishing', async () => {
@@ -506,8 +525,10 @@ describe('webhookDispatcher', () => {
         timestamp: new Date().toISOString(),
       });
 
-      // MAX_ATTEMPTS = 3, retries fire back-to-back with no delay between them.
-      await waitFor(() => {
+      // Every attempt opens its own delivery timeout, so drive the delivery to
+      // exhaustion through the sweep to exercise the leak on all three.
+      await waitFor(async () => {
+        await sweepDueWebhookDeliveries({ now: pastAnyBackoff() });
         return callsToUrl(RETRY_LEAK_URL).length >= 3;
       });
 
@@ -683,14 +704,15 @@ describe('webhookDispatcher', () => {
   });
 
   test('dispatcher marks delivery failed when server returns non-ok status on all attempts', async () => {
+    const url = 'https://example.com/hook-non-ok';
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ error: 'Bad Gateway' }), { status: 502 })
     );
 
-    await createWebhook({
+    const created = await createWebhook({
       project_id: projectId,
       name: 'Non-OK Status Webhook',
-      url: 'https://example.com/hook-non-ok',
+      url,
       events: ['files.created'],
     });
 
@@ -705,11 +727,24 @@ describe('webhookDispatcher', () => {
     });
 
     // Should retry up to MAX_ATTEMPTS since status is not ok.
-    await waitFor(() => {
-      return callsToUrl('https://example.com/hook-non-ok').length >= 3;
+    await waitFor(async () => {
+      await sweepDueWebhookDeliveries({ now: pastAnyBackoff() });
+      return callsToUrl(url).length >= 3;
     });
 
-    expect(callsToUrl('https://example.com/hook-non-ok')).toHaveLength(3);
+    expect(callsToUrl(url)).toHaveLength(3);
+
+    const webhookRow = await db.Webhook.findOne({
+      where: { publicId: created.body.id },
+    });
+    const delivery = await db.WebhookDelivery.findOne({
+      where: { webhookId: webhookRow!.id },
+    });
+    // Exhausted, and terminal: no lease and nothing left to become due.
+    expect(delivery!.status).toBe('failed');
+    expect(delivery!.statusCode).toBe(502);
+    expect(delivery!.nextAttemptAt).toBeNull();
+    expect(delivery!.leaseExpiresAt).toBeNull();
   });
 
   test('a delivery-record creation failure does not crash event dispatch', async () => {

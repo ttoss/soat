@@ -45,6 +45,11 @@
       "operationId": "getWebhookDelivery",
       "action": "webhooks:GetWebhookDelivery",
       "description": "Get details of a specific webhook delivery"
+    },
+    {
+      "operationId": "redeliverWebhookDelivery",
+      "action": "webhooks:RedeliverWebhookDelivery",
+      "description": "Queue a stored delivery to be sent again"
     }
   ]
 }

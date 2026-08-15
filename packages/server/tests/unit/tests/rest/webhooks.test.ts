@@ -24,6 +24,7 @@ describe('Webhooks', () => {
         'webhooks:RotateWebhookSecret',
         'webhooks:ListWebhookDeliveries',
         'webhooks:GetWebhookDelivery',
+        'webhooks:RedeliverWebhookDelivery',
       ],
       createNoPermUser: false,
     });
@@ -485,6 +486,81 @@ describe('Webhooks', () => {
     });
   });
 
+  describe('POST /api/v1/webhook-deliveries/:deliveryId/redeliver', () => {
+    const createFailedDelivery = async (args: {
+      name: string;
+      url: string;
+    }) => {
+      const hookRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/webhooks')
+        .send({
+          project_id: projectId,
+          name: args.name,
+          url: args.url,
+          events: ['files.created'],
+        });
+      const webhook = await db.Webhook.findOne({
+        where: { publicId: hookRes.body.id },
+      });
+      const delivery = await db.WebhookDelivery.create({
+        webhookId: webhook!.id as number,
+        eventType: 'files.created',
+        payload: { event: 'files.created', resource_id: 'fil_redeliver' },
+        status: 'failed',
+        statusCode: 502,
+        attempts: 3,
+      });
+      return { delivery, webhookPublicId: hookRes.body.id as string };
+    };
+
+    test('queues a fresh delivery and answers 202 with a handle to poll', async () => {
+      const { delivery, webhookPublicId } = await createFailedDelivery({
+        name: 'Redeliver Test',
+        url: 'https://example.com/redeliver',
+      });
+
+      const response = await authenticatedTestClient(userToken).post(
+        `/api/v1/webhook-deliveries/${delivery.publicId}/redeliver`
+      );
+
+      expect(response.status).toBe(202);
+      // A redelivery is a new attempt record, not a mutation of the original —
+      // the failed delivery stays in the history a subscriber can audit.
+      expect(response.body.id).toBeDefined();
+      expect(response.body.id).not.toBe(delivery.publicId);
+      expect(response.body.webhook_id).toBe(webhookPublicId);
+      expect(response.body.status).toBe('pending');
+      expect(response.body.attempts).toBe(0);
+      expect(response.body.event_type).toBe('files.created');
+      expect(response.body.payload).toEqual({
+        event: 'files.created',
+        resource_id: 'fil_redeliver',
+      });
+      // It is due immediately, so the outbox sweep picks it up on its next tick.
+      expect(response.body.next_attempt_at).toBeDefined();
+
+      await delivery.reload();
+      expect(delivery.status).toBe('failed');
+      expect(delivery.attempts).toBe(3);
+    });
+
+    test('returns 404 for a non-existent delivery', async () => {
+      const response = await authenticatedTestClient(userToken).post(
+        '/api/v1/webhook-deliveries/wdh_nonexistent/redeliver'
+      );
+
+      expect(response.status).toBe(404);
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const response = await testClient.post(
+        '/api/v1/webhook-deliveries/wdh_nonexistent/redeliver'
+      );
+
+      expect(response.status).toBe(401);
+    });
+  });
+
   describe('DELETE /api/v1/webhooks/:webhookId', () => {
     let webhookId: string;
 
@@ -666,6 +742,26 @@ describe('Webhooks', () => {
 
       const response = await authenticatedTestClient(noPermToken).get(
         `/api/v1/webhook-deliveries/${delivery.publicId}`
+      );
+
+      expect(response.status).toBe(403);
+    });
+
+    test('POST /webhook-deliveries/:deliveryId/redeliver without permission returns 403', async () => {
+      const webhook = await db.Webhook.findOne({
+        where: { publicId: targetWebhookId },
+      });
+      const delivery = await db.WebhookDelivery.create({
+        webhookId: webhook!.id as number,
+        eventType: 'files.created',
+        payload: {},
+        status: 'failed',
+        statusCode: 502,
+        attempts: 3,
+      });
+
+      const response = await authenticatedTestClient(noPermToken).post(
+        `/api/v1/webhook-deliveries/${delivery.publicId}/redeliver`
       );
 
       expect(response.status).toBe(403);

@@ -1,5 +1,4 @@
 /* eslint-disable no-console */
-import { createHmac, timingSafeEqual } from 'node:crypto';
 import { createServer } from 'node:http';
 import * as nodePath from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -23,6 +22,7 @@ import { resolveClient, writeProfile } from './config.js';
 import { routes } from './generated/routes.js';
 import { kebabToSnake, toCanonical, toKebab } from './naming.js';
 import { findUnknownFlags } from './validateFlags.js';
+import { inspectDeliverySignature } from './webhookSignature.js';
 
 /**
  * Renders a command's payload for stdout.
@@ -129,20 +129,6 @@ const matchesFilter = (eventType: string, filter: string) => {
   });
 };
 
-const verifySignature = (
-  secret: string,
-  payload: string,
-  signatureHeader: string
-) => {
-  const expected = createHmac('sha256', secret).update(payload).digest('hex');
-  const expectedBuffer = Buffer.from(expected, 'utf8');
-  const actualBuffer = Buffer.from(signatureHeader, 'utf8');
-
-  if (expectedBuffer.length !== actualBuffer.length) return false;
-
-  return timingSafeEqual(expectedBuffer, actualBuffer);
-};
-
 // ── listen ──────────────────────────────────────────────────────────────────
 
 program
@@ -152,7 +138,7 @@ program
   .option('--path <path>', 'request path to accept', '/webhook')
   .option(
     '--secret <secret>',
-    'verify X-Soat-Signature with this webhook secret'
+    'verify the delivery signature with this webhook secret'
   )
   .option(
     '--filter <pattern>',
@@ -185,12 +171,10 @@ program
         chunks.push(chunk);
       });
 
-      // eslint-disable-next-line complexity
       req.on('end', () => {
         const rawBody = Buffer.concat(chunks).toString('utf8');
         const eventType = String(req.headers['x-soat-event'] ?? 'unknown');
         const deliveryId = String(req.headers['x-soat-delivery'] ?? 'unknown');
-        const signature = String(req.headers['x-soat-signature'] ?? '');
 
         if (filter && !matchesFilter(eventType, filter)) {
           res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -205,17 +189,19 @@ program
           // Keep raw body when payload is not valid JSON.
         }
 
-        let isSignatureValid: boolean | null = null;
-        if (secret) {
-          isSignatureValid = verifySignature(secret, rawBody, signature);
-        }
+        const inspected = inspectDeliverySignature({
+          secret,
+          payload: rawBody,
+          headers: req.headers,
+        });
 
         const record = {
           timestamp: new Date().toISOString(),
           event_type: eventType,
           delivery_id: deliveryId,
-          signature,
-          signature_valid: isSignatureValid,
+          signature: inspected.signature,
+          signature_scheme: inspected.scheme,
+          signature_valid: inspected.valid,
           payload: parsedPayload,
         };
 
@@ -226,19 +212,19 @@ program
           console.log('event_type:', eventType);
           console.log('delivery_id:', deliveryId);
           if (secret) {
-            console.log('signature_valid:', isSignatureValid);
+            console.log('signature_valid:', inspected.valid);
           }
           console.log('payload:', JSON.stringify(parsedPayload, null, 2));
         }
 
-        const responseStatus = secret && isSignatureValid === false ? 401 : 200;
+        const responseStatus = secret && inspected.valid === false ? 401 : 200;
         res.writeHead(responseStatus, { 'Content-Type': 'application/json' });
         res.end(
           JSON.stringify({
             ok: responseStatus === 200,
             event_type: eventType,
             delivery_id: deliveryId,
-            signature_valid: isSignatureValid,
+            signature_valid: inspected.valid,
           })
         );
       });

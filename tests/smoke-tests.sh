@@ -4335,6 +4335,53 @@ if ! printf '%s\n' "$WEBHOOK_DELIVERIES_RESP" | jq -e '((type == "array") or (ty
 fi
 echo "Webhook deliveries listed."
 
+# Redeliver a stored delivery. Needs a delivery to exist first, so this uses its
+# own wildcard webhook: an audited mutation in the project emits
+# `audit.entry_created`, which the wildcard subscription matches.
+echo "--- Redelivering a webhook delivery ---"
+REDELIVER_HOOK_RESP=$($SOAT_CLI create-webhook --project-id "$PROJECT_PUBLIC_ID" \
+  --name "Smoke Redeliver Webhook" \
+  --url "https://example.com/smoke-redeliver" \
+  --events '["*"]')
+REDELIVER_HOOK_ID=$(printf '%s\n' "$REDELIVER_HOOK_RESP" | jq -r '.id')
+if [ -z "$REDELIVER_HOOK_ID" ] || [ "$REDELIVER_HOOK_ID" = "null" ]; then
+  echo "ERROR: Failed to create redeliver webhook" >&2
+  echo "$REDELIVER_HOOK_RESP" >&2
+  exit 1
+fi
+
+$SOAT_CLI update-webhook --webhook-id "$REDELIVER_HOOK_ID" \
+  --description "emit an audited mutation" >/dev/null
+
+# The delivery row is written before the HTTP attempt, but the event is emitted
+# asynchronously, so poll for the row rather than assuming it is already there.
+REDELIVER_SOURCE_ID=""
+i=0
+while [ $i -lt 30 ]; do
+  REDELIVER_SOURCE_ID=$($SOAT_CLI list-webhook-deliveries \
+    --webhook-id "$REDELIVER_HOOK_ID" | jq -r '.data[0].id // empty')
+  if [ -n "$REDELIVER_SOURCE_ID" ]; then
+    break
+  fi
+  i=$((i + 1))
+  sleep 1
+done
+if [ -z "$REDELIVER_SOURCE_ID" ]; then
+  echo "ERROR: no webhook delivery was recorded to redeliver" >&2
+  exit 1
+fi
+
+REDELIVER_RESP=$($SOAT_CLI redeliver-webhook-delivery --delivery-id "$REDELIVER_SOURCE_ID")
+if ! printf '%s\n' "$REDELIVER_RESP" | jq -e --arg id "$REDELIVER_SOURCE_ID" \
+  '.id != $id and .status == "pending" and .attempts == 0' >/dev/null 2>&1; then
+  echo "ERROR: redeliver did not return a new pending delivery" >&2
+  echo "$REDELIVER_RESP" >&2
+  exit 1
+fi
+echo "Webhook delivery redelivered from $REDELIVER_SOURCE_ID."
+
+$SOAT_CLI delete-webhook --webhook-id "$REDELIVER_HOOK_ID" >/dev/null
+
 # Delete webhook
 echo "--- Deleting webhook ---"
 $SOAT_CLI delete-webhook --webhook-id "$WEBHOOK_ID"
