@@ -49,6 +49,21 @@ When a generation in a trace fails (e.g. the upstream AI provider returns an err
 
 Each trace stores the raw step objects produced by the Vercel AI SDK `generateText` call, as a file at `/traces/{traceId}.json` in the project's file storage; `file_id` points to it, so it can be downloaded via the Files API. `Error` instances are serialized to plain objects (`message`, `name`, enumerable properties) so tool failures are preserved faithfully.
 
+### Reading a Turn Back
+
+The steps object is the raw record, in the `ai` package's own shape. To read a turn
+without parsing it yourself, use the generation's transcript — an ordered projection of
+the same steps into a documented, stable schema:
+
+```bash
+soat get-generation-transcript --generation_id gen_abc
+```
+
+A transcript is scoped to one **turn**, which is why it is anchored on the generation
+rather than here: a trace can hold several generations, and `status`, `stop_reason` and
+`agent_version` are generation fields. See
+[Generations → Transcript](./generations.md#transcript).
+
 ### Grouping Generations Under One Trace
 
 `POST /agents/{agent_id}/generate` accepts a `trace_id`. Passing one that already exists groups the new generation with the earlier ones instead of starting a chain — use it when several turns are one logical run and `parent_trace_id` / `root_trace_id` would misrepresent them as nested calls.
@@ -57,6 +72,8 @@ Each trace stores the raw step objects produced by the Vercel AI SDK `generateTe
 - **`step_count` counts them all**, so it stays the length of the object `file_id` points at.
 - **A generation that writes twice rewrites only its own slice.** This is what a run paused on a client tool does: the tool-outputs continuation re-sends the turn's earlier steps along with the new ones, and they replace — rather than duplicate — the ones already recorded.
 - **Sub-agent calls are not grouping.** An agent-to-agent call gets a trace of its own, linked through `parent_trace_id` / `root_trace_id` — see [Trace Ancestry Model](#trace-ancestry-model).
+
+To read one grouped turn on its own rather than the whole object, use that generation's [transcript](#reading-a-turn-back).
 
 Concurrent generations sharing one `trace_id` are serialized per server process. If several servers write to the same `trace_id` at the same moment, one turn's steps can still be lost; sequential turns — the ordinary grouping flow — are unaffected.
 

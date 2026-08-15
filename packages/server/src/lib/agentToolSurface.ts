@@ -98,6 +98,7 @@ export const resolveAgentToolSurface = async (args: {
     projectIds: args.projectIds,
     typedAgent: args.typedAgent,
     resolvedTools,
+    generationId: args.generationId,
   });
 
   return resolvedTools;

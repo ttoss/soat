@@ -50,6 +50,10 @@ Memory entries are the individual knowledge items stored inside a memory. When a
 | `source_type` | `string` | How the entry was created: `manual` (default), `agent`, `extraction`, or `orchestration` |
 | `tags`       | `string[] \| null` | Per-entry labels for entry-granularity tag filtering in [Knowledge search](./knowledge.md) |
 | `metadata`   | `object \| null`   | Arbitrary structured metadata attached to the entry     |
+| `source_generation_id` | `string \| null` | The [generation](./agents.md) whose turn produced the entry — see [Provenance](#provenance) |
+| `source_conversation_id` | `string \| null` | The [conversation](./conversations.md) the producing turn belonged to — see [Provenance](#provenance) |
+| `invalidated_at` | `string \| null` | When the entry was superseded; `null` means currently valid — see [Temporal invalidation](#temporal-invalidation) |
+| `superseded_by_entry_id` | `string \| null` | The entry that replaced this one, when superseded |
 | `created_at` | `string` | ISO 8601 creation timestamp                             |
 | `updated_at` | `string` | ISO 8601 last-updated timestamp                         |
 
@@ -82,7 +86,7 @@ Every write to a memory — via REST, agent tool, or extraction — goes through
 When you call `POST /api/v1/memory-entries` (with `memory_id` in the body), the server:
 
 1. **Embeds** the incoming content.
-2. **Finds** the most similar existing entry in that memory (cosine similarity via pgvector).
+2. **Finds** the most similar **currently-valid** existing entry in that memory (cosine similarity via pgvector). [Invalidated entries](#temporal-invalidation) are never candidates.
 3. **Decides** based on two configurable thresholds:
 
 | Similarity range        | Decision   | What happens                                                               |
@@ -108,6 +112,45 @@ The response always includes an `action` field alongside the entry:
 | `created` | `201`       | New entry written                            |
 | `updated` | `200`       | Existing entry merged with new content       |
 | `skipped` | `200`       | Duplicate detected — existing entry returned |
+| `superseded` | `200`    | The incoming fact contradicted an existing entry, which was invalidated and replaced. Produced by the LLM-arbitrated write path, which has not shipped yet — the value is part of the API contract so clients can handle it from day one. |
+
+### Provenance
+
+Entries written during a generation record where the fact came from, so "why does the
+agent believe this" is answerable from the entry itself:
+
+| Written by | `source_generation_id` | `source_conversation_id` |
+| --- | --- | --- |
+| [`write_memory` tool](#write_memory-tool) | the generation that called the tool | `null` — the tool has no conversation context |
+| [Automatic extraction](#automatic-extraction) | the generation whose turn was extracted | the conversation, when the turn came from one |
+| `POST /api/v1/memory-entries` | `null` | `null` |
+| [Orchestration `memory_write` node](#orchestration-memory_write-node) | `null` | `null` |
+
+Provenance is recorded **when the entry is created and never rewritten by a later merge**:
+it names the turn that first asserted the fact. A later turn that genuinely replaces the
+fact supersedes it with a new entry, which carries its own provenance.
+
+Both fields are `null` when the referenced generation or conversation is deleted — removing
+a conversation never deletes the facts learned from it.
+
+### Temporal invalidation
+
+An entry that no longer holds is **retired rather than rewritten**. Superseding sets
+`invalidated_at` and points `superseded_by_entry_id` at the replacement, so the history
+stays intact: `DELETE` remains the way to remove an entry outright.
+
+Invalidated entries are excluded from:
+
+- entry listing (`GET /api/v1/memory-entries`) unless `include_invalidated=true` is passed
+- [write deduplication](#write-algorithm) — a retired fact is never a merge target, so
+  restating superseded knowledge creates a new entry
+- [Knowledge search](./knowledge.md), so a retired fact is never injected into a generation
+
+They stay readable by ID (`GET /api/v1/memory-entries/{entry_id}`) for audit.
+
+The write path that *produces* an invalidation — LLM arbitration over a shortlist of
+similar entries — has not shipped yet; the columns and the API shape are in place because
+supersede history cannot be reconstructed after the fact.
 
 ### Tag Filtering
 

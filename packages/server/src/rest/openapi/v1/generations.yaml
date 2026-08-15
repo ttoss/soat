@@ -276,6 +276,66 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/generations/{generation_id}/transcript:
+    get:
+      tags:
+        - Generations
+      summary: Get a generation's transcript
+      description: >
+        Returns one generation's turn read back as an ordered sequence of
+        steps: what it was asked, each model step with its tool calls and
+        results, and how it ended.
+
+
+        The transcript is assembled at read time from the generation record and
+        the trace's steps object; nothing is stored, so it cannot outlive the
+        content it projects. Requires `traces:GetTrace` in addition to
+        `generations:GetGeneration`, because the response merges content from
+        both resources.
+
+
+        A generation whose content is unavailable — never written under
+        zero-retention, or cleared by a purge — returns `200` with the skeleton
+        rather than an error: `input` and `output` are null, `steps` is empty,
+        and the `content_redacted_*` fields say which happened.
+        `content_redacted_by_principal_id` is `zero_retention` when the content
+        was never stored, and the purging principal's ID when it was erased
+        later. A generation that is still running returns the same shape with
+        an empty `steps`; `status` disambiguates the two.
+      operationId: getGenerationTranscript
+      parameters:
+        - name: generation_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Public ID of the generation
+      responses:
+        '200':
+          description: The generation's transcript
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenerationTranscript'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Generation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -509,6 +569,223 @@ components:
           example:
             team: payments
             ticket_id: OPS-4821
+
+    TranscriptUsage:
+      type: object
+      description: >
+        Token counts for one step. A field is null when the provider did not
+        report it — null rather than 0, so "not reported" stays distinguishable
+        from "none used".
+      properties:
+        input_tokens:
+          type: integer
+          nullable: true
+        output_tokens:
+          type: integer
+          nullable: true
+        total_tokens:
+          type: integer
+          nullable: true
+
+    TranscriptToolCall:
+      type: object
+      description: One tool call the model made during a step.
+      properties:
+        id:
+          type: string
+          nullable: true
+          description: >
+            The call's ID, as the model provider issued it (e.g. `call_…`),
+            used to correlate it with an entry in `tool_results`. Null when the
+            stored step did not record one.
+        tool_name:
+          type: string
+          nullable: true
+          example: weather
+        args:
+          description: >
+            The arguments the model supplied, as a value. This payload is
+            tool-owned: its keys are passed through exactly as they were
+            recorded and are never inspected or rewritten by SOAT.
+          nullable: true
+          example:
+            cityName: Paris
+
+    TranscriptToolResult:
+      type: object
+      description: >
+        One tool's answer to a call in the same step. A call that failed is
+        reported here too, with `result` null and `error` set — so a reader sees
+        successes and failures in one ordered list keyed by the call they answer.
+      properties:
+        tool_call_id:
+          type: string
+          nullable: true
+          description: The `id` of the `tool_calls` entry this answers.
+        tool_name:
+          type: string
+          nullable: true
+          example: weather
+        result:
+          description: >
+            What the tool returned, as a value. Tool-owned: keys are passed
+            through verbatim. Null when the call errored.
+          nullable: true
+          example:
+            tempC: 18
+        error:
+          description: The tool's failure, when the step recorded one.
+          nullable: true
+          example: null
+
+    TranscriptStep:
+      type: object
+      description: >
+        One model step. Projected from the stored step at read time — the stored
+        shape is provider- and SDK-specific and is never put on the wire.
+      properties:
+        index:
+          type: integer
+          description: >
+            Zero-based position of this step in the turn. Positional rather than
+            the model's own step number, which restarts at zero when a paused
+            turn resumes.
+          example: 0
+        text:
+          type: string
+          description: >
+            The text this step produced. Empty for a step that only called
+            tools.
+          example: ''
+        finish_reason:
+          type: string
+          nullable: true
+          description: Why this step stopped.
+          example: tool-calls
+        tool_calls:
+          type: array
+          items:
+            $ref: '#/components/schemas/TranscriptToolCall'
+        tool_results:
+          type: array
+          items:
+            $ref: '#/components/schemas/TranscriptToolResult'
+        usage:
+          allOf:
+            - $ref: '#/components/schemas/TranscriptUsage'
+          nullable: true
+          description: Null when the step recorded no usage.
+
+    GenerationTranscript:
+      type: object
+      description: >
+        One generation's turn, read back step by step. Assembled at read time
+        from the generation record and the trace's steps object — never stored,
+        so it dies with the content it projects.
+      properties:
+        generation_id:
+          x-soat-ref: generations
+          type: string
+          example: gen_V1StGXR8Z5jdHi6B
+        trace_id:
+          x-soat-ref: traces
+          type: string
+          nullable: true
+          example: trace_V1StGXR8Z5jdHi6B
+        project_id:
+          x-soat-ref: projects
+          type: string
+        agent_id:
+          x-soat-ref: agents
+          type: string
+        agent_version:
+          type: integer
+          nullable: true
+          description: Agent config version that served the turn.
+        status:
+          type: string
+          description: >
+            Lifecycle status of the generation. Disambiguates an empty `steps`
+            caused by a run still in flight from one caused by erased content.
+          enum: [in_progress, requires_action, completed, failed]
+          example: completed
+        stop_reason:
+          type: string
+          nullable: true
+          example: stop
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        step_count:
+          type: integer
+          description: >
+            Number of steps this turn recorded. A counter rather than content,
+            so it survives a purge and still reports the size of a turn whose
+            steps are gone. Scoped to the generation, not the trace: a trace
+            that groups several generations counts them all in its own
+            `step_count`, while each transcript reports only its own.
+          example: 2
+        input:
+          type: array
+          nullable: true
+          description: >
+            The messages the turn was asked, as recorded. Message content is
+            caller-owned and passed through verbatim. Null when the content was
+            never stored, has been purged, or predates input recording.
+          items:
+            type: object
+        steps:
+          type: array
+          description: >
+            The turn's steps in order. Empty for a run still in progress, and
+            for one whose content is unavailable — `status` and
+            `content_redacted_at` say which.
+          items:
+            $ref: '#/components/schemas/TranscriptStep'
+        output:
+          type: object
+          nullable: true
+          description: >
+            The turn's final answer. Null when there are no steps to derive it
+            from.
+          properties:
+            content:
+              type: string
+              nullable: true
+              description: >
+                The last step that produced text. Null for a turn that only
+                called tools.
+              example: It's 18°C in Paris right now.
+            finish_reason:
+              type: string
+              nullable: true
+              description: The finish reason of the actual last step.
+              example: stop
+        error:
+          type: object
+          nullable: true
+          description: Structured error payload when the generation failed.
+        content_redacted_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: >
+            When the generation's content was erased; null while it is intact.
+        content_redacted_by_principal_type:
+          type: string
+          nullable: true
+          description: Principal kind that erased the content.
+          example: system
+        content_redacted_by_principal_id:
+          type: string
+          nullable: true
+          description: >
+            Public ID of that principal. `zero_retention` when the content was
+            never stored, distinguishing it from content erased later.
 
     ErrorResponse:
       type: object

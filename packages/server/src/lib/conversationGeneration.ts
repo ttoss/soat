@@ -256,6 +256,7 @@ const firePostTurnSideEffects = (args: {
     agentId: args.agentId,
     projectIds: [args.projectId],
     generationId: args.generationId,
+    conversationId: args.conversationId,
     messages: args.messagesForModel,
     assistantContent: args.assistantContent,
   });

@@ -17,6 +17,11 @@ import { DomainError } from '../errors';
 import { readFileBuffer } from './fileStorage';
 import { isPlainObject } from './plainObject';
 import { makeResourceAccessor } from './resourceAccessor';
+import {
+  locateSegment,
+  readStepSegments,
+  sliceGenerationSteps,
+} from './traceStepSegments';
 
 const log = createDebug('soat:generation-turn');
 
@@ -29,6 +34,8 @@ type GenerationRow = InstanceType<(typeof db)['Generation']> & {
       })
     | null;
 };
+
+export type GenerationWithTrace = GenerationRow;
 
 const generations = makeResourceAccessor<GenerationRow>({
   model: () => {
@@ -112,8 +119,26 @@ export const deriveTurnOutputText = (steps: unknown): string | null => {
   return null;
 };
 
+/**
+ * Loads a generation with the associations both turn readers need: the project
+ * and agent it belongs to, and the trace carrying its steps file.
+ *
+ * Shared so the two consumers resolve a generation the same way and only one
+ * of them has to know that the answer lives in a File hanging off the trace.
+ * Throws `GENERATION_NOT_FOUND` when the id is unknown or out of scope.
+ */
+export const loadGenerationWithTrace = async (args: {
+  generationId: string;
+  projectIds?: number[];
+}): Promise<GenerationWithTrace> => {
+  return generations.getByPublicId({
+    id: args.generationId,
+    projectIds: args.projectIds,
+  });
+};
+
 /** Reads and parses a trace's steps object. Null when it cannot be read. */
-const readTraceSteps = async (
+export const readTraceSteps = async (
   file: { storagePath: string; storageType: string } | null | undefined
 ): Promise<unknown> => {
   if (!file) return null;
@@ -141,6 +166,36 @@ const readTraceSteps = async (
 };
 
 /**
+ * Reads one generation's own steps out of its trace's steps object.
+ *
+ * A `trace_id` may group several generations, and the object then holds every
+ * one of their segments — so a turn reader must take its own slice or it would
+ * report a neighbouring turn's steps as this one's (#1024). A trace written
+ * before the index existed holds a single turn and is read whole, which is what
+ * every reader did before grouping worked.
+ */
+export const readGenerationSteps = async (
+  generation: GenerationWithTrace
+): Promise<unknown> => {
+  return sliceGenerationSteps({
+    steps: await readTraceSteps(generation.trace?.file),
+    segments: generation.trace?.stepSegments,
+    generationId: generation.publicId,
+  });
+};
+
+/** How many steps of the trace's object are this generation's. Falls back to
+ * the trace's own counter for an unindexed trace, whose object is one turn. */
+export const generationStepCount = (
+  generation: GenerationWithTrace
+): number => {
+  const segments = readStepSegments(generation.trace?.stepSegments);
+  if (segments.length === 0) return generation.trace?.stepCount ?? 0;
+
+  return locateSegment(segments, generation.publicId).stepCount;
+};
+
+/**
  * Loads a completed generation as a replayable turn.
  *
  * Refuses two states rather than degrading, because both would otherwise
@@ -161,8 +216,8 @@ export const getGenerationTurn = async (args: {
 }): Promise<GenerationTurn> => {
   log('getGenerationTurn: generationId=%s', args.generationId);
 
-  const generation = await generations.getByPublicId({
-    id: args.generationId,
+  const generation = await loadGenerationWithTrace({
+    generationId: args.generationId,
     projectIds: args.projectIds,
   });
 
@@ -190,7 +245,7 @@ export const getGenerationTurn = async (args: {
     );
   }
 
-  const steps = await readTraceSteps(generation.trace?.file);
+  const steps = await readGenerationSteps(generation);
 
   return {
     generationDbId: generation.id as number,

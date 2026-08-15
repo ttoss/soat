@@ -21,10 +21,24 @@ export type MemoryConsolidationContext = {
 
 type MemoryEntryRow = InstanceType<(typeof db)['MemoryEntry']> & {
   memory?: InstanceType<(typeof db)['Memory']>;
+  sourceGeneration?: InstanceType<(typeof db)['Generation']> | null;
+  sourceConversation?: InstanceType<(typeof db)['Conversation']> | null;
+  supersededByEntry?: InstanceType<(typeof db)['MemoryEntry']> | null;
 };
 
+/**
+ * Every read path that feeds `mapMemoryEntry` must use these includes: the
+ * mapper reports the provenance and supersede links from the loaded
+ * associations, so a query that omits one would silently return `null` for a
+ * link that exists (the #801 failure shape).
+ */
 const memoryEntryIncludes = () => {
-  return [{ model: db.Memory, as: 'memory' }];
+  return [
+    { model: db.Memory, as: 'memory' },
+    { model: db.Generation, as: 'sourceGeneration' },
+    { model: db.Conversation, as: 'sourceConversation' },
+    { model: db.MemoryEntry, as: 'supersededByEntry' },
+  ];
 };
 
 const memoryEntries = makeResourceAccessor<MemoryEntryRow>({
@@ -35,6 +49,12 @@ const memoryEntries = makeResourceAccessor<MemoryEntryRow>({
   label: 'Memory entry',
 });
 
+const linkedPublicId = (
+  linked?: { publicId: string } | null
+): string | null => {
+  return linked?.publicId ?? null;
+};
+
 const mapMemoryEntry = (instance: MemoryEntryRow) => {
   return {
     id: instance.publicId,
@@ -43,8 +63,46 @@ const mapMemoryEntry = (instance: MemoryEntryRow) => {
     source_type: instance.sourceType,
     tags: instance.tags ?? null,
     metadata: instance.metadata ?? null,
+    source_generation_id: linkedPublicId(instance.sourceGeneration),
+    source_conversation_id: linkedPublicId(instance.sourceConversation),
+    invalidated_at: instance.invalidatedAt ?? null,
+    superseded_by_entry_id: linkedPublicId(instance.supersededByEntry),
     created_at: instance.createdAt,
     updated_at: instance.updatedAt,
+  };
+};
+
+/**
+ * Resolves the public ids the write paths carry (`gen_…`, `cnv_…`) to the
+ * internal ids the provenance columns store. A missing row yields `null`
+ * rather than throwing: provenance is an audit link on a fire-and-forget
+ * write path, never a reason to lose the fact itself.
+ */
+const resolveProvenanceIds = async (args: {
+  sourceGenerationPublicId?: string;
+  sourceConversationPublicId?: string;
+}): Promise<{
+  sourceGenerationId: number | null;
+  sourceConversationId: number | null;
+}> => {
+  const [generation, conversation] = await Promise.all([
+    args.sourceGenerationPublicId
+      ? db.Generation.findOne({
+          where: { publicId: args.sourceGenerationPublicId },
+          attributes: ['id'],
+        })
+      : null,
+    args.sourceConversationPublicId
+      ? db.Conversation.findOne({
+          where: { publicId: args.sourceConversationPublicId },
+          attributes: ['id'],
+        })
+      : null,
+  ]);
+
+  return {
+    sourceGenerationId: (generation?.id as number | undefined) ?? null,
+    sourceConversationId: (conversation?.id as number | undefined) ?? null,
   };
 };
 
@@ -84,21 +142,28 @@ const findTopSimilarEntry = async (args: {
     where: {
       memoryId: args.memoryId,
       embedding: { [Op.not]: null },
+      // A retired fact is not a dedup candidate: a write that restates
+      // superseded knowledge must land as a new entry, not merge into the
+      // entry that was invalidated precisely because it no longer holds.
+      invalidatedAt: null,
     },
     attributes: {
       include: [
         [
           db.MemoryEntry.sequelize!.literal(
-            `embedding <=> '${args.embeddingLiteral}'`
+            `"MemoryEntry"."embedding" <=> '${args.embeddingLiteral}'`
           ),
           'distance',
         ],
       ],
     },
+    // The includes join memory_entries to itself (`supersededByEntry`), so a
+    // bare `embedding` in the literals below is ambiguous — both sides of that
+    // join have the column. Qualify with the table alias.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    include: [{ model: db.Memory, as: 'memory' }] as any,
+    include: memoryEntryIncludes() as any,
     order: db.MemoryEntry.sequelize!.literal(
-      `embedding <=> '${args.embeddingLiteral}'`
+      `"MemoryEntry"."embedding" <=> '${args.embeddingLiteral}'`
     ),
   });
 };
@@ -222,6 +287,19 @@ export const writeMemoryEntry = async (args: {
   duplicateThreshold?: number;
   updateThreshold?: number;
   consolidation?: MemoryConsolidationContext;
+  /**
+   * Provenance for the fact, as public ids. Supplied by the write paths that
+   * have a turn behind them (the `write_memory` tool and extraction); absent
+   * for manual REST writes and orchestration node writes.
+   *
+   * Recorded on creation only. A merge leaves the existing entry's provenance
+   * alone: it names the turn that first asserted the fact, and that is exactly
+   * the unbackfillable record this column exists to keep. A later turn that
+   * genuinely replaces the fact supersedes it with a new entry (Memories 5a),
+   * which carries its own provenance.
+   */
+  sourceGenerationPublicId?: string;
+  sourceConversationPublicId?: string;
 }): Promise<WriteMemoryEntryResult> => {
   // Step 1: Generate embedding for incoming content
   let embedding: number[] | null = null;
@@ -236,6 +314,11 @@ export const writeMemoryEntry = async (args: {
   if (deduped) return deduped;
 
   // Step 3c: New — create
+  const provenance = await resolveProvenanceIds({
+    sourceGenerationPublicId: args.sourceGenerationPublicId,
+    sourceConversationPublicId: args.sourceConversationPublicId,
+  });
+
   const entry = await db.MemoryEntry.create({
     memoryId: args.memoryId,
     content: args.content,
@@ -243,6 +326,8 @@ export const writeMemoryEntry = async (args: {
     tags: args.tags ?? null,
     metadata: args.metadata ?? null,
     embedding,
+    sourceGenerationId: provenance.sourceGenerationId,
+    sourceConversationId: provenance.sourceConversationId,
   });
 
   return {
@@ -282,14 +367,19 @@ export const listMemoryEntries = async (args: {
   memoryId: number;
   limit?: number;
   offset?: number;
+  /** Invalidated (superseded) entries are excluded unless this is set. */
+  includeInvalidated?: boolean;
 }) => {
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
     query: ({ limit, offset }) => {
       return db.MemoryEntry.findAndCountAll({
-        where: { memoryId: args.memoryId },
-        include: [{ model: db.Memory, as: 'memory' }],
+        where: {
+          memoryId: args.memoryId,
+          ...(args.includeInvalidated ? {} : { invalidatedAt: null }),
+        },
+        include: memoryEntryIncludes(),
         order: [['createdAt', 'ASC']],
         distinct: true,
         limit,
@@ -300,10 +390,14 @@ export const listMemoryEntries = async (args: {
   });
 };
 
+/**
+ * Reads a single entry regardless of validity — a superseded entry stays
+ * addressable by id so the supersede chain can be walked for audit.
+ */
 export const getMemoryEntry = async (args: { id: string }) => {
   const entry = await db.MemoryEntry.findOne({
     where: { publicId: args.id },
-    include: [{ model: db.Memory, as: 'memory' }],
+    include: memoryEntryIncludes(),
   });
   if (!entry) return null;
   return mapMemoryEntry(entry);

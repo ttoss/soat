@@ -9,11 +9,15 @@ import {
   resolveTraceContentModeForAgent,
   ZERO_RETENTION_PRINCIPAL,
 } from './traceContentPolicy';
+import {
+  applySegment,
+  locateSegment,
+  readStepSegments,
+  type StepSegment,
+  totalSegmentSteps,
+} from './traceStepSegments';
 
 const log = createDebug('soat:traces');
-
-/** One generation's slice of a trace's steps object — see `Trace.stepSegments`. */
-type StepSegment = { generationId: string; stepCount: number };
 
 /**
  * Serializes trace steps so that Error objects (which serialize to `{}` by
@@ -259,58 +263,6 @@ const readTraceSteps = async (
   }
 };
 
-const readSegments = (
-  trace: InstanceType<(typeof db)['Trace']> | null
-): StepSegment[] => {
-  const segments = trace?.stepSegments;
-  return Array.isArray(segments) ? segments : [];
-};
-
-/** Where `generationId`'s slice starts, and how long it currently is. A
- * generation that has not written yet gets the end of the object. */
-const locateSegment = (
-  segments: StepSegment[],
-  generationId: string
-): { offset: number; previousCount: number } => {
-  let offset = 0;
-  for (const segment of segments) {
-    if (segment.generationId === generationId) {
-      return { offset, previousCount: segment.stepCount };
-    }
-    offset += segment.stepCount;
-  }
-  return { offset, previousCount: 0 };
-};
-
-const applySegment = (args: {
-  segments: StepSegment[];
-  generationId: string;
-  stepCount: number;
-}): StepSegment[] => {
-  const replaced = args.segments.some((segment) => {
-    return segment.generationId === args.generationId;
-  });
-
-  if (!replaced) {
-    return [
-      ...args.segments,
-      { generationId: args.generationId, stepCount: args.stepCount },
-    ];
-  }
-
-  return args.segments.map((segment) => {
-    return segment.generationId === args.generationId
-      ? { generationId: segment.generationId, stepCount: args.stepCount }
-      : segment;
-  });
-};
-
-const totalSteps = (segments: StepSegment[]): number => {
-  return segments.reduce((sum, segment) => {
-    return sum + segment.stepCount;
-  }, 0);
-};
-
 /**
  * Serializes the writes for one trace within this process, so two generations
  * grouped under the same `trace_id` cannot interleave their read-modify-write
@@ -348,6 +300,32 @@ const withTraceWriteLock = async <T>(
   }
 };
 
+/**
+ * The steps object and index a write builds on.
+ *
+ * Both come back empty unless they agree with each other, so the object and its
+ * index can never describe different histories. They disagree in two cases:
+ *
+ * - nothing readable to build on (no file, or unparseable bytes);
+ * - content written before the object was segmented, whose steps cannot be
+ *   attributed to a generation. That write is replaced exactly as it was before
+ *   this change, and the trace is indexed from here on.
+ */
+const readTraceBase = async (
+  trace: InstanceType<(typeof db)['Trace']> | null
+): Promise<{ baseSteps: unknown[]; baseSegments: StepSegment[] }> => {
+  const storedSteps = await readTraceSteps(trace);
+  const storedSegments = readStepSegments(trace?.stepSegments);
+
+  const indexed =
+    storedSteps !== null &&
+    (storedSegments.length > 0 || storedSteps.length === 0);
+
+  return indexed
+    ? { baseSteps: storedSteps, baseSegments: storedSegments }
+    : { baseSteps: [], baseSegments: [] };
+};
+
 const writeTrace = async (args: SaveTraceArgs): Promise<void> => {
   const serializedSteps = serializeSteps(args.steps);
 
@@ -373,7 +351,7 @@ const writeTrace = async (args: SaveTraceArgs): Promise<void> => {
     // The segment index is counters and ids, so it is skeleton like
     // `step_count` and stays accurate even with no object behind it.
     const segments = applySegment({
-      segments: readSegments(existingTrace),
+      segments: readStepSegments(existingTrace?.stepSegments),
       generationId: args.generationId,
       stepCount: serializedSteps.length,
     });
@@ -384,7 +362,7 @@ const writeTrace = async (args: SaveTraceArgs): Promise<void> => {
       agentId: args.agentId,
       filePublicId: null,
       // A counter, not content: step_count is part of the skeleton.
-      stepCount: totalSteps(segments),
+      stepCount: totalSegmentSteps(segments),
       stepSegments: segments,
       parentTraceId: args.parentTraceId ?? null,
       rootTraceId: args.rootTraceId ?? null,
@@ -393,24 +371,9 @@ const writeTrace = async (args: SaveTraceArgs): Promise<void> => {
     return;
   }
 
-  const storedSteps = await readTraceSteps(existingTrace);
-  const storedSegments = readSegments(existingTrace);
+  const { baseSteps, baseSegments } = await readTraceBase(existingTrace);
 
-  // Build on what is there only when the index and the bytes agree, so the two
-  // can never describe different histories. They disagree in two cases, both of
-  // which start the object over:
-  //
-  // - nothing readable to build on (no file, or unparseable bytes);
-  // - content written before the object was segmented, whose steps cannot be
-  //   attributed to a generation. That write is replaced exactly as it was
-  //   before this change, and the trace is indexed from here on.
-  const indexed =
-    storedSteps !== null &&
-    (storedSegments.length > 0 || storedSteps.length === 0);
-  const baseSteps = indexed ? storedSteps : [];
-  const baseSegments = indexed ? storedSegments : [];
-
-  const { offset, previousCount } = locateSegment(
+  const { offset, stepCount: previousCount } = locateSegment(
     baseSegments,
     args.generationId
   );
