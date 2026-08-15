@@ -6,7 +6,10 @@ import { buildRunAuthHeader } from 'src/lib/orchestrationRunToken';
 import { wakeDueRuns } from 'src/lib/orchestrationScheduler';
 import { flushTaskAutomations } from 'src/lib/tasks';
 import * as tasksAutomationModule from 'src/lib/tasksAutomation';
-import { sweepStalledTasks } from 'src/lib/tasksScheduler';
+import {
+  reconcileOrphanedDispatches,
+  sweepStalledTasks,
+} from 'src/lib/tasksScheduler';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
@@ -99,6 +102,7 @@ describe('Tasks', () => {
         'agents:CreateAgent',
         'orchestrations:CreateOrchestration',
         'orchestrations:GetRun',
+        'orchestrations:StartRun',
       ],
       createNoPermUser: true,
     });
@@ -2008,6 +2012,513 @@ describe('Tasks', () => {
         },
       });
       expect(settled.status).toBe('closed');
+    });
+
+    test('a dispatched run that settled while no in-process awaiter existed is reconciled and routed (restart recovery)', async () => {
+      // #855 proved the *run* survives a restart: the scheduler owns its wake.
+      // The task awaiting it does not. `runDispatch` resolves through
+      // `waitForOrchestrationRunSettlement`, an in-process poll loop reached
+      // from `dispatchOnEnter`'s detached promise (tracked only in the
+      // in-memory `pendingAutomations` set). A restart while the run is
+      // `sleeping` — the durable state a `delay`/`poll` node parks in, and the
+      // one that can last hours — loses that loop. The run then completes with
+      // nobody listening: `on_complete` never fires and the task is stranded at
+      // `automation_status: 'running'` forever.
+      const orchestrationId = (
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestrations')
+          .send({
+            project_id: projectId,
+            name: `orphan-pipeline-${Math.random().toString(36).slice(2)}`,
+            nodes: [
+              {
+                id: 'start',
+                type: 'transform',
+                expression: { var: '' },
+                state_mapping: { 'state.result': { var: 'output.output' } },
+              },
+            ],
+            edges: [],
+          })
+      ).body.id;
+
+      // `working` is deliberately not the initial state, so creating the task
+      // parks it in `idle` and dispatches nothing. No awaiter is ever created
+      // for this task in this process — which is exactly the condition a
+      // restart leaves behind, reproduced without needing to kill the process.
+      const workflowId = (
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/workflows')
+          .send({
+            project_id: projectId,
+            name: `orphan-recovery-${Math.random().toString(36).slice(2)}`,
+            states: [
+              { name: 'idle', initial: true, kind: 'human' },
+              {
+                name: 'working',
+                on_enter: {
+                  dispatch: {
+                    kind: 'orchestration',
+                    orchestration_id: orchestrationId,
+                    // A recovered completion must apply `payload_writes` too,
+                    // or the task moves on missing the deterministic channel a
+                    // healthy dispatch would have written.
+                    payload_writes: { recovered: true },
+                  },
+                  on_complete: [{ when: true, transition: 'to_done' }],
+                },
+              },
+              { name: 'done', terminal: true },
+            ],
+            transitions: [
+              { name: 'to_working', from: ['idle'], to: 'working' },
+              { name: 'to_done', from: ['working'], to: 'done' },
+            ],
+          })
+      ).body.id;
+
+      const taskId = (
+        await authenticatedTestClient(userToken).post('/api/v1/tasks').send({
+          project_id: projectId,
+          workflow_id: workflowId,
+          title: 'stranded by a restart',
+          payload: {},
+        })
+      ).body.id;
+
+      // A real run that has already reached a terminal status — the run the
+      // scheduler finished after the process that dispatched it went away.
+      const run = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: orchestrationId, input: {}, wait: true });
+      expect(run.status).toBe(201);
+      expect(run.body.status).toBe('succeeded');
+
+      // The post-restart row, written directly because no API call can produce
+      // it: a task parked in an automated state with a `running` dispatch
+      // pointing at a run that has since settled. `entered_state_at` is aged
+      // past the reconciler's grace window so a genuinely in-flight dispatch in
+      // a live process is never mistaken for an orphan.
+      await db.Task.update(
+        {
+          state: 'working',
+          enteredStateAt: new Date(Date.now() - 60_000),
+          automationStatus: 'running',
+          activeDispatch: {
+            kind: 'orchestration_run',
+            id: run.body.id,
+            status: 'running',
+          },
+        },
+        { where: { publicId: taskId } }
+      );
+
+      const claimed = await reconcileOrphanedDispatches();
+      expect(claimed).toBe(1);
+
+      const recovered = await pollTask({
+        token: userToken,
+        taskId,
+        predicate: (t) => {
+          return t.state === 'done';
+        },
+      });
+      expect(recovered.status).toBe('closed');
+      expect(recovered.payload).toEqual({ recovered: true });
+      expect(recovered.last_result).toBeDefined();
+      // Entering `done` cleared the dispatch provenance, exactly as it does on
+      // the in-process path — the recovery is indistinguishable from a healthy
+      // completion once the task has moved.
+      expect(recovered.automation_status).toBeNull();
+      expect(recovered.active_dispatch).toBeNull();
+
+      // The recovered move carries the run as its cause, exactly as the
+      // in-process completion path records it.
+      const history = (
+        await authenticatedTestClient(userToken).get(
+          `/api/v1/tasks/${taskId}/history`
+        )
+      ).body;
+      const routed = history.find((h: { transition: string | null }) => {
+        return h.transition === 'to_done';
+      });
+      expect(routed.principal_kind).toBe('automation');
+      expect(routed.orchestration_run_id).toBe(run.body.id);
+    });
+
+    test('a reconciled dispatch whose run failed follows on_failure, not on_complete', async () => {
+      // A recovered outcome must pick the same branch a live one would. The
+      // classification is shared with the dispatcher (NON_SUCCESS_TERMINAL_
+      // STATUSES), so a failed run can never be recovered as a success.
+      const orchestrationId = (
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestrations')
+          .send({
+            project_id: projectId,
+            name: `orphan-failing-${Math.random().toString(36).slice(2)}`,
+            nodes: [
+              {
+                id: 'write',
+                type: 'memory_write',
+                memory_id: 'mem_nonexistent12345',
+                input_mapping: { content: { var: 'topic' } },
+              },
+            ],
+            edges: [],
+          })
+      ).body.id;
+
+      const workflowId = (
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/workflows')
+          .send({
+            project_id: projectId,
+            name: `orphan-failure-${Math.random().toString(36).slice(2)}`,
+            states: [
+              { name: 'idle', initial: true, kind: 'human' },
+              {
+                name: 'working',
+                on_enter: {
+                  dispatch: {
+                    kind: 'orchestration',
+                    orchestration_id: orchestrationId,
+                  },
+                  on_complete: [{ when: true, transition: 'to_done' }],
+                  on_failure: 'to_failed',
+                },
+              },
+              { name: 'done', terminal: true },
+              { name: 'failed', terminal: true },
+            ],
+            transitions: [
+              { name: 'to_working', from: ['idle'], to: 'working' },
+              { name: 'to_done', from: ['working'], to: 'done' },
+              { name: 'to_failed', from: ['working'], to: 'failed' },
+            ],
+          })
+      ).body.id;
+
+      const taskId = (
+        await authenticatedTestClient(userToken).post('/api/v1/tasks').send({
+          project_id: projectId,
+          workflow_id: workflowId,
+          title: 'stranded by a restart, and doomed',
+          payload: {},
+        })
+      ).body.id;
+
+      const run = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: orchestrationId, input: {}, wait: true });
+      expect(run.body.status).toBe('failed');
+
+      await db.Task.update(
+        {
+          state: 'working',
+          enteredStateAt: new Date(Date.now() - 60_000),
+          automationStatus: 'running',
+          activeDispatch: {
+            kind: 'orchestration_run',
+            id: run.body.id,
+            status: 'running',
+          },
+        },
+        { where: { publicId: taskId } }
+      );
+
+      expect(await reconcileOrphanedDispatches()).toBe(1);
+
+      const recovered = await pollTask({
+        token: userToken,
+        taskId,
+        predicate: (t) => {
+          return t.state === 'failed';
+        },
+      });
+      expect(recovered.status).toBe('closed');
+      // The catch-all `on_complete` rule must not have fired.
+      expect(recovered.state).not.toBe('done');
+    });
+
+    test('a dispatch whose run is still in flight is never reconciled, however long it has sat', async () => {
+      // The grace window is not the whole guard: a `sleeping` run may legitimately
+      // outlast it by hours. Settlement is judged by the run's own status, using
+      // the same in-flight set the live awaiter uses, so a long `delay` is waited
+      // out rather than routed early with a half-finished state.
+      const orchestrationId = (
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestrations')
+          .send({
+            project_id: projectId,
+            name: `long-delay-${Math.random().toString(36).slice(2)}`,
+            nodes: [{ id: 'wait', type: 'delay', duration: '1h' }],
+            edges: [],
+          })
+      ).body.id;
+
+      const workflowId = (
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/workflows')
+          .send({
+            project_id: projectId,
+            name: `sleeping-dispatch-${Math.random().toString(36).slice(2)}`,
+            states: [
+              { name: 'idle', initial: true, kind: 'human' },
+              {
+                name: 'working',
+                on_enter: {
+                  dispatch: {
+                    kind: 'orchestration',
+                    orchestration_id: orchestrationId,
+                  },
+                  on_complete: [{ when: true, transition: 'to_done' }],
+                },
+              },
+              { name: 'done', terminal: true },
+            ],
+            transitions: [
+              { name: 'to_working', from: ['idle'], to: 'working' },
+              { name: 'to_done', from: ['working'], to: 'done' },
+            ],
+          })
+      ).body.id;
+
+      const taskId = (
+        await authenticatedTestClient(userToken).post('/api/v1/tasks').send({
+          project_id: projectId,
+          workflow_id: workflowId,
+          title: 'waiting an hour',
+          payload: {},
+        })
+      ).body.id;
+
+      const run = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: orchestrationId, input: {} });
+      // Background mode: a run is created and returns its handle immediately.
+      expect(run.status).toBe(201);
+
+      let parked: InstanceType<typeof db.OrchestrationRun> | null = null;
+      for (let i = 0; i < 100; i += 1) {
+        parked = await db.OrchestrationRun.findOne({
+          where: { publicId: run.body.id },
+        });
+        if (parked?.status === 'sleeping') break;
+        await new Promise((resolve) => {
+          setTimeout(resolve, 20);
+        });
+      }
+      expect(parked?.status).toBe('sleeping');
+
+      // Aged well past the grace window — the only thing keeping this task from
+      // being reconciled is that its run has not settled.
+      await db.Task.update(
+        {
+          state: 'working',
+          enteredStateAt: new Date(Date.now() - 3_600_000),
+          automationStatus: 'running',
+          activeDispatch: {
+            kind: 'orchestration_run',
+            id: run.body.id,
+            status: 'running',
+          },
+        },
+        { where: { publicId: taskId } }
+      );
+
+      expect(await reconcileOrphanedDispatches()).toBe(0);
+
+      const untouched = await authenticatedTestClient(userToken).get(
+        `/api/v1/tasks/${taskId}`
+      );
+      expect(untouched.body.state).toBe('working');
+      expect(untouched.body.automation_status).toBe('running');
+    });
+
+    test('an agent dispatch, and a dispatch with no id yet, are both left to the live path', async () => {
+      // Two shapes the reconciler must decline. An `agent` dispatch can park in
+      // `requires_action` waiting for client tool outputs — legitimately
+      // outstanding, and indistinguishable from an orphan from here. A dispatch
+      // with `id: null` is one `setDispatchState` has written but whose record
+      // does not exist yet; there is nothing to look up.
+      const workflowId = (
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/workflows')
+          .send({
+            project_id: projectId,
+            name: `undeclinable-${Math.random().toString(36).slice(2)}`,
+            states: [
+              { name: 'idle', initial: true, kind: 'human' },
+              {
+                name: 'working',
+                on_enter: {
+                  dispatch: { kind: 'agent', agent_id: agentId },
+                  on_complete: [{ when: true, transition: 'to_done' }],
+                },
+              },
+              { name: 'done', terminal: true },
+            ],
+            transitions: [
+              { name: 'to_working', from: ['idle'], to: 'working' },
+              { name: 'to_done', from: ['working'], to: 'done' },
+            ],
+          })
+      ).body.id;
+
+      const makeTask = async (activeDispatch: object) => {
+        const id = (
+          await authenticatedTestClient(userToken).post('/api/v1/tasks').send({
+            project_id: projectId,
+            workflow_id: workflowId,
+            title: 'not the reconciler’s business',
+            payload: {},
+          })
+        ).body.id;
+        await db.Task.update(
+          {
+            state: 'working',
+            enteredStateAt: new Date(Date.now() - 60_000),
+            automationStatus: 'running',
+            activeDispatch,
+          },
+          { where: { publicId: id } }
+        );
+        return id;
+      };
+
+      const agentTaskId = await makeTask({
+        kind: 'generation',
+        id: 'gen_orphan',
+        status: 'running',
+      });
+      const noIdTaskId = await makeTask({
+        kind: 'orchestration_run',
+        id: null,
+        status: 'running',
+      });
+
+      expect(await reconcileOrphanedDispatches()).toBe(0);
+
+      for (const id of [agentTaskId, noIdTaskId]) {
+        const untouched = await authenticatedTestClient(userToken).get(
+          `/api/v1/tasks/${id}`
+        );
+        expect(untouched.body.state).toBe('working');
+        expect(untouched.body.automation_status).toBe('running');
+      }
+    });
+
+    test('a live dispatch inside its grace window is left alone by the reconciler', async () => {
+      // The mirror of the test above: reconciliation must never race a healthy
+      // in-process awaiter. A task that entered its state moments ago is still
+      // plausibly being awaited here, so the sweep must not claim it even
+      // though its dispatch record reads `running`.
+      const orchestrationId = (
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestrations')
+          .send({
+            project_id: projectId,
+            name: `fresh-pipeline-${Math.random().toString(36).slice(2)}`,
+            nodes: [
+              {
+                id: 'start',
+                type: 'transform',
+                expression: { var: '' },
+                state_mapping: { 'state.result': { var: 'output.output' } },
+              },
+            ],
+            edges: [],
+          })
+      ).body.id;
+
+      const workflowId = (
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/workflows')
+          .send({
+            project_id: projectId,
+            name: `fresh-dispatch-${Math.random().toString(36).slice(2)}`,
+            states: [
+              { name: 'idle', initial: true, kind: 'human' },
+              {
+                name: 'working',
+                on_enter: {
+                  dispatch: {
+                    kind: 'orchestration',
+                    orchestration_id: orchestrationId,
+                  },
+                  on_complete: [{ when: true, transition: 'to_done' }],
+                },
+              },
+              { name: 'done', terminal: true },
+            ],
+            transitions: [
+              { name: 'to_working', from: ['idle'], to: 'working' },
+              { name: 'to_done', from: ['working'], to: 'done' },
+            ],
+          })
+      ).body.id;
+
+      const taskId = (
+        await authenticatedTestClient(userToken).post('/api/v1/tasks').send({
+          project_id: projectId,
+          workflow_id: workflowId,
+          title: 'still in flight',
+          payload: {},
+        })
+      ).body.id;
+
+      const run = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: orchestrationId, input: {}, wait: true });
+      expect(run.body.status).toBe('succeeded');
+
+      // Same shape as the orphan above, but entered *now* — inside the grace
+      // window, so the awaiter that would route it may still be alive.
+      await db.Task.update(
+        {
+          state: 'working',
+          enteredStateAt: new Date(),
+          automationStatus: 'running',
+          activeDispatch: {
+            kind: 'orchestration_run',
+            id: run.body.id,
+            status: 'running',
+          },
+        },
+        { where: { publicId: taskId } }
+      );
+
+      expect(await reconcileOrphanedDispatches()).toBe(0);
+
+      const untouched = await authenticatedTestClient(userToken).get(
+        `/api/v1/tasks/${taskId}`
+      );
+      expect(untouched.body.state).toBe('working');
+      expect(untouched.body.automation_status).toBe('running');
+
+      // The window is a knob, not a constant: shrinking it to zero makes the
+      // very same task eligible, which is what an operator recovering a fleet
+      // after a restart would reach for.
+      const previous = process.env.TASKS_DISPATCH_RECONCILE_GRACE_MS;
+      process.env.TASKS_DISPATCH_RECONCILE_GRACE_MS = '0';
+      try {
+        expect(await reconcileOrphanedDispatches()).toBe(1);
+      } finally {
+        if (previous === undefined) {
+          delete process.env.TASKS_DISPATCH_RECONCILE_GRACE_MS;
+        } else {
+          process.env.TASKS_DISPATCH_RECONCILE_GRACE_MS = previous;
+        }
+      }
+
+      const recovered = await pollTask({
+        token: userToken,
+        taskId,
+        predicate: (t) => {
+          return t.state === 'done';
+        },
+      });
+      expect(recovered.status).toBe('closed');
     });
 
     test('a result that arrives after the task left the state is discarded', async () => {

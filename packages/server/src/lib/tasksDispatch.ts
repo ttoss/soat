@@ -15,14 +15,22 @@ import type { WorkflowDispatch } from './workflowsValidation';
 // run resolves normally with its partial state — so runDispatch must check
 // for these explicitly rather than relying on a rejected promise, or a
 // failed dispatch would look identical to a successful one to its caller.
-const NON_SUCCESS_TERMINAL_STATUSES: ReadonlySet<
+// Exported for the same reason as `RUN_IN_FLIGHT_STATUSES` below: the
+// reconciler must classify a settled run's outcome by this exact set, or a
+// recovered dispatch could route `on_complete` where a live one routed
+// `on_failure`.
+export const NON_SUCCESS_TERMINAL_STATUSES: ReadonlySet<
   MappedOrchestrationRun['status']
 > = new Set(['failed', 'cancelled', 'expired']);
 
 // A run has reached a resting point once it leaves these — `queued`/`running`
-// are transient, `sleeping` is a durable, scheduler-owned wait (#855).
-const IN_FLIGHT_STATUSES: ReadonlySet<MappedOrchestrationRun['status']> =
-  new Set(['queued', 'running', 'sleeping']);
+// are transient, `sleeping` is a durable, scheduler-owned wait (#855). Exported
+// so the reconciler (`tasksReconciliation`) decides "settled" by the same rule
+// the in-process awaiter below does, rather than keeping a second copy that
+// could drift into disagreeing about a status.
+export const RUN_IN_FLIGHT_STATUSES: ReadonlySet<
+  MappedOrchestrationRun['status']
+> = new Set(['queued', 'running', 'sleeping']);
 
 const sleep = (ms: number): Promise<void> => {
   return new Promise<void>((resolve) => {
@@ -61,7 +69,9 @@ const waitForOrchestrationRunSettlement = async (args: {
       );
     }
     if (
-      !IN_FLIGHT_STATUSES.has(row.status as MappedOrchestrationRun['status'])
+      !RUN_IN_FLIGHT_STATUSES.has(
+        row.status as MappedOrchestrationRun['status']
+      )
     ) {
       return mapRunWithIncludes(row.id as number);
     }
