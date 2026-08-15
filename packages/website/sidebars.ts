@@ -209,6 +209,7 @@ const sidebars: SidebarsConfig = {
         'tutorials/evaluate-an-agent',
         'tutorials/judge-open-ended-answers',
         'tutorials/gate-a-canary-promotion-on-an-eval',
+        'tutorials/replay-a-bad-turn',
       ],
     },
     {
