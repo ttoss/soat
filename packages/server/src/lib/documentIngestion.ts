@@ -6,6 +6,7 @@ import { DomainError } from '../errors';
 import type { ChunkStrategy } from './chunking';
 import {
   type ChunkConfigInput,
+  emitIngestFailed,
   fetchIngestedDocById,
   fileProjectInclude,
   finalizeIngestedPages,
@@ -162,6 +163,7 @@ const runIngestionPipeline = async (args: IngestionPipelineArgs) => {
       status: 'failed',
       failureReason: 'FILE_NOT_FOUND',
     });
+    await emitIngestFailed({ docId, error: 'FILE_NOT_FOUND' });
     return;
   }
 
@@ -241,6 +243,10 @@ const processDocumentIngestion = async (args: {
         conversionAttemptId: null,
         pendingDocPath: null,
         failureReason: describeError(error),
+      });
+      await emitIngestFailed({
+        docId: args.docId,
+        error: describeError(error),
       });
     } catch {
       // ignore secondary failure

@@ -39,6 +39,7 @@ See the [Permissions Reference](../permissions.md) for the IAM action strings fo
 | `project_id` | string         | ID of the owning project                                                                                           |
 | `path`       | string \| null | Logical path within the project (e.g. `/reports/q1.txt`). Also used as the resource ID segment in path-based SRNs. |
 | `filename`   | string         | Original filename                                                                                                  |
+| `content_type` | string       | Media type of the source file the document was ingested from (e.g. `application/pdf`). Absent when the underlying file is gone. |
 | `size`       | number         | File size in bytes                                                                                                 |
 | `status`     | string         | Ingestion lifecycle state: `pending` → `processing` → `ready` \| `failed`. Plain-text documents are always `ready`. |
 | `title`      | string \| null | Human-readable title (auto-set to filename for PDF ingestion)                                                      |
@@ -104,6 +105,23 @@ Field semantics (they change with `status`):
 | `error` | The `failure_reason` (e.g. `FILE_PARSE_FAILED`, `INGESTION_TIMEOUT`). Only set when `status` is `failed`; otherwise `null`. |
 
 Because chunks are persisted incrementally as their embeddings complete, `chunk_count` and `progress` advance during `processing` rather than jumping from `0` to the total at the end. This is the recommended endpoint for both async ingestion polling and quick status checks.
+
+### Ingestion Events
+
+Polling is not the only way to learn that an ingestion finished. Every path that
+settles one — the pipeline, an async converter callback, and the stall sweeper —
+emits a terminal event on the project event bus, deliverable through a
+[webhook](./webhooks.md):
+
+| Event | Emitted when | Extra `data` field |
+| --- | --- | --- |
+| `documents.ingested` | The document reached `status: ready` and its chunks are queryable | `chunk_count` — the final number of chunks indexed |
+| `documents.ingest_failed` | The ingestion settled in `status: failed` | `error` — the same reason `GET /documents/:id/status` reports |
+
+Both carry the document in `data` in the same shape the REST API returns it, so a
+subscriber does not need a follow-up read. A re-ingest emits a fresh event each
+time it settles; a document that never leaves `processing` emits nothing until
+the stall sweeper fails it (see [Stuck Ingestion Recovery](#stuck-ingestion-recovery)).
 
 ### Stuck Ingestion Recovery
 

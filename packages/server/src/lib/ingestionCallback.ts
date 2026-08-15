@@ -4,7 +4,10 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import type { ChunkStrategy } from './chunking';
 import { parseConverterOutput } from './converterInvocation';
-import { finalizeIngestedPages } from './documentIngestionCore';
+import {
+  emitIngestFailed,
+  finalizeIngestedPages,
+} from './documentIngestionCore';
 import { verifyIngestionCallbackToken } from './ingestionCallbackToken';
 
 const log = createDebug('soat:documents');
@@ -83,6 +86,10 @@ const failStaleConversion = async (
   );
   if (affected === 0) return false; // a callback already won the race
   await doc.reload();
+  await emitIngestFailed({
+    docId: doc.id as number,
+    error: 'CONVERSION_TIMEOUT',
+  });
   log(
     'recoverStaleDocument: marked stalled conversion failed id=%s attemptId=%s',
     doc.publicId,
@@ -116,6 +123,10 @@ export const recoverStaleDocument = async (
   await doc.update({
     status: 'failed',
     failureReason: 'INGESTION_TIMEOUT',
+  });
+  await emitIngestFailed({
+    docId: doc.id as number,
+    error: 'INGESTION_TIMEOUT',
   });
   log(
     'recoverStaleDocument: marked stalled ingestion failed id=%s',

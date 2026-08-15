@@ -60,6 +60,10 @@ export const SOAT_EVENTS = {
     'documents.created': 'A document was created.',
     'documents.updated': 'A document was updated.',
     'documents.deleted': 'A document was deleted.',
+    'documents.ingested':
+      'A document finished ingestion and is indexed (`status=ready`); the payload carries the document plus its final `chunk_count`.',
+    'documents.ingest_failed':
+      'A document ingestion settled in failure (`status=failed`); the payload carries the document plus the `error` reason (e.g. `FILE_PARSE_FAILED`, `INGESTION_TIMEOUT`).',
   },
   eval_run: {
     'eval_run.completed':
