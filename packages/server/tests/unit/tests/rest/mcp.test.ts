@@ -2253,7 +2253,9 @@ describe('MCP tools - happy path', () => {
         projectId: project!.id,
         projectPublicId: projectId,
         agentId: evalAgentId,
-        generationId: 'gen_test_steps',
+        // The steps are this generation's, and saying so is what lets the turn
+        // reader take its own slice out of the trace's object.
+        generationId: generationPublicId,
         steps: [
           { content: [{ type: 'text', text: 'On the first of each month.' }] },
         ],
