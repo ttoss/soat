@@ -112,6 +112,12 @@ atomic, superseded knowledge remains auditable, and every fact traces to its sou
 
 ### Phase 6 — Entity Graph Layer ❌ Not started
 
+> **Demand-gated.** This phase builds only when both roadmap gates fire — a
+> measured hybrid-retrieval gap on the Knowledge Phase 7 golden set, plus
+> observed user demand. The gates, the cheaper fallback, and the rationale live
+> in [roadmap.md](./roadmap.md#entity-graph-memories-phase-6--knowledge-phase-3--demand-gated);
+> a finished design here is not a green light.
+
 **Goal:** Extract structured entities and relationships from memory entries so knowledge can be queried by graph traversal — not just vector similarity. Enables precise queries like "everything about Pedro" or "what does Company X own?" without relying on embedding proximity.
 
 **Motivation:** Vector search excels at semantic similarity ("find things related to billing") but is weak for structural/relational queries. A memory entry "Pedro owns Company X" embeds as a single vector — querying for "Pedro" may not surface it if the embedding space doesn't place it close enough. An entity graph layer decomposes entries into queryable nodes (entities) and edges (relationships), enabling exact lookups and traversals.

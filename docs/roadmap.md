@@ -104,18 +104,28 @@ the memories module), then RC-5, then RC-3 and RC-4 (docs-only) in one PR.
 
 All additive; none changes a frozen field or loses data by waiting.
 
+**Suggested v1.x order:** memories P7 (streaming extraction) → knowledge P7
+(eval harness) → memories 5a (arbitration) → knowledge P5 (ranking). Memories
+P7 goes first because 5a improves write quality for traffic that is already
+captured, while P7 makes passive memory exist at all for the dominant
+transport — a user who enables extraction and sees nothing captured concludes
+the feature is broken. P7 has no dependency on 5a; the trade-off (streaming
+traffic captured before 5a lands goes through the v1 merge path) is acceptable
+because RC-2's schema is already in place and 5a changes behavior, not stored
+data.
+
 ### Memories
 
-- [ ] **5a — LLM-arbitrated write decision.** Top-K shortlist +
-      add/update/supersede/skip arbitration; v1 fallback semantics on LLM
-      failure; consolidation for the manual REST write path. Internal write
-      behavior on top of the RC-2 schema — the `action` enum already includes
-      `superseded`, so no contract change.
 - [ ] **Phase 7 — extraction coverage for streaming and `requires_action`
       completions.** No API change, but the passive-memory pipeline currently
       misses streaming (the dominant production transport) — the highest-value
       post-RC item. Until it lands, the docs must not claim extraction covers
       streaming.
+- [ ] **5a — LLM-arbitrated write decision.** Top-K shortlist +
+      add/update/supersede/skip arbitration; v1 fallback semantics on LLM
+      failure; consolidation for the manual REST write path. Internal write
+      behavior on top of the RC-2 schema — the `action` enum already includes
+      `superseded`, so no contract change.
 
 ### Knowledge
 
@@ -123,7 +133,11 @@ All additive; none changes a frozen field or loses data by waiting.
       (≥ 50 pairs), recall@k / MRR, memory-pipeline benchmarks,
       injected-context tracing. Baselines measured against the shipped
       non-system injection format. **Sequenced before Phase 5**, which needs it
-      as a regression gate.
+      as a regression gate. The golden set must include exact-term and
+      entity-style structural queries ("everything about <actor>", exact-name
+      lookups) so Phase 5's before/after numbers double as the entity graph's
+      evidence gate — without them, "does hybrid retrieval cover structural
+      lookups?" stays unanswered by construction.
 - [ ] **Phase 5 — hybrid retrieval & ranking.** `tsvector` lexical + pgvector
       per source, RRF fusion (replaces the raw-score interleave), optional
       rerank stage, recency blend. Additive parameters only; the `score`
@@ -140,7 +154,7 @@ All additive; none changes a frozen field or loses data by waiting.
 
 ## ⏭️ Post-v1 / deferred
 
-### Entity graph (Memories Phase 6 ↔ Knowledge Phase 3)
+### Entity graph (Memories Phase 6 ↔ Knowledge Phase 3) — demand-gated
 
 The largest pending initiative: `MemoryEntity` (`mey_`) + `MemoryEntityEdge`
 models, async triple extraction on write, entity CRUD endpoints, and the
@@ -152,8 +166,29 @@ they ship together. Entirely additive — new models, new endpoints, new optiona
 parameters — so it gains nothing from being inside v1 and would delay the RC by
 the most.
 
-Depends on: RC-2/5a (supersede must invalidate edges) and benefits from
-Knowledge Phase 7 (retrieval metrics) landing first.
+**Gates (both must fire before anything is built):**
+
+1. **Evidence gate** — the Knowledge Phase 7 golden set includes structural
+   queries ("everything about <actor>", exact-name lookups), and Phase 5
+   hybrid retrieval (lexical + RRF) measurably fails them. If `tsvector`
+   rescues exact-term recall, most of the graph's pitch is already served.
+2. **Demand gate** — an actual user asking for relational queries, not an
+   anticipated one.
+
+**Cheaper fallback to try first:** actor-scoped entry filtering on existing
+metadata — no triple extraction, no predicate normalization, no entity dedup
+thresholds.
+
+*Why gated, not just sequenced:* Phase 6's embedding-threshold entity dedup
+reintroduces the exact failure mode Phase 5 (arbitration) exists to remove —
+fixed cosine cutoffs making the decision — and its headline query ("how are X
+and Y related?") is already out of scope (single-hop only). It is also the only
+pending initiative that ships public API surface with unproven payoff, i.e. the
+only real deprecation exposure on the roadmap. The go/no-go must rest on
+measured retrieval gaps, not on the design being finished.
+
+Technical dependencies (unchanged): RC-2/5a (supersede must invalidate edges)
+and Knowledge Phase 7 (the evidence gate's measurement) landing first.
 
 ### Memories Phase 8 — forgetting
 
@@ -195,13 +230,14 @@ RC ─────────────────────────�
   RC-5 source-tag provenance
 
 v1.x ───────────────────────────────────────────────────────────
-  memories 5a (arbitration)  ◄── RC-2 (schema it populates)
-  memories P7 (streaming extraction)
+  memories P7 (streaming extraction) — first
   knowledge P7 (eval harness) ──► knowledge P5 (ranking; needs the gate)
+  memories 5a (arbitration)  ◄── RC-2 (schema it populates)
 
 post-v1 ────────────────────────────────────────────────────────
   memories P6 (entity data) ◄──► knowledge P3 (entity queries)
       ▲ needs 5a/RC-2 (supersede invalidates edges)
+      ⏭️ gates: hybrid-retrieval gap on P7 golden set (open) + demand (open)
   memories P8 (forgetting) ──► knowledge P5 recency/importance blend
   memories P9 (profile) — sketch
   learned rules ⏭️ ◄── recurrence-view demand (open) + evals P1 ✔
@@ -226,3 +262,7 @@ this file:
   retention flag only on observed demand.
 - **Activity vs audit split (2026-07)** — `ActivityEntry` owns agent/run
   telemetry; `AuditEntry` stays compliance-grade authorization events.
+- **Entity graph demand-gated (2026-08)** — builds only on measured
+  hybrid-retrieval gaps (Knowledge P7 golden set, structural queries) plus
+  observed user demand; actor-scoped filtering on existing metadata is the
+  fallback to try first. Rationale in the post-v1 section above.

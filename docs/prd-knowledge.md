@@ -20,6 +20,12 @@ Only outstanding work is tracked here; shipped functionality lives in `packages/
 
 ### Phase 3 — Entity Graph Queries ❌ Future
 
+> **Demand-gated.** This phase builds only when both roadmap gates fire — a
+> measured hybrid-retrieval gap on the Phase 7 golden set, plus observed user
+> demand. The gates, the cheaper fallback, and the rationale live in
+> [roadmap.md](./roadmap.md#entity-graph-memories-phase-6--knowledge-phase-3--demand-gated);
+> a finished design here is not a green light.
+
 **Goal:** Extend `searchKnowledge()` with entity-based filters so callers can query knowledge by structured graph traversal — not just vector similarity. Enables precise queries like "everything about Pedro", "what does Company X own?", and "all knowledge linked to actor `act_01`".
 
 **Dependencies:** Memory source integration (shipped) must be in place. Memory entity graph layer (prd-memories.md Phase 6) must be complete.
