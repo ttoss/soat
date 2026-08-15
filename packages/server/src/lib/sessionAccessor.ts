@@ -17,6 +17,9 @@ export const sessionIncludes = (): ResourceIncludes => {
     { model: db.Agent, as: 'agent' },
     { model: db.Conversation, as: 'conversation' },
     { model: db.Actor, as: 'actor' },
+    // One level only: lineage is read as "which session did this branch from",
+    // never as a tree. `GET /sessions/{id}/forks` walks the other direction.
+    { model: db.Session, as: 'forkedFrom' },
   ];
 };
 
@@ -30,6 +33,7 @@ export type SessionRow = InstanceType<(typeof db)['Session']> & {
   agent?: InstanceType<(typeof db)['Agent']>;
   conversation?: InstanceType<(typeof db)['Conversation']>;
   actor?: InstanceType<(typeof db)['Actor']> | null;
+  forkedFrom?: InstanceType<(typeof db)['Session']> | null;
 };
 
 export const sessions = makeResourceAccessor<SessionRow>({

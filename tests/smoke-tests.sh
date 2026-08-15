@@ -5039,6 +5039,69 @@ echo "Duplicate call with idempotency_key returns original message: OK"
 
 echo "add-session-message idempotency_key: OK"
 
+# session forking
+echo "--- fork-session ---"
+FORK_PARENT_RESP=$($SOAT_CLI create-session --agent_id "$AGENT_ID" --name "smoke-fork-parent")
+FORK_PARENT_ID=$(printf '%s\n' "$FORK_PARENT_RESP" | jq -r '.id')
+if [ -z "$FORK_PARENT_ID" ] || [ "$FORK_PARENT_ID" = "null" ]; then
+  echo "ERROR: Failed to create session for forking test" >&2
+  printf '%s\n' "$FORK_PARENT_RESP" >&2
+  exit 1
+fi
+
+$SOAT_CLI add-session-message --session_id "$FORK_PARENT_ID" --message "first turn" >/dev/null
+$SOAT_CLI add-session-message --session_id "$FORK_PARENT_ID" --message "second turn" >/dev/null
+
+FORK_RESP=$($SOAT_CLI fork-session \
+  --session_id "$FORK_PARENT_ID" \
+  --fork_at_position 0 \
+  --name "smoke-fork-branch")
+FORK_ID=$(printf '%s\n' "$FORK_RESP" | jq -r '.id')
+FORK_LINEAGE=$(printf '%s\n' "$FORK_RESP" | jq -r '.forked_from_session_id')
+FORK_POSITION=$(printf '%s\n' "$FORK_RESP" | jq -r '.forked_from_position')
+FORK_AUTO_GENERATE=$(printf '%s\n' "$FORK_RESP" | jq -r '.auto_generate')
+if [ -z "$FORK_ID" ] || [ "$FORK_ID" = "null" ] ||
+  [ "$FORK_LINEAGE" != "$FORK_PARENT_ID" ] ||
+  [ "$FORK_POSITION" != "0" ] ||
+  [ "$FORK_AUTO_GENERATE" != "false" ]; then
+  echo "ERROR: fork-session did not return an inert fork with lineage" >&2
+  printf '%s\n' "$FORK_RESP" >&2
+  exit 1
+fi
+echo "Fork created: $FORK_ID (from $FORK_PARENT_ID at position $FORK_POSITION)"
+
+# The fork references the parent's documents: message 0 of the branch is the
+# same document row as message 0 of the parent, not a copy of its text.
+FORK_PARENT_CONV=$(printf '%s\n' "$FORK_PARENT_RESP" | jq -r '.conversation_id')
+FORK_CHILD_CONV=$(printf '%s\n' "$FORK_RESP" | jq -r '.conversation_id')
+FORK_PARENT_DOC=$($SOAT_CLI list-conversation-messages --conversation_id "$FORK_PARENT_CONV" |
+  jq -r '.data[0].document_id')
+FORK_CHILD_DOCS=$($SOAT_CLI list-conversation-messages --conversation_id "$FORK_CHILD_CONV" | sanitize_json)
+FORK_CHILD_DOC=$(printf '%s\n' "$FORK_CHILD_DOCS" | jq -r '.data[0].document_id')
+FORK_CHILD_COUNT=$(printf '%s\n' "$FORK_CHILD_DOCS" | jq -r '.data | length')
+if [ "$FORK_CHILD_DOC" != "$FORK_PARENT_DOC" ] || [ "$FORK_CHILD_COUNT" != "1" ]; then
+  echo "ERROR: fork does not reference the parent's documents up to the fork point" >&2
+  printf '%s\n' "$FORK_CHILD_DOCS" >&2
+  exit 1
+fi
+echo "Fork references parent documents: OK"
+
+FORK_LIST=$($SOAT_CLI list-session-forks --session_id "$FORK_PARENT_ID" | sanitize_json)
+FORK_LIST_OK=$(printf '%s\n' "$FORK_LIST" | jq -r --arg fork "$FORK_ID" '([.data[] | select(.id == $fork)] | length) == 1')
+if [ "$FORK_LIST_OK" != "true" ]; then
+  echo "ERROR: list-session-forks did not include the new fork" >&2
+  printf '%s\n' "$FORK_LIST" >&2
+  exit 1
+fi
+echo "list-session-forks: OK"
+
+# A position the parent never had is a 400, not a silently shorter fork.
+expect_cli_error_status 400 fork-session --session_id "$FORK_PARENT_ID" --fork_at_position 99
+
+$SOAT_CLI delete-session --session-id "$FORK_ID" >/dev/null
+$SOAT_CLI delete-session --session-id "$FORK_PARENT_ID" >/dev/null
+echo "fork-session: OK"
+
 echo ""
 echo "--- Project delete-block and force-delete ---"
 DEL_PROJECT_RESP=$($SOAT_CLI create-project --name smoke-delete-project)

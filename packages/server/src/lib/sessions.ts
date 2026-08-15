@@ -2,8 +2,9 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { emitResourceEvent } from './eventBus';
 import { emptyPage, paginatedList } from './pagination';
-import { sessionIncludes, type SessionRow, sessions } from './sessionAccessor';
+import { sessionIncludes, sessions } from './sessionAccessor';
 import { cancelDelayTimer } from './sessionDelayHelpers';
+import { mapSession } from './sessionMapper';
 import { abortSessionGeneration } from './sessionOperations';
 import { createSessionTransaction } from './sessionTransaction';
 import { assertValidToolContextKeys } from './toolContext';
@@ -23,44 +24,6 @@ const checkAndExpireSession = async (
   if (isSessionExpired(session)) {
     await session.update({ status: 'expired' });
   }
-};
-
-const extractSessionIds = (session: Parameters<typeof mapSession>[0]) => {
-  return {
-    agent_id: session.agent?.publicId ?? null,
-    conversation_id: session.conversation?.publicId ?? null,
-    actor_id: session.actor?.publicId ?? null,
-  };
-};
-
-const extractSessionFlags = (session: Parameters<typeof mapSession>[0]) => {
-  return {
-    auto_generate: session.autoGenerate ?? false,
-  };
-};
-
-const extractSessionOptional = (session: Parameters<typeof mapSession>[0]) => {
-  return {
-    tags: session.tags ?? undefined,
-    tool_context: session.toolContext ?? null,
-    generating_at: session.generatingAt ?? null,
-    inactivity_ttl_seconds: session.inactivityTtlSeconds ?? 0,
-    last_activity_at: session.lastActivityAt ?? null,
-    message_delay_seconds: session.messageDelaySeconds ?? null,
-  };
-};
-
-const mapSession = (session: SessionRow) => {
-  return {
-    id: session.publicId,
-    ...extractSessionIds(session),
-    status: session.status,
-    name: session.name ?? null,
-    ...extractSessionFlags(session),
-    ...extractSessionOptional(session),
-    created_at: session.createdAt,
-    updated_at: session.updatedAt,
-  };
 };
 
 const resolveActorId = async (args: { actorId: string; projectId: number }) => {
