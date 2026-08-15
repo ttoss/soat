@@ -128,22 +128,43 @@ An `apiKey` in `config` is accepted as an express-mode fallback when no secret i
 
 ### Listing the models a provider can run
 
-`GET /api/v1/ai-providers/{ai_provider_id}/models` asks the provider which models it can run, using that provider record's own credentials and configuration, and returns provider-native ids — the same strings `default_model` and an agent's `model` carry. Which models are reachable is a property of the **credential**, not of the slug (two providers of the same slug can return different lists), which is why the listing hangs off a provider.
+`GET /api/v1/ai-providers/{ai_provider_id}/models` asks the provider which models it can run, using that provider record's own configuration and credentials, and returns provider-native ids — the same strings `default_model` and an agent's `model` carry. Which models are reachable is a property of the **credential**, not of the slug (two providers of the same slug can return different lists), which is why the listing hangs off a provider.
 
 Each entry carries what the provider reports: `id`, and optionally `display_name`, `vendor`, `input_modalities`, `output_modalities`, `streaming`, `lifecycle` (`active` / `legacy` / `deprecated`) and `inference_types`. A `lifecycle` other than `active` still serves but should not be pinned by anything new. A Bedrock model whose `inference_types` offers only `inference_profile` must be invoked through a cross-region profile id.
 
 Not every provider type can answer:
 
-| Provider | Listing |
-|---|---|
-| `openai`, `groq`, `xai`, `gateway`, `custom` | `GET {base_url}/models`, so a self-hosted or proxied endpoint works too |
-| `anthropic` | `GET /v1/models` |
-| `google` | AI Studio's model list |
-| `vertex` | the publisher models for the provider's `config.project` and `config.location` |
-| `bedrock` | `ListFoundationModels` in the provider's `config.region` |
-| `azure`, `ollama` | **unsupported** — Azure lists deployments an operator named, and Ollama lists whatever was pulled onto that host, so neither answers "which models can this provider run" |
+| Provider | Listing | Credential the listing uses |
+|---|---|---|
+| `openai`, `groq`, `xai`, `gateway`, `custom` | `GET {base_url}/models`, so a self-hosted or proxied endpoint works too | the linked secret — **required** |
+| `anthropic` | `GET /v1/models` | the linked secret — **required** |
+| `google` | AI Studio's model list | the linked secret — **required** |
+| `vertex` | the publisher models for the provider's `config.project` and `config.location` | [ADC](https://cloud.google.com/docs/authentication/application-default-credentials) from the server environment |
+| `bedrock` | `ListFoundationModels` in the provider's `config.region` | the AWS default credential chain of the server environment |
+| `azure`, `ollama` | **unsupported** — Azure lists deployments an operator named, and Ollama lists whatever was pulled onto that host, so neither answers "which models can this provider run" | — |
 
-Errors: `MODEL_LISTING_UNSUPPORTED` (400) for `azure` and `ollama`; `AI_PROVIDER_MISCONFIGURED` (400) when the record lacks what the listing needs (a Vertex `config.project`, a Bedrock region, a linked API key); `MODEL_LISTING_FAILED` (502) when the provider rejects the request or answers with something other than JSON — its own status and message are carried in the error message. Authorized by `ai-providers:ListAiProviderModels` on the provider's project.
+Errors: `MODEL_LISTING_UNSUPPORTED` (400) for `azure` and `ollama`; `AI_PROVIDER_MISCONFIGURED` (400) when the record lacks what the listing needs (a Vertex `config.project`, a Bedrock region, or — for the API-key providers above — a linked secret); `MODEL_LISTING_FAILED` (502) when the provider rejects the request or answers with something other than JSON — its own status and message are carried in the error message. Authorized by `ai-providers:ListAiProviderModels` on the provider's project.
+
+#### Listing models before you hold credentials
+
+`bedrock` and `vertex` list models using the **server's** ambient credentials, never the linked secret. Two consequences follow.
+
+The useful one: a provider record with **no `secret_id`** can list models, because `secret_id` is optional on create. So browsing a vendor's live catalogue before any key is provisioned needs no new endpoint — create a credential-less record naming only the region (or GCP project) and list against it:
+
+```bash
+soat create-ai-provider \
+  --project-id proj_ABC \
+  --name "Bedrock Catalog" \
+  --provider bedrock \
+  --default-model anthropic.claude-3-5-sonnet-20241022-v2:0 \
+  --config '{"region":"us-east-1"}'
+
+soat list-ai-provider-models --ai-provider-id aip_01
+```
+
+The record supplies the region and the IAM scope; the credential comes from the server's instance role. This is the supported way to keep a model catalogue current instead of vendoring a static list that drifts whenever the vendor ships a model.
+
+The surprising one: because the linked secret is ignored here, a `bedrock` or `vertex` provider that **generates** fine through an IAM-credentials or service-account secret can still fail to **list** if the server environment itself holds no AWS/Google credentials. Generation and listing resolve credentials differently for these two providers.
 
 ### Price overrides
 
