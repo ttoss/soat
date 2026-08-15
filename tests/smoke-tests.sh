@@ -3356,6 +3356,56 @@ if [ -n "$CLIENT_TRACE_ID" ] && [ "$CLIENT_TRACE_ID" != "null" ]; then
   fi
   echo "Generation transcript endpoint: OK ($TRANSCRIPT_STEPS steps)"
 
+  # 34b2. Grouping generations under one trace_id (#1024) — a second generation
+  # sent with an existing trace_id must ADD its steps to the trace, not replace
+  # the earlier generation's. `step_count` on the trace is the observable: it
+  # counts every grouped turn, so it can only grow.
+  echo "--- Grouping a second generation under $CLIENT_TRACE_ID ---"
+  TRACE_STEPS_BEFORE=$(printf '%s\n' "$TRACE_GET_RESP" | jq -r '.step_count')
+  GROUPED_GEN_RESP=$($SOAT_CLI create-agent-generation --wait true --agent-id "$AGENT_ID" \
+    --trace_id "$CLIENT_TRACE_ID" \
+    --messages '[{"role":"user","content":"Reply with the single word: grouped."}]' | sanitize_json)
+  GROUPED_GEN_STATUS=$(printf '%s\n' "$GROUPED_GEN_RESP" | jq -r '.status')
+  GROUPED_GEN_TRACE=$(printf '%s\n' "$GROUPED_GEN_RESP" | jq -r '.trace_id')
+  GROUPED_GEN_ID=$(printf '%s\n' "$GROUPED_GEN_RESP" | jq -r '.id')
+  if [ "$GROUPED_GEN_STATUS" != "completed" ] || [ "$GROUPED_GEN_TRACE" != "$CLIENT_TRACE_ID" ]; then
+    echo "ERROR: grouped generation did not complete on trace '$CLIENT_TRACE_ID' (status '$GROUPED_GEN_STATUS', trace '$GROUPED_GEN_TRACE')" >&2
+    printf '%s\n' "$GROUPED_GEN_RESP" >&2
+    exit 1
+  fi
+
+  TRACE_AFTER_RESP=$($SOAT_CLI get-trace --trace-id "$CLIENT_TRACE_ID" | sanitize_json)
+  TRACE_STEPS_AFTER=$(printf '%s\n' "$TRACE_AFTER_RESP" | jq -r '.step_count')
+  if [ "$TRACE_STEPS_AFTER" -le "$TRACE_STEPS_BEFORE" ]; then
+    echo "ERROR: grouping dropped the earlier generation's steps — step_count went $TRACE_STEPS_BEFORE -> $TRACE_STEPS_AFTER" >&2
+    printf '%s\n' "$TRACE_AFTER_RESP" >&2
+    exit 1
+  fi
+
+  GROUPED_GENS_COUNT=$($SOAT_CLI list-generations --trace-id "$CLIENT_TRACE_ID" | sanitize_json | jq -r '.data | length')
+  if [ "$GROUPED_GENS_COUNT" -lt 2 ]; then
+    echo "ERROR: expected at least 2 generations grouped under '$CLIENT_TRACE_ID', got $GROUPED_GENS_COUNT" >&2
+    exit 1
+  fi
+  echo "Trace grouping: OK (step_count $TRACE_STEPS_BEFORE -> $TRACE_STEPS_AFTER over $GROUPED_GENS_COUNT generations)"
+
+  # A transcript stays scoped to its own turn once the trace holds two of them.
+  # The steps object now holds both turns concatenated, so a transcript that read
+  # the whole object would report the other generation's steps as part of this
+  # one: the first generation's must not grow, and the second must read back only
+  # its own segment.
+  REGROUPED_TRANSCRIPT_STEPS=$($SOAT_CLI get-generation-transcript --generation-id "$FIRST_GENERATION_ID" | sanitize_json | jq -r '.steps | length')
+  GROUPED_TRANSCRIPT_STEPS=$($SOAT_CLI get-generation-transcript --generation-id "$GROUPED_GEN_ID" | sanitize_json | jq -r '.steps | length')
+  if [ "$REGROUPED_TRANSCRIPT_STEPS" != "$TRANSCRIPT_STEPS" ]; then
+    echo "ERROR: grouping leaked the second generation's steps into '$FIRST_GENERATION_ID' — transcript went $TRANSCRIPT_STEPS -> $REGROUPED_TRANSCRIPT_STEPS steps" >&2
+    exit 1
+  fi
+  if [ "$GROUPED_TRANSCRIPT_STEPS" -lt 1 ] || [ "$GROUPED_TRANSCRIPT_STEPS" -ge "$TRACE_STEPS_AFTER" ]; then
+    echo "ERROR: grouped generation's transcript did not read back its own segment ($GROUPED_TRANSCRIPT_STEPS of $TRACE_STEPS_AFTER trace steps)" >&2
+    exit 1
+  fi
+  echo "Transcript stays turn-scoped under grouping: OK"
+
   # 34a2. Content purge (#836) — the trace's steps bytes are deleted from
   # storage and the content purge cascades to the trace's generations, while
   # the auditable skeleton (ids, counters, usage attribution) survives.

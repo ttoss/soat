@@ -1722,6 +1722,7 @@ describe('MCP tools - happy path', () => {
         projectId: internalProjectId,
         projectPublicId: projectId,
         agentId: tracesAgentId,
+        generationId: 'gen_test_steps',
         steps: [{ type: 'text-delta', text: 'hello' }],
       });
 
@@ -1730,6 +1731,7 @@ describe('MCP tools - happy path', () => {
         projectId: internalProjectId,
         projectPublicId: projectId,
         agentId: tracesAgentId,
+        generationId: 'gen_test_steps',
         steps: [{ type: 'text-delta', text: 'world' }],
         parentTraceId: mcpTraceId,
         rootTraceId: mcpTraceId,
@@ -1777,6 +1779,7 @@ describe('MCP tools - happy path', () => {
         projectId: tracesProjectDbId,
         projectPublicId: projectId,
         agentId: tracesAgentId,
+        generationId: 'gen_test_steps',
         steps: [{ type: 'text-delta', text: 'purge me' }],
       });
 
@@ -2250,6 +2253,9 @@ describe('MCP tools - happy path', () => {
         projectId: project!.id,
         projectPublicId: projectId,
         agentId: evalAgentId,
+        // The steps are this generation's, and saying so is what lets the turn
+        // reader take its own slice out of the trace's object.
+        generationId: generationPublicId,
         steps: [
           { content: [{ type: 'text', text: 'On the first of each month.' }] },
         ],

@@ -184,7 +184,10 @@ distinguish "no content" from "no such generation":
 | Never stored (zero-retention) | terminal | `null` | `[]` | set, principal `zero_retention` |
 | Erased by a purge or sweep | terminal | `null` | `[]` | set, purging principal |
 
-`step_count` survives all three, because it is a counter rather than content.
+`step_count` survives all three, because it is a counter rather than content. It counts
+**this turn's** steps: when a `trace_id` groups several generations, the trace's own
+`step_count` covers every one of them, while each transcript reports and projects only its
+own slice — see [Traces → Grouping Generations Under One Trace](./traces.md#grouping-generations-under-one-trace).
 
 A purged generation returns the skeleton even though the trace's steps object may still
 exist — see the warning under [Content Purge](#content-purge). The redaction marker

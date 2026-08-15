@@ -17,9 +17,10 @@
 import createDebug from 'debug';
 
 import {
+  generationStepCount,
   type GenerationWithTrace,
   loadGenerationWithTrace,
-  readTraceSteps,
+  readGenerationSteps,
 } from './generationTurn';
 import { isPlainObject } from './plainObject';
 
@@ -260,7 +261,7 @@ const resolveTranscriptContent = async (
       Array.isArray(inputMessages) && inputMessages.length > 0
         ? inputMessages
         : null,
-    steps: projectTranscriptSteps(await readTraceSteps(generation.trace?.file)),
+    steps: projectTranscriptSteps(await readGenerationSteps(generation)),
   };
 };
 
@@ -314,10 +315,11 @@ export const getGenerationTranscript = async (args: {
     stop_reason: generation.stopReason,
     started_at: generation.startedAt,
     completed_at: generation.completedAt,
-    // The trace's counter, not `steps.length`: it is part of the skeleton a
-    // purge preserves, so it still reports the size of a turn whose content
-    // is gone.
-    step_count: generation.trace?.stepCount ?? 0,
+    // A counter, not `steps.length`: it is part of the skeleton a purge
+    // preserves, so it still reports the size of a turn whose content is gone.
+    // This turn's own count, not the trace's — a trace grouping several
+    // generations would otherwise report every one of them here (#1024).
+    step_count: generationStepCount(generation),
     input,
     steps,
     output: deriveOutput(steps),

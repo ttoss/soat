@@ -30,7 +30,7 @@ Every time an agent runs a generation, SOAT automatically records a trace: the s
 | `project_id`      | string         | Project the trace belongs to                                                           |
 | `agent_id`        | string         | Agent that produced the trace                                                          |
 | `file_id`         | string \| null | ID of the file containing the serialized steps (JSON array)                            |
-| `step_count`      | number         | Number of reasoning steps recorded                                                     |
+| `step_count`      | number         | Number of reasoning steps recorded, across every generation grouped under the trace    |
 | `parent_trace_id` | string \| null | ID of the immediate parent trace; `null` when this trace is itself the root            |
 | `root_trace_id`   | string \| null | ID of the root trace in a multi-agent chain; `null` when this trace is itself the root |
 | `error`           | object \| null | Structured error payload recorded when a generation in this trace failed; `null` otherwise |
@@ -61,8 +61,22 @@ soat get-generation-transcript --generation_id gen_abc
 
 A transcript is scoped to one **turn**, which is why it is anchored on the generation
 rather than here: a trace can hold several generations, and `status`, `stop_reason` and
-`agent_version` are generation fields. See
-[Generations → Transcript](./generations.md#transcript).
+`agent_version` are generation fields. A transcript reads back only the steps of its own
+generation's segment, so grouping several turns under one `trace_id` does not blur them
+together. See [Generations → Transcript](./generations.md#transcript).
+
+### Grouping Generations Under One Trace
+
+`POST /agents/{agent_id}/generate` accepts a `trace_id`. Passing one that already exists groups the new generation with the earlier ones instead of starting a chain — use it when several turns are one logical run and `parent_trace_id` / `root_trace_id` would misrepresent them as nested calls.
+
+- **The steps object is the concatenation of every grouped generation's steps**, in the order the generations first wrote. A second generation appends; it never replaces what the first one recorded.
+- **`step_count` counts them all**, so it stays the length of the object `file_id` points at.
+- **A generation that writes twice rewrites only its own slice.** This is what a run paused on a client tool does: the tool-outputs continuation re-sends the turn's earlier steps along with the new ones, and they replace — rather than duplicate — the ones already recorded.
+- **Sub-agent calls are not grouping.** An agent-to-agent call gets a trace of its own, linked through `parent_trace_id` / `root_trace_id` — see [Trace Ancestry Model](#trace-ancestry-model).
+
+To read one grouped turn on its own rather than the whole object, use that generation's [transcript](#reading-a-turn-back).
+
+Concurrent generations sharing one `trace_id` are serialized per server process. If several servers write to the same `trace_id` at the same moment, one turn's steps can still be lost; sequential turns — the ordinary grouping flow — are unaffected.
 
 ### Debugging Joins (Trace, Generation, Session)
 

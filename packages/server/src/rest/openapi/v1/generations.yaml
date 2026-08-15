@@ -723,9 +723,11 @@ components:
         step_count:
           type: integer
           description: >
-            Number of steps the trace recorded. A counter rather than content,
+            Number of steps this turn recorded. A counter rather than content,
             so it survives a purge and still reports the size of a turn whose
-            steps are gone.
+            steps are gone. Scoped to the generation, not the trace: a trace
+            that groups several generations counts them all in its own
+            `step_count`, while each transcript reports only its own.
           example: 2
         input:
           type: array

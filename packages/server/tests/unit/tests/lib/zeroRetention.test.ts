@@ -66,6 +66,7 @@ describe('zero-retention mode', () => {
       projectId: args.projectDbId,
       projectPublicId: args.projectPublicId,
       agentId: args.agentPublicId,
+      generationId: 'gen_test_steps',
       steps: [{ type: 'text-delta', text: 'confidential case content' }],
     });
     const row = await db.Trace.findOne({ where: { publicId: traceId } });
@@ -181,6 +182,7 @@ describe('zero-retention mode', () => {
         projectId: zeroProjectDbId,
         projectPublicId: zeroProjectId,
         agentId: inheritedAgent.publicId,
+        generationId: 'gen_test_steps',
         steps: [{ type: 'a' }, { type: 'b' }, { type: 'c' }],
       });
 
