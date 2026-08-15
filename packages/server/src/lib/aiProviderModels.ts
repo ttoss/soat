@@ -3,13 +3,19 @@ import createDebug from 'debug';
 import { GoogleAuth } from 'google-auth-library';
 
 import { DomainError } from '../errors';
+import type { VertexSettings } from './agentModel';
+import { resolveBedrockCredentials, resolveVertexSettings } from './agentModel';
 import { resolveAiProviderSecret } from './aiProviders';
+import type {
+  BedrockListArgs,
+  BedrockModelSummary,
+} from './bedrockModelCatalog';
+import { defaultListFoundationModels } from './bedrockModelCatalog';
 import { loadAwsExternalAccountAuthClient } from './vertexAwsCredentials';
 
 const log = createDebug('soat:provider-models');
 
 const ANTHROPIC_VERSION = '2023-06-01';
-const DEFAULT_VERTEX_LOCATION = 'us-central1';
 const GOOGLE_CLOUD_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
 
 /**
@@ -43,16 +49,19 @@ export type FetchLike = (
   text: () => Promise<string>;
 }>;
 
-/** A Bedrock `ListFoundationModels` summary, as the AWS SDK returns one. */
-export type BedrockModelSummary = {
-  modelId?: string;
-  modelName?: string;
-  providerName?: string;
-  inputModalities?: string[];
-  outputModalities?: string[];
-  responseStreamingSupported?: boolean;
-  modelLifecycle?: { status?: string };
-  inferenceTypesSupported?: string[];
+// Re-exported so a caller enumerating models needs only this module, while the
+// AWS SDK adapter itself stays in a file that can be read without it.
+export type { BedrockListArgs, BedrockModelSummary };
+
+/**
+ * The Google auth options a Vertex access token is minted from. Derived from
+ * `VertexSettings` rather than restated, so the two cannot drift.
+ */
+export type VertexAccessTokenArgs = {
+  googleAuthOptions?: Extract<
+    VertexSettings,
+    { project: string }
+  >['googleAuthOptions'];
 };
 
 export type EnumerateProviderModelsArgs = {
@@ -63,11 +72,11 @@ export type EnumerateProviderModelsArgs = {
   /** Injectable HTTP boundary. */
   fetchImpl?: FetchLike;
   /** Injectable Google access token, so Vertex is testable without GCP. */
-  accessTokenProvider?: () => Promise<string>;
+  accessTokenProvider?: (args?: VertexAccessTokenArgs) => Promise<string>;
   /** Injectable AWS control-plane call, so Bedrock is testable without AWS. */
-  listFoundationModels?: (args: {
-    region: string;
-  }) => Promise<BedrockModelSummary[]>;
+  listFoundationModels?: (
+    args: BedrockListArgs
+  ) => Promise<BedrockModelSummary[]>;
 };
 
 /** Adapts the platform `fetch` to the narrow shape above. */
@@ -257,7 +266,26 @@ const enumerateGoogleAiStudio = async (
 /* istanbul ignore next -- resolving real Google credentials cannot run in CI;
    every caller-visible branch around it is driven through
    `accessTokenProvider`. */
-const defaultVertexAccessToken = async (): Promise<string> => {
+const defaultVertexAccessToken = async (
+  args?: VertexAccessTokenArgs
+): Promise<string> => {
+  // A linked service-account key is an explicit choice by the provider record
+  // and outranks anything ambient, exactly as it does when building a model.
+  if (args?.googleAuthOptions) {
+    const auth = new GoogleAuth({
+      ...args.googleAuthOptions,
+      scopes: GOOGLE_CLOUD_SCOPE,
+    });
+    const token = await auth.getAccessToken();
+    if (!token) {
+      throw new DomainError(
+        'AI_PROVIDER_MISCONFIGURED',
+        'Listing Vertex models with the linked service account produced no access token.'
+      );
+    }
+    return token;
+  }
+
   const authClient = loadAwsExternalAccountAuthClient();
   const auth = authClient
     ? new GoogleAuth({ authClient, scopes: GOOGLE_CLOUD_SCOPE })
@@ -296,16 +324,27 @@ const readBedrockLifecycle = (
 const enumerateVertex = async (
   args: EnumerateProviderModelsArgs & { fetchImpl: FetchLike }
 ): Promise<ProviderModel[]> => {
-  const project = configString(args.config, 'project');
-  if (!project) {
+  // The same resolution model building uses, so a record that generates can
+  // list: the project may come from the service-account key file, and the
+  // linked key signs the call instead of whatever ADC the server holds.
+  const settings = resolveVertexSettings({
+    secretValue: args.secretValue ?? null,
+    config: args.config,
+  });
+
+  if ('apiKey' in settings) {
+    // Express mode talks to a global, project-less endpoint, but the
+    // publisher-model listing URL is per-project — there is no URL to call.
     throw new DomainError(
-      'AI_PROVIDER_MISCONFIGURED',
-      'Listing Vertex models needs a Google Cloud project: set config.project on the provider.'
+      'MODEL_LISTING_UNSUPPORTED',
+      'A Vertex provider in express mode (API key) cannot list models: express mode has no per-project catalogue. Link a service-account key, or authenticate through Application Default Credentials, to list.'
     );
   }
-  const location =
-    configString(args.config, 'location') ?? DEFAULT_VERTEX_LOCATION;
-  const token = await (args.accessTokenProvider ?? defaultVertexAccessToken)();
+
+  const { project, location } = settings;
+  const token = await (args.accessTokenProvider ?? defaultVertexAccessToken)({
+    googleAuthOptions: settings.googleAuthOptions,
+  });
 
   const payload = await readJson({
     fetchImpl: args.fetchImpl,
@@ -332,22 +371,6 @@ const enumerateVertex = async (
   });
 };
 
-/**
- * The AWS control-plane call, imported lazily so the Bedrock client is only
- * loaded by a deployment that actually lists Bedrock models.
- */
-/* istanbul ignore next -- calling the real AWS control plane cannot run in CI;
-   the mapping it feeds is driven through `listFoundationModels`. */
-const defaultListFoundationModels = async (args: {
-  region: string;
-}): Promise<BedrockModelSummary[]> => {
-  const { BedrockClient, ListFoundationModelsCommand } =
-    await import('@aws-sdk/client-bedrock');
-  const client = new BedrockClient({ region: args.region });
-  const response = await client.send(new ListFoundationModelsCommand({}));
-  return response.modelSummaries ?? [];
-};
-
 const enumerateBedrock = async (
   args: EnumerateProviderModelsArgs
 ): Promise<ProviderModel[]> => {
@@ -362,9 +385,20 @@ const enumerateBedrock = async (
     );
   }
 
+  // `resolveBedrockCredentials` defaults the region to us-east-1; listing
+  // deliberately refuses to guess one (above), so the region resolved here
+  // wins and only the credential half of that resolution is taken.
+  const credentials = {
+    ...resolveBedrockCredentials({
+      secretValue: args.secretValue ?? null,
+      config: args.config,
+    }),
+    region,
+  };
+
   const summaries = await (
     args.listFoundationModels ?? defaultListFoundationModels
-  )({ region });
+  )({ region, credentials });
 
   return summaries.flatMap((summary) => {
     if (!summary.modelId) return [];
