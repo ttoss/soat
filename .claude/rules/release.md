@@ -82,6 +82,54 @@ pnpm lerna version major --yes --no-push   # 0.6.9 → 1.0.0
 
 Lerna will create a `chore(release): publish packages` commit and tag locally.
 
+#### `--dry-run` is not side-effect-free — reset before the real run
+
+**`--dry-run` skips the commit, the tag and the push. It does *not* skip the file
+writes.** It still writes the bumped version into `lerna.json`, into every
+`package.json`, and appends the new entry to every `CHANGELOG.md` — only the git
+operations are gated on the flag (verified in `@lerna-lite/version` 5.4.1, the
+version this repo pins, and still true in 5.5.0).
+
+So a preview followed by a real run bumps **twice**, and the release tags a
+version one step past the intended one, skipping a number entirely:
+
+```bash
+# starting from a clean main at 0.22.1
+pnpm lerna version --yes --no-push --dry-run
+# → "current project version 0.22.1", proposes 0.22.1 => 0.23.0
+#   ...and silently writes 0.23.0 to lerna.json + every package.json + CHANGELOGs
+
+pnpm lerna version --yes --no-push
+# → "current project version 0.23.0" (!), produces 0.23.0 => 0.24.0
+#   commits and tags v0.24.0 — v0.23.0 is never released, and the v0.24.0
+#   changelog covers the range that belonged to v0.23.0
+```
+
+Nothing in the output flags this; the second run's `current project version` line
+is the only tell, and it reads like normal output. It bit the v0.23.0 cut (#1017).
+
+**Always discard the working tree after a dry run, before the real one:**
+
+```bash
+pnpm lerna version --yes --no-push --dry-run   # preview
+git checkout -- .                              # MANDATORY — undo the version writes
+git status --porcelain                         # must print nothing
+pnpm lerna version --yes --no-push             # the real run
+```
+
+`git checkout -- .` only restores tracked files, which is all lerna touches here.
+Before the real run, confirm the version lerna reports as *current* matches the
+last release tag (`git describe --tags --abbrev=0`); if it is already one bump
+ahead, a dry run leaked and the tree was not reset.
+
+If you notice it only after the real run committed and tagged:
+
+```bash
+git tag -d "v$(node -e "console.log(require('./lerna.json').version)")"
+git reset --hard origin/main
+# then re-run from Step 2
+```
+
 ### Step 4 — Restore engines
 
 ```bash
@@ -138,7 +186,7 @@ Both trigger a major bump (`1.0.0` → `2.0.0`). Running `pnpm lerna version --y
 | Flag | Description |
 |---|---|
 | `--yes` | Skip confirmation prompts |
-| `--dry-run` | Preview what would change without committing |
+| `--dry-run` | Skips the commit/tag/push only — **still writes the bumped version to `lerna.json`, every `package.json` and every `CHANGELOG.md`.** Must be followed by `git checkout -- .` before a real run, or the release bumps twice ([see Step 3](#--dry-run-is-not-side-effect-free--reset-before-the-real-run)) |
 | `--no-push` | Create commit and tag locally but do not push |
 | `--force-publish` | Bump all packages regardless of changes |
 | `--conventional-graduate` | Graduate a prerelease to stable (e.g. `1.0.0-alpha.0` → `1.0.0`) |
