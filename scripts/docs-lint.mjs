@@ -114,6 +114,26 @@ const CHECKS = [
     label: 'retired camelCase spelling (use the snake_case wire name)',
     re: /\b(toolChoice|activeToolIds|toolName|bodyMode)\b/,
   },
+  // The API's only error shape is `{ error: { code, message, meta? } }`
+  // (`.claude/rules/errors.md`), and the SDK's `error` *is* that raw body — the
+  // CLI spreads it unwrapped for exactly that reason. So the code always lives
+  // one level down, at `error.error.code`. A doc that reads `error.code`
+  // prints `undefined` for the one value the step exists to show, and the
+  // tutorials runner cannot catch it: it executes only the CLI tab, so the SDK
+  // and curl tabs of the same step are never run.
+  //
+  // `[\w$]*` cannot span a dot, so the correct `x.error.code` never matches.
+  {
+    label:
+      'SDK error shape: the body nests under `error` (use `error.error.code`)',
+    re: /console\.log\([A-Za-z_$][\w$]*\.(?:code|meta)\)/,
+  },
+  // The curl half of the same mistake: `jq '{code}'` over an error body yields
+  // `{"code": null}`. The correct projection names the path — `.error.code`.
+  {
+    label: "curl error shape: `jq '{code}'` reads null (use `.error.code`)",
+    re: /jq '\{code[,}]/,
+  },
   {
     label: 'wrong public-ID prefix (see publicId.ts)',
     re: /\b(agt_|trc_|actr_|act_[0-9A-Za-z]|tol_|fl_[0-9A-Za-z]|af_[0-9A-Za-z]|afr_|afo_|prj_|usr_|cht_|fil_|me_[0-9A-Za-z])/,

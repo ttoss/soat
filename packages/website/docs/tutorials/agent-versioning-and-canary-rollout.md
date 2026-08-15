@@ -557,7 +557,7 @@ soat abort-agent-release --agent-id "$AGENT_ID"
 const { error } = await adminSoat.agentVersions.abortAgentRelease({
   path: { agent_id: agent.id },
 });
-console.log(error.code); // NO_ACTIVE_RELEASE (409)
+console.log(error.error.code); // NO_ACTIVE_RELEASE (409)
 ```
 
 </TabItem>
@@ -565,7 +565,7 @@ console.log(error.code); // NO_ACTIVE_RELEASE (409)
 
 ```bash
 curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/release/abort" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{code}'   # NO_ACTIVE_RELEASE
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{code: .error.code}'   # NO_ACTIVE_RELEASE
 ```
 
 </TabItem>

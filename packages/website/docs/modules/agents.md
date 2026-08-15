@@ -326,7 +326,7 @@ Set `max_context_messages` to cap how many recent messages are sent to the model
 `trace_content_mode: "none"` stops this agent's trace and generation content from ever being written — useful when one agent in an otherwise ordinary project handles regulated content.
 
 ```bash
-soat patch-agent --agent_id agent_xyz --trace_content_mode none
+soat patch-agent --agent-id agent_xyz --trace-content-mode none
 ```
 
 `null` (the default) inherits the project's `trace_content_mode`. The agent may only **tighten**: setting `full` on an agent whose project is `none` is refused with `400 VALIDATION_FAILED`. The skeleton, usage attribution and cost metering are unaffected; the trade-off is that a generation paused on a client tool cannot be recovered after a server restart. See [Traces — Zero-Retention Mode](./traces.md#zero-retention-mode) for the precise field list and reasoning.
@@ -515,7 +515,7 @@ soat set-agent-release --agent-id agent_V1StGXR8Z5jdHi6B \
 The eval must belong to the same project and evaluate this agent; anything else is rejected with `400 VALIDATION_FAILED` when the release is set. Produce the evidence by running the eval with `agent_version` pinned to the canary:
 
 ```bash
-soat start-eval-run --eval-id eval_V1StGXR8Z5jdHi6B --agent_version 2 --wait true
+soat start-eval-run --eval-id eval_V1StGXR8Z5jdHi6B --agent-version 2 --wait true
 soat promote-agent-release --agent-id agent_V1StGXR8Z5jdHi6B
 ```
 
