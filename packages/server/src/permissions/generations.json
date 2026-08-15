@@ -12,6 +12,11 @@
       "description": "Get a generation record by ID"
     },
     {
+      "operationId": "getGenerationTranscript",
+      "action": "generations:GetGeneration",
+      "description": "Read a generation's turn as an ordered transcript of steps, tool calls and results (also requires traces:GetTrace)"
+    },
+    {
       "operationId": "updateGeneration",
       "action": "generations:UpdateGeneration",
       "description": "Attach caller-supplied metadata to a generation record"

@@ -3296,6 +3296,35 @@ if [ -n "$CLIENT_TRACE_ID" ] && [ "$CLIENT_TRACE_ID" != "null" ]; then
   fi
   echo "Generation retrieval endpoint: OK (status: $GENERATION_RETURNED_STATUS)"
 
+  # 34a1b. Transcript (#1021) — the turn read back step by step, projected from
+  # the trace's steps object at read time. Structural assertions only: the step
+  # texts are whatever the sandbox model produced.
+  TRANSCRIPT_RESP=$($SOAT_CLI get-generation-transcript --generation-id "$FIRST_GENERATION_ID" | sanitize_json)
+  TRANSCRIPT_GEN_ID=$(printf '%s\n' "$TRANSCRIPT_RESP" | jq -r '.generation_id // empty')
+  TRANSCRIPT_STATUS=$(printf '%s\n' "$TRANSCRIPT_RESP" | jq -r '.status // empty')
+  TRANSCRIPT_STEPS=$(printf '%s\n' "$TRANSCRIPT_RESP" | jq -r '.steps | length')
+  TRANSCRIPT_INPUT=$(printf '%s\n' "$TRANSCRIPT_RESP" | jq -r '.input | length')
+  if [ "$TRANSCRIPT_GEN_ID" != "$FIRST_GENERATION_ID" ] || [ -z "$TRANSCRIPT_STATUS" ]; then
+    echo "ERROR: get-generation-transcript returned mismatched id or missing status for '$FIRST_GENERATION_ID'" >&2
+    echo "$TRANSCRIPT_RESP" >&2
+    exit 1
+  fi
+  if [ "$TRANSCRIPT_STEPS" -lt 1 ] || [ "$TRANSCRIPT_INPUT" -lt 1 ]; then
+    echo "ERROR: transcript for '$FIRST_GENERATION_ID' carried no steps or no input" >&2
+    echo "$TRANSCRIPT_RESP" >&2
+    exit 1
+  fi
+  # The projection ran: a step exposes the documented fields, not the raw AI SDK
+  # shape. `index` is present on every step and `tool_calls` is always an array.
+  TRANSCRIPT_FIRST_INDEX=$(printf '%s\n' "$TRANSCRIPT_RESP" | jq -r '.steps[0].index')
+  TRANSCRIPT_CALLS_TYPE=$(printf '%s\n' "$TRANSCRIPT_RESP" | jq -r '.steps[0].tool_calls | type')
+  if [ "$TRANSCRIPT_FIRST_INDEX" != "0" ] || [ "$TRANSCRIPT_CALLS_TYPE" != "array" ]; then
+    echo "ERROR: transcript steps were not projected into the documented shape" >&2
+    echo "$TRANSCRIPT_RESP" >&2
+    exit 1
+  fi
+  echo "Generation transcript endpoint: OK ($TRANSCRIPT_STEPS steps)"
+
   # 34a2. Content purge (#836) — the trace's steps bytes are deleted from
   # storage and the content purge cascades to the trace's generations, while
   # the auditable skeleton (ids, counters, usage attribution) survives.
@@ -3344,6 +3373,27 @@ if [ -n "$CLIENT_TRACE_ID" ] && [ "$CLIENT_TRACE_ID" != "null" ]; then
     exit 1
   fi
   echo "Purge cascaded to generations, skeleton intact: OK"
+
+  # The transcript of a purged generation is a skeleton too — a 200 with the
+  # redaction marker and no content, never a 404 and never content rebuilt from
+  # a record the purge did not reach.
+  PURGED_TRANSCRIPT=$($SOAT_CLI get-generation-transcript --generation-id "$FIRST_GENERATION_ID" | sanitize_json)
+  PURGED_TR_AT=$(printf '%s\n' "$PURGED_TRANSCRIPT" | jq -r '.content_redacted_at // empty')
+  PURGED_TR_STEPS=$(printf '%s\n' "$PURGED_TRANSCRIPT" | jq -r '.steps | length')
+  PURGED_TR_INPUT=$(printf '%s\n' "$PURGED_TRANSCRIPT" | jq -r '.input')
+  PURGED_TR_COUNT=$(printf '%s\n' "$PURGED_TRANSCRIPT" | jq -r '.step_count')
+  if [ -z "$PURGED_TR_AT" ] || [ "$PURGED_TR_STEPS" != "0" ] || [ "$PURGED_TR_INPUT" != "null" ]; then
+    echo "ERROR: transcript of a purged generation was not a redacted skeleton" >&2
+    echo "$PURGED_TRANSCRIPT" >&2
+    exit 1
+  fi
+  # step_count is a counter, not content — it survives the purge.
+  if [ "$PURGED_TR_COUNT" = "null" ]; then
+    echo "ERROR: purged transcript lost step_count, which is skeleton not content" >&2
+    echo "$PURGED_TRANSCRIPT" >&2
+    exit 1
+  fi
+  echo "Purged generation transcript is a skeleton: OK"
 
   # Idempotent: a second purge succeeds and does not move the timestamp.
   REPURGE_RESP=$($SOAT_CLI purge-trace-content --trace-id "$CLIENT_TRACE_ID" | sanitize_json)
