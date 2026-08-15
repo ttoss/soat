@@ -7,7 +7,11 @@ import {
   restoreOrchestrationVersion,
 } from 'src/lib/orchestrationVersions';
 
-import { parsePagination, resolveReadProjectIds } from './helpers';
+import {
+  parsePagination,
+  requireProjectAccess,
+  resolveReadProjectIds,
+} from './helpers';
 
 /**
  * Orchestration graph version history (issue #872).
@@ -87,7 +91,7 @@ orchestrationVersionsRouter.get(
 orchestrationVersionsRouter.post(
   '/orchestrations/:orchestration_id/versions/:version/restore',
   async (ctx: Context) => {
-    const projectIds = await resolveReadProjectIds({
+    const projectIds = await requireProjectAccess({
       ctx,
       action: 'orchestrations:RestoreOrchestrationVersion',
       resourceType: 'orchestration',

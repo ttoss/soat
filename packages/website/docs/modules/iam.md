@@ -203,6 +203,22 @@ When an API key has policies attached — or an OAuth token carries a consented 
 | API key with key policy allowed, but user policy denied             | Denied  | Intersection semantics — both must allow |
 | API key without policies, accessing resource allowed by user policy | Allowed | Key inherits user permissions            |
 
+### What a Denial Looks Like
+
+A denial's status code depends on what the route does, not on which policy failed:
+
+| Route shape                                                             | Denied response                                                                      |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| **List** (`GET /agents`)                                                 | `200` with an empty list — the caller may read zero projects, so nothing matches      |
+| **Read one** (`GET /agents/{id}`)                                        | `404 RESOURCE_NOT_FOUND` — existence is not leaked for a resource the caller can't see |
+| **Write / act on one** (`PATCH /agents/{id}`, `POST .../release/promote`) | `403 FORBIDDEN`                                                                        |
+| **Create** (`POST /agents`)                                             | `403 FORBIDDEN`                                                                        |
+| Scoped credential targeting another project                             | `403 API_KEY_PROJECT_SCOPE`, naming both projects                                     |
+
+A write is refused **before** the request body is validated, so a caller without
+permission cannot tell a well-formed body from a malformed one: the answer is
+`403` either way.
+
 ## Policy Evaluation
 
 Policy evaluation (Layer 2) follows AWS IAM semantics:

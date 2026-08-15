@@ -1,10 +1,9 @@
 import type { Context } from 'src/Context';
-import { DomainError } from 'src/errors';
 import { buildSrn } from 'src/lib/iam';
 import { findOrchestration } from 'src/lib/orchestrations';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
-import { requireAuth, resolveReadProjectIds } from './helpers';
+import { requireAuth, requireProjectAccess } from './helpers';
 
 /**
  * Resolves the target orchestration's project/SRN and hands it to the audit
@@ -45,22 +44,16 @@ export const resolveRunAuth = async (
   action: string
 ): Promise<{ projectIds?: number[] }> => {
   requireAuth(ctx);
-  const projectIds = await resolveReadProjectIds({
+  // An empty (but non-null) array means "permitted in zero projects" — distinct
+  // from `undefined`, which means "unrestricted" for an admin JWT. Only the
+  // former is rejected, which is exactly what `requireProjectAccess` does; this
+  // used to be written out here, and writing it out is what the rest of the
+  // module forgot (#1029).
+  const projectIds = await requireProjectAccess({
     ctx,
     action,
     resourceType: 'orchestration',
   });
-
-  // An empty (but non-null) array means "permitted in zero projects" for a
-  // scoped user — distinct from `undefined`, which means "unrestricted" for
-  // an admin JWT. Only the former should be rejected.
-  if (
-    Array.isArray(projectIds) &&
-    projectIds.length === 0 &&
-    !ctx.authUser.apiKeyProjectId
-  ) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
-  }
 
   return { projectIds: projectIds ?? undefined };
 };
@@ -70,26 +63,17 @@ export const resolveStartRunScope = async (
 ): Promise<{ projectIds?: number[]; primaryId?: number }> => {
   requireAuth(ctx);
 
-  const projectIds = await resolveReadProjectIds({
+  const projectIds = await requireProjectAccess({
     ctx,
     action: 'orchestrations:StartRun',
     resourceType: 'orchestration',
   });
 
-  if (
-    Array.isArray(projectIds) &&
-    projectIds.length === 0 &&
-    !ctx.authUser.apiKeyProjectId
-  ) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
-  }
-
+  // `projectIds` is either `undefined` (unrestricted admin JWT) or non-empty —
+  // `requireProjectAccess` has already refused the empty scope.
   const resolvedProjectIds =
-    projectIds && projectIds.length > 0
-      ? projectIds
-      : ctx.authUser.apiKeyProjectId
-        ? [ctx.authUser.apiKeyProjectId]
-        : undefined;
+    projectIds ??
+    (ctx.authUser.apiKeyProjectId ? [ctx.authUser.apiKeyProjectId] : undefined);
 
   const primaryId = resolvedProjectIds?.[0] ?? ctx.authUser.apiKeyProjectId;
   return { projectIds: resolvedProjectIds, primaryId };

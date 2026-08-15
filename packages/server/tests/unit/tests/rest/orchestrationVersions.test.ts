@@ -469,9 +469,10 @@ describe('Orchestration versions', () => {
       const res = await authenticatedTestClient(noPermToken).post(
         `/api/v1/orchestrations/${orch.id}/versions/1/restore`
       );
-      // `noPermToken` resolves to an empty project list, so the orchestration is
-      // invisible rather than forbidden — the same shape as a cross-tenant read.
-      expect(res.status).toBe(404);
+      // `noPermToken` resolves to an empty project list. On a read that is a
+      // 404 (nothing matches the filter); on a write it is a denial, and the
+      // route says so before touching the orchestration (#1029).
+      expect(res.status).toBe(403);
     });
   });
 
@@ -500,7 +501,7 @@ describe('Orchestration versions', () => {
   describe('a restricted API key', () => {
     /**
      * A project-scoped API key whose policy excludes `excludedAction`. Unlike
-     * `noPermToken` — which resolves to an empty project list and 404s — this
+     * `noPermToken` — which resolves to an empty project list — this
      * reaches the route with a resolvable project and exercises the 403 branch.
      */
     const createRestrictedApiKey = async (excludedAction: string) => {

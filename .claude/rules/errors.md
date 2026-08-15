@@ -155,7 +155,7 @@ to check:
 | Helper | Use for | Throws |
 | --- | --- | --- |
 | `requireAuth(ctx)` | a route with no project to resolve (`/users/me`, OAuth introspection, sub-resources authorized against a parent) | `UNAUTHORIZED` |
-| `resolveReadProjectIds({ ctx, action, resourceType, projectPublicId? })` | a list/read route; **an empty scope is allowed** and yields an empty result | `UNAUTHORIZED` · `API_KEY_PROJECT_SCOPE` · `FORBIDDEN` |
+| `resolveReadProjectIds({ ctx, action, resourceType, projectPublicId? })` | a list/read route — a `Get`/`List`/`Search`/`Export` action and nothing else; **an empty scope is allowed** and yields an empty result | `UNAUTHORIZED` · `API_KEY_PROJECT_SCOPE` · `FORBIDDEN` |
 | `requireProjectAccess({ … })` | a route that loads one resource and checks its project; **an empty scope is a `403`**, not a `404` | the same, plus `FORBIDDEN` on an empty scope |
 | `resolveWriteProjectId({ … })` | a create/write route needing one concrete project | the same, plus `VALIDATION_FAILED` when no project can be inferred |
 | `requireAdmin(ctx, action)` | the non-IAM role gate (users, policies, projects, price book) | `UNAUTHORIZED` · `FORBIDDEN` |
@@ -176,6 +176,21 @@ lost:
 | `rest/errorShapeContract.test.ts` | a manual `ctx.body = { error: … }`, an inline `!ctx.authUser`, or a direct `resolveProjectIds` call in `src/rest/v1` |
 | `rest/adminGateContract.test.ts` | a hand-rolled `role !== 'admin'` gate that answers `403` — in either denial form |
 | `rest/wireKeyContract.test.ts` | a handler reading a camelCase wire key |
+| `rest/readScopeHelperContract.test.ts` | `resolveReadProjectIds` guarding an action that is not a `Get`/`List`/`Search`/`Export` — the read helper on a write route |
+
+That last one is the fourth copy of the same lesson. Thirteen write routes —
+agent update/delete, version restore, release set/promote/abort, guardrail
+update/delete/evaluate/restore — reached for `resolveReadProjectIds`, so an
+unauthorized caller fell through the permitted empty scope into the scoped
+lookup and got `404 RESOURCE_NOT_FOUND` from a route whose `GET` twin answered
+`200` for them at the same instant (#1029). Worse, an empty scope is not itself
+a denial, so the lib validated the body first and a `400` told the caller their
+body was malformed on a route they could not call at all.
+
+The rule is only checkable at the call site: both helpers return
+`number[] | undefined`, and picking the wrong one produces a *plausible* status
+rather than a broken one. So the action name carries it — a write action passed
+to the read helper is a build failure, not a review note.
 
 ## Route handler rules
 

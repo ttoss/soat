@@ -13,6 +13,7 @@ import { setAuditResourceHint } from 'src/middleware/audit';
 import {
   parsePagination,
   requireAuth,
+  requireProjectAccess,
   resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
@@ -102,7 +103,7 @@ quotasRouter.get('/quotas/:quota_id', async (ctx: Context) => {
  *     $ref: 'openapi/v1/quotas.yaml#/paths/~1api~1v1~1quotas~1{quota_id}/patch'
  */
 quotasRouter.patch('/quotas/:quota_id', async (ctx: Context) => {
-  const projectIds = await resolveReadProjectIds({
+  const projectIds = await requireProjectAccess({
     ctx,
     action: 'quotas:UpdateQuota',
     resourceType: 'quota',
@@ -124,7 +125,7 @@ quotasRouter.patch('/quotas/:quota_id', async (ctx: Context) => {
  *     $ref: 'openapi/v1/quotas.yaml#/paths/~1api~1v1~1quotas~1{quota_id}/delete'
  */
 quotasRouter.delete('/quotas/:quota_id', async (ctx: Context) => {
-  const projectIds = await resolveReadProjectIds({
+  const projectIds = await requireProjectAccess({
     ctx,
     action: 'quotas:DeleteQuota',
     resourceType: 'quota',

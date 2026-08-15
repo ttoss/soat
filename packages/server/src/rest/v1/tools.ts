@@ -16,7 +16,12 @@ import {
   assertGuardrailDetachAllowed,
   parseGuardrailIds,
 } from './guardrailAttach';
-import { parsePagination, requireAuth, resolveReadProjectIds } from './helpers';
+import {
+  parsePagination,
+  requireAuth,
+  requireProjectAccess,
+  resolveReadProjectIds,
+} from './helpers';
 
 export const toolsRouter = new Router<Context>();
 
@@ -85,7 +90,10 @@ const resolveToolProjectId = async (
   projectPublicId?: string
 ): Promise<number> => {
   requireAuth(ctx);
-  const projectIds = await resolveReadProjectIds({
+  // `requireProjectAccess`, not the read helper: a caller permitted in zero
+  // projects cannot create here, and an empty scope must say so with a `403`
+  // rather than falling through to "project_id is required" (#1029).
+  const projectIds = await requireProjectAccess({
     ctx,
     projectPublicId,
     action,
@@ -198,7 +206,7 @@ toolsRouter.get('/tools/:tool_id', async (ctx: Context) => {
  *     $ref: 'openapi/v1/tools.yaml#/paths/~1api~1v1~1tools~1{tool_id}/patch'
  */
 toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
-  const projectIds = await resolveReadProjectIds({
+  const projectIds = await requireProjectAccess({
     ctx,
     action: 'tools:UpdateTool',
     resourceType: 'tool',
@@ -281,7 +289,7 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
 toolsRouter.delete('/tools/:tool_id', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectIds = await resolveReadProjectIds({
+  const projectIds = await requireProjectAccess({
     ctx,
     action: 'tools:DeleteTool',
     resourceType: 'tool',
@@ -341,7 +349,7 @@ const setCallToolResponseBody = (ctx: Context, result: unknown): void => {
 toolsRouter.post('/tools/:tool_id/call', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectIds = await resolveReadProjectIds({
+  const projectIds = await requireProjectAccess({
     ctx,
     action: 'tools:CallTool',
     resourceType: 'tool',

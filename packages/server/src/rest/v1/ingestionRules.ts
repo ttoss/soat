@@ -13,6 +13,7 @@ import { setAuditResourceHint } from 'src/middleware/audit';
 
 import {
   requireAuth,
+  requireProjectAccess,
   resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
@@ -116,7 +117,7 @@ ingestionRulesRouter.patch(
   '/ingestion-rules/:ingestion_rule_id',
   async (ctx: Context) => {
     requireAuth(ctx);
-    const projectIds = await resolveReadProjectIds({
+    const projectIds = await requireProjectAccess({
       ctx,
       action: 'ingestion-rules:UpdateIngestionRule',
       resourceType: 'ingestionRule',
@@ -151,7 +152,7 @@ ingestionRulesRouter.delete(
   '/ingestion-rules/:ingestion_rule_id',
   async (ctx: Context) => {
     requireAuth(ctx);
-    const projectIds = await resolveReadProjectIds({
+    const projectIds = await requireProjectAccess({
       ctx,
       action: 'ingestion-rules:DeleteIngestionRule',
       resourceType: 'ingestionRule',

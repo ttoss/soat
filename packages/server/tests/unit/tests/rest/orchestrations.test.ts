@@ -574,12 +574,13 @@ describe('Orchestrations', () => {
       expect(response.status).toBe(401);
     });
 
-    // Same empty-policy-array reasoning as the GET test above.
-    test('user without permission returns 404', async () => {
+    // A caller permitted in zero projects is denied outright on a write:
+    // `requireProjectAccess` answers 403 where the read path 404s (#1029).
+    test('user without permission returns 403', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .patch(`/api/v1/orchestrations/${orchestrationId}`)
         .send({ name: 'X' });
-      expect(response.status).toBe(404);
+      expect(response.status).toBe(403);
     });
 
     test('can update nodes and edges', async () => {
@@ -2252,12 +2253,13 @@ describe('Orchestrations', () => {
       expect(response.status).toBe(401);
     });
 
-    // Same empty-policy-array reasoning as the GET/PATCH tests above.
-    test('user without permission returns 404', async () => {
+    // A caller permitted in zero projects is denied outright on a write:
+    // `requireProjectAccess` answers 403 where the read path 404s (#1029).
+    test('user without permission returns 403', async () => {
       const response = await authenticatedTestClient(noPermToken).delete(
         `/api/v1/orchestrations/${orchestrationId}`
       );
-      expect(response.status).toBe(404);
+      expect(response.status).toBe(403);
     });
 
     test('project-scoped API key without DeleteOrchestration permission returns 403', async () => {

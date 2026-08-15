@@ -21,7 +21,7 @@ import {
   fireMemoryExtraction,
 } from 'src/lib/memoryExtraction';
 
-import { requireAuth, resolveReadProjectIds } from './helpers';
+import { requireAuth, requireProjectAccess } from './helpers';
 import { assertNoSystemMessage } from './systemMessageGuard';
 
 const pipeStreamToResponse = async (
@@ -205,7 +205,7 @@ agentGenerationRouter.post(
   async (ctx: Context) => {
     requireAuth(ctx);
 
-    const projectIds = await resolveReadProjectIds({
+    const projectIds = await requireProjectAccess({
       ctx,
       action: 'agents:CreateAgentGeneration',
       resourceType: 'agent',
@@ -260,7 +260,7 @@ agentGenerationRouter.post(
   async (ctx: Context) => {
     requireAuth(ctx);
 
-    const projectIds = await resolveReadProjectIds({
+    const projectIds = await requireProjectAccess({
       ctx,
       action: 'agents:CreateAgentGeneration',
       resourceType: 'agent',

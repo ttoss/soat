@@ -273,12 +273,13 @@ describe('Tools', () => {
       expect(response.status).toBe(401);
     });
 
-    // Same empty-policy-array reasoning as the GET test above.
-    test('user without permission returns 404', async () => {
+    // A caller permitted in zero projects is denied outright on a write:
+    // `requireProjectAccess` answers 403 where the read path 404s (#1029).
+    test('user without permission returns 403', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .patch(`/api/v1/tools/${toolId}`)
         .send({ name: 'X' });
-      expect(response.status).toBe(404);
+      expect(response.status).toBe(403);
     });
 
     test('non-existent tool returns 404', async () => {
@@ -331,12 +332,13 @@ describe('Tools', () => {
       expect(response.status).toBe(401);
     });
 
-    // Same empty-policy-array reasoning as the GET test above.
-    test('user without permission returns 404', async () => {
+    // A caller permitted in zero projects is denied outright on a write:
+    // `requireProjectAccess` answers 403 where the read path 404s (#1029).
+    test('user without permission returns 403', async () => {
       const response = await authenticatedTestClient(noPermToken).delete(
         `/api/v1/tools/${toolId}`
       );
-      expect(response.status).toBe(404);
+      expect(response.status).toBe(403);
     });
 
     test('non-existent tool returns 404', async () => {
@@ -363,12 +365,13 @@ describe('Tools', () => {
       expect(response.status).toBe(401);
     });
 
-    // Same empty-policy-array reasoning as the GET test above.
-    test('user without permission returns 404', async () => {
+    // A caller permitted in zero projects is denied outright on a write:
+    // `requireProjectAccess` answers 403 where the read path 404s (#1029).
+    test('user without permission returns 403', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .post(`/api/v1/tools/${soatToolId}/call`)
         .send({ action: 'list-tools' });
-      expect(response.status).toBe(404);
+      expect(response.status).toBe(403);
     });
 
     test('non-existent tool returns 404', async () => {
@@ -751,12 +754,13 @@ describe('Tools', () => {
       expect(res.body.error.code).toBe('PIPELINE_INVALID_STEP');
     });
 
-    // Same empty-policy-array reasoning as the GET test above.
-    test('pipeline call without permission returns 404', async () => {
+    // A caller permitted in zero projects is denied outright on a write:
+    // `requireProjectAccess` answers 403 where the read path 404s (#1029).
+    test('pipeline call without permission returns 403', async () => {
       const res = await authenticatedTestClient(noPermToken)
         .post(`/api/v1/tools/${pipelineToolId}/call`)
         .send({ input: {} });
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(403);
     });
   });
 
@@ -1309,7 +1313,7 @@ describe('Tools', () => {
       expect(callRes.body.error.code).toBe('TOOL_AUTH_FAILED');
     });
 
-    test('calling an auth-configured tool without permission returns 404', async () => {
+    test('calling an auth-configured tool without permission returns 403', async () => {
       const createRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')
         .send({
@@ -1333,7 +1337,9 @@ describe('Tools', () => {
       const res = await authenticatedTestClient(noPermToken)
         .post(`/api/v1/tools/${createRes.body.id}/call`)
         .send({ input: {} });
-      expect(res.status).toBe(404);
+      // The call never reaches the tool's credentials: the empty scope is
+      // refused up front (#1029).
+      expect(res.status).toBe(403);
     });
 
     test('creating a tool with auth requires authentication', async () => {
