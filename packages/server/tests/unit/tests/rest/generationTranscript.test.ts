@@ -408,6 +408,45 @@ describe('GET /api/v1/generations/:generation_id/transcript', () => {
     expect(res.status).toBe(403);
   });
 
+  test('is scoped to its own generation when a trace_id is grouped', async () => {
+    // Grouping appends (#1024), so one steps object holds both turns
+    // concatenated. Each transcript must return only its own segment —
+    // projecting the whole object would report the other turn's steps here, and
+    // step_count, which counts every grouped turn, would agree with it.
+    const first = await runGeneration({});
+    const firstBefore = await transcript(first.id);
+    expect(firstBefore.status).toBe(200);
+    expect(firstBefore.body.steps).toHaveLength(1);
+    expect(firstBefore.body.steps[0].text).toBe(ASSISTANT_TEXT);
+
+    const SECOND_TEXT = 'Grouped onto the same trace.';
+    stubResponses = [textCompletion(SECOND_TEXT)];
+    const second = await asUser()
+      .post(`/api/v1/agents/${agentId}/generate?wait=true`)
+      .send({
+        trace_id: first.trace_id,
+        messages: [{ role: 'user', content: 'And now?' }],
+      });
+    expect(second.status).toBe(200);
+    expect(second.body.trace_id).toBe(first.trace_id);
+
+    const firstAfter = await transcript(first.id);
+    expect(firstAfter.status).toBe(200);
+    expect(firstAfter.body.steps).toHaveLength(1);
+    expect(firstAfter.body.steps[0].text).toBe(ASSISTANT_TEXT);
+    expect(firstAfter.body.output.content).toBe(ASSISTANT_TEXT);
+
+    const secondTranscript = await transcript(second.body.id);
+    expect(secondTranscript.status).toBe(200);
+    expect(secondTranscript.body.steps).toHaveLength(1);
+    expect(secondTranscript.body.steps[0].text).toBe(SECOND_TEXT);
+
+    // step_count is the trace's counter and spans both turns, so it is
+    // deliberately larger than either transcript's own step list.
+    expect(firstAfter.body.step_count).toBeGreaterThanOrEqual(2);
+    expect(firstAfter.body.trace_id).toBe(secondTranscript.body.trace_id);
+  });
+
   test('an unknown generation returns 404', async () => {
     const res = await transcript('gen_does_not_exist');
     expect(res.status).toBe(404);

@@ -210,6 +210,52 @@ export const projectTranscriptSteps = (steps: unknown): TranscriptStep[] => {
 };
 
 /**
+ * One generation's slice of a trace's steps object.
+ *
+ * Grouping several generations under one `trace_id` **appends** rather than
+ * replaces (#1024), so the object is the concatenation of one segment per
+ * generation and `Trace.stepSegments` is the index. A transcript that projected
+ * the whole object would report the other turns' steps as part of this one, and
+ * `step_count` — which counts every grouped turn — would agree with it.
+ *
+ * Deliberately not `locateSegment` from `traceWrite`: that one answers "where
+ * should this generation write next", so a generation absent from the index
+ * gets the end of the object. Here the same absence means the generation
+ * recorded nothing, and returning the tail would attribute another turn's steps
+ * to it.
+ *
+ * An **unindexed** trace is the one case that yields the whole object: its bytes
+ * predate the index and cannot be attributed, and that is the answer every
+ * pre-#1024 trace already gave.
+ */
+export const sliceGenerationSteps = (args: {
+  steps: unknown;
+  segments: { generationId: string; stepCount: number }[] | undefined;
+  generationId: string;
+}): unknown[] => {
+  if (!Array.isArray(args.steps)) return [];
+  if (!Array.isArray(args.segments) || args.segments.length === 0) {
+    return args.steps;
+  }
+
+  let offset = 0;
+  for (const segment of args.segments) {
+    if (segment.generationId === args.generationId) {
+      // Clamped: the index and the object are written together but live in
+      // separate stores, so a truncated object must not yield undefined entries.
+      return args.steps.slice(offset, offset + segment.stepCount);
+    }
+    offset += segment.stepCount;
+  }
+
+  log(
+    'sliceGenerationSteps: generationId=%s absent from the segment index of an indexed trace',
+    args.generationId
+  );
+  return [];
+};
+
+/**
  * The turn's final answer, from its projected steps.
  *
  * Scans backwards for the last step carrying non-empty text rather than reading
@@ -255,12 +301,20 @@ const resolveTranscriptContent = async (
 
   const inputMessages = generation.inputMessages;
 
+  const storedSteps = await readTraceSteps(generation.trace?.file);
+
   return {
     input:
       Array.isArray(inputMessages) && inputMessages.length > 0
         ? inputMessages
         : null,
-    steps: projectTranscriptSteps(await readTraceSteps(generation.trace?.file)),
+    steps: projectTranscriptSteps(
+      sliceGenerationSteps({
+        steps: storedSteps,
+        segments: generation.trace?.stepSegments,
+        generationId: generation.publicId,
+      })
+    ),
   };
 };
 

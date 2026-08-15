@@ -1,4 +1,7 @@
-import { projectTranscriptSteps } from 'src/lib/generationTranscript';
+import {
+  projectTranscriptSteps,
+  sliceGenerationSteps,
+} from 'src/lib/generationTranscript';
 
 /**
  * The stored step → transcript step projection.
@@ -258,5 +261,96 @@ describe('projectTranscriptSteps', () => {
     expect(projectTranscriptSteps(undefined)).toEqual([]);
     expect(projectTranscriptSteps({ steps: [] })).toEqual([]);
     expect(projectTranscriptSteps([])).toEqual([]);
+  });
+});
+
+/**
+ * Scoping a transcript to its own generation's slice of a grouped trace (#1024).
+ *
+ * Since grouping appends, one steps object can hold several generations' steps
+ * concatenated, indexed by `Trace.stepSegments`. A transcript that projected the
+ * whole object would report the other turns' steps as part of this one.
+ */
+describe('sliceGenerationSteps', () => {
+  const step = (text: string) => {
+    return { content: [{ type: 'text', text }] };
+  };
+
+  const steps = [step('A1'), step('A2'), step('B1'), step('C1')];
+  const segments = [
+    { generationId: 'gen_a', stepCount: 2 },
+    { generationId: 'gen_b', stepCount: 1 },
+    { generationId: 'gen_c', stepCount: 1 },
+  ];
+
+  const textsOf = (sliced: unknown[]) => {
+    return projectTranscriptSteps(sliced).map((s) => {
+      return s.text;
+    });
+  };
+
+  test('returns only the generation own slice', () => {
+    expect(
+      textsOf(sliceGenerationSteps({ steps, segments, generationId: 'gen_a' }))
+    ).toEqual(['A1', 'A2']);
+    expect(
+      textsOf(sliceGenerationSteps({ steps, segments, generationId: 'gen_b' }))
+    ).toEqual(['B1']);
+    expect(
+      textsOf(sliceGenerationSteps({ steps, segments, generationId: 'gen_c' }))
+    ).toEqual(['C1']);
+  });
+
+  test('returns nothing for a generation with no segment on an indexed trace', () => {
+    // The trace is indexed, and this generation is not in the index — so it
+    // wrote no steps. Falling back to the whole object (or to the tail, as the
+    // write path does for a first write) would attribute another turn's steps
+    // to it.
+    expect(
+      sliceGenerationSteps({ steps, segments, generationId: 'gen_zzz' })
+    ).toEqual([]);
+  });
+
+  test('returns the whole object when the trace has no segment index', () => {
+    // A trace written before the index existed: its bytes cannot be attributed
+    // to a generation, and the whole object is the best available answer — the
+    // behaviour every pre-#1024 trace already had.
+    expect(
+      textsOf(
+        sliceGenerationSteps({ steps, segments: [], generationId: 'gen_a' })
+      )
+    ).toEqual(['A1', 'A2', 'B1', 'C1']);
+    expect(
+      textsOf(
+        sliceGenerationSteps({
+          steps,
+          segments: undefined,
+          generationId: 'gen_a',
+        })
+      )
+    ).toEqual(['A1', 'A2', 'B1', 'C1']);
+  });
+
+  test('tolerates a missing or corrupt steps object', () => {
+    expect(
+      sliceGenerationSteps({ steps: null, segments, generationId: 'gen_a' })
+    ).toEqual([]);
+    expect(
+      sliceGenerationSteps({ steps: 'nope', segments, generationId: 'gen_a' })
+    ).toEqual([]);
+  });
+
+  test('clamps a segment that runs past the end of the object', () => {
+    // The index and the object are written together but are separate stores;
+    // a truncated object must not yield undefined entries.
+    expect(
+      textsOf(
+        sliceGenerationSteps({
+          steps: [step('A1')],
+          segments,
+          generationId: 'gen_b',
+        })
+      )
+    ).toEqual([]);
   });
 });
