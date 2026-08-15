@@ -344,6 +344,14 @@ paths:
         Not every provider type can answer. `azure` lists deployments an operator
         named rather than models, and `ollama` lists whatever was pulled onto that
         host, so both return `400 MODEL_LISTING_UNSUPPORTED`.
+
+        Where the credential comes from depends on the provider type. The
+        API-key types (`openai`, `groq`, `xai`, `gateway`, `custom`, `anthropic`,
+        `google`) use the record's linked secret and cannot list without one.
+        `bedrock` and `vertex` instead resolve credentials from the server
+        environment — the AWS default credential chain and Google Application
+        Default Credentials respectively — and ignore the linked secret here, so
+        a record with no `secret_id` can list models.
       operationId: listAiProviderModels
       parameters:
         - name: ai_provider_id
@@ -364,7 +372,7 @@ paths:
           description: >
             The provider type cannot enumerate models, or the record is missing
             configuration the listing needs (a Vertex project, a Bedrock region,
-            a linked API key).
+            or — for the API-key provider types — a linked secret).
         '401':
           description: Unauthorized
         '403':

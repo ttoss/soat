@@ -732,5 +732,31 @@ describe('AI Providers', () => {
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('AI_PROVIDER_MISCONFIGURED');
     });
+
+    test('an API-key provider with no secret linked returns 400', async () => {
+      // The asymmetry this pins: an OpenAI-family listing needs the record's own
+      // key, so a secret-less record cannot list. `vertex` and `bedrock` resolve
+      // credentials from the server environment instead, which is why the vertex
+      // case above gets as far as complaining about `config.project` rather than
+      // about a missing key. Documented under "Listing the models a provider can
+      // run" in the module docs; if this ever starts passing, that section is
+      // wrong too.
+      const openaiRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: 'OpenAI Listing No Secret',
+          provider: 'openai',
+          default_model: 'gpt-4o',
+        });
+      expect(openaiRes.body.secret_id).toBeNull();
+
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/ai-providers/${openaiRes.body.id}/models`
+      );
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('AI_PROVIDER_MISCONFIGURED');
+      expect(response.body.error.message).toMatch(/API key/i);
+    });
   });
 });
