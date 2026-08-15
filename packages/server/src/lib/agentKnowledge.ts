@@ -137,13 +137,25 @@ const hasDocumentFilters = (config: KnowledgeConfig): boolean => {
   return anyLength(config.documentPaths) || anyLength(config.documentIds);
 };
 
+/**
+ * Renders the source tag that precedes each injected result.
+ *
+ * The tag carries enough provenance to trace an injected claim back to the
+ * exact row it came from — the memory entry id, and the page for a paged
+ * document — not just the container it lives in. A chunk with no page (plain
+ * text, markdown) keeps the bare form.
+ *
+ * The rendered block is documented verbatim in the agents module doc and a
+ * consumer may reasonably parse it, so the shape is part of the v1 contract.
+ */
 const formatResult = (
   r: Awaited<ReturnType<typeof searchKnowledge>>[0]
 ): string => {
   if (r.source_type === 'document') {
-    return `[Document: ${r.path ?? r.filename}]\n${r.content}`;
+    const page = r.page === undefined ? '' : ` (page ${r.page})`;
+    return `[Document: ${r.path ?? r.filename}${page}]\n${r.content}`;
   }
-  return `[Memory: ${r.memory_name}]\n${r.content}`;
+  return `[Memory: ${r.memory_name} (${r.entry_id})]\n${r.content}`;
 };
 
 // Retrieved knowledge is partly user-derived (extraction-sourced memory
