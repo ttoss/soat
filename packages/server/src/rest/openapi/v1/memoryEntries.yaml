@@ -49,6 +49,13 @@ paths:
           schema:
             type: integer
             default: 0
+        - name: include_invalidated
+          in: query
+          required: false
+          description: Include invalidated (superseded) entries. They are excluded by default; set this to audit the supersede history.
+          schema:
+            type: boolean
+            default: false
       responses:
         '200':
           description: List of memory entries
@@ -301,6 +308,28 @@ components:
           additionalProperties: true
           description: Arbitrary structured metadata attached to the entry
           example: { evidence: high }
+        source_generation_id:
+          x-soat-ref: generations
+          type: string
+          nullable: true
+          description: The generation whose turn produced this entry. Set for entries written by the `write_memory` tool and by automatic extraction; null for manual and orchestration writes. Recorded when the entry is created and never rewritten by a later merge.
+          example: gen_V1StGXR8Z5jdHi6B
+        source_conversation_id:
+          x-soat-ref: conversations
+          type: string
+          nullable: true
+          description: The conversation the producing turn belonged to. Null when the entry did not come from a conversation (a direct agent generation, a manual write, or an orchestration write).
+          example: conv_V1StGXR8Z5jdHi6B
+        invalidated_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the entry was superseded. Null means the entry is currently valid. Invalidated entries are excluded from listing, from write deduplication, and from knowledge search, but remain readable by ID for audit.
+        superseded_by_entry_id:
+          type: string
+          nullable: true
+          description: The entry that replaced this one, when it was superseded. Null for valid entries.
+          example: mem_entry_V1StGXR8Z5jdHi6B
         created_at:
           type: string
           format: date-time
@@ -314,5 +343,9 @@ components:
           properties:
             action:
               type: string
-              enum: [created, updated, skipped]
-              description: The outcome of the write operation
+              enum: [created, updated, skipped, superseded]
+              description: >-
+                The outcome of the write operation. `superseded` means the
+                incoming content contradicted an existing entry, which was
+                invalidated and replaced — it is produced by the LLM-arbitrated
+                write path and does not occur until that ships.

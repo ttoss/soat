@@ -244,6 +244,8 @@ const writeCandidates = async (args: {
   candidates: string[];
   aiProviderId?: string;
   model?: string;
+  generationId?: string;
+  conversationId?: string;
 }): Promise<ExtractionSummary> => {
   const summary: ExtractionSummary = {
     candidates: args.candidates.length,
@@ -266,6 +268,8 @@ const writeCandidates = async (args: {
           aiProviderId: args.aiProviderId,
           model: args.model,
         },
+        sourceGenerationPublicId: args.generationId,
+        sourceConversationPublicId: args.conversationId,
       });
       summary[result.action] += 1;
     } catch (error) {
@@ -292,6 +296,11 @@ export const runMemoryExtraction = async (args: {
   agentId: string;
   projectIds?: number[];
   generationId?: string;
+  /**
+   * Provenance for the entries this run writes. Present only on the
+   * conversation path; a direct agent generation has no conversation.
+   */
+  conversationId?: string;
   messages: ExtractionMessage[];
   assistantContent: string;
   /** Per-turn override of the agent's extraction default; see resolveExtractionTarget. */
@@ -342,6 +351,8 @@ export const runMemoryExtraction = async (args: {
     candidates: parseFactCandidates(completionText),
     aiProviderId: extraction.aiProviderId,
     model: extraction.model,
+    generationId: args.generationId,
+    conversationId: args.conversationId,
   });
 
   log(
@@ -371,6 +382,7 @@ export const fireMemoryExtraction = (args: {
   agentId: string;
   projectIds?: number[];
   generationId?: string;
+  conversationId?: string;
   messages: ExtractionMessage[];
   assistantContent: string;
   /** Per-turn override of the agent's extraction default; see resolveExtractionTarget. */

@@ -1272,6 +1272,37 @@ if [ "$ME_LIST_COUNT" -ne 3 ]; then
 fi
 echo "Memory entries listed: $ME_LIST_COUNT entries."
 
+echo "--- Memory entries: provenance and validity on a manual write ---"
+# A manual REST/CLI write has no generation behind it, so both provenance
+# fields are null, and a fresh entry is valid (never superseded).
+ME_PROV_GEN=$(printf '%s\n' "$ME2_RESP" | jq -r '.source_generation_id')
+ME_PROV_CONV=$(printf '%s\n' "$ME2_RESP" | jq -r '.source_conversation_id')
+ME_PROV_INVAL=$(printf '%s\n' "$ME2_RESP" | jq -r '.invalidated_at')
+if [ "$ME_PROV_GEN" != "null" ] || [ "$ME_PROV_CONV" != "null" ]; then
+  echo "ERROR: manual write should carry no provenance, got gen=$ME_PROV_GEN conv=$ME_PROV_CONV" >&2
+  echo "$ME2_RESP" >&2
+  exit 1
+fi
+if [ "$ME_PROV_INVAL" != "null" ]; then
+  echo "ERROR: a new entry must be valid, got invalidated_at=$ME_PROV_INVAL" >&2
+  echo "$ME2_RESP" >&2
+  exit 1
+fi
+echo "Manual write reports null provenance and is valid."
+
+echo "--- List memory entries including invalidated ---"
+# Nothing is invalidated yet (the arbitration that supersedes entries ships
+# later), so this asserts the flag is wired end-to-end and does not change the
+# result set on its own.
+ME_INVAL_RESP=$($SOAT_CLI list-memory-entries --memory-id "$MEM_ID" --include-invalidated true)
+ME_INVAL_COUNT=$(printf '%s\n' "$ME_INVAL_RESP" | jq '.data | length')
+if [ "$ME_INVAL_COUNT" -ne "$ME_LIST_COUNT" ]; then
+  echo "ERROR: Expected $ME_LIST_COUNT entries with include_invalidated, got $ME_INVAL_COUNT" >&2
+  echo "$ME_INVAL_RESP" >&2
+  exit 1
+fi
+echo "include_invalidated listing returned $ME_INVAL_COUNT entries."
+
 echo "--- Knowledge search via per-entry memory_tags (entry granularity) ---"
 KS_TAG_RESP=$($SOAT_CLI search-knowledge \
   --project-id "$PROJECT_PUBLIC_ID" \

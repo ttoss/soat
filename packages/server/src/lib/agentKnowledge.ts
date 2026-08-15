@@ -250,6 +250,8 @@ export const buildWriteMemoryTool = (args: {
   agentId: string;
   projectIds?: number[];
   boundaryPolicy?: unknown;
+  /** Provenance: the generation whose turn asserted the fact. */
+  generationId?: string;
 }): Tool => {
   return tool({
     description:
@@ -285,6 +287,7 @@ export const buildWriteMemoryTool = (args: {
         // Agent context is available here, so merges consolidate via the LLM
         // rather than concatenating.
         consolidation: { agentId: args.agentId, projectIds: args.projectIds },
+        sourceGenerationPublicId: args.generationId,
       });
       return { action: result.action, entryId: result.entry.id };
     },
@@ -301,6 +304,7 @@ export const buildKnowledgeTools = (args: {
   projectIds?: number[];
   typedAgent: TypedAgent;
   resolvedTools: Record<string, unknown>;
+  generationId?: string;
 }): void => {
   const knowledgeConfig = normalizeKnowledgeConfig(
     args.typedAgent.knowledgeConfig
@@ -311,6 +315,7 @@ export const buildKnowledgeTools = (args: {
       agentId: args.agentId,
       projectIds: args.projectIds,
       boundaryPolicy: args.typedAgent.boundaryPolicy,
+      generationId: args.generationId,
     });
   }
 };

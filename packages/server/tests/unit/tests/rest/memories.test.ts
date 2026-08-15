@@ -1,3 +1,5 @@
+import { db } from 'src/db';
+
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
@@ -691,6 +693,183 @@ describe('Memories', () => {
         );
 
         expect(response.status).toBe(403);
+      });
+    });
+
+    describe('provenance and temporal invalidation', () => {
+      // Test embeddings are constant, so any second write into a memory that
+      // already holds a valid entry scores 1.0 and dedups. Thresholds above 1
+      // make both comparisons false, which is the only way to land two
+      // independent entries in one memory here.
+      const createEntry = async (args: {
+        memoryId: string;
+        content: string;
+        sourceType?: string;
+        forceCreate?: boolean;
+      }) => {
+        return authenticatedTestClient(userToken)
+          .post('/api/v1/memory-entries')
+          .send({
+            memory_id: args.memoryId,
+            content: args.content,
+            source_type: args.sourceType,
+            ...(args.forceCreate
+              ? { duplicate_threshold: 1.1, update_threshold: 1.1 }
+              : {}),
+          });
+      };
+
+      // No public API path sets `invalidated_at` until the LLM arbitration of
+      // Memories 5a ships — RC-2 deliberately lands the schema and the API
+      // shape first — so the invalidated state is seeded directly on the model.
+      // The behaviour under test (invalidated entries drop out of listing,
+      // dedup and search) is still exercised entirely through the API.
+      const invalidateEntry = async (args: {
+        entryId: string;
+        supersededBy?: string;
+      }) => {
+        const entry = await db.MemoryEntry.findOne({
+          where: { publicId: args.entryId },
+        });
+        entry!.invalidatedAt = new Date();
+        if (args.supersededBy) {
+          const replacement = await db.MemoryEntry.findOne({
+            where: { publicId: args.supersededBy },
+          });
+          entry!.supersededByEntryId = replacement!.id as number;
+        }
+        await entry!.save();
+      };
+
+      test('a manual REST write records no provenance', async () => {
+        const freshMemoryId = await createTestMemory();
+        const response = await createEntry({
+          memoryId: freshMemoryId,
+          content: 'Manually written fact',
+        });
+
+        expect(response.status).toBe(201);
+        expect(response.body.source_generation_id).toBeNull();
+        expect(response.body.source_conversation_id).toBeNull();
+      });
+
+      test('an orchestration-sourced write records no provenance', async () => {
+        const freshMemoryId = await createTestMemory();
+        const response = await createEntry({
+          memoryId: freshMemoryId,
+          content: 'Written by an orchestration node',
+          sourceType: 'orchestration',
+        });
+
+        expect(response.status).toBe(201);
+        expect(response.body.source_type).toBe('orchestration');
+        expect(response.body.source_generation_id).toBeNull();
+        expect(response.body.source_conversation_id).toBeNull();
+      });
+
+      test('a newly created entry is valid', async () => {
+        const freshMemoryId = await createTestMemory();
+        const response = await createEntry({
+          memoryId: freshMemoryId,
+          content: 'A currently valid fact',
+        });
+
+        expect(response.status).toBe(201);
+        expect(response.body.invalidated_at).toBeNull();
+        expect(response.body.superseded_by_entry_id).toBeNull();
+      });
+
+      test('listing excludes invalidated entries by default', async () => {
+        const freshMemoryId = await createTestMemory();
+        const retired = await createEntry({
+          memoryId: freshMemoryId,
+          content: 'Fact that gets retired',
+        });
+        await invalidateEntry({ entryId: retired.body.id });
+
+        const response = await authenticatedTestClient(userToken).get(
+          `/api/v1/memory-entries?memory_id=${freshMemoryId}`
+        );
+
+        expect(response.status).toBe(200);
+        expect(response.body.data).toHaveLength(0);
+        expect(response.body.total).toBe(0);
+      });
+
+      test('include_invalidated returns invalidated entries with their supersede link', async () => {
+        const freshMemoryId = await createTestMemory();
+        const oldEntry = await createEntry({
+          memoryId: freshMemoryId,
+          content: 'Pedro works at Company X',
+        });
+        const replacement = await createEntry({
+          memoryId: freshMemoryId,
+          content: 'Pedro left Company X',
+          forceCreate: true,
+        });
+        expect(replacement.body.action).toBe('created');
+
+        await invalidateEntry({
+          entryId: oldEntry.body.id,
+          supersededBy: replacement.body.id,
+        });
+
+        const response = await authenticatedTestClient(userToken).get(
+          `/api/v1/memory-entries?memory_id=${freshMemoryId}&include_invalidated=true`
+        );
+
+        expect(response.status).toBe(200);
+        expect(response.body.total).toBe(2);
+        const retired = response.body.data.find((e: { id: string }) => {
+          return e.id === oldEntry.body.id;
+        });
+        expect(retired.invalidated_at).toBeDefined();
+        expect(retired.invalidated_at).not.toBeNull();
+        expect(retired.superseded_by_entry_id).toBe(replacement.body.id);
+      });
+
+      test('an invalidated entry is still readable by id for audit', async () => {
+        const freshMemoryId = await createTestMemory();
+        const retired = await createEntry({
+          memoryId: freshMemoryId,
+          content: 'Retired but auditable',
+        });
+        await invalidateEntry({ entryId: retired.body.id });
+
+        const response = await authenticatedTestClient(userToken).get(
+          `/api/v1/memory-entries/${retired.body.id}`
+        );
+
+        expect(response.status).toBe(200);
+        expect(response.body.id).toBe(retired.body.id);
+        expect(response.body.invalidated_at).not.toBeNull();
+      });
+
+      test('an invalidated entry is not a dedup candidate', async () => {
+        const freshMemoryId = await createTestMemory();
+        const original = await createEntry({
+          memoryId: freshMemoryId,
+          content: 'Original fact',
+        });
+        expect(original.body.action).toBe('created');
+
+        // Baseline: while the entry is valid, the next write dedups against it
+        // (constant test embeddings score 1.0).
+        const beforeInvalidation = await createEntry({
+          memoryId: freshMemoryId,
+          content: 'Second fact',
+        });
+        expect(beforeInvalidation.body.action).toBe('skipped');
+
+        await invalidateEntry({ entryId: original.body.id });
+
+        const afterInvalidation = await createEntry({
+          memoryId: freshMemoryId,
+          content: 'Third fact, written after invalidation',
+        });
+
+        expect(afterInvalidation.status).toBe(201);
+        expect(afterInvalidation.body.action).toBe('created');
       });
     });
   });
