@@ -98,6 +98,50 @@ PENDING_CONFIGURE=""    # profile name waiting to be saved after login
 HEREDOC_DELIM=""
 HEREDOC_PATTERN="<<-?[[:space:]]*['\"]?([A-Za-z_][A-Za-z0-9_]*)['\"]?$"
 
+# Returns true when CURRENT_CMD ends inside an unclosed single-quoted string,
+# meaning the next line belongs to the same command.
+#
+# This has to track quoting *context*, not just count `'` bytes. A possessive
+# apostrophe in a double-quoted argument — `--content "Alice's fiscal year"` —
+# is a literal, and counting it as an opening quote makes the runner swallow
+# every following command until the tally happens to even out. That surfaces
+# several steps later as a bare `unexpected EOF`, pointing at the wrong file
+# (#1046). Mirrored for `"` inside `'…'`, which `jq '… == "agent"'` relies on.
+#
+# Escapes follow POSIX shell: a backslash escapes the next character outside
+# quotes and inside double quotes, and is literal inside single quotes.
+_sq_open() {
+  local s="$CURRENT_CMD"
+  local i ch state=bare
+
+  for (( i = 0; i < ${#s}; i++ )); do
+    ch="${s:i:1}"
+    case "$state" in
+      bare)
+        case "$ch" in
+          "'") state=single ;;
+          '"') state=double ;;
+          '\') state=bare_escape ;;
+        esac
+        ;;
+      single)
+        # Nothing escapes inside single quotes; only another ' closes them.
+        [[ "$ch" == "'" ]] && state=bare
+        ;;
+      double)
+        case "$ch" in
+          '"') state=bare ;;
+          '\') state=double_escape ;;
+        esac
+        ;;
+      bare_escape) state=bare ;;
+      double_escape) state=double ;;
+    esac
+  done
+
+  [[ "$state" == single ]]
+}
+
 _flush_cmd() {
   local cmd="$1"
   local ann="$2"
@@ -143,13 +187,10 @@ while IFS= read -r line; do
     continue
   fi
 
-  # Helper: count single quotes in CURRENT_CMD to detect unclosed strings
-  _sq_open() { printf '%s' "$CURRENT_CMD" | tr -cd "'" | wc -c; }
-
   # Empty line → flush current command (unless inside an unclosed single-quoted string)
   if [[ -z "$line" ]]; then
     if [[ -n "$CURRENT_CMD" ]]; then
-      if (( $(_sq_open) % 2 == 1 )); then
+      if _sq_open; then
         CURRENT_CMD+=$'\n'
       else
         _flush_cmd "$CURRENT_CMD" "$CURRENT_ANNOTATION"
@@ -173,7 +214,7 @@ while IFS= read -r line; do
     fi
 
     # If we're inside an unclosed single-quoted string, keep accumulating
-    if (( $(_sq_open) % 2 == 1 )); then
+    if _sq_open; then
       CURRENT_CMD+=$'\n'
     else
       _flush_cmd "$CURRENT_CMD" "$CURRENT_ANNOTATION"
