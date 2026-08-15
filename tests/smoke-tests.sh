@@ -844,6 +844,13 @@ if [ -z "$PDF_DOC_ID" ] || [ "$PDF_DOC_ID" = "null" ]; then
   echo "ERROR: ingest-document did not return a document id" >&2
   exit 1
 fi
+# The document echoes the source file's media type (#1041), so a caller does
+# not have to fetch the file to tell what it ingested.
+PDF_DOC_CONTENT_TYPE=$(printf '%s\n' "$PDF_DOC_RESP" | jq -r '.content_type')
+if [ "$PDF_DOC_CONTENT_TYPE" != "application/pdf" ]; then
+  echo "ERROR: ingest-document expected content_type 'application/pdf', got '$PDF_DOC_CONTENT_TYPE'" >&2
+  exit 1
+fi
 echo "PDF ingestion: OK"
 
 # 12b-1. Re-ingesting the same file_id is rejected cleanly (issue #797)
