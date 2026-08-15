@@ -28,7 +28,7 @@ paths:
         Lists API keys accessible to the caller.
         - JWT admin: returns all API keys.
         - JWT regular user: returns only the user's own API keys.
-        - API key: returns only API keys scoped to the key's project.
+        - Project-scoped credential (API key or OAuth token): returns only API keys scoped to that project.
       operationId: listApiKeys
       security:
         - bearerAuth: []
@@ -81,6 +81,7 @@ paths:
         - `project_id` is optional. When set, the key is scoped to that single project. When omitted or null, the key is **unscoped** and spans every project its owner can reach.
         - If `policy_ids` is provided, the key's effective permissions are the intersection of the user's policies and the key's policies.
         - Otherwise the key inherits the user's permissions (confined to the key's project when scoped).
+        - When the request is authenticated with a **project-scoped credential**, the new key is confined to that same project: omitting `project_id` defaults to it, naming a different project returns `403 API_KEY_PROJECT_SCOPE`, and `project_id: null` (an unscoped key) is likewise refused. Minting an unscoped key requires an unscoped credential.
       operationId: createApiKey
       requestBody:
         required: true
@@ -123,12 +124,18 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
+        '403':
+          description: Forbidden (a project-scoped credential named a different project, or asked for an unscoped key)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/api-keys/{api_key_id}:
     get:
       tags:
         - API Keys
       summary: Get an API key
-      description: Returns details of an API key. Only the owner or an admin can access it.
+      description: Returns details of an API key. Only the owner or an admin can access it, and a project-scoped credential can only reach keys in its own project.
       operationId: getApiKey
       parameters:
         - name: api_key_id
@@ -148,14 +155,14 @@ paths:
         '401':
           description: Unauthorized
         '403':
-          description: Forbidden (not the key owner or admin)
+          description: Forbidden (not the key owner or admin, or the credential is scoped to a different project)
         '404':
           description: API key not found
     put:
       tags:
         - API Keys
       summary: Update an API key
-      description: Updates an API key's name, project scope, or policies. The project scope can be changed to another project, set (scoping a previously unscoped key), or cleared with null (unscoping the key). Only the owner or an admin can update it.
+      description: Updates an API key's name, project scope, or policies. The project scope can be changed to another project, set (scoping a previously unscoped key), or cleared with null (unscoping the key). Only the owner or an admin can update it. A project-scoped credential can only update keys in its own project, and cannot move a key to another project or unscope it.
       operationId: updateApiKey
       parameters:
         - name: api_key_id
@@ -204,14 +211,14 @@ paths:
         '401':
           description: Unauthorized
         '403':
-          description: Forbidden (not the key owner or admin)
+          description: Forbidden (not the key owner or admin, or the credential is scoped to a different project)
         '404':
           description: API key not found
     delete:
       tags:
         - API Keys
       summary: Delete an API key
-      description: Deletes an API key. Only the owner or an admin can delete it.
+      description: Deletes an API key. Only the owner or an admin can delete it, and a project-scoped credential can only delete keys in its own project.
       operationId: deleteApiKey
       parameters:
         - name: api_key_id
@@ -227,7 +234,7 @@ paths:
         '401':
           description: Unauthorized
         '403':
-          description: Forbidden (not the key owner or admin)
+          description: Forbidden (not the key owner or admin, or the credential is scoped to a different project)
         '404':
           description: API key not found
 components:

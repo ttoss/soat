@@ -344,6 +344,21 @@ paths:
         Not every provider type can answer. `azure` lists deployments an operator
         named rather than models, and `ollama` lists whatever was pulled onto that
         host, so both return `400 MODEL_LISTING_UNSUPPORTED`.
+
+        Listing resolves credentials the same way generation does, so a record
+        that can generate can list. The API-key types (`openai`, `groq`, `xai`,
+        `gateway`, `custom`, `anthropic`, `google`) use the record's linked
+        secret and cannot list without one. `bedrock` and `vertex` use the
+        linked secret when there is one — IAM keys or a Bedrock API key, a
+        Google service-account key — and otherwise fall back to the server
+        environment (the AWS default credential chain, Google Application
+        Default Credentials), so a record with no `secret_id` can still list.
+
+        A Vertex record needs no `config.project` when its secret is a
+        service-account key, since the key file names its own project. A Vertex
+        record in express mode (API key) cannot list at all: express mode is a
+        global, project-less endpoint and the publisher-model catalogue is
+        per-project, so it returns `400 MODEL_LISTING_UNSUPPORTED`.
       operationId: listAiProviderModels
       parameters:
         - name: ai_provider_id
@@ -362,9 +377,11 @@ paths:
                 $ref: '#/components/schemas/ProviderModelsResponse'
         '400':
           description: >
-            The provider type cannot enumerate models, or the record is missing
-            configuration the listing needs (a Vertex project, a Bedrock region,
-            a linked API key).
+            The provider type or authentication mode cannot enumerate models
+            (including Vertex express mode), or the record is missing
+            configuration the listing needs (a Vertex project from either
+            `config.project` or the service-account key file, a Bedrock region,
+            or — for the API-key provider types — a linked secret).
         '401':
           description: Unauthorized
         '403':

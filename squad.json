@@ -1,0 +1,97 @@
+{
+"resources": {
+"Provider": {
+"type": "ai_provider",
+"properties": {
+"name": "Squad Ollama",
+"provider": "ollama",
+"default_model": "qwen2.5:0.5b"
+}
+},
+"Researcher": {
+"type": "agent",
+"properties": {
+"name": "Researcher",
+"ai_provider_id": { "ref": "Provider" },
+"instructions": "You are a research assistant. Given a topic, reply with exactly 3 short bullet facts. Never ask follow-up questions.",
+"max_steps": 3
+}
+},
+"Writer": {
+"type": "agent",
+"properties": {
+"name": "Writer",
+"ai_provider_id": { "ref": "Provider" },
+"instructions": "You are a marketing writer. Given research notes, write a two-sentence marketing blurb. Never ask follow-up questions.",
+"max_steps": 3
+}
+},
+"Reviewer": {
+"type": "agent",
+"properties": {
+"name": "Reviewer",
+"ai_provider_id": { "ref": "Provider" },
+"instructions": "You are an editor. Given research notes, write one sentence of style guidance for the writer. Never ask follow-up questions.",
+"max_steps": 3
+}
+},
+"ContentSquad": {
+"type": "orchestration",
+"properties": {
+"name": "marketing-content-squad",
+"input_schema": {
+"type": "object",
+"properties": { "topic": { "type": "string" } },
+"required": ["topic"]
+},
+"nodes": [
+{
+"id": "research",
+"type": "agent",
+"agent_id": { "ref": "Researcher" },
+"input_mapping": { "prompt": { "var": "input.topic" } },
+"state_mapping":{"state.research":{"var":"output.content"}}
+},
+{
+"id": "write",
+"type": "agent",
+"agent_id": { "ref": "Writer" },
+"input_mapping": { "prompt": { "var": "research" } },
+"state_mapping":{"state.draft":{"var":"output.content"}}
+},
+{
+"id": "review",
+"type": "agent",
+"agent_id": { "ref": "Reviewer" },
+"input_mapping": { "prompt": { "var": "research" } },
+"state_mapping":{"state.notes":{"var":"output.content"}}
+},
+{
+"id": "approve",
+"type": "human",
+"prompt": "Approve the draft for publishing?",
+"options": ["approve", "reject"],
+"input_mapping": { "draft": { "var": "draft" }, "notes": { "var": "notes" } },
+"state_mapping":{"state.approved":{"var":"output.approved"}}
+},
+{
+"id": "publish",
+"type": "transform",
+"expression": { "cat": ["Published: ", { "var": "draft" }] },
+"state_mapping":{"state.published":{"var":"output.result"}}
+}
+],
+"edges": [
+{ "from": "research", "to": "write" },
+{ "from": "research", "to": "review" },
+{ "from": "write", "to": "approve", "activation_group": "join", "activation_condition": "all" },
+{ "from": "review", "to": "approve", "activation_group": "join", "activation_condition": "all" },
+{ "from": "approve", "to": "publish" }
+]
+}
+}
+},
+"outputs": {
+"squad_id": { "ref": "ContentSquad" }
+}
+}

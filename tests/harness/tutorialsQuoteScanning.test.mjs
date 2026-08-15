@@ -1,12 +1,12 @@
-// Tests for how tests/tutorials-tests.sh decides where one command ends.
+// Tests for command-boundary detection in tests/tutorials-tests.sh.
 //
-// The runner accumulates lines until quotes balance, so that a multi-line
-// single-quoted argument (a `jq` filter spanning two lines, say) is executed as
-// one command. Deciding that requires knowing which quotes are *syntactic* —
-// an apostrophe inside a double-quoted string is a literal, not an opening
-// quote. Getting it wrong silently glues every following command onto the
-// current one until the count happens to even out, and the failure surfaces
-// several steps later as a bare `unexpected EOF` (#1046).
+// The runner joins a multi-line command by tracking whether it is still inside
+// an unclosed single-quoted string — a real need, since tutorials pass JSON to
+// `--knowledge-config '{...}'` across several lines. The check used to count
+// every `'` in the accumulated text, which cannot tell a quote from an
+// apostrophe: one `Alice's` inside a double-quoted argument made the count odd,
+// so the runner swallowed every following line and died on `unexpected EOF`
+// several steps later, naming a command that had already run fine.
 //
 // The runner is driven against throwaway tutorial markdown files, so no server
 // or LLM is involved — the commands under test are plain shell.
@@ -73,84 +73,107 @@ const runTutorial = (file) => {
   });
 };
 
+/** The runner prints `[Step N] <command>` as it dispatches each command. */
+const steps = (output) => {
+  return [...output.matchAll(/^\[Step (\d+)\] (.*)$/gm)].map((m) => {
+    return m[2];
+  });
+};
+
 describe('command boundaries and quoting', () => {
-  test('an apostrophe inside double quotes does not swallow the next command', async () => {
-    // The exact shape that broke `memories-agent`: a possessive apostrophe in
-    // a double-quoted argument. It is one `'` byte, so a naive count reads the
-    // command as unterminated and keeps consuming the lines after it.
+  test('an apostrophe inside a double-quoted argument ends the command', async () => {
     const file = await writeTutorial(
-      'apostrophe-in-double-quotes',
+      'apostrophe',
       [
         'echo "Alice\'s fiscal year ends in March"',
-        'echo SECOND_COMMAND_RAN',
+        'echo second-command-ran',
       ].join('\n')
     );
 
     const { code, output } = await runTutorial(file);
 
+    assert.equal(code, 0, output);
+    // Two commands, dispatched as two steps — not swallowed into one blob.
+    assert.deepEqual(steps(output), [
+      'echo "Alice\'s fiscal year ends in March"',
+      'echo second-command-ran',
+    ]);
     assert.doesNotMatch(output, /unexpected EOF/);
-    assert.match(output, /SECOND_COMMAND_RAN/);
-    // Both lines happen to *run* even when glued together, so asserting the
-    // output alone would pass on the broken runner. The defect is the merge:
-    // two commands must be two steps, or a `# → expect-fail` annotation binds
-    // to the wrong one and the step count misreports what was covered.
-    assert.match(output, /\[Step 2\]/);
-    assert.equal(code, 0);
   });
 
-  test('a single-quoted string spanning two lines stays one command', async () => {
-    // The behavior the naive count got right and which must survive the fix:
-    // a `jq` filter broken across lines is a single argument, not two commands.
+  test('every apostrophe-bearing command is its own step', async () => {
     const file = await writeTutorial(
-      'multiline-single-quote',
-      ["echo 'first line", "second line'"].join('\n')
+      'apostrophes-many',
+      [
+        'echo "Alice\'s policy"',
+        'echo "Bob\'s policy"',
+        'echo "Carol\'s policy"',
+        'echo last-command-ran',
+      ].join('\n')
     );
 
     const { code, output } = await runTutorial(file);
 
-    assert.match(output, /first line/);
-    assert.match(output, /second line/);
-    assert.equal(code, 0);
+    assert.equal(code, 0, output);
+    assert.equal(steps(output).length, 4, output);
+    assert.doesNotMatch(output, /unexpected EOF/);
   });
 
-  test('an apostrophe and a later multi-line filter both parse', async () => {
-    // Both together, which is what `memories-agent` actually contains. The
-    // apostrophe must not consume the filter, and the filter must still be
-    // held together across its two lines.
+  test('a genuinely unclosed single-quoted string still joins the next line', async () => {
+    const file = await writeTutorial(
+      'multiline-json',
+      ['echo \'{', '  "memory_ids": ["mem_1"]', '}\'', 'echo after-json'].join(
+        '\n'
+      )
+    );
+
+    const { code, output } = await runTutorial(file);
+
+    assert.equal(code, 0, output);
+    assert.match(output, /"memory_ids"/);
+    assert.match(output, /after-json/);
+    // The JSON spans three lines but is one command; `after-json` is the second.
+    assert.equal(steps(output).length, 2, output);
+  });
+
+  test('a double-quoted string spanning lines is joined, not split', async () => {
+    const file = await writeTutorial(
+      'multiline-double',
+      ['echo "first line', 'second line"', 'echo after-double'].join('\n')
+    );
+
+    const { code, output } = await runTutorial(file);
+
+    assert.equal(code, 0, output);
+    assert.match(output, /second line/);
+    assert.match(output, /after-double/);
+    assert.doesNotMatch(output, /unexpected EOF/);
+  });
+
+  test('an apostrophe followed by a multi-line filter keeps both intact', async () => {
+    // The two shapes above, interleaved — which is what `memories-agent.md`
+    // actually contained when #1046 fired. Neither alone reproduces it: the
+    // apostrophe leaves the old counter odd, and the *opening* quote of the
+    // following two-line filter brings it back to even, so the runner flushed
+    // a blob whose single quote was still open and bash reported
+    // `unexpected EOF` from a command several steps earlier.
     const file = await writeTutorial(
       'apostrophe-then-multiline',
       [
         'echo "Alice\'s renewal"',
-        "echo 'filter part one",
-        "filter part two'",
-        'echo LAST_COMMAND_RAN',
+        "echo '[.data[] | select(.source_type == \"agent\")",
+        "       | {content, source_type}]'",
+        'echo after-filter',
       ].join('\n')
     );
 
     const { code, output } = await runTutorial(file);
 
+    assert.equal(code, 0, output);
     assert.doesNotMatch(output, /unexpected EOF/);
-    assert.match(output, /filter part one/);
-    assert.match(output, /filter part two/);
-    assert.match(output, /LAST_COMMAND_RAN/);
-    // Three commands: the echo, the two-line filter, and the last echo.
-    assert.match(output, /\[Step 3\]/);
-    assert.equal(code, 0);
-  });
-
-  test('a double quote inside a single-quoted string is a literal', async () => {
-    // The mirror case. `jq '[.data[] | select(.source_type == "agent")]'`
-    // carries two double quotes inside single quotes; treating either as
-    // opening a double-quoted context would desynchronize the scanner.
-    const file = await writeTutorial(
-      'double-quote-in-single',
-      ['echo \'a "quoted" word\'', 'echo AFTER_LITERAL'].join('\n')
-    );
-
-    const { code, output } = await runTutorial(file);
-
-    assert.match(output, /a "quoted" word/);
-    assert.match(output, /AFTER_LITERAL/);
-    assert.equal(code, 0);
+    assert.match(output, /source_type/);
+    assert.match(output, /after-filter/);
+    // Three commands: the apostrophe echo, the two-line filter, the last echo.
+    assert.equal(steps(output).length, 3, output);
   });
 });
