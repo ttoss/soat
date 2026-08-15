@@ -140,6 +140,11 @@ const sidebars: SidebarsConfig = {
       ],
     },
     {
+      type: 'doc',
+      id: 'advanced/building-on-soat',
+      label: 'Building on SOAT',
+    },
+    {
       type: 'category',
       label: 'Self-Hosting & Production',
       link: { type: 'doc', id: 'self-hosting/configuration' },

@@ -753,4 +753,216 @@ describe('API Keys', () => {
       expect(res.body.data).toHaveLength(0);
     });
   });
+
+  /**
+   * #1038: every resource route honours a scoped credential's project binding,
+   * but key management itself did not. `POST /api-keys` is self-service — it
+   * runs `requireAuth` and nothing else — so a credential confined to project A
+   * could mint a **new unscoped key** for the same owning user and walk out of
+   * its own boundary in one call. The item routes had the mirror hole: they gate
+   * on owner-or-admin only, so a scoped credential could read, re-scope, or
+   * delete its owner's keys in any other project.
+   *
+   * That is the whole boundary, not a message-quality issue: a fronting service
+   * holding a per-tenant key is only confined if it cannot mint its way out.
+   */
+  describe('credential project scope confines api-key management', () => {
+    let projectA: string;
+    let projectB: string;
+    let scopedKey: string;
+    let scopedKeyId: string;
+    let projectBKeyId: string;
+    let unscopedKeyId: string;
+
+    beforeAll(async () => {
+      const projARes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'Key Scope Project A' });
+      projectA = projARes.body.id;
+
+      const projBRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'Key Scope Project B' });
+      projectB = projBRes.body.id;
+
+      const scopedRes = await authenticatedTestClient(aliceToken)
+        .post('/api/v1/api-keys')
+        .send({ name: 'Scope A Key', project_id: projectA });
+      scopedKey = scopedRes.body.key;
+      scopedKeyId = scopedRes.body.id;
+
+      const projectBKeyRes = await authenticatedTestClient(aliceToken)
+        .post('/api/v1/api-keys')
+        .send({ name: 'Scope B Key', project_id: projectB });
+      projectBKeyId = projectBKeyRes.body.id;
+
+      const unscopedRes = await authenticatedTestClient(aliceToken)
+        .post('/api/v1/api-keys')
+        .send({ name: 'Alice Unscoped Key' });
+      unscopedKeyId = unscopedRes.body.id;
+    });
+
+    describe('POST /api/v1/api-keys', () => {
+      test('a scoped key cannot mint a key for another project', async () => {
+        const res = await authenticatedTestClient(scopedKey)
+          .post('/api/v1/api-keys')
+          .send({ name: 'Escape To B', project_id: projectB });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.code).toBe('API_KEY_PROJECT_SCOPE');
+        expect(res.body.error.meta.scoped_project).toBe(projectA);
+        expect(res.body.error.meta.requested_project).toBe(projectB);
+      });
+
+      test('a scoped key cannot mint an unscoped key', async () => {
+        const res = await authenticatedTestClient(scopedKey)
+          .post('/api/v1/api-keys')
+          .send({ name: 'Escape Unscoped', project_id: null });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.code).toBe('API_KEY_PROJECT_SCOPE');
+        expect(res.body.error.meta.scoped_project).toBe(projectA);
+        expect(res.body.error.meta.requested_project).toBeNull();
+      });
+
+      test('omitting project_id mints a key scoped to the credential project', async () => {
+        const res = await authenticatedTestClient(scopedKey)
+          .post('/api/v1/api-keys')
+          .send({ name: 'Rotated A Key' });
+
+        expect(res.status).toBe(201);
+        expect(res.body.project_id).toBe(projectA);
+        expect(res.body.key).toBeDefined();
+      });
+
+      test('naming the credential own project is accepted', async () => {
+        const res = await authenticatedTestClient(scopedKey)
+          .post('/api/v1/api-keys')
+          .send({ name: 'Explicit A Key', project_id: projectA });
+
+        expect(res.status).toBe(201);
+        expect(res.body.project_id).toBe(projectA);
+      });
+    });
+
+    describe('GET /api/v1/api-keys/:api_key_id', () => {
+      test('a scoped key cannot read its owner key in another project', async () => {
+        const res = await authenticatedTestClient(scopedKey).get(
+          `/api/v1/api-keys/${projectBKeyId}`
+        );
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.code).toBe('API_KEY_PROJECT_SCOPE');
+        expect(res.body.error.meta.requested_project).toBe(projectB);
+      });
+
+      test('a scoped key cannot read its owner unscoped key', async () => {
+        const res = await authenticatedTestClient(scopedKey).get(
+          `/api/v1/api-keys/${unscopedKeyId}`
+        );
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.code).toBe('API_KEY_PROJECT_SCOPE');
+        expect(res.body.error.meta.requested_project).toBeNull();
+      });
+
+      test('a scoped key can read a key in its own project', async () => {
+        const res = await authenticatedTestClient(scopedKey).get(
+          `/api/v1/api-keys/${scopedKeyId}`
+        );
+
+        expect(res.status).toBe(200);
+        expect(res.body.id).toBe(scopedKeyId);
+        expect(res.body.project_id).toBe(projectA);
+      });
+    });
+
+    describe('PUT /api/v1/api-keys/:api_key_id', () => {
+      test('a scoped key cannot clear its own project binding', async () => {
+        const res = await authenticatedTestClient(scopedKey)
+          .put(`/api/v1/api-keys/${scopedKeyId}`)
+          .send({ project_id: null });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.code).toBe('API_KEY_PROJECT_SCOPE');
+        expect(res.body.error.meta.requested_project).toBeNull();
+
+        const check = await authenticatedTestClient(aliceToken).get(
+          `/api/v1/api-keys/${scopedKeyId}`
+        );
+        expect(check.body.project_id).toBe(projectA);
+      });
+
+      test('a scoped key cannot re-scope its own key to another project', async () => {
+        const res = await authenticatedTestClient(scopedKey)
+          .put(`/api/v1/api-keys/${scopedKeyId}`)
+          .send({ project_id: projectB });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.code).toBe('API_KEY_PROJECT_SCOPE');
+        expect(res.body.error.meta.requested_project).toBe(projectB);
+      });
+
+      test('a scoped key cannot update a key in another project', async () => {
+        const res = await authenticatedTestClient(scopedKey)
+          .put(`/api/v1/api-keys/${projectBKeyId}`)
+          .send({ name: 'Renamed From A' });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.code).toBe('API_KEY_PROJECT_SCOPE');
+        expect(res.body.error.meta.requested_project).toBe(projectB);
+      });
+
+      test('a scoped key can rename a key in its own project', async () => {
+        const res = await authenticatedTestClient(scopedKey)
+          .put(`/api/v1/api-keys/${scopedKeyId}`)
+          .send({ name: 'Scope A Key Renamed' });
+
+        expect(res.status).toBe(200);
+        expect(res.body.name).toBe('Scope A Key Renamed');
+        expect(res.body.project_id).toBe(projectA);
+      });
+    });
+
+    describe('DELETE /api/v1/api-keys/:api_key_id', () => {
+      test('a scoped key cannot delete a key in another project', async () => {
+        const res = await authenticatedTestClient(scopedKey).delete(
+          `/api/v1/api-keys/${projectBKeyId}`
+        );
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.code).toBe('API_KEY_PROJECT_SCOPE');
+
+        const check = await authenticatedTestClient(aliceToken).get(
+          `/api/v1/api-keys/${projectBKeyId}`
+        );
+        expect(check.status).toBe(200);
+      });
+
+      test('a scoped key can delete a key in its own project', async () => {
+        const create = await authenticatedTestClient(aliceToken)
+          .post('/api/v1/api-keys')
+          .send({ name: 'Disposable A Key', project_id: projectA });
+
+        const res = await authenticatedTestClient(scopedKey).delete(
+          `/api/v1/api-keys/${create.body.id}`
+        );
+
+        expect(res.status).toBe(204);
+      });
+    });
+
+    test('an unscoped credential is unaffected', async () => {
+      const create = await authenticatedTestClient(aliceToken)
+        .post('/api/v1/api-keys')
+        .send({ name: 'Alice Unscoped Minter' });
+
+      const res = await authenticatedTestClient(create.body.key)
+        .post('/api/v1/api-keys')
+        .send({ name: 'Minted From Unscoped', project_id: projectB });
+
+      expect(res.status).toBe(201);
+      expect(res.body.project_id).toBe(projectB);
+    });
+  });
 });
