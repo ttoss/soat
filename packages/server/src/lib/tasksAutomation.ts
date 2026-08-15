@@ -180,6 +180,47 @@ const routeOnComplete = async (args: {
   });
 };
 
+/**
+ * Routes an already-committed dispatch outcome through `on_complete` /
+ * `on_failure`. The in-process path reaches this through `runStateAutomation`
+ * below; the reconciler (`tasksReconciliation`) calls it for a task whose
+ * awaiter died with its process, so a recovered outcome routes through exactly
+ * the same rules — including `surfaceUnrouted` when nothing matches — rather
+ * than a parallel implementation that could disagree about which rule wins.
+ */
+export const routeSettledDispatch = async (args: {
+  task: TaskWithWorkflow;
+  onEnter: OnEnter;
+  succeeded: boolean;
+  result: unknown;
+  orchestrationRunId: string | null;
+}): Promise<void> => {
+  const taskPublicId = args.task.publicId as string;
+  const projectId = args.task.projectId as number;
+
+  if (!args.succeeded) {
+    if (!args.onEnter.onFailure) return;
+    await transitionTask({
+      id: taskPublicId,
+      transition: args.onEnter.onFailure,
+      principal: { kind: 'automation', id: null },
+      generationId: null,
+      orchestrationRunId: args.orchestrationRunId,
+    });
+    return;
+  }
+
+  await routeOnComplete({
+    taskPublicId,
+    onEnter: args.onEnter,
+    context: buildTaskContext(args.task),
+    result: args.result,
+    projectId,
+    generationId: null,
+    orchestrationRunId: args.orchestrationRunId,
+  });
+};
+
 const handleFailure = async (args: {
   taskPublicId: string;
   stateName: string;

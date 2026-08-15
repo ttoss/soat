@@ -223,6 +223,50 @@ Entering a state cancels any dispatch still running from the state the task is
 leaving — including a genuinely in-flight orchestration run — because task state
 is the source of truth.
 
+#### Waiting, polling, and multi-step work
+
+`on_enter` dispatches **one** thing. When a state needs to wait a fixed
+duration, repeat a call until a condition holds, or run several steps, dispatch
+an **orchestration** and put the work in its graph — `delay`, `poll`, and the
+rest of the [node types](./orchestrations.md) are already there, and a task
+dispatch deliberately starts the run in durable mode so those waits are owned by
+the background scheduler rather than held open in a request:
+
+```json
+{
+  "name": "awaiting_settlement",
+  "on_enter": {
+    "dispatch": { "kind": "orchestration", "orchestration_id": "orc_..." },
+    "on_complete": [{ "when": true, "transition": "to_settled" }]
+  }
+}
+```
+
+The run parks as `sleeping` for the length of the wait and resumes on its own;
+the task sits in the state with `automation_status: running` until the run
+settles, then routes through `on_complete` / `on_failure` as usual. There is no
+`kind: delay` or `kind: poll` — a one-node orchestration is the supported way to
+express it.
+
+#### Recovery after a restart
+
+The run behind a dispatch is durable, but the wait for its outcome is not: it is
+held in the process that started it. If the server restarts while a dispatch is
+outstanding — most plausibly while an orchestration run is `sleeping` through a
+long `delay` or `poll` interval — the run still finishes on the scheduler, and a
+background reconciler routes the task when it does.
+
+The reconciler only considers a dispatch that has read `running` for longer than
+a grace window (`TASKS_DISPATCH_RECONCILE_GRACE_MS`, default `60000`), so a
+healthy in-process hand-off is never raced. The recovered outcome is
+indistinguishable from a live one: the same `on_complete` / `on_failure` rules
+fire, as the same `automation` principal, with the run recorded as the move's
+cause.
+
+Dispatches of `kind: agent` are not reconciled — a generation parked in
+`requires_action` awaiting client tool outputs is legitimately outstanding and
+must not be routed as if it had settled.
+
 ### Versioning
 
 A workflow's state machine is versioned by the same append-only archive that

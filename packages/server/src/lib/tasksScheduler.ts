@@ -5,6 +5,12 @@ import { db } from '../db';
 import { createScheduler, createSweep } from './scheduler';
 import { emitTaskEvent } from './taskEvents';
 import { mapTask, taskIncludes, type TaskInstance } from './tasks';
+import type { TaskWithWorkflow } from './tasksAutomationLocking';
+import {
+  claimOrphanedDispatch,
+  findStaleDispatches,
+  routeOrphanedDispatch,
+} from './tasksReconciliation';
 
 const log = createDebug('soat:tasks');
 
@@ -65,19 +71,55 @@ export const sweepStalledTasks = createSweep<TaskInstance>({
   },
 });
 
+/**
+ * Recovers tasks whose dispatch outcome nobody was left to hear. A task's
+ * dispatch is awaited in-process — `waitForOrchestrationRunSettlement`, reached
+ * from `dispatchOnEnter`'s detached promise — while the run it waits on is
+ * durable and scheduler-owned (#855). A restart while the run is `sleeping`
+ * (the state a `delay`/`poll` node parks in, for as long as its interval says)
+ * therefore loses the awaiter but not the run: the run finishes, and without
+ * this sweep nothing routes `on_complete`, stranding the task at
+ * `automation_status: 'running'` for good.
+ *
+ * Claiming is the same atomic, guarded write `commitCompletion` uses, so a live
+ * awaiter racing the sweep for the same task loses cleanly instead of routing
+ * it twice.
+ *
+ * Returns the number of tasks whose outcome was claimed this tick.
+ */
+export const reconcileOrphanedDispatches = createSweep<TaskWithWorkflow>({
+  log,
+  name: 'reconcileOrphanedDispatches',
+  inFlight: new Set<number>(),
+  findDue: ({ now, limit }) => {
+    return findStaleDispatches({ now, limit });
+  },
+  idOf: (task) => {
+    return task.id as number;
+  },
+  claim: ({ row: task }) => {
+    return claimOrphanedDispatch({ task });
+  },
+  handle: async ({ row: task }) => {
+    await routeOrphanedDispatch({ taskPublicId: task.publicId as string });
+    log('reconcileOrphanedDispatches: routed recovered task=%s', task.publicId);
+  },
+});
+
 const scheduler = createScheduler({
   log,
   defaultIntervalMs: 5000,
   envVar: 'TASKS_SCHEDULER_INTERVAL_MS',
-  sweeps: [sweepStalledTasks],
+  sweeps: [sweepStalledTasks, reconcileOrphanedDispatches],
 });
 
 /**
- * Starts the task stall sweeper loop. Called once from `server.ts` at startup;
- * unit tests drive {@link sweepStalledTasks} directly instead. The timer is
- * unref'd and repeated calls are a no-op.
+ * Starts the task sweeper loop — stall deadlines and orphaned dispatches.
+ * Called once from `server.ts` at startup; unit tests drive
+ * {@link sweepStalledTasks} and {@link reconcileOrphanedDispatches} directly
+ * instead. The timer is unref'd and repeated calls are a no-op.
  */
 export const startTasksScheduler = scheduler.start;
 
-/** Stops the task stall sweeper loop (graceful shutdown / test teardown). */
+/** Stops the task sweeper loop (graceful shutdown / test teardown). */
 export const stopTasksScheduler = scheduler.stop;
