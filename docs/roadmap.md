@@ -1,9 +1,9 @@
 # SOAT v1 Roadmap
 
-The single roadmap for shipping **SOAT v1**. It defines what must land before
-the v1 release candidate (RC), what ships in v1 point releases after the RC,
-and what is explicitly post-v1. Shipped functionality is not tracked here —
-live behavior is documented in the website module docs
+The single roadmap for shipping **SOAT v1**. It defines what ships in v1 point
+releases after the release candidate (RC) and what is explicitly post-v1. The
+RC blocker list is done — see the Decision record. Shipped functionality is not
+tracked here — live behavior is documented in the website module docs
 (`packages/website/docs/modules/`).
 
 > **This is the only roadmap.** Sequencing lives here, not in the PRDs
@@ -22,113 +22,16 @@ Only items that fail that test block the RC. Everything additive — new
 endpoints, new optional parameters, internal ranking or pipeline changes —
 ships after.
 
+**No open item fails that test.** The five RC blockers shipped in 2026-08 (see
+the Decision record); everything below is additive. Keep the test to hand for
+judging new proposals, not for the list that remains.
+
 ## Legend
 
 | Marker | Meaning |
 |--------|---------|
-| 🔴 | RC blocker — must land before the v1 RC is cut |
 | 🟠 | v1.x — ships in a point release after the RC |
 | ⏭️ | Post-v1 / deferred — gated on demand or on another initiative |
-
----
-
-## 🔴 RC blockers
-
-### RC-1 — Memory entry provenance (Memories Phase 5c)
-
-`sourceGenerationId` / `sourceConversationId` on `MemoryEntry`, populated by
-the `write_memory` tool and the extraction write path, exposed as
-`source_generation_id` / `source_conversation_id`.
-
-**Why it blocks:** provenance cannot be backfilled — every entry created by a
-v1 user before this lands is permanently unauditable
-([prd-memories.md 5c](./prd-memories.md#5c--provenance): "ships early on
-purpose"). Small change: two nullable FK columns plus mapper/spec/docs updates.
-
-Note for implementation: there are **four** writers, not two — the manual REST
-write and the orchestration memory-write node (`orchestrationNodeExecutors.ts`,
-`sourceType: 'orchestration'`) carry null provenance by design (no generation
-exists at either site). Name both explicitly in the tests so the null case is
-asserted, not just implied.
-
-### RC-2 — Temporal invalidation schema + API shape (Memories Phase 5b)
-
-`invalidatedAt` + `supersededByEntryId` columns on `MemoryEntry`; the
-`superseded` value in the write endpoint's `action` enum; the
-`include_invalidated` query parameter on entry listing; invalidated entries
-excluded from knowledge search, extraction dedup, and default listing.
-
-**Why it blocks:** the columns share RC-1's backfill problem (supersede history
-for the pre-v1 period is unrecoverable), and the API shape (`action` values,
-`include_invalidated`) belongs in the frozen v1 contract rather than being
-bolted on later. The **LLM arbitration that populates it (5a) does not block**
-— it is internal write behavior and ships as v1.x (see below).
-
-Note for implementation: until 5a lands, **no public API path sets
-`invalidatedAt`** — the `superseded` action value and `include_invalidated`
-parameter ship without a producer. The exclusion tests (knowledge search, dedup
-shortlist, default listing) therefore cannot set up state through the API; seed
-`invalidatedAt` via a direct model write in the test's `beforeAll`, justified
-inline as the sanctioned exception ("no API producer until 5a"). Do not pull 5a
-forward for the sake of the tests.
-
-### RC-3 — Pin knowledge search `score` semantics as implementation-defined
-
-Knowledge Phase 5 will introduce an RRF-fused relevance value and recalibrate
-`min_score` defaults; if v1 freezes only today's cosine-named fields, that
-later change either breaks `min_score` semantics or forces a second filter
-parameter.
-
-The shipped wire has **no `score` field**: results carry `similarity_score`
-(documented as cosine similarity, 0–1) and requests carry `min_score`
-(documented as a minimum similarity). An earlier version of this item said
-"docs-only, re-document `score`" — that field does not exist, so the item is a
-**minimal additive code change**, not docs-only.
-
-**Deliverable:**
-
-- Add `score` to both result variants in the OpenAPI spec and mappers — equal
-  to the cosine value today — documented as an implementation-defined relevance
-  ranking (higher is better, ordering is the contract, absolute values are
-  not). Regenerate SDK/CLI.
-- Keep `similarity_score` pinned as raw cosine similarity — its name asserts
-  cosine semantics, so it must never be redefined; Phase 5 keeps returning it
-  for debugging (the PRD's `similarity` field name aligns to `similarity_score`
-  — do not introduce a third name).
-- Re-document `min_score` as filtering on `score` under the
-  implementation-defined caveat, defaults recalibratable by Phase 5.
-
-### RC-4 — Knowledge injection threat model in the module docs
-
-Move the security rationale out of the code comment in `agentKnowledge.ts` and
-into the module docs: extraction runs tool-less, and retrieved memory content
-is untrusted input for downstream tool authorization. A v1 user must be able to
-read the platform's injection posture without reading source. (Second tail of
-Knowledge Phase 6; the enforcement itself shipped.)
-
-### RC-5 — Provenance detail in injected source tags
-
-`[Memory: …]` tags carry the entry ID and `[Document: …]` tags carry the page,
-not just the memory name and document path/filename. Grouped with the RC
-because the rendered `<knowledge>` block format is documented verbatim in the
-agents module doc — a v1 consumer may reasonably parse it, so changing the tag
-format later is friction that is trivial to avoid now. (First tail of Knowledge
-Phase 6.)
-
-### RC checklist
-
-- [x] RC-1 Memory entry provenance (5c) — #1025
-- [x] RC-2 Temporal invalidation schema + `superseded` / `include_invalidated` API shape (5b) — #1025
-- [x] RC-3 `score` documented as implementation-defined
-- [x] RC-4 Threat model in module docs
-- [x] RC-5 Entry-ID / page provenance in source tags — #1030
-
-**The RC list is complete** — nothing here blocks cutting the v1 RC. Everything
-below this line is additive and ships after it.
-
-Suggested order: RC-1 and RC-2 together (one migration, one spec/docs pass over
-the memories module), then RC-5, then RC-3 (small additive spec+code change)
-and RC-4 (docs-only) in one PR.
 
 ---
 
@@ -143,8 +46,8 @@ captured, while P7 makes passive memory exist at all for the dominant
 transport — a user who enables extraction and sees nothing captured concludes
 the feature is broken. P7 has no dependency on 5a; the trade-off (streaming
 traffic captured before 5a lands goes through the v1 merge path) is acceptable
-because RC-2's schema is already in place and 5a changes behavior, not stored
-data.
+because the invalidation schema is already in place and 5a changes behavior,
+not stored data.
 
 ### Memories
 
@@ -156,8 +59,8 @@ data.
 - [ ] **5a — LLM-arbitrated write decision.** Top-K shortlist +
       add/update/supersede/skip arbitration; v1 fallback semantics on LLM
       failure; consolidation for the manual REST write path. Internal write
-      behavior on top of the RC-2 schema — the `action` enum already includes
-      `superseded`, so no contract change.
+      behavior on top of the shipped invalidation schema — the `action` enum
+      already includes `superseded`, so no contract change.
 
 ### Knowledge
 
@@ -172,9 +75,10 @@ data.
       lookups?" stays unanswered by construction.
 - [ ] **Phase 5 — hybrid retrieval & ranking.** `tsvector` lexical + pgvector
       per source, RRF fusion (replaces the raw-score interleave), optional
-      rerank stage, recency blend. Additive parameters only; the `score`
-      semantics change is pre-authorized by RC-3. Must land with before/after
-      Phase 7 golden-set numbers and no recall@10 regression.
+      rerank stage, recency blend. Additive parameters only; `score` already
+      ships as an implementation-defined ranking, so refilling it with a fused
+      value is not a contract change. Must land with before/after Phase 7
+      golden-set numbers and no recall@10 regression.
 
 ### G5 — usage metering refinement
 
@@ -219,8 +123,9 @@ pending initiative that ships public API surface with unproven payoff, i.e. the
 only real deprecation exposure on the roadmap. The go/no-go must rest on
 measured retrieval gaps, not on the design being finished.
 
-Technical dependencies (unchanged): RC-2/5a (supersede must invalidate edges)
-and Knowledge Phase 7 (the evidence gate's measurement) landing first.
+Technical dependencies (unchanged): memories 5a (supersede must invalidate
+edges; the schema it populates already ships) and Knowledge Phase 7 (the
+evidence gate's measurement) landing first.
 
 ### Memories Phase 8 — forgetting
 
@@ -255,20 +160,14 @@ sketch — requirements to be written before implementation.
 ## Dependency graph (pending nodes only)
 
 ```
-RC ─────────────────────────────────────────────────────────────
-  RC-1 provenance ┐
-  RC-2 invalidation schema ┴─► one memories migration/spec pass
-  RC-3 score semantics (docs)      RC-4 threat model (docs)
-  RC-5 source-tag provenance
-
 v1.x ───────────────────────────────────────────────────────────
   memories P7 (streaming extraction) — first
   knowledge P7 (eval harness) ──► knowledge P5 (ranking; needs the gate)
-  memories 5a (arbitration)  ◄── RC-2 (schema it populates)
+  memories 5a (arbitration)  ◄── invalidation schema ✔ shipped
 
 post-v1 ────────────────────────────────────────────────────────
   memories P6 (entity data) ◄──► knowledge P3 (entity queries)
-      ▲ needs 5a/RC-2 (supersede invalidates edges)
+      ▲ needs 5a (supersede invalidates edges)
       ⏭️ gates: hybrid-retrieval gap on P7 golden set (open) + demand (open)
   memories P8 (forgetting) ──► knowledge P5 recency/importance blend
   memories P9 (profile) — sketch
@@ -294,6 +193,14 @@ this file:
   retention flag only on observed demand.
 - **Activity vs audit split (2026-07)** — `ActivityEntry` owns agent/run
   telemetry; `AuditEntry` stays compliance-grade authorization events.
+- **v1 RC blockers complete (2026-08)** — memory entry provenance, temporal
+  invalidation schema + `include_invalidated` / `superseded` API shape,
+  `score` as an implementation-defined ranking beside the cosine-pinned
+  `similarity_score`, the knowledge injection threat model in the module docs,
+  and entry-id / page detail in the injected source tags all shipped (#1025,
+  #1030, #1032). Nothing blocks cutting the RC. Live behavior is documented in
+  the memories, knowledge and agents module docs; the blocker list itself is
+  recoverable from this file's git history.
 - **Entity graph demand-gated (2026-08)** — builds only on measured
   hybrid-retrieval gaps (Knowledge P7 golden set, structural queries) plus
   observed user demand; actor-scoped filtering on existing metadata is the
