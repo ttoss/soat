@@ -149,4 +149,31 @@ describe('command boundaries and quoting', () => {
     assert.match(output, /after-double/);
     assert.doesNotMatch(output, /unexpected EOF/);
   });
+
+  test('an apostrophe followed by a multi-line filter keeps both intact', async () => {
+    // The two shapes above, interleaved — which is what `memories-agent.md`
+    // actually contained when #1046 fired. Neither alone reproduces it: the
+    // apostrophe leaves the old counter odd, and the *opening* quote of the
+    // following two-line filter brings it back to even, so the runner flushed
+    // a blob whose single quote was still open and bash reported
+    // `unexpected EOF` from a command several steps earlier.
+    const file = await writeTutorial(
+      'apostrophe-then-multiline',
+      [
+        'echo "Alice\'s renewal"',
+        "echo '[.data[] | select(.source_type == \"agent\")",
+        "       | {content, source_type}]'",
+        'echo after-filter',
+      ].join('\n')
+    );
+
+    const { code, output } = await runTutorial(file);
+
+    assert.equal(code, 0, output);
+    assert.doesNotMatch(output, /unexpected EOF/);
+    assert.match(output, /source_type/);
+    assert.match(output, /after-filter/);
+    // Three commands: the apostrophe echo, the two-line filter, the last echo.
+    assert.equal(steps(output).length, 3, output);
+  });
 });
