@@ -61,8 +61,9 @@ soat get-generation-transcript --generation_id gen_abc
 
 A transcript is scoped to one **turn**, which is why it is anchored on the generation
 rather than here: a trace can hold several generations, and `status`, `stop_reason` and
-`agent_version` are generation fields. See
-[Generations → Transcript](./generations.md#transcript).
+`agent_version` are generation fields. A transcript reads back only the steps of its own
+generation's segment, so grouping several turns under one `trace_id` does not blur them
+together. See [Generations → Transcript](./generations.md#transcript).
 
 ### Grouping Generations Under One Trace
 

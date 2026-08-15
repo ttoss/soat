@@ -3389,9 +3389,11 @@ if [ -n "$CLIENT_TRACE_ID" ] && [ "$CLIENT_TRACE_ID" != "null" ]; then
   fi
   echo "Trace grouping: OK (step_count $TRACE_STEPS_BEFORE -> $TRACE_STEPS_AFTER over $GROUPED_GENS_COUNT generations)"
 
-  # A transcript stays scoped to its own turn once the trace holds two of them:
-  # the first generation's transcript must not grow by the second's steps, and
-  # the second must read back only its own.
+  # A transcript stays scoped to its own turn once the trace holds two of them.
+  # The steps object now holds both turns concatenated, so a transcript that read
+  # the whole object would report the other generation's steps as part of this
+  # one: the first generation's must not grow, and the second must read back only
+  # its own segment.
   REGROUPED_TRANSCRIPT_STEPS=$($SOAT_CLI get-generation-transcript --generation-id "$FIRST_GENERATION_ID" | sanitize_json | jq -r '.steps | length')
   GROUPED_TRANSCRIPT_STEPS=$($SOAT_CLI get-generation-transcript --generation-id "$GROUPED_GEN_ID" | sanitize_json | jq -r '.steps | length')
   if [ "$REGROUPED_TRANSCRIPT_STEPS" != "$TRANSCRIPT_STEPS" ]; then
