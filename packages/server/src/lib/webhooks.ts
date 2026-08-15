@@ -183,6 +183,7 @@ const mapWebhookDelivery = (
     status_code: delivery.statusCode,
     attempts: delivery.attempts,
     last_attempt_at: delivery.lastAttemptAt,
+    next_attempt_at: delivery.nextAttemptAt,
     response_body: delivery.responseBody,
     created_at: delivery.createdAt,
     updated_at: delivery.updatedAt,
@@ -218,4 +219,40 @@ export const getWebhookDelivery = async (args: { id: string }) => {
   });
   if (!delivery) return null;
   return mapWebhookDelivery(delivery);
+};
+
+/**
+ * Queues the stored payload of an existing delivery for another send.
+ *
+ * It writes a **new** row rather than resetting the original: the original is
+ * the record of what happened, and a subscriber auditing why a delivery failed
+ * would lose that history if a redelivery overwrote it.
+ *
+ * The row is left unleased and due immediately, so the outbox sweep claims it
+ * on its next tick — the same path every other delivery takes. Nothing is sent
+ * from the request's own process, which is what keeps this a `202` with a
+ * pollable handle rather than a call that blocks on a subscriber's endpoint.
+ */
+export const redeliverWebhookDelivery = async (args: { id: string }) => {
+  const original = await db.WebhookDelivery.findOne({
+    where: { publicId: args.id },
+  });
+  if (!original) return null;
+
+  const delivery = await db.WebhookDelivery.create({
+    webhookId: original.webhookId,
+    eventType: original.eventType,
+    payload: original.payload,
+    status: 'pending',
+    attempts: 0,
+    nextAttemptAt: new Date(),
+    leaseExpiresAt: null,
+  });
+
+  const reloaded = await db.WebhookDelivery.findOne({
+    where: { id: delivery.id as number },
+    include: [{ model: db.Webhook, as: 'webhook' }],
+  });
+
+  return mapWebhookDelivery(reloaded!);
 };

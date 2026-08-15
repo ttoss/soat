@@ -18,6 +18,12 @@ import { Webhook } from './Webhook';
       unique: true,
       fields: ['public_id'],
     },
+    // Drives the outbox sweep's due query, which is the one statement that runs
+    // on every scheduler tick for the lifetime of the process.
+    {
+      name: 'webhook_deliveries_status_next_attempt_at_idx',
+      fields: ['status', 'next_attempt_at'],
+    },
   ],
   hooks: {
     beforeValidate: (instance: WebhookDelivery) => {
@@ -93,6 +99,33 @@ export class WebhookDelivery extends Model {
     allowNull: true,
   })
   declare responseBody: string | null;
+
+  /**
+   * When this delivery becomes eligible for its next attempt. Set at insert
+   * time (before the first HTTP call) and pushed out by the backoff after each
+   * failure, so a `pending` row always carries its own due time rather than
+   * depending on a retry loop living in some process's memory.
+   *
+   * Nullable only for rows written before the outbox existed; the sweep treats
+   * `null` as "due now" so a deploy recovers deliveries a restart had stranded.
+   */
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  declare nextAttemptAt: Date | null;
+
+  /**
+   * Set while a process is attempting this delivery, and cleared when it
+   * schedules the next attempt. A crash leaves the lease behind; the sweep
+   * reclaims the row once it expires, which is what makes an interrupted
+   * delivery resume instead of being stranded in `pending` forever.
+   */
+  @Column({
+    type: DataType.DATE,
+    allowNull: true,
+  })
+  declare leaseExpiresAt: Date | null;
 
   @Column({ type: DataType.DATE })
   declare createdAt: Date;

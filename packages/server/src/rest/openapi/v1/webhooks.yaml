@@ -247,6 +247,39 @@ paths:
         '404':
           description: Delivery not found
 
+  /api/v1/webhook-deliveries/{delivery_id}/redeliver:
+    post:
+      description: |
+        Queues the stored payload of an existing delivery to be sent again.
+
+        A new delivery record is created rather than the original being reset,
+        so the original attempt stays in the history. The send happens in the
+        background: poll the returned delivery to observe its outcome.
+      tags:
+        - Webhooks
+      summary: Redeliver a webhook delivery
+      operationId: redeliverWebhookDelivery
+      parameters:
+        - name: delivery_id
+          in: path
+          required: true
+          description: Delivery to send again (wh_deliv_...)
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Redelivery queued; poll the returned delivery for its outcome
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Delivery'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Delivery not found
+
   /api/v1/webhooks/{webhook_id}/secret:
     get:
       description: Retrieves the signing secret for the specified webhook
@@ -427,6 +460,14 @@ components:
           type: string
           format: date-time
           nullable: true
+        next_attempt_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            When the delivery becomes eligible for its next attempt. Set while
+            the delivery is pending and a retry is still owed; null once it has
+            succeeded or exhausted its attempts.
         response_body:
           type: string
           nullable: true
