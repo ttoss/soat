@@ -23,6 +23,7 @@ Agents can retrieve relevant entries automatically via `knowledge_config` and wr
 - [Agent with Persistent Memory - Step 5 (Write memory entries)](/docs/tutorials/memories-agent#step-5--write-memory-entries)
 - [Agent with Persistent Memory - Step 10 (Observe the agent writing to memory)](/docs/tutorials/memories-agent#step-10--observe-the-agent-writing-to-memory)
 - [Agent with Persistent Memory - Step 11 (Enable automatic extraction)](/docs/tutorials/memories-agent#step-11--enable-automatic-extraction)
+- [Agent with Persistent Memory - Step 13 (Trace a fact back to the turn that produced it)](/docs/tutorials/memories-agent#step-13--trace-a-fact-back-to-the-turn-that-produced-it)
 
 ## Data Model
 
@@ -132,6 +133,8 @@ fact supersedes it with a new entry, which carries its own provenance.
 
 Both fields are `null` when the referenced generation or conversation is deleted — removing
 a conversation never deletes the facts learned from it.
+
+See it end to end in [Agent with Persistent Memory - Step 13 (Trace a fact back to the turn that produced it)](/docs/tutorials/memories-agent#step-13--trace-a-fact-back-to-the-turn-that-produced-it).
 
 ### Temporal invalidation
 
