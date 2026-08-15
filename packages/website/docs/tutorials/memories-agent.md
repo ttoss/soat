@@ -450,11 +450,11 @@ soat list-memory-entries --memory-id "$MEMORY_ID" | jq '[.data[] | .content]'
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: entries } = await MemoryEntries.listMemoryEntries({
+const { data: page } = await MemoryEntries.listMemoryEntries({
   client: authClient,
   query: { memory_id: MEMORY_ID },
 });
-console.log(entries.map((e) => e.content));
+console.log(page.data.map((e) => e.content));
 ```
 
 </TabItem>
@@ -462,7 +462,7 @@ console.log(entries.map((e) => e.content));
 
 ```bash
 curl -s "$SOAT_URL/api/v1/memory-entries?memory_id=$MEMORY_ID" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '[.[] | .content]'
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '[.data[] | .content]'
 ```
 
 </TabItem>
@@ -689,26 +689,27 @@ curl -s -X POST "$SOAT_URL/api/v1/agents/$AGENT_ID/generate?wait=true" \
 </TabItem>
 </Tabs>
 
-After the generation completes, list the memory entries and look for any with `source == "agent"`:
+After the generation completes, list the memory entries and look for any with `source_type == "agent"`. Entries written during a generation also carry [provenance](/docs/modules/memories#provenance) — the id of the turn that produced them:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
 soat list-memory-entries --memory-id "$MEMORY_ID" \
-  | jq '[.[] | select(.source == "agent") | {content: .content, source: .source}]'
+  | jq '[.data[] | select(.source_type == "agent")
+         | {content, source_type, source_generation_id}]'
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: entries } = await MemoryEntries.listMemoryEntries({
+const { data: page } = await MemoryEntries.listMemoryEntries({
   client: authClient,
   query: { memory_id: MEMORY_ID },
 });
-const agentEntries = entries.filter((e) => e.source === 'agent');
-console.log(agentEntries.map((e) => e.content));
+const agentEntries = page.data.filter((e) => e.source_type === 'agent');
+console.log(agentEntries.map((e) => [e.content, e.source_generation_id]));
 ```
 
 </TabItem>
@@ -717,13 +718,14 @@ console.log(agentEntries.map((e) => e.content));
 ```bash
 curl -s "$SOAT_URL/api/v1/memory-entries?memory_id=$MEMORY_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
-  | jq '[.[] | select(.source == "agent") | {content: .content, source: .source}]'
+  | jq '[.data[] | select(.source_type == "agent")
+         | {content, source_type, source_generation_id}]'
 ```
 
 </TabItem>
 </Tabs>
 
-If the model called `write_memory`, you will see an entry with `"source": "agent"` containing the timezone fact.
+If the model called `write_memory`, you will see an entry with `"source_type": "agent"` containing the timezone fact, and a `source_generation_id` pointing at the generation that wrote it. If the list comes back empty the model simply chose not to call the tool this turn — Step 11 removes that dependency.
 
 ---
 
@@ -791,7 +793,8 @@ Extraction runs asynchronously after the generation response returns — give it
 ```bash
 sleep 5
 soat list-memory-entries --memory-id "$MEMORY_ID" \
-  | jq '[.[] | select(.source == "extraction") | {content: .content, source: .source}]'
+  | jq '[.data[] | select(.source_type == "extraction")
+         | {content, source_type, source_generation_id}]'
 ```
 
 </TabItem>
@@ -814,11 +817,11 @@ await adminSoat.agents.createAgentGeneration({
 // Extraction runs asynchronously after the generation response returns.
 await new Promise((resolve) => setTimeout(resolve, 5000));
 
-const { data: entries } = await MemoryEntries.listMemoryEntries({
+const { data: page } = await MemoryEntries.listMemoryEntries({
   client: authClient,
   query: { memory_id: MEMORY_ID },
 });
-const extracted = entries.filter((e) => e.source === 'extraction');
+const extracted = page.data.filter((e) => e.source_type === 'extraction');
 console.log(extracted.map((e) => e.content));
 ```
 
@@ -835,13 +838,14 @@ curl -s -X POST "$SOAT_URL/api/v1/agents/$AGENT_ID/generate?wait=true" \
 sleep 5
 curl -s "$SOAT_URL/api/v1/memory-entries?memory_id=$MEMORY_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
-  | jq '[.[] | select(.source == "extraction") | {content: .content, source: .source}]'
+  | jq '[.data[] | select(.source_type == "extraction")
+         | {content, source_type, source_generation_id}]'
 ```
 
 </TabItem>
 </Tabs>
 
-You should see an entry like `"Alice signed a 2-year contract renewal"` with `"source": "extraction"` — captured without the model choosing to call a tool. The extraction summary is recorded on the generation's `extraction` field ([Generations](/docs/modules/generations)).
+You should see an entry like `"Alice signed a 2-year contract renewal"` with `"source_type": "extraction"` — captured without the model choosing to call a tool. The extraction summary is recorded on the generation's `extraction` field ([Generations](/docs/modules/generations)).
 
 ---
 
@@ -858,18 +862,24 @@ soat search-knowledge \
   --query "P1 outage response and how to reach Alice" \
   --memory-ids '["'"$MEMORY_ID"'"]' \
   --document-paths '["/alice/"]' \
-  | jq '.results[] | {similarity_score: .similarity_score, source_type: .source_type, content: .content}'
+  | jq '.results[] | {score, similarity_score, source_type, content}'
 ```
 
 Expected output — note the two different `source_type` values:
 
 ```json
-{ "similarity_score": 0.69, "source_type": "document", "content": "Alice Corp Support Policy: All priority-1 incidents must receive an initial response within 2 hours ..." }
-{ "similarity_score": 0.62, "source_type": "memory", "content": "Alice prefers email, especially for billing inquiries; she checks it twice a day" }
-{ "similarity_score": 0.50, "source_type": "memory", "content": "Alice's fiscal year ends in March; she starts renewal discussions in January" }
+{ "score": 0.69, "similarity_score": 0.69, "source_type": "document", "content": "Alice Corp Support Policy: All priority-1 incidents must receive an initial response within 2 hours ..." }
+{ "score": 0.62, "similarity_score": 0.62, "source_type": "memory", "content": "Alice prefers email, especially for billing inquiries; she checks it twice a day" }
+{ "score": 0.50, "similarity_score": 0.50, "source_type": "memory", "content": "Alice's fiscal year ends in March; she starts renewal discussions in January" }
 ```
 
-Each result's `similarity_score` (cosine similarity) helps tune `min_score` and `limit` on `knowledge_config`.
+Two scores come back, and they are different contracts — see
+[Relevance scoring](/docs/modules/knowledge#relevance-scoring):
+
+- **`score`** is the relevance ranking. Results are ordered by it and `min_score` filters on it. It is *implementation-defined*: the ordering is the contract, the number is not. Tune `min_score` against it for this deployment, and re-tune after an upgrade rather than treating a value as portable.
+- **`similarity_score`** is the raw cosine similarity, pinned to that meaning. Read it when you need a stable number to compare or log.
+
+They are equal here because the ranking is currently single-signal.
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
@@ -890,7 +900,7 @@ const res = await fetch('http://localhost:5047/api/v1/knowledge/search', {
 });
 
 const { results } = await res.json();
-results.forEach((r) => console.log(r.similarity_score, r.source_type, r.content));
+results.forEach((r) => console.log(r.score, r.similarity_score, r.source_type, r.content));
 ```
 
 </TabItem>
@@ -901,7 +911,7 @@ curl -s -X POST "$SOAT_URL/api/v1/knowledge/search" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"query\":\"P1 outage response and how to reach Alice\",\"memory_ids\":[\"$MEMORY_ID\"],\"document_paths\":[\"/alice/\"]}" \
-  | jq '.results[] | {similarity_score: .similarity_score, source_type: .source_type, content: .content}'
+  | jq '.results[] | {score, similarity_score, source_type, content}'
 ```
 
 </TabItem>
@@ -909,7 +919,89 @@ curl -s -X POST "$SOAT_URL/api/v1/knowledge/search" \
 
 ---
 
+## Step 13 — Trace a fact back to the turn that produced it
+
+Retrieved memory shapes what the agent says, so "why does it believe this?" has to be answerable. Every entry written **during a generation** records [provenance](/docs/modules/memories#provenance): the generation, and the conversation when the turn came from one.
+
+Manual writes have no turn behind them, so the contrast is visible in one listing — the four entries from Step 5 carry `null`, while anything the `write_memory` tool or extraction wrote carries an id:
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat list-memory-entries --memory-id "$MEMORY_ID" \
+  | jq '[.data[] | {source_type, source_generation_id, source_conversation_id}]'
+```
+
+```json
+[
+  { "source_type": "manual", "source_generation_id": null, "source_conversation_id": null },
+  { "source_type": "manual", "source_generation_id": null, "source_conversation_id": null },
+  { "source_type": "extraction", "source_generation_id": "gen_0dR2mJk8xQ1vTbLp", "source_conversation_id": null }
+]
+```
+
+`source_conversation_id` is `null` above because this tutorial drives the agent with `create-agent-generation`, which has no conversation. Drive the same agent through [Conversations](/docs/modules/conversations) and extraction records both.
+
+Follow a provenance id to the generation itself:
+
+```bash
+GEN_ID=$(soat list-memory-entries --memory-id "$MEMORY_ID" \
+  | jq -r '[.data[] | select(.source_generation_id != null)][0].source_generation_id // empty')
+
+# → ignore
+soat get-generation --generation-id "$GEN_ID" | jq '{id, status, extraction}'
+```
+
+The second command is annotated `ignore` because it only has an id to look up if the model actually wrote to memory on this run — the point it demonstrates does not survive being made mandatory. See [Generations](/docs/modules/generations) for the full record, including the `extraction` summary of what that turn contributed.
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: page } = await MemoryEntries.listMemoryEntries({
+  client: authClient,
+  query: { memory_id: MEMORY_ID },
+});
+
+page.data.forEach((e) =>
+  console.log(e.source_type, e.source_generation_id, e.source_conversation_id)
+);
+
+const traced = page.data.find((e) => e.source_generation_id);
+if (traced) {
+  const { data: generation } = await adminSoat.generations.getGeneration({
+    path: { generation_id: traced.source_generation_id },
+  });
+  console.log(generation.id, generation.status);
+}
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -s "$SOAT_URL/api/v1/memory-entries?memory_id=$MEMORY_ID" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  | jq '[.data[] | {source_type, source_generation_id, source_conversation_id}]'
+
+GEN_ID=$(curl -s "$SOAT_URL/api/v1/memory-entries?memory_id=$MEMORY_ID" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  | jq -r '[.data[] | select(.source_generation_id != null)][0].source_generation_id // empty')
+
+curl -s "$SOAT_URL/api/v1/generations/$GEN_ID" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{id, status, extraction}'
+```
+
+</TabItem>
+</Tabs>
+
+Provenance is recorded when the entry is **created** and is never rewritten by a later merge — it names the turn that first asserted the fact. A fact that is later contradicted is retired rather than edited, which keeps the original entry (and its provenance) readable for audit; pass `--include-invalidated true` to `list-memory-entries` to see retired entries alongside live ones. See [Temporal invalidation](/docs/modules/memories#temporal-invalidation).
+
+---
+
 ## What's next
 
 - **Tag-based filtering** — separate memories per customer and `memory_tags` on the agent scope retrieval per customer.
 - **Adjust dedup thresholds** — tune `update_threshold` / `duplicate_threshold`; see [Memories](/docs/modules/memories#write-algorithm).
+- **Audit what an agent was told** — pair the provenance ids from Step 13 with the injected `<knowledge>` block documented in [Agents — Knowledge Config](/docs/modules/agents#knowledge-config), whose source tags name the exact entry and document page behind each retrieved line.
