@@ -1,3 +1,6 @@
+import http from 'node:http';
+import type { AddressInfo } from 'node:net';
+
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 import { expireDueApprovals } from 'src/lib/approvalScheduler';
@@ -103,6 +106,8 @@ describe('Tasks', () => {
         'orchestrations:CreateOrchestration',
         'orchestrations:GetRun',
         'orchestrations:StartRun',
+        'tools:CreateTool',
+        'guardrails:CreateGuardrail',
       ],
       createNoPermUser: true,
     });
@@ -2694,6 +2699,379 @@ describe('Tasks', () => {
         expect(spy).toHaveBeenCalledTimes(1);
       } finally {
         spy.mockRestore();
+      }
+    });
+  });
+
+  describe('on_enter tool dispatch (#1039)', () => {
+    // A local HTTP server standing in for the tool's target: the only thing
+    // mocked is the network hop SOAT does not own. Every layer under test —
+    // validation, the wire mapping, the guardrail gate, the tool executor —
+    // runs for real.
+    let toolServer: http.Server;
+    let toolServerUrl: string;
+    let calls: Array<{ body: unknown; path: string }>;
+    let failNext: boolean;
+
+    const createHttpTool = async (name: string): Promise<string> => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: `${name}-${Math.random().toString(36).slice(2)}`,
+          type: 'http',
+          execute: { url: `${toolServerUrl}/do`, method: 'POST' },
+        });
+      expect(res.status).toBe(201);
+      return res.body.id as string;
+    };
+
+    const toolWorkflow = async (args: {
+      name: string;
+      dispatch: object;
+      onComplete?: object[];
+      onFailure?: string;
+    }) => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/workflows')
+        .send({
+          project_id: projectId,
+          name: `${args.name}-${Math.random().toString(36).slice(2)}`,
+          states: [
+            {
+              name: 'calling',
+              initial: true,
+              on_enter: {
+                dispatch: args.dispatch,
+                on_complete: args.onComplete ?? [],
+                ...(args.onFailure ? { on_failure: args.onFailure } : {}),
+              },
+            },
+            { name: 'done', terminal: true },
+            { name: 'failed', terminal: true },
+          ],
+          transitions: [
+            { name: 'to_done', from: ['calling'], to: 'done' },
+            { name: 'to_failed', from: ['calling'], to: 'failed' },
+          ],
+        });
+      expect(res.status).toBe(201);
+      return res.body.id as string;
+    };
+
+    const startToolTask = async (workflowId: string, payload: object) => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/tasks')
+        .send({
+          project_id: projectId,
+          workflow_id: workflowId,
+          title: 'tool card',
+          payload,
+        });
+      expect(res.status).toBe(201);
+      return res.body.id as string;
+    };
+
+    beforeAll(async () => {
+      calls = [];
+      failNext = false;
+      toolServer = http.createServer((req, res) => {
+        let raw = '';
+        req.on('data', (chunk) => {
+          raw += chunk;
+        });
+        req.on('end', () => {
+          calls.push({
+            body: raw ? JSON.parse(raw) : null,
+            path: req.url ?? '',
+          });
+          if (failNext) {
+            res.statusCode = 500;
+            res.end('boom');
+            return;
+          }
+          res.setHeader('Content-Type', 'application/json');
+          res.end(
+            JSON.stringify({ ok: true, echoed: raw ? JSON.parse(raw) : null })
+          );
+        });
+      });
+      await new Promise<void>((resolve) => {
+        toolServer.listen(0, '127.0.0.1', resolve);
+      });
+      const { port } = toolServer.address() as AddressInfo;
+      toolServerUrl = `http://127.0.0.1:${port}`;
+    });
+
+    afterAll(async () => {
+      await new Promise<void>((resolve) => {
+        toolServer.close(() => {
+          resolve();
+        });
+      });
+    });
+
+    beforeEach(() => {
+      calls = [];
+      failNext = false;
+    });
+
+    test('calls the tool with input_mapping-resolved arguments and routes on_complete', async () => {
+      const toolId = await createHttpTool('echo');
+      const wf = await toolWorkflow({
+        name: 'tool-happy',
+        dispatch: {
+          kind: 'tool',
+          tool_id: toolId,
+          input_mapping: { topic: { var: 'task.payload.topic' } },
+        },
+        onComplete: [{ when: true, transition: 'to_done' }],
+      });
+
+      const taskId = await startToolTask(wf, { topic: 'winter' });
+
+      const settled = await pollTask({
+        token: userToken,
+        taskId,
+        predicate: (t) => {
+          return t.state === 'done';
+        },
+      });
+      expect(settled.status).toBe('closed');
+
+      // The mapping was resolved against the task context exactly once — the
+      // arguments reaching the tool are the mapped ones, not the raw payload
+      // and not a double-resolved copy.
+      expect(calls).toHaveLength(1);
+      expect(calls[0].body).toEqual({ topic: 'winter' });
+
+      // The tool's own return value is what `on_complete` and `last_result` see.
+      expect(settled.last_result).toMatchObject({ ok: true });
+
+      // Every automation move must record a machine-readable cause (#792). A
+      // tool call produces no generation and no run, so the tool is the cause —
+      // without this the move would be rejected outright, not merely untraced.
+      const history = (
+        await authenticatedTestClient(userToken).get(
+          `/api/v1/tasks/${taskId}/history`
+        )
+      ).body;
+      const routed = history.find((h: { transition: string | null }) => {
+        return h.transition === 'to_done';
+      });
+      expect(routed.principal_kind).toBe('automation');
+      expect(routed.tool_id).toBe(toolId);
+      expect(routed.generation_id).toBeNull();
+      expect(routed.orchestration_run_id).toBeNull();
+    });
+
+    test('exposes the tool result to on_complete rules, and records a tool_call dispatch with no id', async () => {
+      const toolId = await createHttpTool('echo');
+      const wf = await toolWorkflow({
+        name: 'tool-result',
+        dispatch: { kind: 'tool', tool_id: toolId, input_mapping: {} },
+        // Deliberately unsatisfiable: the task stays put with its dispatch
+        // provenance intact, which is the only way to observe `active_dispatch`
+        // after a dispatch settles (a routed move clears it).
+        onComplete: [
+          {
+            when: { '==': [{ var: 'result.ok' }, false] },
+            transition: 'to_done',
+          },
+        ],
+      });
+
+      const taskId = await startToolTask(wf, {});
+
+      const parked = await pollTask({
+        token: userToken,
+        taskId,
+        predicate: (t) => {
+          return t.automation_status === 'completed';
+        },
+      });
+      expect(parked.state).toBe('calling');
+      // A tool call leaves no addressable record, so the id is null — unlike a
+      // generation or a run, there is nothing to point at.
+      expect(parked.active_dispatch).toEqual({
+        kind: 'tool_call',
+        id: null,
+        status: 'completed',
+      });
+      expect(parked.last_result).toMatchObject({ ok: true });
+    });
+
+    test('a rule reading the tool result routes on it', async () => {
+      const toolId = await createHttpTool('echo');
+      const wf = await toolWorkflow({
+        name: 'tool-routed',
+        dispatch: { kind: 'tool', tool_id: toolId, input_mapping: {} },
+        onComplete: [
+          {
+            when: { '==': [{ var: 'result.ok' }, true] },
+            transition: 'to_done',
+          },
+        ],
+      });
+
+      const taskId = await startToolTask(wf, {});
+      const settled = await pollTask({
+        token: userToken,
+        taskId,
+        predicate: (t) => {
+          return t.state === 'done';
+        },
+      });
+      expect(settled.status).toBe('closed');
+    });
+
+    test('a failing tool call fails the dispatch and follows on_failure', async () => {
+      failNext = true;
+      const toolId = await createHttpTool('boom');
+      const wf = await toolWorkflow({
+        name: 'tool-failure',
+        dispatch: { kind: 'tool', tool_id: toolId, input_mapping: {} },
+        // A catch-all on_complete must not fire for a failed tool call.
+        onComplete: [{ when: true, transition: 'to_done' }],
+        onFailure: 'to_failed',
+      });
+
+      const taskId = await startToolTask(wf, {});
+      const settled = await pollTask({
+        token: userToken,
+        taskId,
+        predicate: (t) => {
+          return t.state === 'failed';
+        },
+      });
+      expect(settled.status).toBe('closed');
+      expect(settled.state).not.toBe('done');
+    });
+
+    test('a guardrail-blocked call fails the dispatch instead of routing on_complete', async () => {
+      // The guardrail gate is the same one an orchestration `tool` node passes
+      // through — a workflow dispatch is not a way around it. In a graph a
+      // blocked call is a routable outcome an edge can branch on; a task
+      // dispatch has nowhere to put that, so it is a dispatch failure, which
+      // `on_failure` can route and a catch-all `on_complete` must not swallow.
+      const guardrailId = (
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/guardrails')
+          .send({
+            project_id: projectId,
+            name: `block-all-${Math.random().toString(36).slice(2)}`,
+            document: { class: 'D' },
+          })
+      ).body.id;
+
+      const toolId = (
+        await authenticatedTestClient(adminToken)
+          .post('/api/v1/tools')
+          .send({
+            project_id: projectId,
+            name: `guarded-${Math.random().toString(36).slice(2)}`,
+            type: 'http',
+            execute: { url: `${toolServerUrl}/do`, method: 'POST' },
+            guardrail_ids: [guardrailId],
+          })
+      ).body.id;
+
+      const wf = await toolWorkflow({
+        name: 'tool-blocked',
+        dispatch: { kind: 'tool', tool_id: toolId, input_mapping: {} },
+        onComplete: [{ when: true, transition: 'to_done' }],
+        onFailure: 'to_failed',
+      });
+
+      const taskId = await startToolTask(wf, {});
+      const settled = await pollTask({
+        token: userToken,
+        taskId,
+        predicate: (t) => {
+          return t.state === 'failed';
+        },
+      });
+      expect(settled.status).toBe('closed');
+      // The tool's target was never reached — the call was stopped before it ran.
+      expect(calls).toHaveLength(0);
+    });
+
+    test('payload_writes and retry apply to a tool dispatch like any other kind', async () => {
+      let attempts = 0;
+      const flaky = http.createServer((req, res) => {
+        attempts += 1;
+        req.resume();
+        req.on('end', () => {
+          if (attempts === 1) {
+            res.statusCode = 500;
+            res.end('transient');
+            return;
+          }
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ ok: true }));
+        });
+      });
+      await new Promise<void>((resolve) => {
+        flaky.listen(0, '127.0.0.1', resolve);
+      });
+      const { port } = flaky.address() as AddressInfo;
+
+      try {
+        const toolId = (
+          await authenticatedTestClient(adminToken)
+            .post('/api/v1/tools')
+            .send({
+              project_id: projectId,
+              name: `flaky-${Math.random().toString(36).slice(2)}`,
+              type: 'http',
+              execute: { url: `http://127.0.0.1:${port}/do`, method: 'POST' },
+            })
+        ).body.id as string;
+
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/workflows')
+          .send({
+            project_id: projectId,
+            name: `tool-retry-${Math.random().toString(36).slice(2)}`,
+            states: [
+              {
+                name: 'calling',
+                initial: true,
+                on_enter: {
+                  dispatch: {
+                    kind: 'tool',
+                    tool_id: toolId,
+                    input_mapping: {},
+                    payload_writes: { called: true },
+                  },
+                  retry: { max_attempts: 2 },
+                  on_complete: [{ when: true, transition: 'to_done' }],
+                },
+              },
+              { name: 'done', terminal: true },
+            ],
+            transitions: [{ name: 'to_done', from: ['calling'], to: 'done' }],
+          });
+        expect(res.status).toBe(201);
+
+        const taskId = await startToolTask(res.body.id as string, {});
+        const settled = await pollTask({
+          token: userToken,
+          taskId,
+          predicate: (t) => {
+            return t.state === 'done';
+          },
+        });
+        // The first attempt failed and the second succeeded — retry wraps a
+        // tool dispatch with no per-kind plumbing.
+        expect(attempts).toBe(2);
+        expect(settled.payload).toEqual({ called: true });
+      } finally {
+        await new Promise<void>((resolve) => {
+          flaky.close(() => {
+            resolve();
+          });
+        });
       }
     });
   });

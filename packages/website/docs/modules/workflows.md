@@ -18,7 +18,7 @@ bound to it that does not terminate on its own and can revisit states. Where an
 [orchestration](./orchestrations.md) is a forward-only DAG that runs and ends, a
 workflow is a state graph a task _lives_ in — statuses, guarded transitions, a
 kanban board, backward moves. The two compose: a state may **dispatch** an
-orchestration or agent to do its work. See
+orchestration, an agent, or a single tool call to do its work. See
 [Choosing an Automation Model](/docs/getting-started/choosing-an-automation-model)
 for the full comparison and composition patterns.
 
@@ -105,7 +105,7 @@ escape hatch. Define an explicit any-state transition (listing every state in
 | `payload`           | object           | Caller-owned task data; input to guards and dispatch `input_mapping`s. The engine never writes into it except declared `payload_writes` |
 | `last_result`       | any \| null      | Server-owned, read-only: the result of the current state's last completed dispatch, overwritten on every dispatch. Guards read it as `task.last_result` |
 | `assignee`          | string \| null   | Informational in v1 (a user or actor public ID; not interpreted by the engine) |
-| `active_dispatch`   | object \| null   | `{ kind, id, status }` of the current state's dispatch, if any — plus `attempt` while a `retry` policy is in effect |
+| `active_dispatch`   | object \| null   | `{ kind, id, status }` of the current state's dispatch, if any — plus `attempt` while a `retry` policy is in effect. `kind` is `generation`, `orchestration_run` or `tool_call`; a `tool_call` always carries a null `id`, since a direct tool call leaves no addressable record |
 | `automation_status` | string \| null   | `running` \| `completed` \| `failed` \| `unrouted` for the current state's dispatch |
 | `automation_chain_depth` | integer     | Server-owned, read-only: how many machine-driven transitions have run back-to-back with no outside intervention. Reset to `0` by any move a person, a plain API key, or an approval resolution makes. See [The automation chain budget](#the-automation-chain-budget) |
 | `pending_transition`| string \| null   | Name of a `requires_approval` transition parked awaiting a human decision; null otherwise |
@@ -127,9 +127,10 @@ contract for a task. `GET /tasks/{id}/history` returns them oldest-first.
 | `to_state`      | string          | Destination state                                                 |
 | `transition`    | string \| null  | Transition name fired (`null` for the initial placement)          |
 | `principal_kind`| string          | `user` \| `api_key` \| `automation` \| `approval`                 |
-| `principal_id`  | string \| null  | The principal that made the move. For `api_key` auth this is the API key's own id (`key_…`), distinguishing which key acted. `null` for `automation`, which has no principal — read `generation_id` / `orchestration_run_id` for the cause |
+| `principal_id`  | string \| null  | The principal that made the move. For `api_key` auth this is the API key's own id (`key_…`), distinguishing which key acted. `null` for `automation`, which has no principal — read `generation_id` / `orchestration_run_id` / `tool_id` for the cause |
 | `generation_id` | string \| null  | The agent generation that caused the move (set for both `on_complete` routing and `on_failure`, linking the failed generation) |
 | `orchestration_run_id`        | string \| null  | The orchestration run that caused the move, when automation-driven |
+| `tool_id`       | string \| null  | The tool a `tool` dispatch called, when that dispatch caused the move. A tool call produces no record of its own, so the tool is the cause |
 | `note`          | string \| null  | Optional reason supplied by the caller                            |
 | `created_at`    | string          | ISO 8601 timestamp                                                |
 
@@ -186,9 +187,12 @@ run when a task enters it, and routes the outcome back into a transition:
 }
 ```
 
-- **`dispatch`** — one agent (`kind: agent`, `agent_id`) or orchestration
-  (`kind: orchestration`, `orchestration_id`). `input_mapping` is JSON Logic
-  over `{task}` resolving the dispatch input from the task payload.
+- **`dispatch`** — one agent (`kind: agent`, `agent_id`), orchestration
+  (`kind: orchestration`, `orchestration_id`) or tool call (`kind: tool`,
+  `tool_id`, optional `operation_id` to select an operation on a
+  multi-operation tool). `input_mapping` is JSON Logic
+  over `{task}` resolving the dispatch input from the task payload — for a
+  `tool` dispatch it resolves the tool's arguments.
   `payload_writes` (optional) is JSON Logic over `{task, result}`, written into
   named `task.payload` keys atomically with `last_result` when the dispatch
   completes — a named, deterministic channel that survives past the one hop
@@ -197,7 +201,8 @@ run when a task enters it, and routes the outcome back into a transition:
 - **`on_complete`** — labeled rules evaluated in order against `{task, result}`;
   the first match fires its transition **as the `automation` principal**
   (subject to the same guards). An agent dispatch exposes its generation output
-  under `{result}`; an orchestration dispatch exposes its final run state. The
+  under `{result}`; an orchestration dispatch exposes its final run state; a
+  tool dispatch exposes the tool's own return value. The
   result is also written to the server-owned `task.last_result`. No rule
   matches → the task stays put with `automation_status: completed` and a
   `tasks.automation_unrouted` event fires. A matched rule whose transition is
@@ -222,6 +227,44 @@ run when a task enters it, and routes the outcome back into a transition:
 Entering a state cancels any dispatch still running from the state the task is
 leaving — including a genuinely in-flight orchestration run — because task state
 is the source of truth.
+
+#### Tool dispatch
+
+A state whose work is a single tool call dispatches it directly, with no
+orchestration in between:
+
+```json
+{
+  "name": "notifying",
+  "on_enter": {
+    "dispatch": {
+      "kind": "tool",
+      "tool_id": "tool_...",
+      "input_mapping": { "channel": { "var": "task.payload.channel" } }
+    },
+    "on_complete": [{ "when": true, "transition": "to_notified" }]
+  }
+}
+```
+
+`input_mapping` resolves the tool's arguments from the task context, and the
+tool's return value becomes `{result}` and `task.last_result`. The call is
+adjudicated by the **same guardrails** as the identical call made from an
+orchestration `tool` node — a workflow dispatch is not a way around them — and
+is recorded in the activity feed the same way.
+
+Because a tool call settles within the dispatch, there is nothing to poll: the
+move is recorded with `active_dispatch.kind: tool_call` and a null `id` (a tool
+call leaves no addressable record), and the transition it causes carries
+`tool_id` as its provenance.
+
+Two cases belong behind an **orchestration** dispatch instead, and fail a `tool`
+dispatch with `TOOL_DISPATCH_FAILED` rather than pretending to work:
+
+- a tool a guardrail routes to **human approval** (class C) — a task dispatch has
+  no run to park and resume;
+- a call a guardrail **blocks** (class D, or a class-B tripwire) — the call never
+  ran, so it is a dispatch failure, routable through `on_failure`.
 
 #### Waiting, polling, and multi-step work
 
@@ -431,7 +474,8 @@ expressions.
 | `TASK_TRANSITION_NOT_FOUND`| 400    | The named transition does not exist in the workflow            |
 | `TASK_GUARD_REJECTED`      | 400    | The transition guard evaluated to false                        |
 | `TASK_TRANSITION_CONFLICT` | 409    | The transition is not valid from the current state, or the task is closed |
-| `TASK_AUTOMATION_PROVENANCE_MISSING` | 500 | An `automation` transition would be persisted with `principal_id`, `generation_id`, and `orchestration_run_id` all null — rejected as a writer bug rather than silently recorded |
+| `TASK_AUTOMATION_PROVENANCE_MISSING` | 500 | An `automation` transition would be persisted with `principal_id`, `generation_id`, `orchestration_run_id`, and `tool_id` all null — rejected as a writer bug rather than silently recorded |
+| `TOOL_DISPATCH_FAILED` | 422 | A `tool` dispatch's call was settled before it ran — blocked by a guardrail, or routed to human approval, which a task dispatch cannot park on |
 | `INVALID_TOOL_CONTEXT_KEY`  | 400    | A `tool_context` key on `create-task` / `transition-task` is not a valid header name, or two keys collide on one header. See [Dispatch tool context](#dispatch-tool-context) |
 | `TASK_AUTOMATION_CHAIN_LIMIT` | 409 | The task has run `TASK_AUTOMATION_CHAIN_LIMIT` machine-driven transitions with no outside intervention; the next one is refused. See [The automation chain budget](#the-automation-chain-budget) |
 

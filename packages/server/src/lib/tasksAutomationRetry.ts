@@ -135,6 +135,8 @@ type AttemptContext = {
   dispatch: WorkflowDispatch;
   dispatchKind: ActiveDispatch['kind'];
   inputs: Record<string, unknown>;
+  /** The `{task}` context `inputs` was resolved from; see `runDispatch`. */
+  taskContext: Record<string, unknown>;
   retry: RetryPolicy | null;
   principal?: RequestPrincipal;
   /**
@@ -175,6 +177,7 @@ const runOneAttempt = async (args: {
     projectId: ctx.projectId,
     taskPublicId: ctx.taskPublicId,
     inputs: ctx.inputs,
+    taskContext: ctx.taskContext,
     principal: ctx.principal,
     toolContext: ctx.toolContext,
     onDispatchStarted: async ({ generationId, orchestrationRunId }) => {

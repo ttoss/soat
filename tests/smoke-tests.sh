@@ -5327,6 +5327,76 @@ echo "Transition history principal_kind: OK"
 # Board query by state/status.
 $SOAT_CLI list-tasks --project-id "$PROJECT_PUBLIC_ID" --workflow-id "$WORKFLOW_ID" --status closed >/dev/null
 
+# ── on_enter tool dispatch (#1039) ──
+# A state whose work is a single tool call dispatches it directly, with no
+# orchestration in between. A `soat` tool is used so the call exercises the
+# run-as token the dispatch mints for itself, with no external dependency.
+WF_TOOL_RESP=$($SOAT_CLI create-tool \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-workflow-tool \
+  --type soat \
+  --actions '["list-projects"]')
+WF_TOOL_ID=$(printf '%s\n' "$WF_TOOL_RESP" | jq -r '.id')
+if [ -z "$WF_TOOL_ID" ] || [ "$WF_TOOL_ID" = "null" ]; then
+  echo "ERROR: failed to create the workflow tool-dispatch tool" >&2
+  printf '%s\n' "$WF_TOOL_RESP" >&2
+  exit 1
+fi
+
+TOOL_WF_RESP=$($SOAT_CLI create-workflow \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-tool-dispatch-workflow \
+  --states "[{\"name\":\"calling\",\"initial\":true,\"on_enter\":{\"dispatch\":{\"kind\":\"tool\",\"tool_id\":\"$WF_TOOL_ID\",\"operation_id\":\"list-projects\"},\"on_complete\":[{\"when\":true,\"transition\":\"to_done\"}]}},{\"name\":\"done\",\"terminal\":true}]" \
+  --transitions '[{"name":"to_done","from":["calling"],"to":"done"}]')
+TOOL_WF_ID=$(printf '%s\n' "$TOOL_WF_RESP" | jq -r '.id')
+if [ -z "$TOOL_WF_ID" ] || [ "$TOOL_WF_ID" = "null" ]; then
+  echo "ERROR: create-workflow with a tool dispatch failed" >&2
+  printf '%s\n' "$TOOL_WF_RESP" >&2
+  exit 1
+fi
+
+# A tool_id is required — a `tool` dispatch without one is rejected at create.
+expect_cli_error_status 400 create-workflow \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-tool-dispatch-bad \
+  --states '[{"name":"a","initial":true,"on_enter":{"dispatch":{"kind":"tool"}}}]' \
+  --transitions '[]'
+echo "Tool dispatch validation: OK (400 without tool_id)"
+
+TOOL_TASK_ID=$($SOAT_CLI create-task \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --workflow-id "$TOOL_WF_ID" \
+  --title "tool dispatch smoke" | jq -r '.id')
+
+# The call settles within the dispatch, but routing is still asynchronous.
+TOOL_TASK_STATE=""
+i=0
+while [ $i -lt 30 ]; do
+  TOOL_TASK_STATE=$($SOAT_CLI get-task --task-id "$TOOL_TASK_ID" | jq -r '.state')
+  if [ "$TOOL_TASK_STATE" = "done" ]; then
+    break
+  fi
+  sleep 1
+  i=$((i + 1))
+done
+if [ "$TOOL_TASK_STATE" != "done" ]; then
+  echo "ERROR: tool dispatch expected state 'done', got '$TOOL_TASK_STATE'" >&2
+  $SOAT_CLI get-task --task-id "$TOOL_TASK_ID" >&2
+  exit 1
+fi
+
+# The move records the tool as its cause: a tool call leaves no generation and
+# no run, so `tool_id` is the provenance an automation transition carries.
+TOOL_HIST_OK=$($SOAT_CLI get-task-history --task-id "$TOOL_TASK_ID" | jq -r \
+  --arg tool "$WF_TOOL_ID" \
+  'any(.[]; .transition == "to_done" and .principal_kind == "automation" and .tool_id == $tool)')
+if [ "$TOOL_HIST_OK" != "true" ]; then
+  echo "ERROR: tool dispatch transition missing tool_id provenance" >&2
+  $SOAT_CLI get-task-history --task-id "$TOOL_TASK_ID" >&2
+  exit 1
+fi
+echo "Workflow tool dispatch: OK (task routed, tool_id recorded as the cause)"
+
 # ── Definition versioning and task pinning (#882) ──
 echo "--- Workflow versions ---"
 WF_VER_LIST=$($SOAT_CLI list-workflow-versions --workflow-id "$WORKFLOW_ID")

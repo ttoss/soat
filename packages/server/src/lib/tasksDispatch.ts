@@ -4,6 +4,7 @@ import { createGeneration } from './agentGeneration';
 import type { GenerationResult } from './agentGenerationTypes';
 import type { GenerationInputMessage } from './generationInputMessages';
 import { startOrchestrationRun } from './orchestrationEngine';
+import { executeToolNode } from './orchestrationNodeExecutors';
 import { mapRunWithIncludes } from './orchestrationRunHelpers';
 import { buildRunAuthHeader } from './orchestrationRunToken';
 import type { MappedOrchestrationRun } from './orchestrations';
@@ -83,6 +84,12 @@ export type DispatchResult = {
   result: unknown;
   generationId: string | null;
   orchestrationRunId: string | null;
+  /**
+   * Set only by a `tool` dispatch, which produces neither a generation nor a
+   * run. It is that kind's provenance: every automation move must record a
+   * machine-readable cause (#792), and for a tool call the tool is it.
+   */
+  toolId: string | null;
 };
 
 /**
@@ -142,18 +149,97 @@ const runAgentDispatch = async (args: {
     result: gen.output ?? {},
     generationId: gen.id,
     orchestrationRunId: null,
+    toolId: null,
+  };
+};
+
+/**
+ * Runs a `tool` dispatch: one tool call, settled within the dispatch.
+ *
+ * Delegates to the orchestration engine's `tool` node executor rather than
+ * calling `callTool` directly, so a workflow-dispatched call is adjudicated by
+ * exactly the same guardrail gate (class B/C/D) and recorded in the same
+ * activity feed as the identical call made from an orchestration graph. Calling
+ * `callTool` here instead would have quietly created a second, ungoverned path
+ * to every tool in the project.
+ *
+ * The executor is node-shaped, so the dispatch is expressed as the one-node
+ * graph it is. `state` is the task context and `inputMapping` the dispatch's
+ * own, mapped by the executor exactly as a graph node's would be.
+ *
+ * Only an `artifact` outcome is a completed dispatch. A guardrail that blocks
+ * the call (class D / tripwire) or routes it to human approval (class C)
+ * produces a result a task dispatch has nowhere to put — there is no run to
+ * park and resume — so it fails the dispatch, which `on_failure` can route. An
+ * approval-gated tool belongs behind an orchestration dispatch, whose engine
+ * can park on it.
+ */
+const runToolDispatch = async (args: {
+  toolId: string;
+  operationId?: string;
+  inputMapping?: Record<string, unknown>;
+  taskContext: Record<string, unknown>;
+  projectId: number;
+  taskPublicId: string;
+  principal?: RequestPrincipal;
+}): Promise<DispatchResult> => {
+  const authHeader = await buildRunAuthHeader({
+    principalKind: args.principal?.principalType ?? null,
+    principalId: args.principal?.principalId ?? null,
+    projectId: args.projectId,
+    workPublicId: args.taskPublicId,
+  });
+
+  const outcome = await executeToolNode({
+    node: {
+      // Names the dispatching task, so a guardrail reading the node id and an
+      // activity entry both point back at what actually made the call.
+      id: `task:${args.taskPublicId}`,
+      type: 'tool',
+      toolId: args.toolId,
+      operationId: args.operationId,
+      inputMapping: args.inputMapping,
+    },
+    state: args.taskContext,
+    projectIds: [args.projectId],
+    projectId: args.projectId,
+    authHeader,
+  });
+
+  if (outcome.kind !== 'artifact') {
+    throw new DomainError(
+      'TOOL_DISPATCH_FAILED',
+      `Tool dispatch did not complete: the call was settled as '${outcome.kind}' before returning a result.`,
+      { tool_id: args.toolId, outcome: outcome.kind }
+    );
+  }
+
+  return {
+    result: outcome.artifact,
+    generationId: null,
+    orchestrationRunId: null,
+    toolId: args.toolId,
   };
 };
 
 // Runs one dispatch and returns its exposed `{result}` and provenance ids. A
 // generation exposes its output; an orchestration run exposes its final state
-// (matching sub-orchestration semantics, PRD D2).
+// (matching sub-orchestration semantics, PRD D2); a tool call exposes the
+// tool's own return value.
 export const runDispatch = async (args: {
   dispatch: WorkflowDispatch;
   projectId: number;
   taskPublicId: string;
   inputs: Record<string, unknown>;
-  // The identity the dispatch runs as, for both kinds; see `dispatchOnEnter`.
+  /**
+   * The `{task}` JSON Logic context the dispatch's `input_mapping` was resolved
+   * against. `inputs` is that resolution and is what the agent and orchestration
+   * kinds consume; a `tool` dispatch needs the unresolved pair instead, because
+   * its executor owns the mapping step (and applying it twice would resolve the
+   * already-resolved arguments a second time).
+   */
+  taskContext: Record<string, unknown>;
+  // The identity the dispatch runs as, for every kind; see `dispatchOnEnter`.
   principal?: RequestPrincipal;
   /**
    * The task's caller context, forwarded as `X-Soat-Context-*` headers on the
@@ -178,6 +264,18 @@ export const runDispatch = async (args: {
       inputs: args.inputs,
       principal: args.principal,
       toolContext: args.toolContext,
+    });
+  }
+
+  if (args.dispatch.kind === 'tool') {
+    return runToolDispatch({
+      toolId: args.dispatch.toolId!,
+      operationId: args.dispatch.operationId,
+      inputMapping: args.dispatch.inputMapping,
+      taskContext: args.taskContext,
+      projectId: args.projectId,
+      taskPublicId: args.taskPublicId,
+      principal: args.principal,
     });
   }
 
@@ -225,6 +323,7 @@ export const runDispatch = async (args: {
     result: run.state ?? {},
     generationId: null,
     orchestrationRunId: run.id,
+    toolId: null,
   };
 };
 

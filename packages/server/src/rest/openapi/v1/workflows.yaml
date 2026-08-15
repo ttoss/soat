@@ -363,10 +363,16 @@ components:
       description: >-
         A named state. Exactly one state must be `initial: true`; any number may
         be `terminal: true`. A `kind: human` state never dispatches — the task
-        parks until a transition fires. `on_enter` (§5) dispatches one agent
-        generation or orchestration run on entry, optionally under a `retry`
-        policy (`max_attempts` 1-10, `backoff_seconds`, `backoff_multiplier`)
-        that re-runs execution failures before `on_failure` applies.
+        parks until a transition fires. `on_enter` (§5) dispatches exactly one
+        of an agent generation (`kind: agent`, `agent_id`), an orchestration run
+        (`kind: orchestration`, `orchestration_id`) or a tool call
+        (`kind: tool`, `tool_id`, optional `operation_id`) on entry, optionally
+        under a `retry` policy (`max_attempts` 1-10, `backoff_seconds`,
+        `backoff_multiplier`) that re-runs execution failures before
+        `on_failure` applies. A `tool` dispatch settles within the dispatch and
+        is adjudicated by the same guardrails as an orchestration `tool` node;
+        for anything that must wait (a delay, a poll, a multi-step pipeline, or
+        an approval-gated tool), dispatch an orchestration instead.
       additionalProperties: true
       required:
         - name

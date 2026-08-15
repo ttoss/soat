@@ -37,7 +37,12 @@ export type TaskPrincipal = {
 };
 
 export type ActiveDispatch = {
-  kind: 'generation' | 'orchestration_run';
+  /**
+   * What the state dispatched. `tool_call` (a `kind: tool` dispatch) always
+   * carries a null `id`: a direct tool call leaves no addressable record the
+   * way a generation or a run does.
+   */
+  kind: 'generation' | 'orchestration_run' | 'tool_call';
   id: string | null;
   status: string;
   /**
@@ -512,6 +517,7 @@ export const getTaskHistory = async (args: { id: string }) => {
       principal_id: row.principalId,
       generation_id: row.generationId,
       orchestration_run_id: row.orchestrationRunId,
+      tool_id: row.toolId,
       note: row.note,
       created_at: row.createdAt,
     };
