@@ -810,6 +810,18 @@ if [ "$SEARCH_COUNT" -lt 1 ]; then
 fi
 echo "Search returned $SEARCH_COUNT result(s)."
 
+# A query search ranks results, so both scoring fields must come back: `score`
+# is the ranking that ordering and --min_score are defined against, and
+# similarity_score is the raw cosine pinned alongside it.
+SEARCH_SCORE=$(printf '%s\n' "$SEARCH_RESP" | jq -r '.results[0].score')
+SEARCH_SIMILARITY=$(printf '%s\n' "$SEARCH_RESP" | jq -r '.results[0].similarity_score')
+if [ "$SEARCH_SCORE" = "null" ] || [ "$SEARCH_SIMILARITY" = "null" ]; then
+  echo "ERROR: query search must return score and similarity_score, got score=$SEARCH_SCORE similarity_score=$SEARCH_SIMILARITY" >&2
+  echo "$SEARCH_RESP" >&2
+  exit 1
+fi
+echo "Search results carry score=$SEARCH_SCORE similarity_score=$SEARCH_SIMILARITY."
+
 # 12b. Ingest a PDF file
 echo "--- Ingesting a PDF file ---"
 PDF_BASE64="JVBERi0xLjQKMSAwIG9iago8PC9UeXBlL0NhdGFsb2cvUGFnZXMgMiAwIFI+PgplbmRvYmoKMiAwIG9iago8PC9UeXBlL1BhZ2VzL0tpZHNbMyAwIFJdL0NvdW50IDE+PgplbmRvYmoKMyAwIG9iago8PC9UeXBlL1BhZ2UvUGFyZW50IDIgMCBSL01lZGlhQm94WzAgMCA2MTIgNzkyXS9Db250ZW50cyA0IDAgUi9SZXNvdXJjZXM8PC9Gb250PDwvRjEgNSAwIFI+Pj4+Pj4KZW5kb2JqCjQgMCBvYmoKPDwvTGVuZ3RoIDQ0Pj4Kc3RyZWFtCkJUIC9GMSAxMiBUZiAxMDAgNzAwIFRkIChIZWxsbyBXb3JsZCkgVGogRVQKZW5kc3RyZWFtCmVuZG9iago1IDAgb2JqCjw8L1R5cGUvRm9udC9TdWJ0eXBlL1R5cGUxL0Jhc2VGb250L0hlbHZldGljYT4+CmVuZG9iagp4cmVmCjAgNgowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMDkgMDAwMDAgbiAKMDAwMDAwMDA1NCAwMDAwMCBuIAowMDAwMDAwMTA1IDAwMDAwIG4gCjAwMDAwMDAyMTcgMDAwMDAgbiAKMDAwMDAwMDMwOCAwMDAwMCBuIAp0cmFpbGVyCjw8L1NpemUgNi9Sb290IDEgMCBSPj4Kc3RhcnR4cmVmCjM3MQolJUVPRg=="
