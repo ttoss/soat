@@ -1,5 +1,5 @@
 ---
-description: "End-to-end SOAT tutorials that walk through complete workflows from scratch — agents, tools, RAG, orchestration, guardrails, and cost controls."
+description: 'End-to-end SOAT tutorials that walk through complete workflows from scratch — agents, tools, RAG, orchestration, guardrails, and cost controls.'
 keywords:
   - SOAT tutorials
   - AI agent tutorials
@@ -28,6 +28,7 @@ All tutorials assume:
 - **Building one governed process end to end?** [Close the Monthly Books](/docs/tutorials/close-the-monthly-books) composes an orchestration, a workflow, a trigger, and a human approval into a single month-end close — the capstone that puts the pieces above together.
 - **Shipping to production?** Deploy a whole stack declaratively with [Formations](/docs/tutorials/formations) and an [agent squad](/docs/tutorials/create-an-agent-squad), automate it with [Triggers](/docs/tutorials/automate-a-flow-with-triggers), gate risky calls with [Guardrails](/docs/tutorials/gate-a-tool-with-guardrails), hand [per-user credentials to tools with tool context](/docs/tutorials/per-user-credentials-with-tool-context), and control cost with [metering and budgets](/docs/tutorials/metering-and-budgets) and [per-end-user spend caps](/docs/tutorials/cap-spend-per-end-user).
 - **Shipping a change safely?** Measure it first with [Evaluate an Agent](/docs/tutorials/evaluate-an-agent), grade open-ended output with an [LLM judge](/docs/tutorials/judge-open-ended-answers), then make the rollout itself wait for a green suite with [Gate a Canary Promotion on an Eval](/docs/tutorials/gate-a-canary-promotion-on-an-eval).
+- **Chasing one bad answer?** [Replay a Bad Turn](/docs/tutorials/replay-a-bad-turn) reads the turn back step by step, freezes it as a fixture so it cannot regress quietly, and forks the session at that message to try a different agent against the same context.
 - **Under compliance pressure?** Erase, expire, or never store prompt content with [data retention and zero-retention](/docs/tutorials/data-retention-and-zero-retention), and ship prompt changes safely with [agent versioning and canary rollout](/docs/tutorials/agent-versioning-and-canary-rollout).
 - **Calling a cloud API?** Sign requests as AWS or authenticate as a GCP service account with [Call AWS and GCP APIs from an Agent](/docs/tutorials/call-aws-and-gcp-apis-from-an-agent).
 
