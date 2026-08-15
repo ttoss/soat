@@ -88,6 +88,13 @@ export class TaskTransition extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare orchestrationRunId: string | null;
 
+  // The third dispatch kind's cause. A `tool` dispatch produces no addressable
+  // record to point at — no generation, no run — so the tool itself is what
+  // records why the task moved, keeping every automation move traceable to
+  // something machine-readable rather than exempting one kind from the rule.
+  @Column({ type: DataType.STRING, allowNull: true })
+  declare toolId: string | null;
+
   @Column({ type: DataType.TEXT, allowNull: true })
   declare note: string | null;
 

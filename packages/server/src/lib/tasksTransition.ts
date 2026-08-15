@@ -65,10 +65,10 @@ const cancelDispatchOnExit = async (args: {
 };
 
 // An `automation` transition always carries `principal.id === null` (#786) —
-// the cause lives in `generationId` / `orchestrationRunId` instead. If both of
-// those are also null, nothing at all records why the task moved: not a
-// degraded record, a meaningless one. Reject the write rather than silently
-// persisting it (#792).
+// the cause lives in `generationId` / `orchestrationRunId` / `toolId` instead,
+// one per dispatch kind. If all of those are also null, nothing at all records
+// why the task moved: not a degraded record, a meaningless one. Reject the
+// write rather than silently persisting it (#792).
 const assertAutomationHasProvenance = (args: {
   transitionArgs: TransitionArgs;
   transitionName: string;
@@ -77,7 +77,8 @@ const assertAutomationHasProvenance = (args: {
   const hasNoProvenance =
     a.principal.id == null &&
     a.generationId == null &&
-    a.orchestrationRunId == null;
+    a.orchestrationRunId == null &&
+    a.toolId == null;
   if (a.principal.kind === 'automation' && hasNoProvenance) {
     throw new DomainError(
       'TASK_AUTOMATION_PROVENANCE_MISSING',
@@ -85,6 +86,20 @@ const assertAutomationHasProvenance = (args: {
       { transition: transitionName, taskId: a.id }
     );
   }
+};
+
+/**
+ * The three provenance columns, one per dispatch kind — exactly one of which an
+ * automation move carries (`assertAutomationHasProvenance` above rejects a move
+ * with none). Built here rather than inline so adding a kind does not push the
+ * transaction body past its complexity budget.
+ */
+const dispatchProvenance = (a: TransitionArgs) => {
+  return {
+    generationId: a.generationId ?? null,
+    orchestrationRunId: a.orchestrationRunId ?? null,
+    toolId: a.toolId ?? null,
+  };
 };
 
 const evaluateGuard = (args: {
@@ -116,6 +131,8 @@ type TransitionArgs = {
   principal: TaskPrincipal;
   generationId?: string | null;
   orchestrationRunId?: string | null;
+  /** The tool a `tool` dispatch called — that kind's only recorded cause. */
+  toolId?: string | null;
   /**
    * True when the caller authenticated with a run-as token (`ctx.authUser
    * .isRunToken`). Such a move is a dispatch's own `soat` tool acting as the
@@ -325,8 +342,7 @@ const performTransitionTxn = async (args: {
         transition: transition.name,
         principalKind: a.principal.kind,
         principalId: a.principal.id,
-        generationId: a.generationId ?? null,
-        orchestrationRunId: a.orchestrationRunId ?? null,
+        ...dispatchProvenance(a),
         note: a.note ?? null,
       },
       { transaction: t }

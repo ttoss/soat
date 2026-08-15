@@ -354,9 +354,11 @@ components:
           type: object
           nullable: true
           description: >-
-            { kind, id, status } of the current state's dispatch, if any. Carries
-            an additional `attempt` (1-based) while the state's `on_enter.retry`
-            policy is in effect.
+            { kind, id, status } of the current state's dispatch, if any. `kind`
+            is `generation`, `orchestration_run` or `tool_call`; a `tool_call`
+            always carries a null `id`, since a direct tool call leaves no
+            addressable record. Carries an additional `attempt` (1-based) while
+            the state's `on_enter.retry` policy is in effect.
         automation_status:
           type: string
           nullable: true
@@ -434,13 +436,23 @@ components:
             (`user_...`), or for `api_key` auth the key's own id (`key_...`),
             distinguishing which key acted. Null for `automation`, which has no
             principal: the cause is carried by `generation_id` /
-            `orchestration_run_id`.
+            `orchestration_run_id` / `tool_id`, one per dispatch kind — exactly
+            one of which is set on an automation move.
         generation_id:
           type: string
           nullable: true
+          description: Set when an `agent` dispatch's generation caused the move.
         orchestration_run_id:
           type: string
           nullable: true
+          description: Set when an `orchestration` dispatch's run caused the move.
+        tool_id:
+          type: string
+          nullable: true
+          description: >
+            Set when a `tool` dispatch caused the move. A tool call produces no
+            addressable record of its own, so the tool it called is what records
+            why the task moved.
         note:
           type: string
           nullable: true

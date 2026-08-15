@@ -260,6 +260,11 @@ export const ERROR_CODES = {
     description:
       "A workflow on_enter dispatch's orchestration run settled in a non-success terminal status (failed, cancelled, or expired).",
   },
+  TOOL_DISPATCH_FAILED: {
+    httpStatus: 422,
+    description:
+      'A workflow on_enter `tool` dispatch did not return a result. The tool call was settled before it ran — blocked by a guardrail (class D or a class-B tripwire), or routed to human approval (class C), which a task dispatch cannot park on. The error `meta` carries the `tool_id` and the `outcome` that settled it. Dispatch an orchestration instead when the tool is approval-gated: its engine can park and resume.',
+  },
   EMBEDDING_NOT_CONFIGURED: {
     httpStatus: 503,
     description:

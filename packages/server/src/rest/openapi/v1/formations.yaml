@@ -1616,10 +1616,11 @@ components:
       description: >-
         Creates a workflow — a state-machine definition (named states, allowed
         transitions, guards, and per-state automation) that tasks live in. State
-        and transition dispatch references (`agent_id`, `orchestration_id` inside
-        an `on_enter` block) accept `{ "ref": "LogicalId" }` expressions to point
-        at agents or orchestrations declared in the same template, so a workflow
-        plus the agents that service its states can deploy as one stack. Mirrors
+        and transition dispatch references (`agent_id`, `orchestration_id`,
+        `tool_id` inside an `on_enter` block) accept `{ "ref": "LogicalId" }`
+        expressions to point at agents, orchestrations or tools declared in the
+        same template, so a workflow plus the agents and tools that service its
+        states can deploy as one stack. Mirrors
         the workflows REST contract (`states`, `transitions`, `payload_schema`).
       type: object
       additionalProperties: false

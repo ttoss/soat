@@ -38,6 +38,8 @@ type KeyRename = [wire: string, internal: string];
 const DISPATCH_KEYS: KeyRename[] = [
   ['agent_id', 'agentId'],
   ['orchestration_id', 'orchestrationId'],
+  ['tool_id', 'toolId'],
+  ['operation_id', 'operationId'],
   // Renamed as a whole; the bag behind each is author-owned and stays opaque.
   ['input_mapping', 'inputMapping'],
   ['payload_writes', 'payloadWrites'],

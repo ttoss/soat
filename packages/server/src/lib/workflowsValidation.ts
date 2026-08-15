@@ -14,9 +14,16 @@ import {
  * `payload`/`payloadSchema` bags round-trip verbatim).
  */
 export type WorkflowDispatch = {
-  kind: 'agent' | 'orchestration';
+  kind: 'agent' | 'orchestration' | 'tool';
   agentId?: string;
   orchestrationId?: string;
+  /** `tool` dispatch: the tool to call. */
+  toolId?: string;
+  /**
+   * `tool` dispatch: which operation of a multi-operation tool to invoke —
+   * the same selector an orchestration `tool` node's `operation_id` is.
+   */
+  operationId?: string;
   inputMapping?: Record<string, unknown>;
   /**
    * JSON Logic expressions, evaluated over the same `{task, result}` context
@@ -76,6 +83,25 @@ const isNonEmptyString = (value: unknown): value is string => {
   return typeof value === 'string' && value.length > 0;
 };
 
+/**
+ * The id field each dispatch kind requires, and the wire name to report when it
+ * is missing. A table rather than a chain of branches, so adding a kind is a row
+ * — and so the "unknown kind" message below can never drift out of step with the
+ * kinds actually accepted.
+ */
+const DISPATCH_REQUIRED_ID: Record<
+  WorkflowDispatch['kind'],
+  { field: 'agentId' | 'orchestrationId' | 'toolId'; wireName: string }
+> = {
+  agent: { field: 'agentId', wireName: 'agent_id' },
+  orchestration: { field: 'orchestrationId', wireName: 'orchestration_id' },
+  tool: { field: 'toolId', wireName: 'tool_id' },
+};
+
+const KNOWN_DISPATCH_KINDS = Object.keys(DISPATCH_REQUIRED_ID) as Array<
+  WorkflowDispatch['kind']
+>;
+
 const validateOnEnterDispatch = (state: WorkflowState): void => {
   const dispatch = state.onEnter?.dispatch;
   if (!dispatch || typeof dispatch !== 'object') {
@@ -92,27 +118,23 @@ const validateOnEnterDispatch = (state: WorkflowState): void => {
       state: state.name,
     });
   }
-  if (dispatch.kind === 'agent') {
-    if (!isNonEmptyString(dispatch.agentId)) {
-      fail(`State '${state.name}' agent dispatch is missing agent_id.`, {
-        state: state.name,
-      });
-    }
+
+  const required = DISPATCH_REQUIRED_ID[dispatch.kind];
+  if (!required) {
+    const kinds = KNOWN_DISPATCH_KINDS.map((k) => {
+      return `'${k}'`;
+    }).join(', ');
+    fail(`State '${state.name}' dispatch kind must be one of ${kinds}.`, {
+      state: state.name,
+    });
     return;
   }
-  if (dispatch.kind === 'orchestration') {
-    if (!isNonEmptyString(dispatch.orchestrationId)) {
-      fail(
-        `State '${state.name}' orchestration dispatch is missing orchestration_id.`,
-        { state: state.name }
-      );
-    }
-    return;
+  if (!isNonEmptyString(dispatch[required.field])) {
+    fail(
+      `State '${state.name}' ${dispatch.kind} dispatch is missing ${required.wireName}.`,
+      { state: state.name }
+    );
   }
-  fail(
-    `State '${state.name}' dispatch kind must be 'agent' or 'orchestration'.`,
-    { state: state.name }
-  );
 };
 
 const validateStateEntry = (args: {
