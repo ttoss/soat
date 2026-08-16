@@ -114,6 +114,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          # Full history so Docusaurus showLastUpdateTime / sitemap lastmod
+          # resolve real per-file git dates instead of the HEAD commit date.
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v5
 

@@ -56,6 +56,15 @@ const config: Config = {
   // JSON-LD structured data for richer search results.
   headTags: [
     {
+      // Lift Google's default snippet cap so full passages are eligible to
+      // ground AI Overviews / AI Mode answers (and regular rich snippets).
+      tagName: 'meta',
+      attributes: {
+        name: 'robots',
+        content: 'max-snippet:-1, max-image-preview:large',
+      },
+    },
+    {
       tagName: 'script',
       attributes: { type: 'application/ld+json' },
       innerHTML: JSON.stringify({
@@ -100,6 +109,15 @@ const config: Config = {
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
           editUrl: 'https://github.com/ttoss/soat/edit/main/',
+          // Per-page freshness signal (from git history) for search engines
+          // and AI crawlers. Requires a full clone at build time — the deploy
+          // job checks out with fetch-depth: 0.
+          showLastUpdateTime: true,
+        },
+        sitemap: {
+          // Emit <lastmod> from the same git-derived last-update data, so
+          // crawlers can prioritize recently changed pages.
+          lastmod: 'date',
         },
         // blog: {
         //   showReadingTime: true,
@@ -149,11 +167,16 @@ const config: Config = {
         description:
           'Infrastructure for AI Apps — Backend, identity, storage, memory, and orchestration.',
         generateLLMsTxt: true,
-        generateLLMsFullTxt: true,
+        // llms-full.txt is generated via customLLMFiles below so it can
+        // exclude the generated API reference: the split keeps every page —
+        // including all /docs/api/* operations — linkable from llms.txt (and
+        // available as .md), while the full-content file stays a bounded,
+        // prose-only corpus instead of ballooning with generated schema
+        // markup.
+        generateLLMsFullTxt: false,
         generateMarkdownFiles: true,
         excludeImports: true,
         removeDuplicateHeadings: true,
-        ignoreFiles: ['api/**'],
         includeOrder: [
           'getting-started/*',
           'modules/*',
@@ -162,6 +185,26 @@ const config: Config = {
           'cli/*',
           'mcp/*',
           'openapi-specs.md',
+        ],
+        customLLMFiles: [
+          {
+            filename: 'llms-full.txt',
+            includePatterns: ['**/*.md', '**/*.mdx'],
+            fullContent: true,
+            ignorePatterns: ['api/**'],
+            orderPatterns: [
+              'getting-started/*',
+              'modules/*',
+              'tutorials/*',
+              'sdk/*',
+              'cli/*',
+              'mcp/*',
+              'openapi-specs.md',
+            ],
+            includeUnmatchedLast: true,
+            description:
+              'Infrastructure for AI Apps — Backend, identity, storage, memory, and orchestration.',
+          },
         ],
       },
     ],

@@ -15,6 +15,8 @@
 //   6. An endpoint mention (`METHOD /path`) that does not link to its generated
 //      API-reference page — and any /docs/api/ link addressing a page no
 //      operation generates.
+//   7. A doc without a non-empty, unique `description` front matter field —
+//      the snippet search engines and AI crawlers quote for the page.
 //
 // Checks 4 and 5 are existence checks against the in-repo sources of truth, and
 // they cover all three tabs every module example ships. Guarding one language is
@@ -738,6 +740,67 @@ const checkReferenceLinks = (files, routeIndex) => {
   return found;
 };
 
+// ── Check 7: every doc has a non-empty, unique description ──────────────────
+//
+// The `description` front matter becomes the page's <meta name="description">
+// and og:description — the snippet search engines and AI crawlers quote when
+// they cite the page. Docusaurus silently falls back to the site tagline when
+// it is missing, so an undescribed page still builds; it just competes for
+// queries with every other undescribed page. The duplicate rule catches the
+// copy-paste variant of the same failure.
+
+/**
+ * Extract the `description` front matter value from a doc's source, or null
+ * when there is no front matter, no description field, or an empty value.
+ * Surrounding single or double quotes are stripped, mirroring YAML.
+ */
+export const frontMatterDescription = (text) => {
+  const frontMatter = text.match(/^---\n([\s\S]*?)\n---/);
+  if (!frontMatter) return null;
+  const field = frontMatter[1].match(/^description:[ \t]*(.*)$/m);
+  if (!field) return null;
+  const value = field[1]
+    .trim()
+    .replace(/^(['"])(.*)\1$/, '$2')
+    .trim();
+  return value === '' ? null : value;
+};
+
+/**
+ * Check every authored doc for a missing or duplicated description.
+ * Takes `{ rel, text }` entries so the rule stays a pure function of content.
+ */
+export const checkDescriptions = (entries) => {
+  const found = [];
+  const byDescription = new Map();
+
+  for (const entry of entries) {
+    const description = frontMatterDescription(entry.text);
+    if (description === null) {
+      found.push(`${entry.rel}  [missing description front matter]`);
+      continue;
+    }
+    const holders = byDescription.get(description) ?? [];
+    holders.push(entry.rel);
+    byDescription.set(description, holders);
+  }
+
+  for (const [description, holders] of byDescription) {
+    if (holders.length < 2) continue;
+    for (const rel of holders) {
+      found.push(
+        `${rel}  [duplicate description]  shared with ${holders
+          .filter((other) => {
+            return other !== rel;
+          })
+          .join(', ')}: "${description}"`
+      );
+    }
+  }
+
+  return found;
+};
+
 /**
  * Drop generated pages, keeping only authored docs.
  *
@@ -826,6 +889,16 @@ const runChecks = () => {
   violations.push(...checkSdkBodyFields(files, bodyFields, serviceSegments));
   violations.push(...checkCurlBodyFields(files, bodyFields, routeIndex));
   violations.push(...checkReferenceLinks(files, routeIndex));
+  violations.push(
+    ...checkDescriptions(
+      files.map((file) => {
+        return {
+          rel: file.slice(ROOT.length),
+          text: readFileSync(file, 'utf-8'),
+        };
+      })
+    )
+  );
 
   return { files, violations };
 };
