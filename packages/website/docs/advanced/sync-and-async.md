@@ -33,12 +33,12 @@ soat create-agent-generation --agent-id agent_01 --wait true \
 
 | Operation | Handle returned by default | Poll it with |
 | --- | --- | --- |
-| [`POST /agents/{agent_id}/generate`](../modules/agents.md#background-generation) | `generation_id`, `trace_id` | `GET /generations/{generation_id}` |
-| [`POST /sessions/{session_id}/generate`](../modules/sessions.md#background-generation) | `session_id` | `GET /conversations/{conversation_id}/messages` |
-| [`POST /conversations/{conversation_id}/generate`](../modules/conversations.md#generating-the-next-message) | `conversation_id` | `GET /conversations/{conversation_id}/messages` |
-| [`POST /documents/ingest`](../modules/documents.md#async-file-ingestion) and `POST /documents/{document_id}/ingest` | the document, in `status: pending` | `GET /documents/{document_id}/status` |
-| [`POST /orchestration-runs`](../modules/orchestrations.md#durable-background-execution) | the run, in `status: queued` | `GET /orchestration-runs/{orchestration_run_id}` |
-| [`POST /evals/{eval_id}/runs`](../modules/evaluations.md#synchronous-and-queued-runs) | the run, in `status: queued` | `GET /evals/{eval_id}/runs/{eval_run_id}` |
+| [`POST /agents/{agent_id}/generate`](../modules/agents.md#background-generation) | `generation_id`, `trace_id` | [`GET /generations/{generation_id}`](/docs/api/generations/get-generation) |
+| [`POST /sessions/{session_id}/generate`](../modules/sessions.md#background-generation) | `session_id` | [`GET /conversations/{conversation_id}/messages`](/docs/api/conversations/list-conversation-messages) |
+| [`POST /conversations/{conversation_id}/generate`](../modules/conversations.md#generating-the-next-message) | `conversation_id` | [`GET /conversations/{conversation_id}/messages`](/docs/api/conversations/list-conversation-messages) |
+| [`POST /documents/ingest`](../modules/documents.md#async-file-ingestion) and [`POST /documents/{document_id}/ingest`](/docs/api/documents/reingest-document) | the document, in `status: pending` | [`GET /documents/{document_id}/status`](/docs/api/documents/get-document-status) |
+| [`POST /orchestration-runs`](../modules/orchestrations.md#durable-background-execution) | the run, in `status: queued` | [`GET /orchestration-runs/{orchestration_run_id}`](/docs/api/orchestrations/get-orchestration-run) |
+| [`POST /evals/{eval_id}/runs`](../modules/evaluations.md#synchronous-and-queued-runs) | the run, in `status: queued` | [`GET /evals/{eval_id}/runs/{eval_run_id}`](/docs/api/evaluations/get-eval-run) |
 
 ## What the default does **not** change
 
@@ -85,7 +85,7 @@ Reach for **`wait=true`** when the result is the next thing you need: a shell sc
 Stay on the **default** when the work is genuinely detached: a UI that can render a pending state, a batch ingestion, a run you will inspect later. Two things make this comfortable rather than a polling chore:
 
 - [**Webhooks**](../modules/webhooks.md) deliver generation lifecycle events, so you can react to completion instead of asking for it. [Chat with an LLM](../tutorials/chat-with-llm.md) wires this up end to end.
-- **Status endpoints are cheap.** `GET /documents/{id}/status` returns only lifecycle fields rather than the assembled document, and it advances during processing — see [Polling Ingestion Status](../modules/documents.md#polling-ingestion-status).
+- **Status endpoints are cheap.** [`GET /documents/{id}/status`](/docs/api/documents/get-document-status) returns only lifecycle fields rather than the assembled document, and it advances during processing — see [Polling Ingestion Status](../modules/documents.md#polling-ingestion-status).
 
 ## Why `wait` and not `async`
 

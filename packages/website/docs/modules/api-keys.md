@@ -91,7 +91,7 @@ Policies listed in `policy_ids` are loaded from the global [Policies](./policies
 
 ### Revoking a Key
 
-Delete the key via `DELETE /api/v1/api-keys/:id`. The key immediately stops authenticating. There is no rotation endpoint — create a new key and delete the old one.
+Delete the key via [`DELETE /api/v1/api-keys/:id`](/docs/api/api-keys/delete-api-key). The key immediately stops authenticating. There is no rotation endpoint — create a new key and delete the old one.
 
 ## Examples
 

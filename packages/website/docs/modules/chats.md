@@ -11,7 +11,7 @@ LLM completions with optional persistent configuration, supporting both stateles
 
 ## Overview
 
-All completions run through a single endpoint, `POST /chat/completions`, which names exactly one target:
+All completions run through a single endpoint, [`POST /chat/completions`](/docs/api/chats/create-chat-completion), which names exactly one target:
 
 - **Stateless** (`ai_provider_id`) — OpenAI-compatible; pass the full provider configuration on every request. No setup required.
 - **Per-chat** (`chat_id`) — create a Chat resource once to store the AI provider, default `instructions`, and model; then pass only `chat_id` and the `messages` array per request.

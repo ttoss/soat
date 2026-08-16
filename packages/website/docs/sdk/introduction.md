@@ -85,8 +85,8 @@ When `error` is set, `data` is `undefined`. Use early returns or throws to guard
 
 SOAT accepts two token types as the `token` option:
 
-- **JWT session token** — obtained from `POST /api/v1/users/login`
-- **API key** — prefixed `sk_`, obtained from `POST /api/v1/api-keys`
+- **JWT session token** — obtained from [`POST /api/v1/users/login`](/docs/api/users/login-user)
+- **API key** — prefixed `sk_`, obtained from [`POST /api/v1/api-keys`](/docs/api/api-keys/create-api-key)
 
 ```ts
 // JWT token

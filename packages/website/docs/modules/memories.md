@@ -84,7 +84,7 @@ When the same correction keeps being made by hand, the
 
 Every write to a memory — via REST, agent tool, or extraction — goes through the same deduplication algorithm.
 
-When you call `POST /api/v1/memory-entries` (with `memory_id` in the body), the server:
+When you call [`POST /api/v1/memory-entries`](/docs/api/memoryEntries/create-memory-entry) (with `memory_id` in the body), the server:
 
 1. **Embeds** the incoming content.
 2. **Finds** the most similar **currently-valid** existing entry in that memory (cosine similarity via pgvector). [Invalidated entries](#temporal-invalidation) are never candidates.
@@ -96,13 +96,13 @@ When you call `POST /api/v1/memory-entries` (with `memory_id` in the body), the 
 | ≥ `update_threshold`    | **Merge**  | The fact overlaps. The two facts are consolidated into the existing entry (see below).      |
 | < `update_threshold`    | **Create** | The fact is new. A new entry is created.                                   |
 
-On **Merge**, writes made during a generation (the `write_memory` tool and automatic extraction) consolidate the existing and incoming facts into a **single atomic fact** using the agent's LLM — contradictions resolve in favour of the new fact. Writes without an agent context (the manual `POST /api/v1/memory-entries` endpoint) append the incoming content instead. Consolidation is best-effort: if the completion fails, the write falls back to appending, so a merge never loses content.
+On **Merge**, writes made during a generation (the `write_memory` tool and automatic extraction) consolidate the existing and incoming facts into a **single atomic fact** using the agent's LLM — contradictions resolve in favour of the new fact. Writes without an agent context (the manual [`POST /api/v1/memory-entries`](/docs/api/memoryEntries/create-memory-entry) endpoint) append the incoming content instead. Consolidation is best-effort: if the completion fails, the write falls back to appending, so a merge never loses content.
 
 See all three outcomes in action in [Agent with Persistent Memory - Step 5 (Write memory entries)](/docs/tutorials/memories-agent#step-5--write-memory-entries).
 
 The thresholds are per-request fields: `duplicate_threshold` (default `0.95`) and `update_threshold` (default `0.75`).
 
-On a **merge**, the incoming `tags` are unioned into the existing entry's tags and `metadata` is shallow-merged (incoming keys win), so accumulated labels are never lost. `PUT /api/v1/memory-entries/:id` replaces `tags`/`metadata` outright; pass `null` (or `[]` for tags) to clear.
+On a **merge**, the incoming `tags` are unioned into the existing entry's tags and `metadata` is shallow-merged (incoming keys win), so accumulated labels are never lost. [`PUT /api/v1/memory-entries/:id`](/docs/api/memoryEntries/update-memory-entry) replaces `tags`/`metadata` outright; pass `null` (or `[]` for tags) to clear.
 
 #### Response `action` Field
 
@@ -124,7 +124,7 @@ agent believe this" is answerable from the entry itself:
 | --- | --- | --- |
 | [`write_memory` tool](#write_memory-tool) | the generation that called the tool | `null` — the tool has no conversation context |
 | [Automatic extraction](#automatic-extraction) | the generation whose turn was extracted | the conversation, when the turn came from one |
-| `POST /api/v1/memory-entries` | `null` | `null` |
+| [`POST /api/v1/memory-entries`](/docs/api/memoryEntries/create-memory-entry) | `null` | `null` |
 | [Orchestration `memory_write` node](#orchestration-memory_write-node) | `null` | `null` |
 
 Provenance is recorded **when the entry is created and never rewritten by a later merge**:
@@ -144,12 +144,12 @@ stays intact: `DELETE` remains the way to remove an entry outright.
 
 Invalidated entries are excluded from:
 
-- entry listing (`GET /api/v1/memory-entries`) unless `include_invalidated=true` is passed
+- entry listing ([`GET /api/v1/memory-entries`](/docs/api/memoryEntries/list-memory-entries)) unless `include_invalidated=true` is passed
 - [write deduplication](#write-algorithm) — a retired fact is never a merge target, so
   restating superseded knowledge creates a new entry
 - [Knowledge search](./knowledge.md), so a retired fact is never injected into a generation
 
-They stay readable by ID (`GET /api/v1/memory-entries/{entry_id}`) for audit.
+They stay readable by ID ([`GET /api/v1/memory-entries/{entry_id}`](/docs/api/memoryEntries/get-memory-entry)) for audit.
 
 The write path that *produces* an invalidation — LLM arbitration over a shortlist of
 similar entries — has not shipped yet; the columns and the API shape are in place because
@@ -168,7 +168,7 @@ POST /api/v1/memories
 }
 ```
 
-Use the `tags` query parameter on `GET /api/v1/memories` to filter. The parameter supports **glob patterns**:
+Use the `tags` query parameter on [`GET /api/v1/memories`](/docs/api/memories/list-memories) to filter. The parameter supports **glob patterns**:
 
 | Pattern      | Matches                                          |
 | ------------ | ------------------------------------------------ |
@@ -258,7 +258,7 @@ Extraction is opt-in and requires both fields: `extraction` without `write_memor
 
 ##### Gating extraction per turn
 
-The agent-level `extraction` flag decides the default, but a single `POST /agents/:id/generate` call can override it with a top-level `extract` boolean (not inside `knowledge_config`):
+The agent-level `extraction` flag decides the default, but a single [`POST /agents/:id/generate`](/docs/api/agents/create-agent-generation) call can override it with a top-level `extract` boolean (not inside `knowledge_config`):
 
 - `extract` omitted — follow the agent's stored `extraction` default.
 - `extract: false` — suppress extraction for this turn even when the agent enables it. Use this for operational or tool-listing turns whose facts would only add noise to a curated memory.

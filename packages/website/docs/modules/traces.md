@@ -67,7 +67,7 @@ together. See [Generations → Transcript](./generations.md#transcript).
 
 ### Grouping Generations Under One Trace
 
-`POST /agents/{agent_id}/generate` accepts a `trace_id`. Passing one that already exists groups the new generation with the earlier ones instead of starting a chain — use it when several turns are one logical run and `parent_trace_id` / `root_trace_id` would misrepresent them as nested calls.
+[`POST /agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation) accepts a `trace_id`. Passing one that already exists groups the new generation with the earlier ones instead of starting a chain — use it when several turns are one logical run and `parent_trace_id` / `root_trace_id` would misrepresent them as nested calls.
 
 - **The steps object is the concatenation of every grouped generation's steps**, in the order the generations first wrote. A second generation appends; it never replaces what the first one recorded.
 - **`step_count` counts them all**, so it stays the length of the object `file_id` points at.
@@ -80,11 +80,11 @@ Concurrent generations sharing one `trace_id` are serialized per server process.
 
 ### Debugging Joins (Trace, Generation, Session)
 
-Generation responses carry `generation_id` + `trace_id`; `GET /generations?trace_id=` returns all generations linked to a trace. Trace records do **not** include `session_id` — capture (`session_id`, `generation_id`, `trace_id`) from generation responses at your own boundary to correlate in both directions. See [Debug Session, Generation, and Trace History - Step 5](/docs/tutorials/debug-session-generation-trace-history#step-5---inspect-traces-for-each-generation).
+Generation responses carry `generation_id` + `trace_id`; [`GET /generations?trace_id=`](/docs/api/generations/list-generations) returns all generations linked to a trace. Trace records do **not** include `session_id` — capture (`session_id`, `generation_id`, `trace_id`) from generation responses at your own boundary to correlate in both directions. See [Debug Session, Generation, and Trace History - Step 5](/docs/tutorials/debug-session-generation-trace-history#step-5---inspect-traces-for-each-generation).
 
 ### Content Purge
 
-`DELETE /traces/{trace_id}/content` deletes the trace's steps object **from storage** and clears its content columns. It requires the `traces:PurgeTraceContent` action.
+[`DELETE /traces/{trace_id}/content`](/docs/api/traces/purge-trace-content) deletes the trace's steps object **from storage** and clears its content columns. It requires the `traces:PurgeTraceContent` action.
 
 - **The row survives as a skeleton.** `content_redacted_at`, the ids, timestamps and `step_count` remain, so a purge is provable. Reads of a purged trace return the skeleton with the redaction marker set, never a 404.
 - **The bytes are deleted, not orphaned.** The purge commits the row changes, then deletes the storage objects; a failed object delete is logged for reconciliation rather than rolled back.
@@ -101,7 +101,7 @@ soat update-project --project_id proj_abc --trace_content_retention_days 90
 ```
 
 - **Opt-in.** `null` (the default) disables retention. Clear it with `--trace_content_retention_days null`.
-- **Same purge path** as `DELETE /traces/{id}/content` — same cascade, byte deletion, `content_redacted_at` semantics, audit entries and `traces.content_purged` events.
+- **Same purge path** as [`DELETE /traces/{id}/content`](/docs/api/traces/purge-trace-content) — same cascade, byte deletion, `content_redacted_at` semantics, audit entries and `traces.content_purged` events.
 - **Scoped to the project, not the agent** — every trace in a subtree shares one project, so a project-scoped window cannot conflict across a nested call the way a per-agent window would.
 - **A run is purged as a unit.** The sweep selects root traces; when a root crosses the window, its whole subtree goes with it.
 - **Auditable.** Sweep-driven purges are stamped `content_redacted_by_principal_type: "system"`, `content_redacted_by_principal_id: "retention_sweep"`.
@@ -156,7 +156,7 @@ This section is the canonical reference for how trace relationships work. All ot
 2. **Child traces** — `parent_trace_id` is always the immediate parent (never skipped levels). `root_trace_id` is always the top-level ancestor (never `null` for non-root traces).
 3. **Sibling traces** share the same `parent_trace_id` and `root_trace_id`.
 4. **Depth-1 children** of the root have `parent_trace_id === root_trace_id`.
-5. The `GET /traces/{id}/tree` endpoint accepts any `id` in the chain and always returns the same full tree rooted at the root trace.
+5. The [`GET /traces/{id}/tree`](/docs/api/traces/get-trace-tree) endpoint accepts any `id` in the chain and always returns the same full tree rooted at the root trace.
 
 ### Concrete Example
 

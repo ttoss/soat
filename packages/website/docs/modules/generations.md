@@ -11,9 +11,9 @@ Generation records track individual LLM generation runs started by agents, inclu
 
 ## Overview
 
-Every agent generation (`POST /agents/:id/generate`, session generation, sub-agent calls) creates a generation record before the model is called. The record tracks the run through its lifecycle and — when the run fails — stores a structured error payload so failed generations are distinguishable from pending ones and can be debugged post-mortem.
+Every agent generation ([`POST /agents/:id/generate`](/docs/api/agents/create-agent-generation), session generation, sub-agent calls) creates a generation record before the model is called. The record tracks the run through its lifecycle and — when the run fails — stores a structured error payload so failed generations are distinguishable from pending ones and can be debugged post-mortem.
 
-Generations can be listed via `GET /generations` (filter by `agent_id`, `trace_id`, or `status`), and each record can be retrieved via `GET /generations/:generation_id`.
+Generations can be listed via [`GET /generations`](/docs/api/generations/list-generations) (filter by `agent_id`, `trace_id`, or `status`), and each record can be retrieved via [`GET /generations/:generation_id`](/docs/api/generations/get-generation).
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -113,7 +113,7 @@ Generation endpoints return HTTP `502` with the `AI_PROVIDER_ERROR` code when th
 }
 ```
 
-The `meta` field includes the `generation_id` and `trace_id` of the failed run so the failure can be inspected post-mortem via `GET /generations/:generation_id` and `GET /traces/:trace_id`.
+The `meta` field includes the `generation_id` and `trace_id` of the failed run so the failure can be inspected post-mortem via [`GET /generations/:generation_id`](/docs/api/generations/get-generation) and [`GET /traces/:trace_id`](/docs/api/traces/get-trace).
 
 ### Metadata
 
@@ -121,8 +121,8 @@ The `metadata` field is a **caller-owned** bag: it holds only what the caller pu
 
 Callers can write metadata two ways:
 
-- **At create time** — pass a `metadata` object on `POST /agents/:id/generate`.
-- **After creation** — `PATCH /generations/:generation_id` with a `metadata` object. The provided keys are **shallow-merged** over the existing metadata, so repeated patches accumulate.
+- **At create time** — pass a `metadata` object on [`POST /agents/:id/generate`](/docs/api/agents/create-agent-generation).
+- **After creation** — [`PATCH /generations/:generation_id`](/docs/api/generations/update-generation) with a `metadata` object. The provided keys are **shallow-merged** over the existing metadata, so repeated patches accumulate.
 
 Both paths require the `generations:UpdateGeneration` action for PATCH and `agents:CreateAgentGeneration` for the create path.
 
@@ -151,7 +151,7 @@ whose input is gone can no longer be curated, and says so with
 
 ### Transcript
 
-`GET /generations/{generation_id}/transcript` reads one turn back step by step: what it
+[`GET /generations/{generation_id}/transcript`](/docs/api/generations/get-generation-transcript) reads one turn back step by step: what it
 was asked, each model step with its tool calls and results, and how it ended.
 
 ```bash
@@ -196,14 +196,14 @@ record.
 
 ### Content Purge
 
-`DELETE /generations/{generation_id}/content` clears the generation's content — `metadata`, `error`, `extraction`, the recorded input messages, and the internal recovery state of a paused run — and stamps `content_redacted_at`. It requires the `generations:PurgeGenerationContent` action.
+[`DELETE /generations/{generation_id}/content`](/docs/api/generations/purge-generation-content) clears the generation's content — `metadata`, `error`, `extraction`, the recorded input messages, and the internal recovery state of a paused run — and stamps `content_redacted_at`. It requires the `generations:PurgeGenerationContent` action.
 
 The usage and audit skeleton is preserved on purpose: ids, timestamps, status, stop reason, and every attribution field (`action_id`, `trigger_id`, `orchestration_run_id`, `node_id`, `agent_version`, `routing`). A billing ledger has to outlive a tenant's erasure of the content, so a purged generation reads back as that skeleton rather than as a 404.
 
 The operation is idempotent: a second purge succeeds and leaves the original `content_redacted_at` untouched.
 
 :::warning
-A generation purge does **not** delete the parent trace's steps object, which holds this generation's content alongside its siblings'. To erase a run's content completely, purge the trace — `DELETE /traces/{trace_id}/content` deletes the steps bytes from storage and cascades the content purge to every generation in the tree. See [Traces](./traces.md#content-purge).
+A generation purge does **not** delete the parent trace's steps object, which holds this generation's content alongside its siblings'. To erase a run's content completely, purge the trace — [`DELETE /traces/{trace_id}/content`](/docs/api/traces/purge-trace-content) deletes the steps bytes from storage and cascades the content purge to every generation in the tree. See [Traces](./traces.md#content-purge).
 :::
 
 ### Automatic content lifecycle
@@ -221,7 +221,7 @@ Multi-step reasoning is composed by the calling application, so intermediate ste
 
 ### Tool context
 
-The generation-creation endpoints (`POST /agents/{agent_id}/generate`, and the session and conversation generate endpoints) accept an optional `tool_context` object. Its entries are forwarded as `X-Soat-Context-*` request headers on every `http`, `mcp` and `soat` tool call the generation makes, and an invalid key is rejected with `400 INVALID_TOOL_CONTEXT_KEY` before the provider is called. It is not persisted on the Generation record. See the [Tool Context reference](../advanced/tool-context.md).
+The generation-creation endpoints ([`POST /agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation), and the session and conversation generate endpoints) accept an optional `tool_context` object. Its entries are forwarded as `X-Soat-Context-*` request headers on every `http`, `mcp` and `soat` tool call the generation makes, and an invalid key is rejected with `400 INVALID_TOOL_CONTEXT_KEY` before the provider is called. It is not persisted on the Generation record. See the [Tool Context reference](../advanced/tool-context.md).
 
 ## Examples
 

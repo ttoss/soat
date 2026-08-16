@@ -12,6 +12,9 @@
 //      packages/postgresdb/src/utils/publicId.ts.
 //   4. A documented `soat <cmd> --flag` naming no real CLI parameter.
 //   5. A documented SDK or curl request-body field naming no real body property.
+//   6. An endpoint mention (`METHOD /path`) that does not link to its generated
+//      API-reference page — and any /docs/api/ link addressing a page no
+//      operation generates.
 //
 // Checks 4 and 5 are existence checks against the in-repo sources of truth, and
 // they cover all three tabs every module example ships. Guarding one language is
@@ -272,7 +275,7 @@ const collectInvocations = (lines) => {
   let buf = null;
   let startLine = 0;
 
-  lines.forEach((line, idx) => {
+  for (const [idx, line] of lines.entries()) {
     const trimmed = line.trimEnd();
     if (buf !== null) {
       buf += ` ${trimmed.replace(/\\$/, '')}`;
@@ -280,13 +283,13 @@ const collectInvocations = (lines) => {
         out.push({ text: buf, line: startLine });
         buf = null;
       }
-      return;
+      continue;
     }
-    if (!/(^|\$\(|\|\s*|&&\s*)\s*soat\s+[a-z0-9-]+/.test(trimmed)) return;
+    if (!/(^|\$\(|\|\s*|&&\s*)\s*soat\s+[a-z0-9-]+/.test(trimmed)) continue;
     startLine = idx + 1;
     if (trimmed.endsWith('\\')) buf = trimmed.replace(/\\$/, '');
     else out.push({ text: trimmed, line: startLine });
-  });
+  }
 
   return out;
 };
@@ -413,6 +416,10 @@ const buildRouteIndex = () => {
             `^${path.replace(/\{[^}]+\}/g, '[^/]+').replace(/\//g, '\\/')}$`
           ),
           operationId: opMatch[1],
+          // The spec file's basename is the reference page's directory: the
+          // OpenAPI plugin is configured per spec with `outputDir:
+          // docs/api/<name>` (packages/website/docusaurus.config.ts).
+          module: entry.replace(/\.yaml$/, ''),
         });
       }
     }
@@ -550,7 +557,7 @@ const checkCurlBodyFields = (files, bodyFields, routeIndex) => {
     const commands = [];
     let buf = null;
     let startLine = 0;
-    lines.forEach((line, idx) => {
+    for (const [idx, line] of lines.entries()) {
       const trimmed = line.trimEnd();
       if (buf !== null) {
         buf += ` ${trimmed.replace(/\\$/, '')}`;
@@ -558,13 +565,13 @@ const checkCurlBodyFields = (files, bodyFields, routeIndex) => {
           commands.push({ text: buf, line: startLine });
           buf = null;
         }
-        return;
+        continue;
       }
-      if (!/^\s*curl\s/.test(trimmed)) return;
+      if (!/^\s*curl\s/.test(trimmed)) continue;
       startLine = idx + 1;
       if (trimmed.endsWith('\\')) buf = trimmed.replace(/\\$/, '');
       else commands.push({ text: trimmed, line: startLine });
-    });
+    }
 
     for (const { text, line } of commands) {
       const payload = text.match(/-d\s+'([\s\S]*)'/);
@@ -593,6 +600,137 @@ const checkCurlBodyFields = (files, bodyFields, routeIndex) => {
         found.push(
           `${rel}:${line}  [unknown curl body field]  ${route.operationId} body.${key}`
         );
+      }
+    }
+  }
+
+  return found;
+};
+
+// ── Check 6: an endpoint mention must link to its reference page ─────────────
+//
+// A reader who meets `POST /api/v1/documents/ingest` in prose wants the request
+// schema, and the generated reference page has it. Linking only the first
+// mention of a page was the initial plan and is the wrong cut: reference docs
+// are entered by deep link — search results, `#re-ingesting-a-document`, a
+// cross-page anchor — so a reader landing mid-page never sees the top of it.
+// "Every resolvable mention is linked" is also the only version of the rule a
+// script can check; "the first one" is an ordinal judgement that each new page
+// would have to remember.
+//
+// The address is derived, not stored: `docs/api/` is gitignored, so the slug
+// only exists after a generator runs. `pr.yml` skips the website build whenever
+// a PR touches Markdown only, which is precisely the PR that adds these links —
+// so a typo would otherwise surface at the next release deploy.
+//
+// A mention that resolves to no operation is left alone: `POST /chat/completions`
+// and `POST /v1/stt` are provider-side, and "every mutating `POST` … under
+// `/api/v1`" names a class, not a route.
+
+/**
+ * The slug `docusaurus-plugin-openapi-docs` derives from an `operationId`,
+ * which is lodash `kebabCase` — note it splits a digit run into its own word
+ * (`downloadFileBase64` -> `download-file-base-64`), which a plain
+ * camel-boundary split gets wrong.
+ */
+export const operationSlug = (operationId) => {
+  return (
+    operationId.match(
+      /[A-Z]{2,}(?=[A-Z][a-z]|[0-9]|\b)|[A-Z]?[a-z]+|[A-Z]+|[0-9]+/g
+    ) ?? []
+  )
+    .map((word) => {
+      return word.toLowerCase();
+    })
+    .join('-');
+};
+
+/**
+ * Every `` `METHOD /path` `` token in a page, with whether it is already inside
+ * a Markdown link. Fenced blocks are skipped: their content is copy-pasted
+ * verbatim, so a link cannot be added there.
+ */
+export const scanReferenceMentions = (text) => {
+  const mentions = [];
+  let fenced = false;
+
+  for (const [i, line] of text.split('\n').entries()) {
+    if (/^\s*(```|~~~)/.test(line)) {
+      fenced = !fenced;
+      continue;
+    }
+    if (fenced) continue;
+
+    for (const m of line.matchAll(
+      /`(GET|POST|PUT|PATCH|DELETE) (\/[^`\s]*)`/g
+    )) {
+      const before = line[m.index - 1];
+      const after = line.slice(m.index + m[0].length);
+      mentions.push({
+        line: i + 1,
+        token: m[0],
+        method: m[1].toLowerCase(),
+        // A query string is not part of the route: `GET /usage/meters?source=eval`
+        // is `listUsageMeters`. A trailing `/` is not either.
+        path: m[2].split(/[?#]/)[0].replace(/\/$/, ''),
+        linked: before === '[' && /^\]\(/.test(after),
+      });
+    }
+  }
+
+  return mentions;
+};
+
+/** The route a mention names, or null when it names none. */
+const resolveMention = (routeIndex, mention) => {
+  // A wildcard or elision is a class of routes, not one operation.
+  if (/[*…]/.test(mention.path)) return null;
+
+  // Docs write the path both with and without the `/api/v1` prefix the specs
+  // declare; `:id` and `{document_id}` both match the index's `[^/]+` segments.
+  const candidates = mention.path.startsWith('/api/v1/')
+    ? [mention.path]
+    : [`/api/v1${mention.path}`, mention.path];
+
+  for (const path of candidates) {
+    const route = routeIndex.find((r) => {
+      return r.method === mention.method && r.re.test(path);
+    });
+    if (route) return route;
+  }
+  return null;
+};
+
+export const referencePath = (route) => {
+  return `/docs/api/${route.module}/${operationSlug(route.operationId)}`;
+};
+
+const checkReferenceLinks = (files, routeIndex) => {
+  const found = [];
+  const known = new Set(
+    routeIndex.map((route) => {
+      return referencePath(route);
+    })
+  );
+
+  for (const file of files) {
+    const rel = file.slice(ROOT.length);
+    const text = readFileSync(file, 'utf-8');
+
+    for (const mention of scanReferenceMentions(text)) {
+      if (mention.linked) continue;
+      const route = resolveMention(routeIndex, mention);
+      if (!route) continue;
+      found.push(
+        `${rel}:${mention.line}  [unlinked API reference]  ${mention.token} -> ${referencePath(route)}`
+      );
+    }
+
+    // The other direction: a link addressing a page no operation generates.
+    for (const [i, line] of text.split('\n').entries()) {
+      for (const link of line.matchAll(/\]\((\/docs\/api\/[^)#\s]+)\)/g)) {
+        if (known.has(link[1])) continue;
+        found.push(`${rel}:${i + 1}  [unknown API reference link]  ${link[1]}`);
       }
     }
   }
@@ -653,17 +791,13 @@ const runChecks = () => {
 
   for (const file of files) {
     const rel = file.slice(ROOT.length);
-    readFileSync(file, 'utf-8')
-      .split('\n')
-      .forEach((line, i) => {
-        for (const check of CHECKS) {
-          if (check.re.test(line)) {
-            violations.push(
-              `${rel}:${i + 1}  [${check.label}]  ${line.trim()}`
-            );
-          }
+    for (const [i, line] of readFileSync(file, 'utf-8').split('\n').entries()) {
+      for (const check of CHECKS) {
+        if (check.re.test(line)) {
+          violations.push(`${rel}:${i + 1}  [${check.label}]  ${line.trim()}`);
         }
-      });
+      }
+    }
   }
 
   violations.push(...checkCliFlags(files, buildCommandFlags()));
@@ -688,8 +822,10 @@ const runChecks = () => {
     })
   );
 
+  const routeIndex = buildRouteIndex();
   violations.push(...checkSdkBodyFields(files, bodyFields, serviceSegments));
-  violations.push(...checkCurlBodyFields(files, bodyFields, buildRouteIndex()));
+  violations.push(...checkCurlBodyFields(files, bodyFields, routeIndex));
+  violations.push(...checkReferenceLinks(files, routeIndex));
 
   return { files, violations };
 };

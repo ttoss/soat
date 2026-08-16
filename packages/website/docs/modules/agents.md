@@ -156,7 +156,7 @@ An entry must contain exactly one of `tool_id` or `tool` (`400 VALIDATION_FAILED
 
 #### Inline (Ephemeral) Tool Definitions
 
-A binding's `tool` property accepts an inline tool definition — the same shape as the [Create Tool](./tools.md#data-model) request body, minus `project_id` (the agent's own project is always used for `{{secret:...}}` resolution). These are **ephemeral**: stored on the agent record and resolved fresh at generation time, without creating a Tool resource. They never appear in `GET /tools` and cannot be targeted by `active_tool_ids` or `step_rules`. An ephemeral definition cannot itself be of type `pipeline` — nest a persisted pipeline tool via a `tool_id` binding instead. Use inline definitions for a tool that only ever makes sense for one agent; use `tool_id` bindings for tools reused across agents.
+A binding's `tool` property accepts an inline tool definition — the same shape as the [Create Tool](./tools.md#data-model) request body, minus `project_id` (the agent's own project is always used for `{{secret:...}}` resolution). These are **ephemeral**: stored on the agent record and resolved fresh at generation time, without creating a Tool resource. They never appear in [`GET /tools`](/docs/api/tools/list-tools) and cannot be targeted by `active_tool_ids` or `step_rules`. An ephemeral definition cannot itself be of type `pipeline` — nest a persisted pipeline tool via a `tool_id` binding instead. Use inline definitions for a tool that only ever makes sense for one agent; use `tool_id` bindings for tools reused across agents.
 
 ### Instructions
 
@@ -254,16 +254,16 @@ By default, all bound tools are available at every step. Use `active_tool_ids` t
 
 ### Generation Loop
 
-Running an agent with `POST /agents/{agent_id}/generate` creates a **generation** — a single execution of the tool loop. The request takes `prompt` and/or `messages`, per-generation overrides for `tool_choice`, `active_tool_ids`, `step_rules`, and `stop_conditions`, plus `stream`, `tool_context`, `max_call_depth`, and the `wait` query toggle. The agent calls the model, executes any requested tool, and feeds the result back until:
+Running an agent with [`POST /agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation) creates a **generation** — a single execution of the tool loop. The request takes `prompt` and/or `messages`, per-generation overrides for `tool_choice`, `active_tool_ids`, `step_rules`, and `stop_conditions`, plus `stream`, `tool_context`, `max_call_depth`, and the `wait` query toggle. The agent calls the model, executes any requested tool, and feeds the result back until:
 
 - The model produces a final text response with no tool calls (unless `tool_choice` is `"required"`).
 - The step count reaches `max_steps`.
 - A stop condition in `stop_conditions` is met.
-- A tool without an `execute` configuration is called (including `client` tools — which pause the generation with `status: "requires_action"` instead of terminating it; the caller submits results via `POST /agents/{agent_id}/generate/{generation_id}/tool-outputs` and the loop resumes — see [client tools](./tools.md#client)).
+- A tool without an `execute` configuration is called (including `client` tools — which pause the generation with `status: "requires_action"` instead of terminating it; the caller submits results via [`POST /agents/{agent_id}/generate/{generation_id}/tool-outputs`](/docs/api/agents/submit-agent-tool-outputs) and the loop resumes — see [client tools](./tools.md#client)).
 
 #### Background Generation
 
-`POST /agents/{agent_id}/generate` runs in the background by default and returns `202 Accepted` immediately:
+[`POST /agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation) runs in the background by default and returns `202 Accepted` immediately:
 
 ```json
 {
@@ -273,7 +273,7 @@ Running an agent with `POST /agents/{agent_id}/generate` creates a **generation*
 }
 ```
 
-The generation record exists before the response is written, so `generation_id` is immediately pollable via `GET /generations/{generation_id}`. Validation, permissions, the call-depth guard and quota admission all still run **synchronously**, so a bad request is a `400`/`403`/`404`/`429` rather than a failure you discover by polling.
+The generation record exists before the response is written, so `generation_id` is immediately pollable via [`GET /generations/{generation_id}`](/docs/api/generations/get-generation). Validation, permissions, the call-depth guard and quota admission all still run **synchronously**, so a bad request is a `400`/`403`/`404`/`429` rather than a failure you discover by polling.
 
 Pass `?wait=true` to block and receive the result inline. Waiting is required to observe `requires_action` (client tools) in the response, so a client-tool flow should always pass it. See [Synchronous & Asynchronous Execution](../advanced/sync-and-async.md) for the platform-wide `wait` contract — including how `stream` and `soat` tool calls interact with it (both always wait).
 
@@ -355,7 +355,7 @@ Each source tag identifies the exact row the text came from: a memory result
 carries its entry id, and a document chunk carries its page when the document
 has one (a chunk with no page renders as `[Document: /reports/q1.txt]`). That is
 what makes an injected claim traceable — the entry id resolves through
-`GET /api/v1/memory-entries/{entry_id}`, including for an entry that was later
+[`GET /api/v1/memory-entries/{entry_id}`](/docs/api/memoryEntries/get-memory-entry), including for an entry that was later
 [superseded](./memories.md#temporal-invalidation).
 
 | Field            | Type       | Description                                                                                 |
@@ -369,7 +369,7 @@ what makes an injected claim traceable — the entry id resolves through
 | `write_memory_id`| `string`   | When set, automatically injects a `write_memory` tool that writes facts to this memory      |
 | `extraction`     | `boolean` \| `object` | Automatic fact extraction from completed turns (requires `write_memory_id`). `true` enables defaults; the object form customizes provider, model, and prompt — see [Automatic Extraction](./memories.md#automatic-extraction) |
 
-`knowledge_config` can also be passed in the body of `POST /agents/{agent_id}/generate` to override the stored config for that single call: `memory_ids`, `memory_tags`, `document_ids`, and `document_paths` are **unioned** with the agent's stored arrays, while `min_score` and `limit` use the per-generation value when present. `write_memory_id` and `extraction` are agent-level only. See [Memories](./memories.md#agent-integration) for how the `write_memory` tool works.
+`knowledge_config` can also be passed in the body of [`POST /agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation) to override the stored config for that single call: `memory_ids`, `memory_tags`, `document_ids`, and `document_paths` are **unioned** with the agent's stored arrays, while `min_score` and `limit` use the per-generation value when present. `write_memory_id` and `extraction` are agent-level only. See [Memories](./memories.md#agent-integration) for how the `write_memory` tool works.
 
 Automatic extraction can be **gated per turn** with the top-level `extract` boolean on the same generate body — independent of `knowledge_config`. Omit it to follow the agent's stored `extraction` default; `extract: false` suppresses extraction for a single turn; `extract: true` forces it for a single turn, provided the agent has a `write_memory_id`. It has no effect on streaming or `requires_action` turns, which never extract. See [Automatic Extraction](./memories.md#automatic-extraction).
 

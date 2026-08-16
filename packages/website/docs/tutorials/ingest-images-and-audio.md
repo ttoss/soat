@@ -420,7 +420,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/ingestion-rules" \
 
 Upload an image as a [File](/docs/modules/files#examples), then ingest it exactly like
 a PDF or text file. Nothing about the call names the agent or the rule —
-`POST /documents/ingest` resolves the matching rule from the file's `content_type`
+[`POST /documents/ingest`](/docs/api/documents/ingest-document) resolves the matching rule from the file's `content_type`
 automatically. Uploading via base64 lets us set `content_type` explicitly to
 `image/png`, which is what drives routing.
 [`$FIXTURES_DIR/receipt.png`](https://github.com/ttoss/soat/blob/main/packages/website/docs/tutorials/fixtures/receipt.png)

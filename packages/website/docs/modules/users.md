@@ -46,7 +46,7 @@ Sensitive fields (`passwordHash`, internal numeric ID) are never exposed in resp
 
 ### Bootstrap
 
-The `POST /api/v1/users/bootstrap` endpoint creates the first admin user. It is only available when the user table is empty and returns `409 Conflict` if any user already exists. This endpoint does not require authentication.
+The [`POST /api/v1/users/bootstrap`](/docs/api/users/bootstrap-user) endpoint creates the first admin user. It is only available when the user table is empty and returns `409 Conflict` if any user already exists. This endpoint does not require authentication.
 
 You can also bootstrap an admin automatically on server startup by setting two environment variables:
 
@@ -59,7 +59,7 @@ When both variables are present and no users exist, the server creates the admin
 
 ### Authentication
 
-Users authenticate via `POST /api/v1/users/login` with username and password. On success, the server returns a signed JWT containing the user's public ID and role. The token is passed as `Authorization: Bearer <token>` on subsequent requests. See [IAM — Authentication](./iam.md#authentication), or [Chat with an LLM — Step 1 (Log in as admin)](/docs/tutorials/chat-with-llm#step-1--log-in-as-admin) for a worked login example.
+Users authenticate via [`POST /api/v1/users/login`](/docs/api/users/login-user) with username and password. On success, the server returns a signed JWT containing the user's public ID and role. The token is passed as `Authorization: Bearer <token>` on subsequent requests. See [IAM — Authentication](./iam.md#authentication), or [Chat with an LLM — Step 1 (Log in as admin)](/docs/tutorials/chat-with-llm#step-1--log-in-as-admin) for a worked login example.
 
 ### Policy Attachment
 

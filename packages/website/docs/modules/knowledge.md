@@ -65,7 +65,7 @@ A `KnowledgeResult` is a discriminated union on `source_type`. All results share
 
 ### Search Modes
 
-The `POST /knowledge/search` endpoint accepts the following filters. At least one must be provided.
+The [`POST /knowledge/search`](/docs/api/knowledge/search-knowledge) endpoint accepts the following filters. At least one must be provided.
 
 | Parameter        | Type       | Description                                                                                |
 | ---------------- | ---------- | ------------------------------------------------------------------------------------------ |

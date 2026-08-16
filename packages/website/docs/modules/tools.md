@@ -118,7 +118,7 @@ Called with `{ "user_id": "123", "post_id": "456" }`, the server issues `DELETE 
 
 #### Secret references in `execute`
 
-Never paste raw credentials into `execute.headers` — `GET /tools/{id}` echoes the config back verbatim to anyone with read access. Embed a [secret reference](./secrets.md#secret-references-secret) instead, e.g. `"headers": { "Authorization": "Bearer {{secret:sec_01HXYZ}}" }`.
+Never paste raw credentials into `execute.headers` — [`GET /tools/{id}`](/docs/api/tools/get-tool) echoes the config back verbatim to anyone with read access. Embed a [secret reference](./secrets.md#secret-references-secret) instead, e.g. `"headers": { "Authorization": "Bearer {{secret:sec_01HXYZ}}" }`.
 
 `{{secret:...}}` tokens are supported in `execute.url` and `execute.headers` values. The token is resolved to the decrypted secret value right before the outbound request; the stored tool — and everything returned by `GET`/`LIST` — keeps the reference. The referenced secret must exist in the same project, validated at tool create/update time (`400 SECRET_NOT_FOUND` otherwise).
 
@@ -133,7 +133,7 @@ A `{{context:<key>}}` token in `execute.headers` or `mcp.headers` is substituted
 | Valid in | `execute.headers` and `mcp.headers` only. In `execute.url`, `mcp.url`, `execute.auth` or a body it is rejected with `400 INVALID_TEMPLATE_TOKEN` — a caller-supplied value must not be able to steer the outbound URL. |
 | Missing key at call time | The call fails with `400 MISSING_TOOL_CONTEXT_KEY`, naming the key and header, rather than sending an empty credential. |
 | Read back | `GET`/`LIST` echo the token, never the resolved value — same as `{{secret:...}}`. |
-| Calling paths without context | `POST /api/v1/tools/{tool_id}/call` and an orchestration `tool` node carry no `tool_context`, so a tool declaring this token cannot be invoked through them. Reach it through an agent generation, a session, or an orchestration `agent` node. |
+| Calling paths without context | [`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool) and an orchestration `tool` node carry no `tool_context`, so a tool declaring this token cannot be invoked through them. Reach it through an agent generation, a session, or an orchestration `agent` node. |
 
 #### Scoping which context keys reach a tool
 
@@ -209,7 +209,7 @@ For `POST`, `PUT`, and `PATCH`, the request body defaults to JSON (`Content-Type
 
 ### client
 
-Client tools have no server-side `execute`. When the model calls a `client` tool, the generation **pauses** — it suspends with `status: "requires_action"` and the pending tool calls. The caller executes the tool locally, then submits the results via `POST /agents/{agent_id}/generate/{generation_id}/tool-outputs` to resume the loop; the response is either a final result or another `requires_action` if the model calls more client tools.
+Client tools have no server-side `execute`. When the model calls a `client` tool, the generation **pauses** — it suspends with `status: "requires_action"` and the pending tool calls. The caller executes the tool locally, then submits the results via [`POST /agents/{agent_id}/generate/{generation_id}/tool-outputs`](/docs/api/agents/submit-agent-tool-outputs) to resume the loop; the response is either a final result or another `requires_action` if the model calls more client tools.
 
 Example response when a client tool is called:
 
@@ -264,7 +264,7 @@ By default an `mcp` tool exposes the **entire** MCP server surface. Set the `act
 }
 ```
 
-The scope is enforced at two points: only allowlisted tools are registered with the model during generation, and `POST /tools/{id}/call` (and `pipeline` steps) reject an `action` outside the allowlist with `400 VALIDATION_FAILED` before any request reaches the MCP server.
+The scope is enforced at two points: only allowlisted tools are registered with the model during generation, and [`POST /tools/{id}/call`](/docs/api/tools/call-tool) (and `pipeline` steps) reject an `action` outside the allowlist with `400 VALIDATION_FAILED` before any request reaches the MCP server.
 
 Omit `actions` (or set `null`) to expose the whole surface; `[]` exposes nothing. Because MCP tool names are discovered at runtime, they are **not** validated against a static registry at create/update time (unlike `soat` actions) — a name the server does not advertise is simply never exposed.
 
@@ -306,7 +306,7 @@ Each step's full output is captured under `steps.<id>`. A step may reference onl
 
 For LLM-decided (rather than fixed) multi-step flows, see [Orchestrations](./orchestrations.md), which share the same JSON Logic mapping model.
 
-**Validation.** `POST /tools`, `PATCH /tools/:id`, and `validate-formation` all validate a `pipeline` config's structure before it can run — every step must have a `tool_id` or an inline `tool` object with a `name`. In a formation template a step `tool_id` may be a `{ "ref": … }` (resolved at deploy); direct `POST`/`PATCH` require a literal string `tool_id`. `validate-formation` additionally warns (not an error) when the tool's own `parameters` schema declares a property that no step `input` or `output` mapping ever reads via `{ "var": "input.<name>" }` — an unreachable input key.
+**Validation.** [`POST /tools`](/docs/api/tools/create-tool), [`PATCH /tools/:id`](/docs/api/tools/update-tool), and `validate-formation` all validate a `pipeline` config's structure before it can run — every step must have a `tool_id` or an inline `tool` object with a `name`. In a formation template a step `tool_id` may be a `{ "ref": … }` (resolved at deploy); direct `POST`/`PATCH` require a literal string `tool_id`. `validate-formation` additionally warns (not an error) when the tool's own `parameters` schema declares a property that no step `input` or `output` mapping ever reads via `{ "var": "input.<name>" }` — an unreachable input key.
 
 ### Output Mapping
 
@@ -320,7 +320,7 @@ For LLM-decided (rather than fixed) multi-step flows, see [Orchestrations](./orc
 
 - **Ordering for `pipeline` tools.** The tool's top-level `output_mapping` runs *after* the pipeline's own `output` mapping, over the pipeline's final result.
 - **`client` tools.** The mapping is applied when the submitted tool output is materialized back into the generation, keyed by tool name.
-- **Where `input` is available.** Populated for a direct call (`POST /tools/{id}/call`), a pipeline step, or a workflow/orchestration tool dispatch; `{}` for a tool the model calls by name from within an agent's loop, and for a `client` tool's output mapping.
+- **Where `input` is available.** Populated for a direct call ([`POST /tools/{id}/call`](/docs/api/tools/call-tool)), a pipeline step, or a workflow/orchestration tool dispatch; `{}` for a tool the model calls by name from within an agent's loop, and for a `client` tool's output mapping.
 - **A `var` path that resolves to `null`** (commonly a mismatched path, e.g. a missing `output.` prefix) emits a debug log entry; the mapped result is unchanged.
 
 When no `output_mapping` is configured, the raw result is returned unchanged.
@@ -333,7 +333,7 @@ Presets and model-supplied arguments reach the action wherever the OpenAPI opera
 
 ### Calling a Tool Directly
 
-Tools can be invoked independently of an agent via `POST /api/v1/tools/{tool_id}/call`. The body accepts `action` (required for `soat` and `mcp` types) and `input`. For `pipeline` tools, `input` is the pipeline input and `action` is ignored. When the tool has an `output_mapping`, the response is that mapping's result — see [Output Mapping](#output-mapping).
+Tools can be invoked independently of an agent via [`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool). The body accepts `action` (required for `soat` and `mcp` types) and `input`. For `pipeline` tools, `input` is the pipeline input and `action` is ignored. When the tool has an `output_mapping`, the response is that mapping's result — see [Output Mapping](#output-mapping).
 
 - A non-2xx target response fails with `502 TOOL_HTTP_ERROR`; the error `meta` carries `tool_status_code`, `tool_response_body`, `tool_url`, and `tool_method`.
 - If [`execute.auth`](#computed-credentials-executeauth) cannot produce the credential, the call fails with `502 TOOL_AUTH_FAILED` instead.

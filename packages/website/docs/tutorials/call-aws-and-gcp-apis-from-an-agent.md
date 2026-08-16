@@ -113,7 +113,7 @@ PROJECT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/projects" \
 
 ## Step 2 — Store the AWS credentials as secrets
 
-`GET /tools/{tool_id}` echoes `execute` back verbatim to anyone with read access on the project. A pasted access key would therefore be readable by every project member. Store the values as [secrets](/docs/modules/secrets#secret-references-secret) and reference them: the reference is what is stored and returned, and it is resolved only immediately before signing.
+[`GET /tools/{tool_id}`](/docs/api/tools/get-tool) echoes `execute` back verbatim to anyone with read access on the project. A pasted access key would therefore be readable by every project member. Store the values as [secrets](/docs/modules/secrets#secret-references-secret) and reference them: the reference is what is stored and returned, and it is resolved only immediately before signing.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>

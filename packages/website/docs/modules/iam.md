@@ -31,7 +31,7 @@ SOAT supports two authentication methods. Both use the `Authorization: Bearer <t
 
 ### JWT (Users)
 
-Users authenticate via `POST /api/v1/users/login` with username and password. The server returns a signed JWT containing the user's public ID and role. Admin users bypass policy evaluation and have unrestricted access. Regular users are authorized through the [policies](./policies.md) attached to their account.
+Users authenticate via [`POST /api/v1/users/login`](/docs/api/users/login-user) with username and password. The server returns a signed JWT containing the user's public ID and role. Admin users bypass policy evaluation and have unrestricted access. Regular users are authorized through the [policies](./policies.md) attached to their account.
 
 ### API Keys
 
@@ -124,7 +124,7 @@ Every permission action corresponds to a single operation that is reachable thro
 | Surface           | Convention                    | Example                     |
 | ----------------- | ----------------------------- | --------------------------- |
 | **Permission**    | `module:OperationName`        | `actors:CreateActor`        |
-| **REST endpoint** | `METHOD /api/v1/...`          | `POST /api/v1/actors`       |
+| **REST endpoint** | `METHOD /api/v1/...`          | [`POST /api/v1/actors`](/docs/api/actors/create-actor)       |
 | **MCP tool**      | kebab-case operation name     | `create-actor`              |
 | **CLI command**   | `soat <kebab-case>`           | `soat create-actor`         |
 | **SDK method**    | `soat.<module>.<camelCase>()` | `soat.actors.createActor()` |
@@ -209,10 +209,10 @@ A denial's status code depends on what the route does, not on which policy faile
 
 | Route shape                                                             | Denied response                                                                      |
 | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| **List** (`GET /agents`)                                                 | `200` with an empty list — the caller may read zero projects, so nothing matches      |
-| **Read one** (`GET /agents/{id}`)                                        | `404 RESOURCE_NOT_FOUND` — existence is not leaked for a resource the caller can't see |
-| **Write / act on one** (`PATCH /agents/{id}`, `POST .../release/promote`) | `403 FORBIDDEN`                                                                        |
-| **Create** (`POST /agents`)                                             | `403 FORBIDDEN`                                                                        |
+| **List** ([`GET /agents`](/docs/api/agents/list-agents))                                                 | `200` with an empty list — the caller may read zero projects, so nothing matches      |
+| **Read one** ([`GET /agents/{id}`](/docs/api/agents/get-agent))                                        | `404 RESOURCE_NOT_FOUND` — existence is not leaked for a resource the caller can't see |
+| **Write / act on one** ([`PATCH /agents/{id}`](/docs/api/agents/patch-agent), `POST .../release/promote`) | `403 FORBIDDEN`                                                                        |
+| **Create** ([`POST /agents`](/docs/api/agents/create-agent))                                             | `403 FORBIDDEN`                                                                        |
 | Scoped credential targeting another project                             | `403 API_KEY_PROJECT_SCOPE`, naming both projects                                     |
 
 A write is refused **before** the request body is validated, so a caller without

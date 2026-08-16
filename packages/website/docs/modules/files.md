@@ -88,8 +88,8 @@ The list endpoint applies policy filters at the SQL level — the database retur
 
 Upload tokens provide a two-step upload flow — the local-storage equivalent of an S3 presigned URL — usable from any client (SDK, CLI, curl, or an MCP agent):
 
-1. **Request a token** — `POST /api/v1/files/presigned-url` returns a single-use `upload_token`, an `upload_url`, and an `expires_at` (15-minute lifetime). This step is authenticated and requires `files:UploadFile`. By default `upload_url` is **relative** (e.g. `/api/v1/files/upload/upt_xxx`); when the server is configured with `SOAT_BASE_URL`, it is returned as a **fully-qualified absolute URL** so clients and MCP agents can POST to it without knowing the server base URL in advance — see [Configuration](#configuration).
-2. **Upload the content** — `POST /api/v1/files/upload/{token}` writes the file and returns the standard file record. This endpoint requires **no bearer credential** — the token is the credential — and accepts either `multipart/form-data` (field `file`) or JSON with a base64 `content` field.
+1. **Request a token** — [`POST /api/v1/files/presigned-url`](/docs/api/files/create-presigned-url) returns a single-use `upload_token`, an `upload_url`, and an `expires_at` (15-minute lifetime). This step is authenticated and requires `files:UploadFile`. By default `upload_url` is **relative** (e.g. `/api/v1/files/upload/upt_xxx`); when the server is configured with `SOAT_BASE_URL`, it is returned as a **fully-qualified absolute URL** so clients and MCP agents can POST to it without knowing the server base URL in advance — see [Configuration](#configuration).
+2. **Upload the content** — [`POST /api/v1/files/upload/{token}`](/docs/api/files/upload-file-with-token) writes the file and returns the standard file record. This endpoint requires **no bearer credential** — the token is the credential — and accepts either `multipart/form-data` (field `file`) or JSON with a base64 `content` field.
 
 Because the two steps are decoupled, the party that authorizes the upload (step 1) need not be the party that transfers the bytes (step 2) — the token can be handed to a browser, a worker, or a CLI to complete the upload directly over HTTP.
 
@@ -97,7 +97,7 @@ The token is invalidated after a single successful upload. Subsequent uploads re
 
 ### Downloading from a tool
 
-`GET /api/v1/files/{file_id}/download` streams the raw bytes and is a REST/SDK/CLI operation only — raw bytes have no JSON form, so it is not offered as an MCP or `soat` tool action. Use `download-file-base64`, which returns the same content as a base64 string in a normal JSON response. Large files are subject to the client's tool-call payload limit, so an agent should fetch the download URL out-of-band with whatever HTTP capability its runtime provides.
+[`GET /api/v1/files/{file_id}/download`](/docs/api/files/download-file) streams the raw bytes and is a REST/SDK/CLI operation only — raw bytes have no JSON form, so it is not offered as an MCP or `soat` tool action. Use `download-file-base64`, which returns the same content as a base64 string in a normal JSON response. Large files are subject to the client's tool-call payload limit, so an agent should fetch the download URL out-of-band with whatever HTTP capability its runtime provides.
 
 #### Large files via MCP
 

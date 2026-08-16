@@ -388,7 +388,7 @@ echo "read-only policy: $READ_POLICY_ID"
 Attach the full-access policy to Alice and the read-only policy to Bob. See [Policies — Attaching Policies to Users](/docs/modules/policies#attaching-policies-to-users) for more details.
 
 :::note
-`PUT /users/:user_id/policies` **replaces** the user's entire policy list with the provided array.
+[`PUT /users/:user_id/policies`](/docs/api/users/attach-user-policies) **replaces** the user's entire policy list with the provided array.
 :::
 
 <Tabs groupId="client">

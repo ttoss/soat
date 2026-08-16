@@ -254,7 +254,7 @@ produce a verdict.
 
 For a queued run, a worker claims tasks in batches; the worker that drains the run's
 **last** task settles the run and fires [`eval_run.completed`](#lifecycle-webhooks). Poll
-`GET /evals/{eval_id}/runs/{eval_run_id}` or subscribe to the webhook. Delivery is
+[`GET /evals/{eval_id}/runs/{eval_run_id}`](/docs/api/evaluations/get-eval-run) or subscribe to the webhook. Delivery is
 at-least-once but safe: a result row is unique per `(run, item)`, and settling is guarded
 by an atomic claim, so the completion event fires exactly once.
 
@@ -265,7 +265,7 @@ that still has queued tasks is left alone.
 
 ### Canceling a run
 
-`POST /evals/{eval_id}/runs/{eval_run_id}/cancel` drops a queued or running run's
+[`POST /evals/{eval_id}/runs/{eval_run_id}/cancel`](/docs/api/evaluations/cancel-eval-run) drops a queued or running run's
 outstanding tasks and settles it `canceled`; a run that has already finished is rejected
 with `400`. Results already written are **kept**, and `completed_count` /
 `errored_count` report what ran — an item a worker had already claimed runs to completion
@@ -311,7 +311,7 @@ item to another dataset is rejected. Running the suite gives the agent under tes
 generation history, so deleting the formation later fails with
 `409 FORMATION_DELETE_FAILED` naming that agent — see
 [formation teardown](./formations.md#resource-lifecycle); force-delete the agent
-(`DELETE /api/v1/agents/{agent_id}?force=true`) or declare it with
+([`DELETE /api/v1/agents/{agent_id}?force=true`](/docs/api/agents/delete-agent)) or declare it with
 `deletion_policy: retain`.
 
 ### Baseline deltas
@@ -351,8 +351,8 @@ terminal run.
 Every item is a real generation, and `llm_judge` doubles the calls. Eval spend is labelled
 in [usage](./usage.md) metering: item generations carry `source: "eval"` and judge
 completions `source: "eval_judge"` (ordinary agent traffic carries no `source`). Filter
-with `GET /api/v1/usage/meters?source=eval` or roll up with
-`GET /api/v1/usage?group_by=source`. [Quotas](./quotas.md) and usage thresholds still
+with [`GET /api/v1/usage/meters?source=eval`](/docs/api/usage/list-usage-meters) or roll up with
+[`GET /api/v1/usage?group_by=source`](/docs/api/usage/get-usage). [Quotas](./quotas.md) and usage thresholds still
 apply to eval runs.
 
 :::warning[Eval runs have real side effects]
