@@ -30,6 +30,24 @@ export const normalizePath = (p: string): string => {
 };
 
 /**
+ * The `LIKE` pattern that selects everything filed **under** a directory.
+ *
+ * The prefix is a path boundary, not a substring: `/reports` matches
+ * `/reports/q1.txt` and never `/reports-archive/q1.txt`, which is what makes it
+ * safe for a caller that uses a path segment as a grouping key. `/` selects
+ * everything.
+ *
+ * `%` and `_` in the caller's prefix are escaped, so a prefix of `/%` is the
+ * literal directory `/%` rather than a wildcard matching every row — a filter
+ * that silently widens to "everything" is worse than one that matches nothing.
+ */
+export const pathPrefixPattern = (prefix: string): string => {
+  const normalized = normalizePath(prefix);
+  const directory = normalized === '/' ? '/' : `${normalized}/`;
+  return `${directory.replace(/[\\%_]/g, '\\$&')}%`;
+};
+
+/**
  * Derives the filename (download name) from a logical path: its last segment.
  * `/temas/report.txt` → `report.txt`. Returns undefined for an empty/null path.
  */

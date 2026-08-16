@@ -1,3 +1,4 @@
+import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
@@ -9,6 +10,7 @@ import {
 } from './documentContent';
 import { mapDocument } from './documentMapper';
 import { emitResourceEvent } from './eventBus';
+import { pathPrefixPattern } from './filePaths';
 import { getActiveStorageProvider, getStorageProvider } from './fileStorage';
 import { recoverStaleDocument } from './ingestionCallback';
 import { emptyPage, paginatedList } from './pagination';
@@ -82,6 +84,7 @@ const buildDocumentQueryOptions = (args: {
   projectIds?: number[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   policyWhere?: Record<string, any>;
+  pathPrefix?: string;
   limit: number;
   offset: number;
 }) => {
@@ -90,8 +93,13 @@ const buildDocumentQueryOptions = (args: {
     args.policyWhere && Object.keys(args.policyWhere).length > 0
       ? { ...args.policyWhere }
       : {};
-  const fileWhere =
-    args.projectIds !== undefined ? { projectId: args.projectIds } : undefined;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const file: Record<string, any> = {};
+  if (args.projectIds !== undefined) file.projectId = args.projectIds;
+  if (args.pathPrefix !== undefined) {
+    file.path = { [Op.like]: pathPrefixPattern(args.pathPrefix) };
+  }
+  const fileWhere = Object.keys(file).length > 0 ? file : undefined;
   const needsSubQueryFalse =
     args.policyWhere !== undefined &&
     Object.keys(args.policyWhere).some((k) => {
@@ -125,6 +133,8 @@ export const listDocuments = async (args: {
   projectIds?: number[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   policyWhere?: Record<string, any>;
+  /** Only documents filed under this directory (see `pathPrefixPattern`). */
+  pathPrefix?: string;
   limit?: number;
   offset?: number;
 }) => {
@@ -139,6 +149,7 @@ export const listDocuments = async (args: {
       const { topLevelWhere, fileWhere, subQuery } = buildDocumentQueryOptions({
         projectIds: args.projectIds,
         policyWhere: args.policyWhere,
+        pathPrefix: args.pathPrefix,
         limit,
         offset,
       });
