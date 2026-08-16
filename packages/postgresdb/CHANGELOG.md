@@ -3,6 +3,20 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.24.0](https://github.com/ttoss/soat/compare/v0.23.0...v0.24.0) (2026-08-16)
+
+### Bug Fixes
+
+* **formations:** a failed deploy explains itself on the response ([#1028](https://github.com/ttoss/soat/issues/1028)) ([#1031](https://github.com/ttoss/soat/issues/1031)) ([50e20a2](https://github.com/ttoss/soat/commit/50e20a2773d790f513068053f85fc131372f4f85))
+* **traces:** keep every generation's steps when a trace_id is reused ([#1027](https://github.com/ttoss/soat/issues/1027)) ([523d9f9](https://github.com/ttoss/soat/commit/523d9f99654e4f25ed0bcd81ff1d8329fd6e2028)), closes [#1024](https://github.com/ttoss/soat/issues/1024) [#1024](https://github.com/ttoss/soat/issues/1024) [pre-#1024](https://github.com/pre-/issues/1024)
+
+### Features
+
+* **memories:** entry provenance and temporal invalidation schema (RC-1, RC-2) ([#1025](https://github.com/ttoss/soat/issues/1025)) ([561efeb](https://github.com/ttoss/soat/commit/561efeb53d68e600f942ffbbbc5522b871be2b0a))
+* **sessions:** fork a session from any point in its history ([#1023](https://github.com/ttoss/soat/issues/1023)) ([#1035](https://github.com/ttoss/soat/issues/1035)) ([cf234bb](https://github.com/ttoss/soat/commit/cf234bb87628ea308a318c82d5ab1d9fc93e40f2))
+* **webhooks:** durable delivery outbox, redelivery, and timestamped signature ([#1052](https://github.com/ttoss/soat/issues/1052)) ([c7ce377](https://github.com/ttoss/soat/commit/c7ce377fd11cc383a51677c3c9b56342d3208ef0)), closes [#1037](https://github.com/ttoss/soat/issues/1037)
+* **workflows:** add a `tool` on_enter dispatch kind ([#1053](https://github.com/ttoss/soat/issues/1053)) ([42f943f](https://github.com/ttoss/soat/commit/42f943f2167ca8dc2157fbb2d50b02821fbaaef8)), closes [#792](https://github.com/ttoss/soat/issues/792) [#1039](https://github.com/ttoss/soat/issues/1039)
+
 # [0.23.0](https://github.com/ttoss/soat/compare/v0.22.1...v0.23.0) (2026-08-14)
 
 ### Features
