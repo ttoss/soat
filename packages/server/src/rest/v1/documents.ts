@@ -106,6 +106,7 @@ documentsRouter.get('/documents', async (ctx: Context) => {
   const offset = ctx.query.offset
     ? parseInt(ctx.query.offset as string, 10)
     : undefined;
+  const pathPrefix = ctx.query.path_prefix as string | undefined;
 
   const projectIds = await resolveReadProjectIds({
     ctx,
@@ -132,11 +133,17 @@ documentsRouter.get('/documents', async (ctx: Context) => {
       };
       return;
     }
-    ctx.body = await listDocuments({ projectIds, policyWhere, limit, offset });
+    ctx.body = await listDocuments({
+      projectIds,
+      policyWhere,
+      pathPrefix,
+      limit,
+      offset,
+    });
     return;
   }
 
-  ctx.body = await listDocuments({ projectIds, limit, offset });
+  ctx.body = await listDocuments({ projectIds, pathPrefix, limit, offset });
 });
 
 documentsRouter.get('/documents/:document_id', async (ctx: Context) => {

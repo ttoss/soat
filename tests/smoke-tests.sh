@@ -785,6 +785,19 @@ if [ "$GET_DOC1_PATH" != "/animals/fox.txt" ]; then
 fi
 echo "GET document path: OK"
 
+# 11b2. List documents filed under one directory
+echo "--- Listing documents by path prefix ---"
+PREFIX_LIST_RESP=$($SOAT_CLI list-documents \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --path-prefix /animals/)
+PREFIX_LIST_TOTAL=$(printf '%s\n' "$PREFIX_LIST_RESP" | jq -r '.total')
+PREFIX_LIST_ID=$(printf '%s\n' "$PREFIX_LIST_RESP" | jq -r '.data[0].id')
+if [ "$PREFIX_LIST_TOTAL" != "1" ] || [ "$PREFIX_LIST_ID" != "$DOC1_ID" ]; then
+  echo "ERROR: path_prefix list expected only $DOC1_ID, got total=$PREFIX_LIST_TOTAL first=$PREFIX_LIST_ID" >&2
+  exit 1
+fi
+echo "Path-prefix list returned only the document under /animals/: OK"
+
 # 11c. Search knowledge by path prefix
 echo "--- Search knowledge by path prefix ---"
 PATH_SEARCH_RESP=$($SOAT_CLI search-knowledge \

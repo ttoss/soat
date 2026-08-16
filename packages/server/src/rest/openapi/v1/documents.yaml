@@ -34,6 +34,19 @@ paths:
           schema:
             type: string
             example: 'proj_V1StGXR8Z5jdHi6B'
+        - name: path_prefix
+          in: query
+          required: false
+          description: >-
+            Only documents filed under this directory. The prefix is a path
+            boundary, not a substring: `/reports` returns `/reports/q1.txt` and
+            never `/reports-archive/q1.txt`, and `/` selects the whole project.
+            A leading slash is optional and a trailing one is ignored, so
+            `reports`, `/reports` and `/reports/` are the same filter. `%` and
+            `_` are literal characters, not wildcards.
+          schema:
+            type: string
+            example: '/reports/'
         - name: limit
           in: query
           required: false

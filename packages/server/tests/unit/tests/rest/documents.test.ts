@@ -187,6 +187,87 @@ describe('Documents', () => {
     });
   });
 
+  describe('GET /api/v1/documents?path_prefix=…', () => {
+    let insideId: string;
+
+    beforeAll(async () => {
+      const inside = await authenticatedTestClient(adminToken)
+        .post('/api/v1/documents')
+        .send({
+          project_id: projectId,
+          content: 'Filed under the prefix.',
+          path: '/kcol_alpha/refunds.md',
+          filename: 'refunds.md',
+        });
+      insideId = inside.body.id;
+
+      await authenticatedTestClient(adminToken).post('/api/v1/documents').send({
+        project_id: projectId,
+        content: 'Filed elsewhere.',
+        path: '/kcol_beta/shipping.md',
+        filename: 'shipping.md',
+      });
+    });
+
+    test('returns only the documents filed under the prefix', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents?project_id=${projectId}&path_prefix=/kcol_alpha/`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.total).toBe(1);
+      expect(response.body.data).toHaveLength(1);
+      expect(response.body.data[0].id).toBe(insideId);
+      expect(response.body.data[0].path).toBe('/kcol_alpha/refunds.md');
+    });
+
+    test('a prefix nothing is filed under returns an empty page', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents?project_id=${projectId}&path_prefix=/kcol_missing/`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.total).toBe(0);
+      expect(response.body.data).toEqual([]);
+    });
+
+    test('the prefix is a path boundary, not a substring match', async () => {
+      // `/kcol_alph` must not match `/kcol_alpha/…`, and a `%` in the prefix is
+      // a literal — not a LIKE wildcard that would match every document.
+      const partial = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents?project_id=${projectId}&path_prefix=/kcol_alph`
+      );
+      expect(partial.status).toBe(200);
+      expect(partial.body.total).toBe(0);
+
+      const wildcard = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents?project_id=${projectId}&path_prefix=${encodeURIComponent('/%')}`
+      );
+      expect(wildcard.status).toBe(200);
+      expect(wildcard.body.total).toBe(0);
+    });
+
+    test('normalizes a prefix that omits the leading slash', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents?project_id=${projectId}&path_prefix=kcol_alpha/`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.total).toBe(1);
+      expect(response.body.data[0].id).toBe(insideId);
+    });
+
+    test('applies without project_id, across every accessible project', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        '/api/v1/documents?path_prefix=/kcol_alpha/'
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.total).toBe(1);
+      expect(response.body.data[0].id).toBe(insideId);
+    });
+  });
+
   describe('GET /api/v1/documents/:id', () => {
     let documentId: string;
 

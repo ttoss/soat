@@ -67,6 +67,18 @@ Each Document has one or more chunks stored in the database. Chunks are not dire
 
 `path` is optional at creation time; if omitted, the server defaults to `/<filename>`. Paths must be absolute (start with `/`) and are normalized (`.` and `..` are resolved). `project_id + path` is unique within a project. [`PATCH /documents/{document_id}`](/docs/api/documents/update-document) accepts a `path` field to move a document.
 
+### Listing a Directory
+
+[`GET /api/v1/documents`](/docs/api/documents/list-documents) accepts `path_prefix`, which returns only the documents filed under one directory:
+
+```bash
+soat list-documents --project-id proj_ABC --path-prefix /reports/
+```
+
+The prefix is a **path boundary, not a substring**: `/reports` returns `/reports/q1.txt` and never `/reports-archive/q1.txt`. A leading slash is optional and a trailing one is ignored (`reports`, `/reports` and `/reports/` are the same filter), `/` selects the whole project, and `%` and `_` are literal characters rather than wildcards.
+
+The filter runs in SQL alongside the policy filter, so `total` and pagination stay accurate — a caller that uses a path segment as a grouping key (a fronting layer's collections, a per-tenant folder) can page one group without reading the rest of the project.
+
 ## Key Concepts
 
 ### Async File Ingestion
