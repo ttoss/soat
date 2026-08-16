@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.24.0](https://github.com/ttoss/soat/compare/v0.23.0...v0.24.0) (2026-08-16)
+
+### Bug Fixes
+
+* **formations:** a failed deploy explains itself on the response ([#1028](https://github.com/ttoss/soat/issues/1028)) ([#1031](https://github.com/ttoss/soat/issues/1031)) ([50e20a2](https://github.com/ttoss/soat/commit/50e20a2773d790f513068053f85fc131372f4f85))
+
+### Features
+
+* **webhooks:** durable delivery outbox, redelivery, and timestamped signature ([#1052](https://github.com/ttoss/soat/issues/1052)) ([c7ce377](https://github.com/ttoss/soat/commit/c7ce377fd11cc383a51677c3c9b56342d3208ef0)), closes [#1037](https://github.com/ttoss/soat/issues/1037)
+
 # [0.23.0](https://github.com/ttoss/soat/compare/v0.22.1...v0.23.0) (2026-08-14)
 
 ### Bug Fixes

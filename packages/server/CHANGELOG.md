@@ -3,6 +3,30 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.24.0](https://github.com/ttoss/soat/compare/v0.23.0...v0.24.0) (2026-08-16)
+
+### Bug Fixes
+
+* **ai-providers:** list models with the record's own credentials ([#1048](https://github.com/ttoss/soat/issues/1048)) ([850e4d6](https://github.com/ttoss/soat/commit/850e4d676abe4b6ef1330265b26e3325390791ab)), closes [#1040](https://github.com/ttoss/soat/issues/1040)
+* **api-keys:** confine key management to a scoped credential's project ([#1038](https://github.com/ttoss/soat/issues/1038)) ([#1045](https://github.com/ttoss/soat/issues/1045)) ([74c181e](https://github.com/ttoss/soat/commit/74c181e03310a8dd9c08e85136d02045d2bd6bdb)), closes [#1036](https://github.com/ttoss/soat/issues/1036)
+* **formations:** a failed deploy explains itself on the response ([#1028](https://github.com/ttoss/soat/issues/1028)) ([#1031](https://github.com/ttoss/soat/issues/1031)) ([50e20a2](https://github.com/ttoss/soat/commit/50e20a2773d790f513068053f85fc131372f4f85))
+* **server:** deny writes with 403, not 404, on an empty project scope ([#1033](https://github.com/ttoss/soat/issues/1033)) ([5eae41d](https://github.com/ttoss/soat/commit/5eae41d7f4d25a8b44d0475279d15245393c52e1)), closes [#1029](https://github.com/ttoss/soat/issues/1029)
+* **tasks:** reconcile dispatches orphaned by a restart ([#1051](https://github.com/ttoss/soat/issues/1051)) ([8bebcba](https://github.com/ttoss/soat/commit/8bebcba8e8fcb5bebca09ed869f0beb5c1f3d53e)), closes [#855](https://github.com/ttoss/soat/issues/855)
+* **tests:** pin quota enforcement sequences to a non-rolling window ([#1049](https://github.com/ttoss/soat/issues/1049)) ([#1054](https://github.com/ttoss/soat/issues/1054)) ([c054c31](https://github.com/ttoss/soat/commit/c054c31bf17764b1c8d5adf3a2a9487f835fc933))
+* **traces:** keep every generation's steps when a trace_id is reused ([#1027](https://github.com/ttoss/soat/issues/1027)) ([523d9f9](https://github.com/ttoss/soat/commit/523d9f99654e4f25ed0bcd81ff1d8329fd6e2028)), closes [#1024](https://github.com/ttoss/soat/issues/1024) [#1024](https://github.com/ttoss/soat/issues/1024) [pre-#1024](https://github.com/pre-/issues/1024)
+
+### Features
+
+* **documents:** echo the source file content_type and emit ingestion lifecycle events ([#1050](https://github.com/ttoss/soat/issues/1050)) ([befb2c7](https://github.com/ttoss/soat/commit/befb2c74eee573d1019a1a469c7c8d69eb14c8c9)), closes [#1041](https://github.com/ttoss/soat/issues/1041)
+* **eventBus:** type the event envelope so a wrong event name stops compiling ([#1015](https://github.com/ttoss/soat/issues/1015)) ([48cbe9d](https://github.com/ttoss/soat/commit/48cbe9dbb34ae387598af4cf854d25138807d8b3)), closes [#1004](https://github.com/ttoss/soat/issues/1004) [#903](https://github.com/ttoss/soat/issues/903)
+* **generations:** read a turn back as a transcript ([#1021](https://github.com/ttoss/soat/issues/1021)) ([#1026](https://github.com/ttoss/soat/issues/1026)) ([640b532](https://github.com/ttoss/soat/commit/640b5328ed3b222521408cebf40894c54e4f1ecc)), closes [#1012](https://github.com/ttoss/soat/issues/1012) [#1012](https://github.com/ttoss/soat/issues/1012)
+* **knowledge:** add score as the ranking field; document the injection threat model (RC-3, RC-4) ([#1032](https://github.com/ttoss/soat/issues/1032)) ([c9d90de](https://github.com/ttoss/soat/commit/c9d90dec70995e4da117f878f55b5c98bf284059))
+* **knowledge:** carry entry id and page in injected source tags (RC-5) ([#1030](https://github.com/ttoss/soat/issues/1030)) ([92e24b0](https://github.com/ttoss/soat/commit/92e24b09e385a42ff61b2ef23e6398c016e881e0))
+* **memories:** entry provenance and temporal invalidation schema (RC-1, RC-2) ([#1025](https://github.com/ttoss/soat/issues/1025)) ([561efeb](https://github.com/ttoss/soat/commit/561efeb53d68e600f942ffbbbc5522b871be2b0a))
+* **sessions:** fork a session from any point in its history ([#1023](https://github.com/ttoss/soat/issues/1023)) ([#1035](https://github.com/ttoss/soat/issues/1035)) ([cf234bb](https://github.com/ttoss/soat/commit/cf234bb87628ea308a318c82d5ab1d9fc93e40f2))
+* **webhooks:** durable delivery outbox, redelivery, and timestamped signature ([#1052](https://github.com/ttoss/soat/issues/1052)) ([c7ce377](https://github.com/ttoss/soat/commit/c7ce377fd11cc383a51677c3c9b56342d3208ef0)), closes [#1037](https://github.com/ttoss/soat/issues/1037)
+* **workflows:** add a `tool` on_enter dispatch kind ([#1053](https://github.com/ttoss/soat/issues/1053)) ([42f943f](https://github.com/ttoss/soat/commit/42f943f2167ca8dc2157fbb2d50b02821fbaaef8)), closes [#792](https://github.com/ttoss/soat/issues/792) [#1039](https://github.com/ttoss/soat/issues/1039)
+
 # [0.23.0](https://github.com/ttoss/soat/compare/v0.22.1...v0.23.0) (2026-08-14)
 
 * feat!: one rule for system content — never a message, on any surface (#995) ([da80f03](https://github.com/ttoss/soat/commit/da80f03c176927e509289ba9db18b808d45ba783)), closes [#995](https://github.com/ttoss/soat/issues/995)
