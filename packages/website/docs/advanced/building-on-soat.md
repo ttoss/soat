@@ -29,11 +29,11 @@ Mint the key with `project_id` set (see [Project Scoping](../modules/api-keys.md
 
 | Your call, made with the `proj_tenant_a` key | What SOAT does |
 | --- | --- |
-| `GET /agents` (no `project_id`) | Returns tenant A's agents. There is no query that widens it |
-| `GET /agents/{id}` for a tenant B agent | `404 RESOURCE_NOT_FOUND` — existence is not leaked |
-| `POST /agents` (no `project_id`) | Creates in tenant A — the [implicit project id](../modules/api-keys.md#implicit-project-id) |
+| [`GET /agents`](/docs/api/agents/list-agents) (no `project_id`) | Returns tenant A's agents. There is no query that widens it |
+| [`GET /agents/{id}`](/docs/api/agents/get-agent) for a tenant B agent | `404 RESOURCE_NOT_FOUND` — existence is not leaked |
+| [`POST /agents`](/docs/api/agents/create-agent) (no `project_id`) | Creates in tenant A — the [implicit project id](../modules/api-keys.md#implicit-project-id) |
 | Any call with `project_id=proj_tenant_b` | `403 API_KEY_PROJECT_SCOPE`, naming both projects |
-| `POST /api-keys` for another project, or unscoped | `403` — the credential [cannot mint its way out](../modules/api-keys.md#the-boundary-covers-key-management-itself) |
+| [`POST /api-keys`](/docs/api/api-keys/create-api-key) for another project, or unscoped | `403` — the credential [cannot mint its way out](../modules/api-keys.md#the-boundary-covers-key-management-itself) |
 
 That last row is what makes the rest load-bearing. Key creation is self-service, so without it a confined credential could mint an unscoped key for its owning user and be outside its boundary in a single call.
 

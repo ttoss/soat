@@ -102,7 +102,7 @@ After three failed attempts the delivery is marked `failed` and is not retried a
 
 ### Redelivery
 
-`POST /api/v1/webhook-deliveries/{delivery_id}/redeliver` queues a stored payload to be sent again — useful when your endpoint was down, or when you have fixed a bug and want the original event back.
+[`POST /api/v1/webhook-deliveries/{delivery_id}/redeliver`](/docs/api/webhooks/redeliver-webhook-delivery) queues a stored payload to be sent again — useful when your endpoint was down, or when you have fixed a bug and want the original event back.
 
 It creates a **new** delivery record rather than resetting the original, so the failed attempt stays in the history. The call returns `202 Accepted` with the new delivery; the send itself happens in the background, so poll that delivery's `status` to observe the outcome.
 

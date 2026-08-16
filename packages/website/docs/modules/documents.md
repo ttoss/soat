@@ -116,7 +116,7 @@ emits a terminal event on the project event bus, deliverable through a
 | Event | Emitted when | Extra `data` field |
 | --- | --- | --- |
 | `documents.ingested` | The document reached `status: ready` and its chunks are queryable | `chunk_count` — the final number of chunks indexed |
-| `documents.ingest_failed` | The ingestion settled in `status: failed` | `error` — the same reason `GET /documents/:id/status` reports |
+| `documents.ingest_failed` | The ingestion settled in `status: failed` | `error` — the same reason [`GET /documents/:id/status`](/docs/api/documents/get-document-status) reports |
 
 Both carry the document in `data` in the same shape the REST API returns it, so a
 subscriber does not need a follow-up read. A re-ingest emits a fresh event each
