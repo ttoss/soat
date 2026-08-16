@@ -23,7 +23,7 @@ The embedding model is configured server-side via environment variables (`EMBEDD
 | --------------------- | -------- | -------------------------------------------------------------------------------------------------------- |
 | `EMBEDDING_PROVIDER`  | Yes      | Embedding backend: `ollama`, `openai`, or `bedrock`.                                                     |
 | `EMBEDDING_MODEL`     | Yes      | Model identifier for the backend (e.g. `qwen3-embedding:0.6b`, `text-embedding-3-small`, `amazon.titan-embed-text-v2:0`). |
-| `EMBEDDING_DIMENSIONS`| No       | Vector dimensionality. Must match the model output (default: `1024`).                                    |
+| `EMBEDDING_DIMENSIONS`| Yes      | Vector dimensionality. Must match the model output, e.g. `1024` — the server fails at startup when unset. |
 | `OLLAMA_BASE_URL`     | No       | Ollama server URL (`ollama` only). Defaults to `http://localhost:11434`.                                 |
 | `EMBEDDING_API_KEY`   | No       | API key for the backend: the OpenAI key (`openai`), or a Bedrock `ABSK…` bearer token (`bedrock`). For `openai`, falls back to `OPENAI_API_KEY`. |
 | `EMBEDDING_BASE_URL`  | No       | Override the base URL for any OpenAI-compatible endpoint (`openai` only).                                 |
