@@ -581,7 +581,7 @@ echo "AGENT_ID: $AGENT_ID"
 
 ## Step 9 — Run a generation
 
-Send a user message that requires both customer facts (from memory) and the support policy (from the document). SOAT searches both sources and injects matching results as a `system` message before calling the model.
+Send a user message that requires both customer facts (from memory) and the support policy (from the document). SOAT searches both sources and injects matching results as a fenced reference-context `user` message before calling the model — never as `system` content, since retrieved knowledge can be user-derived (see [Knowledge Config](/docs/modules/agents#knowledge-config)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
