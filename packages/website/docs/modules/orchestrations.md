@@ -291,7 +291,7 @@ Parallelism is bounded on two axes:
 
 ### Queue metrics
 
-`GET /api/v1/orchestrations/queue/stats` returns a point-in-time snapshot of the run queue — waiting vs. claimed task counts, the oldest waiting task's age, recent claim-latency percentiles (computed in-process over a rolling 5-minute window), and a per-project breakdown. `driver` names the active backend; under `sqs`, `oldest_queued_age_seconds` / `per_project` are `null` / empty. Guarded by the `orchestrations:GetQueueStats` action; a project-scoped caller sees only their own projects under `per_project`.
+[`GET /api/v1/orchestrations/queue/stats`](/docs/api/orchestrations/get-queue-stats) returns a point-in-time snapshot of the run queue — waiting vs. claimed task counts, the oldest waiting task's age, recent claim-latency percentiles (computed in-process over a rolling 5-minute window), and a per-project breakdown. `driver` names the active backend; under `sqs`, `oldest_queued_age_seconds` / `per_project` are `null` / empty. Guarded by the `orchestrations:GetQueueStats` action; a project-scoped caller sees only their own projects under `per_project`.
 
 ### State and Mappings
 
@@ -429,7 +429,7 @@ Records are returned by both `get-orchestration-run` and `list-orchestration-run
 
 ### Run usage
 
-Every generation an `agent` node dispatches meters against the run: its [usage](./usage.md) event carries the run's `orchestration_run_id` and the dispatching `node_id`. `get-orchestration-run` surfaces the roll-up inline as a `usage` object summed across the run's generations. For the full per-event breakdown, fetch the run receipt at `GET /api/v1/usage/receipt?orchestration_run_id=…` — see [Receipts](./usage.md#receipts-and-reconciliation). When a run is started by a [trigger](./triggers.md), the trigger id is propagated onto every in-run generation's usage event, so run spend also rolls up per trigger (`?trigger_id=`).
+Every generation an `agent` node dispatches meters against the run: its [usage](./usage.md) event carries the run's `orchestration_run_id` and the dispatching `node_id`. `get-orchestration-run` surfaces the roll-up inline as a `usage` object summed across the run's generations. For the full per-event breakdown, fetch the run receipt at [`GET /api/v1/usage/receipt?orchestration_run_id=…`](/docs/api/usage/get-usage-receipt) — see [Receipts](./usage.md#receipts-and-reconciliation). When a run is started by a [trigger](./triggers.md), the trigger id is propagated onto every in-run generation's usage event, so run spend also rolls up per trigger (`?trigger_id=`).
 
 > **Note:** usage events are metered as each generation settles, so read the roll-up from `get-orchestration-run`, not the `start-orchestration-run` response — even with `wait: true` the start response can carry `usage: null`.
 
@@ -460,7 +460,7 @@ When a `human` node is reached, the run pauses and the GET run response includes
 }
 ```
 
-`required_action.type` discriminates why the run paused: `human_input` for a `human` node, `webhook_receive` for a `webhook` node in `mode: "receive"`. Both are resumed the same way — `POST /orchestration-runs/{id}/human-input` with the paused node's `node_id` — there is no separate, independently-authenticated callback endpoint for webhook-receive nodes.
+`required_action.type` discriminates why the run paused: `human_input` for a `human` node, `webhook_receive` for a `webhook` node in `mode: "receive"`. Both are resumed the same way — [`POST /orchestration-runs/{id}/human-input`](/docs/api/orchestrations/submit-human-input) with the paused node's `node_id` — there is no separate, independently-authenticated callback endpoint for webhook-receive nodes.
 
 ### Approval Nodes
 

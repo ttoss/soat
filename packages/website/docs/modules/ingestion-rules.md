@@ -11,7 +11,7 @@ An Ingestion Rule routes a file `content_type` to a converter [Tool](./tools.md)
 
 ## Overview
 
-Native [file ingestion](./documents.md#file-ingestion-and-chunking) only extracts text from PDFs (text layer), `text/plain`, and `text/markdown`. Anything else fails with `FILE_PARSE_FAILED`. An Ingestion Rule fills that gap: it maps a `content_type` glob (e.g. `image/*`, `audio/mpeg`, `application/pdf`) to a **converter** — either a [Tool](./tools.md) (`http`/`mcp`/`soat`/`pipeline`) that calls an external OCR, speech-to-text, or vision service, or an [Agent](./agents.md) with a multimodal model. When `POST /documents/ingest` receives a file whose type has no native extractor — or a PDF whose native extraction yields no text — it looks up the best-matching rule and invokes the converter to produce the document text; the existing chunk + embedding pipeline is unchanged.
+Native [file ingestion](./documents.md#file-ingestion-and-chunking) only extracts text from PDFs (text layer), `text/plain`, and `text/markdown`. Anything else fails with `FILE_PARSE_FAILED`. An Ingestion Rule fills that gap: it maps a `content_type` glob (e.g. `image/*`, `audio/mpeg`, `application/pdf`) to a **converter** — either a [Tool](./tools.md) (`http`/`mcp`/`soat`/`pipeline`) that calls an external OCR, speech-to-text, or vision service, or an [Agent](./agents.md) with a multimodal model. When [`POST /documents/ingest`](/docs/api/documents/ingest-document) receives a file whose type has no native extractor — or a PDF whose native extraction yields no text — it looks up the best-matching rule and invokes the converter to produce the document text; the existing chunk + embedding pipeline is unchanged.
 
 Rules are per-project. SOAT does not perform OCR or transcription itself — the rule points at a tool or agent you configure, so you can use any API or model you like.
 
@@ -128,7 +128,7 @@ Any other shape fails the document with `CONVERTER_OUTPUT_INVALID`; a tool error
 
 A converter tool that returns text (or `{ pages }`) directly is **synchronous** — ingestion continues to chunk and embed inline. An agent converter is always synchronous: its generation is awaited inline and it has no deferral path.
 
-A tool that returns `{ status: "pending" }` is **asynchronous** — but only when the document is being ingested in the default async mode (`POST /documents/ingest` without `?wait=true`). The document stays in `processing` while the external job runs, then the tool (or the service it wires) delivers the result to the Documents module's ingestion-callback endpoint — see [Deliver an async converter result](/docs/api/documents/complete-ingestion-callback) in the API reference for its path, query token, and request schema.
+A tool that returns `{ status: "pending" }` is **asynchronous** — but only when the document is being ingested in the default async mode ([`POST /documents/ingest`](/docs/api/documents/ingest-document) without `?wait=true`). The document stays in `processing` while the external job runs, then the tool (or the service it wires) delivers the result to the Documents module's ingestion-callback endpoint — see [Deliver an async converter result](/docs/api/documents/complete-ingestion-callback) in the API reference for its path, query token, and request schema.
 
 The callback's document ID and token come from the `callback` block ingestion injected into the tool's input (see [Converter Tool Contract](#converter-tool-contract)); its body uses the same output contract as a synchronous converter, adapted for a JSON body (a single page is `{ "text": "..." }` rather than a bare string, since a top-level JSON string is not a valid HTTP JSON body).
 
@@ -208,7 +208,7 @@ curl -X POST https://api.example.com/api/v1/ingestion-rules \
 </TabItem>
 </Tabs>
 
-To create an agent-converter rule instead, pass `--agent-id` in place of `--tool-id` (e.g. a vision agent on `application/pdf` as an OCR fallback for scanned PDFs). Ingesting a matching file needs nothing special — `POST /documents/ingest` routes it to the converter automatically; see [Documents](./documents.md#file-ingestion-and-chunking).
+To create an agent-converter rule instead, pass `--agent-id` in place of `--tool-id` (e.g. a vision agent on `application/pdf` as an OCR fallback for scanned PDFs). Ingesting a matching file needs nothing special — [`POST /documents/ingest`](/docs/api/documents/ingest-document) routes it to the converter automatically; see [Documents](./documents.md#file-ingestion-and-chunking).
 
 ### List rules
 

@@ -18,7 +18,7 @@ An Actor belongs to a project and has a display name, an optional `external_id`,
 The module covers:
 
 - **Identity** — display name and external correlation via `external_id`
-- **Idempotent creation** — `POST /actors` with `external_id` uses find-or-create semantics
+- **Idempotent creation** — [`POST /actors`](/docs/api/actors/create-actor) with `external_id` uses find-or-create semantics
 - **Agent/Chat linking** — an Actor can be bound to an Agent or a Chat for AI interactions
 - **Instructions** — per-actor system prompt overrides composed into generate calls
 - **Tags** — key-value metadata enabling attribute-based access control via IAM conditions
@@ -60,12 +60,12 @@ If the tool set includes third-party endpoints, prefer an opaque internal identi
 
 :::
 
-When `external_id` is supplied to `POST /actors`, the endpoint uses **find-or-create** semantics:
+When `external_id` is supplied to [`POST /actors`](/docs/api/actors/create-actor), the endpoint uses **find-or-create** semantics:
 
 - If no actor with that `external_id` exists in the project, a new actor is created and `201 Created` is returned.
 - If an actor with that `external_id` already exists, the existing actor is returned as-is with `200 OK`. None of the other request fields (name, instructions, etc.) are applied to the existing actor.
 
-This makes actor creation safe to call repeatedly from event-driven pipelines (e.g. a new inbound WhatsApp message). When `external_id` is **not** supplied, `POST /actors` always creates a new actor and returns `201 Created`.
+This makes actor creation safe to call repeatedly from event-driven pipelines (e.g. a new inbound WhatsApp message). When `external_id` is **not** supplied, [`POST /actors`](/docs/api/actors/create-actor) always creates a new actor and returns `201 Created`.
 
 ### Agent and Chat Linking
 
@@ -73,20 +73,20 @@ An Actor can be linked to either an Agent or a Chat — not both simultaneously.
 
 - Set `agent_id` to link the actor to a specific Agent.
 - Set `chat_id` to link the actor to a specific Chat.
-- Pass `null` in a `PATCH /actors/:id` request to unlink either field.
+- Pass `null` in a [`PATCH /actors/:id`](/docs/api/actors/update-actor) request to unlink either field.
 - Supplying both `agent_id` and `chat_id` in the same request returns `400 Bad Request`.
 
 ### Memory Linking and Auto-Creation
 
 An Actor can be linked to a [Memory](./memories.md) container via `memory_id`. The memory container stores persistent facts about the actor (e.g. preferences, conversation history summaries) that can be injected into AI generation calls.
 
-**Manual linking** — supply `memory_id` in the `POST /actors` or `PATCH /actors/:id` request body:
+**Manual linking** — supply `memory_id` in the [`POST /actors`](/docs/api/actors/create-actor) or [`PATCH /actors/:id`](/docs/api/actors/update-actor) request body:
 
 ```json
 { "memory_id": "mem_V1StGXR8Z5jdHi6B" }
 ```
 
-**Auto-creation** — set `auto_create_memory: true` in the `POST /actors` body to automatically create a new memory container named after the actor and link it:
+**Auto-creation** — set `auto_create_memory: true` in the [`POST /actors`](/docs/api/actors/create-actor) body to automatically create a new memory container named after the actor and link it:
 
 ```json
 {
@@ -120,11 +120,11 @@ To unlink a memory from an actor without deleting it, `PATCH` the actor with `"m
 
 `instructions` is a free-form string injected into the system prompt when an AI generation is scoped to this actor. Use it to encode persona-specific context (tone, name, constraints) that should be consistent across all interactions with the actor.
 
-Pass `null` to `PATCH /actors/:id` to clear the instructions.
+Pass `null` to [`PATCH /actors/:id`](/docs/api/actors/update-actor) to clear the instructions.
 
 ### Filtering
 
-`GET /actors` filters by `project_id`, `external_id` (exact match — use it to resolve an external identifier to an `actor_` ID), and `name` (partial, case-insensitive), with `limit`/`offset` pagination in a `{ data, total, limit, offset }` envelope.
+[`GET /actors`](/docs/api/actors/list-actors) filters by `project_id`, `external_id` (exact match — use it to resolve an external identifier to an `actor_` ID), and `name` (partial, case-insensitive), with `limit`/`offset` pagination in a `{ data, total, limit, offset }` envelope.
 
 ### Project Scope
 

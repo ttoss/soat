@@ -80,7 +80,7 @@ With the flag on, a `GET` produces the same entry shape as a mutation — the pe
 
 Two boundaries follow from the flag being per-project:
 
-- **A read that names no project is never recorded.** Unscoped list enumeration (`GET /api/v1/secrets` with no `project_id`) is not attributable to a single project, so no project's flag can opt it in. Pass `project_id` to have list reads audited.
+- **A read that names no project is never recorded.** Unscoped list enumeration ([`GET /api/v1/secrets`](/docs/api/secrets/list-secrets) with no `project_id`) is not attributable to a single project, so no project's flag can opt it in. Pass `project_id` to have list reads audited.
 - **The flag is read per project, not globally.** Turning it on for one project leaves reads of every other project unrecorded.
 
 The flag is cached briefly in-process so the read path never pays a lookup; a change through the API takes effect immediately on the instance that served it, and within 30 seconds on any other instance.
@@ -91,7 +91,7 @@ Entries are never updated or deleted through the API; the model layer rejects up
 
 ### NDJSON export
 
-`GET /api/v1/audit-log/export` streams a project's entries as newline-delimited JSON — one entry object per line, oldest first, with the same fields as the read API. It exists for archival ahead of the retention window and for shipping the log into an external system (SIEM, data lake, an LGPD/GDPR subject-access request).
+[`GET /api/v1/audit-log/export`](/docs/api/audit-log/export-audit-entries) streams a project's entries as newline-delimited JSON — one entry object per line, oldest first, with the same fields as the read API. It exists for archival ahead of the retention window and for shipping the log into an external system (SIEM, data lake, an LGPD/GDPR subject-access request).
 
 - `project_id` is **required**: the export is per-project by design, not an unbounded cross-project dump.
 - Every list filter (`action`, `principal_id`, `resource_public_id`, `resource_srn`, `from`, `to`) applies identically.

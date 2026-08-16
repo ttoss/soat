@@ -73,7 +73,7 @@ firing record is the source of truth for the outcome.
 
 | Type       | Started by                                    | Notes                                                     |
 | ---------- | --------------------------------------------- | --------------------------------------------------------- |
-| `manual`   | `POST /api/v1/triggers/{id}/fire`             | Synchronous; the response is the terminal firing          |
+| `manual`   | [`POST /api/v1/triggers/{id}/fire`](/docs/api/triggers/fire-trigger)             | Synchronous; the response is the terminal firing          |
 | `webhook`  | Signed `POST /hooks/triggers/{trigger_id}` (see below) | Has a `secret`; verified with HMAC-SHA256                 |
 | `schedule` | The built-in scheduler on a cron cadence      | Requires `cron`; `next_fire_at` is server-computed in UTC |
 
@@ -215,13 +215,13 @@ unbounded catch-up storm.
 | `NAME_CONFLICT`                | `409`  | A trigger with that `name` already exists in the project                                                       | Choose a different name                                                                              |
 | `POLICY_HAS_DEPENDENTS`        | `409`  | Attempted to delete a policy while a trigger's `policy_id` still references it                                | Detach the policy from the trigger first, or delete the trigger                                      |
 | `RESOURCE_NOT_FOUND`           | `404`  | The trigger or firing ID doesn't exist (or isn't in the caller's project)                                      | Check the ID and project scope                                                                        |
-| `SECRET_NOT_DECRYPTABLE`       | `500`  | The stored signing secret is not valid ciphertext — written before secret-at-rest encryption, or encrypted under a different `SECRETS_ENCRYPTION_KEY` | Rotate the secret (`POST /triggers/{id}/rotate-secret`) to replace it, or restore the original key. A webhook trigger in this state cannot authenticate inbound deliveries until it is fixed |
+| `SECRET_NOT_DECRYPTABLE`       | `500`  | The stored signing secret is not valid ciphertext — written before secret-at-rest encryption, or encrypted under a different `SECRETS_ENCRYPTION_KEY` | Rotate the secret ([`POST /triggers/{id}/rotate-secret`](/docs/api/triggers/rotate-trigger-secret)) to replace it, or restore the original key. A webhook trigger in this state cannot authenticate inbound deliveries until it is fixed |
 
 For the inbound webhook endpoint's error responses (bad signature, oversized body, inactive trigger, …), see the [table above](#inbound-webhook-endpoint).
 
 **A `schedule` trigger never fires:** confirm `active` is `true`, `next_fire_at` is set, and the server wasn't started with `SOAT_TRIGGER_SCHEDULER_DISABLED=true`.
 
-**A firing's `status` never leaves `pending`/`running`:** webhook and schedule firings execute fire-and-forget; poll `GET /trigger-firings/{id}` for the terminal `status`. There is no automatic retry — inspect `error.code`/`error.message` and re-fire manually.
+**A firing's `status` never leaves `pending`/`running`:** webhook and schedule firings execute fire-and-forget; poll [`GET /trigger-firings/{id}`](/docs/api/triggers/get-trigger-firing) for the terminal `status`. There is no automatic retry — inspect `error.code`/`error.message` and re-fire manually.
 
 ### Formation Support
 

@@ -147,7 +147,7 @@ Requests are counted in memory per (project, API key) and a periodic flush write
 | `chat` | A standalone [chat](./chats.md) completion |
 | `memory_extraction` / `memory_consolidation` | A [memory](./memories.md) pass |
 
-`source` is set by the platform at the metering choke point — a caller cannot bill eval spend as production. It both filters (`GET /api/v1/usage/meters?source=eval`) and groups (`group_by=source`); ordinary traffic collapses into the `null` bucket, so groups still sum to the project total.
+`source` is set by the platform at the metering choke point — a caller cannot bill eval spend as production. It both filters ([`GET /api/v1/usage/meters?source=eval`](/docs/api/usage/list-usage-meters)) and groups (`group_by=source`); ordinary traffic collapses into the `null` bucket, so groups still sum to the project total.
 
 ### End-user attribution
 
@@ -159,7 +159,7 @@ Each component's cost is computed at write time from the effective price row for
 
 SOAT ships **no default prices**. Prices are managed where their scope lives:
 
-- **Global defaults** — admins via `PUT /api/v1/usage/prices`. `GET /api/v1/usage/prices` lists only these.
+- **Global defaults** — admins via [`PUT /api/v1/usage/prices`](/docs/api/usage/upsert-price-book). [`GET /api/v1/usage/prices`](/docs/api/usage/get-price-book) lists only these.
 - **Project + provider-slug** — project members via [`PUT /api/v1/projects/{project_id}/prices`](./projects.md).
 - **Per-provider override** — project members via [`PUT /api/v1/ai-providers/{ai_provider_id}/prices`](./ai-providers.md#price-overrides).
 
@@ -167,13 +167,13 @@ Past-effective prices are immutable — corrections ship as new future-dated row
 
 ### Receipts and reconciliation
 
-`GET /api/v1/usage/receipt?generation_id=…` returns a billing **receipt** for a completed generation: one line item per usage event, a `by_meter_type` cost split, reconstructed token totals (`total_input_tokens` is uncached input + cached), and a grand total. Because every component carries its price-book version and frozen cost, receipts are reproducible and meant to reconcile against the provider's invoice within a small tolerance (target ±2%).
+[`GET /api/v1/usage/receipt?generation_id=…`](/docs/api/usage/get-usage-receipt) returns a billing **receipt** for a completed generation: one line item per usage event, a `by_meter_type` cost split, reconstructed token totals (`total_input_tokens` is uncached input + cached), and a grand total. Because every component carries its price-book version and frozen cost, receipts are reproducible and meant to reconcile against the provider's invoice within a small tolerance (target ±2%).
 
-`GET /api/v1/usage/receipt?orchestration_run_id=…` returns the same shape for an entire [orchestration](./orchestrations.md) run, summed across every node. The run's roll-up is also surfaced inline as a `usage` object on `GET /api/v1/orchestration-runs/{orchestration_run_id}`.
+[`GET /api/v1/usage/receipt?orchestration_run_id=…`](/docs/api/usage/get-usage-receipt) returns the same shape for an entire [orchestration](./orchestrations.md) run, summed across every node. The run's roll-up is also surfaced inline as a `usage` object on [`GET /api/v1/orchestration-runs/{orchestration_run_id}`](/docs/api/orchestrations/get-orchestration-run).
 
 ### Aggregation
 
-`GET /api/v1/usage?project_id=…&group_by=…` rolls a project's usage up over an optional `[from, to]` window (inclusive ISO-8601 bounds on `created_at`), bucketed by one dimension — `model`, `agent`, `run`, `day`, `meter_type`, `actor`, `session`, or [`source`](#workload-source). Each group and the grand `totals` carry summed token counts and `cost_usd` (`null` when no event in the bucket was priced). An event a dimension does not apply to collapses into a `null`-keyed group, so groups always sum to the project total. Requires `usage:GetUsage` on the project.
+[`GET /api/v1/usage?project_id=…&group_by=…`](/docs/api/usage/get-usage) rolls a project's usage up over an optional `[from, to]` window (inclusive ISO-8601 bounds on `created_at`), bucketed by one dimension — `model`, `agent`, `run`, `day`, `meter_type`, `actor`, `session`, or [`source`](#workload-source). Each group and the grand `totals` carry summed token counts and `cost_usd` (`null` when no event in the bucket was priced). An event a dimension does not apply to collapses into a `null`-keyed group, so groups always sum to the project total. Requires `usage:GetUsage` on the project.
 
 Every group also carries a `components` array — the measured dimensions summed over the bucket — so an infra meter aggregates to what it measured rather than reading as all-zero tokens. Entries are keyed by `component` **and** `unit` and sorted, and quantities are summed as exact decimals (no float drift).
 

@@ -175,7 +175,7 @@ Internal completions (chats, memory extraction/consolidation) resolve their mete
 | Agents (generations, and client-tool resumption)    | its own `model_route_id`, else its pin, else the project default |
 | Memory extraction / consolidation                   | the completion config's `ai_provider_id` override, else the agent's pin, else the agent's `model_route_id`, else the project default |
 | Chats (chat-scoped completions)                     | the chat's pin, else the project default |
-| Stateless `POST /chat/completions`                  | its per-request `ai_provider_id` only — it belongs to no project of its own, so there is no default to inherit |
+| Stateless [`POST /chat/completions`](/docs/api/chats/create-chat-completion)                  | its per-request `ai_provider_id` only — it belongs to no project of its own, so there is no default to inherit |
 
 Chats deliberately have **no** `model_route_id` column: a project default plus explicit pins already covers "most consumers routed, some pinned". A per-consumer column is only needed for *two different routes in one project*, and is worth adding when that is actually requested.
 

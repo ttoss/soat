@@ -38,7 +38,7 @@ Conversations are identified by an `id` prefixed with `conv_`. The internal data
 | `created_at` | string | ISO 8601 creation timestamp                                        |
 | `updated_at` | string | ISO 8601 last-updated timestamp                                    |
 
-`actor_id` identifies the **owner** of the conversation — typically the external contact who initiated the thread (e.g. a WhatsApp contact). This is a direct ownership reference set at creation time and is distinct from message authorship: multiple actors can still participate by sending messages. To list all distinct message participants, filter the [Actors](./actors.md) listing by conversation: `GET /actors?conversation_id=...`.
+`actor_id` identifies the **owner** of the conversation — typically the external contact who initiated the thread (e.g. a WhatsApp contact). This is a direct ownership reference set at creation time and is distinct from message authorship: multiple actors can still participate by sending messages. To list all distinct message participants, filter the [Actors](./actors.md) listing by conversation: [`GET /actors?conversation_id=...`](/docs/api/actors/list-actors).
 
 ### Conversation Message
 
@@ -58,7 +58,7 @@ The pair `(conversation_id, position)` is uniquely indexed. See [Message orderin
 
 ### Actors, Agents, and Chats
 
-[Actors](./actors.md) track _who_ wrote a message (authorship); generation is triggered separately by passing `agent_id` directly to `POST /conversations/:id/generate` — no actor is required. For actor↔agent/chat linking and deletion rules, see [Agent and Chat Linking](./actors.md#agent-and-chat-linking). Deleting an Actor is **blocked** while any conversation message references it — remove its messages (or delete the containing conversations) first.
+[Actors](./actors.md) track _who_ wrote a message (authorship); generation is triggered separately by passing `agent_id` directly to [`POST /conversations/:id/generate`](/docs/api/conversations/generate-conversation-message) — no actor is required. For actor↔agent/chat linking and deletion rules, see [Agent and Chat Linking](./actors.md#agent-and-chat-linking). Deleting an Actor is **blocked** while any conversation message references it — remove its messages (or delete the containing conversations) first.
 
 ### Messages
 
@@ -66,7 +66,7 @@ Messages are ordered references to Documents within a conversation. Each message
 
 A `role: "system"` message is refused with `400 SYSTEM_MESSAGE_NOT_ALLOWED`: stored history feeds [agent generations](./agents.md#instructions), so a system entry here would let conversation data rewrite the generating agent's prompt. System content belongs to the agent's `instructions` field or the [actor persona](./actors.md).
 
-When listing messages, each entry includes the full text `content` of the underlying document, the message `role`, the optional authoring `actor_id`, and the optional `agent_id` of the Agent that generated it (set for `assistant` messages produced by `POST /conversations/:id/generate`, `null` otherwise). See it end to end in [Chat with an LLM - Step 7 (View the conversation history)](/docs/tutorials/chat-with-llm#step-7--view-the-conversation-history).
+When listing messages, each entry includes the full text `content` of the underlying document, the message `role`, the optional authoring `actor_id`, and the optional `agent_id` of the Agent that generated it (set for `assistant` messages produced by [`POST /conversations/:id/generate`](/docs/api/conversations/generate-conversation-message), `null` otherwise). See it end to end in [Chat with an LLM - Step 7 (View the conversation history)](/docs/tutorials/chat-with-llm#step-7--view-the-conversation-history).
 
 Removing a message from a conversation also deletes its underlying Document and the associated File on disk, preventing orphaned records.
 
@@ -89,7 +89,7 @@ POST /api/v1/conversations/:id/generate?wait=true
 { "agent_id": "agent_...", "stream": false }
 ```
 
-The call runs in the background by default and returns `202 Accepted` immediately (`{ "status": "accepted", "conversation_id": "conv_..." }`); the reply lands as a new message when it completes, so poll `GET /conversations/:id/messages` for it. The agent is still resolved **synchronously**, so an unknown `agent_id` is a `404` rather than a failure you discover by polling.
+The call runs in the background by default and returns `202 Accepted` immediately (`{ "status": "accepted", "conversation_id": "conv_..." }`); the reply lands as a new message when it completes, so poll [`GET /conversations/:id/messages`](/docs/api/conversations/list-conversation-messages) for it. The agent is still resolved **synchronously**, so an unknown `agent_id` is a `404` rather than a failure you discover by polling.
 
 Pass `?wait=true` to block and receive the result inline, as the flow below describes. Waiting is required to observe `requires_action` (client tools), so a client-tool flow should always pass it. See [Synchronous & Asynchronous Execution](../advanced/sync-and-async.md) for the platform-wide `wait` contract.
 
@@ -115,7 +115,7 @@ Flow (with `?wait=true`):
    const responseText = data?.content;
    ```
 
-6. On `requires_action` (agent client tools only), no message is persisted yet. Submit outputs via `POST /agents/:id/generate/:generation_id/tool-outputs`; the resolved message is persisted on completion.
+6. On `requires_action` (agent client tools only), no message is persisted yet. Submit outputs via [`POST /agents/:id/generate/:generation_id/tool-outputs`](/docs/api/agents/submit-agent-tool-outputs); the resolved message is persisted on completion.
 
 #### Concurrency
 
@@ -127,15 +127,15 @@ With `"stream": true`, the response is a `text/event-stream` emitting incrementa
 
 ### Tool Context
 
-`POST /api/v1/conversations/:id/generate` accepts an optional `tool_context` field in the request body, forwarded verbatim to the underlying agent generation — see the [Tool Context reference](../advanced/tool-context.md).
+[`POST /api/v1/conversations/:id/generate`](/docs/api/conversations/generate-conversation-message) accepts an optional `tool_context` field in the request body, forwarded verbatim to the underlying agent generation — see the [Tool Context reference](../advanced/tool-context.md).
 
 ### Filtering by Actor
 
-Use `GET /conversations?actor_id=...` to list conversations in which the given actor has authored at least one message. This is evaluated via an `EXISTS` join on `conversation_messages` and is more expensive than the default listing.
+Use [`GET /conversations?actor_id=...`](/docs/api/conversations/list-conversations) to list conversations in which the given actor has authored at least one message. This is evaluated via an `EXISTS` join on `conversation_messages` and is more expensive than the default listing.
 
 ### Status
 
-A conversation transitions between `open` and `closed`. Use `PATCH /conversations/:id` to update the status. New conversations default to `open`.
+A conversation transitions between `open` and `closed`. Use [`PATCH /conversations/:id`](/docs/api/conversations/update-conversation) to update the status. New conversations default to `open`.
 
 ## Examples
 

@@ -13,7 +13,7 @@ A simplified 1 user ↔ 1 agent conversational interface, owned by an agent.
 
 Sessions hide the underlying [Conversation](./conversations.md) and generation plumbing. The [Actor](./actors.md) is not hidden and not created for you — link one with `actor_id` when the session represents a specific end user. By default, interacting with an agent requires three API calls: create a session, save a user message, and trigger generation. When `auto_generate` is enabled, the message and generation collapse into a single call. Walk through it end to end in [Chat with an LLM - Step 5 (Create a session)](/docs/tutorials/chat-with-llm#step-5--create-a-session) and [Step 6 (Send messages and receive replies)](/docs/tutorials/chat-with-llm#step-6--send-messages-and-receive-replies).
 
-Sessions are a top-level resource at `/sessions`. Each session belongs to an [Agent](./agents.md) — set `agent_id` on create, and filter by it with `GET /sessions?agent_id=`. Each session exposes its `conversation_id` as an escape hatch to the full [Conversations](./conversations.md) API; list a session's messages via `GET /conversations/:conversation_id/messages` (this is governed by `conversations:GetConversation`, not the `agents:*` session actions).
+Sessions are a top-level resource at `/sessions`. Each session belongs to an [Agent](./agents.md) — set `agent_id` on create, and filter by it with [`GET /sessions?agent_id=`](/docs/api/sessions/list-sessions). Each session exposes its `conversation_id` as an escape hatch to the full [Conversations](./conversations.md) API; list a session's messages via [`GET /conversations/:conversation_id/messages`](/docs/api/conversations/list-conversation-messages) (this is governed by `conversations:GetConversation`, not the `agents:*` session actions).
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -87,13 +87,13 @@ What deletion does **not** remove:
 
 - **The session's actor.** The [Actor](./actors.md) referenced by `actor_id` is left untouched and can still be looked up or reused by other sessions.
 - **Documents backing message content.** Each message's content is stored in a [Document](./documents.md) row; deleting the session does not delete these documents (or their underlying files), so they remain in place after the session and its messages are gone.
-- **Generations and traces.** A session's [generations and traces](./traces.md#debugging-joins-trace-generation-session) are not linked to the session or conversation record, so they are unaffected by session deletion and remain queryable via `GET /api/v1/traces/{trace_id}` after the session no longer exists.
+- **Generations and traces.** A session's [generations and traces](./traces.md#debugging-joins-trace-generation-session) are not linked to the session or conversation record, so they are unaffected by session deletion and remain queryable via [`GET /api/v1/traces/{trace_id}`](/docs/api/traces/get-trace) after the session no longer exists.
 
 Delete these resources explicitly beforehand if you need a full cleanup.
 
 ### Forking
 
-`POST /api/v1/sessions/{session_id}/fork` branches a new session from a point in an existing one: same context, different continuation. It answers "what if" — a support agent gave a bad answer at message 7, and you want to try a stricter prompt or a different agent version against *that exact* context without replaying the conversation by hand.
+[`POST /api/v1/sessions/{session_id}/fork`](/docs/api/sessions/fork-session) branches a new session from a point in an existing one: same context, different continuation. It answers "what if" — a support agent gave a bad answer at message 7, and you want to try a stricter prompt or a different agent version against *that exact* context without replaying the conversation by hand.
 
 ```bash
 curl -X POST "$SOAT_URL/api/v1/sessions/$SESSION_ID/fork" \
@@ -134,7 +134,7 @@ Forking requires both `agents:GetSession` and `agents:CreateSession`: it reads a
 
 When `auto_generate` is `true`, `POST .../messages` saves the user message **and** automatically triggers LLM generation in the same request. The response body contains the assistant reply instead of just the saved user message.
 
-This collapses the three-call flow into two calls: create a session, then send messages. `auto_generate` defaults to `false` and can be set at creation or toggled at any time via `PATCH /sessions/{session_id}`.
+This collapses the three-call flow into two calls: create a session, then send messages. `auto_generate` defaults to `false` and can be set at creation or toggled at any time via [`PATCH /sessions/{session_id}`](/docs/api/sessions/update-session).
 
 The explicit `POST .../generate` endpoint continues to work regardless of this setting. With `auto_generate` enabled, `POST .../messages` returns as soon as the message is saved and the triggered generation runs in the background.
 
@@ -210,8 +210,8 @@ When a new generation request arrives while a previous one is still in-flight, t
 Each call to `POST .../generate` returns `generation_id` and `trace_id`. Store these alongside `session_id` for debugging:
 
 - `GET .../sessions/{session_id}/messages` returns the conversation timeline — see [Debug Session, Generation, and Trace History - Step 4 (Retrieve the full session message timeline)](/docs/tutorials/debug-session-generation-trace-history#step-4---retrieve-the-full-session-message-timeline).
-- `GET /api/v1/traces/{trace_id}` returns the execution trace.
-- `GET /api/v1/traces/{trace_id}/tree` returns the full trace tree for nested agent calls.
+- [`GET /api/v1/traces/{trace_id}`](/docs/api/traces/get-trace) returns the execution trace.
+- [`GET /api/v1/traces/{trace_id}/tree`](/docs/api/traces/get-trace-tree) returns the full trace tree for nested agent calls.
 
 See [Traces](./traces.md#debugging-joins-trace-generation-session) for the full correlation strategy.
 

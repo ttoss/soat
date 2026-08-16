@@ -92,7 +92,7 @@ SOAT detects that `MyAgent` depends on `MyProvider` and `MyMemory` through the `
 
 ### FormationOperation
 
-Every deploy (create, update, delete) creates one of these records; `GET /api/v1/formations/{formation_id}/events` returns the full history.
+Every deploy (create, update, delete) creates one of these records; [`GET /api/v1/formations/{formation_id}/events`](/docs/api/formations/list-formation-events) returns the full history.
 
 | Field            | Type   | Description                                           |
 | ---------------- | ------ | ----------------------------------------------------- |
@@ -465,7 +465,7 @@ fails the whole operation having destroyed nothing: the stack stays `active` and
 intact, and the same `delete-formation` succeeds once the blocker is resolved.
 The one such blocker today is an **agent with generation or trace history**,
 which the platform never force-deletes on its own — that stays an explicit
-operator decision via `DELETE /api/v1/agents/{agent_id}?force=true`. Declare the
+operator decision via [`DELETE /api/v1/agents/{agent_id}?force=true`](/docs/api/agents/delete-agent). Declare the
 agent with `deletion_policy: retain` if the stack should leave it standing; a
 retained resource is never deleted, so it never blocks.
 

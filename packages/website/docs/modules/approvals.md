@@ -148,7 +148,7 @@ rejected item, so approvers see the recurrence.
 
 ### Recurrence view
 
-`GET /api/v1/approvals/recurrences` is a **read-only** rollup answering "what
+[`GET /api/v1/approvals/recurrences`](/docs/api/approvals/list-approval-recurrences) is a **read-only** rollup answering "what
 keeps coming back?". It groups items by `dedup_key` and returns those recurring
 at least `min_count` times (default `2`), most-recurrent first. Each group
 carries the `agent_id`, `tool_id`, `count`, the ordered item `chain` (the

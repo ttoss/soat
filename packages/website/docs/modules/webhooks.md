@@ -102,7 +102,7 @@ After three failed attempts the delivery is marked `failed` and is not retried a
 
 ### Redelivery
 
-`POST /api/v1/webhook-deliveries/{delivery_id}/redeliver` queues a stored payload to be sent again — useful when your endpoint was down, or when you have fixed a bug and want the original event back.
+[`POST /api/v1/webhook-deliveries/{delivery_id}/redeliver`](/docs/api/webhooks/redeliver-webhook-delivery) queues a stored payload to be sent again — useful when your endpoint was down, or when you have fixed a bug and want the original event back.
 
 It creates a **new** delivery record rather than resetting the original, so the failed attempt stays in the history. The call returns `202 Accepted` with the new delivery; the send itself happens in the background, so poll that delivery's `status` to observe the outcome.
 
@@ -138,7 +138,7 @@ The request body is a JSON envelope wrapping the resource payload. Like every ot
 
 ### Secret and Signature Verification
 
-Every webhook has a secret generated at creation time. The secret is returned in the response body on create or secret rotation. You can also retrieve it explicitly via `GET /api/v1/webhooks/{webhook_id}/secret` (requires `webhooks:GetWebhookSecret`).
+Every webhook has a secret generated at creation time. The secret is returned in the response body on create or secret rotation. You can also retrieve it explicitly via [`GET /api/v1/webhooks/{webhook_id}/secret`](/docs/api/webhooks/get-webhook-secret) (requires `webhooks:GetWebhookSecret`).
 
 The secret is stored encrypted at rest using the same AES-256-GCM encryption as [secrets](./secrets.md), keyed by `SECRETS_ENCRYPTION_KEY`. It is decrypted only to sign outbound deliveries or to return it through the API to a caller with `webhooks:GetWebhookSecret`. See [Configuration](/docs/self-hosting/configuration) for the operational impact of losing this key.
 

@@ -12,13 +12,13 @@ This page is the canonical contract. `tool_context` is **not** general templatin
 
 | Surface | Field |
 | --- | --- |
-| `POST /api/v1/agents/{agent_id}/generate` | `tool_context` in the body |
-| `POST /api/v1/sessions` / `PATCH /api/v1/sessions/{session_id}` | `tool_context` — persisted on the session, applied to every generation in it |
-| `POST /api/v1/sessions/{session_id}/messages` and `.../generate` | `tool_context` — per-request, this generation only |
-| `POST /api/v1/conversations/{conversation_id}/generate` | `tool_context` in the body |
-| `POST /api/v1/orchestration-runs` | `tool_context` — persisted on the run, applied to the generation of every `agent` node it executes, and inherited by `loop`/`sub_orchestration` child runs (see [Run Tool Context](../modules/orchestrations.md#run-tool-context)) |
-| `POST /api/v1/tasks` | `tool_context` — persisted on the task, applied to the dispatches of the entry state's `on_enter` |
-| `POST /api/v1/tasks/{task_id}/transitions` | `tool_context` — **replaces** the task's stored bag; omitting it keeps it (see [Dispatch tool context](../modules/workflows.md#dispatch-tool-context)) |
+| [`POST /api/v1/agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation) | `tool_context` in the body |
+| [`POST /api/v1/sessions`](/docs/api/sessions/create-session) / [`PATCH /api/v1/sessions/{session_id}`](/docs/api/sessions/update-session) | `tool_context` — persisted on the session, applied to every generation in it |
+| [`POST /api/v1/sessions/{session_id}/messages`](/docs/api/sessions/add-session-message) and `.../generate` | `tool_context` — per-request, this generation only |
+| [`POST /api/v1/conversations/{conversation_id}/generate`](/docs/api/conversations/generate-conversation-message) | `tool_context` in the body |
+| [`POST /api/v1/orchestration-runs`](/docs/api/orchestrations/start-orchestration-run) | `tool_context` — persisted on the run, applied to the generation of every `agent` node it executes, and inherited by `loop`/`sub_orchestration` child runs (see [Run Tool Context](../modules/orchestrations.md#run-tool-context)) |
+| [`POST /api/v1/tasks`](/docs/api/tasks/create-task) | `tool_context` — persisted on the task, applied to the dispatches of the entry state's `on_enter` |
+| [`POST /api/v1/tasks/{task_id}/transitions`](/docs/api/tasks/transition-task) | `tool_context` — **replaces** the task's stored bag; omitting it keeps it (see [Dispatch tool context](../modules/workflows.md#dispatch-tool-context)) |
 | Formation templates | `tool_context` on a `Session` resource |
 
 ## Which tools receive the headers
@@ -73,9 +73,9 @@ The authority is split on purpose: the tool knows the header shape its endpoint 
 | Missing key at call time | The tool call **fails** with `400 MISSING_TOOL_CONTEXT_KEY`, naming the key and header. An `Authorization: Bearer ` with no value would reach the endpoint and come back as an opaque upstream `401`, several steps from the actual mistake. |
 | Empty-string value | A value, not a missing key — the header is sent empty, because that is what the caller asked for. |
 | With `{{secret:...}}` | Both kinds may appear in the same header value and are substituted in a **single pass**, so a substituted value is never re-scanned as template source: a `tool_context` value containing `{{secret:sec_...}}` stays literal text, and so does a secret whose plaintext contains `{{context:...}}`. |
-| Calling paths with no context | `POST /api/v1/tools/{tool_id}/call` and an orchestration `tool` node carry no `tool_context`, so a tool declaring `{{context:...}}` cannot be invoked through them — the call fails with `MISSING_TOOL_CONTEXT_KEY`. Bind such a tool to an agent and call it through a generation, session or orchestration `agent` node. |
+| Calling paths with no context | [`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool) and an orchestration `tool` node carry no `tool_context`, so a tool declaring `{{context:...}}` cannot be invoked through them — the call fails with `MISSING_TOOL_CONTEXT_KEY`. Bind such a tool to an agent and call it through a generation, session or orchestration `agent` node. |
 
-The token is resolved at the point of use. `GET /tools` echoes back the token, never the resolved value — the same as `{{secret:...}}`.
+The token is resolved at the point of use. [`GET /tools`](/docs/api/tools/list-tools) echoes back the token, never the resolved value — the same as `{{secret:...}}`.
 
 ## Key → header name
 

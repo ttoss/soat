@@ -133,7 +133,7 @@ curl 'https://your-soat-server.com/api/v1/agents?project_id=proj_abc&limit=25&of
 
 > **Breaking change (v1 list envelope).** Every list endpoint now returns
 > `{ data, total, limit, offset }`. Endpoints that previously returned a bare
-> JSON array (e.g. `GET /api/v1/agents`, `/projects`, `/tools`, `/triggers`,
+> JSON array (e.g. [`GET /api/v1/agents`](/docs/api/agents/list-agents), `/projects`, `/tools`, `/triggers`,
 > `/webhooks`, `/secrets`, and others) now return the envelope — read the items
 > from `response.data`, not the top-level body.
 

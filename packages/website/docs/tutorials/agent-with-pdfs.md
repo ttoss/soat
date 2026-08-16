@@ -31,7 +31,7 @@ It maps directly onto the build plan:
 | **D. Citations** — `page` + `document_id` per result | Step 8 |
 
 :::note[Requires native file ingestion]
-`POST /api/v1/documents/ingest` and the `DocumentChunk` model land in
+[`POST /api/v1/documents/ingest`](/docs/api/documents/ingest-document) and the `DocumentChunk` model land in
 [#245](https://github.com/ttoss/soat/pull/245). Run this tutorial against a server
 that includes that change.
 :::
@@ -294,7 +294,7 @@ echo "ROUTER_FILE_ID: $ROUTER_FILE_ID"
 
 ## Step 6 — Ingest the PDFs (Plan A)
 
-`POST /documents/ingest` extracts the text page-by-page, splits it into chunks, embeds
+[`POST /documents/ingest`](/docs/api/documents/ingest-document) extracts the text page-by-page, splits it into chunks, embeds
 each chunk, and stores **one Document with many `DocumentChunk` rows**. The
 `--path-prefix` organizes the documents under a common path so you can scope an agent
 to the whole subtree later with a single `document_paths` prefix.

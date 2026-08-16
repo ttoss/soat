@@ -840,7 +840,7 @@ The server merges `preset_parameters` into the call before dispatching — alice
 
 2. **Model's view**: The model saw `docs_update-document` accepting only `content`, `title`, `path`, `metadata`, and `tags` — no `document_id` in sight. This eliminates the risk of the model supplying a wrong or hallucinated ID.
 
-3. **Execution**: When the model called `docs_update-document`, the server merged the preset `document_id` back in before dispatching the `PATCH /api/v1/documents/{document_id}` request.
+3. **Execution**: When the model called `docs_update-document`, the server merged the preset `document_id` back in before dispatching the [`PATCH /api/v1/documents/{document_id}`](/docs/api/documents/update-document) request.
 
 4. **Permission enforcement**: The request ran under alice's JWT. The platform's document permission check verified that alice's policy allows `documents:UpdateDocument` for the path `/notes/public/note.txt`. The private document path falls outside `/notes/public/*`, so any attempt there returns 403.
 

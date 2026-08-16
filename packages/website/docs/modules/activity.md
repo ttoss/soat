@@ -80,7 +80,7 @@ One producer exercises that override: `exception_created` **inherits the filed [
 
 ### Cursor pagination
 
-`GET /api/v1/activity` returns `next_cursor` — pass it back as `cursor` to fetch the next page; a `null` `next_cursor` means there is no more data. The cursor is an opaque, keyset (not offset) token encoding a `(created_at, id)` position, so a page never shifts as new entries arrive ahead of it — the failure mode an offset page has on a fast-moving, append-only feed.
+[`GET /api/v1/activity`](/docs/api/activity/list-activity) returns `next_cursor` — pass it back as `cursor` to fetch the next page; a `null` `next_cursor` means there is no more data. The cursor is an opaque, keyset (not offset) token encoding a `(created_at, id)` position, so a page never shifts as new entries arrive ahead of it — the failure mode an offset page has on a fast-moving, append-only feed.
 
 ### Retention
 

@@ -37,7 +37,7 @@ Creating a task places it in the workflow's `initial` state (or a named `state`
 `on_enter`. From then on, every state change — human, API, agent (via MCP), or
 automation outcome — routes through the single **transition** operation, so
 guards and the audit trail can never be bypassed. A task's `state` is never
-directly writable. The board is the point: `GET /tasks?workflow_id=…&state=…`
+directly writable. The board is the point: [`GET /tasks?workflow_id=…&state=…`](/docs/api/tasks/list-tasks)
 is one column, with zero application-side state.
 
 > See the [Permissions Reference](../permissions.md#workflows) for the
@@ -117,7 +117,7 @@ escape hatch. Define an explicit any-state transition (listing every state in
 #### Transition history
 
 Every move appends one append-only `TaskTransition` record — the audited
-contract for a task. `GET /tasks/{id}/history` returns them oldest-first.
+contract for a task. [`GET /tasks/{id}/history`](/docs/api/tasks/get-task-history) returns them oldest-first.
 
 | Field           | Type            | Description                                                        |
 | --------------- | --------------- | ----------------------------------------------------------------- |
@@ -149,7 +149,7 @@ contract for a task. `GET /tasks/{id}/history` returns them oldest-first.
   deleted (`WORKFLOW_HAS_OPEN_TASKS`). Once every task is closed (terminal),
   deleting the workflow also removes those closed tasks and their transition
   history.
-- **Payload is working data.** `PATCH /tasks/{id}` updates `payload`, `title`, or
+- **Payload is working data.** [`PATCH /tasks/{id}`](/docs/api/tasks/update-task) updates `payload`, `title`, or
   `assignee`. `payload` is **shallow-merged** over the current payload (keys the
   request omits are kept) and validated against `payload_schema`. The payload is
   100% caller-owned; the automation result lives in the read-only `last_result`
@@ -320,7 +320,7 @@ on create, and every subsequent write that **changes** the definition
 increments `version` and archives it as a `WorkflowVersion`. The versioned
 surface is `states`, `transitions` and `payload_schema`.
 
-**A task runs on the version it entered on.** `POST /tasks` stamps the
+**A task runs on the version it entered on.** [`POST /tasks`](/docs/api/tasks/create-task) stamps the
 workflow's current `version` onto the task as `workflow_version`, and every
 later read of the definition — validating a transition, parking an approval
 gate, validating a payload patch — resolves it from that version. Editing a
@@ -335,9 +335,9 @@ itself a change.
 
 | Operation | Endpoint |
 | --- | --- |
-| List versions, newest first | `GET /api/v1/workflows/{workflow_id}/versions` |
-| Fetch one version | `GET /api/v1/workflows/{workflow_id}/versions/{version}` |
-| Roll back to a version | `POST /api/v1/workflows/{workflow_id}/versions/{version}/restore` |
+| List versions, newest first | [`GET /api/v1/workflows/{workflow_id}/versions`](/docs/api/workflows/list-workflow-versions) |
+| Fetch one version | [`GET /api/v1/workflows/{workflow_id}/versions/{version}`](/docs/api/workflows/get-workflow-version) |
+| Roll back to a version | [`POST /api/v1/workflows/{workflow_id}/versions/{version}/restore`](/docs/api/workflows/restore-workflow-version) |
 
 **Restore appends, it does not rewind.** Restoring v1 of a workflow at v2
 writes v1's definition back as **v3**; a task pinned to v2 still runs on the
@@ -349,7 +349,7 @@ deleted fails with `WORKFLOW_VALIDATION_FAILED` (400).
 
 ### Alternate entry points
 
-`POST /tasks` accepts an optional `state`, naming a declared state to create
+[`POST /tasks`](/docs/api/tasks/create-task) accepts an optional `state`, naming a declared state to create
 the task in directly instead of the `initial` state. Entering the named state
 behaves exactly like arriving via a transition — `entered_state_at` is set,
 `on_enter` fires, the stall clock arms — and history records the placement as
@@ -470,7 +470,7 @@ expressions.
 | `WORKFLOW_HAS_OPEN_TASKS`  | 409    | The workflow has open tasks and cannot be deleted              |
 | `TASK_NOT_FOUND`           | 404    | The task does not exist or is not accessible                   |
 | `TASK_PAYLOAD_INVALID`     | 400    | The payload violates the workflow's `payload_schema`           |
-| `TASK_STATE_NOT_FOUND`     | 400    | `POST /tasks` `state` does not name a declared state of the workflow |
+| `TASK_STATE_NOT_FOUND`     | 400    | [`POST /tasks`](/docs/api/tasks/create-task) `state` does not name a declared state of the workflow |
 | `TASK_TRANSITION_NOT_FOUND`| 400    | The named transition does not exist in the workflow            |
 | `TASK_GUARD_REJECTED`      | 400    | The transition guard evaluated to false                        |
 | `TASK_TRANSITION_CONFLICT` | 409    | The transition is not valid from the current state, or the task is closed |

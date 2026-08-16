@@ -15,8 +15,8 @@ A Document is backed by a [File](./files.md) and associated with a project. When
 
 Documents can be created in two ways:
 
-- **Plain text** (`POST /documents`) — content is supplied inline; stored as a single chunk unless `chunk_strategy` splits it. Returns `201 Created`.
-- **File ingestion** (`POST /documents/ingest`) — an already-uploaded file is parsed and chunked **asynchronously**; see [Async File Ingestion](#async-file-ingestion) and [File Ingestion and Chunking](#file-ingestion-and-chunking).
+- **Plain text** ([`POST /documents`](/docs/api/documents/create-document)) — content is supplied inline; stored as a single chunk unless `chunk_strategy` splits it. Returns `201 Created`.
+- **File ingestion** ([`POST /documents/ingest`](/docs/api/documents/ingest-document)) — an already-uploaded file is parsed and chunked **asynchronously**; see [Async File Ingestion](#async-file-ingestion) and [File Ingestion and Chunking](#file-ingestion-and-chunking).
 
 Documents are identified by an `id` prefixed with `doc_`. The internal database primary key is never returned.
 
@@ -43,9 +43,9 @@ See the [Permissions Reference](../permissions.md) for the IAM action strings fo
 | `size`       | number         | File size in bytes                                                                                                 |
 | `status`     | string         | Ingestion lifecycle state: `pending` → `processing` → `ready` \| `failed`. Plain-text documents are always `ready`. |
 | `title`      | string \| null | Human-readable title (auto-set to filename for PDF ingestion)                                                      |
-| `metadata`   | object \| null | Arbitrary caller-supplied JSON metadata — never written or read by the server. Key casing is preserved verbatim — unlike other response fields, `metadata` keys are not converted between `snake_case` and `camelCase`. Ingestion progress (`chunk_count`, `total_pages`) and failure info (`error`) live on `GET /documents/:id/status` instead — see [Polling Ingestion Status](#polling-ingestion-status). |
+| `metadata`   | object \| null | Arbitrary caller-supplied JSON metadata — never written or read by the server. Key casing is preserved verbatim — unlike other response fields, `metadata` keys are not converted between `snake_case` and `camelCase`. Ingestion progress (`chunk_count`, `total_pages`) and failure info (`error`) live on [`GET /documents/:id/status`](/docs/api/documents/get-document-status) instead — see [Polling Ingestion Status](#polling-ingestion-status). |
 | `tags`       | object \| null | Key-value string tags                                                                                              |
-| `content`    | string \| null | Joined chunk content — only present in `GET /documents/:id` responses when `status` is `ready`                     |
+| `content`    | string \| null | Joined chunk content — only present in [`GET /documents/:id`](/docs/api/documents/get-document) responses when `status` is `ready`                     |
 | `chunk_strategy` | string | The chunk strategy the document was last (re-)ingested with (`page` \| `whole` \| `size`). Absent when the default (`whole`) was used — the key is omitted rather than sent as `null`. |
 | `chunk_size`   | number | Window size in characters used when `chunk_strategy` is `size`. Absent otherwise.                                |
 | `chunk_overlap`| number | Overlap in characters between consecutive windows used when `chunk_strategy` is `size`. Absent otherwise.        |
@@ -54,7 +54,7 @@ See the [Permissions Reference](../permissions.md) for the IAM action strings fo
 
 ### DocumentChunk (internal)
 
-Each Document has one or more chunks stored in the database. Chunks are not directly exposed via the REST API but are returned as the `content` field on `GET /documents/:id` (joined with newlines) and used for embedding-based search.
+Each Document has one or more chunks stored in the database. Chunks are not directly exposed via the REST API but are returned as the `content` field on [`GET /documents/:id`](/docs/api/documents/get-document) (joined with newlines) and used for embedding-based search.
 
 | Field          | Type   | Description                                      |
 | -------------- | ------ | ------------------------------------------------ |
@@ -65,13 +65,13 @@ Each Document has one or more chunks stored in the database. Chunks are not dire
 
 ### Path Field
 
-`path` is optional at creation time; if omitted, the server defaults to `/<filename>`. Paths must be absolute (start with `/`) and are normalized (`.` and `..` are resolved). `project_id + path` is unique within a project. `PATCH /documents/{document_id}` accepts a `path` field to move a document.
+`path` is optional at creation time; if omitted, the server defaults to `/<filename>`. Paths must be absolute (start with `/`) and are normalized (`.` and `..` are resolved). `project_id + path` is unique within a project. [`PATCH /documents/{document_id}`](/docs/api/documents/update-document) accepts a `path` field to move a document.
 
 ## Key Concepts
 
 ### Async File Ingestion
 
-`POST /api/v1/documents/ingest` returns `202 Accepted` immediately by default. The document record is created with `status: pending` and chunk extraction + embedding run in the background. Poll `GET /api/v1/documents/:id` until `status` is `ready` or `failed`.
+[`POST /api/v1/documents/ingest`](/docs/api/documents/ingest-document) returns `202 Accepted` immediately by default. The document record is created with `status: pending` and chunk extraction + embedding run in the background. Poll [`GET /api/v1/documents/:id`](/docs/api/documents/get-document) until `status` is `ready` or `failed`.
 
 Pass `?wait=true` to block until processing completes. The endpoint then returns `201 Created` with `status: ready` (or `status: failed` on error) — no polling required. This is useful for small files or scripted workflows where latency is acceptable. See [Synchronous & Asynchronous Execution](../advanced/sync-and-async.md) for the platform-wide `wait` contract.
 
@@ -79,7 +79,7 @@ Synchronous ingestion is bounded by file size: a file larger than `SYNC_INGESTIO
 
 ### Polling Ingestion Status
 
-Polling `GET /documents/:id` returns the full document including the assembled chunk content, which can be several megabytes. To check ingestion progress cheaply, use `GET /api/v1/documents/:id/status` instead — it returns only the lifecycle fields:
+Polling [`GET /documents/:id`](/docs/api/documents/get-document) returns the full document including the assembled chunk content, which can be several megabytes. To check ingestion progress cheaply, use [`GET /api/v1/documents/:id/status`](/docs/api/documents/get-document-status) instead — it returns only the lifecycle fields:
 
 ```json
 {
@@ -116,7 +116,7 @@ emits a terminal event on the project event bus, deliverable through a
 | Event | Emitted when | Extra `data` field |
 | --- | --- | --- |
 | `documents.ingested` | The document reached `status: ready` and its chunks are queryable | `chunk_count` — the final number of chunks indexed |
-| `documents.ingest_failed` | The ingestion settled in `status: failed` | `error` — the same reason `GET /documents/:id/status` reports |
+| `documents.ingest_failed` | The ingestion settled in `status: failed` | `error` — the same reason [`GET /documents/:id/status`](/docs/api/documents/get-document-status) reports |
 
 Both carry the document in `data` in the same shape the REST API returns it, so a
 subscriber does not need a follow-up read. A re-ingest emits a fresh event each
@@ -125,11 +125,11 @@ the stall sweeper fails it (see [Stuck Ingestion Recovery](#stuck-ingestion-reco
 
 ### Stuck Ingestion Recovery
 
-If an ingestion worker dies mid-processing, a document can be left in `processing` (or `pending`) indefinitely. Such a document is **self-recovered**: when it is read via `GET /documents/:id` or `GET /documents/:id/status` and has made no progress for longer than `INGESTION_STALL_TIMEOUT_MS` (default 5 minutes), it is transitioned to `failed` with `error = INGESTION_TIMEOUT` on the status response. From there it can be re-processed with the re-ingest endpoint below.
+If an ingestion worker dies mid-processing, a document can be left in `processing` (or `pending`) indefinitely. Such a document is **self-recovered**: when it is read via [`GET /documents/:id`](/docs/api/documents/get-document) or [`GET /documents/:id/status`](/docs/api/documents/get-document-status) and has made no progress for longer than `INGESTION_STALL_TIMEOUT_MS` (default 5 minutes), it is transitioned to `failed` with `error = INGESTION_TIMEOUT` on the status response. From there it can be re-processed with the re-ingest endpoint below.
 
 ### Re-ingesting a Document
 
-`POST /api/v1/documents/:id/ingest` re-runs ingestion for an existing document against its already-stored source file. Existing chunks are discarded and the document is reset to `status: pending` before re-processing. Use it to recover a stuck or failed document, or to re-chunk an existing document with a different `chunk_strategy`, without deleting and re-uploading the file. It accepts the same `chunk_strategy` / `chunk_size` / `chunk_overlap` body fields and `?wait=` toggle as `POST /documents/ingest`, and returns `202` (background, default) or `201` (`?wait=true`).
+[`POST /api/v1/documents/:id/ingest`](/docs/api/documents/reingest-document) re-runs ingestion for an existing document against its already-stored source file. Existing chunks are discarded and the document is reset to `status: pending` before re-processing. Use it to recover a stuck or failed document, or to re-chunk an existing document with a different `chunk_strategy`, without deleting and re-uploading the file. It accepts the same `chunk_strategy` / `chunk_size` / `chunk_overlap` body fields and `?wait=` toggle as [`POST /documents/ingest`](/docs/api/documents/ingest-document), and returns `202` (background, default) or `201` (`?wait=true`).
 
 **Lifecycle states:**
 
@@ -138,7 +138,7 @@ If an ingestion worker dies mid-processing, a document can be left in `processin
 | `pending`    | Enqueued; background worker has not started yet                                   |
 | `processing` | Actively extracting pages, chunking, and generating embeddings                    |
 | `ready`      | Fully indexed; content and chunk embeddings are available for search              |
-| `failed`     | Processing encountered an error. The `error` field on `GET /documents/:id/status` describes it |
+| `failed`     | Processing encountered an error. The `error` field on [`GET /documents/:id/status`](/docs/api/documents/get-document-status) describes it |
 
 Common `error` values: `FILE_PARSE_FAILED` (no extractable text and no matching converter rule), `FILE_NOT_FOUND`, `INGESTION_TIMEOUT` (ingestion stalled and was auto-recovered — see [Stuck Ingestion Recovery](#stuck-ingestion-recovery)). When conversion via an [Ingestion Rule](./ingestion-rules.md) is involved, `CONVERTER_FAILED`, `CONVERTER_OUTPUT_INVALID`, and `CONVERSION_TIMEOUT` may also appear.
 
@@ -146,7 +146,7 @@ Embedding concurrency is bounded (default: 5 simultaneous requests) to avoid ove
 
 ### File Ingestion and Chunking
 
-`POST /api/v1/documents/ingest` ingests an already-uploaded file (uploaded via `POST /api/v1/files/upload`). The source format is detected from the file's `content_type`:
+[`POST /api/v1/documents/ingest`](/docs/api/documents/ingest-document) ingests an already-uploaded file (uploaded via [`POST /api/v1/files/upload`](/docs/api/files/upload-file)). The source format is detected from the file's `content_type`:
 
 | Content type     | How the source text is extracted |
 | ---------------- | -------------------------------- |
@@ -157,7 +157,7 @@ Embedding concurrency is bounded (default: 5 simultaneous requests) to avoid ove
 
 A content type with no built-in extractor and no matching [Ingestion Rule](./ingestion-rules.md) is rejected with `UNSUPPORTED_FILE_TYPE` (`400`).
 
-A file can back only one Document — `file_id` is unique across documents. Calling `POST /api/v1/documents/ingest` again with a `file_id` that already has a document returns `409 FILE_ALREADY_INGESTED`. To re-chunk or recover that same document (e.g. with a different `chunk_strategy`), use [Re-ingesting a Document](#re-ingesting-a-document) instead; to ingest the same source under a different path, upload a new copy of the file and ingest that.
+A file can back only one Document — `file_id` is unique across documents. Calling [`POST /api/v1/documents/ingest`](/docs/api/documents/ingest-document) again with a `file_id` that already has a document returns `409 FILE_ALREADY_INGESTED`. To re-chunk or recover that same document (e.g. with a different `chunk_strategy`), use [Re-ingesting a Document](#re-ingesting-a-document) instead; to ingest the same source under a different path, upload a new copy of the file and ingest that.
 
 The extracted text is then split into one or more DocumentChunks according to `chunk_strategy`:
 
@@ -165,11 +165,11 @@ The extracted text is then split into one or more DocumentChunks according to `c
 - **`chunk_strategy: whole`** — a single chunk with all source text joined by newlines.
 - **`chunk_strategy: size`** — fixed-size character windows with overlap, controlled by `chunk_size` (default `1000`) and `chunk_overlap` (default `200`). Page attribution is dropped.
 
-The same `chunk_strategy` / `chunk_size` / `chunk_overlap` options are also accepted by `POST /api/v1/documents` (plain text), where the default strategy is `whole`.
+The same `chunk_strategy` / `chunk_size` / `chunk_overlap` options are also accepted by [`POST /api/v1/documents`](/docs/api/documents/create-document) (plain text), where the default strategy is `whole`.
 
 Each chunk gets its own embedding vector, enabling fine-grained semantic search that can cite specific page numbers. Embeddings are computed concurrently across chunks, and an embedding failure is non-fatal — the chunk is stored without a vector.
 
-After ingestion completes, `GET /documents/:id/status` reports the number of chunks created as `chunk_count`. Note this can differ from `total_pages`: with `whole` it is always `1`, and with `size` it depends on the text length.
+After ingestion completes, [`GET /documents/:id/status`](/docs/api/documents/get-document-status) reports the number of chunks created as `chunk_count`. Note this can differ from `total_pages`: with `whole` it is always `1`, and with `size` it depends on the text length.
 
 The chunk configuration a document was last (re-)ingested with is persisted on the document itself and returned as `chunk_strategy` / `chunk_size` / `chunk_overlap`. This lets a [Formation](./formations.md) `document` resource read its chunk settings back, so a re-plan of an unchanged template converges to a no-op instead of perpetually re-reporting these fields as changed. Updating a formation document's `chunk_strategy` re-chunks the stored source text on the next `update-formation` (no out-of-band re-ingest required).
 
@@ -264,7 +264,7 @@ curl -X POST https://api.example.com/api/v1/documents \
 
 ### Ingest a file
 
-First upload the file via `POST /api/v1/files/upload`, then call `POST /api/v1/documents/ingest` with the returned `file_id`. Works for PDFs and `text/*` files alike.
+First upload the file via [`POST /api/v1/files/upload`](/docs/api/files/upload-file), then call [`POST /api/v1/documents/ingest`](/docs/api/documents/ingest-document) with the returned `file_id`. Works for PDFs and `text/*` files alike.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>

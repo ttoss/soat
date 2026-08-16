@@ -91,12 +91,12 @@ Key creation is self-service — any authenticated caller may mint a key for the
 
 | Operation | Behavior under a credential scoped to `proj_A` |
 | --- | --- |
-| `POST /api-keys` with no `project_id` | Mints a key scoped to `proj_A` (the [implicit project id](#implicit-project-id)) |
-| `POST /api-keys` with `project_id: proj_B` | `403 API_KEY_PROJECT_SCOPE` |
-| `POST /api-keys` with `project_id: null` | `403` — minting an **unscoped** key requires an unscoped credential |
-| `GET` / `PUT` / `DELETE /api-keys/{id}` for a key in `proj_B`, or for an unscoped key | `403 API_KEY_PROJECT_SCOPE` |
-| `PUT /api-keys/{id}` moving a `proj_A` key to `proj_B`, or clearing its scope | `403` — both ends of a re-scope are checked |
-| `GET /api-keys` (list) | Returns only keys scoped to `proj_A` |
+| [`POST /api-keys`](/docs/api/api-keys/create-api-key) with no `project_id` | Mints a key scoped to `proj_A` (the [implicit project id](#implicit-project-id)) |
+| [`POST /api-keys`](/docs/api/api-keys/create-api-key) with `project_id: proj_B` | `403 API_KEY_PROJECT_SCOPE` |
+| [`POST /api-keys`](/docs/api/api-keys/create-api-key) with `project_id: null` | `403` — minting an **unscoped** key requires an unscoped credential |
+| `GET` / `PUT` / [`DELETE /api-keys/{id}`](/docs/api/api-keys/delete-api-key) for a key in `proj_B`, or for an unscoped key | `403 API_KEY_PROJECT_SCOPE` |
+| [`PUT /api-keys/{id}`](/docs/api/api-keys/update-api-key) moving a `proj_A` key to `proj_B`, or clearing its scope | `403` — both ends of a re-scope are checked |
+| [`GET /api-keys`](/docs/api/api-keys/list-api-keys) (list) | Returns only keys scoped to `proj_A` |
 
 Without this, the boundary would be exactly one call deep: a key confined to `proj_A` could mint an unscoped key for the same owning user and operate anywhere. Rotation still works — a scoped key can mint and delete keys **within its own project**.
 
@@ -108,7 +108,7 @@ Policies listed in `policy_ids` are loaded from the global [Policies](./policies
 
 ### Revoking a Key
 
-Delete the key via `DELETE /api/v1/api-keys/:id`. The key immediately stops authenticating. There is no rotation endpoint — create a new key and delete the old one.
+Delete the key via [`DELETE /api/v1/api-keys/:id`](/docs/api/api-keys/delete-api-key). The key immediately stops authenticating. There is no rotation endpoint — create a new key and delete the old one.
 
 ## Examples
 

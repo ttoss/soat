@@ -203,8 +203,8 @@ Three writes archive nothing — a version exists to name a distinct policy: a m
 | Operation | Endpoint |
 | --- | --- |
 | List versions, newest first | [`GET /api/v1/guardrails/{guardrail_id}/versions`](#list-archived-versions) |
-| Fetch one version | `GET /api/v1/guardrails/{guardrail_id}/versions/{version}` |
-| Roll back to a version | `POST /api/v1/guardrails/{guardrail_id}/versions/{version}/restore` |
+| Fetch one version | [`GET /api/v1/guardrails/{guardrail_id}/versions/{version}`](/docs/api/guardrails/get-guardrail-version) |
+| Roll back to a version | [`POST /api/v1/guardrails/{guardrail_id}/versions/{version}/restore`](/docs/api/guardrails/restore-guardrail-version) |
 
 **Restore appends, it does not rewind.** Restoring v1 of a guardrail at v2 writes v1's document back as **v3**, so records citing v2 still resolve. The restore runs through the ordinary update path (the archived document is re-validated), takes an optional `label`, and rolls back only the policy — `name`, `description` and the context binding are untouched.
 
@@ -214,11 +214,11 @@ Guardrails have no release/canary layer, unlike agents: splitting traffic across
 
 ### Deletion
 
-A guardrail cannot be deleted while it is attached: `DELETE /api/v1/guardrails/{guardrail_id}` returns `409` listing the tools, agents, and projects whose `guardrail_ids` still reference it. Each reference must be detached first — a `guardrails:DetachGuardrail` operation (see [Attachment](#attachment)) — so deletion can never do what detach permissions forbid. As defense-in-depth, a dangling reference encountered at evaluation time fails closed: the unresolvable guardrail evaluates as class **C**.
+A guardrail cannot be deleted while it is attached: [`DELETE /api/v1/guardrails/{guardrail_id}`](/docs/api/guardrails/delete-guardrail) returns `409` listing the tools, agents, and projects whose `guardrail_ids` still reference it. Each reference must be detached first — a `guardrails:DetachGuardrail` operation (see [Attachment](#attachment)) — so deletion can never do what detach permissions forbid. As defense-in-depth, a dangling reference encountered at evaluation time fails closed: the unresolvable guardrail evaluates as class **C**.
 
 ### Dry-run Evaluation
 
-`POST /api/v1/guardrails/{guardrail_id}/evaluate` runs the full evaluation pipeline — the `class` expression, the guard, the context tool per `context_mode`, live `soat.*` resolution — against caller-supplied `args` and `guardrail_context`, and returns the exact [evaluation record](#evaluation-audit-record) a real call would produce. Nothing executes, no approval item is filed, no activity entry is written. Pass an optional `tool_id` to resolve `soat.tool.*`; an unresolvable `soat.*` key behaves exactly as at runtime (fail-closed).
+[`POST /api/v1/guardrails/{guardrail_id}/evaluate`](/docs/api/guardrails/evaluate-guardrail) runs the full evaluation pipeline — the `class` expression, the guard, the context tool per `context_mode`, live `soat.*` resolution — against caller-supplied `args` and `guardrail_context`, and returns the exact [evaluation record](#evaluation-audit-record) a real call would produce. Nothing executes, no approval item is filed, no activity entry is written. Pass an optional `tool_id` to resolve `soat.tool.*`; an unresolvable `soat.*` key behaves exactly as at runtime (fail-closed).
 
 This is the adoption path: preview a document's decisions against production-shaped calls **before** attaching it — or before editing a widely-attached one.
 
@@ -262,7 +262,7 @@ Evaluations that **changed the call's outcome** — `route_to_approval`, `blocke
 
 ### Formation resource
 
-Guardrails can be declared as a `guardrail` [formation](./formations.md) resource (`GuardrailResourceProperties`): `name`, `description`, `class`, `default_class`, `guard`, `escalate`, `context_tool_id`, `context_mode` — the same fields as [Create a guardrail](#create-a-guardrail), with the REST API's single `document` object flattened to top-level properties. `context_tool_id` may be a `{ "ref": "ResourceName" }` to a `tool` resource in the same template, and a tool or agent resource can attach the guardrail via `guardrail_ids: [{ "ref": "ResourceName" }]`, so a full gate deploys from one template. `class`/`default_class`/`guard`/`escalate` are recombined into a single `document` write on every create/update, so an update that omits one of them drops it (matching `PATCH /api/v1/guardrails/{guardrail_id}`'s full-replace semantics for `document`).
+Guardrails can be declared as a `guardrail` [formation](./formations.md) resource (`GuardrailResourceProperties`): `name`, `description`, `class`, `default_class`, `guard`, `escalate`, `context_tool_id`, `context_mode` — the same fields as [Create a guardrail](#create-a-guardrail), with the REST API's single `document` object flattened to top-level properties. `context_tool_id` may be a `{ "ref": "ResourceName" }` to a `tool` resource in the same template, and a tool or agent resource can attach the guardrail via `guardrail_ids: [{ "ref": "ResourceName" }]`, so a full gate deploys from one template. `class`/`default_class`/`guard`/`escalate` are recombined into a single `document` write on every create/update, so an update that omits one of them drops it (matching [`PATCH /api/v1/guardrails/{guardrail_id}`](/docs/api/guardrails/update-guardrail)'s full-replace semantics for `document`).
 
 ## Examples
 

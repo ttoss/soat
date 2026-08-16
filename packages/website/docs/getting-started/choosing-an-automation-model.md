@@ -35,7 +35,7 @@ exactly which.
 | **Cycles** — `review → draft`, a card dragged back a column                                    | Graph validation rejects a cycle by design                                |
 | **A long-lived entity** — a task never terminates on its own (`status: open` / `closed`)        | A run always drives toward a terminal node                                 |
 | **Named transitions as the only mutation path**, with guards over `{task, transition, principal}` | A run advances by the edges the engine picks; there is nothing to fire     |
-| **A board query** — `GET /tasks?workflow_id=…&state=…` is one column, with zero app-side state | —                                                                         |
+| **A board query** — [`GET /tasks?workflow_id=…&state=…`](/docs/api/tasks/list-tasks) is one column, with zero app-side state | —                                                                         |
 | **Append-only transition history** with `principal_kind` (`user`/`api_key`/`automation`/`approval`) | `node_executions` records execution, not who moved what                   |
 | **Caller-owned mutable `payload`** (shallow-merged on `PATCH`, validated by `payload_schema`)   | A run's `state` is engine-owned                                           |
 | **Approval-gated _transitions_** (`requires_approval` parks the move itself)                    | An `approval` node gates a tool call, not a state change                   |

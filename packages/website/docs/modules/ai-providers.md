@@ -128,7 +128,7 @@ An `apiKey` in `config` is accepted as an express-mode fallback when no secret i
 
 ### Listing the models a provider can run
 
-`GET /api/v1/ai-providers/{ai_provider_id}/models` asks the provider which models it can run, using that provider record's own configuration and credentials, and returns provider-native ids — the same strings `default_model` and an agent's `model` carry. Which models are reachable is a property of the **credential**, not of the slug (two providers of the same slug can return different lists), which is why the listing hangs off a provider.
+[`GET /api/v1/ai-providers/{ai_provider_id}/models`](/docs/api/ai-providers/list-ai-provider-models) asks the provider which models it can run, using that provider record's own configuration and credentials, and returns provider-native ids — the same strings `default_model` and an agent's `model` carry. Which models are reachable is a property of the **credential**, not of the slug (two providers of the same slug can return different lists), which is why the listing hangs off a provider.
 
 Each entry carries what the provider reports: `id`, and optionally `display_name`, `vendor`, `input_modalities`, `output_modalities`, `streaming`, `lifecycle` (`active` / `legacy` / `deprecated`) and `inference_types`. A `lifecycle` other than `active` still serves but should not be pinned by anything new. A Bedrock model whose `inference_types` offers only `inference_profile` must be invoked through a cross-region profile id.
 
@@ -173,14 +173,14 @@ The record supplies the region and the IAM scope; the credential comes from the 
 
 A project can price its own provider instances without a global admin. A **per-provider price override** is a [price-book](./usage.md#pricebook) row bound to a specific AI provider — an enterprise-negotiated rate or a gateway with markup — that wins over the global default when [usage](./usage.md) cost is computed for that provider. Manage them with:
 
-- `GET /api/v1/ai-providers/{ai_provider_id}/prices` — list this provider's overrides
-- `PUT /api/v1/ai-providers/{ai_provider_id}/prices` — upsert them, keyed on `(model, effective_from)`
+- [`GET /api/v1/ai-providers/{ai_provider_id}/prices`](/docs/api/ai-providers/get-ai-provider-prices) — list this provider's overrides
+- [`PUT /api/v1/ai-providers/{ai_provider_id}/prices`](/docs/api/ai-providers/update-ai-provider-prices) — upsert them, keyed on `(model, effective_from)`
 
 Both are authorized by the caller's access to the provider's own project (`ai-providers:GetAiProviderPrices` / `ai-providers:ManageAiProviderPrices`), so one project never sees another's negotiated rates. The `provider` slug is taken from the AI provider itself — you supply just the model, rates, and `effective_from`, which must be in the future (past prices are immutable; ship corrections as new future-dated rows). See [Usage - Pricing](./usage.md#pricing) for how the effective price is chosen and frozen onto each meter.
 
 ### Deleting a provider
 
-`DELETE /api/v1/ai-providers/{ai_provider_id}` classifies everything that references the provider into two kinds:
+[`DELETE /api/v1/ai-providers/{ai_provider_id}`](/docs/api/ai-providers/delete-ai-provider) classifies everything that references the provider into two kinds:
 
 | Dependent | Kind | Behavior |
 |---|---|---|
