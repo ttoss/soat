@@ -430,6 +430,16 @@ describe('something that pauses async work', () => {
   a bounded predicate on the observable side effect — a delivery row, a mock call, a DB
   column change (as `generationLifecycle.test.ts` does). For TTL / expiry behavior, advance
   an injected clock rather than sleeping past the TTL.
+- **Never assert across a wall-clock bucket boundary.** State keyed by a truncated
+  timestamp — a quota's fixed window, a rate-limit bucket, a per-minute aggregate — resets
+  the instant the key changes, and nothing in the test controls when that is. A sequence of
+  requests asserting on such a counter must run against a bucket that *cannot* roll over
+  mid-test: `rest/quotas.test.ts` pins every counted sequence to `calendar_month`
+  (`COUNTED_WINDOW`), and `lib/quotaGenerationEnforcement.test.ts` defaults to it. With a
+  minute-sized bucket the assertion holds only while every request lands in the same
+  minute, so it fails a few times in a thousand runs — long after the change that
+  introduced it (#1049). Cover the truncation math itself separately, against a frozen
+  clock (`lib/quotas.test.ts`).
 - **Never leak global singleton state.** A listener registered on a shared bus
   (`onEvent` on the `eventBus` singleton) or a mutated shared registry must be torn down in
   `finally` / `afterEach`, or it leaks into every later test and breaks the suite under

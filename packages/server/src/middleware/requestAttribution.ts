@@ -20,6 +20,19 @@ type Next = () => Promise<void>;
  * counted — the meter records arrivals, the quota decides admissions, and the
  * two must not disagree about how many requests arrived.
  *
+ * They are two different counters, and only one of them gates admission. The
+ * meter is an in-memory `Map` increment ({@link incrementRequestCount} does no
+ * I/O and returns `void`), flushed to `api_request` usage events on a timer;
+ * there is no promise to await and none is dropped by calling it as a
+ * statement. The quota counter is a row per `(quota, window)` incremented
+ * *inside* the awaited `evaluateRequestQuotas`, by one atomic
+ * `INSERT … ON CONFLICT DO UPDATE … RETURNING "count"` that is simultaneously
+ * the increment and the value compared to the limit. So enforcement never
+ * evaluates a count that is missing a predecessor, however concurrent the
+ * arrivals — pinned by the two "under concurrency" tests in
+ * `rest/quotas.test.ts`, which admit exactly `limit` of N simultaneous requests
+ * (#1049).
+ *
  * Idempotent per request: the first call wins and later ones are no-ops, so a
  * handler that authorizes twice (a write plus a privilege-escalation probe) is
  * counted once. `ctx.state` is guaranteed to exist here — `requestIdMiddleware`

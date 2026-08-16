@@ -14,7 +14,7 @@ import {
 } from './tasksAutomationLocking';
 import { runDispatchWithRetry } from './tasksAutomationRetry';
 import { type DispatchResult, failedDispatchIds } from './tasksDispatch';
-import type { OnEnter } from './workflowsValidation';
+import type { OnEnter, WorkflowDispatch } from './workflowsValidation';
 
 const log = createDebug('soat:tasks');
 
@@ -122,6 +122,7 @@ const routeOnComplete = async (args: {
   projectId: number;
   generationId: string | null;
   orchestrationRunId: string | null;
+  toolId: string | null;
 }): Promise<void> => {
   const rules = args.onEnter.onComplete ?? [];
   const matched = rules.find((rule) => {
@@ -145,6 +146,7 @@ const routeOnComplete = async (args: {
         principal: { kind: 'automation', id: null },
         generationId: args.generationId,
         orchestrationRunId: args.orchestrationRunId,
+        toolId: args.toolId,
       });
     } catch (error) {
       // A matched rule whose transition is guard-rejected (or invalidated by a
@@ -180,6 +182,50 @@ const routeOnComplete = async (args: {
   });
 };
 
+/**
+ * Routes an already-committed dispatch outcome through `on_complete` /
+ * `on_failure`. The in-process path reaches this through `runStateAutomation`
+ * below; the reconciler (`tasksReconciliation`) calls it for a task whose
+ * awaiter died with its process, so a recovered outcome routes through exactly
+ * the same rules — including `surfaceUnrouted` when nothing matches — rather
+ * than a parallel implementation that could disagree about which rule wins.
+ */
+export const routeSettledDispatch = async (args: {
+  task: TaskWithWorkflow;
+  onEnter: OnEnter;
+  succeeded: boolean;
+  result: unknown;
+  orchestrationRunId: string | null;
+}): Promise<void> => {
+  const taskPublicId = args.task.publicId as string;
+  const projectId = args.task.projectId as number;
+
+  if (!args.succeeded) {
+    if (!args.onEnter.onFailure) return;
+    await transitionTask({
+      id: taskPublicId,
+      transition: args.onEnter.onFailure,
+      principal: { kind: 'automation', id: null },
+      generationId: null,
+      orchestrationRunId: args.orchestrationRunId,
+    });
+    return;
+  }
+
+  await routeOnComplete({
+    taskPublicId,
+    onEnter: args.onEnter,
+    context: buildTaskContext(args.task),
+    result: args.result,
+    projectId,
+    generationId: null,
+    orchestrationRunId: args.orchestrationRunId,
+    // The reconciler only ever recovers orchestration dispatches, so a tool is
+    // never the cause here (`tasksReconciliation.settledRun`).
+    toolId: null,
+  });
+};
+
 const handleFailure = async (args: {
   taskPublicId: string;
   stateName: string;
@@ -189,6 +235,8 @@ const handleFailure = async (args: {
   dispatchKind: ActiveDispatch['kind'];
   attempt: number | undefined;
   error: unknown;
+  /** Set for a `tool` dispatch: the cause `on_failure` records (#792). */
+  toolId: string | null;
 }): Promise<void> => {
   log(
     'runStateAutomation: dispatch failed task=%s %o',
@@ -219,6 +267,7 @@ const handleFailure = async (args: {
       principal: { kind: 'automation', id: null },
       generationId,
       orchestrationRunId,
+      toolId: args.toolId,
     });
   }
 };
@@ -275,15 +324,46 @@ const commitCompletion = async (args: {
 
 /**
  * Executes a state's `on_enter` automation for a task: resolves the dispatch
- * input from the task payload, runs the single agent generation or
- * orchestration run, records provenance and `automation_status`, and routes the
+ * input from the task payload, runs the single agent generation, orchestration
+ * run or tool call, records provenance and `automation_status`, and routes the
  * outcome through `on_complete` / `on_failure`. Detached (fire-and-forget) —
  * callers `void` it. At most one dispatch is active per task; if the task has
  * already left the state by the time the dispatch resolves, the result is
  * discarded (cancellation-on-exit).
  */
 const dispatchKindOf = (kind: string): ActiveDispatch['kind'] => {
-  return kind === 'agent' ? 'generation' : 'orchestration_run';
+  if (kind === 'agent') return 'generation';
+  if (kind === 'tool') return 'tool_call';
+  return 'orchestration_run';
+};
+
+/**
+ * A failed dispatch's provenance for the `tool` kind. The success path reads it
+ * off the `DispatchResult`, but a failure has no result to read — and an
+ * automation move still needs a recorded cause (#792), so it comes from the
+ * definition instead.
+ */
+const failedToolId = (dispatch: WorkflowDispatch): string | null => {
+  if (dispatch.kind !== 'tool') return null;
+  return dispatch.toolId ?? null;
+};
+
+/** Marks the dispatch in flight before it starts, with no id known yet. */
+const markDispatchRunning = (args: {
+  task: TaskWithWorkflow;
+  dispatchKind: ActiveDispatch['kind'];
+  retry: OnEnter['retry'];
+}): Promise<void> => {
+  return setDispatchState({
+    task: args.task,
+    activeDispatch: {
+      kind: args.dispatchKind,
+      id: null,
+      status: 'running',
+      ...(args.retry ? { attempt: 1 } : {}),
+    },
+    automationStatus: 'running',
+  });
 };
 
 export const runStateAutomation = async (args: {
@@ -307,16 +387,7 @@ export const runStateAutomation = async (args: {
   // `active_dispatch` — exactly today's behavior (#822).
   const retry = args.onEnter.retry ?? null;
 
-  await setDispatchState({
-    task,
-    activeDispatch: {
-      kind: dispatchKind,
-      id: null,
-      status: 'running',
-      ...(retry ? { attempt: 1 } : {}),
-    },
-    automationStatus: 'running',
-  });
+  await markDispatchRunning({ task, dispatchKind, retry });
 
   const outcome = await runDispatchWithRetry({
     taskPublicId: args.taskPublicId,
@@ -326,6 +397,7 @@ export const runStateAutomation = async (args: {
     dispatch,
     dispatchKind,
     inputs,
+    taskContext: context,
     retry,
     principal: args.principal,
     toolContext: task.toolContext ?? undefined,
@@ -344,6 +416,7 @@ export const runStateAutomation = async (args: {
       dispatchKind,
       attempt: outcome.attempt,
       error: outcome.error,
+      toolId: failedToolId(dispatch),
     });
     return;
   }
@@ -377,5 +450,6 @@ export const runStateAutomation = async (args: {
     projectId: args.projectId,
     generationId: dispatched.generationId,
     orchestrationRunId: dispatched.orchestrationRunId,
+    toolId: dispatched.toolId,
   });
 };

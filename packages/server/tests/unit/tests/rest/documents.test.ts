@@ -2,6 +2,7 @@ import fs from 'node:fs';
 
 import jwt from 'jsonwebtoken';
 import { db } from 'src/db';
+import * as eventBusModule from 'src/lib/eventBus';
 import * as pdfModule from 'src/lib/pdf';
 import { JWT_SECRET } from 'src/middleware/auth';
 
@@ -1177,6 +1178,242 @@ describe('Documents', () => {
       expect(ingestRes.body.status).toBe('failed');
       const status = await getDocumentStatus(ingestRes.body.id);
       expect(status.error).toBe('FILE_PARSE_FAILED');
+    });
+  });
+
+  // A fronting layer that reacts to ingestion needs two things SOAT did not
+  // expose: the source file's media type on the document itself, and a
+  // terminal event when ingestion settles (issue #1041). Without them the
+  // caller mirrors the document locally and edge-triggers on a polled status.
+  describe('content_type and ingestion lifecycle events (issue #1041)', () => {
+    let extractSpy: jest.SpyInstance;
+
+    const uploadFile = async (args: {
+      buffer: Buffer;
+      filename: string;
+      contentType: string;
+    }) => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/files/upload')
+        .attach('file', args.buffer, {
+          filename: args.filename,
+          contentType: args.contentType,
+        })
+        .field('project_id', projectId);
+      expect(res.status).toBe(201);
+      return res.body.id as string;
+    };
+
+    /**
+     * Runs `act` with a listener on the shared bus and returns the events it
+     * saw, polling briefly because an emit resolves the project public id
+     * asynchronously. The listener is always removed — a leaked subscriber on
+     * the singleton bus would follow every later test in the run.
+     */
+    const captureEvents = async (
+      act: () => Promise<void>
+    ): Promise<eventBusModule.SoatEvent[]> => {
+      const events: eventBusModule.SoatEvent[] = [];
+      const listener = (event: eventBusModule.SoatEvent) => {
+        events.push(event);
+      };
+      eventBusModule.eventBus.on('soat:event', listener);
+      try {
+        await act();
+        // The envelope's project lookup is a real DB read, so an event can land
+        // a tick or two after the call that produced it returned.
+        for (let i = 0; i < 100 && events.length === 0; i += 1) {
+          await new Promise((r) => {
+            return setTimeout(r, 20);
+          });
+        }
+        return events;
+      } finally {
+        eventBusModule.eventBus.off('soat:event', listener);
+      }
+    };
+
+    beforeAll(() => {
+      extractSpy = jest
+        .spyOn(pdfModule, 'extractPdfPages')
+        .mockResolvedValue(['Hello World']);
+    });
+
+    afterAll(() => {
+      extractSpy.mockRestore();
+    });
+
+    test('a created document echoes the stored file content type', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents')
+        .send({
+          project_id: projectId,
+          content: 'Content type echo.',
+          filename: 'echo.txt',
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.content_type).toBe('text/plain');
+    });
+
+    test('an ingested document echoes the source file content type', async () => {
+      const fileId = await uploadFile({
+        buffer: ONE_PAGE_PDF_BUFFER,
+        filename: 'content-type.pdf',
+        contentType: 'application/pdf',
+      });
+
+      const ingestRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/ingest?wait=true')
+        .send({ file_id: fileId, project_id: projectId });
+
+      expect(ingestRes.status).toBe(201);
+      expect(ingestRes.body.content_type).toBe('application/pdf');
+
+      const getRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents/${ingestRes.body.id}`
+      );
+      expect(getRes.status).toBe(200);
+      expect(getRes.body.content_type).toBe('application/pdf');
+    });
+
+    test('a settled ingestion emits documents.ingested with the indexed chunk count', async () => {
+      const fileId = await uploadFile({
+        buffer: Buffer.from('An ingested paragraph.'),
+        filename: 'ingested-event.txt',
+        contentType: 'text/plain',
+      });
+
+      let docId = '';
+      const events = await captureEvents(async () => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/documents/ingest?wait=true')
+          .send({ file_id: fileId, project_id: projectId });
+        expect(res.status).toBe(201);
+        docId = res.body.id as string;
+      });
+
+      const ingested = events.find((e) => {
+        return e.type === 'documents.ingested';
+      });
+      expect(ingested).toBeDefined();
+      expect(ingested?.resourceType).toBe('document');
+      expect(ingested?.resourceId).toBe(docId);
+      expect(ingested?.data.status).toBe('ready');
+      expect(ingested?.data.chunk_count).toBe(1);
+      expect(ingested?.data.content_type).toBe('text/plain');
+    });
+
+    test('a failed ingestion emits documents.ingest_failed with the failure reason', async () => {
+      const fileId = await uploadFile({
+        buffer: Buffer.from('   \n\t  '),
+        filename: 'ingest-failed-event.txt',
+        contentType: 'text/plain',
+      });
+
+      let docId = '';
+      const events = await captureEvents(async () => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/documents/ingest?wait=true')
+          .send({ file_id: fileId, project_id: projectId });
+        expect(res.status).toBe(201);
+        docId = res.body.id as string;
+      });
+
+      const failed = events.find((e) => {
+        return e.type === 'documents.ingest_failed';
+      });
+      expect(failed).toBeDefined();
+      expect(failed?.resourceId).toBe(docId);
+      expect(failed?.data.status).toBe('failed');
+      expect(failed?.data.error).toBe('FILE_PARSE_FAILED');
+    });
+
+    test('an ingestion that throws mid-pipeline still emits documents.ingest_failed', async () => {
+      const fileId = await uploadFile({
+        buffer: ONE_PAGE_PDF_BUFFER,
+        filename: 'throwing.pdf',
+        contentType: 'application/pdf',
+      });
+
+      extractSpy.mockRejectedValueOnce(new Error('extractor exploded'));
+
+      let docId = '';
+      const events = await captureEvents(async () => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/documents/ingest?wait=true')
+          .send({ file_id: fileId, project_id: projectId });
+        expect(res.status).toBe(201);
+        docId = res.body.id as string;
+      });
+
+      const failed = events.find((e) => {
+        return e.type === 'documents.ingest_failed';
+      });
+      expect(failed).toBeDefined();
+      expect(failed?.resourceId).toBe(docId);
+      expect(failed?.data.error).toBe('extractor exploded');
+    });
+
+    test('a re-ingest emits a fresh documents.ingested event', async () => {
+      const fileId = await uploadFile({
+        buffer: Buffer.from('Re-ingested content.'),
+        filename: 'reingest-event.txt',
+        contentType: 'text/plain',
+      });
+
+      const first = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/ingest?wait=true')
+        .send({ file_id: fileId, project_id: projectId });
+      expect(first.status).toBe(201);
+      const docId = first.body.id as string;
+
+      const events = await captureEvents(async () => {
+        const res = await authenticatedTestClient(userToken)
+          .post(`/api/v1/documents/${docId}/ingest?wait=true`)
+          .send({});
+        expect(res.status).toBe(201);
+      });
+
+      const ingested = events.find((e) => {
+        return e.type === 'documents.ingested';
+      });
+      expect(ingested?.resourceId).toBe(docId);
+    });
+
+    test('a stalled ingestion recovered on read emits documents.ingest_failed', async () => {
+      const fileId = await uploadFile({
+        buffer: Buffer.from('Stalled content.'),
+        filename: 'stalled.txt',
+        contentType: 'text/plain',
+      });
+
+      const ingestRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/ingest?wait=true')
+        .send({ file_id: fileId, project_id: projectId });
+      expect(ingestRes.status).toBe(201);
+      const docId = ingestRes.body.id as string;
+
+      // Put the document back into a non-terminal state with an updatedAt far
+      // enough in the past that the stall sweeper fails it on the next read.
+      await db.Document.update(
+        { status: 'processing', updatedAt: new Date(Date.now() - 3600_000) },
+        { where: { publicId: docId }, silent: true }
+      );
+
+      const events = await captureEvents(async () => {
+        const res = await authenticatedTestClient(userToken).get(
+          `/api/v1/documents/${docId}/status`
+        );
+        expect(res.status).toBe(200);
+        expect(res.body.status).toBe('failed');
+      });
+
+      const failed = events.find((e) => {
+        return e.type === 'documents.ingest_failed';
+      });
+      expect(failed?.resourceId).toBe(docId);
+      expect(failed?.data.error).toBe('INGESTION_TIMEOUT');
     });
   });
 

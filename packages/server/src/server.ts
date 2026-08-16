@@ -20,6 +20,7 @@ import { startTriggerScheduler } from './lib/triggerScheduler';
 import { startUsageRequestScheduler } from './lib/usageRequestScheduler';
 import { startUsageStorageScheduler } from './lib/usageStorageScheduler';
 import { createFirstAdminUser } from './lib/users';
+import { startWebhookScheduler } from './lib/webhookDispatcher';
 
 const log = createDebug('soat:server');
 
@@ -52,6 +53,10 @@ const startServer = async () => {
     // Start the task stall sweeper so tasks parked past their `stalled_after`
     // threshold emit `tasks.stalled` (once per episode, re-armed on transition).
     startTasksScheduler();
+    // Start the webhook delivery outbox sweep so failed deliveries are retried
+    // behind their backoff, and so deliveries interrupted mid-attempt by a
+    // restart are reclaimed once their lease expires instead of being stranded.
+    startWebhookScheduler();
     // Start the audit-log retention sweep so entries older than
     // AUDIT_RETENTION_DAYS are pruned on a daily tick.
     startAuditRetentionScheduler();

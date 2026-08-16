@@ -11,6 +11,7 @@ import {
   getWebhookDelivery,
   listWebhookDeliveries,
   listWebhooks,
+  redeliverWebhookDelivery,
   rotateWebhookSecret,
   updateWebhook,
 } from 'src/lib/webhooks';
@@ -267,6 +268,41 @@ webhooksRouter.get('/webhook-deliveries/:delivery_id', async (ctx: Context) => {
 
   ctx.body = delivery;
 });
+
+// Redelivery re-queues a stored payload; it never sends inline, so the response
+// is a `202` carrying the new delivery to poll (`.claude/rules/sync-async.md`).
+webhooksRouter.post(
+  '/webhook-deliveries/:delivery_id/redeliver',
+  async (ctx: Context) => {
+    requireAuth(ctx);
+
+    const delivery = await getWebhookDelivery({ id: ctx.params.delivery_id });
+    if (!delivery) {
+      throw new DomainError('RESOURCE_NOT_FOUND', 'Delivery not found');
+    }
+
+    const webhook = await getWebhook({ id: delivery.webhook_id! });
+    if (!webhook) {
+      throw new DomainError('RESOURCE_NOT_FOUND', 'Delivery not found');
+    }
+
+    const allowed = await ctx.authUser.isAllowed({
+      projectPublicId: webhook.project_id!,
+      action: 'webhooks:RedeliverWebhookDelivery',
+      resource: buildSrn({
+        projectPublicId: webhook.project_id!,
+        resourceType: 'webhook',
+        resourceId: webhook.id,
+      }),
+    });
+    if (!allowed) {
+      throw new DomainError('FORBIDDEN', 'Forbidden');
+    }
+
+    ctx.status = 202;
+    ctx.body = await redeliverWebhookDelivery({ id: ctx.params.delivery_id });
+  }
+);
 
 webhooksRouter.get('/webhooks/:webhook_id/secret', async (ctx: Context) => {
   requireAuth(ctx);

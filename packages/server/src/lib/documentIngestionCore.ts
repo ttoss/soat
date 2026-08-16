@@ -34,6 +34,62 @@ export const fetchIngestedDocById = (
   }) as Promise<IngestedDoc | null>;
 };
 
+/**
+ * Emits the terminal ingestion event for a document (#1041). Every path that
+ * settles an ingestion — the pipeline tail here, the async-callback completion,
+ * the pipeline's catch-all, and the stall sweeper — ends in one of these, so a
+ * subscriber learns that a document became queryable (or gave up) without
+ * polling `GET /documents/{id}/status` and edge-triggering on the change.
+ *
+ * The document is re-read with its file and project because a settle site may
+ * only hold the bare row, and the envelope needs the owning project. A document
+ * whose project can no longer be resolved (its file was deleted underneath the
+ * ingestion) emits nothing: an event is best-effort and must never fail the
+ * write that produced it.
+ */
+export const emitIngestionSettled = async (args: {
+  docId: number;
+  type: 'documents.ingested' | 'documents.ingest_failed';
+  data?: Record<string, unknown>;
+}): Promise<void> => {
+  const fetched = await fetchIngestedDocById(args.docId);
+  const project = fetched?.file?.project;
+  if (!fetched || !project) {
+    log('emitIngestionSettled: no project for docId=%d — dropping', args.docId);
+    return;
+  }
+
+  emitResourceEvent({
+    type: args.type,
+    projectId: project.id,
+    projectPublicId: project.publicId,
+    resourceType: 'document',
+    resourceId: fetched.publicId,
+    data: { ...mapDocument(fetched), ...args.data },
+  });
+};
+
+/**
+ * The failure half of {@link emitIngestionSettled}, swallowing its own errors.
+ * Its callers are failure handlers themselves — a rejected emit there would
+ * replace the real ingestion error with a secondary one, or surface as an
+ * unhandled rejection on the background path.
+ */
+export const emitIngestFailed = async (args: {
+  docId: number;
+  error: string;
+}): Promise<void> => {
+  try {
+    await emitIngestionSettled({
+      docId: args.docId,
+      type: 'documents.ingest_failed',
+      data: { error: args.error },
+    });
+  } catch (error) {
+    log('emitIngestFailed: docId=%d error=%o', args.docId, error);
+  }
+};
+
 export type ChunkConfigInput = {
   chunkStrategy?: ChunkStrategy;
   chunkSize?: number;
@@ -118,6 +174,7 @@ export const finalizeIngestedPages = async (
       failureReason: 'FILE_PARSE_FAILED',
     });
     log('finalizeIngestedPages: no extractable text docId=%d', docId);
+    await emitIngestFailed({ docId, error: 'FILE_PARSE_FAILED' });
     return;
   }
 
@@ -166,8 +223,19 @@ export const finalizeIngestedPages = async (
       resourceId: fetched.publicId,
       data: {
         ...mapDocument(fetched),
-        chunkCount: chunks.length,
+        // snake_case, like every other key on the wire: a webhook payload uses
+        // the same names the REST response does (`case-convention.md`). This
+        // one shipped as `chunkCount` and was the only camelCase key in the
+        // envelope.
+        chunk_count: chunks.length,
       },
     });
   }
+
+  // The document is now queryable — the event a fronting layer waits on.
+  await emitIngestionSettled({
+    docId,
+    type: 'documents.ingested',
+    data: { chunk_count: chunks.length },
+  });
 };

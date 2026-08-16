@@ -814,6 +814,10 @@ components:
           type: string
           description: Original filename
           example: 'my-doc.txt'
+        content_type:
+          type: string
+          description: Media type of the source file the document was ingested from. Absent when the underlying file is gone.
+          example: 'application/pdf'
         size:
           type: integer
           description: File size in bytes

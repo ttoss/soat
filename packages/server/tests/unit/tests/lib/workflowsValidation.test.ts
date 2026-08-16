@@ -455,6 +455,39 @@ describe('assertWorkflowValid', () => {
     );
   });
 
+  test('rejects a tool dispatch with no tool_id', () => {
+    expectInvalid(
+      JSON.parse(
+        '{"states":[{"name":"a","initial":true,"onEnter":{"dispatch":{"kind":"tool"}}}],"transitions":[]}'
+      ),
+      /tool dispatch is missing tool_id/
+    );
+  });
+
+  test('accepts a tool dispatch naming a tool_id (#1039)', () => {
+    expect(() => {
+      return assertWorkflowValid({
+        states: [
+          {
+            name: 'a',
+            initial: true,
+            onEnter: {
+              dispatch: {
+                kind: 'tool',
+                toolId: 'tol_123',
+                operationId: 'doThing',
+                inputMapping: { q: { var: 'task.payload.q' } },
+              },
+              onComplete: [{ when: true, transition: 'go' }],
+            },
+          },
+          { name: 'b' },
+        ],
+        transitions: [{ name: 'go', from: ['a'], to: 'b' }],
+      });
+    }).not.toThrow();
+  });
+
   test('accepts a transition declaring requires_approval: true (Phase 3)', () => {
     expect(() => {
       return assertWorkflowValid({
