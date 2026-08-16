@@ -15,6 +15,32 @@ const QUOTA_ACTIONS = [
   'quotas:DeleteQuota',
 ];
 
+/**
+ * The window every quota that a **counted request sequence** runs against must
+ * use. Not a detail — picking `rolling_1m` here is what made this file flaky
+ * (#1049).
+ *
+ * `requests` windows are fixed windows keyed by a truncated wall-clock stamp
+ * (`quotaWindows.ts`), so a `rolling_1m` counter resets at every minute
+ * boundary. A test that issues 3 requests against `limit: 2` therefore asserts
+ * on the counter only while all three land inside the same minute: when the
+ * boundary falls between the 2nd and the 3rd — a few hundred milliseconds of
+ * exposure per run, which a loaded CI shard eventually hits — the 3rd request
+ * reads a freshly reset counter and is admitted, failing with
+ * `Expected: 429, Received: 200`.
+ *
+ * A `calendar_month` key (`YYYY-MM`) cannot roll over inside a test run, which
+ * removes the wall clock from the assertion entirely. Nothing is weakened: the
+ * count, the limit comparison, the blocking, the once-per-window webhook guard
+ * and the attribution are identical for every window — only the key differs.
+ * The key derivation itself (`rolling_1m` included) is covered against a frozen
+ * clock in `lib/quotas.test.ts`, where it is deterministic.
+ *
+ * `lib/quotaGenerationEnforcement.test.ts` defaults to the same window for the
+ * same reason.
+ */
+const COUNTED_WINDOW = 'calendar_month';
+
 describe('Quotas', () => {
   let adminToken: string;
   let userToken: string;
@@ -624,7 +650,7 @@ describe('Quotas', () => {
           scope: 'api_key',
           scope_ref: keyId,
           metric: 'requests',
-          window: 'rolling_1m',
+          window: COUNTED_WINDOW,
           limit: 3,
         },
         enfProjectId
@@ -651,7 +677,7 @@ describe('Quotas', () => {
       expect(blocked.body.error.meta.quota_id).toBe(quotaId);
       expect(blocked.body.error.meta.metric).toBe('requests');
       expect(blocked.body.error.meta.limit).toBe(3);
-      expect(blocked.body.error.meta.window).toBe('rolling_1m');
+      expect(blocked.body.error.meta.window).toBe(COUNTED_WINDOW);
       expect(blocked.body.error.meta.resets_at).toBeDefined();
     });
 
@@ -666,7 +692,7 @@ describe('Quotas', () => {
         {
           scope: 'project',
           metric: 'requests',
-          window: 'rolling_1m',
+          window: COUNTED_WINDOW,
           limit: 100,
         },
         enfProjectId
@@ -678,7 +704,7 @@ describe('Quotas', () => {
           scope: 'api_key',
           scope_ref: keyId,
           metric: 'requests',
-          window: 'rolling_1m',
+          window: COUNTED_WINDOW,
           limit: 2,
         },
         enfProjectId
@@ -709,7 +735,7 @@ describe('Quotas', () => {
         {
           scope: 'project',
           metric: 'requests',
-          window: 'rolling_1m',
+          window: COUNTED_WINDOW,
           limit: 2,
         },
         enfProjectId
@@ -741,7 +767,7 @@ describe('Quotas', () => {
         {
           scope: 'project',
           metric: 'requests',
-          window: 'rolling_1m',
+          window: COUNTED_WINDOW,
           limit: 1,
         },
         enfProjectId
@@ -752,7 +778,7 @@ describe('Quotas', () => {
           scope: 'api_key',
           scope_ref: keyId,
           metric: 'requests',
-          window: 'rolling_1m',
+          window: COUNTED_WINDOW,
           limit: 1,
         },
         enfProjectId
@@ -783,7 +809,7 @@ describe('Quotas', () => {
           scope: 'api_key',
           scope_ref: keyId,
           metric: 'requests',
-          window: 'rolling_1m',
+          window: COUNTED_WINDOW,
           limit,
         },
         enfProjectId
@@ -819,7 +845,7 @@ describe('Quotas', () => {
         {
           scope: 'project',
           metric: 'requests',
-          window: 'rolling_1m',
+          window: COUNTED_WINDOW,
           limit: 1,
         },
         enfProjectId
@@ -848,7 +874,7 @@ describe('Quotas', () => {
         {
           scope: 'project',
           metric: 'requests',
-          window: 'rolling_1m',
+          window: COUNTED_WINDOW,
           limit: 2,
         },
         enfProjectId
@@ -876,6 +902,76 @@ describe('Quotas', () => {
       expect(blocked.headers['retry-after']).toBeDefined();
     });
 
+    // The concurrent twin of the test above, on the *deferred* attribution path
+    // (#1049). A sequential sequence only proves the counter advances; it says
+    // nothing about what happens when the N+1th request is evaluated while the
+    // Nth is still in flight. It holds because counting and checking are the
+    // same statement — `incrementCounter`'s `INSERT … ON CONFLICT DO UPDATE …
+    // RETURNING "count"` — so a request is compared against a count that
+    // already includes itself and every predecessor that reached the row first.
+    // Split that into a read plus a write (or defer the write past the check)
+    // and the overshoot here scales with concurrency.
+    test('an unscoped key never admits more than limit under concurrency', async () => {
+      const { enfProjectId } = await setupEnforcementProject(
+        'quotas-unscoped-concurrency'
+      );
+
+      const limit = 3;
+      await createQuota(
+        userToken,
+        {
+          scope: 'project',
+          metric: 'requests',
+          window: COUNTED_WINDOW,
+          limit,
+        },
+        enfProjectId
+      );
+
+      const unscopedKeyRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/api-keys')
+        .send({
+          name: 'quotas-unscoped-concurrency key',
+          policy_ids: [policyId],
+        });
+      expect(unscopedKeyRes.status).toBe(201);
+      const rawUnscopedKey = unscopedKeyRes.body.key as string;
+
+      const total = 12;
+      const results = await Promise.all(
+        Array.from({ length: total }, () => {
+          return authenticatedTestClient(rawUnscopedKey).get(
+            `/api/v1/quotas?project_id=${enfProjectId}`
+          );
+        })
+      );
+
+      // Counted, not compared as response objects: a supertest response prints
+      // its whole request/response pair on failure, which buries the one number
+      // that matters.
+      const statuses = results.map((res) => {
+        return res.status;
+      });
+      const admitted = statuses.filter((status) => {
+        return status === 200;
+      });
+      expect(admitted).toHaveLength(limit);
+      expect(
+        statuses.filter((status) => {
+          return status === 429;
+        })
+      ).toHaveLength(total - limit);
+
+      // Every rejection is the quota's, not an incidental error.
+      for (const res of results.filter((res) => {
+        return res.status === 429;
+      })) {
+        expect(res.body.error.code).toBe('QUOTA_EXCEEDED');
+        expect(res.body.error.meta.limit).toBe(limit);
+        expect(res.headers['retry-after']).toBeDefined();
+      }
+    });
+
     // An unscoped key can never be *named* by a `scope_ref` — that check
     // requires the key to live in the quota's project (`assertScopeRefValid`),
     // and an unscoped key lives in none. A null-ref `api_key` quota is the cap
@@ -899,7 +995,7 @@ describe('Quotas', () => {
           scope: 'api_key',
           scope_ref: unscopedKeyRes.body.id,
           metric: 'requests',
-          window: 'rolling_1m',
+          window: COUNTED_WINDOW,
           limit: 1,
         },
         enfProjectId
@@ -911,7 +1007,7 @@ describe('Quotas', () => {
         {
           scope: 'api_key',
           metric: 'requests',
-          window: 'rolling_1m',
+          window: COUNTED_WINDOW,
           limit: 1,
         },
         enfProjectId
@@ -952,7 +1048,7 @@ describe('Quotas', () => {
         {
           scope: 'project',
           metric: 'requests',
-          window: 'rolling_1m',
+          window: COUNTED_WINDOW,
           limit: 2,
         },
         enfProjectId
@@ -1002,7 +1098,7 @@ describe('Quotas', () => {
         {
           scope: 'project',
           metric: 'requests',
-          window: 'rolling_1m',
+          window: COUNTED_WINDOW,
           limit: 1,
         },
         enfProjectId
@@ -1078,7 +1174,7 @@ describe('Quotas', () => {
         {
           scope: 'project',
           metric: 'requests',
-          window: 'rolling_1m',
+          window: COUNTED_WINDOW,
           limit: 2,
         },
         enfProjectId
@@ -1137,7 +1233,7 @@ describe('Quotas', () => {
         {
           scope: 'project',
           metric: 'requests',
-          window: 'rolling_1m',
+          window: COUNTED_WINDOW,
           limit: 1,
         },
         enfProjectId
@@ -1232,7 +1328,7 @@ describe('Quotas', () => {
         {
           scope: 'project',
           metric: 'tokens',
-          window: 'calendar_month',
+          window: COUNTED_WINDOW,
           limit: 30,
         },
         enfProjectId
@@ -1353,7 +1449,7 @@ describe('Quotas', () => {
         {
           scope: 'actor',
           metric: 'tokens',
-          window: 'calendar_month',
+          window: COUNTED_WINDOW,
           limit: 30,
         },
         enfProjectId
@@ -1411,7 +1507,7 @@ describe('Quotas', () => {
           scope: 'api_key',
           scope_ref: keyId,
           metric: 'requests',
-          window: 'rolling_1m',
+          window: COUNTED_WINDOW,
           limit: 1,
         },
         enfProjectId
@@ -1482,7 +1578,7 @@ describe('Quotas', () => {
           scope: 'api_key',
           scope_ref: keyId,
           metric: 'requests',
-          window: 'rolling_1m',
+          window: COUNTED_WINDOW,
           limit: 1,
           mode: 'monitor',
         },
@@ -1527,7 +1623,7 @@ describe('Quotas', () => {
           scope: 'api_key',
           scope_ref: keyId,
           metric: 'requests',
-          window: 'rolling_1m',
+          window: COUNTED_WINDOW,
           limit: 1,
           mode: 'monitor',
         },
@@ -1573,7 +1669,7 @@ describe('Quotas', () => {
           scope: 'api_key',
           scope_ref: keyId,
           metric: 'requests',
-          window: 'rolling_1m',
+          window: COUNTED_WINDOW,
           limit: 1,
           mode: 'enforce',
         },
@@ -1601,7 +1697,7 @@ describe('Quotas', () => {
           scope: 'api_key',
           scope_ref: keyId,
           metric: 'requests',
-          window: 'rolling_1m',
+          window: COUNTED_WINDOW,
           limit: 1,
         },
         enfProjectId
@@ -1619,9 +1715,9 @@ describe('Quotas', () => {
     });
 
     test('changing the limit re-arms the webhook for a later breach in the same window', async () => {
-      // `calendar_month` (not `rolling_1m`) so the window key cannot roll over
-      // mid-test: every request below shares one window, which is exactly the
-      // condition the once-per-window fire guard applies to.
+      // `COUNTED_WINDOW` matters most here: every request below must share one
+      // window, which is exactly the condition the once-per-window fire guard
+      // applies to.
       const { enfProjectId, keyId, rawKey } = await setupEnforcementProject(
         'quotas-refire-on-limit-change'
       );
@@ -1631,7 +1727,7 @@ describe('Quotas', () => {
           scope: 'api_key',
           scope_ref: keyId,
           metric: 'requests',
-          window: 'calendar_month',
+          window: COUNTED_WINDOW,
           limit: 1,
           mode: 'monitor',
         },
@@ -1683,7 +1779,7 @@ describe('Quotas', () => {
           scope: 'api_key',
           scope_ref: keyId,
           metric: 'requests',
-          window: 'rolling_1m',
+          window: COUNTED_WINDOW,
           limit: 1,
           mode: 'monitor',
         },
