@@ -81,7 +81,7 @@ const HomepageHeader = () => {
           </Link>
         </div>
         <p className={styles.heroNote}>
-          MIT licensed · No vendor lock-in · One Docker Compose away
+          Apache 2.0 licensed · No vendor lock-in · One Docker Compose away
         </p>
       </div>
     </header>

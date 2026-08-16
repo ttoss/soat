@@ -35,7 +35,7 @@ SOAT's voice is **a systems engineer describing something powerful** — technic
   - **Don't:** "We use super-cool futuristic tech so your bot remembers stuff."
 - **Casing:** Sentence case for headings and body ("Deploy complete agent stacks from one template."). Product/brand name is **always all-caps SOAT**. CLI command is lowercase `soat`. Eyebrows and small section labels are UPPERCASE with wide tracking ("WHAT SOAT PROVIDES", "AGENT FORMATIONS").
 - **Headlines** are short, declarative, and benefit-led — often a single sentence ending in a period: *"One backend. Four ways to call it."*, *"From zero to running agent in three commands."*, *"Stop rebuilding agent infrastructure."*
-- **Vocabulary:** infrastructure layer, surfaces, orchestration, sessions, memory, knowledge, traces, formations, self-hosted, governance, observability. Numbers are concrete ("5047", "5 min", "three commands", "MIT licensed").
+- **Vocabulary:** infrastructure layer, surfaces, orchestration, sessions, memory, knowledge, traces, formations, self-hosted, governance, observability. Numbers are concrete ("5047", "5 min", "three commands", "Apache 2.0 licensed").
 - **No emojis.** Ever — in docs, headers, UI, or commits. They contradict the engineered, precise aesthetic.
 - **Code-forward:** copy frequently sits beside a terminal block or an endpoint. Commands and identifiers are monospace.
 
