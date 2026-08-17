@@ -22,20 +22,17 @@ consent, and refresh validation — plus the consent screen.
 
 ## Flow
 
-```
-MCP client ──GET /authorize──▶ Authorization Server
-                                  │  no consent cookie
-                                  ▼
-                       302 → /app/oauth/consent   (consent screen in the app/SPA)
-                                  │  user signs in (app login) if needed,
-                                  │  picks a project + permissions
-                                  ▼
-                       POST /api/v1/oauth/consent  (bearer token + authorize_query)
-                                  │  sets single-use consent cookie,
-                                  │  returns authorize_url
-                                  ▼
-   app navigates → GET /authorize ──▶ issues code ──▶ client
-                            client ──POST /token──▶ access token (JWT)
+```mermaid
+flowchart TB
+    S1["MCP client<br/>GET /authorize"]
+    S2["Authorization Server<br/>no consent cookie<br/>302 → /app/oauth/consent"]
+    S3["Consent screen (app/SPA)<br/>user signs in if needed,<br/>picks a project + permissions"]
+    S4["Consent screen → Auth Server<br/>POST /api/v1/oauth/consent<br/>bearer token + authorize_query"]
+    S5["Authorization Server<br/>sets single-use consent cookie,<br/>returns authorize_url"]
+    S6["App navigates → GET /authorize<br/>server issues code to the client"]
+    S7["MCP client → POST /token<br/>access token (JWT)"]
+
+    S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7
 ```
 
 Login is handled by the app (the SPA): `/authorize` redirects the browser to
