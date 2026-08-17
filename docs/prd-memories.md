@@ -15,10 +15,9 @@ that landed with the v1 RC — is documented in the
 | MemoryEntityEdge model         | ❌ Not started | First-class entity→entity edges: subject, canonical predicate, object, provenance entry, validity (Phase 6)                      |
 | Entity extraction on write     | ❌ Not started | Async, off the request path; LLM extracts subject/predicate/object triples after the entry persists (Phase 6)                    |
 | Entity-based knowledge queries | ❌ Not started | Memory-side `resolveEntitySearch()` (entity/actor → edges → entries). Query surface specced in prd-knowledge.md Phase 3 (Phase 6) |
-| Streaming extraction coverage  | ❌ Not started | Extraction trigger for streaming and `requires_action` completions (Phase 7)                                                     |
+| Extraction coverage            | ❌ Not started | Extraction trigger for streaming, `requires_action`, and background (`wait=false`) direct completions (Phase 7)                  |
 | Decay, importance & compaction | ❌ Not started | Importance scoring, access tracking, retrieval-time recency blend, compaction (Phase 8)                                          |
 | Profile memory                 | ❌ Not started | Always-injected bounded profile blocks, agent-editable (Phase 9)                                                                 |
-| Actor memory resolution        | 🟠 Decided — remove | `actors.memory_id` / `auto_create_memory` are a pure data link — nothing in the generation pipeline reads them; **remove before v1** (#1062); server-side actor-scoped retrieval returns post-v1 (entity-graph fallback) |
 | Indexes on `memory_entries`    | ❌ Not started | Only declared index is the `public_id` unique — no vector index on `embedding`, none on `memory_id`; every similarity search is a sequential scan (see [Engine Review Findings](#engine-review-findings-2026-08)) |
 
 ## Implementation Phases
@@ -435,7 +434,7 @@ supplies a model. Phase 5 replaces the decision step for the reasons below:
   endpoint and the orchestration `memory_write` node leave overlapping facts as separate entries
   until arbitration merges them. Atomic and lossless, but redundant — 5a is what resolves it.
 - **No contradiction resolution.** A
-  contradicting fact phrased differently can score below the update threshold and simply coexist
+  contradicting fact phrased differently can score below the merge band and simply coexist
   ("Pedro works at Company X" / "Pedro left Company X"). The invalidate operation itself now
   exists — supersede columns, API shape and retrieval exclusion all ship — but nothing decides
   *when* to use it; state-of-the-art pipelines (e.g. Mem0) arbitrate add / update / delete / no-op
@@ -452,47 +451,26 @@ set, and the create/update/supersede decision moves to an LLM.
 
 ## Engine Review Findings (2026-08)
 
-A code-level review of the shipped engine (2026-08-17) produced the findings below. Each records
-the finding and its recommended disposition; sequencing stays in [roadmap.md](./roadmap.md). The
-review's overall verdict: no architectural wrong turns — the write funnel (every path converges on
-`writeMemoryEntry`), the contract-first schema work, and the injection security posture are sound
-foundations for the pending phases.
+A code-level review of the shipped engine (2026-08-17) produced four findings; sequencing stays
+in [roadmap.md](./roadmap.md). The review's overall verdict: no architectural wrong turns — the
+write funnel (every path converges on `writeMemoryEntry`), the contract-first schema work, and
+the injection security posture are sound foundations for the pending phases.
 
-### Concatenation merge is quarantined — do not extend it
+Two findings were **resolved by removal before v1** (#1062, shipped in #1064):
 
-The merge band on paths without an agent context (manual REST, orchestration `memory_write`)
-always **concatenates**, and concatenation is self-eroding: each merge dilutes the entry's
-embedding away from every fact it contains, degrading the very similarity decision the thresholds
-depend on.
+| Finding | Resolution |
+| --- | --- |
+| **Concatenation merge** — self-eroding: each concat diluted the entry's embedding away from every fact it contained | ✅ Removed on every path. A merge happens only when an LLM consolidates; everything else — no agent context, failed or blank completion — creates. `update_threshold` left the wire (5a reintroduces the concept as `shortlist_threshold`). See [Known v1 Limitations](#known-v1-limitations-addressed-by-phase-5). |
+| **Actor memory link** (`actors.memory_id` / `auto_create_memory`) — a half-feature nothing in the generation pipeline read | ✅ Removed end to end (model, lib, REST, formations, docs). Per-actor memory is the application-side composition documented in the Actors module page; server-side actor-scoped retrieval returns post-v1 as the entity-graph fallback. |
 
-> **Decision (2026-08-17): removed outright, before v1 (#1062)** — no path concatenates. A
-> merge-band write without a consolidation context **creates** instead; a failed consolidation
-> completion on agent paths falls back to **create**, never concat. `update_threshold` leaves the
-> wire (5a reintroduces the concept as `shortlist_threshold`). The "never lose a write" invariant
-> is preserved by create; the cost — a possible near-duplicate pair until 5a arbitration — is
-> accepted.
+Two remain open:
 
-### Actor memory link is a half-feature — finish or remove before it ossifies
+### `duplicate_threshold` is deployment-tuned, not portable
 
-`actors.memory_id` and `auto_create_memory` ship on the API, but nothing in the generation
-pipeline reads them: retrieval scope comes exclusively from the agent's static
-`knowledge_config`. A user who wires an actor to a memory silently gets nothing — worse than the
-field not existing — and this is the one shipped surface with genuine deprecation exposure.
-
-> **Decision (2026-08-17): remove before v1 (#1062).** The documented client-side composition
-> (read the actor's `memory_id`, pass it back per generation) moves to the application — its own
-> actor→memory mapping or memory `tags`/`name` conventions. The capability returns post-v1 as
-> **server-side** actor-scoped retrieval — the roadmap's entity-graph fallback ("actor-scoped
-> entry filtering on existing metadata") — designed so generation actually reads it. Removal is
-> breaking and must precede the freeze; the re-add is additive and can wait for the design.
-
-### Write thresholds are deployment-tuned, not portable
-
-`duplicate_threshold` / `update_threshold` are raw cosine values, so a tuned value is coupled to
-the deployment's embedding model — the same caveat the knowledge docs already state for
-`min_score`. Phase 5 gives both knobs model-independent roles (duplicate short-circuit, shortlist
-bound). The module docs should document them as deployment-tuned knobs, not portable constants,
-under the same framing as `min_score`.
+A raw cosine value, so a tuned threshold is coupled to the deployment's embedding model — the
+same caveat the knowledge docs already state for `min_score`. The module docs should document it
+as a deployment-tuned knob, not a portable constant, under the same framing as `min_score`.
+(Phase 5 keeps it in the model-independent duplicate-short-circuit role.)
 
 ### Missing indexes on `memory_entries`
 

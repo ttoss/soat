@@ -14,7 +14,6 @@ Only outstanding work is tracked here; shipped functionality lives in `packages/
 | Reranking stage                    | ❌ Future      | Optional cross-encoder/LLM rerank of fused candidates (Phase 5)                                  |
 | Recency/importance weighting       | ❌ Future      | Retrieval-time blend for memory results (Phase 5; importance from prd-memories.md Phase 8)       |
 | Evaluation harness                 | ❌ Future      | Golden query set, recall@k/MRR, memory benchmarks, injected-context tracing (Phase 7)            |
-| `knowledge_config` single-casing   | 🟠 Decided — pre-v1 | Backfill pre-single-casing agent rows, replace the deep key transform with explicit per-field mapping, delete the dead `query` fallback (#1063; see [Engine Review Findings](#engine-review-findings-2026-08)) |
 
 ## Engine Review Findings — Resolved by Removal (#1063)
 
@@ -193,37 +192,6 @@ defines success metrics today, and ranking changes (Phase 5) need a regression g
       change cannot land without before/after golden-set numbers and no recall@10 regression.
 
 **Unlocks:** Retrieval quality becomes a regression-tested property instead of a vibe.
-
-## Engine Review Findings (2026-08)
-
-From the 2026-08-17 code-level review of the shipped engine (memory-side findings live in
-[prd-memories.md](./prd-memories.md#engine-review-findings-2026-08); sequencing stays in
-[roadmap.md](./roadmap.md)).
-
-### `knowledge_config` still rides a deep key transform
-
-`normalizeKnowledgeConfig` / `denormalizeKnowledgeConfig` (`agentKnowledge.ts`) recursively
-rewrite every key in the bag between casings — the exact shape
-`.claude/rules/case-convention.md` bans, and the `knowledge_config` casing family already
-produced #524. The exception is deliberately argued at the definition site: the bag carries only
-engine-owned keys and no free-form value maps, so the transform never touches a key it does not
-own. The *live* reason it survives is compatibility with agent rows persisted before
-single-casing, when request middleware camelCased the bag before storage.
-
-Durable fix, in order: a one-time backfill migration normalizing stored `knowledge_config`
-values to a single casing; then replace the transform with the explicit field-by-field mapping
-the rest of the wire uses; then delete `convertKeysDeep` from this path. This should land
-**before** `knowledge_config` grows any field that can hold user-authored keys (a future
-retrieval-options block, per-algorithm config maps) — such a field silently breaks the
-"no free-form value maps" premise the current exception rests on, which is exactly the failure
-class (#651, #690, #729, #737) the case-convention rule exists to prevent.
-
-> **Decision (2026-08-17): sequenced pre-v1 (#1063)**, together with removing the dead
-> `knowledge_config.query` fallback (in the TS type only — no OpenAPI schema carries it, so
-> `strictFields` and the formation validator both reject it; unreachable from every wire
-> surface). Neither changes the wire contract; both get strictly more expensive with every
-> stored row and every new `knowledge_config` field, and the transform's removal is what
-> clears `knowledge_config` to carry per-algorithm config later.
 
 ## Implementation Architecture
 

@@ -40,8 +40,8 @@ Every stage in that picture is an algorithm with a name, a default, and (in most
 | Content extraction | Native extractors (PDF, text, markdown) or a converter you provide | [Ingestion rules](../modules/ingestion-rules.md) |
 | Chunking | `page` \| `whole` \| `size` (character window + overlap) | `chunk_strategy`, `chunk_size`, `chunk_overlap` |
 | Embedding | One deployment-wide model | `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, `EMBEDDING_DIMENSIONS` |
-| Memory write decision | Two-threshold cosine dedup (skip / merge / create) | `duplicate_threshold`, `update_threshold` |
-| Memory merge | LLM consolidation into one atomic fact, concat fallback | presence of an agent context; extraction's provider/model override |
+| Memory write decision | Cosine dedup: skip / create everywhere; merge band on agent paths only | `duplicate_threshold` |
+| Memory merge | LLM consolidation into one atomic fact; a failed or blank completion creates instead | presence of an agent context; extraction's provider/model override |
 | Fact extraction | Tool-less LLM completion over the finished turn | `knowledge_config.extraction`, per-turn `extract` |
 | Retrieval ranking | Cosine similarity top-k per source, merged and re-sorted | `min_score`, `limit`, source filters |
 | Injection | Fenced `<knowledge>` block as a `user`-role message | `knowledge_config` |
@@ -54,10 +54,10 @@ Every memory write in SOAT — no matter where it originates — flows through t
 
 | Path | `source_type` | LLM merge? | Provenance recorded |
 | --- | --- | --- | --- |
-| [`POST /api/v1/memory-entries`](/docs/api/memoryEntries/create-memory-entry) (manual) | `manual` | No — concatenation fallback | none |
+| [`POST /api/v1/memory-entries`](/docs/api/memoryEntries/create-memory-entry) (manual) | `manual` | No — similar facts create | none |
 | `write_memory` agent tool | `agent` | Yes (agent's provider) | source generation |
 | [Automatic extraction](../modules/memories.md#automatic-extraction) | `extraction` | Yes (extraction's provider) | source generation + conversation |
-| Orchestration `memory_write` node | `orchestration` | No | none |
+| Orchestration `memory_write` node | `orchestration` | No — similar facts create | none |
 | Formation `memory_entry` resource | declared | n/a — declarative create, bypasses dedup | none |
 
 The single funnel is a deliberate design property: a new write algorithm (or a pluggable one) changes **one** decision function and every path inherits it. The formation path is the one exception — a formation declares exact desired state, so deduplication would fight convergence.
@@ -68,22 +68,21 @@ The caller-facing contract is documented in [Memories — Write Algorithm](../mo
 
 1. **Embed** the incoming content. Embedding is best-effort — on failure the write proceeds and the entry is stored without a vector (it will not be retrievable by semantic search until re-written).
 2. **Shortlist**: find the single most similar **currently-valid** entry in the target memory by pgvector cosine distance. Entries with `invalidated_at` set are never candidates — restating superseded knowledge always creates a fresh entry.
-3. **Decide** from two thresholds on the cosine score:
+3. **Decide** from the cosine score:
    - `score >= duplicate_threshold` (default `0.95`) → **skip**, return the existing entry.
-   - `score >= update_threshold` (default `0.75`) → **merge** into the existing entry (next section), re-embed.
-   - otherwise → **create** a new entry.
+   - similar but below the duplicate bar (at or above a fixed `0.75` floor), **and the write carries an agent context** → **merge** by LLM consolidation (next section), re-embed.
+   - everything else → **create** a new entry.
 4. **Return** `{ action, ...entry }` where `action` is `created`, `updated`, or `skipped`. The enum also reserves `superseded` — the contradiction-arbitration outcome — so clients can handle it before the write path that produces it ships (see [Design headroom](#design-headroom--where-the-engine-is-going)).
 
-The thresholds are **per-request fields** on [`POST /api/v1/memory-entries`](/docs/api/memoryEntries/create-memory-entry) only; the tool, extraction, and orchestration paths always use the defaults. Because cosine cutoffs are coupled to the embedding model, re-tune any custom thresholds when you change `EMBEDDING_MODEL`.
+`duplicate_threshold` is a **per-request field** on [`POST /api/v1/memory-entries`](/docs/api/memoryEntries/create-memory-entry) only; the tool, extraction, and orchestration paths always use the default. Because cosine cutoffs are coupled to the embedding model, re-tune a custom threshold when you change `EMBEDDING_MODEL`.
 
 ### The merge (consolidation) algorithm
 
-When the write algorithm lands in the merge band, the existing and incoming facts must become one entry. Two strategies exist, selected by whether the write carries an agent context:
+Merging is exclusively an **agent-path** behavior: only the `write_memory` tool and extraction carry the context it needs. A tool-less, temperature-0 completion is asked to merge the existing and incoming facts into a **single, self-contained sentence**, preferring the new fact on contradiction. This keeps entries atomic — an entry that grows into a multi-fact paragraph drifts away from every individual fact it contains, degrading retrieval.
 
-- **LLM consolidation** (the `write_memory` tool and extraction): a tool-less, temperature-0 completion is asked to merge both facts into a **single, self-contained sentence**, preferring the new fact on contradiction. This keeps entries atomic — an entry that grows into a multi-fact paragraph drifts away from every individual fact it contains, degrading retrieval.
-- **Concatenation fallback** (manual REST and orchestration writes, or any consolidation failure): the incoming content is appended to the existing entry. A failed LLM call never loses a write — the fallback is unconditional.
+Nothing is ever appended to an existing entry. A write with no agent context (manual REST, the orchestration node), and an agent-path write whose consolidation completion fails or comes back blank, **creates** instead — so no write can lose a fact, at the accepted cost of a possible near-duplicate pair until arbitration ships.
 
-On every merge, incoming `tags` are unioned into the existing entry's tags and `metadata` is shallow-merged (incoming keys win). Provenance (`source_generation_id`, `source_conversation_id`) is recorded at creation and **never rewritten by a later merge** — it names the turn that first asserted the fact.
+On a merge, incoming `tags` are unioned into the existing entry's tags and `metadata` is shallow-merged (incoming keys win). Provenance (`source_generation_id`, `source_conversation_id`) is recorded at creation and **never rewritten by a later merge** — it names the turn that first asserted the fact.
 
 ### The extraction algorithm
 
@@ -111,7 +110,7 @@ The gaps are known and tracked (see [Design headroom](#design-headroom--where-th
 
 ### Actor-scoped memory
 
-Per-end-user memory is composed from two primitives: an [Actor](../modules/actors.md) can own a memory (`memory_id`, or `auto_create_memory` at creation), and the caller passes that memory in the per-generation `knowledge_config` override. The engine does not resolve an actor's memory automatically at generation time — the application chooses which memories a turn reads and writes, which keeps memory scoping explicit and auditable.
+Per-end-user memory is an **application-side composition**: retrieval scope for a generation comes from the agent's `knowledge_config` and nothing else — the engine stores no actor→memory link and resolves nothing implicitly at generation time. Create one memory per end user (keyed by the [Actor](../modules/actors.md)'s `external_id`, or found via memory `tags`/`name`), and pass it in the per-generation `knowledge_config` override, where `memory_ids` union with the agent's stored scope. This keeps memory scoping explicit and auditable; the pattern is documented in [Actors — Per-Actor Memory](../modules/actors.md#per-actor-memory).
 
 ## The read side — how knowledge is retrieved
 
@@ -190,7 +189,6 @@ Orchestrations read knowledge mid-flow with the `knowledge` node and write memor
 | Knob | Wire location | Default | Governs |
 | --- | --- | --- | --- |
 | `duplicate_threshold` | [`POST /api/v1/memory-entries`](/docs/api/memoryEntries/create-memory-entry) body | `0.95` | skip band of the write algorithm |
-| `update_threshold` | same | `0.75` | merge band of the write algorithm |
 | `chunk_strategy` / `chunk_size` / `chunk_overlap` | document create/ingest bodies; ingestion rules | `page` (ingest) / `whole` (create); `1000`; `200` | chunking |
 | `native_extraction` | ingestion rule | `first` | run native extraction before the converter (`skip` to always convert) |
 | `file_delivery` | ingestion rule | `base64` | how the converter receives the file (`download_url` for large files) |
@@ -202,7 +200,7 @@ Orchestrations read knowledge mid-flow with the `knowledge` node and write memor
 | `include_invalidated` | [`GET /api/v1/memory-entries`](/docs/api/memoryEntries/list-memory-entries) query | `false` | whether superseded entries appear in listings |
 | `EMBEDDING_*` env vars | server environment | — | the shared vector space |
 
-Fixed by design today (no knob): the cosine distance metric, the retrieval ranking formula, the injection preamble and source-tag format, the extraction candidate cap (20), and the per-source embedding concurrency during ingestion.
+Fixed by design today (no knob): the cosine distance metric, the merge band's `0.75` floor (agent paths only), the retrieval ranking formula, the injection preamble and source-tag format, the extraction candidate cap (20), and the per-source embedding concurrency during ingestion.
 
 ## Extending the engine today
 
@@ -211,7 +209,7 @@ The engine already has one fully pluggable stage and several composition points 
 - **Custom content extraction — first-class.** An [ingestion rule](../modules/ingestion-rules.md) pointing at your own tool *is* a pluggable extraction algorithm: OCR, audio transcription, layout-aware PDF parsing, table extraction — anything that can answer with pages of text, synchronously or via the deferred callback. This is the sanctioned way to teach SOAT a new file type or a better extractor.
 - **Custom chunking — via pre-chunking.** Run your own splitter (semantic, token-based, heading-aware) and create one document per chunk with `chunk_strategy: whole`, encoding structure in `path`, `title`, `tags`, and `metadata`. Retrieval treats your chunks identically to engine-made ones.
 - **Custom extraction behavior.** `extraction.prompt` changes *what* the fact miner looks for (domain-specific facts, a narrower definition of "worth remembering") while the engine keeps the response contract; `extraction.ai_provider_id`/`model` route it to a cheaper or better model.
-- **Custom write policy.** Curation pipelines that write through [`POST /api/v1/memory-entries`](/docs/api/memoryEntries/create-memory-entry) can tune `duplicate_threshold`/`update_threshold` per write — e.g. lower the duplicate bar for high-churn feeds, or set `update_threshold: 1.01` to disable merging entirely and keep every fact distinct.
+- **Custom write policy.** Curation pipelines that write through [`POST /api/v1/memory-entries`](/docs/api/memoryEntries/create-memory-entry) can tune `duplicate_threshold` per write — e.g. lower the bar to skip more aggressively on a high-churn feed, or raise it toward `1.0` to keep near-duplicates as distinct facts. Manual writes never merge, so every accepted fact lands as its own atomic entry.
 - **Custom retrieval composition.** For ranking the engine doesn't do yet — reranking, fusion with your own lexical index, recency weighting — call [`POST /api/v1/knowledge/search`](/docs/api/knowledge/search-knowledge) with a generous `limit`, re-rank on your side using `similarity_score` (the stable signal) plus your own features, and pass the survivors as input messages. Context composition is deliberately the application's job in SOAT, so this pattern is supported, not a workaround.
 
 ## Design headroom — where the engine is going

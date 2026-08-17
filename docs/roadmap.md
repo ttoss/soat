@@ -35,25 +35,6 @@ judging new proposals, not for the list that remains.
 
 ---
 
-## 🔴 Pre-v1 — contract removals (block the release)
-
-The inverse of the v1 test: these **cannot** be done after v1 without breaking
-the frozen contract, so they must land before it. Decided 2026-08 from the
-engine review (#1061); breaking pre-v1 is accepted.
-
-- [ ] **Remove the concatenation merge and the unread actor memory link**
-      (#1062) — no path concatenates (merge band without a consolidation
-      context creates; consolidation-failure fallback creates);
-      `update_threshold` leaves the wire (5a reintroduces it as
-      `shortlist_threshold`); `actors.memory_id` / `auto_create_memory` removed
-      end to end (model, REST, formations, docs). Actor-scoped retrieval
-      returns post-v1, server-side, via the entity-graph fallback.
-- [ ] **Remove the `knowledge_config` deep case transform and the dead `query`
-      fallback** (#1063) — not contract-breaking (internal representation +
-      a one-time backfill of stored rows), but sequenced here by decision:
-      the backfill grows with every deployment, and deleting the transform is
-      what clears `knowledge_config` to carry per-algorithm config safely.
-
 ## 🟠 v1.x — after the RC, inside the v1 line
 
 All additive; none changes a frozen field or loses data by waiting.
@@ -221,6 +202,15 @@ this file:
   #1030, #1032). Nothing blocks cutting the RC. Live behavior is documented in
   the memories, knowledge and agents module docs; the blocker list itself is
   recoverable from this file's git history.
+- **Pre-v1 engine removals complete (2026-08)** — from the engine review
+  (#1061): the concatenation merge (no path appends; merge is LLM-consolidation
+  on agent paths only, `update_threshold` left the wire), the unread actor
+  memory link (`actors.memory_id` / `auto_create_memory`; per-actor memory is
+  application-side composition documented in the Actors module page), the
+  `knowledge_config` deep case transform (stored verbatim + explicit read
+  mapping + boot-time casing backfill), and the dead `knowledge_config.query`
+  fallback. #1062 + #1063, shipped in #1064. Clears `knowledge_config` to
+  carry per-algorithm config later.
 - **Entity graph demand-gated (2026-08)** — builds only on measured
   hybrid-retrieval gaps (Knowledge P7 golden set, structural queries) plus
   observed user demand; actor-scoped filtering on existing metadata is the
