@@ -50,6 +50,21 @@
       "operationId": "submitSessionToolOutputs",
       "action": "agents:SubmitSessionToolOutputs",
       "description": "Submit tool outputs for client tools in a session"
+    },
+    {
+      "operationId": "getSessionTags",
+      "action": "agents:GetSession",
+      "description": "Get a session's tags"
+    },
+    {
+      "operationId": "replaceSessionTags",
+      "action": "agents:UpdateSession",
+      "description": "Replace a session's tags"
+    },
+    {
+      "operationId": "mergeSessionTags",
+      "action": "agents:UpdateSession",
+      "description": "Merge a session's tags"
     }
   ]
 }

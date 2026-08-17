@@ -25,6 +25,21 @@
       "operationId": "deleteActor",
       "action": "actors:DeleteActor",
       "description": "Delete an actor"
+    },
+    {
+      "operationId": "getActorTags",
+      "action": "actors:GetActor",
+      "description": "Get an actor's tags"
+    },
+    {
+      "operationId": "replaceActorTags",
+      "action": "actors:UpdateActor",
+      "description": "Replace an actor's tags"
+    },
+    {
+      "operationId": "mergeActorTags",
+      "action": "actors:UpdateActor",
+      "description": "Merge an actor's tags"
     }
   ]
 }

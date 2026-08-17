@@ -2086,8 +2086,14 @@ describe('resolveAgentTools - mcp and soat types', () => {
 
     const tools = await resolveAgentTools({
       toolIds: [deniedSoatRes.body.id],
+      // `files:GetFile` is the action the route enforces for both listing and
+      // getting, so this `Deny` is what refuses the call. It used to be written
+      // as `files:ListFiles` — a string that names no real permission — and the
+      // test still passed, because the boundary was evaluated against the tool
+      // name `list-files` and denied everything by default. That is the bug this
+      // assertion now pins: the message names the action a policy can target.
       boundaryPolicy: {
-        statement: [{ effect: 'Deny', action: ['files:ListFiles'] }],
+        statement: [{ effect: 'Deny', action: ['files:GetFile'] }],
       },
     });
 
@@ -2095,8 +2101,40 @@ describe('resolveAgentTools - mcp and soat types', () => {
     if ('execute' in soatTool && typeof soatTool.execute === 'function') {
       const result = await soatTool.execute({}, {} as never);
       expect(result).toEqual({
-        error: 'Forbidden: boundary policy denies list-files',
+        error: 'Forbidden: boundary policy denies files:GetFile',
       });
+    }
+  });
+
+  test('soat tool runs when the boundary allows its IAM action', async () => {
+    // The other half of the same fix. An allow-list naming the real action used
+    // to deny the call anyway — the boundary was matched against `list-files`,
+    // which no `module:Operation` pattern can match — so every correctly
+    // written boundary silently over-denied.
+    const allowedSoatRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name: 'myAllowedSoatTool',
+        type: 'soat',
+        actions: ['list-files'],
+      });
+
+    const tools = await resolveAgentTools({
+      toolIds: [allowedSoatRes.body.id],
+      authHeader: `Bearer ${adminToken}`,
+      boundaryPolicy: {
+        statement: [
+          { effect: 'Allow', action: ['files:GetFile'], resource: ['*'] },
+        ],
+      },
+    });
+
+    const soatTool = tools['myAllowedSoatTool_list-files'];
+    if ('execute' in soatTool && typeof soatTool.execute === 'function') {
+      const result = await soatTool.execute({}, {} as never);
+      expect(result).not.toHaveProperty('error');
+      expect(Array.isArray((result as { data?: unknown[] }).data)).toBe(true);
     }
   });
 

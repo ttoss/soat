@@ -229,6 +229,7 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Governance & Safety',
       items: [
+        'tutorials/agent-boundary-policy',
         'tutorials/gate-a-tool-with-guardrails',
         'tutorials/per-user-credentials-with-tool-context',
         'tutorials/data-retention-and-zero-retention',

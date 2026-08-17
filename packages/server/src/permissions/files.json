@@ -45,6 +45,26 @@
       "operationId": "deleteFile",
       "action": "files:DeleteFile",
       "description": "Delete a file"
+    },
+    {
+      "operationId": "getFileTags",
+      "action": "files:GetFile",
+      "description": "Get a file's tags"
+    },
+    {
+      "operationId": "replaceFileTags",
+      "action": "files:UpdateFileMetadata",
+      "description": "Replace a file's tags"
+    },
+    {
+      "operationId": "mergeFileTags",
+      "action": "files:UpdateFileMetadata",
+      "description": "Merge a file's tags"
+    },
+    {
+      "operationId": "createPresignedUrl",
+      "action": "files:UploadFile",
+      "description": "Create a presigned upload URL"
     }
   ],
   "srnPatterns": [
