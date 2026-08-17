@@ -1,6 +1,5 @@
 ---
 description: "The two-layer pattern behind SOAT's intelligence modules: a mechanical engine you can rely on, an algorithm layer you can swap, and tools as the seam for bringing your own algorithm."
-sidebar_position: 4
 sidebar_label: Engines & Algorithms
 title: Engines & Algorithms
 ---

@@ -15,9 +15,9 @@ outputs. Where [traces](./traces.md) and [guardrails](./guardrails.md) deal with
 already happened or are happening, an evaluation answers whether a *change* to the agent —
 a reworded instruction, a swapped model, a new tool — improved the distribution of runs.
 Evaluations is the foundation of the ratchet layer described in
-[The Layers of an Agent System](../getting-started/agent-system-layers.md#layer-4--the-ratchet).
+[The Layers of an Agent System](../agent-system-layers.md#layer-4--the-ratchet).
 
-The module follows SOAT's [engine & algorithms pattern](../getting-started/engines-and-algorithms.md):
+The module follows SOAT's [engine & algorithms pattern](../advanced/engines-and-algorithms.md):
 the **engine** is the mechanics — running items, freezing inputs, aggregating, settling —
 and the **scorers** are the algorithm layer on top, including
 [custom scorers](#custom-scorers-tool) you implement as a [tool](./tools.md). The
@@ -113,7 +113,7 @@ One row per dataset item per run.
 
 ### The engine and the scorers
 
-The two layers of the [engine & algorithms pattern](../getting-started/engines-and-algorithms.md)
+The two layers of the [engine & algorithms pattern](../advanced/engines-and-algorithms.md)
 map onto this module like so:
 
 | Layer | What it covers here | Where it is documented |
@@ -187,7 +187,7 @@ judge model changes.
 ### Custom scorers (`tool`)
 
 A `tool` scorer is the module's
-[bring-your-own-algorithm seam](../getting-started/engines-and-algorithms.md): the engine
+[bring-your-own-algorithm seam](../advanced/engines-and-algorithms.md): the engine
 invokes a [tool](./tools.md) you own once per item, and your code — any language, any
 model, any vendor — answers with the same `{ score, passed }` shape every built-in scorer
 produces. Aggregation, thresholds, and baseline deltas apply to it unchanged.

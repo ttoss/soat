@@ -5,9 +5,14 @@ import type { SidebarsConfig } from '@docusaurus/plugin-content-docs';
 /**
  * Navbar structure: Docs · Tutorials · Reference (see README.md).
  *
- * - docsSidebar — learning-oriented content: getting started, client surface
- *   setup guides, the grouped Platform (module) pages, the Advanced
- *   (`docs/advanced/*`) pages, and self-hosting.
+ * - docsSidebar — learning-oriented content: the framing page
+ *   (`agent-system-layers`), getting started, client surface setup guides, the
+ *   grouped Platform (module) pages, the Advanced (`docs/advanced/*`) pages,
+ *   and self-hosting.
+ *
+ *   Getting Started is deliberately short — only what a reader needs before
+ *   their first call. A page that a newcomer does not need, or that is only
+ *   linked from module deep-dives, belongs under Advanced instead.
  * - tutorialSidebar — end-to-end walkthroughs, grouped by theme.
  * - referenceSidebar — generated / lookup material: REST API, SDK services,
  *   CLI commands, MCP tools, formation types, permissions.
@@ -20,24 +25,20 @@ import type { SidebarsConfig } from '@docusaurus/plugin-content-docs';
 const sidebars: SidebarsConfig = {
   docsSidebar: [
     'introduction',
+    'agent-system-layers',
     {
       type: 'category',
       label: 'Getting Started',
       link: { type: 'doc', id: 'getting-started/quick-start' },
       collapsed: false,
-      items: [
-        'getting-started/quick-start',
-        'getting-started/concepts',
-        'getting-started/agent-system-layers',
-        'getting-started/engines-and-algorithms',
-        'getting-started/choosing-a-client',
-        'getting-started/choosing-an-automation-model',
-      ],
+      items: ['getting-started/quick-start', 'getting-started/concepts'],
     },
     {
       type: 'category',
       label: 'Client Surfaces',
+      link: { type: 'doc', id: 'client-surfaces' },
       items: [
+        'client-surfaces',
         {
           type: 'category',
           label: 'SDK',
@@ -145,6 +146,8 @@ const sidebars: SidebarsConfig = {
       type: 'category',
       label: 'Advanced',
       items: [
+        'advanced/choosing-an-automation-model',
+        'advanced/engines-and-algorithms',
         'advanced/building-on-soat',
         'advanced/expressions-and-templating',
         'advanced/sync-and-async',

@@ -19,7 +19,7 @@ bound to it that does not terminate on its own and can revisit states. Where an
 workflow is a state graph a task _lives_ in — statuses, guarded transitions, a
 kanban board, backward moves. The two compose: a state may **dispatch** an
 orchestration, an agent, or a single tool call to do its work. See
-[Choosing an Automation Model](/docs/getting-started/choosing-an-automation-model)
+[Choosing an Automation Model](/docs/advanced/choosing-an-automation-model)
 for the full comparison and composition patterns.
 
 A workflow's two lists are the whole model:

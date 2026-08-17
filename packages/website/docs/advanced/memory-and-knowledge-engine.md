@@ -11,7 +11,7 @@ keywords:
 
 # Memory & Knowledge Engine
 
-SOAT's memory and knowledge system is one engine with two sides. The **write side** turns conversations, agent decisions, and uploaded files into stored, embedded knowledge. The **read side** turns a query into ranked results and injects them into generations. This page explains the whole mechanism — the data flow, every algorithm the engine runs today with its exact configuration knobs, and the extension seams the design deliberately keeps open. It is the engine-side deep dive of the [engine & algorithms pattern](../getting-started/engines-and-algorithms.md) for this module pair.
+SOAT's memory and knowledge system is one engine with two sides. The **write side** turns conversations, agent decisions, and uploaded files into stored, embedded knowledge. The **read side** turns a query into ranked results and injects them into generations. This page explains the whole mechanism — the data flow, every algorithm the engine runs today with its exact configuration knobs, and the extension seams the design deliberately keeps open. It is the engine-side deep dive of the [engine & algorithms pattern](./engines-and-algorithms.md) for this module pair.
 
 It complements the module pages, which own the caller-facing contracts: [Memories](../modules/memories.md), [Knowledge](../modules/knowledge.md), [Documents](../modules/documents.md), [Embeddings](../modules/embeddings.md), and [Ingestion Rules](../modules/ingestion-rules.md). For a hands-on walkthrough, follow [Agent with Persistent Memory](/docs/tutorials/memories-agent) and [Agent over a Library of PDFs](/docs/tutorials/agent-with-pdfs).
 

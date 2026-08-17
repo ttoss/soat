@@ -63,7 +63,7 @@ Composing agents into workflows and reacting to events.
 ## Improvement & Adaptation
 
 How the system changes, and what proves a change was an improvement. See
-[The Layers of an Agent System](../getting-started/agent-system-layers.md#layer-4--the-ratchet)
+[The Layers of an Agent System](../agent-system-layers.md#layer-4--the-ratchet)
 for how this group fits the rest of the platform.
 
 - [Evaluations](./evaluations.md) — datasets, scorers, and scored runs comparable against a baseline (coming soon)

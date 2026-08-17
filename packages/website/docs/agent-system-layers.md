@@ -1,6 +1,6 @@
 ---
 description: "The layers an agent system decomposes into — harness, loop, graph, ratchet — which SOAT module owns each one, why the graph should be the last thing you build, and why the ratchet — the layer that evaluates every change and keeps it from sliding backward — keeps the other three honest."
-sidebar_position: 3
+sidebar_position: 2
 sidebar_label: Layers of an Agent System
 title: The Layers of an Agent System
 ---
@@ -183,7 +183,7 @@ If you have decided you need one, the next question is which shape: an
 [orchestration](/docs/modules/orchestrations) is a directed acyclic pipeline that runs and
 ends; a [workflow](/docs/modules/workflows) is a state graph a task *lives* in and can
 move backward through. They are not variants of each other, and they compose in both
-directions. **[Choosing an Automation Model](./choosing-an-automation-model.md)** covers
+directions. **[Choosing an Automation Model](./advanced/choosing-an-automation-model.md)** covers
 the full comparison.
 
 [Triggers](/docs/modules/triggers) start a graph on a cron schedule, an inbound webhook,
@@ -333,7 +333,7 @@ topology problem.
 
 1. **Build the harness.** One agent, an [AI provider](/docs/modules/ai-providers), the
    few tools it genuinely needs, and `knowledge_config` pointed at real project content.
-   The [Quick Start](./quick-start.md) gets you here.
+   The [Quick Start](./getting-started/quick-start.md) gets you here.
 2. **Close the loop.** Add an `output_schema` so success is checked rather than claimed, a
    `max_steps` and a [quota](/docs/modules/quotas) so it cannot run away, a
    [guardrail](/docs/modules/guardrails) on anything that touches the outside world, and
@@ -344,4 +344,4 @@ topology problem.
    would be embarrassed to regress is enough to start.
 4. **Add a graph only when a specific pain unlocks it** — a human gate, an audit
    requirement, a parallel join, or durable resume. Then go to
-   [Choosing an Automation Model](./choosing-an-automation-model.md).
+   [Choosing an Automation Model](./advanced/choosing-an-automation-model.md).
