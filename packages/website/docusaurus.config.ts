@@ -154,6 +154,22 @@ const config: Config = {
             from: '/docs/getting-started/advanced-config',
             to: '/docs/self-hosting/configuration',
           },
+          {
+            from: '/docs/getting-started/agent-system-layers',
+            to: '/docs/agent-system-layers',
+          },
+          {
+            from: '/docs/getting-started/choosing-a-client',
+            to: '/docs/client-surfaces',
+          },
+          {
+            from: '/docs/getting-started/engines-and-algorithms',
+            to: '/docs/advanced/engines-and-algorithms',
+          },
+          {
+            from: '/docs/getting-started/choosing-an-automation-model',
+            to: '/docs/advanced/choosing-an-automation-model',
+          },
         ],
       },
     ],

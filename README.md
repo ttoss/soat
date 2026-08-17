@@ -17,7 +17,7 @@ You bring the product. SOAT handles the infrastructure layer.
 
 Shipping AI applications means rebuilding the same infrastructure on every project: users, API keys, encrypted secrets, file storage, embeddings, conversation history, agent tool calling, traces, observability. SOAT solves all of it once and exposes it through five equivalent surfaces — REST, MCP, CLI, TypeScript SDK, and a built-in web app — so the same operation runs the same way whether you call it from a backend, Claude Desktop, a CI script, the bundled UI, or your own frontend.
 
-SOAT organizes that surface around the [four layers of an agent system](https://soat.ttoss.dev/docs/getting-started/agent-system-layers): the **harness** (what an agent can reach and what it is forbidden), the **loop** (what proves a run did the job), the **graph** (what is allowed to happen next), and the **ratchet** (what proves a change to the agent was an improvement). All four are shipped — see [The ratchet](#the-ratchet-governing-change-itself) for the layer that governs change itself.
+SOAT organizes that surface around the [four layers of an agent system](https://soat.ttoss.dev/docs/agent-system-layers): the **harness** (what an agent can reach and what it is forbidden), the **loop** (what proves a run did the job), the **graph** (what is allowed to happen next), and the **ratchet** (what proves a change to the agent was an improvement). All four are shipped — see [The ratchet](#the-ratchet-governing-change-itself) for the layer that governs change itself.
 
 ## Highlights
 
@@ -39,7 +39,7 @@ SOAT organizes that surface around the [four layers of an agent system](https://
 
 ## The ratchet: governing change itself
 
-An agent platform that only records what agents _did_ cannot tell you whether the next change makes them _better_. SOAT's fourth layer is the **ratchet** — the layer that governs change itself: produce a verdict from evidence, gate the change on the verdict, keep history append-only so nothing slides backward silently. The framing lives in [The Layers of an Agent System](https://soat.ttoss.dev/docs/getting-started/agent-system-layers), and the loop is shipped end to end:
+An agent platform that only records what agents _did_ cannot tell you whether the next change makes them _better_. SOAT's fourth layer is the **ratchet** — the layer that governs change itself: produce a verdict from evidence, gate the change on the verdict, keep history append-only so nothing slides backward silently. The framing lives in [The Layers of an Agent System](https://soat.ttoss.dev/docs/agent-system-layers), and the loop is shipped end to end:
 
 - **[Agent versions](https://soat.ttoss.dev/docs/modules/agents#versioning-and-staged-rollout)** — append-only config history with one-call restore, a deterministic stable/canary split, and served-version stamping on every generation.
 - **[Evaluations](https://soat.ttoss.dev/docs/modules/evaluations)** — datasets, deterministic and LLM-judge scorers, and scored runs of the real agent, comparable against a baseline and schedulable on a cron: "did this change make the agent worse?" as a pass/fail verdict.

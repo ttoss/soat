@@ -22,10 +22,11 @@ The navbar has three documentation tabs, each backed by a sidebar defined in `si
 
 - **Docs** (`docsSidebar`) — learning-oriented content:
   - **Introduction** — what SOAT is and the "one backend, four surfaces" model.
-  - **Getting Started** — quick start, key concepts, choosing a client surface, the harness/loop/graph layering, and choosing an automation model.
-  - **Client Surfaces** — setup and usage guides for the SDK, CLI, and MCP server.
+  - **The Layers of an Agent System** (`docs/agent-system-layers.md`) — the harness/loop/graph/ratchet framing `introduction.md` is built on. Top-level, not nested, because it is orientation rather than a step.
+  - **Getting Started** — quick start and key concepts, and nothing else. Keep it to what a reader needs before their first call; a page only reachable from module deep-dives belongs under **Advanced**.
+  - **Client Surfaces** — choosing a surface (`docs/client-surfaces.md`, the category landing page), then setup and usage guides for the SDK, CLI, and MCP server.
   - **Platform** — one page per module (`docs/modules/*.md`), grouped into: Identity & Access, Storage & Retrieval, Agents & Conversations, Orchestration & Automation, Declarative Deployment, and Operations. The grouping mirrors `introduction.md`; `docs/modules/index.md` is the category landing page.
-  - **Advanced** — cross-cutting platform behavior that is not tied to a single module (`docs/advanced/*.md`): building on SOAT, expressions & templating, synchronous & asynchronous execution, the memory & knowledge engine, and tool context.
+  - **Advanced** — cross-cutting platform behavior that is not tied to a single module (`docs/advanced/*.md`): choosing an automation model, engines & algorithms, building on SOAT, expressions & templating, synchronous & asynchronous execution, the memory & knowledge engine, and tool context.
   - **Self-Hosting & Production** — environment variables and production configuration (`docs/self-hosting/configuration.md`).
 - **Tutorials** (`tutorialSidebar`) — end-to-end walkthroughs (`docs/tutorials/*.md`), grouped by theme: Basics, Agents, Knowledge & RAG, Orchestration & Multi-Agent, Automation & Deployment. Tutorial files are also executed by CI (`tests/run-tutorials.sh`), so keep their CLI code blocks runnable.
 - **Reference** (`referenceSidebar`) — generated and lookup-oriented material: REST API (OpenAPI-generated), SDK Services, CLI Commands, MCP Tools, Formation Types, Permissions Reference, Webhook Events, and OpenAPI Specs.

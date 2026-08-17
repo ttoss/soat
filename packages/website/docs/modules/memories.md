@@ -15,7 +15,7 @@ Memories provide a logical namespace for text content that agents can read and w
 
 Agents can retrieve relevant entries automatically via `knowledge_config` and write new facts using the built-in `write_memory` tool. See [Agent Integration](#agent-integration) for details, and the [Memory & Knowledge Engine](../advanced/memory-and-knowledge-engine.md) deep dive for how the write, extraction, and retrieval algorithms fit together end to end.
 
-The module follows SOAT's [engine & algorithms pattern](../getting-started/engines-and-algorithms.md): the write funnel, embedding, provenance, and invalidation are the **engine**; the [write algorithm](#write-algorithm) and [extraction](#automatic-extraction) are the **algorithms** running on it, with their customization seams documented in the [deep dive](../advanced/memory-and-knowledge-engine.md#extending-the-engine-today).
+The module follows SOAT's [engine & algorithms pattern](../advanced/engines-and-algorithms.md): the write funnel, embedding, provenance, and invalidation are the **engine**; the [write algorithm](#write-algorithm) and [extraction](#automatic-extraction) are the **algorithms** running on it, with their customization seams documented in the [deep dive](../advanced/memory-and-knowledge-engine.md#extending-the-engine-today).
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 

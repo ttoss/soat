@@ -10,7 +10,7 @@ import TabItem from '@theme/TabItem';
 
 **SOAT is the infrastructure layer for production-ready AI agents.** It bundles IAM, file and document storage, vector search, conversational memory, agent orchestration, multi-agent workflows, retrieval-augmented generation, declarative stack deployment, and a full MCP server into a single self-hostable Node.js service backed by PostgreSQL.
 
-The platform is organized around the [four layers of an agent system](/docs/getting-started/agent-system-layers): the **harness** (what an agent can reach), the **loop** (what proves a run did the job), the **graph** (what happens next), and the **ratchet** (what proves a change was an improvement). The first three are shipped in depth; the ratchet is the active build front — see [Where SOAT is going](#where-soat-is-going).
+The platform is organized around the [four layers of an agent system](/docs/agent-system-layers): the **harness** (what an agent can reach), the **loop** (what proves a run did the job), the **graph** (what happens next), and the **ratchet** (what proves a change was an improvement). The first three are shipped in depth; the ratchet is the active build front — see [Where SOAT is going](#where-soat-is-going).
 
 ## What you get out of the box
 
@@ -69,7 +69,7 @@ The ratchet is now closed end to end: versioned agents, canary rollout, the appr
 - **[Evaluations](/docs/modules/evaluations)** — datasets, scorers, and scored runs of the real agent, comparable against a baseline, answering "did this change make the agent worse?" with a pass/fail verdict
 - **[Eval-gated promotion](/docs/modules/agents#eval-gated-promotion)** — a canary release that promotes only on a passing eval run against that canary, not on a judgment call
 
-Promotion stays human-gated by design: the platform owns the queue, the recurrence signal, and the verdict — a human owns the judgment. The full framing is in [The Layers of an Agent System](/docs/getting-started/agent-system-layers), and sequencing lives in the [roadmap](https://github.com/ttoss/soat/blob/main/docs/roadmap.md).
+Promotion stays human-gated by design: the platform owns the queue, the recurrence signal, and the verdict — a human owns the judgment. The full framing is in [The Layers of an Agent System](/docs/agent-system-layers), and sequencing lives in the [roadmap](https://github.com/ttoss/soat/blob/main/docs/roadmap.md).
 
 ## Architecture
 
@@ -90,7 +90,7 @@ Every operation in SOAT is reachable through four interchangeable client surface
 | **CLI** (`soat`)      | Scripts, CI pipelines, and local exploration         | [CLI](/docs/cli)           |
 | **SDK** (`@soat/sdk`) | TypeScript and JavaScript applications               | [SDK](/docs/sdk)           |
 
-Each operation is gated by a single [permission action](/docs/permissions) (e.g. `documents:CreateDocument`) that is enforced consistently across all four surfaces. See [IAM & Policies](/docs/modules/iam) for how policies are evaluated.
+See [Choosing a Client Surface](/docs/client-surfaces) for the trade-offs. Each operation is gated by a single [permission action](/docs/permissions) (e.g. `documents:CreateDocument`) that is enforced consistently across all four surfaces. See [IAM & Policies](/docs/modules/iam) for how policies are evaluated.
 
 ## Example — create a document
 
@@ -141,4 +141,5 @@ curl -X POST https://api.example.com/api/v1/documents \
 
 - **[Get started](/docs/getting-started)** — bring up SOAT with Docker Compose in five minutes
 - **[Key concepts](/docs/getting-started/concepts)** — the mental model behind projects, agents, and sessions
+- **[Choosing a client surface](/docs/client-surfaces)** — REST, SDK, CLI, or MCP
 - **[Platform modules](/docs/modules)** — deep-dives into every resource type
