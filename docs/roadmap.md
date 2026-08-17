@@ -51,11 +51,12 @@ not stored data.
 
 ### Memories
 
-- [ ] **Phase 7 — extraction coverage for streaming and `requires_action`
-      completions.** No API change, but the passive-memory pipeline currently
-      misses streaming (the dominant production transport) — the highest-value
-      post-RC item. Until it lands, the docs must not claim extraction covers
-      streaming.
+- [ ] **Phase 7 — extraction coverage for streaming, `requires_action`, and
+      background (`wait=false`) direct completions.** No API change, but the
+      passive-memory pipeline currently misses streaming (the dominant
+      production transport) and the direct-generation background path — the
+      highest-value post-RC item. Until it lands, the docs must not claim
+      extraction covers streaming.
 - [ ] **5a — LLM-arbitrated write decision.** Top-K shortlist +
       add/update/supersede/skip arbitration; v1 fallback semantics on LLM
       failure; consolidation for the manual REST write path. Internal write

@@ -18,6 +18,8 @@ that landed with the v1 RC — is documented in the
 | Streaming extraction coverage  | ❌ Not started | Extraction trigger for streaming and `requires_action` completions (Phase 7)                                                     |
 | Decay, importance & compaction | ❌ Not started | Importance scoring, access tracking, retrieval-time recency blend, compaction (Phase 8)                                          |
 | Profile memory                 | ❌ Not started | Always-injected bounded profile blocks, agent-editable (Phase 9)                                                                 |
+| Actor memory resolution        | ❌ Decision needed | `actors.memory_id` / `auto_create_memory` are a pure data link — nothing in the generation pipeline reads them; finish or remove (see [Engine Review Findings](#engine-review-findings-2026-08)) |
+| Indexes on `memory_entries`    | ❌ Not started | Only declared index is the `public_id` unique — no vector index on `embedding`, none on `memory_id`; every similarity search is a sequential scan (see [Engine Review Findings](#engine-review-findings-2026-08)) |
 
 ## Implementation Phases
 
@@ -199,7 +201,7 @@ This phase delivers the **memory-side data layer** that Phase 3 queries against:
 
 ---
 
-### Phase 7 — Extraction Coverage (Streaming and Client-Tool Turns) ❌ Not started
+### Phase 7 — Extraction Coverage (Streaming, Client-Tool, and Background Turns) ❌ Not started
 
 **Goal:** Fire memory extraction for the turn types that skip it today. Streaming is the default
 transport in production chat UIs, so the passive-memory pipeline currently misses most real
@@ -211,6 +213,12 @@ traffic.
   chunk is flushed, using the fully accumulated transcript
 - Trigger extraction when a `requires_action` (client-tool) turn reaches its terminal `completed`
   state via `tool-outputs` — once per logical turn, not per round-trip
+- Trigger extraction when a **background** (`wait=false`) direct generation completes. Today the
+  trigger for `POST /agents/{agent_id}/generate` lives only in the route's blocking branch
+  (`rest/v1/agentGeneration.ts`); the `startGeneration` background path never extracts, even for a
+  non-streaming turn. Since background is the endpoint's *default* mode, the trigger belongs in
+  the lib completion path, not the route. Conversation and session turns are unaffected — their
+  trigger already sits in `generateConversationMessage`, after the assistant message persists
 - Idempotency guard: at most one extraction per generation (`metadata.extraction` is the marker),
   so retries and multi-request turns cannot double-write
 - Same opt-in condition (`extraction` + `write_memory_id`) and summary reporting as Phase 4
@@ -324,6 +332,8 @@ harness-independent, checkable criteria (verified with unit/REST tests per
   extraction, recorded on `metadata.extraction`.
 - A `requires_action` turn triggers extraction once, only after its terminal `completed` state —
   never once per tool-output round-trip.
+- A background (`wait=false`) non-streaming direct generation that completes produces exactly one
+  extraction, identical in behavior to its blocking twin.
 - Retries or repeated requests for the same generation never produce a second extraction
   (idempotency marker holds).
 
@@ -428,6 +438,50 @@ merge. Phase 5 replaces the decision and merge steps for the reasons below:
 In write algorithm v2 (Phase 5) `duplicate_threshold` (default 0.95) still short-circuits
 near-exact duplicates, a new `shortlist_threshold` (default 0.60) bounds the arbitration candidate
 set, and the create/update/supersede decision moves to an LLM.
+
+## Engine Review Findings (2026-08)
+
+A code-level review of the shipped engine (2026-08-17) produced the findings below. Each records
+the finding and its recommended disposition; sequencing stays in [roadmap.md](./roadmap.md). The
+review's overall verdict: no architectural wrong turns — the write funnel (every path converges on
+`writeMemoryEntry`), the contract-first schema work, and the injection security posture are sound
+foundations for the pending phases.
+
+### Concatenation merge is quarantined — do not extend it
+
+The merge band on paths without an agent context (manual REST, orchestration `memory_write`)
+always **concatenates**, and concatenation is self-eroding: each merge dilutes the entry's
+embedding away from every fact it contains, degrading the very similarity decision the thresholds
+depend on. Phase 5 replaces it. Until then, treat `mergeEntryContent` as frozen: no new write path
+may ship relying on concatenation semantics, and any new agent-adjacent path must thread a
+consolidation context the way `write_memory` and extraction already do.
+
+### Actor memory link is a half-feature — finish or remove before it ossifies
+
+`actors.memory_id` and `auto_create_memory` ship on the API, but nothing in the generation
+pipeline reads them: retrieval scope comes exclusively from the agent's static
+`knowledge_config`. A user who wires an actor to a memory silently gets nothing — worse than the
+field not existing — and this is the one shipped surface with genuine deprecation exposure.
+Recommended disposition: **finish it** — resolve the calling actor's memory into the knowledge
+scope at generation time, which is substantially the same "actor-scoped filtering on existing
+metadata" the roadmap already names as the entity graph's cheaper fallback. Removing the surface
+is the alternative; leaving it in limbo through v1 is not.
+
+### Write thresholds are deployment-tuned, not portable
+
+`duplicate_threshold` / `update_threshold` are raw cosine values, so a tuned value is coupled to
+the deployment's embedding model — the same caveat the knowledge docs already state for
+`min_score`. Phase 5 gives both knobs model-independent roles (duplicate short-circuit, shortlist
+bound). The module docs should document them as deployment-tuned knobs, not portable constants,
+under the same framing as `min_score`.
+
+### Missing indexes on `memory_entries`
+
+The only declared index is the `public_id` unique — there is no vector index on `embedding` and
+no index on `memory_id`, so every dedup lookup and every knowledge search over memory is a
+sequential scan. Adding them (HNSW on `embedding`, b-tree on `memory_id`) is invisible to the
+contract and additive; it should land before 10k-entry memories are a real workload, and it gates
+how much Phase 8 (forgetting) can matter in practice.
 
 ## Data Model (Pending Work)
 
