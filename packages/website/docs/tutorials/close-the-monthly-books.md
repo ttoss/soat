@@ -246,10 +246,14 @@ nodes and run in the same round — in parallel. Their edges share an
 `activation_group` with `activation_condition: "all"`, which makes
 `total_variance` a **join barrier**: it waits for all three.
 
-```txt
-  bank_recon ─┐
-  ar_recon   ─┼─(all)─► total_variance ─► gate_check ─┬─clean──────► clean_summary
-  ap_recon   ─┘                                       └─exception──► draft_memo
+```mermaid
+flowchart TB
+    bank_recon --> total_variance
+    ar_recon --> total_variance
+    ap_recon --> total_variance
+    total_variance["total_variance<br/>join barrier: all"] --> gate_check{gate_check}
+    gate_check -->|clean| clean_summary
+    gate_check -->|exception| draft_memo
 ```
 
 | Node | Type | Purpose |
