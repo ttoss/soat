@@ -1,81 +1,85 @@
 {
-  "name": "LangChain",
+  "name": "LangChain / LangGraph",
   "slug": "langchain",
   "archetype": "framework",
-  "summary": "The most widely adopted open-source framework for LLM applications: standardized model interfaces, a huge integration library, LangGraph for controllable agent orchestration, and the commercial LangSmith platform for observability and evals.",
+  "summary": "One stack from one vendor, rated together: LangChain for standardized model interfaces and the largest third-party integration catalog, LangGraph for durable stateful agent graphs, the LangGraph Platform Agent Server for assistants, threads, runs, and cron, and the commercial LangSmith for tracing and evals. The libraries are MIT and run wherever you host them; tracing, evals, and the hosted server are paid products.",
   "website": "https://www.langchain.com",
-  "license": "MIT (LangSmith is commercial)",
+  "license": "MIT (LangChain, LangGraph); LangSmith and LangGraph Platform are commercial",
   "deployment": ["self-hosted", "managed"],
   "last_verified": "2026-08-14",
   "capabilities": {
     "agent-runtime": {
       "rating": "native",
-      "note": "Agent abstractions in LangChain plus low-level, stateful agent graphs in LangGraph.",
-      "evidence": "https://github.com/langchain-ai/langchain"
+      "note": "LangChain's agent abstractions on top of LangGraph's graph runtime, which executes stateful agent loops with durable execution and resumes from a checkpoint after a failure.",
+      "evidence": "https://docs.langchain.com/oss/python/langgraph/overview"
     },
     "orchestration": {
       "rating": "native",
-      "note": "LangGraph provides graph-based multi-agent workflows with persistence and human-in-the-loop interrupts.",
-      "evidence": "https://github.com/langchain-ai/langgraph"
+      "note": "Graphs mix deterministic and model-driven steps for multi-step and multi-agent workflows, and the Agent Server exposes assistants, threads, runs, and cron jobs over HTTP.",
+      "evidence": "https://docs.langchain.com/langgraph-platform/langgraph-server"
     },
     "knowledge-memory": {
       "rating": "native",
-      "note": "Vector store, retriever, and embedding abstractions with a large integration catalog; memory via LangGraph checkpointers.",
+      "note": "Vector store, retriever, and embedding abstractions over a large integration catalog, plus a cross-thread Store with optional semantic search. The storage engines are third-party, and neither library ships a document ingestion or chunking pipeline of its own.",
       "evidence": "https://python.langchain.com/docs/integrations/vectorstores/"
     },
     "tools-integration": {
       "rating": "native",
-      "note": "Tool-calling abstractions, MCP adapters, and hundreds of third-party integrations.",
+      "note": "Tool-calling abstractions and hundreds of third-party integrations; MCP servers connect through the separate langchain-mcp-adapters package.",
       "evidence": "https://python.langchain.com/docs/integrations/tools/"
     },
     "identity-governance": {
-      "rating": "absent",
-      "note": "A library, not a server — no IAM, policies, quotas, approvals, or audit log; governance is the host application's job."
+      "rating": "partial",
+      "note": "Real approval gates via interrupts, and the Platform accepts custom auth handlers with resource filters — but the handlers are yours to write, and there is no quota enforcement, policy language, or audit log.",
+      "evidence": "https://docs.langchain.com/langgraph-platform/custom-auth"
     },
     "observability": {
       "rating": "partial",
-      "note": "Deep tracing and monitoring via LangSmith — a separate, commercial companion service, not part of the OSS framework.",
+      "note": "Deep tracing and monitoring through LangSmith, a separate commercial product enabled by an environment variable rather than part of either library.",
       "evidence": "https://docs.smith.langchain.com"
     },
     "data-secrets": {
       "rating": "absent",
-      "note": "No managed file storage or encrypted secrets store; delegated to the host application."
+      "note": "No managed file storage and no encrypted secrets store; persistence stops at checkpointers and the key-value Store, and credentials are the host application's problem."
     },
     "evaluation": {
       "rating": "partial",
-      "note": "Datasets, evaluators, and experiment tracking via LangSmith (commercial) and the open-source openevals utilities.",
+      "note": "Datasets, evaluators, and experiment tracking live in the commercial LangSmith product, with the open-source openevals utilities alongside it; nothing gates a deployment on a result.",
       "evidence": "https://docs.smith.langchain.com/evaluation"
     },
     "channels": {
       "rating": "plugin",
-      "note": "No built-in messaging gateway; Slack/Discord/etc. are wired up through community integrations or the host application.",
+      "note": "No first-party messaging gateway and no bundled chat UI — the Agent Server speaks HTTP, and Slack or Discord delivery comes from community integrations or the host application.",
       "evidence": "https://python.langchain.com/docs/integrations/providers/"
     },
     "code-execution": {
       "rating": "plugin",
-      "note": "Sandboxed execution through integrations (e.g. Riza, Bearly, E2B code interpreter tools), not a first-party runtime.",
+      "note": "Sandboxed execution arrives as integration tools (E2B, Riza, Bearly) rather than a runtime either library operates.",
       "evidence": "https://python.langchain.com/docs/integrations/tools/"
     },
     "human-in-loop": {
       "rating": "native",
-      "note": "HumanInTheLoopMiddleware takes an interrupt_on map of tool names with approve, edit, and reject decisions, backed by a checkpointer that holds state across the pause.",
-      "evidence": "https://docs.langchain.com/oss/python/langchain/middleware/built-in"
+      "note": "interrupt() checkpoints graph state and pauses a node indefinitely; Command(resume=value) re-invokes the same thread. HumanInTheLoopMiddleware wraps that in an interrupt_on map of tool names with approve, edit, and reject decisions.",
+      "evidence": "https://docs.langchain.com/oss/python/langgraph/interrupts"
     },
     "multi-tenancy": {
-      "rating": "absent",
-      "note": "A library with no tenant, workspace, or namespace concept; isolation is the host application's responsibility."
+      "rating": "partial",
+      "note": "Agent Server auth handlers can stamp owner metadata onto threads, runs, and assistants and filter reads by it, but there is no tenant or workspace object — the isolation is whatever those handlers implement.",
+      "evidence": "https://docs.langchain.com/langgraph-platform/resource-auth"
     },
     "declarative-deployment": {
-      "rating": "absent",
-      "note": "No template or infrastructure-as-code format; agents and chains are constructed in application code."
+      "rating": "partial",
+      "note": "langgraph.json declares the graphs, dependencies, and environment of a single deployed application. There is no plan and apply step and no dependency graph across resources.",
+      "evidence": "https://docs.langchain.com/oss/python/langgraph/application-structure"
     },
     "agent-versioning": {
-      "rating": "absent",
-      "note": "No versioned agent definitions, aliases, or rollout controls; versioning is whatever the host repository does."
+      "rating": "partial",
+      "note": "Each assistant update creates a new version that can be promoted to active or rolled back; there is no canary rollout and no eval-gated promotion.",
+      "evidence": "https://docs.langchain.com/langsmith/assistants"
     },
     "skill-learning": {
       "rating": "plugin",
-      "note": "The separate Deep Agents package exposes a skills parameter for procedural memory whose skill files an agent can write and edit itself; core LangChain has no equivalent.",
+      "note": "The separate Deep Agents package exposes a skills parameter for procedural memory whose skill files an agent can write and edit itself. Core LangChain and LangGraph have no equivalent — the Store persists data, not reusable skills.",
       "evidence": "https://docs.langchain.com/oss/python/deepagents/skills"
     }
   }

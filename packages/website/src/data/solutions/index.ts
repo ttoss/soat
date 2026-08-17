@@ -15,7 +15,6 @@ import deepseekHarness from './deepseek-harness.json';
 import dify from './dify.json';
 import hermesAgent from './hermes-agent.json';
 import langchain from './langchain.json';
-import langgraph from './langgraph.json';
 import letta from './letta.json';
 import microsoftAgentFramework from './microsoft-agent-framework.json';
 import openaiAgentsPlatform from './openai-agents-platform.json';
@@ -164,7 +163,6 @@ export const solutions: Solution[] = [
   asSolution(dify),
   asSolution(hermesAgent),
   asSolution(langchain),
-  asSolution(langgraph),
   asSolution(letta),
   asSolution(microsoftAgentFramework),
   asSolution(openaiAgentsPlatform),
