@@ -164,7 +164,6 @@ memoryEntriesRouter.post('/memory-entries', async (ctx: Context) => {
     tags?: unknown;
     metadata?: unknown;
     duplicate_threshold?: number;
-    update_threshold?: number;
   };
 
   const validationError = validateTagsMetadata(body, { allowNull: false });
@@ -186,7 +185,6 @@ memoryEntriesRouter.post('/memory-entries', async (ctx: Context) => {
     tags: isStringArray(body.tags) ? body.tags : undefined,
     metadata: isPlainObject(body.metadata) ? body.metadata : undefined,
     duplicateThreshold: body.duplicate_threshold,
-    updateThreshold: body.update_threshold,
   });
 
   ctx.status = result.action === 'created' ? 201 : 200;

@@ -29,23 +29,22 @@ describe('buildConsolidationPrompt', () => {
 
 describe('pickMergedContent', () => {
   test('uses the consolidated text when it is non-empty', () => {
-    expect(
-      pickMergedContent({ consolidated: 'Merged fact', fallback: 'a\nb' })
-    ).toBe('Merged fact');
+    expect(pickMergedContent({ consolidated: 'Merged fact' })).toBe(
+      'Merged fact'
+    );
   });
 
   test('trims the consolidated text', () => {
-    expect(
-      pickMergedContent({ consolidated: '  Merged fact  ', fallback: 'a\nb' })
-    ).toBe('Merged fact');
+    expect(pickMergedContent({ consolidated: '  Merged fact  ' })).toBe(
+      'Merged fact'
+    );
   });
 
-  test('falls back to the concatenation when consolidation is empty', () => {
-    expect(pickMergedContent({ consolidated: '', fallback: 'a\nb' })).toBe(
-      'a\nb'
-    );
-    expect(
-      pickMergedContent({ consolidated: '   \n ', fallback: 'a\nb' })
-    ).toBe('a\nb');
+  // There is no concatenation fallback any more (#1062): a blank completion
+  // means "do not merge", and the caller creates a new entry instead. Merging
+  // an existing entry into a blank string would lose the fact it already held.
+  test('returns null when consolidation produced nothing usable', () => {
+    expect(pickMergedContent({ consolidated: '' })).toBeNull();
+    expect(pickMergedContent({ consolidated: '   \n ' })).toBeNull();
   });
 });

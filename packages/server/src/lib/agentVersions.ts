@@ -13,7 +13,6 @@ import { getAgent, updateAgent } from './agents';
 import {
   type AgentConfigSnapshot,
   agentVersionStore,
-  configKnowledgeConfig,
   configToolBindings,
 } from './agentVersionSnapshot';
 import { type ActiveRelease, parseActiveRelease } from './releaseAssignment';
@@ -136,7 +135,7 @@ const archivedConfigToUpdateArgs = (config: AgentConfigSnapshot) => {
     stepRules: configArray<object>(config.step_rules),
     boundaryPolicy: configObject(config.boundary_policy),
     temperature: configNumber(config.temperature),
-    knowledgeConfig: configKnowledgeConfig(config.knowledge_config),
+    knowledgeConfig: configObject(config.knowledge_config),
     outputSchema: configObject(config.output_schema),
     maxContextMessages: configNumber(config.max_context_messages),
     singleSessionPerActor: configBoolean(config.single_session_per_actor),

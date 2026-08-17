@@ -40,10 +40,9 @@ export const actorsFormationModule = defineFormationModule({
   create: async ({ properties, projectId }) => {
     const name = requireString({ value: properties.name, fieldName: 'name' });
 
-    const { agentId, chatId, memoryId } = await resolveActorLinkedIds({
+    const { agentId, chatId } = await resolveActorLinkedIds({
       agentId: toNullableString(properties.agent_id),
       chatId: toNullableString(properties.chat_id),
-      memoryId: toNullableString(properties.memory_id),
       projectId,
     });
 
@@ -54,11 +53,6 @@ export const actorsFormationModule = defineFormationModule({
       instructions: toNullableString(properties.instructions),
       agentId,
       chatId,
-      memoryId,
-      autoCreateMemory:
-        typeof properties.auto_create_memory === 'boolean'
-          ? properties.auto_create_memory
-          : undefined,
     });
   },
 
@@ -70,7 +64,6 @@ export const actorsFormationModule = defineFormationModule({
       instructions: toNullableString(properties.instructions),
       agentId: toNullableString(properties.agent_id),
       chatId: toNullableString(properties.chat_id),
-      memoryId: toNullableString(properties.memory_id),
     });
   },
 

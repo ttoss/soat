@@ -395,9 +395,12 @@ describe('Memories', () => {
         expect(response.body.id).toMatch(/^mem_entry_/);
       });
 
-      test('write with duplicate_threshold > 1 forces merge path', async () => {
+      // #1062: the manual path has no agent context, so a merge-band write
+      // creates a second entry rather than concatenating onto the first.
+      // `duplicate_threshold > 1` keeps this out of the skip branch.
+      test('a merge-band manual write creates instead of merging', async () => {
         const freshMemoryId = await createTestMemory();
-        await authenticatedTestClient(userToken)
+        const first = await authenticatedTestClient(userToken)
           .post('/api/v1/memory-entries')
           .send({ memory_id: freshMemoryId, content: 'First entry for merge' });
 
@@ -407,12 +410,33 @@ describe('Memories', () => {
             memory_id: freshMemoryId,
             content: 'Second entry for merge',
             duplicate_threshold: 1.1,
-            update_threshold: 0.0,
           });
 
-        expect(response.status).toBe(200);
-        expect(response.body.action).toBe('updated');
+        expect(response.status).toBe(201);
+        expect(response.body.action).toBe('created');
         expect(response.body.id).toMatch(/^mem_entry_/);
+        expect(response.body.id).not.toBe(first.body.id);
+        expect(response.body.content).toBe('Second entry for merge');
+
+        // The pre-existing entry is untouched — nothing was appended to it.
+        const existing = await authenticatedTestClient(userToken).get(
+          `/api/v1/memory-entries/${first.body.id}`
+        );
+        expect(existing.body.content).toBe('First entry for merge');
+      });
+
+      test('update_threshold is rejected as an unknown field', async () => {
+        const freshMemoryId = await createTestMemory();
+        const response = await authenticatedTestClient(userToken)
+          .post('/api/v1/memory-entries')
+          .send({
+            memory_id: freshMemoryId,
+            content: 'Threshold entry',
+            update_threshold: 0.5,
+          });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error.code).toBe('VALIDATION_FAILED');
       });
 
       test('can create an entry with tags and metadata', async () => {
@@ -698,9 +722,10 @@ describe('Memories', () => {
 
     describe('provenance and temporal invalidation', () => {
       // Test embeddings are constant, so any second write into a memory that
-      // already holds a valid entry scores 1.0 and dedups. Thresholds above 1
-      // make both comparisons false, which is the only way to land two
-      // independent entries in one memory here.
+      // already holds a valid entry scores 1.0 and would be skipped as a
+      // duplicate. A `duplicate_threshold` above 1 makes that comparison false,
+      // which is the only way to land two independent entries in one memory
+      // here (the merge band already creates on this path).
       const createEntry = async (args: {
         memoryId: string;
         content: string;
@@ -713,9 +738,7 @@ describe('Memories', () => {
             memory_id: args.memoryId,
             content: args.content,
             source_type: args.sourceType,
-            ...(args.forceCreate
-              ? { duplicate_threshold: 1.1, update_threshold: 1.1 }
-              : {}),
+            ...(args.forceCreate ? { duplicate_threshold: 1.1 } : {}),
           });
       };
 

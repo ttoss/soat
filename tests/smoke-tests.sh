@@ -1249,17 +1249,26 @@ if [ "$ME_SKIP_ACTION" != "skipped" ]; then
 fi
 echo "Duplicate correctly skipped."
 
-echo "--- Memory entries: similar write (updated) ---"
+echo "--- Memory entries: similar write (created, no agent context to merge with) ---"
+# A manual write has no agent context, so an overlapping fact is stored as its
+# own entry rather than being merged into the existing one. `updated` is
+# reachable only from the agent write paths, which consolidate via the LLM.
 ME_UPD_RESP=$($SOAT_CLI create-memory-entry \
   --memory-id "$MEM_ID" \
   --content "Smoke test customer prefers email, especially for billing inquiries")
 ME_UPD_ACTION=$(printf '%s\n' "$ME_UPD_RESP" | jq -r '.action')
-if [ "$ME_UPD_ACTION" != "updated" ]; then
-  echo "ERROR: Expected action=updated, got $ME_UPD_ACTION" >&2
+if [ "$ME_UPD_ACTION" != "created" ]; then
+  echo "ERROR: Expected action=created for a similar manual write, got $ME_UPD_ACTION" >&2
   echo "$ME_UPD_RESP" >&2
   exit 1
 fi
-echo "Similar entry correctly merged (updated)."
+# The pre-existing entry must be untouched — nothing is ever appended to it.
+ME1_AFTER=$($SOAT_CLI get-memory-entry --entry-id "$ME1_ID" | jq -r '.content')
+if [ "$ME1_AFTER" != "Smoke test customer prefers email over phone calls" ]; then
+  echo "ERROR: the existing entry was mutated by a merge-band write: $ME1_AFTER" >&2
+  exit 1
+fi
+echo "Similar entry stored as its own entry; existing entry untouched."
 
 echo "--- Memory entries: unrelated write (created) ---"
 ME2_RESP=$($SOAT_CLI create-memory-entry \
@@ -1297,8 +1306,8 @@ echo "Tagged entry created with tags/metadata."
 echo "--- List memory entries ---"
 ME_LIST_RESP=$($SOAT_CLI list-memory-entries --memory-id "$MEM_ID")
 ME_LIST_COUNT=$(printf '%s\n' "$ME_LIST_RESP" | jq '.data | length')
-if [ "$ME_LIST_COUNT" -ne 3 ]; then
-  echo "ERROR: Expected 3 entries after dedup writes, got $ME_LIST_COUNT" >&2
+if [ "$ME_LIST_COUNT" -ne 4 ]; then
+  echo "ERROR: Expected 4 entries after dedup writes, got $ME_LIST_COUNT" >&2
   echo "$ME_LIST_RESP" >&2
   exit 1
 fi

@@ -796,14 +796,6 @@ components:
           type: string
           nullable: true
           description: Linked chat ID (mutually exclusive with agent_id)
-        memory_id:
-          x-soat-ref: memories
-          type: string
-          nullable: true
-          description: Linked memory ID
-        auto_create_memory:
-          type: boolean
-          description: Whether to auto-create memory when actor is created
 
     AiProviderResourceProperties:
       description: >-

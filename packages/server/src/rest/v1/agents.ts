@@ -3,7 +3,7 @@ import type { Context } from 'src/Context';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 import { deleteAgent } from 'src/lib/agentDelete';
-import { normalizeKnowledgeConfig } from 'src/lib/agentKnowledge';
+import { toStoredKnowledgeConfig } from 'src/lib/agentKnowledge';
 import { createAgent, getAgent, listAgents, updateAgent } from 'src/lib/agents';
 import { parseWireToolBindings } from 'src/lib/agentToolBindings';
 import { buildSrn } from 'src/lib/iam';
@@ -83,7 +83,7 @@ const parseUpdateAgentBody = (body: Record<string, unknown>) => {
     knowledgeConfig:
       body.knowledge_config === undefined
         ? undefined
-        : normalizeKnowledgeConfig(body.knowledge_config),
+        : toStoredKnowledgeConfig(body.knowledge_config),
     outputSchema: parseOptional<object | null>(body.output_schema),
     maxContextMessages: parseOptional<number | null>(body.max_context_messages),
     singleSessionPerActor:
@@ -162,7 +162,7 @@ const buildCreateAgentArgs = (args: {
     stepRules: Array.isArray(body.step_rules) ? body.step_rules : undefined,
     boundaryPolicy: body.boundary_policy as object | undefined,
     temperature: parseNumber(body.temperature),
-    knowledgeConfig: normalizeKnowledgeConfig(body.knowledge_config) as
+    knowledgeConfig: toStoredKnowledgeConfig(body.knowledge_config) as
       object | undefined,
     outputSchema: body.output_schema as object | undefined,
     maxContextMessages: parseNumber(body.max_context_messages),

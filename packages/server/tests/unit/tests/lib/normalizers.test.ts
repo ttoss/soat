@@ -3,7 +3,6 @@ import {
   camelToSnakeKey,
   coalesce,
   convertKeys,
-  convertKeysDeep,
   normalizePropertyKeys,
   snakeToCamelKey,
 } from 'src/lib/resource-inputs/normalizers';
@@ -77,42 +76,6 @@ describe('convertKeys (shallow)', () => {
       // nested value bag is left untouched by the shallow transform
       nested: { keepMe: 1 },
     });
-  });
-});
-
-describe('convertKeysDeep (recursive)', () => {
-  test('rewrites keys at every depth, including inside arrays', () => {
-    const result = convertKeysDeep(
-      {
-        writeMemoryId: 'mem_1',
-        extraction: { aiProviderId: 'aip_1' },
-        items: [{ someKey: 'v' }],
-      },
-      camelToSnakeKey
-    );
-    expect(result).toEqual({
-      write_memory_id: 'mem_1',
-      extraction: { ai_provider_id: 'aip_1' },
-      items: [{ some_key: 'v' }],
-    });
-  });
-
-  test('leaves leaf values (including strings with underscores) untouched', () => {
-    const result = convertKeysDeep(
-      { memoryIds: ['mem_a', 'mem_b'], count: 3, flag: true },
-      camelToSnakeKey
-    );
-    expect(result).toEqual({
-      memory_ids: ['mem_a', 'mem_b'],
-      count: 3,
-      flag: true,
-    });
-  });
-
-  test('returns non-object primitives unchanged', () => {
-    expect(convertKeysDeep('x', camelToSnakeKey)).toBe('x');
-    expect(convertKeysDeep(42, camelToSnakeKey)).toBe(42);
-    expect(convertKeysDeep(null, camelToSnakeKey)).toBeNull();
   });
 });
 

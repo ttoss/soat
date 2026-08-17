@@ -91,7 +91,12 @@ paths:
       tags:
         - MemoryEntries
       summary: Create a memory entry
-      description: Creates a new entry in the specified memory container. Automatically generates an embedding for semantic search.
+      description: >-
+        Creates a new entry in the specified memory container. Automatically
+        generates an embedding for semantic search, and skips the write when an
+        existing entry is a near-duplicate (see `duplicate_threshold`). A merely
+        similar fact is stored as its own entry: this path has no agent context
+        and therefore no model to consolidate two facts into one.
       operationId: createMemoryEntry
       x-iam-action: memories:CreateMemoryEntry
       requestBody:
@@ -132,19 +137,13 @@ paths:
                   example: { evidence: high, quarter: Q3 }
                 duplicate_threshold:
                   type: number
-                  description: Cosine similarity score at or above which the incoming content is considered a duplicate and skipped (default 0.95)
+                  description: Cosine similarity score at or above which the incoming content is considered a duplicate of an existing entry and skipped (default 0.95). Below it the entry is always created.
                   default: 0.95
-                  minimum: 0
-                  maximum: 1
-                update_threshold:
-                  type: number
-                  description: Cosine similarity score at or above which the incoming content is appended to the existing entry (default 0.75)
-                  default: 0.75
                   minimum: 0
                   maximum: 1
       responses:
         '200':
-          description: Memory entry deduplicated (action is "skipped" or "updated")
+          description: Memory entry deduplicated (action is "skipped")
           content:
             application/json:
               schema:
@@ -345,7 +344,11 @@ components:
               type: string
               enum: [created, updated, skipped, superseded]
               description: >-
-                The outcome of the write operation. `superseded` means the
-                incoming content contradicted an existing entry, which was
+                The outcome of the write operation. `updated` means an existing
+                entry was rewritten to absorb the incoming fact — it is produced
+                only by the LLM consolidation on agent write paths (the
+                `write_memory` tool and automatic extraction), never by this
+                endpoint, which creates instead of merging. `superseded` means
+                the incoming content contradicted an existing entry, which was
                 invalidated and replaced — it is produced by the LLM-arbitrated
                 write path and does not occur until that ships.

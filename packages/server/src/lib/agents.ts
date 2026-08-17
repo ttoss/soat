@@ -5,7 +5,6 @@ import {
   getAgentIncludes,
   type MappedAgent,
 } from './agentAccessor';
-import { denormalizeKnowledgeConfig } from './agentKnowledge';
 import {
   type AgentToolBinding,
   readAgentToolBindings,
@@ -57,7 +56,7 @@ const mapAgent = (agent: AgentRow): MappedAgent => {
     step_rules: agent.stepRules,
     boundary_policy: agent.boundaryPolicy,
     temperature: agent.temperature,
-    knowledge_config: denormalizeKnowledgeConfig(agent.knowledgeConfig) ?? null,
+    knowledge_config: (agent.knowledgeConfig as object | null) ?? null,
     output_schema: agent.outputSchema,
     max_context_messages: agent.maxContextMessages,
     single_session_per_actor: agent.singleSessionPerActor,

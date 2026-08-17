@@ -6,7 +6,6 @@ import {
   applyActorRelationshipFilters,
   buildActorListWhere,
 } from './actorFilters';
-import { createMemory } from './memories';
 import type { ResourceIncludes } from './modelIncludes';
 import { emptyPage, paginatedList } from './pagination';
 import {
@@ -36,7 +35,6 @@ type ActorRow = InstanceType<(typeof db)['Actor']> & {
   project?: InstanceType<(typeof db)['Project']>;
   agent?: InstanceType<(typeof db)['Agent']> | null;
   chat?: InstanceType<(typeof db)['Chat']> | null;
-  memory?: InstanceType<(typeof db)['Memory']> | null;
 };
 
 const mapActor = (actor: ActorRow) => {
@@ -48,7 +46,6 @@ const mapActor = (actor: ActorRow) => {
     instructions: actor.instructions ?? null,
     agent_id: getLinkedPublicId(actor.agent),
     chat_id: getLinkedPublicId(actor.chat),
-    memory_id: getLinkedPublicId(actor.memory),
     tags: actor.tags ?? undefined,
     created_at: actor.createdAt,
     updated_at: actor.updatedAt,
@@ -60,7 +57,6 @@ const actorIncludes = (): ResourceIncludes => {
     { model: db.Project, as: 'project' },
     { model: db.Agent, as: 'agent' },
     { model: db.Chat, as: 'chat' },
-    { model: db.Memory, as: 'memory' },
   ];
 };
 
@@ -101,15 +97,13 @@ const resolveSingleLinkedId = async (args: {
 export const resolveActorLinkedIds = async (args: {
   agentId?: string | null;
   chatId?: string | null;
-  memoryId?: string | null;
   projectId?: number;
 }): Promise<{
   agentId?: number | null;
   chatId?: number | null;
-  memoryId?: number | null;
 }> => {
   log('resolveActorLinkedIds %o', args);
-  const [agentId, chatId, memoryId] = await Promise.all([
+  const [agentId, chatId] = await Promise.all([
     resolveSingleLinkedId({
       publicId: args.agentId,
       projectId: args.projectId,
@@ -128,17 +122,8 @@ export const resolveActorLinkedIds = async (args: {
       errorCode: 'CHAT_NOT_FOUND',
       notFoundMessage: `Chat '${args.chatId}' not found.`,
     }),
-    resolveSingleLinkedId({
-      publicId: args.memoryId,
-      projectId: args.projectId,
-      findFn: (where) => {
-        return db.Memory.findOne({ where });
-      },
-      errorCode: 'MEMORY_NOT_FOUND',
-      notFoundMessage: `Memory '${args.memoryId}' not found.`,
-    }),
   ]);
-  return { agentId, chatId, memoryId };
+  return { agentId, chatId };
 };
 
 const buildActorUpdates = (args: {
@@ -222,8 +207,6 @@ export const createActor = async (args: {
   instructions?: string | null;
   agentId?: number | null;
   chatId?: number | null;
-  memoryId?: number | null;
-  autoCreateMemory?: boolean;
 }) => {
   log('createActor %o', args);
 
@@ -234,20 +217,6 @@ export const createActor = async (args: {
     );
   }
 
-  let resolvedMemoryId = args.memoryId ?? null;
-  if (args.autoCreateMemory && resolvedMemoryId === null) {
-    log('createActor: auto-creating memory for actor name=%s', args.name);
-    const memory = await createMemory({
-      projectId: args.projectId,
-      name: args.name,
-    });
-    log('createActor: auto-created memory id=%s', memory.id);
-    const memoryRow = await db.Memory.findOne({
-      where: { publicId: memory.id },
-    });
-    resolvedMemoryId = memoryRow ? (memoryRow.id as number) : null;
-  }
-
   const actor = await db.Actor.create({
     projectId: args.projectId,
     name: args.name,
@@ -255,30 +224,12 @@ export const createActor = async (args: {
     instructions: args.instructions ?? null,
     agentId: args.agentId ?? null,
     chatId: args.chatId ?? null,
-    memoryId: resolvedMemoryId,
   });
 
   const created = await actors.reload(actor);
 
   log('createActor: created actor id=%s', created.publicId);
   return mapActor(created);
-};
-
-const attachMemoryToActor = async (args: {
-  actor: InstanceType<(typeof db)['Actor']>;
-  projectId: number;
-  name: string;
-}) => {
-  log('attachMemoryToActor: auto-creating memory name=%s', args.name);
-  const memory = await createMemory({
-    projectId: args.projectId,
-    name: args.name,
-  });
-  log('attachMemoryToActor: created memory id=%s', memory.id);
-  const memoryRow = await db.Memory.findOne({ where: { publicId: memory.id } });
-  if (memoryRow) {
-    await args.actor.update({ memoryId: memoryRow.id as number });
-  }
 };
 
 export const findOrCreateActor = async (args: {
@@ -288,8 +239,6 @@ export const findOrCreateActor = async (args: {
   instructions?: string | null;
   agentId?: number | null;
   chatId?: number | null;
-  memoryId?: number | null;
-  autoCreateMemory?: boolean;
 }) => {
   log('findOrCreateActor %o', args);
 
@@ -307,19 +256,10 @@ export const findOrCreateActor = async (args: {
       instructions: args.instructions ?? null,
       agentId: args.agentId ?? null,
       chatId: args.chatId ?? null,
-      memoryId: args.memoryId ?? null,
     },
   });
 
   log('findOrCreateActor: actor=%s created=%s', actor.publicId, created);
-
-  if (created && args.autoCreateMemory && !args.memoryId) {
-    await attachMemoryToActor({
-      actor,
-      projectId: args.projectId,
-      name: args.name,
-    });
-  }
 
   return { actor: mapActor(await actors.reload(actor)), created };
 };
@@ -350,7 +290,6 @@ export const updateActor = async (args: {
   instructions?: string | null;
   agentId?: string | null;
   chatId?: string | null;
-  memoryId?: string | null;
 }) => {
   log('updateActor %o', args);
 
@@ -365,12 +304,10 @@ export const updateActor = async (args: {
   const resolved = await resolveActorLinkedIds({
     agentId: args.agentId,
     chatId: args.chatId,
-    memoryId: args.memoryId,
   });
 
   if (resolved.agentId !== undefined) updates.agentId = resolved.agentId;
   if (resolved.chatId !== undefined) updates.chatId = resolved.chatId;
-  if (resolved.memoryId !== undefined) updates.memoryId = resolved.memoryId;
 
   const finalAgent =
     args.agentId !== undefined ? resolved.agentId : actor.agentId;
