@@ -52,3 +52,10 @@ allowBuilds:
   protobufjs: true
   ssh2: true
   unrs-resolver: true
+overrides:
+  # mermaid (via @docusaurus/theme-mermaid) pulls cytoscape@3.34.1, which was
+  # published without trust evidence while earlier versions had a trusted
+  # publisher — that trips `trustPolicy: no-downgrade`. Pin to the last trusted
+  # release instead of adding cytoscape to trustPolicyExclude, so the guard
+  # stays in force. Drop this once cytoscape publishes a trusted 3.34.x+.
+  cytoscape: 3.34.0
