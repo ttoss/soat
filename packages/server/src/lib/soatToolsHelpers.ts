@@ -7,6 +7,7 @@ import type { JsonObjectSchema } from '@ttoss/http-server-mcp';
 import type { JSONSchema7 } from 'ai';
 import createDebug from 'debug';
 
+import { getActionForOperation } from './permissionCatalog';
 import {
   buildBodyFn,
   buildPathFn,
@@ -458,7 +459,15 @@ export const processOperation = (args: {
     path: buildPathFn(args.pathTemplate, pathParams),
     query: buildQueryFn(queryParams),
     body: buildBodyFn(bodyProps),
-    iamAction: args.operation['x-iam-action'],
+    // `x-iam-action` is the explicit override, for an operation whose enforced
+    // action differs from the catalog's entry for its own id. Everything else
+    // resolves from the permission catalog — the same operationId→action map
+    // the route handlers enforce — so `boundary_policy` is evaluated against a
+    // name a policy author is allowed to write. Falling back to the tool's
+    // kebab-case name would leave a `Deny` matching nothing (#1070).
+    iamAction:
+      args.operation['x-iam-action'] ??
+      getActionForOperation(args.operation.operationId),
     acceptedBodyFields,
   };
 };

@@ -19,6 +19,7 @@ import {
 } from './agentVersionSnapshot';
 import {
   assertAgentReferencesExist,
+  assertBoundaryPolicyActionsKnown,
   assertModelBinding,
   requireAiProviderDbId,
   resolveCreateModelBinding,
@@ -178,6 +179,7 @@ export const createAgent = async (
   } & AgentVersionAuthorship
 ): Promise<MappedAgent> => {
   validateOutputSchema(args.outputSchema);
+  assertBoundaryPolicyActionsKnown(args.boundaryPolicy);
 
   const { aiProviderId, modelRouteId } = await resolveCreateModelBinding(args);
 
@@ -339,6 +341,7 @@ export const updateAgent = async (
     AgentVersionAuthorship
 ): Promise<MappedAgent> => {
   validateOutputSchema(args.outputSchema);
+  assertBoundaryPolicyActionsKnown(args.boundaryPolicy);
 
   // Loaded with its joins so the pre-write config can be snapshotted through
   // the same mapper that serializes the response — the diff is then between two

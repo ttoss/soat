@@ -110,6 +110,44 @@ export const getPermissionCatalog = (): PermissionCatalog => {
   return cached;
 };
 
+let operationActions: Map<string, string> | null = null;
+
+/**
+ * The IAM action an operation is enforced with, keyed by its OpenAPI
+ * `operationId` — the same mapping the route handlers pass to `isAllowed`.
+ *
+ * This is what lets the `soat` tool surface evaluate `boundary_policy` against
+ * the action an author can actually write (`documents:UpdateDocument`) rather
+ * than the tool's own kebab-case name (`update-document`). Only 9 of 267
+ * operations declare `x-iam-action` in their spec, and a boundary containing a
+ * kebab name is rejected by `validatePolicyActions` — so without this lookup a
+ * `Deny` boundary matched nothing at all and failed open (#1070).
+ *
+ * Returns `undefined` for operations that are unauthorized by design (login,
+ * bootstrap, `users/me`, token-credentialed upload, the ingestion callback).
+ */
+export const getActionForOperation = (
+  operationId: string
+): string | undefined => {
+  if (!operationActions) {
+    operationActions = new Map();
+    const dir = resolvePermissionsDir();
+    if (dir) {
+      for (const file of fs.readdirSync(dir).filter((f) => {
+        return f.endsWith('.json');
+      })) {
+        const raw = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf-8'));
+        if (!isPermissionFile(raw)) continue;
+        for (const op of raw.operations) {
+          operationActions.set(op.operationId, op.action);
+        }
+      }
+    }
+    log('getActionForOperation: indexed operations=%d', operationActions.size);
+  }
+  return operationActions.get(operationId);
+};
+
 export const listAllActions = (): Set<string> => {
   const actions = new Set<string>();
   for (const mod of getPermissionCatalog().modules) {

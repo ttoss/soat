@@ -65,6 +65,11 @@
       "operationId": "abortAgentRelease",
       "action": "agents:SetAgentRelease",
       "description": "Roll traffic back to the stable version and end the rollout"
+    },
+    {
+      "operationId": "patchAgent",
+      "action": "agents:UpdateAgent",
+      "description": "Partially update an agent"
     }
   ]
 }

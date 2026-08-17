@@ -47,22 +47,22 @@
       "description": "Restore an archived orchestration graph as a new version"
     },
     {
-      "operationId": "startRun",
+      "operationId": "startOrchestrationRun",
       "action": "orchestrations:StartRun",
       "description": "Start a new orchestration run"
     },
     {
-      "operationId": "listRuns",
+      "operationId": "listOrchestrationRuns",
       "action": "orchestrations:ListRuns",
       "description": "List runs for an orchestration"
     },
     {
-      "operationId": "getRun",
+      "operationId": "getOrchestrationRun",
       "action": "orchestrations:GetRun",
       "description": "Get an orchestration run by ID"
     },
     {
-      "operationId": "cancelRun",
+      "operationId": "cancelOrchestrationRun",
       "action": "orchestrations:CancelRun",
       "description": "Cancel a running or paused orchestration run"
     },
@@ -72,7 +72,7 @@
       "description": "Submit human input to a paused orchestration run"
     },
     {
-      "operationId": "resumeRun",
+      "operationId": "resumeOrchestrationRun",
       "action": "orchestrations:ResumeRun",
       "description": "Resume a paused orchestration run from its last checkpoint"
     },

@@ -10,6 +10,7 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { assertGuardrailsExist } from './guardrails';
+import { validatePolicyActions } from './iam';
 import {
   assertModelBindingResolvable,
   resolveModelRouteDbId,
@@ -78,6 +79,34 @@ const assertTraceContentModeAllowed = async (args: {
   });
 
   if (message) throw new DomainError('VALIDATION_FAILED', message);
+};
+
+/**
+ * Rejects a `boundary_policy` whose action strings do not name real,
+ * enforceable permissions.
+ *
+ * The rule itself lives in `validatePolicyActions` (`iam.ts`) and is shared
+ * with the formation module, which accumulates the same errors against a
+ * template path (`.claude/rules/modules.md` — Shared Business Rules). Only the
+ * formation path used to apply it, so a typo'd boundary written through REST
+ * was stored unchecked — and a boundary is precisely where that silently fails
+ * open: a mis-named `Deny` matches nothing, leaving the agent permitted.
+ *
+ * Structural validation (shape of `statement`, effects, resources) stays with
+ * the boundary evaluator at generation time; this is only the action-name gate.
+ */
+export const assertBoundaryPolicyActionsKnown = (
+  boundaryPolicy: unknown
+): void => {
+  if (boundaryPolicy === null || boundaryPolicy === undefined) return;
+  if (typeof boundaryPolicy !== 'object' || Array.isArray(boundaryPolicy)) {
+    return;
+  }
+
+  const { valid, errors } = validatePolicyActions(boundaryPolicy);
+  if (!valid) {
+    throw new DomainError('VALIDATION_FAILED', errors.join('; '));
+  }
 };
 
 export const assertAgentReferencesExist = async (args: {

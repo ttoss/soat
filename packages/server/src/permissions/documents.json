@@ -40,6 +40,21 @@
       "operationId": "reingestDocument",
       "action": "documents:IngestDocument",
       "description": "Re-ingest an existing document from its source file"
+    },
+    {
+      "operationId": "getDocumentTags",
+      "action": "documents:GetDocument",
+      "description": "Get a document's tags"
+    },
+    {
+      "operationId": "replaceDocumentTags",
+      "action": "documents:UpdateDocument",
+      "description": "Replace a document's tags"
+    },
+    {
+      "operationId": "mergeDocumentTags",
+      "action": "documents:UpdateDocument",
+      "description": "Merge a document's tags"
     }
   ],
   "srnPatterns": [

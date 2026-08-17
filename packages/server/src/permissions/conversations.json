@@ -45,6 +45,21 @@
       "operationId": "generateConversationMessage",
       "action": "conversations:GenerateConversationMessage",
       "description": "Generate the next message in a conversation"
+    },
+    {
+      "operationId": "getConversationTags",
+      "action": "conversations:GetConversation",
+      "description": "Get a conversation's tags"
+    },
+    {
+      "operationId": "replaceConversationTags",
+      "action": "conversations:UpdateConversation",
+      "description": "Replace a conversation's tags"
+    },
+    {
+      "operationId": "mergeConversationTags",
+      "action": "conversations:UpdateConversation",
+      "description": "Merge a conversation's tags"
     }
   ]
 }

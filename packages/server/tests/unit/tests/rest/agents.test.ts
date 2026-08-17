@@ -2133,4 +2133,88 @@ describe('Agents', () => {
       expect(res.body.error.message).toMatch(/cannot store content/i);
     });
   });
+
+  describe('boundary_policy action validation', () => {
+    // A boundary is the one policy surface where a mis-named action fails
+    // *open*: `Deny` on a typo matches nothing, so the agent stays permitted.
+    // Only the formation path used to run this check, so a typo written
+    // through REST was stored unchecked (#1070).
+    test('rejects a create whose boundary_policy names an unknown action', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: 'typo-boundary-agent',
+          boundary_policy: {
+            statement: [
+              {
+                effect: 'Deny',
+                action: ['documents:GetDocumnet'],
+                resource: ['*'],
+              },
+            ],
+          },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toMatch(/documents:GetDocumnet/);
+      expect(res.body.error.message).toMatch(/not a known action/i);
+    });
+
+    test('rejects an update whose boundary_policy names an unknown action', async () => {
+      const created = await authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: 'boundary-update-agent',
+        });
+      expect(created.status).toBe(201);
+
+      const res = await authenticatedTestClient(adminToken)
+        .put(`/api/v1/agents/${created.body.id}`)
+        .send({
+          boundary_policy: {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['agents:NotAThing'],
+                resource: ['*'],
+              },
+            ],
+          },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toMatch(/agents:NotAThing/);
+    });
+
+    test('accepts a boundary_policy built from real actions', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: 'valid-boundary-agent',
+          boundary_policy: {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['documents:GetDocument', 'documents:*'],
+                resource: ['*'],
+              },
+            ],
+          },
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.boundary_policy.statement[0].action).toEqual([
+        'documents:GetDocument',
+        'documents:*',
+      ]);
+    });
+  });
 });
