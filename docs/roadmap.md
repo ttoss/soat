@@ -35,6 +35,20 @@ judging new proposals, not for the list that remains.
 
 ---
 
+## 🔴 Pre-v1 — contract removals (block the release)
+
+The inverse of the v1 test: these **cannot** be done after v1 without breaking
+the frozen contract, so they must land before it. Decided 2026-08 from the
+engine review (#1061); breaking pre-v1 is accepted.
+
+- [ ] **Remove the concatenation merge and the unread actor memory link**
+      (#1062) — no path concatenates (merge band without a consolidation
+      context creates; consolidation-failure fallback creates);
+      `update_threshold` leaves the wire (5a reintroduces it as
+      `shortlist_threshold`); `actors.memory_id` / `auto_create_memory` removed
+      end to end (model, REST, formations, docs). Actor-scoped retrieval
+      returns post-v1, server-side, via the entity-graph fallback.
+
 ## 🟠 v1.x — after the RC, inside the v1 line
 
 All additive; none changes a frozen field or loses data by waiting.

@@ -18,7 +18,7 @@ that landed with the v1 RC — is documented in the
 | Streaming extraction coverage  | ❌ Not started | Extraction trigger for streaming and `requires_action` completions (Phase 7)                                                     |
 | Decay, importance & compaction | ❌ Not started | Importance scoring, access tracking, retrieval-time recency blend, compaction (Phase 8)                                          |
 | Profile memory                 | ❌ Not started | Always-injected bounded profile blocks, agent-editable (Phase 9)                                                                 |
-| Actor memory resolution        | ❌ Decision needed | `actors.memory_id` / `auto_create_memory` are a pure data link — nothing in the generation pipeline reads them; finish or remove (see [Engine Review Findings](#engine-review-findings-2026-08)) |
+| Actor memory resolution        | 🟠 Decided — remove | `actors.memory_id` / `auto_create_memory` are a pure data link — nothing in the generation pipeline reads them; **remove before v1** (#1062); server-side actor-scoped retrieval returns post-v1 (entity-graph fallback) |
 | Indexes on `memory_entries`    | ❌ Not started | Only declared index is the `public_id` unique — no vector index on `embedding`, none on `memory_id`; every similarity search is a sequential scan (see [Engine Review Findings](#engine-review-findings-2026-08)) |
 
 ## Implementation Phases
@@ -452,9 +452,14 @@ foundations for the pending phases.
 The merge band on paths without an agent context (manual REST, orchestration `memory_write`)
 always **concatenates**, and concatenation is self-eroding: each merge dilutes the entry's
 embedding away from every fact it contains, degrading the very similarity decision the thresholds
-depend on. Phase 5 replaces it. Until then, treat `mergeEntryContent` as frozen: no new write path
-may ship relying on concatenation semantics, and any new agent-adjacent path must thread a
-consolidation context the way `write_memory` and extraction already do.
+depend on.
+
+> **Decision (2026-08-17): removed outright, before v1 (#1062)** — no path concatenates. A
+> merge-band write without a consolidation context **creates** instead; a failed consolidation
+> completion on agent paths falls back to **create**, never concat. `update_threshold` leaves the
+> wire (5a reintroduces the concept as `shortlist_threshold`). The "never lose a write" invariant
+> is preserved by create; the cost — a possible near-duplicate pair until 5a arbitration — is
+> accepted.
 
 ### Actor memory link is a half-feature — finish or remove before it ossifies
 
@@ -462,10 +467,13 @@ consolidation context the way `write_memory` and extraction already do.
 pipeline reads them: retrieval scope comes exclusively from the agent's static
 `knowledge_config`. A user who wires an actor to a memory silently gets nothing — worse than the
 field not existing — and this is the one shipped surface with genuine deprecation exposure.
-Recommended disposition: **finish it** — resolve the calling actor's memory into the knowledge
-scope at generation time, which is substantially the same "actor-scoped filtering on existing
-metadata" the roadmap already names as the entity graph's cheaper fallback. Removing the surface
-is the alternative; leaving it in limbo through v1 is not.
+
+> **Decision (2026-08-17): remove before v1 (#1062).** The documented client-side composition
+> (read the actor's `memory_id`, pass it back per generation) moves to the application — its own
+> actor→memory mapping or memory `tags`/`name` conventions. The capability returns post-v1 as
+> **server-side** actor-scoped retrieval — the roadmap's entity-graph fallback ("actor-scoped
+> entry filtering on existing metadata") — designed so generation actually reads it. Removal is
+> breaking and must precede the freeze; the re-add is additive and can wait for the design.
 
 ### Write thresholds are deployment-tuned, not portable
 
