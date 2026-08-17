@@ -62,16 +62,21 @@ const isPermissionFile = (value: unknown): value is PermissionFile => {
   return typeof v.module === 'string' && Array.isArray(v.operations);
 };
 
-let cached: PermissionCatalog | null = null;
-
-export const getPermissionCatalog = (): PermissionCatalog => {
-  if (cached) return cached;
-
+/**
+ * Every well-formed permission file on disk, in filename order.
+ *
+ * A file that cannot be parsed is skipped rather than thrown from: the catalog
+ * backs the consent screen and the policy-authoring typo check, and both are
+ * documented to degrade to "no catalog" rather than take a request down. The
+ * `isPermissionFile` guard below already expressed that intent for a file whose
+ * *shape* is wrong; a file whose JSON is unreadable — or a `.json` that is not
+ * a permission file at all — reached `JSON.parse` first and threw past it.
+ */
+const readPermissionFiles = (): PermissionFile[] => {
   const dir = resolvePermissionsDir();
   if (!dir) {
-    log('getPermissionCatalog: permissions dir not found');
-    cached = { modules: [] };
-    return cached;
+    log('readPermissionFiles: permissions dir not found');
+    return [];
   }
 
   const files = fs
@@ -81,15 +86,36 @@ export const getPermissionCatalog = (): PermissionCatalog => {
     })
     .sort();
 
-  const modules: CatalogModule[] = [];
-
+  const parsed: PermissionFile[] = [];
   for (const file of files) {
-    const raw = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf-8'));
-    if (!isPermissionFile(raw)) {
-      log('getPermissionCatalog: skipping malformed file=%s', file);
+    let raw: unknown;
+    try {
+      raw = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf-8'));
+    } catch (error) {
+      log(
+        'readPermissionFiles: skipping unreadable file=%s error=%o',
+        file,
+        error
+      );
       continue;
     }
+    if (!isPermissionFile(raw)) {
+      log('readPermissionFiles: skipping malformed file=%s', file);
+      continue;
+    }
+    parsed.push(raw);
+  }
+  return parsed;
+};
 
+let cached: PermissionCatalog | null = null;
+
+export const getPermissionCatalog = (): PermissionCatalog => {
+  if (cached) return cached;
+
+  const modules: CatalogModule[] = [];
+
+  for (const raw of readPermissionFiles()) {
     const seen = new Set<string>();
     const actions: CatalogAction[] = [];
     for (const op of raw.operations) {
@@ -131,16 +157,9 @@ export const getActionForOperation = (
 ): string | undefined => {
   if (!operationActions) {
     operationActions = new Map();
-    const dir = resolvePermissionsDir();
-    if (dir) {
-      for (const file of fs.readdirSync(dir).filter((f) => {
-        return f.endsWith('.json');
-      })) {
-        const raw = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf-8'));
-        if (!isPermissionFile(raw)) continue;
-        for (const op of raw.operations) {
-          operationActions.set(op.operationId, op.action);
-        }
+    for (const file of readPermissionFiles()) {
+      for (const op of file.operations) {
+        operationActions.set(op.operationId, op.action);
       }
     }
     log('getActionForOperation: indexed operations=%d', operationActions.size);
