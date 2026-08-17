@@ -40,16 +40,19 @@ const RatingBadge = (props: { rating: Rating }) => {
   );
 };
 
-const SolutionCard = (props: {
+/**
+ * Card body. Split out so the card can render as either an interactive control
+ * or a plain article without duplicating its contents.
+ */
+const SolutionCardBody = (props: {
   solution: Solution;
   isPinned: boolean;
   isSelected: boolean;
-  selectionFull: boolean;
-  onToggle: () => void;
+  selectable: boolean;
 }) => {
   const { solution } = props;
   return (
-    <article className={clsx(styles.card, props.isPinned && styles.cardPinned)}>
+    <>
       {props.isPinned ? <p className={styles.baselineTag}>Baseline</p> : null}
       <div className={styles.cardHead}>
         <Heading as="h3" className={styles.cardTitle}>
@@ -83,23 +86,106 @@ const SolutionCard = (props: {
             Pinned as the comparison baseline
           </span>
         ) : (
-          <button
-            type="button"
+          <span
             className={clsx(
-              styles.compareButton,
-              props.isSelected && styles.compareButtonActive
+              styles.comparePill,
+              props.isSelected && styles.comparePillActive,
+              !props.selectable && styles.comparePillMuted
             )}
-            disabled={!props.isSelected && props.selectionFull}
-            onClick={props.onToggle}
           >
             {props.isSelected ? 'Remove from comparison' : 'Compare'}
-          </button>
+          </span>
         )}
         <Link className={styles.cardLink} to={solution.website}>
           Website
         </Link>
       </div>
-    </article>
+    </>
+  );
+};
+
+/**
+ * The `Website` link keeps its own click, so a card-level handler has to ignore
+ * anything that came from inside it.
+ */
+const cameFromLink = (target: EventTarget | null) => {
+  return target instanceof Element && target.closest('a') !== null;
+};
+
+const TOGGLE_KEYS = new Set(['Enter', ' ', 'Spacebar']);
+
+/**
+ * The whole card is the comparison toggle, not just a button inside it. A
+ * selectable card therefore *is* a button: it renders as one (rather than an
+ * `<article>` wearing `role="button"`, which would claim article semantics it
+ * no longer has), takes focus, answers Enter and Space, and reports state
+ * through `aria-pressed`. That is also why the pill inside it is a `span` — a
+ * real button firing the same action would just be a duplicate tab stop nested
+ * in this one.
+ *
+ * A card that cannot be toggled — the pinned baseline, or any card while the
+ * comparison is full — stays a plain `<article>` with no handlers, so it never
+ * offers a click that would do nothing.
+ */
+const SolutionCard = (props: {
+  solution: Solution;
+  isPinned: boolean;
+  isSelected: boolean;
+  selectionFull: boolean;
+  onToggle: () => void;
+}) => {
+  const { solution } = props;
+
+  const selectable =
+    !props.isPinned && (props.isSelected || !props.selectionFull);
+
+  const className = clsx(
+    styles.card,
+    props.isPinned && styles.cardPinned,
+    selectable && styles.cardSelectable,
+    props.isSelected && styles.cardSelected
+  );
+
+  const body = (
+    <SolutionCardBody
+      solution={solution}
+      isPinned={props.isPinned}
+      isSelected={props.isSelected}
+      selectable={selectable}
+    />
+  );
+
+  if (!selectable) {
+    return <article className={className}>{body}</article>;
+  }
+
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (cameFromLink(event.target) || !TOGGLE_KEYS.has(event.key)) {
+      return;
+    }
+    // Space would otherwise scroll the page out from under the card.
+    event.preventDefault();
+    props.onToggle();
+  };
+
+  return (
+    <div
+      className={className}
+      role="button"
+      tabIndex={0}
+      aria-pressed={props.isSelected}
+      aria-label={`${props.isSelected ? 'Remove' : 'Add'} ${solution.name} ${
+        props.isSelected ? 'from' : 'to'
+      } the comparison`}
+      onClick={(event) => {
+        if (!cameFromLink(event.target)) {
+          props.onToggle();
+        }
+      }}
+      onKeyDown={onKeyDown}
+    >
+      {body}
+    </div>
   );
 };
 

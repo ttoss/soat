@@ -116,6 +116,26 @@
 }
 
 /**
+ * The whole card is the comparison toggle (see `onCardClick` in benchmark.tsx),
+ * so the surface carries the affordance and the selected state as well: on a
+ * grid this wide, a button label is the easiest thing on the card to miss.
+ */
+.cardSelectable {
+  cursor: pointer;
+}
+
+.cardSelected {
+  border-color: var(--ifm-color-primary);
+  box-shadow: 0 0 0 1px var(--ifm-color-primary);
+}
+
+.cardSelected:hover {
+  box-shadow:
+    0 0 0 1px var(--ifm-color-primary),
+    0 6px 24px rgba(0, 0, 0, 0.08);
+}
+
+/**
  * The baseline card: brand gradient edge (violet → primary) over the page
  * surface, so SOAT reads as the reference point rather than one entry
  * among many. Gradient lives in the border box, fill in the padding box.
@@ -215,26 +235,29 @@
   margin-top: 0.25rem;
 }
 
-.compareButton {
+/**
+ * State indicator, not a control — the card is the button (see benchmark.tsx).
+ * Styled as the affordance a reader reaches for, since it names what the click
+ * will do.
+ */
+.comparePill {
+  display: inline-block;
   padding: 0.35rem 0.9rem;
-  font: inherit;
   font-size: 0.82rem;
   font-weight: 600;
   color: var(--ifm-color-primary);
-  background: transparent;
   border: 1px solid var(--ifm-color-primary);
   border-radius: 8px;
-  cursor: pointer;
 }
 
-.compareButtonActive {
+.comparePillActive {
   color: var(--ifm-background-color);
   background: var(--ifm-color-primary);
 }
 
-.compareButton:disabled {
+/* The comparison is full, so this card can only be added after one is removed. */
+.comparePillMuted {
   opacity: 0.45;
-  cursor: not-allowed;
 }
 
 .pinnedNote {

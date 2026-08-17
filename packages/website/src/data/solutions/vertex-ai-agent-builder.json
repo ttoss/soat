@@ -51,7 +51,7 @@
     "channels": {
       "rating": "partial",
       "note": "Chat-platform delivery through Conversational Agents (Dialogflow) channel integrations, adjacent to Agent Builder itself.",
-      "evidence": "https://cloud.google.com/dialogflow/cx/docs/concept/integrations"
+      "evidence": "https://cloud.google.com/dialogflow/cx/docs/concept/integration"
     },
     "code-execution": {
       "rating": "native",
