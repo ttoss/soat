@@ -99,6 +99,11 @@ const config: Config = {
     locales: ['en'],
   },
 
+  // Render ```mermaid fenced blocks as diagrams (@docusaurus/theme-mermaid).
+  markdown: {
+    mermaid: true,
+  },
+
   presets: [
     [
       'classic',
@@ -210,7 +215,7 @@ const config: Config = {
     ],
   ],
 
-  themes: ['docusaurus-theme-openapi-docs'],
+  themes: ['docusaurus-theme-openapi-docs', '@docusaurus/theme-mermaid'],
 
   themeConfig: {
     // Replace with your project's social card
@@ -332,6 +337,10 @@ const config: Config = {
         },
       ],
       copyright: `Copyright © ${new Date().getFullYear()} SOAT, a Terezinha Tech Operations (ttoss) project.`,
+    },
+    // Diagrams follow the site color mode (the site defaults to dark).
+    mermaid: {
+      theme: { light: 'neutral', dark: 'dark' },
     },
     prism: {
       theme: prismThemes.github,
