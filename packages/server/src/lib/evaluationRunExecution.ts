@@ -24,9 +24,9 @@ import {
   type AggregateScores,
   aggregateScores,
   resolveRunPassed,
-  scoreOutput,
-  type ScorerOutcome,
-} from './evaluationScorers';
+} from './evaluationScorerAggregation';
+import { scoreOutput, type ScorerOutcome } from './evaluationScorers';
+import { runToolScorerCall } from './evaluationToolScorer';
 import type { GenerationInputMessage } from './generationInputMessages';
 
 const log = createDebug('soat:evaluations');
@@ -83,6 +83,30 @@ const erroredOutcome = (
     output,
     error,
     generationDbId,
+  };
+};
+
+/**
+ * The I/O runners the scorer kernel needs, bound to the run's project: judge
+ * completions and tool scorer calls. Injected into `scoreOutput` so the kernel
+ * itself stays pure.
+ */
+const buildScorerRunners = (args: { projectId: number }) => {
+  return {
+    runJudge: (judge: {
+      scorer: Record<string, unknown>;
+      input: unknown;
+      output: string;
+      expected: string | null;
+    }) => {
+      return runJudgeCompletion({ projectId: args.projectId, ...judge });
+    },
+    runToolScorer: (call: {
+      scorer: Record<string, unknown>;
+      context: Record<string, unknown>;
+    }) => {
+      return runToolScorerCall({ projectId: args.projectId, ...call });
+    },
   };
 };
 
@@ -156,15 +180,7 @@ export const runEvalItem = async (args: {
       expectedOutput: args.expectedOutput,
       itemMetadata: args.itemMetadata,
       agentOutputSchema: args.agentOutputSchema,
-      runJudge: ({ scorer, input, output: judged, expected }) => {
-        return runJudgeCompletion({
-          projectId: args.projectId,
-          scorer,
-          input,
-          output: judged,
-          expected,
-        });
-      },
+      ...buildScorerRunners({ projectId: args.projectId }),
     });
   } catch (error) {
     // A scorer that could not produce a verdict (a judge call failing, a

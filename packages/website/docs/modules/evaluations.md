@@ -17,6 +17,12 @@ a reworded instruction, a swapped model, a new tool — improved the distributio
 Evaluations is the foundation of the ratchet layer described in
 [The Layers of an Agent System](../getting-started/agent-system-layers.md#layer-4--the-ratchet).
 
+The module follows SOAT's [engine & algorithms pattern](../getting-started/engines-and-algorithms.md):
+the **engine** is the mechanics — running items, freezing inputs, aggregating, settling —
+and the **scorers** are the algorithm layer on top, including
+[custom scorers](#custom-scorers-tool) you implement as a [tool](./tools.md). The
+[boundary section](#the-engine-and-the-scorers) below maps which is which.
+
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
 ## Related Tutorials
@@ -98,18 +104,35 @@ One row per dataset item per run.
 | `expected_output` | string | **Frozen copy** of the item's expected output at run time |
 | `generation_id` | string | The generation that produced the output, or `null` |
 | `output` | string | The agent's final output text. `null` only when there is none — the generation failed or never completed — or once the linked generation's content is [purged](#retention-and-erasure). An item errored by a **scorer** keeps the output it was graded on |
-| `scores` | array | `[{ scorer, score, passed, reasoning? }]`, one entry per scorer in the order the eval declares them. `reasoning` is present for `llm_judge` only |
+| `scores` | array | `[{ scorer, score, passed, reasoning? }]`, one entry per scorer in the order the eval declares them. `scorer` is the type — or the scorer's `name` for a [`tool` scorer](#custom-scorers-tool). `reasoning` is present for `llm_judge`, and for `tool` scorers whose tool returned one |
 | `passed` | boolean | AND over the per-scorer `passed` flags |
 | `error` | string | Item-level failure reason; set instead of scoring, never alongside it |
 | `created_at` | string | ISO 8601 creation timestamp |
 
 ## Key Concepts
 
+### The engine and the scorers
+
+The two layers of the [engine & algorithms pattern](../getting-started/engines-and-algorithms.md)
+map onto this module like so:
+
+| Layer | What it covers here | Where it is documented |
+| --- | --- | --- |
+| **The engine** — mechanics, not configurable, no opinions | Executing every item against the real agent, [freezing inputs](#frozen-inputs), [version pinning](#version-pinning), [pass semantics](#pass-semantics) and aggregation, [error handling](#errors-are-not-zeros), [sync/queued execution](#synchronous-and-queued-runs), [cancelation](#canceling-a-run), [scheduling](#scheduled-runs), [baseline deltas](#baseline-deltas), [webhooks](#lifecycle-webhooks), [metering](#eval-spend-is-separable-from-production-spend), [retention](#retention-and-erasure) | The sections named at left |
+| **The algorithms** — opinionated, swappable | The [scorers](#scorers): what "good output" means for an item | [Scorers](#scorers), [LLM judge](#llm-judge) |
+| **Bring your own** | A scorer whose grading logic is your code | [Custom scorers](#custom-scorers-tool) |
+
+The engine's guarantees — a run settles, an errored item is never a 0, frozen inputs keep
+runs comparable — hold identically for built-in and custom scorers.
+
 ### Scorers
 
-`scorers` is a discriminated union on `type`. Each type may appear **at most once** per
-eval (aggregate scores are keyed by type). Every scorer produces
-`{ score: 0–1, passed: boolean }` — binary scorers emit 0 or 1.
+`scorers` is a discriminated union on `type`. Every scorer produces
+`{ score: 0–1, passed: boolean }` — binary scorers emit 0 or 1 — so aggregation,
+thresholds, and baseline deltas never care which algorithm produced a score. Each built-in
+type may appear **at most once** per eval; `tool` scorers may appear several times, each
+under a distinct `name` (outcomes and aggregate scores key on the type, or on the `name`
+for `tool` scorers).
 
 | `type` | Config | Scores |
 | --- | --- | --- |
@@ -118,6 +141,7 @@ eval (aggregate scores are keyed by type). Every scorer produces
 | `json_logic` | `expression` | 1 when the [JSON Logic](https://jsonlogic.com) expression evaluates truthy |
 | `output_schema` | `schema` (optional) | 1 when the structured output validates against the schema |
 | `llm_judge` | `prompt`, `pass_threshold`, `ai_provider_id` (optional), `model` (optional) | The judge's 0–1 score; see [LLM judge](#llm-judge) |
+| `tool` | `name`, `tool_id`, `action` (soat/mcp tools), `preset_parameters` (optional), `pass_threshold` (optional) | Whatever your algorithm answers; see [Custom scorers](#custom-scorers-tool) |
 
 `exact_match`, `contains` and `llm_judge` read the final **text**; `output_schema`
 validates the **structured object** the platform already parsed. `json_logic` sees both,
@@ -159,6 +183,76 @@ outside 0–1 marks the **item** errored — never the run failed, and never a s
 `pass_threshold` is **required** on the scorer, with no default; the item passes when
 `score >= pass_threshold`. Judges drift with model updates — re-run the baseline when the
 judge model changes.
+
+### Custom scorers (`tool`)
+
+A `tool` scorer is the module's
+[bring-your-own-algorithm seam](../getting-started/engines-and-algorithms.md): the engine
+invokes a [tool](./tools.md) you own once per item, and your code — any language, any
+model, any vendor — answers with the same `{ score, passed }` shape every built-in scorer
+produces. Aggregation, thresholds, and baseline deltas apply to it unchanged.
+
+| Config field | Required | Meaning |
+| --- | --- | --- |
+| `name` | yes | Keys this scorer's outcomes and aggregate buckets. Unique within the eval; must not shadow a built-in type. Several `tool` scorers may coexist under distinct names |
+| `tool_id` | yes | The tool that grades each item. Must belong to the eval's project and be server-callable — `http`, `mcp`, `soat`, or `pipeline`. A `client` tool is rejected with `400`: it pauses for a calling client, and an eval run scores server-side |
+| `action` | soat/mcp only | The operation to invoke on a multi-action tool |
+| `preset_parameters` | no | Fixed values merged into every call's input at the top level. The engine-injected keys below are reserved and rejected |
+| `pass_threshold` | no | Fallback verdict cutoff; see below |
+
+**Input** — the engine calls the tool with the item's context: the same variables a
+`json_logic` expression reads, so the two algorithm surfaces share one contract.
+
+```jsonc
+{
+  "input": [{ "role": "user", "content": "Is this friendly?" }], // the item's input messages
+  "output": "Absolutely, very friendly!",  // the agent's final output text
+  "object": { "category": "other" },       // structured output; absent when the agent has no output_schema
+  "expected": "yes",                        // the item's expected_output, or null
+  "item": { "metadata": { "topic": "tone" } }
+  // preset_parameters are merged in at the top level
+}
+```
+
+**Output** — the tool must answer with a JSON object (an `http` target answering
+`text/plain`, or an `mcp` tool's text content, is scanned for its first `{…}` span):
+
+```jsonc
+{
+  "score": 0.9,               // required, 0–1
+  "passed": true,             // optional — your algorithm's own verdict
+  "reasoning": "Warm phrasing." // optional, stored on the result
+}
+```
+
+**Verdict resolution.** A tool-returned `passed` always wins. When the tool omits it, the
+scorer's `pass_threshold` applies (`score >= pass_threshold`, the same `>=` rule as
+`llm_judge`). When neither exists, the item is recorded as **errored** — a scorer that
+produced no verdict must not guess one. Return `passed` from the tool when the algorithm
+owns the cutoff; declare `pass_threshold` when you want to tune the cutoff in the eval
+config without redeploying the tool.
+
+**Error semantics** follow [errors are not zeros](#errors-are-not-zeros): a failed tool
+call, an unparseable answer, an out-of-range score, or a missing verdict errors the
+**item** — never the run, and never a score of 0. The item keeps the output it was graded
+on, and its `error` names the scorer.
+
+**Validation** happens at eval create and update, and again — authoritatively — at run
+start, so a tool deleted after the eval was created fails the run *request* with `400`
+rather than erroring every item.
+
+Bind one like any other scorer:
+
+```bash
+soat create-eval --project-id "$PROJECT_ID" --name tone-suite \
+  --agent-id "$AGENT_ID" --dataset-id "$DATASET_ID" \
+  --scorers '[{"type":"tool","name":"tone","tool_id":"'"$TOOL_ID"'","pass_threshold":0.5}]' \
+  --pass-threshold 0.8
+```
+
+An eval run invokes the tool once per item — real calls, like everything else in a run —
+so point scorer tools at infrastructure that tolerates the volume, and at a staging
+target if the algorithm itself has side effects.
 
 ### Frozen inputs
 

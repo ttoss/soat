@@ -12,6 +12,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { validateScorers } from './evaluationScorers';
+import { validateToolScorerRefs } from './evaluationToolScorer';
 import {
   assertValid,
   requireName,
@@ -153,6 +154,10 @@ export const createEval = async (args: {
       agentHasOutputSchema: isPlainObject(agent.outputSchema),
     })
   );
+  await validateToolScorerRefs({
+    scorers: args.scorers,
+    projectId: args.projectId,
+  });
   assertValid(validatePassThreshold(args.passThreshold));
 
   let evaluation;
@@ -290,6 +295,10 @@ export const updateEval = async (args: {
         agentHasOutputSchema: isPlainObject(agentOutputSchema),
       })
     );
+    await validateToolScorerRefs({
+      scorers,
+      projectId: evaluation.projectId as number,
+    });
     updates.scorers = scorers;
   }
 

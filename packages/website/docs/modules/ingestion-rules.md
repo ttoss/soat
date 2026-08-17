@@ -13,7 +13,7 @@ An Ingestion Rule routes a file `content_type` to a converter [Tool](./tools.md)
 
 Native [file ingestion](./documents.md#file-ingestion-and-chunking) only extracts text from PDFs (text layer), `text/plain`, and `text/markdown`. Anything else fails with `FILE_PARSE_FAILED`. An Ingestion Rule fills that gap: it maps a `content_type` glob (e.g. `image/*`, `audio/mpeg`, `application/pdf`) to a **converter** — either a [Tool](./tools.md) (`http`/`mcp`/`soat`/`pipeline`) that calls an external OCR, speech-to-text, or vision service, or an [Agent](./agents.md) with a multimodal model. When [`POST /documents/ingest`](/docs/api/documents/ingest-document) receives a file whose type has no native extractor — or a PDF whose native extraction yields no text — it looks up the best-matching rule and invokes the converter to produce the document text; the existing chunk + embedding pipeline is unchanged.
 
-Rules are per-project. SOAT does not perform OCR or transcription itself — the rule points at a tool or agent you configure, so you can use any API or model you like.
+Rules are per-project. SOAT does not perform OCR or transcription itself — the rule points at a tool or agent you configure, so you can use any API or model you like. In the [engine & algorithms pattern](../getting-started/engines-and-algorithms.md), a converter tool is the knowledge engine's bring-your-own-algorithm seam: the [contract below](#converter-tool-contract) is the boundary, and everything downstream (chunking, embedding, retrieval) treats your converter's pages exactly like natively extracted ones.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 

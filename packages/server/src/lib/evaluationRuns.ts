@@ -34,6 +34,7 @@ import {
 } from './evaluationRunReads';
 import { getEvalRow } from './evaluations';
 import { scorerList, validateScorers } from './evaluationScorers';
+import { validateToolScorerRefs } from './evaluationToolScorer';
 import { kickEvalWorker } from './evaluationWorker';
 import { isPlainObject } from './plainObject';
 import { parseActiveRelease } from './releaseAssignment';
@@ -219,12 +220,17 @@ const planRun = async (args: {
   }
 
   // Authoritative re-check: the agent's `output_schema` is mutable, so an Eval
-  // that validated at create time can have stopped being runnable since.
+  // that validated at create time can have stopped being runnable since. The
+  // same goes for a tool scorer's tool, which can have been deleted.
   const scorerError = validateScorers({
     scorers: evaluation.scorers,
     agentHasOutputSchema: isPlainObject(agent.outputSchema),
   });
   if (scorerError) throw new DomainError('VALIDATION_FAILED', scorerError);
+  await validateToolScorerRefs({
+    scorers: evaluation.scorers,
+    projectId: evaluation.projectId as number,
+  });
 
   const items = await db.DatasetItem.findAll({
     where: { datasetId: dataset.id as number },

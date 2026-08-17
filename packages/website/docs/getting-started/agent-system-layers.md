@@ -228,8 +228,10 @@ and add a graph only when a process pain demands one.
 
 [Evaluations](/docs/modules/evaluations) is the module that turns "it feels better" into a
 number. A project-scoped **dataset** holds the cases, **scorers** grade each output —
-deterministic ones (exact match, substring, JSON Logic, schema validation) and an LLM
-judge where the criterion is genuinely fuzzy — and a **run** executes the real agent
+deterministic ones (exact match, substring, JSON Logic, schema validation), an LLM
+judge where the criterion is genuinely fuzzy, or
+[your own algorithm brought as a tool](/docs/modules/evaluations#custom-scorers-tool) —
+and a **run** executes the real agent
 against every item, so the verdict reflects the agent's true instructions, tools, model,
 and knowledge rather than a mock of them. A run compared against a named baseline yields
 per-scorer deltas and a pass/fail verdict, and every result links back to its

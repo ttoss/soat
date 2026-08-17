@@ -11,7 +11,7 @@ keywords:
 
 # Memory & Knowledge Engine
 
-SOAT's memory and knowledge system is one engine with two sides. The **write side** turns conversations, agent decisions, and uploaded files into stored, embedded knowledge. The **read side** turns a query into ranked results and injects them into generations. This page explains the whole mechanism — the data flow, every algorithm the engine runs today with its exact configuration knobs, and the extension seams the design deliberately keeps open.
+SOAT's memory and knowledge system is one engine with two sides. The **write side** turns conversations, agent decisions, and uploaded files into stored, embedded knowledge. The **read side** turns a query into ranked results and injects them into generations. This page explains the whole mechanism — the data flow, every algorithm the engine runs today with its exact configuration knobs, and the extension seams the design deliberately keeps open. It is the engine-side deep dive of the [engine & algorithms pattern](../getting-started/engines-and-algorithms.md) for this module pair.
 
 It complements the module pages, which own the caller-facing contracts: [Memories](../modules/memories.md), [Knowledge](../modules/knowledge.md), [Documents](../modules/documents.md), [Embeddings](../modules/embeddings.md), and [Ingestion Rules](../modules/ingestion-rules.md). For a hands-on walkthrough, follow [Agent with Persistent Memory](/docs/tutorials/memories-agent) and [Agent over a Library of PDFs](/docs/tutorials/agent-with-pdfs).
 
@@ -19,18 +19,22 @@ It complements the module pages, which own the caller-facing contracts: [Memorie
 
 There is no separate vector database and no "knowledge base" resource. Knowledge lives in **two stores** — document chunks and memory entries, both rows in PostgreSQL with pgvector embedding columns — and is unified **at query time** by a single search function:
 
-```
-WRITE SIDE                                          READ SIDE
+```mermaid
+flowchart TB
+    subgraph WRITE["WRITE SIDE"]
+        files["files"] --> ingest["ingestion pipeline<br/>extract → chunk → embed"]
+        sources["turns · agents (write_memory)<br/>REST (manual) · nodes (memory_write)"] --> writealg["write algorithm<br/>dedup / merge / create"]
+    end
 
-files ──► ingestion pipeline ──► DocumentChunk ─┐
-          (extract → chunk →                    │   POST /knowledge/search
-           embed, per chunk)                    ├─► per-source cosine top-k
-                                                │   → merge → rank → limit
-turns ──► extraction ─┐                         │        │
-agents ─► write_memory├─► write algorithm ──►   │        ▼
-REST ───► manual write│   (dedup / merge /      │   agent knowledge_config:
-nodes ──► memory_write┘    create)              │   results injected as a
-                          └► MemoryEntry ───────┘   fenced reference message
+    ingest --> chunks[("DocumentChunk")]
+    writealg --> entries[("MemoryEntry")]
+
+    chunks --> search
+    entries --> search
+
+    subgraph READ["READ SIDE"]
+        search["POST /knowledge/search<br/>per-source cosine top-k<br/>merge → rank → limit"] --> inject["agent knowledge_config<br/>injected as a fenced<br/>reference message"]
+    end
 ```
 
 Every stage in that picture is an algorithm with a name, a default, and (in most cases) a knob:
@@ -204,7 +208,7 @@ Fixed by design today (no knob): the cosine distance metric, the merge band's `0
 
 ## Extending the engine today
 
-The engine already has one fully pluggable stage and several composition points that amount to "bring your own algorithm":
+The engine already has one fully pluggable stage and several composition points that amount to "bring your own algorithm" (the same seam shape the evaluations engine exposes as [custom scorers](../modules/evaluations.md#custom-scorers-tool)):
 
 - **Custom content extraction — first-class.** An [ingestion rule](../modules/ingestion-rules.md) pointing at your own tool *is* a pluggable extraction algorithm: OCR, audio transcription, layout-aware PDF parsing, table extraction — anything that can answer with pages of text, synchronously or via the deferred callback. This is the sanctioned way to teach SOAT a new file type or a better extractor.
 - **Custom chunking — via pre-chunking.** Run your own splitter (semantic, token-based, heading-aware) and create one document per chunk with `chunk_strategy: whole`, encoding structure in `path`, `title`, `tags`, and `metadata`. Retrieval treats your chunks identically to engine-made ones.

@@ -118,6 +118,8 @@ describe('Evaluations', () => {
         'agents:CreateAgent',
         'agents:UpdateAgent',
         'generations:PurgeGenerationContent',
+        'tools:CreateTool',
+        'tools:DeleteTool',
       ],
       createOtherProject: true,
     });
@@ -2577,6 +2579,514 @@ describe('Evaluations', () => {
       expect(result.passed).toBe(true);
       expect(result.input[0].content).toBe('sensitive question');
       expect(result.expected_output).toBe('sensitive answer');
+    });
+  });
+
+  // ── Tool scorers (custom algorithms) ───────────────────────────────────────
+
+  describe('tool scorers', () => {
+    let scorerServer: Server;
+    let scorerServerUrl: string;
+    /** Bodies the scorer endpoint received, oldest first. */
+    let scorerRequests: Array<Record<string, unknown>>;
+    /** Responses to answer with, shifted per request; a number is a status. */
+    let scorerResponses: Array<unknown>;
+
+    let httpToolId: string;
+    let clientToolId: string;
+    let soatToolId: string;
+    let datasetId: string;
+
+    const httpScorerTool = async (name: string): Promise<string> => {
+      const res = await asUser()
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name,
+          type: 'http',
+          description: 'Grades an output',
+          parameters: {
+            type: 'object',
+            properties: {},
+            additionalProperties: true,
+          },
+          execute: { url: `${scorerServerUrl}/score`, method: 'POST' },
+        });
+      expect(res.status).toBe(201);
+      return res.body.id as string;
+    };
+
+    beforeAll(async () => {
+      scorerRequests = [];
+      scorerResponses = [];
+      scorerServer = createServer((req, res) => {
+        let raw = '';
+        req.on('data', (chunk) => {
+          raw += chunk as string;
+        });
+        req.on('end', () => {
+          scorerRequests.push(JSON.parse(raw) as Record<string, unknown>);
+          const next = scorerResponses.shift();
+          if (typeof next === 'number') {
+            res.writeHead(next, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'scorer down' }));
+            return;
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(next ?? { score: 1, passed: true }));
+        });
+      });
+      await new Promise<void>((resolve) => {
+        scorerServer.listen(0, '127.0.0.1', resolve);
+      });
+      const { port } = scorerServer.address() as AddressInfo;
+      scorerServerUrl = `http://127.0.0.1:${port}`;
+
+      httpToolId = await httpScorerTool('grade-answer');
+
+      const clientToolRes = await asUser()
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'client-grader',
+          type: 'client',
+          parameters: { type: 'object', properties: {} },
+        });
+      expect(clientToolRes.status).toBe(201);
+      clientToolId = clientToolRes.body.id;
+
+      const soatToolRes = await asUser()
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'platform',
+          type: 'soat',
+          actions: ['search-knowledge'],
+        });
+      expect(soatToolRes.status).toBe(201);
+      soatToolId = soatToolRes.body.id;
+
+      const dataset = await createDataset('tool-scorer-suite');
+      datasetId = dataset.id;
+      await addItem(datasetId, {
+        input: [{ role: 'user', content: 'Is this friendly?' }],
+        expected_output: 'yes',
+        metadata: { topic: 'tone' },
+      });
+    });
+
+    afterAll(async () => {
+      await new Promise<void>((resolve) => {
+        scorerServer.close(() => {
+          resolve();
+        });
+      });
+    });
+
+    beforeEach(() => {
+      scorerRequests.length = 0;
+      scorerResponses.length = 0;
+    });
+
+    describe('eval create/update validation', () => {
+      test('accepts a tool scorer and echoes its config', async () => {
+        const evaluation = await createEval({
+          name: 'tool-scorer-accepts',
+          agent_id: agentId,
+          dataset_id: datasetId,
+          scorers: [
+            {
+              type: 'tool',
+              name: 'tone',
+              tool_id: httpToolId,
+              pass_threshold: 0.5,
+            },
+          ],
+        });
+        expect(evaluation.scorers).toEqual([
+          {
+            type: 'tool',
+            name: 'tone',
+            tool_id: httpToolId,
+            pass_threshold: 0.5,
+          },
+        ]);
+      });
+
+      test('rejects a tool_id that does not exist in the project', async () => {
+        const res = await asUser()
+          .post('/api/v1/evals')
+          .send({
+            project_id: projectId,
+            name: 'tool-scorer-missing-tool',
+            agent_id: agentId,
+            dataset_id: datasetId,
+            scorers: [
+              { type: 'tool', name: 'tone', tool_id: 'tool_does_not_exist' },
+            ],
+          });
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('VALIDATION_FAILED');
+        expect(res.body.error.message).toContain('tool_does_not_exist');
+      });
+
+      test('rejects a tool from another project as a 400, not a 404', async () => {
+        const foreignToolRes = await authenticatedTestClient(adminToken)
+          .post('/api/v1/tools')
+          .send({
+            project_id: otherProjectId,
+            name: 'foreign-grader',
+            type: 'http',
+            parameters: { type: 'object', properties: {} },
+            execute: { url: `${scorerServerUrl}/score` },
+          });
+        expect(foreignToolRes.status).toBe(201);
+
+        const res = await asUser()
+          .post('/api/v1/evals')
+          .send({
+            project_id: projectId,
+            name: 'tool-scorer-foreign-tool',
+            agent_id: agentId,
+            dataset_id: datasetId,
+            scorers: [
+              { type: 'tool', name: 'tone', tool_id: foreignToolRes.body.id },
+            ],
+          });
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      });
+
+      test('rejects a client tool — an eval run has no client to pause for', async () => {
+        const res = await asUser()
+          .post('/api/v1/evals')
+          .send({
+            project_id: projectId,
+            name: 'tool-scorer-client-tool',
+            agent_id: agentId,
+            dataset_id: datasetId,
+            scorers: [{ type: 'tool', name: 'tone', tool_id: clientToolId }],
+          });
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toMatch(/client tools/);
+      });
+
+      test('rejects a soat tool with no action', async () => {
+        const res = await asUser()
+          .post('/api/v1/evals')
+          .send({
+            project_id: projectId,
+            name: 'tool-scorer-soat-no-action',
+            agent_id: agentId,
+            dataset_id: datasetId,
+            scorers: [{ type: 'tool', name: 'tone', tool_id: soatToolId }],
+          });
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toMatch(/action is required/);
+      });
+
+      test('re-validates tool refs on update', async () => {
+        const evaluation = await createEval({
+          name: 'tool-scorer-update-check',
+          agent_id: agentId,
+          dataset_id: datasetId,
+          scorers: [{ type: 'exact_match' }],
+        });
+
+        const res = await asUser()
+          .put(`/api/v1/evals/${evaluation.id}`)
+          .send({
+            scorers: [
+              { type: 'tool', name: 'tone', tool_id: 'tool_still_missing' },
+            ],
+          });
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toContain('tool_still_missing');
+      });
+    });
+
+    describe('POST /api/v1/evals/:eval_id/runs with a tool scorer', () => {
+      test('invokes the tool with the context contract and records its verdict', async () => {
+        const evaluation = await createEval({
+          name: 'tool-scorer-run-happy',
+          agent_id: agentId,
+          dataset_id: datasetId,
+          scorers: [
+            {
+              type: 'tool',
+              name: 'tone',
+              tool_id: httpToolId,
+              preset_parameters: { strictness: 'high' },
+            },
+          ],
+        });
+
+        mockCreateGeneration.mockResolvedValueOnce(
+          completedGeneration('gen_ts1', 'Absolutely, very friendly!')
+        );
+        scorerResponses.push({
+          score: 0.9,
+          passed: true,
+          reasoning: 'Warm phrasing.',
+        });
+
+        const res = await asUser()
+          .post(`/api/v1/evals/${evaluation.id}/runs`)
+          .send({ wait: true });
+
+        expect(res.status).toBe(201);
+        expect(res.body.status).toBe('completed');
+        expect(res.body.errored_count).toBe(0);
+        // Aggregates key on the scorer's name, not its type.
+        expect(res.body.aggregate_scores.scorers.tone).toEqual({
+          mean: 0.9,
+          pass_rate: 1,
+        });
+
+        // The wire contract: the same variables a json_logic scorer reads,
+        // plus the preset parameters merged at the top level.
+        expect(scorerRequests).toHaveLength(1);
+        expect(scorerRequests[0]).toEqual({
+          strictness: 'high',
+          input: [{ role: 'user', content: 'Is this friendly?' }],
+          output: 'Absolutely, very friendly!',
+          expected: 'yes',
+          item: { metadata: { topic: 'tone' } },
+        });
+
+        const results = await asUser().get(
+          `/api/v1/evals/${evaluation.id}/runs/${res.body.id}/results`
+        );
+        expect(results.body.data[0].scores).toEqual([
+          {
+            scorer: 'tone',
+            score: 0.9,
+            passed: true,
+            reasoning: 'Warm phrasing.',
+          },
+        ]);
+        expect(results.body.data[0].passed).toBe(true);
+      });
+
+      test('falls back to the config pass_threshold when the tool omits passed', async () => {
+        const evaluation = await createEval({
+          name: 'tool-scorer-run-threshold',
+          agent_id: agentId,
+          dataset_id: datasetId,
+          scorers: [
+            {
+              type: 'tool',
+              name: 'tone',
+              tool_id: httpToolId,
+              pass_threshold: 0.7,
+            },
+          ],
+        });
+
+        mockCreateGeneration.mockResolvedValueOnce(
+          completedGeneration('gen_ts2', 'Sure.')
+        );
+        scorerResponses.push({ score: 0.7 });
+
+        const res = await asUser()
+          .post(`/api/v1/evals/${evaluation.id}/runs`)
+          .send({ wait: true });
+
+        expect(res.status).toBe(201);
+        const results = await asUser().get(
+          `/api/v1/evals/${evaluation.id}/runs/${res.body.id}/results`
+        );
+        expect(results.body.data[0].scores).toEqual([
+          { scorer: 'tone', score: 0.7, passed: true },
+        ]);
+      });
+
+      test('a verdict the run cannot resolve errors the item, never scores it 0', async () => {
+        const evaluation = await createEval({
+          name: 'tool-scorer-run-no-verdict',
+          agent_id: agentId,
+          dataset_id: datasetId,
+          scorers: [{ type: 'tool', name: 'tone', tool_id: httpToolId }],
+        });
+
+        mockCreateGeneration.mockResolvedValueOnce(
+          completedGeneration('gen_ts3', 'Sure.')
+        );
+        scorerResponses.push({ score: 0.6 });
+
+        const res = await asUser()
+          .post(`/api/v1/evals/${evaluation.id}/runs`)
+          .send({ wait: true });
+
+        expect(res.status).toBe(201);
+        expect(res.body.status).toBe('completed');
+        expect(res.body.errored_count).toBe(1);
+        expect(res.body.aggregate_scores.scored_item_count).toBe(0);
+
+        const results = await asUser().get(
+          `/api/v1/evals/${evaluation.id}/runs/${res.body.id}/results`
+        );
+        const [result] = results.body.data;
+        expect(result.error).toMatch(/tone/);
+        // The generation was good; the output it was graded on is kept.
+        expect(result.output).toBe('Sure.');
+      });
+
+      test('an unrecognized tool answer errors the item', async () => {
+        const evaluation = await createEval({
+          name: 'tool-scorer-run-bad-shape',
+          agent_id: agentId,
+          dataset_id: datasetId,
+          scorers: [{ type: 'tool', name: 'tone', tool_id: httpToolId }],
+        });
+
+        mockCreateGeneration.mockResolvedValueOnce(
+          completedGeneration('gen_ts4', 'Sure.')
+        );
+        scorerResponses.push({ verdict: 'looks fine' });
+
+        const res = await asUser()
+          .post(`/api/v1/evals/${evaluation.id}/runs`)
+          .send({ wait: true });
+
+        expect(res.status).toBe(201);
+        expect(res.body.errored_count).toBe(1);
+      });
+
+      test('a failing tool call errors the item and the run still settles', async () => {
+        const evaluation = await createEval({
+          name: 'tool-scorer-run-tool-down',
+          agent_id: agentId,
+          dataset_id: datasetId,
+          scorers: [{ type: 'tool', name: 'tone', tool_id: httpToolId }],
+        });
+
+        mockCreateGeneration.mockResolvedValueOnce(
+          completedGeneration('gen_ts5', 'Sure.')
+        );
+        scorerResponses.push(500);
+
+        const res = await asUser()
+          .post(`/api/v1/evals/${evaluation.id}/runs`)
+          .send({ wait: true });
+
+        expect(res.status).toBe(201);
+        expect(res.body.status).toBe('completed');
+        expect(res.body.errored_count).toBe(1);
+      });
+
+      test('a pipeline tool can be the scorer, deriving its verdict from the context', async () => {
+        // The shape the smoke suite uses: the pipeline's merged input IS the
+        // scorer context, so its output mapping can compute a deterministic
+        // verdict with no scoring service at all.
+        const pipelineToolRes = await asUser()
+          .post('/api/v1/tools')
+          .send({
+            project_id: projectId,
+            name: 'pipeline-grader',
+            type: 'pipeline',
+            pipeline: {
+              steps: [{ id: 'ping', tool_id: httpToolId, input: {} }],
+              output: {
+                score: { if: [{ '!=': [{ var: 'input.output' }, ''] }, 1, 0] },
+                passed: { '!=': [{ var: 'input.output' }, ''] },
+              },
+            },
+          });
+        expect(pipelineToolRes.status).toBe(201);
+
+        const evaluation = await createEval({
+          name: 'tool-scorer-run-pipeline',
+          agent_id: agentId,
+          dataset_id: datasetId,
+          scorers: [
+            {
+              type: 'tool',
+              name: 'non_empty',
+              tool_id: pipelineToolRes.body.id,
+            },
+          ],
+        });
+
+        mockCreateGeneration.mockResolvedValueOnce(
+          completedGeneration('gen_ts7', 'Sure.')
+        );
+        // The ping step's http response; the output mapping ignores it.
+        scorerResponses.push({ ok: true });
+
+        const res = await asUser()
+          .post(`/api/v1/evals/${evaluation.id}/runs`)
+          .send({ wait: true });
+
+        expect(res.status).toBe(201);
+        expect(res.body.errored_count).toBe(0);
+        expect(res.body.aggregate_scores.scorers.non_empty).toEqual({
+          mean: 1,
+          pass_rate: 1,
+        });
+      });
+
+      test('two tool scorers with distinct names aggregate as two buckets', async () => {
+        const secondToolId = await httpScorerTool('grade-grounding');
+        const evaluation = await createEval({
+          name: 'tool-scorer-run-two-tools',
+          agent_id: agentId,
+          dataset_id: datasetId,
+          scorers: [
+            { type: 'tool', name: 'tone', tool_id: httpToolId },
+            { type: 'tool', name: 'grounding', tool_id: secondToolId },
+          ],
+        });
+
+        mockCreateGeneration.mockResolvedValueOnce(
+          completedGeneration('gen_ts6', 'Sure.')
+        );
+        scorerResponses.push({ score: 1, passed: true });
+        scorerResponses.push({ score: 0, passed: false });
+
+        const res = await asUser()
+          .post(`/api/v1/evals/${evaluation.id}/runs`)
+          .send({ wait: true });
+
+        expect(res.status).toBe(201);
+        expect(res.body.aggregate_scores.scorers.tone).toEqual({
+          mean: 1,
+          pass_rate: 1,
+        });
+        expect(res.body.aggregate_scores.scorers.grounding).toEqual({
+          mean: 0,
+          pass_rate: 0,
+        });
+
+        const results = await asUser().get(
+          `/api/v1/evals/${evaluation.id}/runs/${res.body.id}/results`
+        );
+        expect(results.body.data[0].scores).toEqual([
+          { scorer: 'tone', score: 1, passed: true },
+          { scorer: 'grounding', score: 0, passed: false },
+        ]);
+        expect(results.body.data[0].passed).toBe(false);
+      });
+
+      test('run start re-checks the tool ref, so a deleted tool is a 400, not a broken run', async () => {
+        const doomedToolId = await httpScorerTool('grade-doomed');
+        const evaluation = await createEval({
+          name: 'tool-scorer-run-deleted-tool',
+          agent_id: agentId,
+          dataset_id: datasetId,
+          scorers: [{ type: 'tool', name: 'tone', tool_id: doomedToolId }],
+        });
+
+        const del = await asUser().delete(`/api/v1/tools/${doomedToolId}`);
+        expect(del.status).toBe(204);
+
+        const res = await asUser()
+          .post(`/api/v1/evals/${evaluation.id}/runs`)
+          .send({ wait: true });
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('VALIDATION_FAILED');
+        expect(res.body.error.message).toContain(doomedToolId);
+      });
     });
   });
 });
