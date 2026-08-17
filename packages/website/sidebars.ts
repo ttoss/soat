@@ -282,6 +282,11 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'doc',
+      id: 'advanced/memory-and-knowledge-engine',
+      label: 'Memory & Knowledge Engine',
+    },
+    {
+      type: 'doc',
       id: 'advanced/tool-context',
       label: 'Tool Context',
     },

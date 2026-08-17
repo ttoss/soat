@@ -11,7 +11,7 @@ import TabItem from '@theme/TabItem';
 
 The Knowledge module provides unified semantic search across all knowledge sources in a project — documents and memory entries. A single endpoint searches across these sources simultaneously, ranks results by vector similarity, and returns an interleaved list tagged by source type.
 
-Each result carries a `source_type` discriminant (`"document"` or `"memory"`) so callers know where each piece of knowledge came from. This is the same search layer agents use internally for retrieval — see it wired into an agent in [Agent with Persistent Memory — Step 8 (Create an agent with knowledge_config)](/docs/tutorials/memories-agent#step-8--create-an-agent-with-knowledge_config).
+Each result carries a `source_type` discriminant (`"document"` or `"memory"`) so callers know where each piece of knowledge came from. This is the same search layer agents use internally for retrieval — see it wired into an agent in [Agent with Persistent Memory — Step 8 (Create an agent with knowledge_config)](/docs/tutorials/memories-agent#step-8--create-an-agent-with-knowledge_config), and the [Memory & Knowledge Engine](../advanced/memory-and-knowledge-engine.md) deep dive for the full retrieval pipeline and its extension points.
 
 See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -139,7 +139,7 @@ and documents may influence what it tries to do.
 | Environment Variable   | Required | Description                                                  |
 | ---------------------- | -------- | ------------------------------------------------------------ |
 | `FILES_STORAGE_DIR`    | Yes      | Directory where `.txt` files are stored (shared with Files)  |
-| `EMBEDDING_PROVIDER`   | Yes      | Embedding backend — only `ollama` is supported               |
+| `EMBEDDING_PROVIDER`   | Yes      | Embedding backend: `ollama`, `openai`, or `bedrock`          |
 | `EMBEDDING_MODEL`      | Yes      | Model name, e.g. `qwen3-embedding:0.6b`                      |
 | `EMBEDDING_DIMENSIONS` | Yes      | Vector dimensions — must match the model output, e.g. `1024` |
 | `OLLAMA_BASE_URL`      | No       | Ollama server URL, defaults to `http://localhost:11434`      |

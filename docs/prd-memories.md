@@ -9,15 +9,16 @@ that landed with the v1 RC — is documented in the
 
 | Component                      | Status         | Notes                                                                                                                            |
 | ------------------------------ | -------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Merge consolidation (LLM)      | 🟡 Partial    | Agent-tool + extraction merges consolidate into a single fact via the LLM (`memoryConsolidationCompletion.ts`). Every other outcome is a create: no agent context, or a failed/blank completion. Concatenation removed in #1062; manual-path consolidation arrives with Phase 5 |
+| Merge consolidation (LLM)      | 🟡 Partial    | Agent-tool + extraction merges consolidate into a single fact via the LLM (`memoryConsolidationCompletion.ts`). Every other outcome is a create: no agent context, or a failed/blank completion. Manual-path consolidation arrives with Phase 5 |
 | Write algorithm v2 (arbitrated)| ❌ Not started | Top-K shortlist + LLM decision (add/update/supersede/skip), landing on a create-only baseline (Phase 5)                          |
 | MemoryEntity model             | ❌ Not started | Project-scoped extracted nouns/objects with `mey_` prefix, embedding column, optional `actorId` FK; deduplicated across memories (Phase 6) |
 | MemoryEntityEdge model         | ❌ Not started | First-class entity→entity edges: subject, canonical predicate, object, provenance entry, validity (Phase 6)                      |
 | Entity extraction on write     | ❌ Not started | Async, off the request path; LLM extracts subject/predicate/object triples after the entry persists (Phase 6)                    |
 | Entity-based knowledge queries | ❌ Not started | Memory-side `resolveEntitySearch()` (entity/actor → edges → entries). Query surface specced in prd-knowledge.md Phase 3 (Phase 6) |
-| Streaming extraction coverage  | ❌ Not started | Extraction trigger for streaming and `requires_action` completions (Phase 7)                                                     |
+| Extraction coverage            | ❌ Not started | Extraction trigger for streaming, `requires_action`, and background (`wait=false`) direct completions (Phase 7)                  |
 | Decay, importance & compaction | ❌ Not started | Importance scoring, access tracking, retrieval-time recency blend, compaction (Phase 8)                                          |
 | Profile memory                 | ❌ Not started | Always-injected bounded profile blocks, agent-editable (Phase 9)                                                                 |
+| Indexes on `memory_entries`    | ❌ Not started | Only declared index is the `public_id` unique — no vector index on `embedding`, none on `memory_id`; every similarity search is a sequential scan (see [Engine Review Findings](#engine-review-findings-2026-08)) |
 
 ## Implementation Phases
 
@@ -34,13 +35,6 @@ instead of coexisting with them.
 > `supersededByEntryId`, `sourceGenerationId`, `sourceConversationId`, the `superseded` action
 > value, `include_invalidated`, and the exclusion of invalidated entries from listing, dedup and
 > knowledge search (see the [Memory module docs](../packages/website/docs/modules/memories.md)).
->
-> **Removed pre-v1 (#1062):** the **concatenation merge**, on every path — the manual
-> [`POST /api/v1/memory-entries`](/docs/api/memoryEntries/create-memory-entry) endpoint, the
-> orchestration `memory_write` node, and the fallback on agent paths whose consolidation
-> completion fails. All of them now create instead, so an entry is never appended to. The manual
-> path's `update_threshold` field went with it; 5a reintroduces the concept as
-> `shortlist_threshold`, with a model-independent role.
 >
 > **Still pending — this phase:** the top-K shortlist + full add/update/supersede/skip arbitration
 > that *populates* that schema, and consolidation for the manual REST write path (which has no
@@ -207,7 +201,7 @@ This phase delivers the **memory-side data layer** that Phase 3 queries against:
 
 ---
 
-### Phase 7 — Extraction Coverage (Streaming and Client-Tool Turns) ❌ Not started
+### Phase 7 — Extraction Coverage (Streaming, Client-Tool, and Background Turns) ❌ Not started
 
 **Goal:** Fire memory extraction for the turn types that skip it today. Streaming is the default
 transport in production chat UIs, so the passive-memory pipeline currently misses most real
@@ -219,6 +213,12 @@ traffic.
   chunk is flushed, using the fully accumulated transcript
 - Trigger extraction when a `requires_action` (client-tool) turn reaches its terminal `completed`
   state via `tool-outputs` — once per logical turn, not per round-trip
+- Trigger extraction when a **background** (`wait=false`) direct generation completes. Today the
+  trigger for `POST /agents/{agent_id}/generate` lives only in the route's blocking branch
+  (`rest/v1/agentGeneration.ts`); the `startGeneration` background path never extracts, even for a
+  non-streaming turn. Since background is the endpoint's *default* mode, the trigger belongs in
+  the lib completion path, not the route. Conversation and session turns are unaffected — their
+  trigger already sits in `generateConversationMessage`, after the assistant message persists
 - Idempotency guard: at most one extraction per generation (`metadata.extraction` is the marker),
   so retries and multi-request turns cannot double-write
 - Same opt-in condition (`extraction` + `write_memory_id`) and summary reporting as Phase 4
@@ -332,6 +332,8 @@ harness-independent, checkable criteria (verified with unit/REST tests per
   extraction, recorded on `metadata.extraction`.
 - A `requires_action` turn triggers extraction once, only after its terminal `completed` state —
   never once per tool-output round-trip.
+- A background (`wait=false`) non-streaming direct generation that completes produces exactly one
+  extraction, identical in behavior to its blocking twin.
 - Retries or repeated requests for the same generation never produce a second extraction
   (idempotency marker holds).
 
@@ -417,15 +419,11 @@ The shipped v1 write algorithm (see the [Memory module docs](../packages/website
 decides skip/merge/create from fixed cosine thresholds, and can only merge where an agent context
 supplies a model. Phase 5 replaces the decision step for the reasons below:
 
-- ~~**Concatenation merge breaks atomicity.**~~ **Resolved by removal (#1062).** Concatenation
-  turned a one-fact entry into a multi-fact paragraph whose embedding drifted away from every fact
-  it contained. No path appends any more: a merge happens only when an LLM rewrites the two facts
-  into one, and everything else creates. The residual cost is the next item.
 - **Near-duplicate accumulation on non-agent paths.** With no model to consolidate with, the manual
   endpoint and the orchestration `memory_write` node leave overlapping facts as separate entries
   until arbitration merges them. Atomic and lossless, but redundant — 5a is what resolves it.
 - **No contradiction resolution.** A
-  contradicting fact phrased differently can score below the update threshold and simply coexist
+  contradicting fact phrased differently can score below the merge band and simply coexist
   ("Pedro works at Company X" / "Pedro left Company X"). The invalidate operation itself now
   exists — supersede columns, API shape and retrieval exclusion all ship — but nothing decides
   *when* to use it; state-of-the-art pipelines (e.g. Mem0) arbitrate add / update / delete / no-op
@@ -439,6 +437,26 @@ supplies a model. Phase 5 replaces the decision step for the reasons below:
 In write algorithm v2 (Phase 5) `duplicate_threshold` (default 0.95) still short-circuits
 near-exact duplicates, a new `shortlist_threshold` (default 0.60) bounds the arbitration candidate
 set, and the create/update/supersede decision moves to an LLM.
+
+## Engine Review Findings (2026-08)
+
+Open findings from the code-level engine review; sequencing stays in
+[roadmap.md](./roadmap.md).
+
+### `duplicate_threshold` is deployment-tuned, not portable
+
+A raw cosine value, so a tuned threshold is coupled to the deployment's embedding model — the
+same caveat the knowledge docs already state for `min_score`. The module docs should document it
+as a deployment-tuned knob, not a portable constant, under the same framing as `min_score`.
+(Phase 5 keeps it in the model-independent duplicate-short-circuit role.)
+
+### Missing indexes on `memory_entries`
+
+The only declared index is the `public_id` unique — there is no vector index on `embedding` and
+no index on `memory_id`, so every dedup lookup and every knowledge search over memory is a
+sequential scan. Adding them (HNSW on `embedding`, b-tree on `memory_id`) is invisible to the
+contract and additive; it should land before 10k-entry memories are a real workload, and it gates
+how much Phase 8 (forgetting) can matter in practice.
 
 ## Data Model (Pending Work)
 

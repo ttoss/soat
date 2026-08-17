@@ -210,7 +210,7 @@ For endpoints that accept `project_id`, the field is optional: when omitted, the
 | Environment Variable   | Required | Description                                                  |
 | ---------------------- | -------- | ------------------------------------------------------------ |
 | `FILES_STORAGE_DIR`    | Yes      | Directory where `.txt` files are written (shared with Files) |
-| `EMBEDDING_PROVIDER`   | Yes      | Embedding backend — only `ollama` is supported               |
+| `EMBEDDING_PROVIDER`   | Yes      | Embedding backend: `ollama`, `openai`, or `bedrock`          |
 | `EMBEDDING_MODEL`      | Yes      | Model name, e.g. `qwen3-embedding:0.6b`                      |
 | `EMBEDDING_DIMENSIONS` | Yes      | Vector dimensions — must match the model output, e.g. `1024` |
 | `OLLAMA_BASE_URL`      | No       | Ollama server URL, defaults to `http://localhost:11434`      |

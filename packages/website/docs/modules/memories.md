@@ -13,7 +13,7 @@ Named containers for storing and retrieving knowledge entries within a project.
 
 Memories provide a logical namespace for text content that agents can read and write during generation. Each memory holds many **memory entries** — individual pieces of text that are automatically embedded for semantic search via the [Knowledge](./knowledge.md) module.
 
-Agents can retrieve relevant entries automatically via `knowledge_config` and write new facts using the built-in `write_memory` tool. See [Agent Integration](#agent-integration) for details.
+Agents can retrieve relevant entries automatically via `knowledge_config` and write new facts using the built-in `write_memory` tool. See [Agent Integration](#agent-integration) for details, and the [Memory & Knowledge Engine](../advanced/memory-and-knowledge-engine.md) deep dive for how the write, extraction, and retrieval algorithms fit together end to end.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
