@@ -87,6 +87,30 @@ const erroredOutcome = (
 };
 
 /**
+ * The I/O runners the scorer kernel needs, bound to the run's project: judge
+ * completions and tool scorer calls. Injected into `scoreOutput` so the kernel
+ * itself stays pure.
+ */
+const buildScorerRunners = (args: { projectId: number }) => {
+  return {
+    runJudge: (judge: {
+      scorer: Record<string, unknown>;
+      input: unknown;
+      output: string;
+      expected: string | null;
+    }) => {
+      return runJudgeCompletion({ projectId: args.projectId, ...judge });
+    },
+    runToolScorer: (call: {
+      scorer: Record<string, unknown>;
+      context: Record<string, unknown>;
+    }) => {
+      return runToolScorerCall({ projectId: args.projectId, ...call });
+    },
+  };
+};
+
+/**
  * Runs one item and scores it.
  *
  * A non-`completed` generation is an item-level **error**, never a score of 0.
@@ -156,22 +180,7 @@ export const runEvalItem = async (args: {
       expectedOutput: args.expectedOutput,
       itemMetadata: args.itemMetadata,
       agentOutputSchema: args.agentOutputSchema,
-      runJudge: ({ scorer, input, output: judged, expected }) => {
-        return runJudgeCompletion({
-          projectId: args.projectId,
-          scorer,
-          input,
-          output: judged,
-          expected,
-        });
-      },
-      runToolScorer: ({ scorer, context }) => {
-        return runToolScorerCall({
-          projectId: args.projectId,
-          scorer,
-          context,
-        });
-      },
+      ...buildScorerRunners({ projectId: args.projectId }),
     });
   } catch (error) {
     // A scorer that could not produce a verdict (a judge call failing, a
