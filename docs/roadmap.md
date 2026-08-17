@@ -48,6 +48,11 @@ engine review (#1061); breaking pre-v1 is accepted.
       `shortlist_threshold`); `actors.memory_id` / `auto_create_memory` removed
       end to end (model, REST, formations, docs). Actor-scoped retrieval
       returns post-v1, server-side, via the entity-graph fallback.
+- [ ] **Remove the `knowledge_config` deep case transform and the dead `query`
+      fallback** (#1063) — not contract-breaking (internal representation +
+      a one-time backfill of stored rows), but sequenced here by decision:
+      the backfill grows with every deployment, and deleting the transform is
+      what clears `knowledge_config` to carry per-algorithm config safely.
 
 ## 🟠 v1.x — after the RC, inside the v1 line
 

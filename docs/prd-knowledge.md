@@ -14,7 +14,7 @@ Only outstanding work is tracked here; shipped functionality lives in `packages/
 | Reranking stage                    | ❌ Future      | Optional cross-encoder/LLM rerank of fused candidates (Phase 5)                                  |
 | Recency/importance weighting       | ❌ Future      | Retrieval-time blend for memory results (Phase 5; importance from prd-memories.md Phase 8)       |
 | Evaluation harness                 | ❌ Future      | Golden query set, recall@k/MRR, memory benchmarks, injected-context tracing (Phase 7)            |
-| `knowledge_config` single-casing   | ❌ Not started | Backfill pre-single-casing agent rows, then replace the deep key transform with explicit per-field mapping (see [Engine Review Findings](#engine-review-findings-2026-08)) |
+| `knowledge_config` single-casing   | 🟠 Decided — pre-v1 | Backfill pre-single-casing agent rows, replace the deep key transform with explicit per-field mapping, delete the dead `query` fallback (#1063; see [Engine Review Findings](#engine-review-findings-2026-08)) |
 
 ## Implementation Phases
 
@@ -203,6 +203,13 @@ the rest of the wire uses; then delete `convertKeysDeep` from this path. This sh
 retrieval-options block, per-algorithm config maps) — such a field silently breaks the
 "no free-form value maps" premise the current exception rests on, which is exactly the failure
 class (#651, #690, #729, #737) the case-convention rule exists to prevent.
+
+> **Decision (2026-08-17): sequenced pre-v1 (#1063)**, together with removing the dead
+> `knowledge_config.query` fallback (in the TS type only — no OpenAPI schema carries it, so
+> `strictFields` and the formation validator both reject it; unreachable from every wire
+> surface). Neither changes the wire contract; both get strictly more expensive with every
+> stored row and every new `knowledge_config` field, and the transform's removal is what
+> clears `knowledge_config` to carry per-algorithm config later.
 
 ## Implementation Architecture
 
