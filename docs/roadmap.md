@@ -1,10 +1,10 @@
 # SOAT v1 Roadmap
 
 The single roadmap for shipping **SOAT v1**. It defines what ships in v1 point
-releases after the release candidate (RC) and what is explicitly post-v1. The
-RC blocker list is done — see the Decision record. Shipped functionality is not
-tracked here — live behavior is documented in the website module docs
-(`packages/website/docs/modules/`).
+releases after the release candidate (RC) and what is explicitly post-v1.
+Shipped functionality is not tracked here — live behavior is documented in the
+website module docs (`packages/website/docs/modules/`), and past decisions live
+in this file's git history, not in the file.
 
 > **This is the only roadmap.** Sequencing lives here, not in the PRDs
 > ([prd-memories.md](./prd-memories.md), [prd-knowledge.md](./prd-knowledge.md)).
@@ -22,9 +22,8 @@ Only items that fail that test block the RC. Everything additive — new
 endpoints, new optional parameters, internal ranking or pipeline changes —
 ships after.
 
-**No open item fails that test.** The five RC blockers shipped in 2026-08 (see
-the Decision record); everything below is additive. Keep the test to hand for
-judging new proposals, not for the list that remains.
+**No open item fails that test.** Everything below is additive. Keep the test
+to hand for judging new proposals, not for the list that remains.
 
 ## Legend
 
@@ -149,7 +148,7 @@ sketch — requirements to be written before implementation.
 - [ ] ⏭️ **G6 learned rules** — semantic clustering, promotion lifecycle,
       scoped rule listing. Gates: sustained demand on the approvals recurrence
       view (open) **and** evaluations P1 (satisfied). Design record recoverable
-      from git history (`docs/prd-learned-rules.md`, removed 2026-08)
+      from git history (`docs/prd-learned-rules.md`)
 - [ ] ⏭️ **Model routing** — per-consumer `model_route_id` on Chat (build only
       when two routes in one project is actually requested)
 - [ ] **Model routing (accepted gap)** — failed attempts that burned tokens are
@@ -164,7 +163,7 @@ sketch — requirements to be written before implementation.
 v1.x ───────────────────────────────────────────────────────────
   memories P7 (streaming extraction) — first
   knowledge P7 (eval harness) ──► knowledge P5 (ranking; needs the gate)
-  memories 5a (arbitration)  ◄── invalidation schema ✔ shipped
+  memories 5a (arbitration)  ◄── invalidation schema (already in place)
 
 post-v1 ────────────────────────────────────────────────────────
   memories P6 (entity data) ◄──► knowledge P3 (entity queries)
@@ -174,44 +173,3 @@ post-v1 ────────────────────────
   memories P9 (profile) — sketch
   learned rules ⏭️ ◄── recurrence-view demand (open) + evals P1 ✔
 ```
-
-## Decision record (carried from the pre-v1 roadmap)
-
-Resolved decisions that shape v1's surface; full rationale in git history of
-this file:
-
-- **Discussions removed at v0 (2026-08)** — deliberation is application-side
-  context composition; primitives (agents, actors, conversations, documents)
-  stay. Recoverable from git history if SOAT is ever asked to own deliberation
-  as a governed artifact.
-- **Context composition is the application's job (2026-07)** — knowledge
-  packages / layered assembler dropped; SOAT injects via `instructions` and
-  per-generation input messages.
-- **Learned rules deferred (2026-07/08)** — exact-key recurrence shipped as the
-  approvals recurrence view; module builds only if both gates fire.
-- **`from-generation` dataset curation dropped (2026-08)** — operators curate
-  client-side through the ordinary item-create route; revisit as an opt-in
-  retention flag only on observed demand.
-- **Activity vs audit split (2026-07)** — `ActivityEntry` owns agent/run
-  telemetry; `AuditEntry` stays compliance-grade authorization events.
-- **v1 RC blockers complete (2026-08)** — memory entry provenance, temporal
-  invalidation schema + `include_invalidated` / `superseded` API shape,
-  `score` as an implementation-defined ranking beside the cosine-pinned
-  `similarity_score`, the knowledge injection threat model in the module docs,
-  and entry-id / page detail in the injected source tags all shipped (#1025,
-  #1030, #1032). Nothing blocks cutting the RC. Live behavior is documented in
-  the memories, knowledge and agents module docs; the blocker list itself is
-  recoverable from this file's git history.
-- **Pre-v1 engine removals complete (2026-08)** — from the engine review
-  (#1061): the concatenation merge (no path appends; merge is LLM-consolidation
-  on agent paths only, `update_threshold` left the wire), the unread actor
-  memory link (`actors.memory_id` / `auto_create_memory`; per-actor memory is
-  application-side composition documented in the Actors module page), the
-  `knowledge_config` deep case transform (stored verbatim + explicit read
-  mapping + boot-time casing backfill), and the dead `knowledge_config.query`
-  fallback. #1062 + #1063, shipped in #1064. Clears `knowledge_config` to
-  carry per-algorithm config later.
-- **Entity graph demand-gated (2026-08)** — builds only on measured
-  hybrid-retrieval gaps (Knowledge P7 golden set, structural queries) plus
-  observed user demand; actor-scoped filtering on existing metadata is the
-  fallback to try first. Rationale in the post-v1 section above.

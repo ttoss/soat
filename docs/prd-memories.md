@@ -9,7 +9,7 @@ that landed with the v1 RC — is documented in the
 
 | Component                      | Status         | Notes                                                                                                                            |
 | ------------------------------ | -------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Merge consolidation (LLM)      | 🟡 Partial    | Agent-tool + extraction merges consolidate into a single fact via the LLM (`memoryConsolidationCompletion.ts`). Every other outcome is a create: no agent context, or a failed/blank completion. Concatenation removed in #1062; manual-path consolidation arrives with Phase 5 |
+| Merge consolidation (LLM)      | 🟡 Partial    | Agent-tool + extraction merges consolidate into a single fact via the LLM (`memoryConsolidationCompletion.ts`). Every other outcome is a create: no agent context, or a failed/blank completion. Manual-path consolidation arrives with Phase 5 |
 | Write algorithm v2 (arbitrated)| ❌ Not started | Top-K shortlist + LLM decision (add/update/supersede/skip), landing on a create-only baseline (Phase 5)                          |
 | MemoryEntity model             | ❌ Not started | Project-scoped extracted nouns/objects with `mey_` prefix, embedding column, optional `actorId` FK; deduplicated across memories (Phase 6) |
 | MemoryEntityEdge model         | ❌ Not started | First-class entity→entity edges: subject, canonical predicate, object, provenance entry, validity (Phase 6)                      |
@@ -35,13 +35,6 @@ instead of coexisting with them.
 > `supersededByEntryId`, `sourceGenerationId`, `sourceConversationId`, the `superseded` action
 > value, `include_invalidated`, and the exclusion of invalidated entries from listing, dedup and
 > knowledge search (see the [Memory module docs](../packages/website/docs/modules/memories.md)).
->
-> **Removed pre-v1 (#1062):** the **concatenation merge**, on every path — the manual
-> [`POST /api/v1/memory-entries`](/docs/api/memoryEntries/create-memory-entry) endpoint, the
-> orchestration `memory_write` node, and the fallback on agent paths whose consolidation
-> completion fails. All of them now create instead, so an entry is never appended to. The manual
-> path's `update_threshold` field went with it; 5a reintroduces the concept as
-> `shortlist_threshold`, with a model-independent role.
 >
 > **Still pending — this phase:** the top-K shortlist + full add/update/supersede/skip arbitration
 > that *populates* that schema, and consolidation for the manual REST write path (which has no
@@ -426,10 +419,6 @@ The shipped v1 write algorithm (see the [Memory module docs](../packages/website
 decides skip/merge/create from fixed cosine thresholds, and can only merge where an agent context
 supplies a model. Phase 5 replaces the decision step for the reasons below:
 
-- ~~**Concatenation merge breaks atomicity.**~~ **Resolved by removal (#1062).** Concatenation
-  turned a one-fact entry into a multi-fact paragraph whose embedding drifted away from every fact
-  it contained. No path appends any more: a merge happens only when an LLM rewrites the two facts
-  into one, and everything else creates. The residual cost is the next item.
 - **Near-duplicate accumulation on non-agent paths.** With no model to consolidate with, the manual
   endpoint and the orchestration `memory_write` node leave overlapping facts as separate entries
   until arbitration merges them. Atomic and lossless, but redundant — 5a is what resolves it.
@@ -451,19 +440,8 @@ set, and the create/update/supersede decision moves to an LLM.
 
 ## Engine Review Findings (2026-08)
 
-A code-level review of the shipped engine (2026-08-17) produced four findings; sequencing stays
-in [roadmap.md](./roadmap.md). The review's overall verdict: no architectural wrong turns — the
-write funnel (every path converges on `writeMemoryEntry`), the contract-first schema work, and
-the injection security posture are sound foundations for the pending phases.
-
-Two findings were **resolved by removal before v1** (#1062, shipped in #1064):
-
-| Finding | Resolution |
-| --- | --- |
-| **Concatenation merge** — self-eroding: each concat diluted the entry's embedding away from every fact it contained | ✅ Removed on every path. A merge happens only when an LLM consolidates; everything else — no agent context, failed or blank completion — creates. `update_threshold` left the wire (5a reintroduces the concept as `shortlist_threshold`). See [Known v1 Limitations](#known-v1-limitations-addressed-by-phase-5). |
-| **Actor memory link** (`actors.memory_id` / `auto_create_memory`) — a half-feature nothing in the generation pipeline read | ✅ Removed end to end (model, lib, REST, formations, docs). Per-actor memory is the application-side composition documented in the Actors module page; server-side actor-scoped retrieval returns post-v1 as the entity-graph fallback. |
-
-Two remain open:
+Open findings from the code-level engine review; sequencing stays in
+[roadmap.md](./roadmap.md).
 
 ### `duplicate_threshold` is deployment-tuned, not portable
 
