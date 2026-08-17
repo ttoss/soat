@@ -9,6 +9,7 @@
  */
 import awsBedrockAgentcore from './aws-bedrock-agentcore.json';
 import azureAiFoundryAgentService from './azure-ai-foundry-agent-service.json';
+import claudeDeveloperPlatform from './claude-developer-platform.json';
 import crewai from './crewai.json';
 import deepseekHarness from './deepseek-harness.json';
 import dify from './dify.json';
@@ -157,6 +158,7 @@ export const solutions: Solution[] = [
   asSolution(soat),
   asSolution(awsBedrockAgentcore),
   asSolution(azureAiFoundryAgentService),
+  asSolution(claudeDeveloperPlatform),
   asSolution(crewai),
   asSolution(deepseekHarness),
   asSolution(dify),

@@ -1,0 +1,86 @@
+{
+  "name": "Claude Developer Platform",
+  "slug": "claude-developer-platform",
+  "archetype": "managed-platform",
+  "summary": "Anthropic's agent stack on platform.claude.com: the Messages API and tool use, plus Managed Agents — versioned agent configs, per-session containers Anthropic provisions, an SSE event stream, MCP servers with vault-held credentials, skills, memory stores, and cron-scheduled deployments. Workspaces and the Admin API scope keys and resources; the control plane is Anthropic-operated, though tool execution can move to a self-hosted sandbox.",
+  "website": "https://platform.claude.com/",
+  "license": "Proprietary",
+  "deployment": ["managed"],
+  "last_verified": "2026-08-17",
+  "capabilities": {
+    "agent-runtime": {
+      "rating": "native",
+      "note": "Managed Agents runs the loop on Anthropic's orchestration layer: a persisted, versioned agent config plus stateful sessions with an event stream, automatic context compaction, and prompt caching.",
+      "evidence": "https://platform.claude.com/docs/en/managed-agents/overview"
+    },
+    "orchestration": {
+      "rating": "partial",
+      "note": "A coordinator agent delegates to a roster of subagents in parallel threads, and scheduled deployments fire sessions on a cron cadence — but there is no declarative multi-step pipeline or DAG the platform executes.",
+      "evidence": "https://platform.claude.com/docs/en/managed-agents/multiagent-orchestration"
+    },
+    "knowledge-memory": {
+      "rating": "partial",
+      "note": "Memory stores persist versioned text documents across sessions, mounted into the container as a filesystem the agent reads and writes. There is no document ingestion pipeline, embeddings endpoint, or semantic search — retrieval is file reads, grep, and the hosted web search tool.",
+      "evidence": "https://platform.claude.com/docs/en/managed-agents/memory"
+    },
+    "tools-integration": {
+      "rating": "native",
+      "note": "Client-side tool use with strict schemas, Anthropic-hosted server tools (web search, web fetch, code execution), remote MCP servers declared on the agent, and HMAC-signed webhooks for session state changes.",
+      "evidence": "https://platform.claude.com/docs/en/managed-agents/mcp-connector"
+    },
+    "identity-governance": {
+      "rating": "partial",
+      "note": "The Admin API manages org members, five org roles, workspace membership, and API keys; per-tool permission policies gate execution and session budgets cap spend. Authorization is workspace-scoped rather than a per-resource policy language, and there is no configurable guardrail model — content safeguards are built into the models.",
+      "evidence": "https://platform.claude.com/docs/en/manage-claude/admin-api"
+    },
+    "observability": {
+      "rating": "native",
+      "note": "Every session exposes a replayable event history with model-request spans and per-request token usage, a live Console trace view, plus the Usage and Cost API and the Compliance API activity feed. Webhook delivery is best-effort — three attempts, then dropped, with no dead-letter queue to inspect.",
+      "evidence": "https://platform.claude.com/docs/en/managed-agents/observability"
+    },
+    "data-secrets": {
+      "rating": "native",
+      "note": "The Files API stores inputs and captures session outputs, and vaults hold credentials the sandbox never sees: MCP OAuth tokens refreshed automatically, and environment-variable secrets substituted into outbound requests at egress with a per-credential host allowlist.",
+      "evidence": "https://platform.claude.com/docs/en/managed-agents/vaults"
+    },
+    "evaluation": {
+      "rating": "partial",
+      "note": "An outcome states what done looks like and a separate grader scores each iteration against a rubric, looping until it passes or hits max_iterations. That is per-session grading, not a dataset and scorer API, and nothing gates a version promotion on it.",
+      "evidence": "https://platform.claude.com/docs/en/managed-agents/define-outcomes"
+    },
+    "channels": {
+      "rating": "absent",
+      "note": "No gateway for developer-built agents to Slack, WhatsApp, Telegram, or Discord, and no embeddable chat UI; integrations reach the agent through the API or MCP. Anthropic ships first-party Slack surfaces for its own Claude apps, which is a different thing from a channel gateway an agent you define can be bound to."
+    },
+    "code-execution": {
+      "rating": "native",
+      "note": "Every session gets an isolated container where bash, file operations, and code run, and the Messages API exposes code execution as a hosted server tool. A self-hosted sandbox moves that execution to infrastructure you control via an outbound-polling worker.",
+      "evidence": "https://platform.claude.com/docs/en/managed-agents/permission-policies"
+    },
+    "human-in-loop": {
+      "rating": "native",
+      "note": "A tool carrying the always_ask permission policy pauses the session at the call, which idles awaiting a tool-confirmation event; the reply allows or denies, and a denial message is surfaced back to the agent so it can change approach.",
+      "evidence": "https://platform.claude.com/docs/en/managed-agents/permission-policies"
+    },
+    "multi-tenancy": {
+      "rating": "native",
+      "note": "Workspaces scope API keys, rate limits, spend, and agent resources — agents, sessions, vaults, and memory stores all belong to one workspace — with membership and roles assignable per workspace through the Admin API.",
+      "evidence": "https://platform.claude.com/docs/en/manage-claude/workspaces"
+    },
+    "declarative-deployment": {
+      "rating": "partial",
+      "note": "Agents and environments are checked in as YAML and applied from CI with the ant CLI, using a version field for optimistic concurrency. Each resource is applied on its own — there is no dependency-graph plan and apply over a stack, and no teardown that unwinds what a failed apply created.",
+      "evidence": "https://platform.claude.com/docs/en/cli-sdks-libraries/cli/quickstart"
+    },
+    "agent-versioning": {
+      "rating": "partial",
+      "note": "Every agent update creates an immutable, append-only version, and a session pins one by number — so rollback is pinning new sessions back to a known-good version while running sessions keep theirs. There are no aliases, no traffic split for a canary, and no gated promotion.",
+      "evidence": "https://platform.claude.com/docs/en/managed-agents/agent-setup"
+    },
+    "skill-learning": {
+      "rating": "partial",
+      "note": "Skills are versioned resources an agent can read, and a read-write memory store lets it record learnings that later sessions mount — but promoting experience into a published skill version is a step you drive through the Skills API, not a loop the platform runs.",
+      "evidence": "https://platform.claude.com/docs/en/managed-agents/skills"
+    }
+  }
+}
