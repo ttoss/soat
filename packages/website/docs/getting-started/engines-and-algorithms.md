@@ -12,6 +12,21 @@ Every intelligence module in SOAT — [Evaluations](/docs/modules/evaluations),
 same two layers. Knowing the split tells you what you can rely on, what you are allowed to
 disagree with, and where your own code plugs in.
 
+```mermaid
+%%{init: {'flowchart': {'wrappingWidth': 300}}}%%
+flowchart BT
+    ENG["ENGINE — the mechanics, not negotiable<br/>calls the agent · persists output<br/>freezes inputs · links the trace<br/>aggregates · settles · meters"]
+    ALG["ALGORITHMS — the opinions, swappable<br/>built-in: exact_match · llm_judge<br/>dedup · chunking · ranking<br/>or bring your own, as a tool"]
+
+    ENG -- "item context" --> ALG
+    ALG -- "a decision<br/>score · fact · pages" --> ENG
+```
+
+The engine hands an algorithm the context, the algorithm hands back a decision, and the
+engine records it under guarantees that do not depend on which algorithm answered. Both
+slots in the upper layer are filled the same way — which is why a scorer you write is not
+a second-class citizen next to `llm_judge`.
+
 ## The pattern
 
 ### The engine — mechanics you cannot opt out of

@@ -19,18 +19,22 @@ It complements the module pages, which own the caller-facing contracts: [Memorie
 
 There is no separate vector database and no "knowledge base" resource. Knowledge lives in **two stores** — document chunks and memory entries, both rows in PostgreSQL with pgvector embedding columns — and is unified **at query time** by a single search function:
 
-```
-WRITE SIDE                                          READ SIDE
+```mermaid
+flowchart TB
+    subgraph WRITE["WRITE SIDE"]
+        files["files"] --> ingest["ingestion pipeline<br/>extract → chunk → embed"]
+        sources["turns · agents (write_memory)<br/>REST (manual) · nodes (memory_write)"] --> writealg["write algorithm<br/>dedup / merge / create"]
+    end
 
-files ──► ingestion pipeline ──► DocumentChunk ─┐
-          (extract → chunk →                    │   POST /knowledge/search
-           embed, per chunk)                    ├─► per-source cosine top-k
-                                                │   → merge → rank → limit
-turns ──► extraction ─┐                         │        │
-agents ─► write_memory├─► write algorithm ──►   │        ▼
-REST ───► manual write│   (dedup / merge /      │   agent knowledge_config:
-nodes ──► memory_write┘    create)              │   results injected as a
-                          └► MemoryEntry ───────┘   fenced reference message
+    ingest --> chunks[("DocumentChunk")]
+    writealg --> entries[("MemoryEntry")]
+
+    chunks --> search
+    entries --> search
+
+    subgraph READ["READ SIDE"]
+        search["POST /knowledge/search<br/>per-source cosine top-k<br/>merge → rank → limit"] --> inject["agent knowledge_config<br/>injected as a fenced<br/>reference message"]
+    end
 ```
 
 Every stage in that picture is an algorithm with a name, a default, and (in most cases) a knob:
