@@ -10,7 +10,8 @@ import { makeResourceAccessor } from 'src/lib/resourceAccessor';
 /**
  * Context needed to consolidate a merge with an LLM. Present only for writes
  * with an agent context (the `write_memory` tool and automatic extraction);
- * absent for manual REST writes, which keep the concatenation merge.
+ * absent for manual REST writes and orchestration `memory_write` nodes, which
+ * have no model to consolidate with and therefore never merge.
  */
 export type MemoryConsolidationContext = {
   agentId: string;
@@ -127,13 +128,6 @@ const mergeEntryMetadata = (args: {
   return { ...(args.existing ?? {}), ...args.incoming };
 };
 
-const mergeEntryContent = (args: {
-  existing: string;
-  incoming: string;
-}): string => {
-  return `${args.existing}\n${args.incoming}`;
-};
-
 const findTopSimilarEntry = async (args: {
   memoryId: number;
   embeddingLiteral: string;
@@ -168,41 +162,51 @@ const findTopSimilarEntry = async (args: {
   });
 };
 
+/**
+ * Consolidates a merge-band write into the existing entry, or returns `null`
+ * when there is nothing to consolidate *with* and the caller must create a new
+ * entry instead.
+ *
+ * There is deliberately no concatenation path. Appending the incoming fact to
+ * the existing one is self-eroding: every merge turns a one-fact entry into a
+ * multi-fact paragraph whose embedding drifts away from each fact it contains,
+ * degrading the very similarity decision the thresholds depend on. Removed in
+ * #1062 — a merge now happens only when a model actually rewrites the two facts
+ * into one.
+ *
+ * `null` therefore means "create", on both of its paths: a write with no agent
+ * context (manual REST, the orchestration `memory_write` node) has no model to
+ * call, and a write whose consolidation completion fails must still not lose
+ * the fact. Creating never loses content and keeps entries atomic; the cost is
+ * a possible near-duplicate pair until arbitration merges it properly.
+ */
 const mergeAndUpdateEntry = async (args: {
   match: Awaited<ReturnType<typeof findTopSimilarEntry>>;
   incoming: string;
   tags?: string[] | null;
   metadata?: Record<string, unknown> | null;
   consolidation?: MemoryConsolidationContext;
-}): Promise<ReturnType<typeof mapMemoryEntry>> => {
+}): Promise<ReturnType<typeof mapMemoryEntry> | null> => {
   const match = args.match!;
 
-  // Concatenation is the fallback; when an agent context is available we ask an
-  // LLM to consolidate the two facts into a single atomic entry instead.
-  const fallback = mergeEntryContent({
-    existing: match.content,
-    incoming: args.incoming,
-  });
+  if (!args.consolidation) return null;
 
-  let mergedContent = fallback;
-  if (args.consolidation) {
-    try {
-      const consolidated =
-        await consolidationCompletion.runConsolidationCompletion({
-          agentId: args.consolidation.agentId,
-          projectIds: args.consolidation.projectIds,
-          existing: match.content,
-          incoming: args.incoming,
-          aiProviderId: args.consolidation.aiProviderId,
-          model: args.consolidation.model,
-        });
-      mergedContent = pickMergedContent({ consolidated, fallback });
-    } catch {
-      // Best-effort: a failed completion must never lose the write, so fall
-      // back to the concatenation.
-      mergedContent = fallback;
-    }
+  let mergedContent: string | null;
+  try {
+    const consolidated =
+      await consolidationCompletion.runConsolidationCompletion({
+        agentId: args.consolidation.agentId,
+        projectIds: args.consolidation.projectIds,
+        existing: match.content,
+        incoming: args.incoming,
+        aiProviderId: args.consolidation.aiProviderId,
+        model: args.consolidation.model,
+      });
+    mergedContent = pickMergedContent({ consolidated });
+  } catch {
+    return null;
   }
+  if (mergedContent === null) return null;
 
   match.content = mergedContent;
   match.tags = mergeEntryTags({ existing: match.tags, incoming: args.tags });
@@ -262,8 +266,9 @@ const resolveDedupAction = async (args: {
     return { action: 'skipped', entry: mapMemoryEntry(topMatch) };
   }
 
-  // Step 3b: Related — merge (LLM consolidation when an agent context is
-  // available, concatenation otherwise)
+  // Step 3b: Related — merge, but only where an LLM can consolidate the two
+  // facts into one. Everywhere else (no agent context, or a failed completion)
+  // this returns null and the write falls through to create.
   if (score >= updateThreshold) {
     const entry = await mergeAndUpdateEntry({
       match: topMatch,
@@ -272,7 +277,7 @@ const resolveDedupAction = async (args: {
       metadata: args.metadata,
       consolidation: args.consolidation,
     });
-    return { action: 'updated', entry };
+    if (entry) return { action: 'updated', entry };
   }
 
   return null;
@@ -285,6 +290,11 @@ export const writeMemoryEntry = async (args: {
   tags?: string[] | null;
   metadata?: Record<string, unknown> | null;
   duplicateThreshold?: number;
+  /**
+   * Floor of the merge band. Only reachable with a `consolidation` context —
+   * no wire surface sets it, because a caller without an agent context always
+   * creates (#1062).
+   */
   updateThreshold?: number;
   consolidation?: MemoryConsolidationContext;
   /**

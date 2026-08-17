@@ -270,38 +270,6 @@ describe('FK onDelete rules', () => {
     });
   });
 
-  // ── SET NULL: Memory deleted → Actor.memoryId is null ─────────────────────
-
-  describe('Memory deleted → Actor.memoryId is SET NULL', () => {
-    test('actor.memory_id becomes null after linked memory is deleted', async () => {
-      const memId = await createMemory();
-
-      const actorRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/actors')
-        .send({
-          project_id: projectId,
-          name: 'fkod-actor-mem',
-          memory_id: memId,
-        });
-      expect(actorRes.status).toBe(201);
-      const actorId = actorRes.body.id as string;
-      expect(actorRes.body.memory_id).toBe(memId);
-
-      // Delete the memory
-      const delRes = await authenticatedTestClient(userToken).delete(
-        `/api/v1/memories/${memId}`
-      );
-      expect(delRes.status).toBe(204);
-
-      // Actor must still exist, but memory_id is now null
-      const actorAfter = await authenticatedTestClient(userToken).get(
-        `/api/v1/actors/${actorId}`
-      );
-      expect(actorAfter.status).toBe(200);
-      expect(actorAfter.body.memory_id).toBeNull();
-    });
-  });
-
   // ── SET NULL: Actor deleted → Session.actorId is null ─────────────────────
 
   describe('Actor deleted → Session.actorId is SET NULL', () => {

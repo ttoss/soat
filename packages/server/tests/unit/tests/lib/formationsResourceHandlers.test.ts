@@ -150,8 +150,6 @@ describe('formationsResourceHandlers', () => {
           external_id: 'whatsapp:+5511999999999',
           instructions: 'Talk like support',
           agent_id: agentId,
-          memory_id: memoryId,
-          auto_create_memory: false,
         },
       });
 
@@ -162,7 +160,6 @@ describe('formationsResourceHandlers', () => {
         external_id: 'whatsapp:+5511999999999',
         instructions: 'Talk like support',
         agent_id: agentId,
-        memory_id: memoryId,
       });
     });
 

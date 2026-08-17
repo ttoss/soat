@@ -2,7 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import type { ExtractionConfig, KnowledgeConfig } from './agentKnowledge';
-import { normalizeKnowledgeConfig } from './agentKnowledge';
+import { readKnowledgeConfig } from './agentKnowledge';
 import { updateGenerationRecord } from './generations';
 import { writeMemoryEntry } from './memoryEntries';
 import * as extractionCompletion from './memoryExtractionCompletion';
@@ -206,10 +206,9 @@ const resolveExtractionTarget = async (args: {
     return null;
   }
 
-  // Normalize at read time so an agent whose stored knowledge_config is still
-  // in snake_case (e.g. a formation-deployed agent persisted before the
-  // write-time normalization fix) is not silently treated as extraction-off.
-  const config = normalizeKnowledgeConfig(agent.knowledgeConfig) as
+  // The stored bag is snake_case (the wire casing); read it into the internal
+  // camelCase shape before consulting `extraction` / `write_memory_id`.
+  const config = readKnowledgeConfig(agent.knowledgeConfig) as
     KnowledgeConfig | null | undefined;
   const extraction = resolveEffectiveExtraction(config, args.override);
   const writeMemoryId = config?.writeMemoryId;

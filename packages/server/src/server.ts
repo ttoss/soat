@@ -13,6 +13,7 @@ import { startApprovalScheduler } from './lib/approvalScheduler';
 import { startAuditRetentionScheduler } from './lib/auditScheduler';
 import { startContentRetentionScheduler } from './lib/contentRetentionScheduler';
 import { startEvalWorker } from './lib/evaluationWorker';
+import { backfillKnowledgeConfigCasing } from './lib/knowledgeConfigBackfill';
 import { startOrchestrationScheduler } from './lib/orchestrationScheduler';
 import { startOrchestrationWorker } from './lib/orchestrationWorker';
 import { startTasksScheduler } from './lib/tasksScheduler';
@@ -35,6 +36,10 @@ const startServer = async () => {
     // Serialize boot-time schema DDL across concurrently-starting tasks so
     // sync({ alter: true }) runs exactly once and the rest see a no-op.
     await syncSchemaWithAdvisoryLock({ sequelize: database.sequelize });
+    // One-time data normalization of `knowledge_config` bags stored in
+    // camelCase before single-casing. Idempotent and prefiltered in SQL, so a
+    // converged database pays a single indexless scan and writes nothing.
+    await backfillKnowledgeConfigCasing();
     // Start the durable orchestration scheduler once the database is ready so
     // it can wake sleeping runs whose delay/poll waits are due (including runs
     // that were parked before a restart).

@@ -4,9 +4,9 @@ import {
   buildKnowledgeMessages,
   buildKnowledgeTools,
   buildWriteMemoryTool,
-  denormalizeKnowledgeConfig,
   mergeKnowledgeConfig,
-  normalizeKnowledgeConfig,
+  readKnowledgeConfig,
+  toStoredKnowledgeConfig,
 } from 'src/lib/agentKnowledge';
 import { getAgent } from 'src/lib/agents';
 import { applyCreateResource } from 'src/lib/formationsResourceHandlers';
@@ -253,8 +253,8 @@ describe('buildKnowledgeMessages', () => {
   test('returns [] when searchKnowledge returns empty results', async () => {
     mockSearchKnowledge.mockResolvedValueOnce([]);
     const result = await buildKnowledgeMessages({
-      knowledgeConfig: { query: 'hello' },
-      messages: [],
+      knowledgeConfig: {},
+      messages: [{ role: 'user', content: 'hello' }],
     });
     expect(result).toEqual([]);
     expect(mockSearchKnowledge).toHaveBeenCalledWith(
@@ -278,14 +278,28 @@ describe('buildKnowledgeMessages', () => {
     );
   });
 
-  test('falls back to config.query when no user message exists', async () => {
+  // `knowledge_config.query` used to supply a stored query here. It appeared in
+  // no OpenAPI schema, so `strictFields` rejected it on every REST request and
+  // the formation validator rejected it in templates — unreachable from every
+  // wire surface, and now deleted (#1063). A turn with no user message and no
+  // filters injects nothing.
+  test('injects nothing when no user message exists and no filters are set', async () => {
+    const result = await buildKnowledgeMessages({
+      knowledgeConfig: { limit: 5 },
+      messages: [{ role: 'assistant', content: 'hi' }],
+    });
+    expect(result).toEqual([]);
+    expect(mockSearchKnowledge).not.toHaveBeenCalled();
+  });
+
+  test('still searches on filters alone when no user message exists', async () => {
     mockSearchKnowledge.mockResolvedValueOnce([]);
     await buildKnowledgeMessages({
-      knowledgeConfig: { query: 'config query' },
+      knowledgeConfig: { memoryIds: ['mem_1'] },
       messages: [{ role: 'assistant', content: 'hi' }],
     });
     expect(mockSearchKnowledge).toHaveBeenCalledWith(
-      expect.objectContaining({ query: 'config query' })
+      expect.objectContaining({ memoryIds: ['mem_1'], query: undefined })
     );
   });
 
@@ -308,8 +322,8 @@ describe('buildKnowledgeMessages', () => {
     ] as Awaited<ReturnType<typeof knowledgeModule.searchKnowledge>>);
 
     const result = await buildKnowledgeMessages({
-      knowledgeConfig: { query: 'guide' },
-      messages: [],
+      knowledgeConfig: {},
+      messages: [{ role: 'user', content: 'guide' }],
     });
 
     expect(result).toHaveLength(1);
@@ -339,8 +353,8 @@ describe('buildKnowledgeMessages', () => {
     ] as Awaited<ReturnType<typeof knowledgeModule.searchKnowledge>>);
 
     const result = await buildKnowledgeMessages({
-      knowledgeConfig: { query: 'revenue' },
-      messages: [],
+      knowledgeConfig: {},
+      messages: [{ role: 'user', content: 'revenue' }],
     });
 
     expect(result[0].content).toContain('[Document: /reports/q1.pdf (page 3)]');
@@ -365,8 +379,8 @@ describe('buildKnowledgeMessages', () => {
     ] as Awaited<ReturnType<typeof knowledgeModule.searchKnowledge>>);
 
     const result = await buildKnowledgeMessages({
-      knowledgeConfig: { query: 'guide' },
-      messages: [],
+      knowledgeConfig: {},
+      messages: [{ role: 'user', content: 'guide' }],
     });
 
     expect(result[0].content).toContain('[Document: guide.md]');
@@ -387,8 +401,8 @@ describe('buildKnowledgeMessages', () => {
     ] as Awaited<ReturnType<typeof knowledgeModule.searchKnowledge>>);
 
     const result = await buildKnowledgeMessages({
-      knowledgeConfig: { query: 'remember' },
-      messages: [],
+      knowledgeConfig: {},
+      messages: [{ role: 'user', content: 'remember' }],
     });
 
     expect(result).toHaveLength(1);
@@ -466,7 +480,6 @@ describe('buildKnowledgeMessages', () => {
     mockSearchKnowledge.mockResolvedValueOnce([]);
     await buildKnowledgeMessages({
       knowledgeConfig: {
-        query: 'test',
         memoryTags: ['tag1'],
         documentIds: [42],
         documentPaths: ['path/to/doc'],
@@ -474,7 +487,7 @@ describe('buildKnowledgeMessages', () => {
         limit: 5,
       },
       projectIds: [1, 2],
-      messages: [],
+      messages: [{ role: 'user', content: 'test' }],
     });
     expect(mockSearchKnowledge).toHaveBeenCalledWith({
       projectIds: [1, 2],
@@ -518,7 +531,7 @@ describe('buildKnowledgeMessages', () => {
     ] as Awaited<ReturnType<typeof knowledgeModule.searchKnowledge>>);
 
     const result = await buildKnowledgeMessages({
-      knowledgeConfig: { query: 'combined' },
+      knowledgeConfig: {},
       messages: [{ role: 'user', content: 'combined' }],
     });
 
@@ -595,24 +608,18 @@ describe('mergeKnowledgeConfig', () => {
   });
 });
 
-describe('normalizeKnowledgeConfig', () => {
+describe('readKnowledgeConfig', () => {
   test('returns null/undefined unchanged', () => {
-    expect(normalizeKnowledgeConfig(null)).toBeNull();
-    expect(normalizeKnowledgeConfig(undefined)).toBeUndefined();
+    expect(readKnowledgeConfig(null)).toBeNull();
+    expect(readKnowledgeConfig(undefined)).toBeUndefined();
   });
 
   test('returns undefined for a non-object value', () => {
-    expect(normalizeKnowledgeConfig('not an object')).toBeUndefined();
+    expect(readKnowledgeConfig('not an object')).toBeUndefined();
   });
 
-  // A Formation template's `knowledge_config` bypasses caseTransformMiddleware
-  // (`template` is a deliberate skip-key — see caseTransform.ts) and reaches
-  // the formation module exactly as the author wrote it: snake_case. Without
-  // normalization, `agent.knowledge_config.writeMemoryId` reads `undefined` for
-  // such agents, which is what silently disabled memory injection, the
-  // write_memory tool, and extraction (the reported bug).
-  test('normalizes a fully snake_case (formation-authored) config to camelCase', () => {
-    const result = normalizeKnowledgeConfig({
+  test('maps every stored snake_case field to its camelCase counterpart', () => {
+    const result = readKnowledgeConfig({
       memory_ids: ['mem_1'],
       memory_tags: ['tag1'],
       document_ids: ['doc_1'],
@@ -634,7 +641,6 @@ describe('normalizeKnowledgeConfig', () => {
       documentPaths: ['/docs/'],
       minScore: 0.5,
       limit: 50,
-      query: undefined,
       writeMemoryId: 'mem_1',
       extraction: {
         enabled: true,
@@ -645,85 +651,56 @@ describe('normalizeKnowledgeConfig', () => {
     });
   });
 
-  test('leaves an already camelCase (direct REST) config unchanged', () => {
-    const result = normalizeKnowledgeConfig({
-      memoryIds: ['mem_1'],
-      writeMemoryId: 'mem_1',
-      limit: 10,
-      extraction: true,
-    });
-    expect(result).toMatchObject({
-      memoryIds: ['mem_1'],
-      writeMemoryId: 'mem_1',
-      limit: 10,
-      extraction: true,
-    });
+  test('omits absent fields rather than setting them undefined', () => {
+    // `mergeKnowledgeConfig` spreads the override over the base, so an absent
+    // field must not be present as an explicit `undefined` — that would clear
+    // the agent's stored value on every per-generation override.
+    const result = readKnowledgeConfig({ limit: 5 });
+    expect(Object.keys(result!)).toEqual(['limit']);
   });
 
   test('passes a boolean extraction value through as-is', () => {
-    expect(normalizeKnowledgeConfig({ extraction: true })?.extraction).toBe(
-      true
-    );
-    expect(normalizeKnowledgeConfig({ extraction: false })?.extraction).toBe(
-      false
-    );
+    expect(readKnowledgeConfig({ extraction: true })?.extraction).toBe(true);
+    expect(readKnowledgeConfig({ extraction: false })?.extraction).toBe(false);
+  });
+
+  test('ignores a camelCase key — storage is the wire casing after the backfill', () => {
+    const result = readKnowledgeConfig({ writeMemoryId: 'mem_1' });
+    expect(result).toEqual({});
+  });
+
+  test('drops values of the wrong type instead of forwarding them', () => {
+    const result = readKnowledgeConfig({
+      memory_ids: 'mem_1',
+      limit: '5',
+      write_memory_id: 42,
+    });
+    expect(result).toEqual({});
   });
 });
 
-describe('denormalizeKnowledgeConfig', () => {
+describe('toStoredKnowledgeConfig', () => {
   test('returns null/undefined unchanged', () => {
-    expect(denormalizeKnowledgeConfig(null)).toBeNull();
-    expect(denormalizeKnowledgeConfig(undefined)).toBeUndefined();
+    expect(toStoredKnowledgeConfig(null)).toBeNull();
+    expect(toStoredKnowledgeConfig(undefined)).toBeUndefined();
   });
 
-  test('converts a stored camelCase config back to snake_case for formation read', () => {
-    const result = denormalizeKnowledgeConfig({
-      memoryIds: ['mem_1'],
-      memoryTags: ['tag1'],
-      documentIds: ['doc_1'],
-      documentPaths: ['/docs/'],
-      minScore: 0.5,
-      limit: 50,
-      writeMemoryId: 'mem_1',
-      extraction: {
-        enabled: true,
-        aiProviderId: 'aip_1',
-        model: 'llama3.2:1b',
-        prompt: 'extract facts',
-      },
-    });
-    expect(result).toEqual({
-      memory_ids: ['mem_1'],
-      memory_tags: ['tag1'],
-      document_ids: ['doc_1'],
-      document_paths: ['/docs/'],
-      min_score: 0.5,
-      limit: 50,
-      write_memory_id: 'mem_1',
-      extraction: {
-        enabled: true,
-        ai_provider_id: 'aip_1',
-        model: 'llama3.2:1b',
-        prompt: 'extract facts',
-      },
-    });
+  test('returns undefined for a non-object value', () => {
+    expect(toStoredKnowledgeConfig('not an object')).toBeUndefined();
   });
 
-  test('round-trips through normalize → denormalize unchanged', () => {
-    const snakeCase = {
-      memory_ids: ['mem_1'],
+  test('stores the bag verbatim — a write performs no key transform', () => {
+    const input = {
       write_memory_id: 'mem_1',
-      limit: 5,
-      extraction: true,
+      extraction: { ai_provider_id: 'aip_1' },
     };
-    const roundTripped = denormalizeKnowledgeConfig(
-      normalizeKnowledgeConfig(snakeCase)
-    );
-    expect(roundTripped).toMatchObject(snakeCase);
+    const stored = toStoredKnowledgeConfig(input);
+    expect(stored).toBe(input);
+    expect(stored).toEqual(input);
   });
 });
 
-describe('buildKnowledgeTools — formation-deployed agent casing regression', () => {
+describe('buildKnowledgeTools — formation-deployed agent casing', () => {
   let adminToken: string;
   let projectId: string;
   let internalProjectId: number;
@@ -785,13 +762,10 @@ describe('buildKnowledgeTools — formation-deployed agent casing regression', (
     };
   };
 
-  // Regression: a Formation template's `knowledge_config` bypasses
-  // caseTransformMiddleware entirely (`template` is a deliberate skip-key,
-  // see caseTransform.ts), so a formation-deployed agent's stored
-  // `knowledgeConfig` used to keep the author's snake_case keys verbatim
-  // (`write_memory_id`, not `writeMemoryId`). `buildKnowledgeTools` only ever
-  // checked the camelCase key, so `write_memory` silently never appeared for
-  // any formation-deployed agent.
+  // A formation template's `knowledge_config` reaches the module exactly as the
+  // author wrote it — snake_case — and is stored that way, the same as a REST
+  // write. `buildKnowledgeTools` reads the wire casing, so the two paths agree
+  // by construction rather than by a transform that had to be kept in sync.
   test('exposes write_memory for an agent created via a formation template with snake_case knowledge_config', async () => {
     const agentId = await applyCreateResource({
       resourceType: 'agent',
@@ -859,8 +833,8 @@ describe('buildKnowledgeMessages — injection hardening', () => {
     mockSearchKnowledge.mockResolvedValueOnce(memoryResult);
 
     const result = await buildKnowledgeMessages({
-      knowledgeConfig: { query: 'prefs' },
-      messages: [],
+      knowledgeConfig: {},
+      messages: [{ role: 'user', content: 'prefs' }],
     });
 
     expect(result).toHaveLength(1);
@@ -872,8 +846,8 @@ describe('buildKnowledgeMessages — injection hardening', () => {
     mockSearchKnowledge.mockResolvedValueOnce(memoryResult);
 
     const result = await buildKnowledgeMessages({
-      knowledgeConfig: { query: 'prefs' },
-      messages: [],
+      knowledgeConfig: {},
+      messages: [{ role: 'user', content: 'prefs' }],
     });
 
     // The retrieved content is fenced so the model can tell data from instructions...

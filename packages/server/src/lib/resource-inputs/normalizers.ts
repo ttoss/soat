@@ -1,5 +1,3 @@
-import { isPlainObject } from '../plainObject';
-
 /**
  * Generic type-coercion helpers shared by REST handlers and formation modules.
  * All functions accept `unknown` and return typed values or `undefined`/`null`
@@ -68,41 +66,14 @@ export const snakeToCamelKey = (key: string): string => {
 };
 
 /**
- * Recursively rewrites every object key with `transform`, descending into
- * nested plain objects and arrays while leaving all leaf *values* untouched.
+ * Rewrites an object's own (top-level) keys with `transform`, leaving all
+ * values — including nested objects — verbatim.
  *
- * Use this to convert a whole nested config bag between the external snake_case
- * contract and internal camelCase in one call — instead of enumerating fields
- * by hand, which silently drops any field a future change forgets to list. Only
- * safe for bags whose keys are all part of the resource contract; do **not**
- * use it on free-form value maps that must round-trip verbatim (JSON Schema,
- * user-defined metadata, JSON-Logic), which is why nothing rewrites its
- * own skip-key list rather than sharing this helper wholesale.
- */
-export const convertKeysDeep = (
-  value: unknown,
-  transform: (key: string) => string
-): unknown => {
-  if (Array.isArray(value)) {
-    return value.map((item) => {
-      return convertKeysDeep(item, transform);
-    });
-  }
-  if (isPlainObject(value)) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, val]) => {
-        return [transform(key), convertKeysDeep(val, transform)];
-      })
-    );
-  }
-  return value;
-};
-
-/**
- * Rewrites only an object's own (top-level) keys with `transform`, leaving all
- * values — including nested objects — verbatim. The shallow counterpart to
- * {@link convertKeysDeep}, for bags whose nested values must round-trip
- * untouched.
+ * There is deliberately no recursive counterpart. A key-blind transform that
+ * descends into a bag rewrites keys the platform does not own, which is the
+ * single shape behind every case-transform incident this project has had
+ * (#651/#690/#729/#737); `.claude/rules/case-convention.md` bans it outright.
+ * Map nested config field by field instead.
  */
 export const convertKeys = (
   obj: Record<string, unknown>,

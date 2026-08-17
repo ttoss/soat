@@ -256,9 +256,14 @@ echo "MEMORY_ID: $MEMORY_ID"
 ## Step 5 — Write memory entries
 
 Every write goes through the semantic deduplication described in
-[Memories — Write Algorithm](/docs/modules/memories#write-algorithm), producing one of
-three outcomes: **`created`** (201, new fact stored), **`skipped`** (200, near-identical
-entry exists), or **`updated`** (200, similar entry replaced with the richer version).
+[Memories — Write Algorithm](/docs/modules/memories#write-algorithm). A manual write has
+no agent context, so it produces one of two outcomes: **`created`** (201, the fact is
+stored as its own entry) or **`skipped`** (200, a near-identical entry already exists).
+
+The third outcome — **`updated`**, where an existing entry is rewritten to absorb the
+incoming fact — needs a model to consolidate the two, so only the agent write paths reach
+it. [Step 10](#step-10--observe-the-agent-writing-to-memory) shows it on the `write_memory`
+tool.
 
 ### 5a — First entry (action: created)
 
@@ -345,9 +350,11 @@ curl -s -X POST "$SOAT_URL/api/v1/memory-entries" \
 </TabItem>
 </Tabs>
 
-### 5c — Improved version (action: updated)
+### 5c — Related content (action: created)
 
-Related content with new detail — the existing entry is replaced with the richer version.
+Overlapping content with new detail. There is no model on this path to fold the two facts
+into one, so the richer statement is stored as its own entry rather than being appended to
+5a — entries stay atomic.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -356,7 +363,7 @@ Related content with new detail — the existing entry is replaced with the rich
 soat create-memory-entry \
   --memory-id "$MEMORY_ID" \
   --content "Alice prefers email, especially for billing inquiries; she checks it twice a day"
-# → { "action": "updated", ... }
+# → { "action": "created", ... }
 ```
 
 </TabItem>
@@ -371,7 +378,7 @@ const { data: e3 } = await MemoryEntries.createMemoryEntry({
       'Alice prefers email, especially for billing inquiries; she checks it twice a day',
   },
 });
-console.log(e3.action); // "updated"
+console.log(e3.action); // "created"
 ```
 
 </TabItem>
@@ -382,7 +389,7 @@ curl -s -X POST "$SOAT_URL/api/v1/memory-entries" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"memory_id":"'"$MEMORY_ID"'","content":"Alice prefers email, especially for billing inquiries; she checks it twice a day"}' | jq .
-# → { "action": "updated", ... }
+# → { "action": "created", ... }
 ```
 
 </TabItem>
@@ -435,7 +442,7 @@ curl -s -X POST "$SOAT_URL/api/v1/memory-entries" \
 
 ## Step 6 — List entries to verify
 
-After the four writes, the memory holds exactly **two entries** — the skipped near-duplicate was discarded and the improved version replaced the original.
+After the four writes, the memory holds exactly **three entries** — only the near-duplicate from 5b was discarded.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -443,6 +450,7 @@ After the four writes, the memory holds exactly **two entries** — the skipped 
 ```bash
 soat list-memory-entries --memory-id "$MEMORY_ID" | jq '[.data[] | .content]'
 # [
+#   "Alice prefers email over phone calls for all support communication",
 #   "Alice prefers email, especially for billing inquiries; she checks it twice a day",
 #   "The Alice Corp fiscal year ends in March; she starts renewal discussions in January"
 # ]
@@ -645,7 +653,7 @@ curl -s -X POST "$SOAT_URL/api/v1/agents/$AGENT_ID/generate?wait=true" \
 
 ## Step 10 — Observe the agent writing to memory
 
-If the model decides to call the `write_memory` tool, the fact is persisted via the same deduplication algorithm as manual writes. Send a message that introduces a new fact:
+If the model decides to call the `write_memory` tool, the fact is persisted via the same deduplication algorithm as manual writes — with one addition. This path has an agent context, so a fact that overlaps an existing entry is consolidated with it into a single atomic fact by the agent's LLM and comes back as `action: "updated"`, instead of landing as a second entry the way 5c did. Send a message that introduces a new fact:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -928,7 +936,7 @@ curl -s -X POST "$SOAT_URL/api/v1/knowledge/search" \
 
 Retrieved memory shapes what the agent says, so "why does it believe this?" has to be answerable. Every entry written **during a generation** records [provenance](/docs/modules/memories#provenance): the generation, and the conversation when the turn came from one.
 
-Manual writes have no turn behind them, so the contrast is visible in one listing — the four entries from Step 5 carry `null`, while anything the `write_memory` tool or extraction wrote carries an id:
+Manual writes have no turn behind them, so the contrast is visible in one listing — the entries from Step 5 carry `null`, while anything the `write_memory` tool or extraction wrote carries an id:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -940,6 +948,11 @@ soat list-memory-entries --memory-id "$MEMORY_ID" \
 
 ```json
 [
+  {
+    "source_type": "manual",
+    "source_generation_id": null,
+    "source_conversation_id": null
+  },
   {
     "source_type": "manual",
     "source_generation_id": null,
@@ -1020,5 +1033,5 @@ Provenance is recorded when the entry is **created** and is never rewritten by a
 ## What's next
 
 - **Tag-based filtering** — separate memories per customer and `memory_tags` on the agent scope retrieval per customer.
-- **Adjust dedup thresholds** — tune `update_threshold` / `duplicate_threshold`; see [Memories](/docs/modules/memories#write-algorithm).
+- **Adjust the dedup threshold** — tune `duplicate_threshold` to control how close a fact must be before a manual write is skipped; see [Memories](/docs/modules/memories#write-algorithm).
 - **Audit what an agent was told** — pair the provenance ids from Step 13 with the injected `<knowledge>` block documented in [Agents — Knowledge Config](/docs/modules/agents#knowledge-config), whose source tags name the exact entry and document page behind each retrieved line.

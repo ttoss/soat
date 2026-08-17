@@ -39,7 +39,6 @@ The module covers:
 | `instructions` | string \| null | No       | Persona-specific instructions composed into the effective system prompt for generate calls                        |
 | `agent_id`     | string \| null | No       | Public ID of the linked [Agent](./agents.md) (`agent_` prefix). Mutually exclusive with `chat_id`                 |
 | `chat_id`      | string \| null | No       | Public ID of the linked [Chat](./chats.md) (`chat_` prefix). Mutually exclusive with `agent_id`                   |
-| `memory_id`    | string \| null | No       | Public ID of the linked [Memory](./memories.md) container (`mem_` prefix). Stores persistent facts for this actor |
 | `tags`         | object         | No       | Key-value string pairs used for ABAC conditions (see [Tags](#tags))                                               |
 | `created_at`   | string         | —        | ISO 8601 creation timestamp                                                                                       |
 | `updated_at`   | string         | —        | ISO 8601 last-updated timestamp                                                                                   |
@@ -76,34 +75,16 @@ An Actor can be linked to either an Agent or a Chat — not both simultaneously.
 - Pass `null` in a [`PATCH /actors/:id`](/docs/api/actors/update-actor) request to unlink either field.
 - Supplying both `agent_id` and `chat_id` in the same request returns `400 Bad Request`.
 
-### Memory Linking and Auto-Creation
+### Per-Actor Memory
 
-An Actor can be linked to a [Memory](./memories.md) container via `memory_id`. The memory container stores persistent facts about the actor (e.g. preferences, conversation history summaries) that can be injected into AI generation calls.
+An actor has no memory field. Retrieval scope for a generation comes from the
+agent's `knowledge_config` and nothing else, so the platform never read a link
+stored on the actor — keep the actor→memory mapping in your application and pass
+it per call.
 
-**Manual linking** — supply `memory_id` in the [`POST /actors`](/docs/api/actors/create-actor) or [`PATCH /actors/:id`](/docs/api/actors/update-actor) request body:
-
-```json
-{ "memory_id": "mem_V1StGXR8Z5jdHi6B" }
-```
-
-**Auto-creation** — set `auto_create_memory: true` in the [`POST /actors`](/docs/api/actors/create-actor) body to automatically create a new memory container named after the actor and link it:
-
-```json
-{
-  "project_id": "proj_ABC",
-  "name": "Alice",
-  "external_id": "+15551234567",
-  "auto_create_memory": true
-}
-```
-
-The response will include `memory_id` pointing to the newly created memory.
-
-`auto_create_memory` is **create-if-missing**, not create-always: it only creates a memory when no `memory_id` is supplied in the same request. If you pass an explicit `memory_id`, that memory is linked and `auto_create_memory` has no effect. When combined with `external_id` (idempotent creation), the memory is created at most once — repeat calls return the existing actor with its existing `memory_id` unchanged.
-
-Deleting an actor does **not** delete its linked memory. Memory data outlives the actor record and may contain valuable information.
-
-Once you have the actor's `memory_id`, use it in generation calls:
+Create one [Memory](./memories.md) per end user, keyed however your application
+already keys them (the actor's `external_id` is the natural choice), then name it
+in the generate body:
 
 ```json
 {
@@ -114,7 +95,14 @@ Once you have the actor's `memory_id`, use it in generation calls:
 }
 ```
 
-To unlink a memory from an actor without deleting it, `PATCH` the actor with `"memory_id": null`.
+`memory_ids` and `memory_tags` are **unioned** with the agent's stored config, so
+a per-actor memory extends the agent's shared scope rather than replacing it. If
+you would rather not keep a mapping table, tag the memory (`tags`) or name it
+after the `external_id` and look it up with
+[`GET /memories`](/docs/api/memories/list-memories).
+
+Memory data outlives the actor record: deleting an actor deletes nothing in any
+memory.
 
 ### Instructions
 

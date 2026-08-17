@@ -9,8 +9,8 @@ that landed with the v1 RC — is documented in the
 
 | Component                      | Status         | Notes                                                                                                                            |
 | ------------------------------ | -------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Merge consolidation (LLM)      | 🟡 Partial    | Agent-tool + extraction merges consolidate into a single fact via the LLM (`memoryConsolidationCompletion.ts`), concat fallback; manual REST writes still concatenate (Phase 5) |
-| Write algorithm v2 (arbitrated)| ❌ Not started | Top-K shortlist + LLM decision (add/update/supersede/skip); real merge replaces the v1 concatenation shortcut (Phase 5)          |
+| Merge consolidation (LLM)      | 🟡 Partial    | Agent-tool + extraction merges consolidate into a single fact via the LLM (`memoryConsolidationCompletion.ts`). Every other outcome is a create: no agent context, or a failed/blank completion. Concatenation removed in #1062; manual-path consolidation arrives with Phase 5 |
+| Write algorithm v2 (arbitrated)| ❌ Not started | Top-K shortlist + LLM decision (add/update/supersede/skip), landing on a create-only baseline (Phase 5)                          |
 | MemoryEntity model             | ❌ Not started | Project-scoped extracted nouns/objects with `mey_` prefix, embedding column, optional `actorId` FK; deduplicated across memories (Phase 6) |
 | MemoryEntityEdge model         | ❌ Not started | First-class entity→entity edges: subject, canonical predicate, object, provenance entry, validity (Phase 6)                      |
 | Entity extraction on write     | ❌ Not started | Async, off the request path; LLM extracts subject/predicate/object triples after the entry persists (Phase 6)                    |
@@ -29,20 +29,28 @@ instead of coexisting with them.
 
 > **Already shipped:** the **merge consolidation** step for writes with an agent context (the
 > `write_memory` tool and automatic extraction), which consolidates both facts into a single atomic
-> entry instead of concatenating (`memoryConsolidationCompletion.ts`, best-effort with a concat
-> fallback); and the **temporal-invalidation and provenance schema** — `invalidatedAt`,
+> entry (`memoryConsolidationCompletion.ts`, best-effort — a failed or blank completion creates a
+> new entry rather than merging); and the **temporal-invalidation and provenance schema** — `invalidatedAt`,
 > `supersededByEntryId`, `sourceGenerationId`, `sourceConversationId`, the `superseded` action
 > value, `include_invalidated`, and the exclusion of invalidated entries from listing, dedup and
 > knowledge search (see the [Memory module docs](../packages/website/docs/modules/memories.md)).
 >
+> **Removed pre-v1 (#1062):** the **concatenation merge**, on every path — the manual
+> [`POST /api/v1/memory-entries`](/docs/api/memoryEntries/create-memory-entry) endpoint, the
+> orchestration `memory_write` node, and the fallback on agent paths whose consolidation
+> completion fails. All of them now create instead, so an entry is never appended to. The manual
+> path's `update_threshold` field went with it; 5a reintroduces the concept as
+> `shortlist_threshold`, with a model-independent role.
+>
 > **Still pending — this phase:** the top-K shortlist + full add/update/supersede/skip arbitration
 > that *populates* that schema, and consolidation for the manual REST write path (which has no
-> agent context to resolve a provider).
+> agent context to resolve a provider) — now landing on a create-only baseline.
 
 **Motivation:** v1 has three structural problems (see
-[Known v1 Limitations](#known-v1-limitations-addressed-by-phase-5)): the concatenation merge
-destroys entry atomicity, contradictions are appended or silently coexist, and fixed cosine
-thresholds both make the decision and fail to port across embedding models. State-of-the-art
+[Known v1 Limitations](#known-v1-limitations-addressed-by-phase-5)): near-duplicate facts
+accumulate as separate entries on every path without an agent context, contradictions silently
+coexist, and fixed cosine thresholds both make the decision and fail to port across embedding
+models. State-of-the-art
 memory pipelines (Mem0's add/update/delete/no-op arbitration, Zep/Graphiti's temporal fact
 invalidation) use embeddings only to shortlist candidates, let an LLM choose the operation, and
 never silently destroy superseded knowledge — they timestamp it out of validity.
@@ -406,14 +414,17 @@ This enables queries like:
 ## Known v1 Limitations (addressed by Phase 5)
 
 The shipped v1 write algorithm (see the [Memory module docs](../packages/website/docs/modules/memories.md))
-decides create/update/skip from two fixed cosine thresholds and **concatenates** contents on
-merge. Phase 5 replaces the decision and merge steps for the reasons below:
+decides skip/merge/create from fixed cosine thresholds, and can only merge where an agent context
+supplies a model. Phase 5 replaces the decision step for the reasons below:
 
-- **Concatenation merge breaks atomicity.** Repeated merges turn a one-fact entry into a
-  multi-fact paragraph, its embedding drifts away from any single fact it contains, and the
-  entity extraction in Phase 6 receives multi-fact content. An LLM consolidation step is required
-  to keep entries atomic.
-- **No contradiction resolution.** Concatenation appends conflicting statements; worse, a
+- ~~**Concatenation merge breaks atomicity.**~~ **Resolved by removal (#1062).** Concatenation
+  turned a one-fact entry into a multi-fact paragraph whose embedding drifted away from every fact
+  it contained. No path appends any more: a merge happens only when an LLM rewrites the two facts
+  into one, and everything else creates. The residual cost is the next item.
+- **Near-duplicate accumulation on non-agent paths.** With no model to consolidate with, the manual
+  endpoint and the orchestration `memory_write` node leave overlapping facts as separate entries
+  until arbitration merges them. Atomic and lossless, but redundant — 5a is what resolves it.
+- **No contradiction resolution.** A
   contradicting fact phrased differently can score below the update threshold and simply coexist
   ("Pedro works at Company X" / "Pedro left Company X"). The invalidate operation itself now
   exists — supersede columns, API shape and retrieval exclusion all ship — but nothing decides
