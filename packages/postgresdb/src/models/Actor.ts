@@ -10,7 +10,6 @@ import {
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { Agent } from './Agent';
 import { Chat } from './Chat';
-import { Memory } from './Memory';
 import { Project } from './Project';
 
 @Table({
@@ -91,20 +90,6 @@ export class Actor extends Model {
     return Chat;
   })
   declare chat: Chat | null;
-
-  @ForeignKey(() => {
-    return Memory;
-  })
-  @Column({ type: DataType.INTEGER, allowNull: true })
-  declare memoryId: number | null;
-
-  @BelongsTo(
-    () => {
-      return Memory;
-    },
-    { onDelete: 'SET NULL' }
-  )
-  declare memory: Memory | null;
 
   @Column({
     type: DataType.JSONB,

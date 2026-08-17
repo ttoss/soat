@@ -8,11 +8,6 @@ import { isSoatActionAllowedByBoundary } from './agentToolResolver';
 import { searchKnowledge } from './knowledge';
 import { writeMemoryEntry } from './memoryEntries';
 import { isPlainObject } from './plainObject';
-import {
-  camelToSnakeKey,
-  convertKeysDeep,
-  snakeToCamelKey,
-} from './resource-inputs/normalizers';
 
 const log = createDebug('soat:knowledge');
 
@@ -34,7 +29,6 @@ export type KnowledgeConfig = {
   documentPaths?: string[];
   minScore?: number;
   limit?: number;
-  query?: string;
   writeMemoryId?: string;
   /**
    * Automatic fact extraction from completed turns (requires writeMemoryId).
@@ -45,43 +39,92 @@ export type KnowledgeConfig = {
 };
 
 /**
- * Normalizes a raw `knowledge_config` bag to the canonical camelCase
- * `KnowledgeConfig` shape, accepting either casing for every (nested) key.
+ * Accepts a `knowledge_config` bag on a write path and returns it **verbatim**,
+ * having only checked that it is a bag at all.
  *
- * Every caller now sends snake_case, so the snake_case branch is the live one.
- * The camelCase branch remains only to read agent rows persisted before
- * single-casing, when the request middleware camelCased the bag before it was
- * stored. Without it, `agent.knowledgeConfig.writeMemoryId` / `.memoryIds`
- * read `undefined` for those rows, silently disabling memory-scoped
- * injection, the `write_memory` tool, and extraction.
- *
- * A generic deep key transform (rather than a field-by-field mapping) keeps
- * this correct when new `knowledge_config` fields are added: every key is
- * converted, so nothing is silently dropped. This is safe because
- * `knowledge_config` carries no free-form value maps — only scalars, string
- * arrays, and the fixed-shape `extraction` object — so `snakeToCamelKey` on
- * an already-camelCase input is a no-op and leaf values are never touched.
+ * `knowledge_config` is stored in the wire casing (snake_case), exactly as the
+ * client sent it, so a write performs no transform: the value is copied, not
+ * walked. `null` clears the config; anything that is not a plain object is
+ * ignored (`strictFields` has already rejected unknown members of a bag that
+ * *is* an object).
  */
-export const normalizeKnowledgeConfig = (
-  value: unknown
-): KnowledgeConfig | null | undefined => {
-  if (value === null) return null;
-  if (!isPlainObject(value)) return undefined;
-  return convertKeysDeep(value, snakeToCamelKey) as KnowledgeConfig;
-};
-
-/**
- * Reverses {@link normalizeKnowledgeConfig} for the Formation module's `read`
- * method, which must return `knowledge_config` in snake_case (see
- * `.claude/rules/modules.md` Formations Sync — "Formation module `read`
- * method returns the new field (snake_case)").
- */
-export const denormalizeKnowledgeConfig = (
+export const toStoredKnowledgeConfig = (
   value: unknown
 ): Record<string, unknown> | null | undefined => {
   if (value === null) return null;
   if (!isPlainObject(value)) return undefined;
-  return convertKeysDeep(value, camelToSnakeKey) as Record<string, unknown>;
+  return value;
+};
+
+const readStringArray = (value: unknown): string[] | undefined => {
+  if (!Array.isArray(value)) return undefined;
+  return value.filter((item): item is string => {
+    return typeof item === 'string';
+  });
+};
+
+const readString = (value: unknown): string | undefined => {
+  return typeof value === 'string' ? value : undefined;
+};
+
+const readNumber = (value: unknown): number | undefined => {
+  return typeof value === 'number' ? value : undefined;
+};
+
+const readExtraction = (
+  value: unknown
+): boolean | ExtractionConfig | undefined => {
+  if (typeof value === 'boolean') return value;
+  if (!isPlainObject(value)) return undefined;
+  const extraction: ExtractionConfig = {};
+  if (typeof value.enabled === 'boolean') extraction.enabled = value.enabled;
+  const aiProviderId = readString(value.ai_provider_id);
+  if (aiProviderId !== undefined) extraction.aiProviderId = aiProviderId;
+  const model = readString(value.model);
+  if (model !== undefined) extraction.model = model;
+  const prompt = readString(value.prompt);
+  if (prompt !== undefined) extraction.prompt = prompt;
+  return extraction;
+};
+
+/**
+ * Reads a stored (or per-generation) `knowledge_config` bag — snake_case, the
+ * wire casing — into the internal camelCase `KnowledgeConfig` the engine acts
+ * on. The inbound half of the case convention, applied at one boundary, exactly
+ * as a route handler maps a request body (`.claude/rules/case-convention.md`).
+ *
+ * The mapping is field by field on purpose. This used to be a recursive key
+ * transform, which the rule bans after #651/#690/#729/#737: it depended on
+ * `knowledge_config` never gaining a field that can hold caller-authored keys,
+ * and that premise expires the moment one does.
+ *
+ * Only keys actually present are assigned, so a per-generation override merges
+ * over the agent's stored config without an absent field clearing a set one.
+ */
+export const readKnowledgeConfig = (
+  value: unknown
+): KnowledgeConfig | null | undefined => {
+  if (value === null) return null;
+  if (!isPlainObject(value)) return undefined;
+
+  const config: KnowledgeConfig = {};
+  const set = <K extends keyof KnowledgeConfig>(
+    key: K,
+    read: KnowledgeConfig[K] | undefined
+  ): void => {
+    if (read !== undefined) config[key] = read;
+  };
+
+  set('memoryIds', readStringArray(value.memory_ids));
+  set('memoryTags', readStringArray(value.memory_tags));
+  set('documentIds', readStringArray(value.document_ids));
+  set('documentPaths', readStringArray(value.document_paths));
+  set('minScore', readNumber(value.min_score));
+  set('limit', readNumber(value.limit));
+  set('writeMemoryId', readString(value.write_memory_id));
+  set('extraction', readExtraction(value.extraction));
+
+  return config;
 };
 
 const anyLength = (arr: unknown[] | undefined): boolean => {
@@ -189,10 +232,13 @@ export const buildKnowledgeMessages = async (args: {
   const lastUserMessage = [...args.messages].reverse().find((m) => {
     return m.role === 'user';
   });
+  // The query is always the turn's own last user message. A generation with no
+  // user-role string content contributes no query, and injects knowledge only
+  // if the config carries explicit filters.
   const query =
-    (typeof lastUserMessage?.content === 'string'
+    typeof lastUserMessage?.content === 'string'
       ? lastUserMessage.content
-      : undefined) ?? config.query;
+      : undefined;
 
   log(
     'buildKnowledgeMessages: query=%s memoryIds=%o documentPaths=%o',
@@ -302,8 +348,9 @@ export const buildWriteMemoryTool = (args: {
         memoryId: memory.id as number,
         content,
         sourceType: 'agent',
-        // Agent context is available here, so merges consolidate via the LLM
-        // rather than concatenating.
+        // Agent context is available here, so a merge-band write can be
+        // consolidated by the LLM into a single atomic fact. Without it the
+        // write would create a second entry instead.
         consolidation: { agentId: args.agentId, projectIds: args.projectIds },
         sourceGenerationPublicId: args.generationId,
       });
@@ -324,9 +371,7 @@ export const buildKnowledgeTools = (args: {
   resolvedTools: Record<string, unknown>;
   generationId?: string;
 }): void => {
-  const knowledgeConfig = normalizeKnowledgeConfig(
-    args.typedAgent.knowledgeConfig
-  );
+  const knowledgeConfig = readKnowledgeConfig(args.typedAgent.knowledgeConfig);
   if (knowledgeConfig?.writeMemoryId) {
     args.resolvedTools['write_memory'] = buildWriteMemoryTool({
       writeMemoryId: knowledgeConfig.writeMemoryId,

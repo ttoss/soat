@@ -70,7 +70,9 @@ describe('writeMemoryEntry merge consolidation', () => {
     expect(mockRunConsolidationCompletion).toHaveBeenCalledTimes(1);
   });
 
-  test('falls back to concatenation when consolidation fails', async () => {
+  // #1062: a failed completion must never lose the write, but it must not
+  // concatenate either — concatenation is self-eroding. Create instead.
+  test('creates a new entry when consolidation fails', async () => {
     const memoryId = await createMemoryId('Consolidate Failure');
     await writeMemoryEntry({ memoryId, content: 'First fact' });
 
@@ -85,11 +87,20 @@ describe('writeMemoryEntry merge consolidation', () => {
       ...FORCE_MERGE,
     });
 
-    expect(result.action).toBe('updated');
-    expect(result.entry.content).toBe('First fact\nSecond fact');
+    expect(result.action).toBe('created');
+    expect(result.entry.content).toBe('Second fact');
+    // The existing entry is left exactly as it was — nothing appended to it.
+    const entries = await db.MemoryEntry.findAll({ where: { memoryId } });
+    expect(
+      entries
+        .map((e) => {
+          return e.content;
+        })
+        .sort()
+    ).toEqual(['First fact', 'Second fact']);
   });
 
-  test('falls back to concatenation when consolidation returns blank text', async () => {
+  test('creates a new entry when consolidation returns blank text', async () => {
     const memoryId = await createMemoryId('Consolidate Blank');
     await writeMemoryEntry({ memoryId, content: 'Alpha fact' });
 
@@ -102,10 +113,13 @@ describe('writeMemoryEntry merge consolidation', () => {
       ...FORCE_MERGE,
     });
 
-    expect(result.entry.content).toBe('Alpha fact\nBeta fact');
+    expect(result.action).toBe('created');
+    expect(result.entry.content).toBe('Beta fact');
   });
 
-  test('concatenates without calling the LLM when no consolidation context', async () => {
+  // No agent context (manual REST, the orchestration `memory_write` node)
+  // means no model to consolidate with, so a merge-band write creates.
+  test('creates without calling the LLM when there is no consolidation context', async () => {
     const memoryId = await createMemoryId('Manual Merge');
     await writeMemoryEntry({ memoryId, content: 'Alpha' });
 
@@ -115,12 +129,12 @@ describe('writeMemoryEntry merge consolidation', () => {
       ...FORCE_MERGE,
     });
 
-    expect(result.action).toBe('updated');
-    expect(result.entry.content).toBe('Alpha\nBeta');
+    expect(result.action).toBe('created');
+    expect(result.entry.content).toBe('Beta');
     expect(mockRunConsolidationCompletion).not.toHaveBeenCalled();
   });
 
-  test('unions tags and shallow-merges metadata on a merge write', async () => {
+  test('unions tags and shallow-merges metadata on an LLM-consolidated merge', async () => {
     const memoryId = await createMemoryId('Tagged Merge');
     await writeMemoryEntry({
       memoryId,
@@ -129,11 +143,14 @@ describe('writeMemoryEntry merge consolidation', () => {
       metadata: { a: 1 },
     });
 
+    mockRunConsolidationCompletion.mockResolvedValueOnce('First and second');
+
     const result = await writeMemoryEntry({
       memoryId,
       content: 'Second fact',
       tags: ['source:rejected_approval'],
       metadata: { b: 2 },
+      consolidation: { agentId: 'agt_consolidate' },
       ...FORCE_MERGE,
     });
 
@@ -142,5 +159,21 @@ describe('writeMemoryEntry merge consolidation', () => {
       expect.arrayContaining(['role:manager', 'source:rejected_approval'])
     );
     expect(result.entry.metadata).toEqual({ a: 1, b: 2 });
+  });
+
+  test('a merge-band write with no context leaves the existing entry untouched', async () => {
+    const memoryId = await createMemoryId('No Erosion');
+    const first = await writeMemoryEntry({ memoryId, content: 'Atomic fact' });
+
+    await writeMemoryEntry({
+      memoryId,
+      content: 'Related fact',
+      ...FORCE_MERGE,
+    });
+
+    const existing = await db.MemoryEntry.findOne({
+      where: { publicId: first.entry.id },
+    });
+    expect(existing!.content).toBe('Atomic fact');
   });
 });

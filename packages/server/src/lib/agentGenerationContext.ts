@@ -10,7 +10,7 @@ import type { TypedAgent } from './agentGenerationTypes';
 import {
   buildKnowledgeMessages,
   mergeKnowledgeConfig,
-  normalizeKnowledgeConfig,
+  readKnowledgeConfig,
 } from './agentKnowledge';
 import { resolveAgentModel } from './agentModelResolution';
 import { resolveServedAgentVersion } from './agentServedVersion';
@@ -87,8 +87,8 @@ const assembleContextMessages = async (args: {
 }): Promise<Array<{ role: string; content: unknown }>> => {
   const knowledgeMessages = await buildKnowledgeMessages({
     knowledgeConfig: mergeKnowledgeConfig({
-      base: normalizeKnowledgeConfig(args.typedAgent.knowledgeConfig),
-      override: normalizeKnowledgeConfig(args.knowledgeConfig),
+      base: readKnowledgeConfig(args.typedAgent.knowledgeConfig),
+      override: readKnowledgeConfig(args.knowledgeConfig),
     }),
     projectIds: args.projectIds,
     messages: args.resolvedMessages,

@@ -29,8 +29,6 @@ type CreateActorBody = {
   instructions?: string | null;
   agent_id?: string;
   chat_id?: string;
-  memory_id?: string;
-  auto_create_memory?: boolean;
 };
 
 actorsRouter.get('/actors', async (ctx: Context) => {
@@ -122,11 +120,8 @@ const performCreateActor = async (args: {
   body: CreateActorBody;
   agentDbId: number | undefined;
   chatDbId: number | undefined;
-  memoryDbId: number | undefined;
 }): Promise<{ status: 200 | 201; actor: unknown }> => {
   const instructions = args.body.instructions ?? null;
-  const autoCreateMemory = args.body.auto_create_memory ?? false;
-  const memoryId = args.memoryDbId ?? null;
 
   if (args.body.external_id !== undefined) {
     const result = await findOrCreateActor({
@@ -136,8 +131,6 @@ const performCreateActor = async (args: {
       instructions,
       agentId: args.agentDbId,
       chatId: args.chatDbId,
-      memoryId,
-      autoCreateMemory,
     });
     return { status: result.created ? 201 : 200, actor: result.actor };
   }
@@ -149,8 +142,6 @@ const performCreateActor = async (args: {
     instructions,
     agentId: args.agentDbId,
     chatId: args.chatDbId,
-    memoryId,
-    autoCreateMemory,
   });
 
   return { status: 201 as const, actor };
@@ -181,7 +172,6 @@ actorsRouter.post('/actors', async (ctx: Context) => {
   const resolved = await resolveActorLinkedIds({
     agentId: body.agent_id,
     chatId: body.chat_id,
-    memoryId: body.memory_id,
     projectId: projectDbId,
   });
 
@@ -190,7 +180,6 @@ actorsRouter.post('/actors', async (ctx: Context) => {
     body,
     agentDbId: resolved.agentId ?? undefined,
     chatDbId: resolved.chatId ?? undefined,
-    memoryDbId: resolved.memoryId ?? undefined,
   });
 
   ctx.status = result.status;
@@ -255,7 +244,6 @@ actorsRouter.patch('/actors/:actor_id', async (ctx: Context) => {
     instructions?: string | null;
     agent_id?: string | null;
     chat_id?: string | null;
-    memory_id?: string | null;
   };
 
   const updated = await updateActor({
@@ -265,7 +253,6 @@ actorsRouter.patch('/actors/:actor_id', async (ctx: Context) => {
     instructions: body.instructions,
     agentId: body.agent_id,
     chatId: body.chat_id,
-    memoryId: body.memory_id,
   });
 
   ctx.body = updated;

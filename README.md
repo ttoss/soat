@@ -4,7 +4,7 @@
   <img src="./packages/website/static/img/soat-architecture.png" alt="SOAT Architecture" width="100%">
 </p>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![SafeSkill 92/100](https://img.shields.io/badge/SafeSkill-92%2F100_Verified%20Safe-brightgreen)](https://safeskill.dev/scan/ttoss-soat)
 [![Docker Image Version](https://img.shields.io/docker/v/ttoss/soat?label=docker)](https://hub.docker.com/r/ttoss/soat)
 [![Docker Pulls](https://img.shields.io/docker/pulls/ttoss/soat)](https://hub.docker.com/r/ttoss/soat)
@@ -88,11 +88,15 @@ This is a monorepo managed with pnpm and Turbo:
 
 ## Contributing
 
-Issues and pull requests are welcome. Run the tests with `pnpm --filter @soat/server test` and the smoke suite with `pnpm run -w smoke-tests`.
+Issues and pull requests are welcome — see [CONTRIBUTING.md](./CONTRIBUTING.md) for the workflow, the quality bar, and what changing a module involves. Run the tests with `pnpm --filter @soat/server test` and the smoke suite with `pnpm run -w smoke-tests`.
+
+Found a security issue? Please report it privately — see [SECURITY.md](./SECURITY.md).
 
 ## License
 
-MIT — see the [LICENSE](LICENSE) file for details.
+Apache 2.0 — see the [LICENSE](LICENSE) and [NOTICE](NOTICE) files for details. Releases published before the relicensing remain available under the MIT License. SOAT is not monetized: there is no paid tier and no feature withheld from this repository.
+
+The license covers the code, not the name. For use of "SOAT" and the logo, see [TRADEMARK.md](./TRADEMARK.md).
 
 ## Acknowledgments
 

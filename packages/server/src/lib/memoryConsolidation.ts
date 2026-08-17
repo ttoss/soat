@@ -32,13 +32,16 @@ export const buildConsolidationPrompt = (args: {
 
 /**
  * Chooses the content to persist after a consolidation attempt: the trimmed
- * consolidated text when the model returned something usable, otherwise the
- * concatenation fallback. A blank completion must never blow away the merge.
+ * consolidated text when the model returned something usable, `null` when it
+ * returned nothing.
+ *
+ * `null` means "do not merge" — the caller creates a new entry instead. A blank
+ * completion must never blow away the existing entry, and there is no
+ * concatenation to fall back to any more (#1062).
  */
 export const pickMergedContent = (args: {
   consolidated: string;
-  fallback: string;
-}): string => {
+}): string | null => {
   const trimmed = args.consolidated.trim();
-  return trimmed.length > 0 ? trimmed : args.fallback;
+  return trimmed.length > 0 ? trimmed : null;
 };

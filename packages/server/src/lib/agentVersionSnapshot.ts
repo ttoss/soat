@@ -1,6 +1,5 @@
 import { db } from '../db';
 import type { MappedAgent } from './agentAccessor';
-import { normalizeKnowledgeConfig } from './agentKnowledge';
 import {
   type AgentToolBinding,
   parseWireToolBindings,
@@ -74,8 +73,8 @@ export const buildAgentConfigSnapshot = (
 
 // ── Agent-specific snapshot readers ───────────────────────────────────────
 //
-// The scalar readers (`configString`, `configNumber`, …) are shared; these two
-// are not, because they re-run agent-specific parsing over an archived value.
+// The scalar readers (`configString`, `configNumber`, …) are shared; this one
+// is not, because it re-runs agent-specific parsing over an archived value.
 
 /**
  * Reads the archived `tool_bindings` as canonical bindings.
@@ -88,9 +87,4 @@ export const configToolBindings = (
   value: unknown
 ): AgentToolBinding[] | null => {
   return parseWireToolBindings(value) ?? null;
-};
-
-/** Reads the archived `knowledge_config`, which is stored in its wire shape. */
-export const configKnowledgeConfig = (value: unknown): object | null => {
-  return normalizeKnowledgeConfig(value) ?? null;
 };

@@ -2,10 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import type { TypedAgent } from './agentGenerationTypes';
-import {
-  configKnowledgeConfig,
-  configToolBindings,
-} from './agentVersionSnapshot';
+import { configToolBindings } from './agentVersionSnapshot';
 import {
   type ActiveRelease,
   assignReleaseVersion,
@@ -78,7 +75,7 @@ const buildTypedAgentFromConfig = (args: {
     stepRules: configArray<object>(config.step_rules),
     boundaryPolicy: configObject(config.boundary_policy),
     temperature: configNumber(config.temperature),
-    knowledgeConfig: configKnowledgeConfig(config.knowledge_config),
+    knowledgeConfig: configObject(config.knowledge_config),
     outputSchema: configObject(config.output_schema),
     guardrailIds: configArray<string>(config.guardrail_ids),
     project: live.project,

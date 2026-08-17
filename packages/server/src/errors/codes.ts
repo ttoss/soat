@@ -16,10 +16,6 @@ export const ERROR_CODES = {
     httpStatus: 400,
     description: 'A referenced chat does not exist.',
   },
-  MEMORY_NOT_FOUND: {
-    httpStatus: 400,
-    description: 'A referenced memory does not exist.',
-  },
   AI_PROVIDER_NOT_FOUND: {
     httpStatus: 400,
     description: 'A referenced AI provider does not exist.',

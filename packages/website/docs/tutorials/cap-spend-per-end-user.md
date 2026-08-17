@@ -924,6 +924,6 @@ curl -s "$SOAT_BASE_URL/api/v1/audit-log?project_id=$PROJECT_ID&action=quotas:Mo
 ## Next Steps
 
 - Price your usage so `cost_usd` caps actually bite, and get pushed a webhook before a budget is hit, in [Meter and Budget Your Project's Spend](/docs/tutorials/metering-and-budgets).
-- Give each end user their own long-term memory with `auto_create_memory` on the actor — see [Give Your Agent Long-Term Memory](/docs/tutorials/memories-agent).
+- Give each end user their own long-term memory: create one memory per user, keep the mapping in your application, and pass it as `knowledge_config.memory_ids` on the generate call — see [Give Your Agent Long-Term Memory](/docs/tutorials/memories-agent) and [Actors — Per-Actor Memory](/docs/modules/actors#per-actor-memory).
 - Cap an individual tool call rather than aggregate spend with [Gate a Dangerous Tool with Guardrails](/docs/tutorials/gate-a-tool-with-guardrails).
 - Triage what a breached cap filed — see [Exceptions](/docs/modules/exceptions).

@@ -4,7 +4,7 @@
   "archetype": "infrastructure",
   "summary": "Self-hosted infrastructure layer for production-ready AI agents: IAM, storage, knowledge, memory, orchestration, guardrails, and traces from one Node.js server backed by PostgreSQL.",
   "website": "https://soat.ttoss.dev",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "deployment": ["self-hosted"],
   "last_verified": "2026-08-14",
   "capabilities": {

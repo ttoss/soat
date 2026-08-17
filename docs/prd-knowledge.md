@@ -16,6 +16,20 @@ Only outstanding work is tracked here; shipped functionality lives in `packages/
 | Evaluation harness                 | ❌ Future      | Golden query set, recall@k/MRR, memory benchmarks, injected-context tracing (Phase 7)            |
 | `knowledge_config` single-casing   | 🟠 Decided — pre-v1 | Backfill pre-single-casing agent rows, replace the deep key transform with explicit per-field mapping, delete the dead `query` fallback (#1063; see [Engine Review Findings](#engine-review-findings-2026-08)) |
 
+## Engine Review Findings — Resolved by Removal (#1063)
+
+Two pieces of the shipped `knowledge_config` surface were removed pre-v1. Neither
+changed the wire contract; both got strictly more expensive to do later.
+
+| Finding | Resolution |
+| --- | --- |
+| **Deep case transform on `knowledge_config`** — `normalizeKnowledgeConfig` / `denormalizeKnowledgeConfig` rewrote every key in the bag recursively, the key-walking shape `.claude/rules/case-convention.md` bans after #651/#690/#729/#737 | ✅ Removed. The bag is stored in the wire casing verbatim (`toStoredKnowledgeConfig`) and read into the engine's camelCase shape field by field (`readKnowledgeConfig`). Rows persisted before single-casing are normalized once at boot by `backfillKnowledgeConfigCasing`, covering both `agents.knowledge_config` and the `config.knowledge_config` on version snapshots. `convertKeysDeep` is deleted — it had no other caller. |
+| **Dead `knowledge_config.query` fallback** — in the TS type and in `buildKnowledgeMessages`, but in no OpenAPI schema, so `strictFields` rejected it on every REST request and the formation validator rejected it in templates | ✅ Removed. The query is the turn's own last user message; a generation with no user-role string content injects knowledge only when the config carries explicit filters. If a stored-query use case materializes it returns as a specced field with a documented contract. |
+
+This unblocks the pluggable-algorithm work: `knowledge_config` may now grow a
+field that holds user-authored keys (a per-algorithm config map), which the deep
+transform would have corrupted.
+
 ## Implementation Phases
 
 ### Phase 3 — Entity Graph Queries ❌ Future

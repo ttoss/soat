@@ -149,16 +149,6 @@ paths:
                   type: string
                   description: Chat to link this actor to. Mutually exclusive with agent_id.
                   example: 'chat_V1StGXR8Z5jdHi6B'
-                memory_id:
-                  x-soat-ref: memories
-                  type: string
-                  nullable: true
-                  description: Memory ID to link to this actor. Mutually exclusive with auto_create_memory.
-                  example: 'mem_V1StGXR8Z5jdHi6B'
-                auto_create_memory:
-                  type: boolean
-                  default: false
-                  description: When true, automatically creates a new memory container for this actor and links it. Ignored if memory_id is set. With external_id (idempotent), memory is only created on first creation.
       responses:
         '200':
           description: Actor already exists — returned when externalId matches an existing actor in this project (idempotent)
@@ -306,12 +296,6 @@ paths:
                   type: string
                   nullable: true
                   description: Chat to link this actor to. Mutually exclusive with agent_id.
-                memory_id:
-                  x-soat-ref: memories
-                  type: string
-                  nullable: true
-                  description: Memory ID to link to this actor. Set to null to unlink.
-                  example: 'mem_V1StGXR8Z5jdHi6B'
                 tags:
                   type: object
                   additionalProperties:
@@ -527,11 +511,6 @@ components:
           type: string
           nullable: true
           description: Chat this actor is linked to (mutually exclusive with agentId).
-        memory_id:
-          x-soat-ref: memories
-          type: string
-          nullable: true
-          description: Memory container linked to this actor.
         tags:
           type: object
           additionalProperties:

@@ -1,6 +1,7 @@
 {
   "name": "@soat/cli",
   "version": "0.24.0",
+  "license": "Apache-2.0",
   "type": "module",
   "scripts": {
     "generate": "tsx scripts/generate.ts",

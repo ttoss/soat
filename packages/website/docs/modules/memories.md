@@ -90,17 +90,28 @@ When you call [`POST /api/v1/memory-entries`](/docs/api/memoryEntries/create-mem
 2. **Finds** the most similar **currently-valid** existing entry in that memory (cosine similarity via pgvector). [Invalidated entries](#temporal-invalidation) are never candidates.
 3. **Decides** based on two configurable thresholds:
 
-| Similarity range        | Decision   | What happens                                                               |
-| ----------------------- | ---------- | -------------------------------------------------------------------------- |
-| ≥ `duplicate_threshold` | **Skip**   | The fact is already known. Returns the existing entry unchanged.           |
-| ≥ `update_threshold`    | **Merge**  | The fact overlaps. The two facts are consolidated into the existing entry (see below).      |
-| < `update_threshold`    | **Create** | The fact is new. A new entry is created.                                   |
+| Similarity range        | Decision   | What happens                                                     |
+| ----------------------- | ---------- | ---------------------------------------------------------------- |
+| ≥ `duplicate_threshold` | **Skip**   | The fact is already known. Returns the existing entry unchanged. |
+| below it                | **Create** | A new entry is written.                                          |
 
-On **Merge**, writes made during a generation (the `write_memory` tool and automatic extraction) consolidate the existing and incoming facts into a **single atomic fact** using the agent's LLM — contradictions resolve in favour of the new fact. Writes without an agent context (the manual [`POST /api/v1/memory-entries`](/docs/api/memoryEntries/create-memory-entry) endpoint) append the incoming content instead. Consolidation is best-effort: if the completion fails, the write falls back to appending, so a merge never loses content.
+`duplicate_threshold` is a per-request field on [`POST /api/v1/memory-entries`](/docs/api/memoryEntries/create-memory-entry), defaulting to `0.95`.
 
-See all three outcomes in action in [Agent with Persistent Memory - Step 5 (Write memory entries)](/docs/tutorials/memories-agent#step-5--write-memory-entries).
+**Merge** is a third outcome, and only agent write paths can reach it. A write made
+during a generation (the [`write_memory` tool](#write_memory-tool) and
+[automatic extraction](#automatic-extraction)) carries an agent context, so a fact
+that is merely *similar* to an existing entry — scoring at or above `0.75` but
+below `duplicate_threshold` — is consolidated with it into a **single atomic
+fact** by the agent's LLM, contradictions resolving in favour of the new fact.
 
-The thresholds are per-request fields: `duplicate_threshold` (default `0.95`) and `update_threshold` (default `0.75`).
+A write with no agent context — the manual endpoint above and the
+[orchestration `memory_write` node](#orchestration-memory_write-node) — has no
+model to consolidate with, so it creates instead. Consolidation is also
+best-effort on the agent paths: if the completion fails or comes back empty, the
+write creates too. Nothing is ever appended to an existing entry, so no write can
+lose a fact, and an entry stays one fact rather than growing into a paragraph
+whose embedding drifts away from everything in it. The cost is a possible
+near-duplicate pair, which future arbitration merges properly.
 
 On a **merge**, the incoming `tags` are unioned into the existing entry's tags and `metadata` is shallow-merged (incoming keys win), so accumulated labels are never lost. [`PUT /api/v1/memory-entries/:id`](/docs/api/memoryEntries/update-memory-entry) replaces `tags`/`metadata` outright; pass `null` (or `[]` for tags) to clear.
 
@@ -111,7 +122,7 @@ The response always includes an `action` field alongside the entry:
 | `action`  | HTTP status | Meaning                                      |
 | --------- | ----------- | -------------------------------------------- |
 | `created` | `201`       | New entry written                            |
-| `updated` | `200`       | Existing entry merged with new content       |
+| `updated` | `200`       | Existing entry rewritten to absorb the incoming fact. Agent write paths only — the manual endpoint never returns it |
 | `skipped` | `200`       | Duplicate detected — existing entry returned |
 | `superseded` | `200`    | The incoming fact contradicted an existing entry, which was invalidated and replaced. Produced by the LLM-arbitrated write path, which has not shipped yet — the value is part of the API contract so clients can handle it from day one. |
 

@@ -325,7 +325,7 @@ const config: Config = {
               href: 'https://github.com/ttoss/soat/blob/main/CHANGELOG.md',
             },
             {
-              label: 'License (MIT)',
+              label: 'License (Apache 2.0)',
               href: 'https://github.com/ttoss/soat/blob/main/LICENSE',
             },
           ],

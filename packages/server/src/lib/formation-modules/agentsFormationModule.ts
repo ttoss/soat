@@ -1,9 +1,6 @@
 import { db } from '../../db';
 import { deleteAgent, findAgentDeletionBlocker } from '../agentDelete';
-import {
-  denormalizeKnowledgeConfig,
-  normalizeKnowledgeConfig,
-} from '../agentKnowledge';
+import { toStoredKnowledgeConfig } from '../agentKnowledge';
 import { createAgent, getAgent, updateAgent } from '../agents';
 import type { AgentToolBinding } from '../agentToolBindings';
 import { lookupProjectOwnerUserId } from '../formationsHelpers';
@@ -136,7 +133,7 @@ const mapAgentProperties = (properties: Record<string, unknown>) => {
       toNullableString(properties.trace_content_mode)
     ),
     knowledgeConfig: toOptional(
-      normalizeKnowledgeConfig(properties.knowledge_config)
+      toStoredKnowledgeConfig(properties.knowledge_config)
     ),
     outputSchema: toOptional(toNullableObject(properties.output_schema)),
   };
@@ -225,7 +222,7 @@ export const agentsFormationModule = defineFormationModule({
         properties.single_session_per_actor
       ),
       traceContentMode: toNullableString(properties.trace_content_mode),
-      knowledgeConfig: normalizeKnowledgeConfig(properties.knowledge_config),
+      knowledgeConfig: toStoredKnowledgeConfig(properties.knowledge_config),
       outputSchema: toNullableObject(properties.output_schema),
     });
   },
@@ -248,8 +245,8 @@ export const agentsFormationModule = defineFormationModule({
     return getAgent({ id: physicalResourceId });
   },
 
-  // `knowledge_config` is stored normalized and read back denormalized, so this
-  // view is a mapping rather than a plain field selection.
+  // A plain field selection: every property is already the snake_case wire
+  // value the agent mapper returned, `knowledge_config` included.
   read: (agent) => {
     return {
       ai_provider_id: agent.ai_provider_id,
@@ -269,7 +266,7 @@ export const agentsFormationModule = defineFormationModule({
       max_context_messages: agent.max_context_messages,
       single_session_per_actor: agent.single_session_per_actor,
       trace_content_mode: agent.trace_content_mode,
-      knowledge_config: denormalizeKnowledgeConfig(agent.knowledge_config),
+      knowledge_config: agent.knowledge_config,
       output_schema: agent.output_schema,
     };
   },
