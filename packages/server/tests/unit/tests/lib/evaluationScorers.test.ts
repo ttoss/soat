@@ -1,10 +1,13 @@
 import {
   aggregateScores,
+  resolveRunPassed,
+} from 'src/lib/evaluationScorerAggregation';
+import {
   buildJsonLogicContext,
   type JudgeRunner,
-  resolveRunPassed,
   scoreOutput,
   type ScorerOutcome,
+  type ToolScorerRunner,
   validateScorers,
 } from 'src/lib/evaluationScorers';
 
@@ -32,6 +35,7 @@ describe('evaluation scorers', () => {
     itemMetadata?: unknown;
     agentOutputSchema?: unknown;
     runJudge?: JudgeRunner;
+    runToolScorer?: ToolScorerRunner;
   }): Promise<ScorerOutcome> => {
     const outcomes = await scoreOutput({
       scorers: [args.scorer],
@@ -41,6 +45,7 @@ describe('evaluation scorers', () => {
       itemMetadata: args.itemMetadata ?? null,
       agentOutputSchema: args.agentOutputSchema,
       runJudge: args.runJudge,
+      runToolScorer: args.runToolScorer,
     });
     return outcomes[0];
   };
@@ -168,6 +173,7 @@ describe('evaluation scorers', () => {
               prompt: 'rate {{output}}',
               pass_threshold: 0.5,
             },
+            { type: 'tool', name: 'toxicity', tool_id: 'tool_x1' },
           ],
           true
         )
@@ -191,6 +197,98 @@ describe('evaluation scorers', () => {
         expect(
           validate([{ type: 'output_schema', schema: 'object' }], true)
         ).toMatch(/must be a JSON Schema object/);
+      });
+    });
+
+    describe('tool', () => {
+      const toolScorer = (overrides: Record<string, unknown> = {}) => {
+        return {
+          type: 'tool',
+          name: 'toxicity',
+          tool_id: 'tool_x1',
+          ...overrides,
+        };
+      };
+
+      test('accepts a minimal tool scorer', () => {
+        expect(validate([toolScorer()])).toBeNull();
+      });
+
+      test('accepts the full config', () => {
+        expect(
+          validate([
+            toolScorer({
+              action: 'score-toxicity',
+              preset_parameters: { model: 'small' },
+              pass_threshold: 0.5,
+            }),
+          ])
+        ).toBeNull();
+      });
+
+      test.each([
+        ['a missing name', { name: undefined }, /name is required/],
+        ['an empty name', { name: '  ' }, /name is required/],
+        ['a non-string name', { name: 7 }, /name is required/],
+        ['a missing tool_id', { tool_id: undefined }, /tool_id is required/],
+        ['an empty tool_id', { tool_id: '' }, /tool_id is required/],
+        ['a non-string action', { action: 7 }, /action must be a string/],
+        [
+          'non-object preset_parameters',
+          { preset_parameters: 'x' },
+          /preset_parameters must be an object/,
+        ],
+        [
+          'a pass_threshold above 1',
+          { pass_threshold: 1.5 },
+          /pass_threshold must be a number between 0 and 1/,
+        ],
+        [
+          'a non-numeric pass_threshold',
+          { pass_threshold: '0.7' },
+          /pass_threshold must be a number between 0 and 1/,
+        ],
+      ])('rejects %s', (_label, overrides, pattern) => {
+        expect(
+          validate([toolScorer(overrides as Record<string, unknown>)])
+        ).toMatch(pattern as RegExp);
+      });
+
+      test('rejects a name that shadows a built-in scorer type', () => {
+        // Aggregate scores are keyed by the outcome's scorer key, so a tool
+        // scorer named like a built-in would collapse into its bucket.
+        expect(validate([toolScorer({ name: 'contains' })])).toMatch(
+          /must not be a built-in scorer type/
+        );
+      });
+
+      test.each(['input', 'output', 'object', 'expected', 'item'])(
+        'rejects the reserved preset key %s',
+        (key) => {
+          expect(
+            validate([toolScorer({ preset_parameters: { [key]: 1 } })])
+          ).toMatch(/reserved/);
+        }
+      );
+
+      test('rejects two tool scorers sharing a name', () => {
+        expect(
+          validate([
+            toolScorer(),
+            toolScorer({ name: 'toxicity', tool_id: 'tool_x2' }),
+          ])
+        ).toMatch(/declared more than once/);
+      });
+
+      test('accepts two tool scorers with distinct names', () => {
+        // Unlike built-in types, `tool` may appear several times — outcomes
+        // key on the scorer's own name, so two names are two buckets.
+        expect(
+          validate([
+            toolScorer(),
+            toolScorer({ name: 'groundedness', tool_id: 'tool_x2' }),
+          ])
+        ).toBeNull();
       });
     });
   });
@@ -675,6 +773,142 @@ describe('evaluation scorers', () => {
         input: [{ role: 'user', content: 'hi' }],
         output: 'Paris',
         expected: 'Paris, France',
+      });
+    });
+  });
+
+  // ── tool ─────────────────────────────────────────────────────────────────
+
+  describe('tool', () => {
+    const scorer = (overrides: Record<string, unknown> = {}) => {
+      return {
+        type: 'tool',
+        name: 'toxicity',
+        tool_id: 'tool_x1',
+        ...overrides,
+      };
+    };
+
+    const verdict = (result: {
+      score: number;
+      passed?: boolean;
+      reasoning?: string;
+    }): ToolScorerRunner => {
+      return () => {
+        return Promise.resolve(result);
+      };
+    };
+
+    test('keys the outcome by the scorer name, not the type', async () => {
+      expect(
+        await runOne({
+          scorer: scorer(),
+          content: 'x',
+          runToolScorer: verdict({ score: 0.8, passed: true }),
+        })
+      ).toEqual({ scorer: 'toxicity', score: 0.8, passed: true });
+    });
+
+    test('keeps the tool reasoning', async () => {
+      expect(
+        await runOne({
+          scorer: scorer(),
+          content: 'x',
+          runToolScorer: verdict({
+            score: 1,
+            passed: true,
+            reasoning: 'No slurs found.',
+          }),
+        })
+      ).toEqual({
+        scorer: 'toxicity',
+        score: 1,
+        passed: true,
+        reasoning: 'No slurs found.',
+      });
+    });
+
+    test('an explicit passed from the tool wins over the threshold', async () => {
+      // The tool owns the algorithm, so its verdict is authoritative even when
+      // the config also declares a threshold the score would clear.
+      expect(
+        (
+          await runOne({
+            scorer: scorer({ pass_threshold: 0.5 }),
+            content: 'x',
+            runToolScorer: verdict({ score: 0.9, passed: false }),
+          })
+        ).passed
+      ).toBe(false);
+    });
+
+    // The fallback gate boundary: `>=`, so a score exactly at the threshold
+    // passes — the same rule as llm_judge.
+    test.each([
+      [0.69, false],
+      [0.7, true],
+      [0.71, true],
+    ])(
+      'without a tool verdict, a score of %s at threshold 0.7 passes: %s',
+      async (score, expected) => {
+        expect(
+          (
+            await runOne({
+              scorer: scorer({ pass_threshold: 0.7 }),
+              content: 'x',
+              runToolScorer: verdict({ score }),
+            })
+          ).passed
+        ).toBe(expected);
+      }
+    );
+
+    test('no tool verdict and no threshold errors the item, naming the scorer', async () => {
+      // A scorer that cannot resolve pass/fail must error, never guess — the
+      // same rule that keeps a failed judge from landing as a 0.
+      await expect(
+        runOne({
+          scorer: scorer(),
+          content: 'x',
+          runToolScorer: verdict({ score: 0.6 }),
+        })
+      ).rejects.toThrow(/toxicity.*passed.*pass_threshold/);
+    });
+
+    test('propagates a tool failure so the caller can error the item', async () => {
+      await expect(
+        runOne({
+          scorer: scorer(),
+          content: 'x',
+          runToolScorer: () => {
+            return Promise.reject(new Error('scorer tool exploded'));
+          },
+        })
+      ).rejects.toThrow('scorer tool exploded');
+    });
+
+    test('receives the scorer and the same context json_logic sees', async () => {
+      let seen: unknown;
+      await runOne({
+        scorer: scorer(),
+        content: 'Paris',
+        object: { category: 'geo' },
+        expectedOutput: 'Paris, France',
+        itemMetadata: { topic: 'capitals' },
+        runToolScorer: (args) => {
+          seen = args;
+          return Promise.resolve({ score: 1, passed: true });
+        },
+      });
+      expect(seen).toEqual({
+        scorer: scorer(),
+        context: {
+          input: [{ role: 'user', content: 'hi' }],
+          output: 'Paris',
+          object: { category: 'geo' },
+          expected: 'Paris, France',
+          item: { metadata: { topic: 'capitals' } },
+        },
       });
     });
   });

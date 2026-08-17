@@ -13,6 +13,8 @@ The Knowledge module provides unified semantic search across all knowledge sourc
 
 Each result carries a `source_type` discriminant (`"document"` or `"memory"`) so callers know where each piece of knowledge came from. This is the same search layer agents use internally for retrieval — see it wired into an agent in [Agent with Persistent Memory — Step 8 (Create an agent with knowledge_config)](/docs/tutorials/memories-agent#step-8--create-an-agent-with-knowledge_config), and the [Memory & Knowledge Engine](../advanced/memory-and-knowledge-engine.md) deep dive for the full retrieval pipeline and its extension points.
 
+The module follows SOAT's [engine & algorithms pattern](../getting-started/engines-and-algorithms.md): the two stores, the unified search function, and injection are the **engine**; chunking and ranking are the **algorithms**, and [ingestion rules](./ingestion-rules.md) are the seam for bringing your own extraction algorithm as a [tool](./tools.md).
+
 See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
 ## Related Tutorials

@@ -15,15 +15,25 @@
  *   scorers read `output.content`; `output_schema` validates `output.object`
  *   and never re-parses the text. `json_logic` sees both.
  */
-import createDebug from 'debug';
-
 import { DomainError } from '../errors';
-import type { BaselineComparison } from './evaluationDeltas';
+import {
+  checkToolScorerConfig,
+  isUnitInterval,
+  resolveToolScorerPassed,
+  type ToolScorerRunner,
+} from './evaluationToolScorerContract';
 import { evaluateLogic } from './jsonLogicMapping';
 import { validateStructuredOutput } from './outputSchema';
 import { isPlainObject } from './plainObject';
 
-const log = createDebug('soat:evaluations');
+// The tool scorer's pure contract — its config rules, verdict semantics, and
+// runner types — lives in `evaluationToolScorerContract.ts`; re-exported here
+// so consumers of the scorer algebra see one surface.
+export {
+  TOOL_SCORER_RESERVED_KEYS,
+  type ToolScorerRunner,
+  type ToolScorerVerdict,
+} from './evaluationToolScorerContract';
 
 /** Every scorer type the module executes. */
 export const SCORER_TYPES = [
@@ -32,6 +42,7 @@ export const SCORER_TYPES = [
   'json_logic',
   'output_schema',
   'llm_judge',
+  'tool',
 ] as const;
 
 export type ScorerType = (typeof SCORER_TYPES)[number];
@@ -43,6 +54,14 @@ export type ScorerType = (typeof SCORER_TYPES)[number];
  */
 export const JUDGE_SCORER_TYPE = 'llm_judge';
 
+/**
+ * The scorer that runs a caller-authored algorithm — a project [tool] invoked
+ * with the item's context. Like judging, the invocation is injected (see
+ * {@link ToolScorerRunner}) so this module stays pure; the call itself lives in
+ * `evaluationToolScorer.ts`.
+ */
+export const TOOL_SCORER_TYPE = 'tool';
+
 /** The config keys each scorer type accepts, beyond `type`. */
 const SCORER_FIELDS: Record<ScorerType, readonly string[]> = {
   exact_match: [],
@@ -50,6 +69,7 @@ const SCORER_FIELDS: Record<ScorerType, readonly string[]> = {
   json_logic: ['expression'],
   output_schema: ['schema'],
   llm_judge: ['ai_provider_id', 'model', 'prompt', 'pass_threshold'],
+  tool: ['name', 'tool_id', 'action', 'preset_parameters', 'pass_threshold'],
 };
 
 export type ScorerOutcome = {
@@ -91,22 +111,12 @@ type ScorerCheck = (args: {
   agentHasOutputSchema: boolean;
 }) => string | null;
 
-/**
- * A finite number in `[0, 1]`.
- *
- * `llm_judge.pass_threshold` is required with no default: a judge emits a
- * continuous score, so nothing about the score itself says where "good enough"
- * is — and a defaulted cutoff would silently decide the gate every run-level
- * `passed` is computed from (the evaluations module doc — Pass semantics).
- */
-const isUnitInterval = (value: unknown): boolean => {
-  return (
-    typeof value === 'number' &&
-    Number.isFinite(value) &&
-    value >= 0 &&
-    value <= 1
-  );
-};
+// `llm_judge.pass_threshold` is required with no default: a judge emits a
+// continuous score, so nothing about the score itself says where "good enough"
+// is — and a defaulted cutoff would silently decide the gate every run-level
+// `passed` is computed from (the evaluations module doc — Pass semantics).
+// `isUnitInterval` (shared with the tool scorer's optional threshold) comes
+// from `evaluationToolScorerContract.ts`.
 
 /**
  * The per-type config rules, keyed by type so a new entry in
@@ -166,6 +176,15 @@ const SCORER_CHECKS: Record<ScorerType, ScorerCheck> = {
     }
     return null;
   },
+  tool: ({ scorer, path }) => {
+    return checkToolScorerConfig({
+      scorer,
+      path,
+      isBuiltInTypeName: (name) => {
+        return SCORER_TYPE_SET.has(name);
+      },
+    });
+  },
 };
 
 const validateOneScorer = (args: {
@@ -223,13 +242,18 @@ export const validateScorers = (args: {
     });
     if (error) return error;
 
-    // Aggregate scores are keyed by scorer type, so two scorers of the same
-    // type would collapse into one bucket and silently lose a signal.
+    // Aggregate scores are keyed by the outcome's scorer key — the type for
+    // built-ins, the scorer's own `name` for tool scorers — so two scorers
+    // sharing a key would collapse into one bucket and silently lose a signal.
+    // Tool scorers may therefore appear several times, under distinct names.
     const type = scorer.type as string;
-    if (seen.has(type)) {
-      return `${path}.type '${type}' is declared more than once; each scorer type may appear at most once per eval.`;
+    const key = type === TOOL_SCORER_TYPE ? (scorer.name as string) : type;
+    if (seen.has(key)) {
+      return type === TOOL_SCORER_TYPE
+        ? `${path}.name '${key}' is declared more than once; each tool scorer name may appear at most once per eval.`
+        : `${path}.type '${key}' is declared more than once; each scorer type may appear at most once per eval.`;
     }
-    seen.add(type);
+    seen.add(key);
   }
 
   return null;
@@ -347,6 +371,32 @@ export type JudgeRunner = (args: {
   expected: string | null;
 }) => Promise<{ score: number; reasoning?: string }>;
 
+/**
+ * Grades one item with the caller's own algorithm. The runner (injected — see
+ * {@link ToolScorerRunner}) does the I/O and shape-checks the answer; the
+ * verdict semantics live in `evaluationToolScorerContract.ts`.
+ */
+const scoreToolScorer = async (args: {
+  scorer: Record<string, unknown>;
+  context: Record<string, unknown>;
+  runToolScorer: ToolScorerRunner;
+}): Promise<ScorerOutcome> => {
+  const verdict = await args.runToolScorer({
+    scorer: args.scorer,
+    context: args.context,
+  });
+
+  const name = String(args.scorer.name);
+  return {
+    scorer: name,
+    score: verdict.score,
+    passed: resolveToolScorerPassed({ name, scorer: args.scorer, verdict }),
+    ...(verdict.reasoning === undefined
+      ? {}
+      : { reasoning: verdict.reasoning }),
+  };
+};
+
 const scoreJudge = async (args: {
   scorer: Record<string, unknown>;
   input: unknown;
@@ -383,6 +433,7 @@ const scoreOne = async (args: {
   expectedOutput: string | null;
   agentOutputSchema: unknown;
   runJudge?: JudgeRunner;
+  runToolScorer?: ToolScorerRunner;
 }): Promise<ScorerOutcome> => {
   const { scorer } = args;
   const scorerType = scorer.type;
@@ -422,6 +473,21 @@ const scoreOne = async (args: {
         runJudge: args.runJudge,
       });
     }
+    case 'tool': {
+      /* istanbul ignore next -- the run path always supplies a runner, so a
+         tool scorer with none is unreachable through any entry point. */
+      if (!args.runToolScorer) {
+        throw new DomainError(
+          'VALIDATION_FAILED',
+          'A tool scorer needs a tool runner; none was supplied.'
+        );
+      }
+      return scoreToolScorer({
+        scorer,
+        context: args.context,
+        runToolScorer: args.runToolScorer,
+      });
+    }
     case 'output_schema':
       return scoreOutputSchema({
         scorer,
@@ -459,6 +525,7 @@ export const scoreOutput = async (args: {
   itemMetadata: unknown;
   agentOutputSchema: unknown;
   runJudge?: JudgeRunner;
+  runToolScorer?: ToolScorerRunner;
 }): Promise<ScorerOutcome[]> => {
   const context = buildJsonLogicContext({
     input: args.input,
@@ -480,6 +547,7 @@ export const scoreOutput = async (args: {
         expectedOutput: args.expectedOutput,
         agentOutputSchema: args.agentOutputSchema,
         runJudge: args.runJudge,
+        runToolScorer: args.runToolScorer,
       })
     );
   }
@@ -487,108 +555,7 @@ export const scoreOutput = async (args: {
   return outcomes;
 };
 
-// ── Aggregation ────────────────────────────────────────────────────────────
-
-/** Per-scorer rollup plus the run-level pass rate, in the wire shape. */
-export type AggregateScores = {
-  scorers: Record<string, { mean: number; pass_rate: number }>;
-  pass_rate: number | null;
-  scored_item_count: number;
-  /**
-   * Present only when the run named a `baseline_run_id`. Computed over the item
-   * intersection with divergence counts, so a delta is never presented as a
-   * clean comparison when the two runs' item sets differ (`evaluationDeltas.ts`).
-   */
-  baseline?: BaselineComparison;
-};
-
-const ratio = (numerator: number, denominator: number): number => {
-  return denominator === 0 ? 0 : numerator / denominator;
-};
-
-/**
- * Rolls per-item outcomes up to the run level.
- *
- * Only **non-errored** items are included: an item whose generation could not
- * be evaluated (a `requires_action` pause, a provider failure) says nothing
- * about the agent's answers, so counting it would depress the score with
- * infrastructure noise.
- *
- * `pass_rate` is `null` when nothing was scorable — an honest "no signal",
- * distinct from a genuine 0.
- */
-export const aggregateScores = (args: {
-  results: Array<{
-    scores: ScorerOutcome[];
-    passed: boolean;
-    errored: boolean;
-  }>;
-}): AggregateScores => {
-  const scored = args.results.filter((result) => {
-    return !result.errored;
-  });
-
-  const byScorer = new Map<
-    string,
-    { total: number; passes: number; n: number }
-  >();
-  for (const result of scored) {
-    for (const outcome of result.scores) {
-      const bucket = byScorer.get(outcome.scorer) ?? {
-        total: 0,
-        passes: 0,
-        n: 0,
-      };
-      bucket.total += outcome.score;
-      bucket.passes += outcome.passed ? 1 : 0;
-      bucket.n += 1;
-      byScorer.set(outcome.scorer, bucket);
-    }
-  }
-
-  const scorers: AggregateScores['scorers'] = {};
-  for (const [scorer, bucket] of byScorer) {
-    scorers[scorer] = {
-      mean: ratio(bucket.total, bucket.n),
-      pass_rate: ratio(bucket.passes, bucket.n),
-    };
-  }
-
-  const passedItems = scored.filter((result) => {
-    return result.passed;
-  }).length;
-
-  log(
-    'aggregateScores: scored=%d passed=%d scorers=%d',
-    scored.length,
-    passedItems,
-    byScorer.size
-  );
-
-  return {
-    scorers,
-    pass_rate: scored.length === 0 ? null : ratio(passedItems, scored.length),
-    scored_item_count: scored.length,
-  };
-};
-
-/**
- * The run-level verdict.
- *
- * Gates on the **pass rate**, never on a pooled mean: pooling 0/1 binaries with
- * 0–1 judge fractions produces a unit-less number whose meaning shifts whenever
- * a scorer is added — a gate value nobody can reason about
- * (the evaluations module doc — Pass semantics).
- *
- * `null` when the Eval declares no threshold (it reports without gating), and
- * `false` when a threshold exists but nothing was scorable — a run that
- * measured nothing must not read as a pass.
- */
-export const resolveRunPassed = (args: {
-  passThreshold: number | null;
-  aggregate: AggregateScores;
-}): boolean | null => {
-  if (args.passThreshold === null) return null;
-  if (args.aggregate.pass_rate === null) return false;
-  return args.aggregate.pass_rate >= args.passThreshold;
-};
+// Run-level aggregation (`aggregateScores`, `resolveRunPassed`,
+// `AggregateScores`) lives in `evaluationScorerAggregation.ts`: scoring
+// produces one item's outcomes, and the roll-up over persisted outcomes is a
+// separate consumer's concern (the run finalizer's).

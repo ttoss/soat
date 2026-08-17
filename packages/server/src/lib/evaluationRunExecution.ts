@@ -24,9 +24,9 @@ import {
   type AggregateScores,
   aggregateScores,
   resolveRunPassed,
-  scoreOutput,
-  type ScorerOutcome,
-} from './evaluationScorers';
+} from './evaluationScorerAggregation';
+import { scoreOutput, type ScorerOutcome } from './evaluationScorers';
+import { runToolScorerCall } from './evaluationToolScorer';
 import type { GenerationInputMessage } from './generationInputMessages';
 
 const log = createDebug('soat:evaluations');
@@ -163,6 +163,13 @@ export const runEvalItem = async (args: {
           input,
           output: judged,
           expected,
+        });
+      },
+      runToolScorer: ({ scorer, context }) => {
+        return runToolScorerCall({
+          projectId: args.projectId,
+          scorer,
+          context,
         });
       },
     });

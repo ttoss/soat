@@ -1042,8 +1042,8 @@ components:
             type: object
           description: >-
             Scorer configs — `exact_match`, `contains`, `json_logic`,
-            `output_schema`, or `llm_judge`. Same shape as the evals REST
-            contract.
+            `output_schema`, `llm_judge`, or `tool`. Same shape as the evals
+            REST contract.
         pass_threshold:
           type: number
           nullable: true

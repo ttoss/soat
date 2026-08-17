@@ -1102,6 +1102,12 @@ components:
         continuous score plus its `reasoning`. Its `pass_threshold` is required:
         a continuous score says nothing about where "good enough" is, and a
         defaulted cutoff would silently decide the gate.
+
+
+        `tool` runs a custom scoring algorithm: a server-callable project tool
+        the engine invokes once per item with the item's context. Unlike the
+        built-in types it may appear several times, each under a distinct
+        `name` — outcomes and aggregates key on the name.
       items:
         oneOf:
           - $ref: '#/components/schemas/ExactMatchScorer'
@@ -1109,6 +1115,7 @@ components:
           - $ref: '#/components/schemas/JsonLogicScorer'
           - $ref: '#/components/schemas/OutputSchemaScorer'
           - $ref: '#/components/schemas/LlmJudgeScorer'
+          - $ref: '#/components/schemas/ToolScorer'
     ExactMatchScorer:
       type: object
       required:
@@ -1206,12 +1213,78 @@ components:
             Overrides the provider's default model. Pinned per scorer, because
             deltas between runs judged by different models are not comparable.
           example: gpt-4o-mini
+    ToolScorer:
+      type: object
+      description: >-
+        A custom scoring algorithm — a server-callable project tool the engine
+        invokes once per item. The tool receives the same variables a
+        `json_logic` expression reads — `input`, `output`, `object` (when the
+        agent has an `output_schema`), `expected`, and `item.metadata` — with
+        `preset_parameters` merged in at the top level, and must answer with a
+        JSON object carrying a numeric `score` between 0 and 1, an optional
+        boolean `passed`, and an optional `reasoning` string. A malformed
+        answer or a failed call marks the **item** errored, never the run
+        failed and never a score of 0.
+      required:
+        - type
+        - name
+        - tool_id
+      properties:
+        type:
+          type: string
+          enum: [tool]
+        name:
+          type: string
+          description: >-
+            Keys this scorer's outcomes and aggregate scores, so it must be
+            unique within the eval and must not shadow a built-in scorer type.
+            Unlike the built-in types, several `tool` scorers may coexist under
+            distinct names.
+          example: toxicity
+        tool_id:
+          x-soat-ref: tools
+          type: string
+          description: >-
+            The tool that scores each item. It must belong to the eval's
+            project and be server-callable (`http`, `mcp`, `soat`, or
+            `pipeline` — a `client` tool pauses for a calling client an eval
+            run does not have).
+          example: tool_V1StGXR8Z5jdHi6B
+        action:
+          type: string
+          nullable: true
+          description: >-
+            The operation to invoke; required when the tool type is `soat` or
+            `mcp`.
+          example: score-toxicity
+        preset_parameters:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: >-
+            Fixed values merged into every call's input at the top level. The
+            engine-injected keys (`input`, `output`, `object`, `expected`,
+            `item`) are reserved and rejected.
+        pass_threshold:
+          type: number
+          nullable: true
+          minimum: 0
+          maximum: 1
+          description: >-
+            Fallback verdict cutoff when the tool answers without a `passed`
+            flag: the item passes this scorer when `score` is greater than or
+            equal to this value. A tool-returned `passed` always wins. When
+            the tool omits `passed` and no threshold is set, the item is
+            recorded as errored — the scorer produced no verdict.
+          example: 0.5
     ScorerResult:
       type: object
       properties:
         scorer:
           type: string
-          description: The scorer type that produced this entry
+          description: >-
+            The scorer that produced this entry — the scorer type, or for a
+            `tool` scorer its `name`
           example: contains
         score:
           type: number
@@ -1220,7 +1293,9 @@ components:
           type: boolean
         reasoning:
           type: string
-          description: The judge's stated rationale; present for `llm_judge` only
+          description: >-
+            The stated rationale; present for `llm_judge` and for `tool`
+            scorers whose tool returned one
     Dataset:
       type: object
       properties:

@@ -6320,6 +6320,100 @@ if [ "$EVAL_JUDGE_BAD_EXIT" -eq 0 ]; then
   exit 1
 fi
 
+# Custom (tool) scorer — the evaluations engine's bring-your-own-algorithm
+# seam. The scorer is a pipeline tool: one step pings the live server through
+# an http tool, and the pipeline `output` mapping computes the verdict from the
+# scorer input contract ({ input, output, expected, item } is the pipeline's
+# merged input) — score 1 / passed true when the agent produced non-empty text,
+# the same predicate the json_logic scorer above asserts. No LLM in the path,
+# so unlike the judge the outcome over a completed generation is deterministic.
+echo "--- Creating a custom scorer tool (pipeline over http) ---"
+SCORER_PING_TOOL_RESP=$($SOAT_CLI create-tool \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name scorer-ping \
+  --type http \
+  --description "Scorer pipeline step target" \
+  --parameters '{"type":"object","properties":{},"required":[]}' \
+  --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}")
+SCORER_PING_TOOL_ID=$(printf '%s\n' "$SCORER_PING_TOOL_RESP" | jq -r '.id')
+SCORER_TOOL_RESP=$($SOAT_CLI create-tool \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name non-empty-output-scorer \
+  --type pipeline \
+  --description "Scores 1 when the agent produced non-empty text" \
+  --pipeline "{\"steps\":[{\"id\":\"ping\",\"tool_id\":\"$SCORER_PING_TOOL_ID\",\"input\":{}}],\"output\":{\"score\":{\"if\":[{\"!=\":[{\"var\":\"input.output\"},\"\"]},1,0]},\"passed\":{\"!=\":[{\"var\":\"input.output\"},\"\"]}}}")
+SCORER_TOOL_ID=$(printf '%s\n' "$SCORER_TOOL_RESP" | jq -r '.id')
+if ! printf '%s\n' "$SCORER_TOOL_ID" | grep -q '^tool_'; then
+  echo "ERROR: could not create the custom scorer pipeline tool" >&2
+  printf '%s\n' "$SCORER_TOOL_RESP" >&2
+  exit 1
+fi
+echo "Custom scorer tool id: $SCORER_TOOL_ID"
+
+echo "--- Running an eval with the custom tool scorer ---"
+EVAL_TOOL_RESP=$($SOAT_CLI create-eval \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-eval-tool-scorer" \
+  --agent_id "$AGENT_ID" \
+  --dataset_id "$DATASET_ID" \
+  --scorers '[{"type":"tool","name":"non_empty","tool_id":"'"$SCORER_TOOL_ID"'"}]' \
+  --pass_threshold 0.5)
+EVAL_TOOL_ID=$(printf '%s\n' "$EVAL_TOOL_RESP" | jq -r '.id')
+if ! printf '%s\n' "$EVAL_TOOL_ID" | grep -q '^eval_'; then
+  echo "ERROR: eval with a tool scorer was not created" >&2
+  printf '%s\n' "$EVAL_TOOL_RESP" >&2
+  exit 1
+fi
+EVAL_TOOL_RUN=$($SOAT_CLI start-eval-run --eval_id "$EVAL_TOOL_ID" --wait true)
+EVAL_TOOL_RUN_ID=$(printf '%s\n' "$EVAL_TOOL_RUN" | jq -r '.id')
+if ! printf '%s\n' "$EVAL_TOOL_RUN" | jq -e '.status == "completed"' >/dev/null 2>&1; then
+  echo "ERROR: tool-scorer eval run did not complete" >&2
+  printf '%s\n' "$EVAL_TOOL_RUN" >&2
+  exit 1
+fi
+# The generation itself may pause or fail (that errors the item, like any
+# scorer), but a scored item must carry the tool's verdict keyed by the
+# scorer's NAME — and the aggregate bucket must key on the same name.
+EVAL_TOOL_RESULTS=$($SOAT_CLI list-eval-results --eval_id "$EVAL_TOOL_ID" --eval_run_id "$EVAL_TOOL_RUN_ID")
+if ! printf '%s\n' "$EVAL_TOOL_RESULTS" | jq -e \
+  '.total == 1
+   and (.data[0]
+        | (.error != null and (.scores | length) == 0)
+          or (.error == null and .scores[0].scorer == "non_empty"
+              and .scores[0].score == 1 and .scores[0].passed == true))' \
+  >/dev/null 2>&1; then
+  echo "ERROR: tool-scorer result was neither scored under its name nor cleanly errored" >&2
+  printf '%s\n' "$EVAL_TOOL_RESULTS" >&2
+  exit 1
+fi
+if printf '%s\n' "$EVAL_TOOL_RUN" | jq -e '.completed_count == 1' >/dev/null 2>&1; then
+  if ! printf '%s\n' "$EVAL_TOOL_RUN" | jq -e \
+    '.aggregate_scores.scorers.non_empty.pass_rate == 1' >/dev/null 2>&1; then
+    echo "ERROR: aggregate scores did not key on the tool scorer's name" >&2
+    printf '%s\n' "$EVAL_TOOL_RUN" >&2
+    exit 1
+  fi
+fi
+$SOAT_CLI delete-eval --eval_id "$EVAL_TOOL_ID"
+
+echo "--- Rejecting a client tool as a scorer ---"
+SCORER_CLIENT_TOOL_RESP=$($SOAT_CLI create-tool \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name scorer-client-tool \
+  --type client \
+  --parameters '{"type":"object","properties":{},"required":[]}')
+SCORER_CLIENT_TOOL_ID=$(printf '%s\n' "$SCORER_CLIENT_TOOL_RESP" | jq -r '.id')
+expect_cli_error_status 400 create-eval \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-eval-tool-scorer-client" \
+  --agent_id "$AGENT_ID" \
+  --dataset_id "$DATASET_ID" \
+  --scorers '[{"type":"tool","name":"clientside","tool_id":"'"$SCORER_CLIENT_TOOL_ID"'"}]'
+$SOAT_CLI delete-tool --tool-id "$SCORER_CLIENT_TOOL_ID"
+$SOAT_CLI delete-tool --tool-id "$SCORER_TOOL_ID"
+$SOAT_CLI delete-tool --tool-id "$SCORER_PING_TOOL_ID"
+echo "Custom tool scorer verified."
+
 echo "--- Listing and getting eval runs ---"
 EVAL_RUNS_RESP=$($SOAT_CLI list-eval-runs --eval_id "$EVAL_ID")
 if ! printf '%s\n' "$EVAL_RUNS_RESP" | jq -e '.total >= 1' >/dev/null 2>&1; then

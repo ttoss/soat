@@ -10,7 +10,7 @@
  */
 import createDebug from 'debug';
 
-import type { AggregateScores } from './evaluationScorers';
+import type { AggregateScores } from './evaluationScorerAggregation';
 import { emitResourceEvent } from './eventBus';
 
 const log = createDebug('soat:evaluations');
