@@ -55,9 +55,20 @@ services:
       PORT: '11434'
       OLLAMA_UPSTREAM_URL: 'http://ollama:11434'
       # Only these tools have their forcing honored deterministically — the
-      # client-tools tutorial (get_order_status) and the tool-context tutorial
-      # (record_order). Every other forced tool still goes to the real model.
-      TOOL_CHOICE_TOOLS: 'get_order_status,record_order'
+      # client-tools tutorial (get_order_status), the tool-context tutorial
+      # (record_order), and the boundary-policy tutorial
+      # (docs_update-document). Every other forced tool still goes to the real
+      # model.
+      #
+      # docs_update-document qualifies on the allowlist's own criterion: the
+      # assertion is about dispatch — that `boundary_policy` refuses the action
+      # before it runs — and not about argument quality. Its `document_id` is
+      # pinned by `preset_parameters`, and the boundary check returns
+      # `Forbidden` ahead of `executeSoatTool`, so no synthesized argument ever
+      # reaches the action. Left off the list, the tutorial's assertion would
+      # pass *vacuously* whenever qwen2.5:0.5b declines to call the tool — green
+      # CI proving nothing, which is the failure mode the shim exists to remove.
+      TOOL_CHOICE_TOOLS: 'get_order_status,record_order,docs_update-document'
       # Nothing bounds how many tokens qwen2.5:0.5b emits per completion (agents
       # have no max_tokens field), and no tutorial asserts generated content —
       # only structure and forward progress. Uncapped output is what makes a
