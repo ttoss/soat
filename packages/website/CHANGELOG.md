@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.25.0](https://github.com/ttoss/soat/compare/v0.24.0...v0.25.0) (2026-08-17)
+
+### Features
+
+* **evaluations:** custom tool scorers + Engine & Algorithms pattern docs ([#1068](https://github.com/ttoss/soat/issues/1068)) ([f7375cd](https://github.com/ttoss/soat/commit/f7375cd5a5fb85ab38a018ec4b6e327159ad43ee))
+* **server:** filter documents by path prefix ([#1059](https://github.com/ttoss/soat/issues/1059)) ([24c3c12](https://github.com/ttoss/soat/commit/24c3c121fca4dda24cdc25b86391cc746659d8f4))
+* **website:** add the Claude Developer Platform to the benchmark ([#1067](https://github.com/ttoss/soat/issues/1067)) ([a7f5aaf](https://github.com/ttoss/soat/commit/a7f5aaf7f814e093f5167c7b0fd8a8cb6549f31f))
+* **website:** enable mermaid diagrams in docs ([#1065](https://github.com/ttoss/soat/issues/1065)) ([4680bed](https://github.com/ttoss/soat/commit/4680bedae8277ecde48d63821db4f0694a7cf7c8))
+* **website:** strengthen AI/search grounding signals for docs ([#1058](https://github.com/ttoss/soat/issues/1058)) ([5a727ba](https://github.com/ttoss/soat/commit/5a727ba7136d16b4b75cf76d1f9d7eb933e7052b))
+
 # [0.24.0](https://github.com/ttoss/soat/compare/v0.23.0...v0.24.0) (2026-08-16)
 
 ### Bug Fixes
