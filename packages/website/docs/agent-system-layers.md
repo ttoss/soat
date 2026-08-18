@@ -36,6 +36,25 @@ you know which part of the platform to reach for when a layer is the one failing
 | **Graph**   | What is allowed to happen next?    | [Orchestrations](/docs/modules/orchestrations), [Workflows](/docs/modules/workflows), [Triggers](/docs/modules/triggers)                                       |
 | **Ratchet** | How does the system change, and what proves the change was an improvement? | [Evaluations](/docs/modules/evaluations), [agent versions](/docs/modules/agents#versioning-and-staged-rollout), the [approvals recurrence view](/docs/modules/approvals#recurrence-view), [Guardrails](/docs/modules/guardrails), [Formations](/docs/modules/formations) |
 
+```mermaid
+%%{init: {'flowchart': {'wrappingWidth': 260}}}%%
+flowchart TB
+    subgraph SYSTEM["The system at rest — build in this order"]
+        direction TB
+        H["1 · HARNESS — build first<br/>what it can reach, see, keep, and never touch<br/>Tools · Knowledge · Documents · Memories<br/>Sessions · IAM · Secrets · Formations"]
+        L["2 · LOOP — close second<br/>success predicate · budget · escalation<br/>Agents (output_schema, max_steps) · Guardrails<br/>Approvals · Quotas · Usage · Traces · Exceptions"]
+        G["3 · GRAPH — last, often never<br/>only when a process pain demands it:<br/>human gate · audit · parallel join · durable resume<br/>Orchestrations · Workflows · Triggers"]
+        H --> L
+        L -. "only when a specific<br/>pain unlocks it" .-> G
+    end
+
+    R["4 · RATCHET — the mechanism of change<br/>evidence → verdict → gated promotion → append-only history<br/>Evaluations · Agent versions · Recurrence view · Guardrails · Formations"]
+
+    R -- "evaluates every change<br/>against a baseline" --> H
+    R -- "ratchet the loop as soon as<br/>it produces trusted evidence" --> L
+    R -- "keeps it from<br/>sliding backward" --> G
+```
+
 ## Layer 1 — The harness
 
 Most failures live here. An agent that cannot reach the right tool, works from stale
