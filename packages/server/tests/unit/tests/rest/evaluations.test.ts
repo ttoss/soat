@@ -577,6 +577,21 @@ describe('Evaluations', () => {
       expect(res.body.error.message).toContain('scorers.0.type');
     });
 
+    test('an embedding_similarity scorer without a pass_threshold is rejected', async () => {
+      const res = await asUser()
+        .post('/api/v1/evals')
+        .send({
+          project_id: projectId,
+          name: 'embedding-no-threshold-eval',
+          agent_id: agentId,
+          dataset_id: datasetId,
+          scorers: [{ type: 'embedding_similarity' }],
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toMatch(/pass_threshold is required/);
+    });
+
     test('an llm_judge scorer without a pass_threshold is rejected', async () => {
       const res = await asUser()
         .post('/api/v1/evals')
@@ -995,6 +1010,48 @@ describe('Evaluations', () => {
         score: 0,
         passed: false,
       });
+    });
+
+    test('an embedding_similarity scorer grades an item by cosine similarity', async () => {
+      const dataset = await createDataset('embedding-suite');
+      await addItem(dataset.id, {
+        input: [{ role: 'user', content: 'capital of France?' }],
+        expected_output: 'Paris',
+      });
+
+      const embeddingEval = await createEval({
+        name: 'embedding-eval',
+        agent_id: agentId,
+        dataset_id: dataset.id,
+        scorers: [{ type: 'embedding_similarity', pass_threshold: 0.9 }],
+        pass_threshold: 1,
+      });
+
+      // The suite's embedding stub returns the same vector for every input
+      // (setupTestsAfterEnv), so the cosine similarity is exactly 1 — this
+      // covers the wiring: run → getEmbeddings → cosine → outcome.
+      mockCreateGeneration.mockResolvedValueOnce(
+        completedGeneration('gen_emb1', 'The capital is Paris.')
+      );
+
+      const res = await asUser()
+        .post(`/api/v1/evals/${embeddingEval.id}/runs`)
+        .send({ wait: true });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('completed');
+      expect(res.body.passed).toBe(true);
+      expect(res.body.aggregate_scores.scorers.embedding_similarity).toEqual({
+        mean: 1,
+        pass_rate: 1,
+      });
+
+      const results = await asUser().get(
+        `/api/v1/evals/${embeddingEval.id}/runs/${res.body.id}/results`
+      );
+      expect(results.body.data[0].scores).toEqual([
+        { scorer: 'embedding_similarity', score: 1, passed: true },
+      ]);
     });
 
     test('pins every item of the run to one agent version', async () => {

@@ -4,6 +4,7 @@ import {
 } from 'src/lib/evaluationScorerAggregation';
 import {
   buildJsonLogicContext,
+  type EmbeddingScorerRunner,
   type JudgeRunner,
   scoreOutput,
   type ScorerOutcome,
@@ -36,6 +37,7 @@ describe('evaluation scorers', () => {
     agentOutputSchema?: unknown;
     runJudge?: JudgeRunner;
     runToolScorer?: ToolScorerRunner;
+    runEmbeddings?: EmbeddingScorerRunner;
   }): Promise<ScorerOutcome> => {
     const outcomes = await scoreOutput({
       scorers: [args.scorer],
@@ -46,6 +48,7 @@ describe('evaluation scorers', () => {
       agentOutputSchema: args.agentOutputSchema,
       runJudge: args.runJudge,
       runToolScorer: args.runToolScorer,
+      runEmbeddings: args.runEmbeddings,
     });
     return outcomes[0];
   };
@@ -910,6 +913,154 @@ describe('evaluation scorers', () => {
           item: { metadata: { topic: 'capitals' } },
         },
       });
+    });
+  });
+
+  // ── embedding_similarity ─────────────────────────────────────────────────
+
+  describe('embedding_similarity', () => {
+    const scorer = (overrides: Record<string, unknown> = {}) => {
+      return {
+        type: 'embedding_similarity',
+        pass_threshold: 0.8,
+        ...overrides,
+      };
+    };
+
+    const vectors = (
+      byText: Record<string, number[]>
+    ): EmbeddingScorerRunner => {
+      return ({ texts }) => {
+        return Promise.resolve(
+          texts.map((text) => {
+            return byText[text];
+          })
+        );
+      };
+    };
+
+    describe('validation', () => {
+      const validate = (config: Record<string, unknown>) => {
+        return validateScorers({
+          scorers: [config],
+          agentHasOutputSchema: false,
+        });
+      };
+
+      test('accepts a valid config', () => {
+        expect(validate(scorer())).toBeNull();
+      });
+
+      test.each([
+        ['missing', undefined],
+        ['not a number', 'high'],
+        ['below 0', -0.1],
+        ['above 1', 1.1],
+      ])('rejects a pass_threshold that is %s', (_label, pass_threshold) => {
+        expect(validate(scorer({ pass_threshold }))).toContain(
+          'scorers.0.pass_threshold'
+        );
+      });
+
+      test('rejects unknown fields', () => {
+        expect(validate(scorer({ model: 'x' }))).toContain('unknown field');
+      });
+    });
+
+    test('scores the cosine similarity of the two embeddings', async () => {
+      const outcome = await runOne({
+        scorer: scorer(),
+        content: 'The capital is Paris.',
+        expectedOutput: 'Paris',
+        runEmbeddings: vectors({
+          'The capital is Paris.': [1, 1, 0],
+          Paris: [1, 0, 0],
+        }),
+      });
+      expect(outcome.scorer).toBe('embedding_similarity');
+      expect(outcome.score).toBeCloseTo(Math.SQRT1_2, 10);
+      expect(outcome.passed).toBe(false);
+    });
+
+    test('identical texts score 1 and pass', async () => {
+      expect(
+        await runOne({
+          scorer: scorer(),
+          content: 'Paris',
+          expectedOutput: 'Paris',
+          runEmbeddings: vectors({ Paris: [0.3, 0.4, 0] }),
+        })
+      ).toEqual({ scorer: 'embedding_similarity', score: 1, passed: true });
+    });
+
+    test('passes exactly at the threshold (>=)', async () => {
+      const outcome = await runOne({
+        scorer: scorer({ pass_threshold: 1 }),
+        content: 'a',
+        expectedOutput: 'b',
+        // Parallel vectors: the cosine is exactly 1 (clamped), meeting a
+        // threshold of 1 — proving `>=`, not `>`.
+        runEmbeddings: vectors({ a: [2, 0], b: [1, 0] }),
+      });
+      expect(outcome.score).toBe(1);
+      expect(outcome.passed).toBe(true);
+    });
+
+    test('clamps a negative cosine to 0', async () => {
+      const outcome = await runOne({
+        scorer: scorer(),
+        content: 'a',
+        expectedOutput: 'b',
+        runEmbeddings: vectors({ a: [1, 0], b: [-1, 0] }),
+      });
+      expect(outcome).toEqual({
+        scorer: 'embedding_similarity',
+        score: 0,
+        passed: false,
+      });
+    });
+
+    test('a zero-magnitude embedding scores 0 instead of NaN', async () => {
+      const outcome = await runOne({
+        scorer: scorer(),
+        content: 'a',
+        expectedOutput: 'b',
+        runEmbeddings: vectors({ a: [0, 0], b: [1, 0] }),
+      });
+      expect(outcome.score).toBe(0);
+      expect(outcome.passed).toBe(false);
+    });
+
+    test('scores 0 without embedding when the item has no reference answer', async () => {
+      let called = false;
+      const outcome = await runOne({
+        scorer: scorer(),
+        content: 'Paris',
+        expectedOutput: null,
+        runEmbeddings: () => {
+          called = true;
+          return Promise.resolve([]);
+        },
+      });
+      expect(outcome).toEqual({
+        scorer: 'embedding_similarity',
+        score: 0,
+        passed: false,
+      });
+      expect(called).toBe(false);
+    });
+
+    test('an embedding failure propagates as an item error, never a 0', async () => {
+      await expect(
+        runOne({
+          scorer: scorer(),
+          content: 'Paris',
+          expectedOutput: 'Paris',
+          runEmbeddings: () => {
+            return Promise.reject(new Error('embedding backend down'));
+          },
+        })
+      ).rejects.toThrow('embedding backend down');
     });
   });
 });

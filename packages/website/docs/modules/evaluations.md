@@ -140,10 +140,11 @@ for `tool` scorers).
 | `contains` | `value`, `case_sensitive` (default `false`) | 1 when `value` occurs in the output text |
 | `json_logic` | `expression` | 1 when the [JSON Logic](https://jsonlogic.com) expression evaluates truthy |
 | `output_schema` | `schema` (optional) | 1 when the structured output validates against the schema |
+| `embedding_similarity` | `pass_threshold` | The cosine similarity between the embeddings of the output text and `expected_output`, clamped to 0–1; see [Embedding similarity](#embedding-similarity) |
 | `llm_judge` | `prompt`, `pass_threshold`, `ai_provider_id` (optional), `model` (optional) | The judge's 0–1 score; see [LLM judge](#llm-judge) |
 | `tool` | `name`, `tool_id`, `action` (soat/mcp tools), `preset_parameters` (optional), `pass_threshold` (optional) | Whatever your algorithm answers; see [Custom scorers](#custom-scorers-tool) |
 
-`exact_match`, `contains` and `llm_judge` read the final **text**; `output_schema`
+`exact_match`, `contains`, `embedding_similarity` and `llm_judge` read the final **text**; `output_schema`
 validates the **structured object** the platform already parsed. `json_logic` sees both,
 through these variables:
 
@@ -159,6 +160,34 @@ An `output_schema` scorer is rejected with `400` unless the **agent under test**
 `output_schema` — even when the scorer supplies its own `schema` — because the platform only
 produces structured output when the agent's schema constrains the model. The check runs at
 eval-create (best-effort) and again at run start (authoritative).
+
+### Embedding similarity
+
+An `embedding_similarity` scorer grades semantic closeness instead of literal overlap: it
+embeds the output text and the item's `expected_output` with the platform's configured
+embedding model — the `EMBEDDING_PROVIDER` / `EMBEDDING_MODEL` environment variables, the
+same stack [document ingestion](./documents.md) uses — and scores their **cosine
+similarity**, clamped to 0–1. It sits between the deterministic text scorers and the
+judge: cheaper and more repeatable than an LLM judge (an embedding call per item instead
+of a completion), while tolerating paraphrases `exact_match` would fail.
+
+`pass_threshold` is **required** on the scorer, with no default, for the same reason as
+the judge's: cosine similarity is a continuous score, and nothing about it says where
+"close enough" is for your domain — 0.85 can be strict for one embedding model and
+permissive for another, so calibrate it against your own data.
+
+Two edges mirror the rest of the module:
+
+- An item with **no `expected_output`** scores 0 and cannot pass — similarity is measured
+  against the reference answer, so without one there is nothing to be close to (the same
+  rule as `exact_match`). The embedding backend is not called for such an item.
+- An **embedding backend failure** marks the *item* errored — never the run failed, and
+  never a score of 0 (the same rule as a judge that cannot answer): a backend that could
+  not embed says nothing about the agent.
+
+Because the embedding model is platform-configured, scores from runs executed under
+different `EMBEDDING_MODEL` values are not comparable — re-run the baseline when the
+embedding model changes, just as you would when a judge model changes.
 
 ### LLM judge
 

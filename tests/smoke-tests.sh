@@ -6106,12 +6106,15 @@ expect_cli_error_status 404 create-dataset-item-from-generation \
 echo "--- Creating eval ---"
 # A json_logic scorer that only asserts the agent produced *some* text: the
 # model's wording is not deterministic, so nothing here grades its content.
+# The embedding_similarity scorer exercises the embedding wiring end-to-end
+# (two real qwen3-embedding calls per item) with pass_threshold 0 so the
+# verdict never depends on how close the model's wording lands.
 EVAL_RESP=$($SOAT_CLI create-eval \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-eval" \
   --agent_id "$AGENT_ID" \
   --dataset_id "$DATASET_ID" \
-  --scorers '[{"type":"json_logic","expression":{"!=":[{"var":"output"},""]}}]' \
+  --scorers '[{"type":"json_logic","expression":{"!=":[{"var":"output"},""]}},{"type":"embedding_similarity","pass_threshold":0}]' \
   --pass_threshold 0.5)
 EVAL_ID=$(printf '%s\n' "$EVAL_RESP" | jq -r '.id')
 if ! printf '%s\n' "$EVAL_ID" | grep -q '^eval_'; then
@@ -6164,6 +6167,16 @@ if ! printf '%s\n' "$EVAL_ASYNC_RESULTS" | jq -e '.total == 1' >/dev/null 2>&1; 
   printf '%s\n' "$EVAL_ASYNC_RESULTS" >&2
   exit 1
 fi
+# The embedding scorer must have produced a numeric 0-1 cosine score (the value
+# itself depends on the model's wording, so only its presence/shape is asserted).
+if ! printf '%s\n' "$EVAL_ASYNC_RESULTS" | jq -e \
+  '.data[0].scores[] | select(.scorer == "embedding_similarity") | (.score >= 0 and .score <= 1 and .passed == true)' \
+  >/dev/null 2>&1; then
+  echo "ERROR: expected an embedding_similarity score on the eval result" >&2
+  printf '%s\n' "$EVAL_ASYNC_RESULTS" >&2
+  exit 1
+fi
+echo "Embedding similarity scorer: OK"
 
 echo "--- Cancelling an already-finished run is rejected ---"
 set +e

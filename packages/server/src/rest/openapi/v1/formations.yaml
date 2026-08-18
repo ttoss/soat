@@ -1004,7 +1004,7 @@ components:
         expected_output:
           type: string
           nullable: true
-          description: Reference answer for exact_match / contains / llm_judge scorers
+          description: Reference answer for exact_match / contains / embedding_similarity / llm_judge scorers
         metadata:
           type: object
           nullable: true
@@ -1042,8 +1042,8 @@ components:
             type: object
           description: >-
             Scorer configs — `exact_match`, `contains`, `json_logic`,
-            `output_schema`, `llm_judge`, or `tool`. Same shape as the evals
-            REST contract.
+            `output_schema`, `embedding_similarity`, `llm_judge`, or `tool`.
+            Same shape as the evals REST contract.
         pass_threshold:
           type: number
           nullable: true
