@@ -17,6 +17,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { createGeneration } from './agentGeneration';
 import type { GenerationResult } from './agentGenerationTypes';
+import { getEmbeddings } from './embedding';
 import { computeBaselineComparison } from './evaluationDeltas';
 import { emitEvalRunEvent, EVAL_RUN_COMPLETED_EVENT } from './evaluationEvents';
 import { runJudgeCompletion } from './evaluationJudge';
@@ -107,6 +108,10 @@ const buildScorerRunners = (args: { projectId: number }) => {
     }) => {
       return runToolScorerCall({ projectId: args.projectId, ...call });
     },
+    // The embedding stack is env-configured (EMBEDDING_PROVIDER / _MODEL — the
+    // same one document ingestion uses), so unlike the judge there is nothing
+    // project-scoped to bind; the lib function is the runner.
+    runEmbeddings: getEmbeddings,
   };
 };
 

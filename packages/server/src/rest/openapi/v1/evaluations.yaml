@@ -318,7 +318,7 @@ paths:
                 expected_output:
                   type: string
                   nullable: true
-                  description: Reference answer for exact_match / llm_judge scorers
+                  description: Reference answer for exact_match / embedding_similarity / llm_judge scorers
                   example: Your invoice is issued on the first of each month.
                 metadata:
                   type: object
@@ -1104,6 +1104,15 @@ components:
         defaulted cutoff would silently decide the gate.
 
 
+        `embedding_similarity` embeds the output text and `expected_output`
+        with the platform's configured embedding model (`EMBEDDING_PROVIDER` /
+        `EMBEDDING_MODEL` — the same stack document ingestion uses) and scores
+        their cosine similarity, clamped to 0-1. Its `pass_threshold` is
+        required for the same reason as the judge's. An item without an
+        `expected_output` scores 0; an embedding backend failure marks the
+        **item** errored, never a score of 0.
+
+
         `tool` runs a custom scoring algorithm: a server-callable project tool
         the engine invokes once per item with the item's context. Unlike the
         built-in types it may appear several times, each under a distinct
@@ -1114,6 +1123,7 @@ components:
           - $ref: '#/components/schemas/ContainsScorer'
           - $ref: '#/components/schemas/JsonLogicScorer'
           - $ref: '#/components/schemas/OutputSchemaScorer'
+          - $ref: '#/components/schemas/EmbeddingSimilarityScorer'
           - $ref: '#/components/schemas/LlmJudgeScorer'
           - $ref: '#/components/schemas/ToolScorer'
     ExactMatchScorer:
@@ -1167,6 +1177,24 @@ components:
             JSON Schema the structured output is validated against. Frozen here
             so two runs stay comparable; falls back to the agent's
             `output_schema` when omitted.
+    EmbeddingSimilarityScorer:
+      type: object
+      required:
+        - type
+        - pass_threshold
+      properties:
+        type:
+          type: string
+          enum: [embedding_similarity]
+        pass_threshold:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: >-
+            The item passes this scorer when the cosine similarity between the
+            embeddings of the output text and `expected_output` is greater than
+            or equal to this value. Required.
+          example: 0.85
     LlmJudgeScorer:
       type: object
       required:

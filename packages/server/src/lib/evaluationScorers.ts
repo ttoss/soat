@@ -17,6 +17,11 @@
  */
 import { DomainError } from '../errors';
 import {
+  checkEmbeddingScorerConfig,
+  type EmbeddingScorerRunner,
+  scoreEmbeddingSimilarity,
+} from './evaluationEmbeddingScorer';
+import {
   checkToolScorerConfig,
   isUnitInterval,
   resolveToolScorerPassed,
@@ -35,11 +40,20 @@ export {
   type ToolScorerVerdict,
 } from './evaluationToolScorerContract';
 
+// The embedding scorer's pure contract lives in
+// `evaluationEmbeddingScorer.ts`; re-exported here for the same reason.
+export {
+  cosineSimilarity,
+  EMBEDDING_SCORER_TYPE,
+  type EmbeddingScorerRunner,
+} from './evaluationEmbeddingScorer';
+
 /** Every scorer type the module executes. */
 export const SCORER_TYPES = [
   'exact_match',
   'contains',
   'json_logic',
+  'embedding_similarity',
   'output_schema',
   'llm_judge',
   'tool',
@@ -67,6 +81,7 @@ const SCORER_FIELDS: Record<ScorerType, readonly string[]> = {
   exact_match: [],
   contains: ['value', 'case_sensitive'],
   json_logic: ['expression'],
+  embedding_similarity: ['pass_threshold'],
   output_schema: ['schema'],
   llm_judge: ['ai_provider_id', 'model', 'prompt', 'pass_threshold'],
   tool: ['name', 'tool_id', 'action', 'preset_parameters', 'pass_threshold'],
@@ -88,10 +103,6 @@ export type ScoredOutput = {
 };
 
 // ── Validation ─────────────────────────────────────────────────────────────
-
-const asRecord = (value: unknown): Record<string, unknown> | null => {
-  return isPlainObject(value) ? value : null;
-};
 
 const SCORER_TYPE_SET: ReadonlySet<unknown> = new Set(SCORER_TYPES);
 
@@ -144,6 +155,7 @@ const SCORER_CHECKS: Record<ScorerType, ScorerCheck> = {
       ? `${path}.expression is required.`
       : null;
   },
+  embedding_similarity: checkEmbeddingScorerConfig,
   output_schema: ({ scorer, path, agentHasOutputSchema }) => {
     if (scorer.schema !== undefined && !isPlainObject(scorer.schema)) {
       return `${path}.schema must be a JSON Schema object.`;
@@ -232,7 +244,7 @@ export const validateScorers = (args: {
 
   for (const [index, raw] of args.scorers.entries()) {
     const path = `scorers.${index}`;
-    const scorer = asRecord(raw);
+    const scorer = isPlainObject(raw) ? raw : null;
     if (!scorer) return `${path} must be an object.`;
 
     const error = validateOneScorer({
@@ -425,6 +437,21 @@ const scoreJudge = async (args: {
   };
 };
 
+/**
+ * The injected runner a scorer type needs, or the `VALIDATION_FAILED` the
+ * dispatch throws without one. Unreachable through every entry point — the run
+ * path supplies every runner — so the throw exists only to keep a hand-called
+ * `scoreOutput` honest.
+ */
+const requireRunner = <Runner>(
+  runner: Runner | undefined,
+  message: string
+): Runner => {
+  /* istanbul ignore next -- unreachable; see above. */
+  if (!runner) throw new DomainError('VALIDATION_FAILED', message);
+  return runner;
+};
+
 const scoreOne = async (args: {
   scorer: Record<string, unknown>;
   context: Record<string, unknown>;
@@ -434,6 +461,7 @@ const scoreOne = async (args: {
   agentOutputSchema: unknown;
   runJudge?: JudgeRunner;
   runToolScorer?: ToolScorerRunner;
+  runEmbeddings?: EmbeddingScorerRunner;
 }): Promise<ScorerOutcome> => {
   const { scorer } = args;
   const scorerType = scorer.type;
@@ -455,39 +483,36 @@ const scoreOne = async (args: {
       return scoreContains({ scorer, output: args.output });
     case 'json_logic':
       return scoreJsonLogic({ scorer, context: args.context });
-    case 'llm_judge': {
-      /* istanbul ignore next -- validateScorers rejects a judge scorer at Eval
-         create, and the run path always supplies a runner, so an Eval with a
-         judge and no runner is unreachable through any entry point. */
-      if (!args.runJudge) {
-        throw new DomainError(
-          'VALIDATION_FAILED',
-          'An llm_judge scorer needs a judge runner; none was supplied.'
-        );
-      }
+    case 'llm_judge':
       return scoreJudge({
         scorer,
         input: args.input,
         output: args.output,
         expectedOutput: args.expectedOutput,
-        runJudge: args.runJudge,
+        runJudge: requireRunner(
+          args.runJudge,
+          'An llm_judge scorer needs a judge runner; none was supplied.'
+        ),
       });
-    }
-    case 'tool': {
-      /* istanbul ignore next -- the run path always supplies a runner, so a
-         tool scorer with none is unreachable through any entry point. */
-      if (!args.runToolScorer) {
-        throw new DomainError(
-          'VALIDATION_FAILED',
-          'A tool scorer needs a tool runner; none was supplied.'
-        );
-      }
+    case 'tool':
       return scoreToolScorer({
         scorer,
         context: args.context,
-        runToolScorer: args.runToolScorer,
+        runToolScorer: requireRunner(
+          args.runToolScorer,
+          'A tool scorer needs a tool runner; none was supplied.'
+        ),
       });
-    }
+    case 'embedding_similarity':
+      return scoreEmbeddingSimilarity({
+        scorer,
+        output: args.output,
+        expectedOutput: args.expectedOutput,
+        runEmbeddings: requireRunner(
+          args.runEmbeddings,
+          'An embedding_similarity scorer needs an embedding runner; none was supplied.'
+        ),
+      });
     case 'output_schema':
       return scoreOutputSchema({
         scorer,
@@ -526,6 +551,7 @@ export const scoreOutput = async (args: {
   agentOutputSchema: unknown;
   runJudge?: JudgeRunner;
   runToolScorer?: ToolScorerRunner;
+  runEmbeddings?: EmbeddingScorerRunner;
 }): Promise<ScorerOutcome[]> => {
   const context = buildJsonLogicContext({
     input: args.input,
@@ -537,7 +563,7 @@ export const scoreOutput = async (args: {
   const outcomes: ScorerOutcome[] = [];
 
   for (const raw of args.scorers) {
-    const scorer = asRecord(raw) ?? {};
+    const scorer = isPlainObject(raw) ? raw : {};
     outcomes.push(
       await scoreOne({
         scorer,
@@ -548,6 +574,7 @@ export const scoreOutput = async (args: {
         agentOutputSchema: args.agentOutputSchema,
         runJudge: args.runJudge,
         runToolScorer: args.runToolScorer,
+        runEmbeddings: args.runEmbeddings,
       })
     );
   }
