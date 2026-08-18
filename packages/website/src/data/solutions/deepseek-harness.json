@@ -6,7 +6,7 @@
   "website": "https://github.com/deepseek-ai/deepseek-harness",
   "license": "MIT",
   "deployment": ["self-hosted"],
-  "last_verified": "2026-08-14",
+  "last_verified": "2026-08-18",
   "capabilities": {
     "agent-runtime": {
       "rating": "native",
@@ -14,9 +14,9 @@
       "evidence": "https://github.com/deepseek-ai/deepseek-harness"
     },
     "orchestration": {
-      "rating": "plugin",
-      "note": "No built-in DAG/workflow engine; composition is expressed through the plugin architecture.",
-      "evidence": "https://github.com/deepseek-ai/deepseek-harness"
+      "rating": "partial",
+      "note": "A built-in workflow family runs model-authored dynamic workflows over subagents, plus plan/schedule/goal packages; no declarative DAG with explicit steps, dependencies, or conditions.",
+      "evidence": "https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/workflow/README.md"
     },
     "knowledge-memory": {
       "rating": "plugin",
@@ -34,12 +34,13 @@
     },
     "observability": {
       "rating": "partial",
-      "note": "Run visibility through the web UI; no structured trace/usage/audit model.",
+      "note": "Runtime diagnostics, a per-session audit trail, and durable JSONL/SQLite session persistence with a query layer; no structured trace/usage metering model.",
       "evidence": "https://github.com/deepseek-ai/deepseek-harness"
     },
     "data-secrets": {
-      "rating": "absent",
-      "note": "No managed file storage or encrypted secrets store."
+      "rating": "partial",
+      "note": "Credential references resolved from env/local files (config carries references, not values) plus session storage and attachments; no managed encrypted secrets store or API-managed file storage.",
+      "evidence": "https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/credentials/README.md"
     },
     "evaluation": {
       "rating": "absent",
@@ -51,9 +52,9 @@
       "evidence": "https://github.com/deepseek-ai/deepseek-harness"
     },
     "code-execution": {
-      "rating": "plugin",
-      "note": "No first-party sandbox; execution environments are provided by plugins.",
-      "evidence": "https://github.com/deepseek-ai/deepseek-harness"
+      "rating": "native",
+      "note": "First-party per-session process confinement (bwrap/Landlock/Seatbelt backends) and a code-execution family running in worker threads, with an E2B integration; worker threads are not a security boundary.",
+      "evidence": "https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/sandbox/README.md"
     },
     "human-in-loop": {
       "rating": "native",

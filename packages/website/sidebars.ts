@@ -233,6 +233,7 @@ const sidebars: SidebarsConfig = {
       label: 'Governance & Safety',
       items: [
         'tutorials/agent-boundary-policy',
+        'tutorials/build-an-agent-harness',
         'tutorials/gate-a-tool-with-guardrails',
         'tutorials/per-user-credentials-with-tool-context',
         'tutorials/data-retention-and-zero-retention',

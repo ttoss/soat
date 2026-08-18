@@ -68,7 +68,12 @@ services:
       # reaches the action. Left off the list, the tutorial's assertion would
       # pass *vacuously* whenever qwen2.5:0.5b declines to call the tool — green
       # CI proving nothing, which is the failure mode the shim exists to remove.
-      TOOL_CHOICE_TOOLS: 'get_order_status,record_order,docs_update-document'
+      # read_local_file (build-an-agent-harness) also qualifies: the tutorial
+      # asserts the client-tool pause/resume wiring — requires_action, then
+      # completed after tool-outputs — and synthesizes the output itself, so
+      # argument quality never matters. Without forcing, qwen2.5:0.5b answering
+      # directly would fail the requires_action assertion at random.
+      TOOL_CHOICE_TOOLS: 'get_order_status,record_order,docs_update-document,read_local_file'
       # Nothing bounds how many tokens qwen2.5:0.5b emits per completion (agents
       # have no max_tokens field), and no tutorial asserts generated content —
       # only structure and forward progress. Uncapped output is what makes a
