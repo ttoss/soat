@@ -23,13 +23,15 @@ const fakeFetch = (
   const calls: { url: string; headers: Headers }[] = [];
   const fetchImpl: FetchLike = (url, init) => {
     calls.push({ url, headers: new Headers(init?.headers) });
-    const match = Object.keys(responses).find((key) => {
-      return url.startsWith(key);
-    });
-    if (!match) {
+    // Keyed by the *whole* URL, not by origin: an origin-keyed fake answers
+    // every path under a host, so an enumerator asking for a route the
+    // provider does not serve still passes. That is how #1080 shipped — the
+    // vertex listing built a project-scoped path Google answers with an HTML
+    // 404, and three tests went green against it.
+    const response = responses[url];
+    if (!response) {
       return Promise.reject(new Error(`unexpected request to ${url}`));
     }
-    const response = responses[match];
     return Promise.resolve({
       ok: (response.status ?? 200) < 400,
       status: response.status ?? 200,
@@ -201,20 +203,21 @@ describe('enumerateProviderModels — anthropic', () => {
 });
 
 describe('enumerateProviderModels — vertex', () => {
-  test('lists publisher models for the configured project and location', async () => {
+  test('lists publisher models from the publisher-rooted path for the location', async () => {
     const { fetchImpl, calls } = fakeFetch({
-      'https://us-central1-aiplatform.googleapis.com': {
-        body: {
-          publisherModels: [
-            {
-              name: 'publishers/google/models/gemini-2.5-flash',
-              versionId: '001',
-              publisherModelTemplate: 'projects/x/locations/us-central1',
-              launchStage: 'GA',
-            },
-          ],
+      'https://us-central1-aiplatform.googleapis.com/v1beta1/publishers/google/models':
+        {
+          body: {
+            publisherModels: [
+              {
+                name: 'publishers/google/models/gemini-2.5-flash',
+                versionId: '001',
+                publisherModelTemplate: 'projects/x/locations/us-central1',
+                launchStage: 'GA',
+              },
+            ],
+          },
         },
-      },
     });
 
     const models = await enumerateProviderModels({
@@ -226,6 +229,13 @@ describe('enumerateProviderModels — vertex', () => {
       fetchImpl,
     });
 
+    // `publisherModels.list` is rooted at `publishers/*` — it is *not*
+    // project-scoped the way generation's `baseURL` is. Google answers the
+    // project-scoped path with a generic HTML 404 (#1080), so the path is
+    // pinned here rather than left to the fake's matching.
+    expect(calls[0].url).toBe(
+      'https://us-central1-aiplatform.googleapis.com/v1beta1/publishers/google/models'
+    );
     expect(calls[0].headers.get('authorization')).toBe('Bearer ya29.test');
     expect(models).toEqual([
       {
@@ -239,16 +249,17 @@ describe('enumerateProviderModels — vertex', () => {
 
   test('marks a deprecated launch stage so the catalog can retire it', async () => {
     const { fetchImpl } = fakeFetch({
-      'https://us-central1-aiplatform.googleapis.com': {
-        body: {
-          publisherModels: [
-            {
-              name: 'publishers/google/models/gemini-1.5-flash-002',
-              launchStage: 'DEPRECATED',
-            },
-          ],
+      'https://us-central1-aiplatform.googleapis.com/v1beta1/publishers/google/models':
+        {
+          body: {
+            publisherModels: [
+              {
+                name: 'publishers/google/models/gemini-1.5-flash-002',
+                launchStage: 'DEPRECATED',
+              },
+            ],
+          },
         },
-      },
     });
 
     const models = await enumerateProviderModels({
@@ -265,9 +276,10 @@ describe('enumerateProviderModels — vertex', () => {
 
   test('defaults the location the same way model building does', async () => {
     const { fetchImpl, calls } = fakeFetch({
-      'https://us-central1-aiplatform.googleapis.com': {
-        body: { publisherModels: [] },
-      },
+      'https://us-central1-aiplatform.googleapis.com/v1beta1/publishers/google/models':
+        {
+          body: { publisherModels: [] },
+        },
     });
 
     await enumerateProviderModels({
@@ -279,7 +291,11 @@ describe('enumerateProviderModels — vertex', () => {
       fetchImpl,
     });
 
-    expect(calls[0].url).toContain('us-central1-aiplatform.googleapis.com');
+    // The regional host is the only thing `location` scopes now, so it is the
+    // only thing that can be asserted about it.
+    expect(calls[0].url).toBe(
+      'https://us-central1-aiplatform.googleapis.com/v1beta1/publishers/google/models'
+    );
   });
 
   test('refuses to guess when no project is configured', async () => {
@@ -366,7 +382,7 @@ describe('enumerateProviderModels — bedrock', () => {
 describe('enumerateProviderModels — google ai studio', () => {
   test('strips the models/ prefix and reads streaming from the method list', async () => {
     const { fetchImpl, calls } = fakeFetch({
-      'https://generativelanguage.googleapis.com': {
+      'https://generativelanguage.googleapis.com/v1beta/models': {
         body: {
           models: [
             {
@@ -572,9 +588,10 @@ describe('enumerateProviderModels — listing honors the linked secret (#1044)',
 
   test('vertex authenticates with the linked service account', async () => {
     const { fetchImpl } = fakeFetch({
-      'https://us-central1-aiplatform.googleapis.com': {
-        body: { publisherModels: [] },
-      },
+      'https://us-central1-aiplatform.googleapis.com/v1beta1/publishers/google/models':
+        {
+          body: { publisherModels: [] },
+        },
     });
     let seenOptions: unknown;
 
@@ -605,9 +622,10 @@ describe('enumerateProviderModels — listing honors the linked secret (#1044)',
 
   test('vertex takes the project from the service-account key file', async () => {
     const { fetchImpl, calls } = fakeFetch({
-      'https://us-central1-aiplatform.googleapis.com': {
-        body: { publisherModels: [] },
-      },
+      'https://us-central1-aiplatform.googleapis.com/v1beta1/publishers/google/models':
+        {
+          body: { publisherModels: [] },
+        },
     });
 
     // Generation resolves `config.project ?? secret.project_id`, so a record
@@ -627,13 +645,36 @@ describe('enumerateProviderModels — listing honors the linked secret (#1044)',
       fetchImpl,
     });
 
-    expect(calls[0].url).toContain('/projects/from-key-file/');
+    expect(calls).toHaveLength(1);
+  });
+
+  test('vertex still refuses to list when no project can be resolved at all', async () => {
+    // The project stopped reaching the listing URL with #1080, so the test
+    // above can no longer read it back out of `calls[0].url`. This is the
+    // other half of that guard: strip `project_id` from the same key file and
+    // the record is refused, which is what proves the field above was the
+    // thing being resolved rather than an ignored input.
+    await expect(
+      enumerateProviderModels({
+        provider: 'vertex',
+        config: {},
+        secretValue: JSON.stringify({
+          client_email: 'vertex@example.iam.gserviceaccount.com',
+          private_key:
+            '-----BEGIN PRIVATE KEY-----\nx\n-----END PRIVATE KEY-----',
+        }),
+        accessTokenProvider: () => {
+          return Promise.resolve('ya29.test');
+        },
+        fetchImpl: fakeFetch({}).fetchImpl,
+      })
+    ).rejects.toThrow(DomainError);
   });
 
   test('vertex express mode cannot list, and says so', async () => {
-    // Express mode targets a global, project-less endpoint; the publisher-model
-    // listing URL is per-project, so there is nothing to call. Failing with a
-    // named reason beats a confusing 404 from a guessed URL.
+    // The publisher-model listing rejects API keys outright ("API keys are not
+    // supported by this API"), and express mode holds no other credential.
+    // Failing with a named reason beats forwarding Google's 401.
     await expect(
       enumerateProviderModels({
         provider: 'vertex',

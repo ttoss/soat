@@ -284,6 +284,14 @@ paths:
                 description: >
                   SSE stream of JSON objects, one per line, prefixed with
                   `data: `. The stream ends with `data: [DONE]`.
+
+                  The response headers are written before the provider is
+                  called, so a failure cannot become a status code once the
+                  stream is open. It arrives instead as a terminal
+                  `data: {"error": "..."}` frame carrying the same mapped
+                  message the non-streaming path returns in its `502` body
+                  (e.g. `Provider returned 404: ...`), and the stream then
+                  ends without a `[DONE]`.
         '400':
           description: >-
             Bad Request — `messages` is missing or empty; a `role: "system"`
@@ -311,6 +319,19 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: AI provider not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: >
+            Upstream AI provider error (AI_PROVIDER_ERROR) — the provider
+            rejected the completion (an unavailable model, a refused
+            credential) or could not be reached. The message names the
+            provider's own status and message, so an unavailable model is
+            distinguishable from a fault in the runtime itself. Streaming
+            requests report this in a terminal SSE frame instead, since their
+            status line is already on the wire.
           content:
             application/json:
               schema:

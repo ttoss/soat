@@ -333,22 +333,36 @@ const enumerateVertex = async (
   });
 
   if ('apiKey' in settings) {
-    // Express mode talks to a global, project-less endpoint, but the
-    // publisher-model listing URL is per-project — there is no URL to call.
+    // `publisherModels.list` refuses API keys outright — it answers one with
+    // `401 UNAUTHENTICATED`, "API keys are not supported by this API. Expected
+    // OAuth2 access token or other authentication credentials that assert a
+    // principal." Express mode holds nothing else, so there is no credential
+    // to list with.
     throw new DomainError(
       'MODEL_LISTING_UNSUPPORTED',
-      'A Vertex provider in express mode (API key) cannot list models: express mode has no per-project catalogue. Link a service-account key, or authenticate through Application Default Credentials, to list.'
+      'A Vertex provider in express mode (API key) cannot list models: the publisher-model listing rejects API keys and needs a credential that asserts a principal. Link a service-account key, or authenticate through Application Default Credentials, to list.'
     );
   }
 
-  const { project, location } = settings;
+  const { location } = settings;
   const token = await (args.accessTokenProvider ?? defaultVertexAccessToken)({
     googleAuthOptions: settings.googleAuthOptions,
   });
 
   const payload = await readJson({
     fetchImpl: args.fetchImpl,
-    url: `https://${location}-aiplatform.googleapis.com/v1beta1/projects/${project}/locations/${location}/publishers/google/models`,
+    // `publisherModels.list` is rooted at `publishers/*`, not at
+    // `projects/*/locations/*/publishers/*` — unlike generation's `baseURL`,
+    // which *is* project-scoped. Reusing generation's shape here built a path
+    // Google does not serve, and it answered with a generic HTML 404 that
+    // surfaced as MODEL_LISTING_FAILED for every vertex caller (#1080).
+    //
+    // `project` therefore no longer reaches the URL, but it stays required by
+    // `resolveVertexSettings`: it is what selects the ADC/service-account
+    // branch that mints the token, and it is the project the token is billed
+    // and quota'd against. The regional host is what scopes the answer to
+    // `location`.
+    url: `https://${location}-aiplatform.googleapis.com/v1beta1/publishers/google/models`,
     headers: { authorization: `Bearer ${token}` },
     provider: args.provider,
   });

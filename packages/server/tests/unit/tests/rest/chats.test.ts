@@ -1,3 +1,7 @@
+import type { Server } from 'node:http';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
+
 import * as chatsLib from 'src/lib/chats';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
@@ -9,7 +13,49 @@ describe('Chats', () => {
   let projectId: string;
   let otherProjectId: string;
   let aiProviderId: string;
+  let rejectingProviderId: string;
   let noPermToken: string;
+  let rejectingServer: Server;
+
+  /**
+   * A local OpenAI-compatible endpoint that rejects every completion the way a
+   * provider rejects an unavailable model: `404`, with the provider's own JSON
+   * error body. The ollama builder targets `${base_url}/v1/chat/completions`,
+   * so the real `generateText` / `streamText` call runs end to end and the AI
+   * SDK raises a genuine `APICallError` — which is the thing the route has to
+   * map. A mock would skip the serialization that produces it.
+   */
+  const startRejectingServer = async (): Promise<string> => {
+    rejectingServer = createServer((req, res) => {
+      req.resume();
+      req.on('end', () => {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            error: {
+              message: 'model "not-a-real-model" not found',
+              type: 'invalid_request_error',
+              code: 'model_not_found',
+            },
+          })
+        );
+      });
+    });
+
+    await new Promise<void>((resolve) => {
+      rejectingServer.listen(0, '127.0.0.1', resolve);
+    });
+    const { port } = rejectingServer.address() as AddressInfo;
+    return `http://127.0.0.1:${port}`;
+  };
+
+  afterAll(async () => {
+    await new Promise<void>((resolve) => {
+      rejectingServer.close(() => {
+        resolve();
+      });
+    });
+  });
 
   beforeAll(async () => {
     const setup = await setupProjectWithUsers({
@@ -39,6 +85,17 @@ describe('Chats', () => {
         default_model: 'llama3.2',
       });
     aiProviderId = aiProvRes.body.id;
+
+    const rejectingRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/ai-providers')
+      .send({
+        project_id: projectId,
+        name: 'Chats Rejecting Provider',
+        provider: 'ollama',
+        base_url: await startRejectingServer(),
+        default_model: 'not-a-real-model',
+      });
+    rejectingProviderId = rejectingRes.body.id;
   });
 
   describe('POST /api/v1/chats', () => {
@@ -378,10 +435,10 @@ describe('Chats', () => {
           instructions: 'You are a helpful assistant.',
         });
 
-      // Ollama isn't running in unit CI, so the connection error is a plain
-      // (non-DomainError) Error and errorLogger's default status is 500 —
-      // this still exercises the stored-instructions branch, which runs
-      // before the provider call.
+      // Ollama isn't running in unit CI, so the provider call fails at the
+      // socket — mapped to `502 AI_PROVIDER_ERROR` since #1081, where it used
+      // to be a bare 500. This still exercises the stored-instructions branch,
+      // which runs before the provider call.
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/chat/completions')
         .send({
@@ -389,7 +446,8 @@ describe('Chats', () => {
           messages: [{ role: 'user', content: 'Hello' }],
         });
 
-      expect(response.status).toBe(500);
+      expect(response.status).toBe(502);
+      expect(response.body.error.code).toBe('AI_PROVIDER_ERROR');
     });
   });
 
@@ -544,6 +602,80 @@ describe('Chats', () => {
     });
   });
 
+  // ── Upstream provider rejections (#1081) ────────────────────────────────
+
+  describe('POST /api/v1/chat/completions - upstream provider rejection', () => {
+    test('a provider rejection is mapped to 502 AI_PROVIDER_ERROR, not a bare 500', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/chat/completions')
+        .send({
+          ai_provider_id: rejectingProviderId,
+          messages: [{ role: 'user', content: 'Hello' }],
+        });
+
+      expect(response.status).toBe(502);
+      expect(response.body.error.code).toBe('AI_PROVIDER_ERROR');
+      // The provider's own status is what tells a caller "this model is not
+      // available here" apart from "SOAT is broken" — the whole point of #1081.
+      expect(response.body.error.message).toContain('404');
+    });
+
+    test('a provider rejection on a chat target maps the same way', async () => {
+      const chatRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/chats')
+        .send({ ai_provider_id: rejectingProviderId, project_id: projectId });
+
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/chat/completions')
+        .send({
+          chat_id: chatRes.body.id,
+          messages: [{ role: 'user', content: 'Hello' }],
+        });
+
+      expect(response.status).toBe(502);
+      expect(response.body.error.code).toBe('AI_PROVIDER_ERROR');
+    });
+
+    test('an unknown ai_provider_id is still RESOURCE_NOT_FOUND, not a provider error', async () => {
+      // The mapping runs *after* this branch, so widening the catch must not
+      // swallow the one case it already handled.
+      const response = await authenticatedTestClient(adminToken)
+        .post('/api/v1/chat/completions')
+        .send({
+          ai_provider_id: 'aip_doesnotexist000000',
+          messages: [{ role: 'user', content: 'Hello' }],
+        });
+
+      expect(response.status).toBe(404);
+      expect(response.body.error.code).toBe('RESOURCE_NOT_FOUND');
+    });
+
+    test('a streaming provider rejection reports the mapped message in the SSE error frame', async () => {
+      // Headers are already on the wire by the time the provider answers, so
+      // this cannot become a status code — the terminal event carries the
+      // mapped message instead of the AI SDK's raw one.
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/chat/completions')
+        .send({
+          ai_provider_id: rejectingProviderId,
+          messages: [{ role: 'user', content: 'Hello' }],
+          stream: true,
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.headers['content-type']).toMatch(/text\/event-stream/);
+
+      const frame = response.text.split('\n').find((line) => {
+        return line.startsWith('data:') && line.includes('"error"');
+      });
+      expect(frame).toBeDefined();
+      const payload = JSON.parse((frame as string).replace(/^data: /, '')) as {
+        error: string;
+      };
+      expect(payload.error).toContain('Provider returned 404');
+    });
+  });
+
   // ── Streaming /chat/completions against a chat ──────────────────────────
 
   describe('POST /api/v1/chat/completions - chat_id streaming (real lib)', () => {
@@ -683,7 +815,8 @@ describe('Chats', () => {
     test('non-streaming request reaches createChatCompletion (propagates AI error status)', async () => {
       // createChatCompletion reaches generateText, which throws because this
       // suite has no live Ollama server (only the smoke/tutorials CI jobs set
-      // one up) — the connection failure surfaces as an unhandled error, i.e. 500.
+      // one up) — the connection failure is an upstream fault, so it maps to
+      // `502 AI_PROVIDER_ERROR` (#1081).
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/chat/completions')
         .send({
@@ -692,7 +825,8 @@ describe('Chats', () => {
           messages: [{ role: 'user', content: 'Hello' }],
         });
 
-      expect(response.status).toBe(500);
+      expect(response.status).toBe(502);
+      expect(response.body.error.code).toBe('AI_PROVIDER_ERROR');
     });
 
     test('a system message in messages is refused with 400', async () => {
@@ -753,7 +887,8 @@ describe('Chats', () => {
           messages: [{ role: 'user', content: 'Hello' }],
         });
 
-      expect(res.status).toBe(500);
+      expect(res.status).toBe(502);
+      expect(res.body.error.code).toBe('AI_PROVIDER_ERROR');
     });
 
     test('openai provider exercises getProviderFactory openai branch and buildModel factory-true branch (streaming)', async () => {

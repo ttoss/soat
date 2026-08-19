@@ -91,6 +91,23 @@ A caller without the action on that project gets `403`, before any provider call
 
 Set `stream: true` in the request body to receive an SSE stream. Each event contains a JSON object with a `choices[0].delta.content` chunk. The stream ends with `data: [DONE]`.
 
+### Upstream provider errors
+
+When the provider rejects the completion — an unavailable model, a refused credential — or cannot be reached, [`POST /api/v1/chat/completions`](/docs/api/chats/create-chat-completion) answers `502 AI_PROVIDER_ERROR` with the provider's own status and message in the error message:
+
+```json
+{
+  "error": {
+    "code": "AI_PROVIDER_ERROR",
+    "message": "Provider returned 404: model \"gemini-2.0-flash\" not found"
+  }
+}
+```
+
+This is the same mapping [Agents](./agents.md) generation applies, so probing which models a provider can actually serve gives an interpretable answer instead of a bare `500`.
+
+A streaming request cannot report this as a status code — its `200` and headers are written before the provider is called. The failure arrives as a terminal `data: {"error": "..."}` frame carrying the same message, and the stream then ends without a `[DONE]`.
+
 ### Document-Backed Messages
 
 A message may carry a `document_id` instead of inline `content`. The server fetches that document and uses its `content` field as the message body. jq-based selection of tool output (the `output_path` behavior) is handled by [Agents](./agents.md#tool-output-message-content).

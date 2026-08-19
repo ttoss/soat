@@ -356,9 +356,15 @@ paths:
 
         A Vertex record needs no `config.project` when its secret is a
         service-account key, since the key file names its own project. A Vertex
-        record in express mode (API key) cannot list at all: express mode is a
-        global, project-less endpoint and the publisher-model catalogue is
-        per-project, so it returns `400 MODEL_LISTING_UNSUPPORTED`.
+        record in express mode (API key) cannot list at all: the publisher-model
+        listing rejects API keys and needs a credential that asserts a
+        principal, so it returns `400 MODEL_LISTING_UNSUPPORTED`.
+
+        The Vertex answer is the publisher catalogue the record's
+        `config.location` region serves. The project behind the credential is
+        billed and quota'd for the call but does not filter the result, so a
+        listed model may still be unavailable to that project at generation
+        time.
       operationId: listAiProviderModels
       parameters:
         - name: ai_provider_id
