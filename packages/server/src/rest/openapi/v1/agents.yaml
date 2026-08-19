@@ -400,7 +400,20 @@ paths:
             text/event-stream:
               schema:
                 type: string
-                description: 'SSE stream of delta chunks ending with `data: [DONE]`.'
+                description: >
+                  SSE stream of delta chunks ending with `data: [DONE]`.
+
+
+                  The response headers are written before the provider is
+                  called, so a failure cannot become a status code once the
+                  stream is open. It arrives instead as a terminal
+                  `data: {"error": "..."}` frame carrying the same mapped
+                  message the non-streaming path returns in its `502` body
+                  (e.g. `Provider returned 404: ...`), and the stream then ends
+                  **without** a `[DONE]` — the absence of that sentinel is how a
+                  caller tells a truncated answer from a complete one. Chunks
+                  produced before the failure are still delivered, and the
+                  generation is recorded as `failed`.
         '202':
           description: Generation accepted and running in the background (default, when `wait` is omitted or `false`). Poll `GET /api/v1/generations/{generation_id}` for the result.
           content:
@@ -442,6 +455,8 @@ paths:
             error `meta` includes the `generation_id` and
             `trace_id` of the failed
             generation for post-mortem debugging via GET /api/v1/generations/{generation_id}.
+            Streaming requests report the provider error in a terminal SSE frame
+            instead, since their status line is already on the wire.
           content:
             application/json:
               schema:
