@@ -83,7 +83,17 @@ The route must belong to this project. An explicit binding on a consumer always 
 
 ### Deletion
 
-Deleting a project that has any dependent resource (agents, AI providers, tools, conversations, files, traces, [usage](./usage.md) history, etc.) returns `409 Conflict` with error code `PROJECT_HAS_DEPENDENTS`. Pass `?force=true` to delete all dependents along with the project in a single transaction — including the billing/usage history, and the stored bytes of the project's [files](./files.md), so a force-deleted project leaves nothing behind in storage.
+Deleting a project that has any dependent resource returns `409 Conflict` with error code `PROJECT_HAS_DEPENDENTS`. "Any" is literal — every project-scoped resource counts, including the ones a project accumulates on its own while it runs:
+
+- agents, AI providers, [model routes](./model-routes.md), tools, [ingestion rules](./ingestion-rules.md)
+- actors, chats, conversations, sessions, [generations](./generations.md), [traces](./traces.md)
+- [datasets and evals](./evaluations.md), [workflows and tasks](./workflows.md), [triggers](./triggers.md), [orchestrations](./orchestrations.md) and their runs
+- [formations](./formations.md), [memories](./memories.md), [secrets](./secrets.md), [files](./files.md), [guardrails](./guardrails.md), [quotas](./quotas.md)
+- [usage](./usage.md) history, and the [activity](./activity.md), [approval](./approvals.md), [exception](./exceptions.md) and guardrail-evaluation records of past runs
+
+Pass `?force=true` to delete all dependents along with the project in a single transaction — including the billing/usage history, and the stored bytes of the project's [files](./files.md), so a force-deleted project leaves nothing behind in storage.
+
+The [audit log](./audit-log.md) is the one deliberate exception: its entries outlive the project, keeping the record of who did what with `project_id` cleared instead of the row deleted.
 
 ### Common Errors
 

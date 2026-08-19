@@ -5197,6 +5197,54 @@ DEL_AGENT_RESP=$($SOAT_CLI create-agent \
   --name smoke-delete-agent)
 DEL_AGENT_ID=$(printf '%s\n' "$DEL_AGENT_RESP" | jq -r '.id')
 
+# Resources from the modules that landed after the delete cascade was first
+# written (#1079): each one used to be missing from both the dependent count and
+# the cascade, so a project holding any of them answered 500 either way.
+DEL_DATASET_ID=$(printf '%s\n' "$($SOAT_CLI create-dataset \
+  --project_id "$DEL_PROJECT_ID" --name smoke-delete-dataset)" | jq -r '.id')
+
+DEL_EVAL_ID=$(printf '%s\n' "$($SOAT_CLI create-eval \
+  --project_id "$DEL_PROJECT_ID" \
+  --name smoke-delete-eval \
+  --agent_id "$DEL_AGENT_ID" \
+  --dataset_id "$DEL_DATASET_ID" \
+  --scorers '[{"type":"contains","value":"a"}]')" | jq -r '.id')
+
+DEL_WORKFLOW_ID=$(printf '%s\n' "$($SOAT_CLI create-workflow \
+  --project-id "$DEL_PROJECT_ID" \
+  --name smoke-delete-workflow \
+  --states '[{"name":"open","initial":true},{"name":"closed","terminal":true}]' \
+  --transitions '[{"name":"close","from":["open"],"to":"closed"}]')" | jq -r '.id')
+
+DEL_TASK_ID=$(printf '%s\n' "$($SOAT_CLI create-task \
+  --project-id "$DEL_PROJECT_ID" \
+  --workflow-id "$DEL_WORKFLOW_ID" \
+  --title "smoke delete card")" | jq -r '.id')
+
+DEL_TRIGGER_ID=$(printf '%s\n' "$($SOAT_CLI create-trigger \
+  --project-id "$DEL_PROJECT_ID" \
+  --name smoke-delete-trigger \
+  --type webhook \
+  --target-type agent \
+  --target-id "$DEL_AGENT_ID")" | jq -r '.id')
+
+DEL_GUARDRAIL_ID=$(printf '%s\n' "$($SOAT_CLI create-guardrail \
+  --project-id "$DEL_PROJECT_ID" \
+  --name smoke-delete-guardrail \
+  --document '{"class":"C"}')" | jq -r '.id')
+
+DEL_QUOTA_ID=$(printf '%s\n' "$($SOAT_CLI create-quota \
+  --project-id "$DEL_PROJECT_ID" --scope project --metric requests \
+  --window rolling_1h --limit 5)" | jq -r '.id')
+
+for smoke_delete_id in "$DEL_DATASET_ID" "$DEL_EVAL_ID" "$DEL_WORKFLOW_ID" \
+  "$DEL_TASK_ID" "$DEL_TRIGGER_ID" "$DEL_GUARDRAIL_ID" "$DEL_QUOTA_ID"; do
+  if [ -z "$smoke_delete_id" ] || [ "$smoke_delete_id" = "null" ]; then
+    echo "ERROR: failed to create a force-delete fixture" >&2
+    exit 1
+  fi
+done
+
 expect_cli_error_status 409 delete-project --project-id "$DEL_PROJECT_ID"
 echo "Project delete-block: OK (409 PROJECT_HAS_DEPENDENTS as expected)"
 
@@ -5204,6 +5252,13 @@ $SOAT_CLI delete-project --project-id "$DEL_PROJECT_ID" --force true
 expect_cli_error_status 404 get-project --project-id "$DEL_PROJECT_ID"
 expect_cli_error_status 404 get-agent --agent-id "$DEL_AGENT_ID"
 expect_cli_error_status 404 get-ai-provider --ai-provider-id "$DEL_AI_PROVIDER_ID"
+expect_cli_error_status 404 get-dataset --dataset-id "$DEL_DATASET_ID"
+expect_cli_error_status 404 get-eval --eval-id "$DEL_EVAL_ID"
+expect_cli_error_status 404 get-workflow --workflow-id "$DEL_WORKFLOW_ID"
+expect_cli_error_status 404 get-task --task-id "$DEL_TASK_ID"
+expect_cli_error_status 404 get-trigger --trigger-id "$DEL_TRIGGER_ID"
+expect_cli_error_status 404 get-guardrail --guardrail-id "$DEL_GUARDRAIL_ID"
+expect_cli_error_status 404 get-quota --quota-id "$DEL_QUOTA_ID"
 echo "Project force-delete: OK (project and dependents removed)"
 
 echo ""

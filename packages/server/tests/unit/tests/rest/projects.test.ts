@@ -945,6 +945,390 @@ describe('Projects', () => {
       ).toBeNull();
     });
 
+    // ── Modules added after the cascade was first written (#1079) ───────────
+    //
+    // Every one of these holds rows whose `projectId` FK is NO ACTION, so a
+    // project holding only them used to count `0` dependents and take the bare
+    // `project.destroy()` path — a raw 500 from the constraint, with `force`
+    // failing the same way once anything else was counted.
+
+    /** Creates a dataset + eval pair (evaluations), a workflow + task
+     * (automation), a trigger, a guardrail and a quota in `project`. */
+    const createLateModuleResources = async (project: string) => {
+      const aiProviderRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: project,
+          name: 'Late Module Provider',
+          provider: 'ollama',
+          default_model: 'llama3.2',
+        });
+      expect(aiProviderRes.status).toBe(201);
+
+      const agentRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderRes.body.id,
+          project_id: project,
+          name: 'Late Module Agent',
+        });
+      expect(agentRes.status).toBe(201);
+
+      const datasetRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/datasets')
+        .send({ project_id: project, name: 'late-module-dataset' });
+      expect(datasetRes.status).toBe(201);
+
+      const evalRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/evals')
+        .send({
+          project_id: project,
+          name: 'late-module-eval',
+          agent_id: agentRes.body.id,
+          dataset_id: datasetRes.body.id,
+          scorers: [{ type: 'contains', value: 'x' }],
+        });
+      expect(evalRes.status).toBe(201);
+
+      const workflowRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/workflows')
+        .send({
+          project_id: project,
+          name: 'late-module-workflow',
+          states: [
+            { name: 'draft', initial: true },
+            { name: 'done', terminal: true },
+          ],
+          transitions: [{ name: 'finish', from: ['draft'], to: 'done' }],
+        });
+      expect(workflowRes.status).toBe(201);
+
+      const taskRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tasks')
+        .send({
+          project_id: project,
+          workflow_id: workflowRes.body.id,
+          title: 'late-module-task',
+        });
+      expect(taskRes.status).toBe(201);
+
+      const triggerRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/triggers')
+        .send({
+          project_id: project,
+          name: 'late-module-trigger',
+          type: 'webhook',
+          target_type: 'agent',
+          target_id: agentRes.body.id,
+        });
+      expect(triggerRes.status).toBe(201);
+
+      const guardrailRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/guardrails')
+        .send({
+          project_id: project,
+          name: 'late-module-guardrail',
+          document: {
+            default_class: 'C',
+            class: { if: [{ '<': [{ var: 'args.amount' }, 500] }, 'B', 'C'] },
+          },
+        });
+      expect(guardrailRes.status).toBe(201);
+
+      const quotaRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/quotas')
+        .send({
+          project_id: project,
+          scope: 'project',
+          metric: 'requests',
+          window: 'calendar_month',
+          limit: 10,
+        });
+      expect(quotaRes.status).toBe(201);
+
+      return {
+        datasetId: datasetRes.body.id as string,
+        evalId: evalRes.body.id as string,
+        workflowId: workflowRes.body.id as string,
+        taskId: taskRes.body.id as string,
+        triggerId: triggerRes.body.id as string,
+        guardrailId: guardrailRes.body.id as string,
+        quotaId: quotaRes.body.id as string,
+      };
+    };
+
+    /**
+     * The records a project writes about itself as it runs — activity,
+     * approvals, exceptions, guardrail evaluations — and an orchestration queue
+     * task. Each has a blocking `projectId` (or `orchestrationRunId`) FK and no
+     * route that creates one directly, so they are written at the DB layer, the
+     * same way the usage-history tests above do.
+     */
+    const createRunRecords = async (internalProjectId: number) => {
+      const activity = await db.ActivityEntry.create({
+        projectId: internalProjectId,
+        kind: 'action_executed',
+        severity: 'info',
+        summary: 'late-module activity',
+      });
+
+      const approval = await db.ApprovalItem.create({
+        projectId: internalProjectId,
+        origin: 'tool_call',
+        status: 'pending',
+        proposedAction: { tool: 'noop' },
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+
+      const exception = await db.ExceptionItem.create({
+        projectId: internalProjectId,
+        status: 'open',
+        severity: 'warning',
+        kind: 'manual',
+        title: 'late-module exception',
+        lastSeenAt: new Date(),
+      });
+
+      const guardrailEvaluation = await db.GuardrailEvaluation.create({
+        projectId: internalProjectId,
+        guardrailId: 'grd_late_module',
+        scope: 'agent',
+        resolvedClass: 'C',
+        decision: 'allowed',
+        contextSource: 'none',
+        contextSnapshot: {},
+      });
+
+      const orchestration = await db.Orchestration.create({
+        projectId: internalProjectId,
+        name: 'late-module-orchestration',
+        definition: { nodes: [], edges: [] },
+      });
+      const orchestrationRun = await db.OrchestrationRun.create({
+        projectId: internalProjectId,
+        orchestrationId: orchestration.get('id'),
+        status: 'queued',
+        input: {},
+      });
+      const runTask = await db.OrchestrationRunTask.create({
+        orchestrationRunId: orchestrationRun.get('id'),
+        kind: 'continue',
+      });
+
+      return {
+        activityId: activity.get('id') as number,
+        approvalId: approval.get('id') as number,
+        exceptionId: exception.get('id') as number,
+        guardrailEvaluationId: guardrailEvaluation.get('id') as number,
+        orchestrationRunId: orchestrationRun.get('id') as number,
+        runTaskId: runTask.get('id') as number,
+      };
+    };
+
+    test('returns 409 PROJECT_HAS_DEPENDENTS when the project only holds a dataset', async () => {
+      const projRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'Dataset Only Project' });
+      const datasetOnlyProjectId = projRes.body.id;
+
+      const datasetRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/datasets')
+        .send({ project_id: datasetOnlyProjectId, name: 'lonely-dataset' });
+      expect(datasetRes.status).toBe(201);
+
+      const response = await authenticatedTestClient(adminToken).delete(
+        `/api/v1/projects/${datasetOnlyProjectId}`
+      );
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('PROJECT_HAS_DEPENDENTS');
+
+      const getProjectRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/projects/${datasetOnlyProjectId}`
+      );
+      expect(getProjectRes.status).toBe(200);
+    });
+
+    test('force=true deletes a project holding evaluation, automation, guardrail and quota resources', async () => {
+      const projRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'Late Module Force Delete Project' });
+      const lateProjectId = projRes.body.id;
+
+      const created = await createLateModuleResources(lateProjectId);
+
+      const project = await db.Project.findOne({
+        where: { publicId: lateProjectId },
+      });
+      const records = await createRunRecords(project?.get('id') as number);
+
+      const blockedResponse = await authenticatedTestClient(adminToken).delete(
+        `/api/v1/projects/${lateProjectId}`
+      );
+      expect(blockedResponse.status).toBe(409);
+
+      const forcedResponse = await authenticatedTestClient(adminToken).delete(
+        `/api/v1/projects/${lateProjectId}?force=true`
+      );
+      expect(forcedResponse.status).toBe(204);
+
+      expect(
+        await db.Dataset.findOne({ where: { publicId: created.datasetId } })
+      ).toBeNull();
+      expect(
+        await db.Eval.findOne({ where: { publicId: created.evalId } })
+      ).toBeNull();
+      expect(
+        await db.Workflow.findOne({ where: { publicId: created.workflowId } })
+      ).toBeNull();
+      expect(
+        await db.Task.findOne({ where: { publicId: created.taskId } })
+      ).toBeNull();
+      expect(
+        await db.Trigger.findOne({ where: { publicId: created.triggerId } })
+      ).toBeNull();
+      expect(
+        await db.Guardrail.findOne({ where: { publicId: created.guardrailId } })
+      ).toBeNull();
+      expect(
+        await db.Quota.findOne({ where: { publicId: created.quotaId } })
+      ).toBeNull();
+
+      expect(
+        await db.ActivityEntry.findOne({ where: { id: records.activityId } })
+      ).toBeNull();
+      expect(
+        await db.ApprovalItem.findOne({ where: { id: records.approvalId } })
+      ).toBeNull();
+      expect(
+        await db.ExceptionItem.findOne({ where: { id: records.exceptionId } })
+      ).toBeNull();
+      expect(
+        await db.GuardrailEvaluation.findOne({
+          where: { id: records.guardrailEvaluationId },
+        })
+      ).toBeNull();
+      expect(
+        await db.OrchestrationRunTask.findOne({
+          where: { id: records.runTaskId },
+        })
+      ).toBeNull();
+      expect(
+        await db.OrchestrationRun.findOne({
+          where: { id: records.orchestrationRunId },
+        })
+      ).toBeNull();
+    });
+
+    test('force=true unwinds documents, traces and generations, self-references included', async () => {
+      const projRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'Force Delete Graph Project' });
+      const graphProjectId = projRes.body.id;
+
+      const aiProviderRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: graphProjectId,
+          name: 'Graph Provider',
+          provider: 'ollama',
+          default_model: 'llama3.2',
+        });
+      const agentRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderRes.body.id,
+          project_id: graphProjectId,
+          name: 'Graph Agent',
+        });
+      expect(agentRes.status).toBe(201);
+
+      const project = await db.Project.findOne({
+        where: { publicId: graphProjectId },
+      });
+      const internalProjectId = project?.get('id') as number;
+      const agent = await db.Agent.findOne({
+        where: { publicId: agentRes.body.id },
+      });
+      const agentId = agent?.get('id') as number;
+
+      // A file with a document on it: `Document.fileId` is RESTRICT, so the
+      // document has to go before the file it describes.
+      const file = await db.File.create({
+        projectId: internalProjectId,
+        path: '/force-delete-graph.txt',
+        filename: 'force-delete-graph.txt',
+        contentType: 'text/plain',
+        size: 4,
+        storageType: 'local',
+        storagePath: '/tmp/force-delete-graph.txt',
+        metadata: null,
+      });
+      const document = await db.Document.create({
+        fileId: file.get('id'),
+        title: 'Force delete graph document',
+        metadata: null,
+        tags: null,
+        embedding: null,
+      });
+
+      // Traces and generations point at their own kind with RESTRICT FKs, so
+      // the cascade nulls those links before destroying the rows.
+      const rootTrace = await db.Trace.create({
+        projectId: internalProjectId,
+        agentId,
+      });
+      const childTrace = await db.Trace.create({
+        projectId: internalProjectId,
+        agentId,
+        parentTraceId: rootTrace.get('id'),
+        rootTraceId: rootTrace.get('id'),
+      });
+      const initiatorGeneration = await db.Generation.create({
+        projectId: internalProjectId,
+        agentId,
+        traceId: rootTrace.get('id'),
+        status: 'completed',
+        startedAt: new Date(),
+      });
+      const nestedGeneration = await db.Generation.create({
+        projectId: internalProjectId,
+        agentId,
+        traceId: childTrace.get('id'),
+        status: 'completed',
+        startedAt: new Date(),
+        initiatorGenerationId: initiatorGeneration.get('id'),
+      });
+
+      const forcedResponse = await authenticatedTestClient(adminToken).delete(
+        `/api/v1/projects/${graphProjectId}?force=true`
+      );
+      expect(forcedResponse.status).toBe(204);
+
+      expect(
+        await db.Document.findOne({ where: { id: document.get('id') } })
+      ).toBeNull();
+      expect(
+        await db.File.findOne({ where: { id: file.get('id') } })
+      ).toBeNull();
+      expect(
+        await db.Trace.findOne({ where: { id: childTrace.get('id') } })
+      ).toBeNull();
+      expect(
+        await db.Trace.findOne({ where: { id: rootTrace.get('id') } })
+      ).toBeNull();
+      expect(
+        await db.Generation.findOne({
+          where: { id: nestedGeneration.get('id') },
+        })
+      ).toBeNull();
+      expect(
+        await db.Generation.findOne({
+          where: { id: initiatorGeneration.get('id') },
+        })
+      ).toBeNull();
+    });
+
     test('force=true on a project without dependents just deletes it', async () => {
       const projRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/projects')
