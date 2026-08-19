@@ -3,6 +3,18 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.26.0](https://github.com/ttoss/soat/compare/v0.25.1...v0.26.0) (2026-08-19)
+
+### Bug Fixes
+
+* **agents:** report provider failures on a streaming generation ([#1085](https://github.com/ttoss/soat/issues/1085)) ([0e80550](https://github.com/ttoss/soat/commit/0e80550d723d39a7787245828e67dd78c4a89c2e)), closes [#1081](https://github.com/ttoss/soat/issues/1081) [#1083](https://github.com/ttoss/soat/issues/1083) [#1083](https://github.com/ttoss/soat/issues/1083) [#1083](https://github.com/ttoss/soat/issues/1083) [#1084](https://github.com/ttoss/soat/issues/1084)
+* **ai-providers,chats:** correct the vertex listing URL and map provider errors ([#1083](https://github.com/ttoss/soat/issues/1083)) ([00921ee](https://github.com/ttoss/soat/commit/00921ee87f3a84cf5211fbdf9c6d3373c9c63563)), closes [#1080](https://github.com/ttoss/soat/issues/1080) [#1081](https://github.com/ttoss/soat/issues/1081) [179/#180](https://github.com/ttoss/soat/issues/180) [#1080](https://github.com/ttoss/soat/issues/1080) [#1081](https://github.com/ttoss/soat/issues/1081)
+* **projects:** count and cascade every project-scoped model on delete ([#1082](https://github.com/ttoss/soat/issues/1082)) ([f8f7d7b](https://github.com/ttoss/soat/commit/f8f7d7bcc9f0416d2fab5fd3721dc4fddf10a7d4)), closes [#1079](https://github.com/ttoss/soat/issues/1079) [#834](https://github.com/ttoss/soat/issues/834) [#1079](https://github.com/ttoss/soat/issues/1079)
+
+### Features
+
+* **evaluations:** add embedding_similarity scorer for cosine similarity grading ([#1077](https://github.com/ttoss/soat/issues/1077)) ([7314ade](https://github.com/ttoss/soat/commit/7314ade2e514ee192c18491aa81cc4644f830c83))
+
 ## [0.25.1](https://github.com/ttoss/soat/compare/v0.25.0...v0.25.1) (2026-08-17)
 
 **Note:** Version bump only for package @soat/website
