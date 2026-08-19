@@ -257,12 +257,19 @@ paths:
         - Projects
       summary: Delete a project
       description: >
-        Deletes a project. Requires admin role. Fails with `409` if the
-        project has any dependent resources (agents, ai providers, tools,
-        conversations, chats, formations, memories, actors, webhooks,
-        secrets, sessions, files, traces, generations, orchestrations, etc.),
-        unless `force=true` is passed, in which case those resources are
-        deleted along with the project.
+        Deletes a project. Requires admin role. Fails with `409` if the project
+        has any dependent resource, unless `force=true` is passed, in which case
+        those resources are deleted along with the project.
+
+
+        Every project-scoped resource counts: agents, ai providers, model
+        routes, tools, ingestion rules, actors, chats, conversations, sessions,
+        generations, traces, datasets, evals, workflows, tasks, triggers,
+        orchestrations and their runs, formations, memories, secrets, files,
+        guardrails, quotas, usage history — and the activity, approval,
+        exception and guardrail-evaluation records a project accumulates while
+        it runs. Audit log entries are the one exception: they outlive the
+        project, keeping their record with `project_id` cleared.
       operationId: deleteProject
       parameters:
         - name: project_id
