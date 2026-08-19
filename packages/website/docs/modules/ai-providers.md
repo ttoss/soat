@@ -139,7 +139,7 @@ Not every provider type can answer:
 | `openai`, `groq`, `xai`, `gateway`, `custom` | `GET {base_url}/models`, so a self-hosted or proxied endpoint works too | the linked secret — **required** |
 | `anthropic` | `GET /v1/models` | the linked secret — **required** |
 | `google` | AI Studio's model list | the linked secret — **required** |
-| `vertex` | the publisher models for the provider's project and `config.location` | the linked service-account key, else [ADC](https://cloud.google.com/docs/authentication/application-default-credentials) |
+| `vertex` | the Google publisher models the `config.location` region serves | the linked service-account key, else [ADC](https://cloud.google.com/docs/authentication/application-default-credentials) |
 | `bedrock` | `ListFoundationModels` in the provider's `config.region` | the linked secret's IAM keys or API key, else the AWS default credential chain |
 | `azure`, `ollama` | **unsupported** — Azure lists deployments an operator named, and Ollama lists whatever was pulled onto that host, so neither answers "which models can this provider run" | — |
 
@@ -148,7 +148,8 @@ Listing resolves credentials exactly the way generation does, so a record that c
 Two consequences worth knowing:
 
 - **A Vertex record needs no `config.project` when its secret is a service-account key**, because the key file names its own project. `config.project` still overrides it.
-- **Vertex express mode cannot list.** An API-key (express-mode) Vertex record talks to a global, project-less endpoint, but the publisher-model catalogue is per-project, so there is no URL to call. Listing returns `MODEL_LISTING_UNSUPPORTED` naming the reason rather than guessing a project.
+- **Vertex express mode cannot list.** The publisher-model listing rejects API keys outright — Google answers one with `401 UNAUTHENTICATED`, "API keys are not supported by this API" — and an express-mode record holds no other credential. Listing returns `MODEL_LISTING_UNSUPPORTED` naming the reason rather than forwarding that 401.
+- **The Vertex list is a regional publisher catalogue, not a per-project reachability check.** Google's publisher-model listing is rooted at `publishers/google`, so `config.location` selects the region and the credential's project decides only who is billed and quota'd — the project is not a filter on the result. A model that appears in the list can still fail at generation time if that project cannot serve it, so treat the answer as "what this region publishes", not "what this project is entitled to".
 
 Errors: `MODEL_LISTING_UNSUPPORTED` (400) for `azure`, `ollama`, and Vertex express mode; `AI_PROVIDER_MISCONFIGURED` (400) when the record lacks what the listing needs (a Vertex project from either `config.project` or the key file, a Bedrock region, or — for the API-key providers above — a linked secret); `MODEL_LISTING_FAILED` (502) when the provider rejects the request or answers with something other than JSON — its own status and message are carried in the error message. Authorized by `ai-providers:ListAiProviderModels` on the provider's project.
 

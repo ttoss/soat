@@ -14,6 +14,7 @@ import {
   validateChatCompletionTarget,
 } from 'src/lib/chats';
 import { buildSrn } from 'src/lib/iam';
+import { toProviderDomainError } from 'src/lib/providerError';
 
 import {
   parsePagination,
@@ -268,8 +269,15 @@ const handleStreamingCompletion = async (args: {
 
     args.ctx.res.write('data: [DONE]\n\n');
   } catch (error) {
+    // The response headers went out with the `200` before the provider was
+    // even called, so an upstream rejection here can never become a status
+    // code — the terminal SSE event is the only place to report it. It still
+    // gets the same mapping the non-streaming branch applies, so the frame
+    // names the provider's status instead of whatever the AI SDK's raw
+    // message happened to say (#1081).
+    const mapped = toProviderDomainError(error) ?? error;
     const message =
-      error instanceof Error ? error.message : 'Internal server error';
+      mapped instanceof Error ? mapped.message : 'Internal server error';
     args.ctx.res.write(`data: ${JSON.stringify({ error: message })}\n\n`);
   } finally {
     args.ctx.res.end();
@@ -359,6 +367,13 @@ chatsRouter.post('/chat/completions', async (ctx: Context) => {
       throw new DomainError('RESOURCE_NOT_FOUND', 'AI provider not found');
     }
 
-    throw error;
+    // The same mapping the agent generation paths apply (#179/#180). Without
+    // it an upstream rejection — an unavailable model, a bad credential, a
+    // provider outage — reached the error logger unmapped and came back as a
+    // bare `500 INTERNAL_ERROR`, which a caller cannot tell apart from a fault
+    // in SOAT itself (#1081). `toProviderDomainError` returns `null` for an
+    // error that did not come from the provider call, so those still rethrow
+    // untouched.
+    throw toProviderDomainError(error) ?? error;
   }
 });

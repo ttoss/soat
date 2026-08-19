@@ -371,15 +371,28 @@ export const createChatCompletion = async (
   };
 };
 
-export const streamChatCompletion = async (args: ChatCompletionArgs) => {
+export const streamChatCompletion = async (
+  args: ChatCompletionArgs
+): Promise<AsyncIterable<string>> => {
   const { fallbackModel, instructions, messages, resolvedModel } =
     await prepareChatCompletion(args);
+
+  // `streamText` does not throw from the stream it returns: a failure is
+  // handed to `onError` and the stream then closes cleanly. Left alone, a
+  // provider rejection reached the route as an ordinary end-of-stream, so a
+  // completion against an unavailable model answered `200` with no content and
+  // no error at all (#1081). Capturing it here and rethrowing once the stream
+  // drains is what gives the route something to turn into a terminal event.
+  let streamError: unknown;
 
   const result = streamText({
     model: resolvedModel.model,
     instructions,
     messages,
     maxRetries: routedMaxRetries(resolvedModel.model),
+    onError: ({ error }) => {
+      streamError = error;
+    },
     // Token counts only arrive once the provider closes the stream, so a
     // streamed completion meters at the end rather than up front. A stream the
     // client abandons never reaches `onEnd` and is not metered.
@@ -392,5 +405,17 @@ export const streamChatCompletion = async (args: ChatCompletionArgs) => {
     },
   });
 
-  return result.textStream;
+  // Chunks are forwarded as they arrive — the rethrow happens after the last
+  // one, so a stream that fails part-way keeps everything it already produced
+  // and still reports why it stopped.
+  async function* withTerminalError(): AsyncGenerator<string> {
+    for await (const chunk of result.textStream) {
+      yield chunk;
+    }
+    if (streamError !== undefined) {
+      throw streamError;
+    }
+  }
+
+  return withTerminalError();
 };
