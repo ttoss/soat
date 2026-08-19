@@ -1,4 +1,4 @@
-import type { Server } from 'node:http';
+import type { Server, ServerResponse } from 'node:http';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
@@ -1023,6 +1023,282 @@ describe('Agent Generation Routes', () => {
           where: { publicId: 'gen_text_encoded_continuation' },
         });
         expect(generation?.status).toBe('failed');
+      });
+    });
+  });
+
+  // ── Streaming provider rejections (#1084) ─────────────────────────────────
+
+  describe('POST /api/v1/agents/:id/generate - streaming provider rejection', () => {
+    // A local OpenAI-compatible endpoint that rejects every completion the way
+    // a provider rejects an unavailable model: `404`, with the provider's own
+    // JSON error body. The ollama builder targets
+    // `${base_url}/v1/chat/completions`, so the real `streamText` call runs end
+    // to end and the AI SDK raises a genuine `APICallError` — which is the
+    // thing the stream has to surface. A mock would skip the serialization that
+    // produces it, and `streamText`'s swallow-the-error behavior is exactly
+    // what a mocked stream cannot reproduce.
+    let rejectingServer: Server;
+    let userToken: string;
+    let agentId: string;
+    let agentDbId: number;
+    let partialAgentId: string;
+    let partialAgentDbId: number;
+
+    // When set, the endpoint instead answers `200` and streams one text chunk
+    // followed by the provider's own mid-run error frame — the shape a provider
+    // that dies part-way through a completion sends. It is the case the issue
+    // calls worse than an outright rejection: nothing threw, the status line is
+    // long gone, and the delivered prefix is indistinguishable from a finished
+    // answer unless the failure is reported after it.
+    let streamPartialThenFail = false;
+
+    const PARTIAL_CHUNK = 'The weather in Lisbon is ';
+
+    const writePartialFailureStream = (res: ServerResponse): void => {
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+      });
+      const delta = {
+        id: 'chatcmpl-partial',
+        object: 'chat.completion.chunk',
+        created: 0,
+        model: 'not-a-real-model',
+        choices: [
+          { index: 0, delta: { content: PARTIAL_CHUNK }, finish_reason: null },
+        ],
+      };
+      res.write(`data: ${JSON.stringify(delta)}\n\n`);
+      res.write(
+        `data: ${JSON.stringify({
+          error: {
+            message: 'upstream capacity exceeded',
+            type: 'server_error',
+            code: 'overloaded',
+          },
+        })}\n\n`
+      );
+      res.write('data: [DONE]\n\n');
+      res.end();
+    };
+
+    const startRejectingServer = async (): Promise<string> => {
+      rejectingServer = createServer((req, res) => {
+        req.resume();
+        req.on('end', () => {
+          if (streamPartialThenFail) {
+            writePartialFailureStream(res);
+            return;
+          }
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              error: {
+                message: 'model "not-a-real-model" not found',
+                type: 'invalid_request_error',
+                code: 'model_not_found',
+              },
+            })
+          );
+        });
+      });
+      await new Promise<void>((resolve) => {
+        rejectingServer.listen(0, '127.0.0.1', resolve);
+      });
+      const { port } = rejectingServer.address() as AddressInfo;
+      return `http://127.0.0.1:${port}`;
+    };
+
+    beforeAll(async () => {
+      const baseUrl = await startRejectingServer();
+
+      const bootstrapRes = await testClient
+        .post('/api/v1/users/bootstrap')
+        .send({ username: 'agentstreamerradmin', password: 'supersecret' });
+      const adminToken =
+        bootstrapRes.status === 201
+          ? await loginAs('agentstreamerradmin', 'supersecret')
+          : await loginAs('agentgeneradmin', 'supersecret');
+
+      const userRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/users')
+        .send({
+          username: 'agentstreamerruser',
+          password: 'agentstreamerrpass',
+        });
+      userToken = await loginAs('agentstreamerruser', 'agentstreamerrpass');
+
+      const policyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['agents:CreateAgent', 'agents:CreateAgentGeneration'],
+              },
+            ],
+          },
+        });
+      await authenticatedTestClient(adminToken)
+        .put(`/api/v1/users/${userRes.body.id}/policies`)
+        .send({ policy_ids: [policyRes.body.id] });
+
+      const projectRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'AgentGeneration Stream Rejection Project' });
+
+      const aiProvRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectRes.body.id,
+          name: 'Rejecting Provider',
+          provider: 'ollama',
+          default_model: 'not-a-real-model',
+          base_url: baseUrl,
+        });
+
+      const agentRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProvRes.body.id,
+          project_id: projectRes.body.id,
+          name: 'Rejecting Stream Agent',
+        });
+      agentId = agentRes.body.id;
+
+      const agent = await db.Agent.findOne({ where: { publicId: agentId } });
+      agentDbId = agent!.id;
+
+      // A second agent so the part-way-failure test can find *its* generation
+      // by agent without racing the outright-rejection tests above.
+      const partialAgentRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProvRes.body.id,
+          project_id: projectRes.body.id,
+          name: 'Partially Failing Stream Agent',
+        });
+      partialAgentId = partialAgentRes.body.id;
+      const partialAgent = await db.Agent.findOne({
+        where: { publicId: partialAgentId },
+      });
+      partialAgentDbId = partialAgent!.id;
+    });
+
+    afterAll(async () => {
+      await new Promise<void>((resolve, reject) => {
+        rejectingServer.close((err) => {
+          return err ? reject(err) : resolve();
+        });
+      });
+    });
+
+    const streamGeneration = () => {
+      return authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
+        .send({ messages: [{ role: 'user', content: 'hello' }], stream: true });
+    };
+
+    /**
+     * `streamText` hands a provider failure to `onError` and then closes the
+     * stream cleanly, so before #1084 this answered `200` with nothing but
+     * `data: [DONE]` — an aborted generation the caller could not tell apart
+     * from a model that legitimately produced no text.
+     */
+    test('a provider rejection arrives as a terminal SSE error frame', async () => {
+      const response = await streamGeneration();
+
+      expect(response.status).toBe(200);
+      expect(response.headers['content-type']).toContain('text/event-stream');
+
+      const frame = response.text.split('\n').find((line) => {
+        return line.startsWith('data:') && line.includes('"error"');
+      });
+      expect(frame).toBeDefined();
+      const payload = JSON.parse((frame as string).replace(/^data: /, '')) as {
+        error: string;
+      };
+      // The provider's own status is what separates "this model is not
+      // available here" from "SOAT is broken".
+      expect(payload.error).toContain('Provider returned 404');
+    });
+
+    test('a failed stream does not claim completion with [DONE]', async () => {
+      const response = await streamGeneration();
+
+      expect(response.text).not.toContain('[DONE]');
+    });
+
+    /**
+     * `onEnd` never fires on the error path, so nothing else writes this
+     * generation's terminal state: without the failure record it sat
+     * `in_progress` forever while the caller had already been told the run
+     * ended.
+     */
+    test('the failure is persisted on the generation record', async () => {
+      await streamGeneration();
+
+      const generation = await db.Generation.findOne({
+        where: { agentId: agentDbId },
+        order: [['id', 'DESC']],
+      });
+      expect(generation?.status).toBe('failed');
+      expect(generation?.stopReason).toBe('error');
+      expect(generation?.error).toMatchObject({ code: 'AI_PROVIDER_ERROR' });
+    });
+
+    describe('a provider that fails part-way through the stream', () => {
+      let response: Awaited<ReturnType<typeof streamGeneration>>;
+
+      beforeAll(async () => {
+        streamPartialThenFail = true;
+        try {
+          response = await authenticatedTestClient(userToken)
+            .post(`/api/v1/agents/${partialAgentId}/generate?wait=true`)
+            .send({
+              messages: [{ role: 'user', content: 'hello' }],
+              stream: true,
+            });
+        } finally {
+          streamPartialThenFail = false;
+        }
+      });
+
+      test('still delivers the chunks produced before the failure', () => {
+        expect(response.status).toBe(200);
+        expect(response.text).toContain(PARTIAL_CHUNK);
+      });
+
+      test('reports the provider message and withholds [DONE]', () => {
+        const frame = response.text.split('\n').find((line) => {
+          return line.startsWith('data:') && line.includes('"error"');
+        });
+        expect(frame).toBeDefined();
+        const payload = JSON.parse(
+          (frame as string).replace(/^data: /, '')
+        ) as { error: string };
+        expect(payload.error).toContain('upstream capacity exceeded');
+        // Without this the prefix above reads as the whole answer.
+        expect(response.text).not.toContain('[DONE]');
+      });
+
+      /**
+       * This run *does* reach `onEnd` — one step completed before the failure —
+       * so the completion write and the failure write target the same row. The
+       * failure is the one that must survive.
+       */
+      test('records the generation as failed, not completed', async () => {
+        const generation = await db.Generation.findOne({
+          where: { agentId: partialAgentDbId },
+          order: [['id', 'DESC']],
+        });
+        expect(generation?.status).toBe('failed');
+        expect(generation?.error).toMatchObject({
+          code: 'AI_PROVIDER_ERROR',
+        });
       });
     });
   });

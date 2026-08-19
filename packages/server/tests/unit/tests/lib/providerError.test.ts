@@ -58,8 +58,43 @@ describe('toProviderDomainError', () => {
     expect(error?.message).toContain('fetch failed');
   });
 
+  /**
+   * A provider that fails *part-way* through a stream sends its fault as a
+   * `data: {"error": {...}}` frame, which the AI SDK hands on as the raw JSON
+   * value rather than an `APICallError` — nothing threw, the response was
+   * already `200`. Before #1084 it fell through to the generic wrapper and the
+   * caller was told "Internal Server Error" about a fault the provider had
+   * named.
+   */
+  test('maps a mid-stream provider error frame to its own message', () => {
+    // The shape the AI SDK forwards from an OpenAI-compatible `data: {"error":
+    // {...}}` frame: the frame's inner value, unwrapped.
+    const error = toProviderDomainError({
+      message: 'upstream capacity exceeded',
+      type: 'server_error',
+      code: 'overloaded',
+    });
+
+    expect(error?.code).toBe('AI_PROVIDER_ERROR');
+    expect(error?.httpStatus).toBe(502);
+    expect(error?.message).toContain('upstream capacity exceeded');
+  });
+
+  test('maps a mid-stream error frame that arrives still wrapped', () => {
+    const error = toProviderDomainError({
+      error: { message: 'model overloaded' },
+    });
+
+    expect(error?.code).toBe('AI_PROVIDER_ERROR');
+    expect(error?.message).toContain('model overloaded');
+  });
+
   test('returns null for non-provider errors', () => {
     expect(toProviderDomainError(new Error('boom'))).toBeNull();
     expect(toProviderDomainError('boom')).toBeNull();
+    // No string `message` anywhere: not a provider frame.
+    expect(toProviderDomainError({ error: 'nope' })).toBeNull();
+    expect(toProviderDomainError({ error: { code: 500 } })).toBeNull();
+    expect(toProviderDomainError({ status: 500 })).toBeNull();
   });
 });

@@ -18,6 +18,7 @@ import {
   normalizeToolChoice,
   resolveAgentStepRuleToolIdToName,
 } from './agentStepRules';
+import { recordGenerationFailure } from './generationLifecycle';
 import { updateGenerationRecord } from './generations';
 import {
   collectSystemInstructions,
@@ -26,7 +27,10 @@ import {
 import { routedMaxRetries } from './modelRouteExecutor';
 import { saveRoutingMetadata } from './modelRouteMetadata';
 import { isPlainObject } from './plainObject';
-import { buildGenerationErrorPayload } from './providerError';
+import {
+  buildGenerationErrorPayload,
+  toProviderDomainError,
+} from './providerError';
 import {
   findTextEncodedToolCall,
   textEncodedToolCallError,
@@ -90,6 +94,14 @@ const fireStreamEndSideEffects = (args: {
   steps: unknown[];
   finishReason: string;
   usage?: LanguageModelUsage;
+  /**
+   * Whether `onError` already captured a provider failure. A stream that dies
+   * *after* a step completed still reaches `onEnd`, and the terminal status
+   * there belongs to the failure path — which records `failed` with the
+   * provider's own error. Both writes target the same row, so without this the
+   * `completed` write could land last and bury the failure.
+   */
+  failed: boolean;
 }): void => {
   saveTrace({
     traceId: args.traceId,
@@ -117,7 +129,7 @@ const fireStreamEndSideEffects = (args: {
       traceId: args.traceId,
       toolName: streamedToolCall,
     });
-  } else {
+  } else if (!args.failed) {
     updateGenerationRecord({
       publicId: args.generationId,
       status: 'completed',
@@ -139,6 +151,85 @@ const fireStreamEndSideEffects = (args: {
     generationId: args.generationId,
     model: args.typedAgent.model ?? '',
     usage: args.usage,
+  });
+};
+
+/**
+ * Persists a streamed generation that failed mid-flight, and returns the error
+ * to fail the stream with.
+ *
+ * A run that fails before any step completes never reaches `onEnd` — the SDK
+ * rejects its result promises instead — so nothing else writes this
+ * generation's terminal state: without this the record sat `in_progress`
+ * forever while the caller had already been told the run ended. (A run that
+ * fails *after* a step does reach `onEnd`, which is what the `failed` flag on
+ * `fireStreamEndSideEffects` is for.)
+ *
+ * The error is mapped the way the non-stream path maps at its own provider call
+ * (`callGenerateText`), so the record, the `agents.generation.failed` event and
+ * the terminal SSE frame all carry the provider's own status. It is awaited
+ * before the stream is failed, so the record is already truthful by the time
+ * the caller reads the error frame.
+ */
+const recordStreamFailure = async (args: {
+  generationId: string;
+  traceId: string;
+  typedAgent: TypedAgent;
+  model: LanguageModel;
+  error: unknown;
+}): Promise<unknown> => {
+  // `TypedAgent.project.id` is `unknown` — the row is built from several
+  // sources — so it is narrowed rather than asserted: when it is not a number
+  // the failure is still persisted, just not announced.
+  const projectId = args.typedAgent.project.id;
+  return recordGenerationFailure({
+    generationId: args.generationId,
+    traceId: args.traceId,
+    error: toProviderDomainError(args.error) ?? args.error,
+    model: args.model,
+    ...(typeof projectId === 'number'
+      ? { projectId, projectPublicId: args.typedAgent.project.publicId }
+      : {}),
+  });
+};
+
+/**
+ * Wraps the stream `streamText` returns so a captured failure actually reaches
+ * the caller.
+ *
+ * `streamText` does not throw from that stream: a failure is handed to
+ * `onError` and the stream then **closes cleanly** — deliberately, so a
+ * provider fault cannot crash the server mid-response. Left alone, the route
+ * read an ordinary end-of-stream and wrote `data: [DONE]`, so a rejected
+ * generation was answered `200` with no content and no error, and one that
+ * failed part-way was indistinguishable from a complete answer (#1084).
+ *
+ * Chunks are forwarded as they arrive and the failure is raised only after the
+ * last one, so a stream that dies part-way keeps everything it already
+ * produced and still reports why it stopped. Erroring the stream is what makes
+ * the route's existing `catch` — which writes the terminal SSE error frame and
+ * no `[DONE]` — reachable at all.
+ */
+const withTerminalError = (args: {
+  source: ReadableStream<string>;
+  readStreamError: () => unknown;
+  recordFailure: (error: unknown) => Promise<unknown>;
+}): ReadableStream<string> => {
+  const reader = args.source.getReader();
+  return new ReadableStream<string>({
+    pull: async (controller) => {
+      const chunk = await reader.read();
+      if (chunk.value !== undefined) {
+        controller.enqueue(chunk.value);
+      }
+      if (!chunk.done) return;
+      const streamError = args.readStreamError();
+      if (streamError === undefined) {
+        controller.close();
+        return;
+      }
+      controller.error(await args.recordFailure(streamError));
+    },
   });
 };
 
@@ -169,6 +260,11 @@ export const runStreamGeneration = async (args: {
       : 0
   );
   log('runStreamGeneration: tools=%o', Object.keys(args.resolvedTools));
+  // Captured here rather than acted on here: `onError` fires while the stream
+  // is still being read, and the failure must not overtake the chunks already
+  // on their way to the caller. `withTerminalError` raises it once the stream
+  // drains.
+  let streamError: unknown;
   const result = streamText({
     model: args.model,
     // Routed models own every attempt themselves (see `routedMaxRetries`).
@@ -183,6 +279,9 @@ export const runStreamGeneration = async (args: {
     prepareStep,
     stopWhen: isStepCount((args.typedAgent.maxSteps as number) ?? 20),
     temperature: (args.typedAgent.temperature as number) ?? undefined,
+    onError: ({ error }) => {
+      streamError = error;
+    },
     onEnd: ({ steps, finishReason, usage }) => {
       fireStreamEndSideEffects({
         generationId: args.generationId,
@@ -196,8 +295,23 @@ export const runStreamGeneration = async (args: {
         steps: steps as unknown[],
         finishReason,
         usage,
+        failed: streamError !== undefined,
       });
     },
   });
-  return result.textStream as unknown as ReadableStream;
+  return withTerminalError({
+    source: result.textStream,
+    readStreamError: () => {
+      return streamError;
+    },
+    recordFailure: (error) => {
+      return recordStreamFailure({
+        generationId: args.generationId,
+        traceId: args.traceId,
+        typedAgent: args.typedAgent,
+        model: args.model,
+        error,
+      });
+    },
+  });
 };

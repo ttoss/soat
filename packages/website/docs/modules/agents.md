@@ -309,6 +309,22 @@ Pass `stream: true` to receive results as Server-Sent Events (SSE), each step's 
 
 Streaming is a REST/SDK/CLI capability only. A tool call — from an MCP client or from an agent's own `soat` tool — is one request returning one result, so `stream` is not offered on the `create-agent-generation` tool; calling it returns the completed generation.
 
+A completed stream ends with `data: [DONE]`.
+
+#### Upstream provider errors on a stream
+
+A streaming request cannot report a provider failure as a status code: its `200` and headers are written before the model is called. The failure arrives instead as a terminal frame carrying the same message the non-streaming path returns in its `502` body, and the stream then ends **without** a `[DONE]`:
+
+```
+data: {"error":"Provider returned 404: model \"gemini-2.0-flash\" not found"}
+```
+
+Three consequences worth relying on:
+
+- **The missing `[DONE]` is the signal.** A stream that ends without it did not complete, whether it produced no text at all or stopped part-way.
+- **Chunks produced before the failure are still delivered.** The error frame follows them, so a partial answer is kept and still explains why it stopped.
+- **The generation is recorded `failed`** with error code `AI_PROVIDER_ERROR`, readable afterwards via [`GET /api/v1/generations/{generation_id}`](/docs/api/generations/get-generation) and announced as an `agents.generation.failed` [webhook](./webhooks.md) event.
+
 ### Tool Context
 
 `tool_context` is a flat `Record<string, string>` of key-value pairs forwarded as HTTP headers to every tool call in a generation, so server-side tools can make authorization decisions without trusting data embedded in the prompt. The header name is `X-Soat-Context-` followed by the key verbatim (e.g. `userId` → `X-Soat-Context-userId`); read headers case-insensitively at your endpoint.
