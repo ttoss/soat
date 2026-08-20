@@ -1,6 +1,5 @@
-import crypto from 'node:crypto';
-
 import createDebug from 'debug';
+import jwt from 'jsonwebtoken';
 
 import { isPlainObject } from './plainObject';
 import {
@@ -58,10 +57,22 @@ const parseServiceAccount = (credentials: string) => {
   };
 };
 
-const base64Url = (value: string | Buffer): string => {
-  return Buffer.from(value).toString('base64url');
-};
-
+/**
+ * The RFC 7523 JWT-bearer assertion the token endpoint exchanges for an access
+ * token. `jsonwebtoken` — already this package's JWT signer — builds and signs
+ * it; the base64url encoding, the `{alg, typ}` header and the `crypto.sign`
+ * call used to be written out by hand here for a result byte-for-byte the
+ * same.
+ *
+ * `iat` and `exp` are passed explicitly rather than left to the library's
+ * `expiresIn`, because the caller injects `now`: the token cache is asserted
+ * across a simulated hour, which a wall-clock timestamp could not express.
+ *
+ * Note this is deliberately *not* `google-auth-library`'s `JWT` client, even
+ * though that dependency is present. Its token URL is a module constant used
+ * as both the POST target and the assertion's `aud`, with no override, so it
+ * cannot honour the `token_uri` a service-account key file names.
+ */
 const buildAssertion = (args: {
   clientEmail: string;
   privateKey: string;
@@ -69,32 +80,23 @@ const buildAssertion = (args: {
   scopes: string[];
   nowSeconds: number;
 }): string => {
-  const header = base64Url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
-  const claims = base64Url(
-    JSON.stringify({
-      iss: args.clientEmail,
-      scope: args.scopes.join(' '),
-      aud: args.tokenUri,
-      iat: args.nowSeconds,
-      exp: args.nowSeconds + GCP_TOKEN_LIFETIME_SECONDS,
-    })
-  );
-  const signingInput = `${header}.${claims}`;
-
-  let signature: Buffer;
   try {
-    signature = crypto.sign(
-      'RSA-SHA256',
-      Buffer.from(signingInput),
-      args.privateKey
+    return jwt.sign(
+      {
+        iss: args.clientEmail,
+        scope: args.scopes.join(' '),
+        aud: args.tokenUri,
+        iat: args.nowSeconds,
+        exp: args.nowSeconds + GCP_TOKEN_LIFETIME_SECONDS,
+      },
+      args.privateKey,
+      { algorithm: 'RS256' }
     );
   } catch (error) {
     throw authFailed({
       message: `Failed to sign the service account assertion: ${error instanceof Error ? error.message : String(error)}`,
     });
   }
-
-  return `${signingInput}.${base64Url(signature)}`;
 };
 
 const exchangeAssertionForToken = async (args: {
