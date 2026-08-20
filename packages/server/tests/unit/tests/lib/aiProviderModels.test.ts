@@ -43,6 +43,14 @@ const fakeFetch = (
   return { fetchImpl, calls };
 };
 
+/**
+ * The vertex listing URL, `view` included. `launchStage` is only populated
+ * under the FULL view — the default view omits it, which is what made the
+ * lifecycle mapping unverifiable before (#1089).
+ */
+const VERTEX_LIST_URL =
+  'https://us-central1-aiplatform.googleapis.com/v1beta1/publishers/google/models?view=PUBLISHER_MODEL_VIEW_FULL';
+
 describe('enumerateProviderModels — against a real HTTP server', () => {
   // No `fetchImpl` here: this drives the module's own default, so real `fetch`,
   // real request serialization and real header delivery are exercised end to
@@ -205,19 +213,18 @@ describe('enumerateProviderModels — anthropic', () => {
 describe('enumerateProviderModels — vertex', () => {
   test('lists publisher models from the publisher-rooted path for the location', async () => {
     const { fetchImpl, calls } = fakeFetch({
-      'https://us-central1-aiplatform.googleapis.com/v1beta1/publishers/google/models':
-        {
-          body: {
-            publisherModels: [
-              {
-                name: 'publishers/google/models/gemini-2.5-flash',
-                versionId: '001',
-                publisherModelTemplate: 'projects/x/locations/us-central1',
-                launchStage: 'GA',
-              },
-            ],
-          },
+      [VERTEX_LIST_URL]: {
+        body: {
+          publisherModels: [
+            {
+              name: 'publishers/google/models/gemini-2.5-flash',
+              versionId: '001',
+              publisherModelTemplate: 'projects/x/locations/us-central1',
+              launchStage: 'GA',
+            },
+          ],
         },
+      },
     });
 
     const models = await enumerateProviderModels({
@@ -232,34 +239,52 @@ describe('enumerateProviderModels — vertex', () => {
     // `publisherModels.list` is rooted at `publishers/*` — it is *not*
     // project-scoped the way generation's `baseURL` is. Google answers the
     // project-scoped path with a generic HTML 404 (#1080), so the path is
-    // pinned here rather than left to the fake's matching.
+    // pinned here rather than left to the fake's matching — query string
+    // included, because `launchStage` is only populated under the FULL view
+    // and a fake that ignores the query cannot tell the two views apart
+    // (#1089).
     expect(calls[0].url).toBe(
-      'https://us-central1-aiplatform.googleapis.com/v1beta1/publishers/google/models'
+      'https://us-central1-aiplatform.googleapis.com/v1beta1/publishers/google/models?view=PUBLISHER_MODEL_VIEW_FULL'
     );
     expect(calls[0].headers.get('authorization')).toBe('Bearer ya29.test');
+    // No `streaming`: the listing says nothing about streaming, and this
+    // endpoint serves embedding, TTS and classification models too.
     expect(models).toEqual([
       {
         id: 'gemini-2.5-flash',
         vendor: 'google',
-        streaming: true,
         lifecycle: 'active',
       },
     ]);
   });
 
-  test('marks a deprecated launch stage so the catalog can retire it', async () => {
+  test('reports a lifecycle only for a launch stage that means one, and never a blanket streaming', async () => {
+    // The real enum is LAUNCH_STAGE_UNSPECIFIED | EXPERIMENTAL |
+    // PRIVATE_PREVIEW | PUBLIC_PREVIEW | GA — `DEPRECATED` is never emitted,
+    // so the branch that used to test for it was dead and every model,
+    // preview ones included, was reported `active` (#1089).
     const { fetchImpl } = fakeFetch({
-      'https://us-central1-aiplatform.googleapis.com/v1beta1/publishers/google/models':
-        {
-          body: {
-            publisherModels: [
-              {
-                name: 'publishers/google/models/gemini-1.5-flash-002',
-                launchStage: 'DEPRECATED',
-              },
-            ],
-          },
+      [VERTEX_LIST_URL]: {
+        body: {
+          publisherModels: [
+            {
+              name: 'publishers/google/models/gemini-2.5-flash',
+              launchStage: 'GA',
+            },
+            {
+              name: 'publishers/google/models/gemini-3.5-flash-preview',
+              launchStage: 'PUBLIC_PREVIEW',
+            },
+            {
+              name: 'publishers/google/models/gemini-2.5-flash-experimental',
+              launchStage: 'EXPERIMENTAL',
+            },
+            // A non-generative Model Garden entry, served by the same listing
+            // and reported with no launch stage at all.
+            { name: 'publishers/google/models/bert-base-uncased' },
+          ],
         },
+      },
     });
 
     const models = await enumerateProviderModels({
@@ -271,15 +296,27 @@ describe('enumerateProviderModels — vertex', () => {
       fetchImpl,
     });
 
-    expect(models[0].lifecycle).toBe('deprecated');
+    expect(models).toEqual([
+      { id: 'gemini-2.5-flash', vendor: 'google', lifecycle: 'active' },
+      { id: 'gemini-3.5-flash-preview', vendor: 'google' },
+      { id: 'gemini-2.5-flash-experimental', vendor: 'google' },
+      { id: 'bert-base-uncased', vendor: 'google' },
+    ]);
+    // Spelled out separately: `toEqual` ignores a key whose value is
+    // `undefined`, so it alone would pass against `streaming: undefined`
+    // *and* against a mapper that dropped the key. Neither is what broke —
+    // `streaming: true` on a TTS model was.
+    for (const model of models) {
+      expect(model.streaming).toBeUndefined();
+    }
+    expect(models[1].lifecycle).toBeUndefined();
   });
 
   test('defaults the location the same way model building does', async () => {
     const { fetchImpl, calls } = fakeFetch({
-      'https://us-central1-aiplatform.googleapis.com/v1beta1/publishers/google/models':
-        {
-          body: { publisherModels: [] },
-        },
+      [VERTEX_LIST_URL]: {
+        body: { publisherModels: [] },
+      },
     });
 
     await enumerateProviderModels({
@@ -294,7 +331,7 @@ describe('enumerateProviderModels — vertex', () => {
     // The regional host is the only thing `location` scopes now, so it is the
     // only thing that can be asserted about it.
     expect(calls[0].url).toBe(
-      'https://us-central1-aiplatform.googleapis.com/v1beta1/publishers/google/models'
+      'https://us-central1-aiplatform.googleapis.com/v1beta1/publishers/google/models?view=PUBLISHER_MODEL_VIEW_FULL'
     );
   });
 
@@ -588,10 +625,9 @@ describe('enumerateProviderModels — listing honors the linked secret (#1044)',
 
   test('vertex authenticates with the linked service account', async () => {
     const { fetchImpl } = fakeFetch({
-      'https://us-central1-aiplatform.googleapis.com/v1beta1/publishers/google/models':
-        {
-          body: { publisherModels: [] },
-        },
+      [VERTEX_LIST_URL]: {
+        body: { publisherModels: [] },
+      },
     });
     let seenOptions: unknown;
 
@@ -622,10 +658,9 @@ describe('enumerateProviderModels — listing honors the linked secret (#1044)',
 
   test('vertex takes the project from the service-account key file', async () => {
     const { fetchImpl, calls } = fakeFetch({
-      'https://us-central1-aiplatform.googleapis.com/v1beta1/publishers/google/models':
-        {
-          body: { publisherModels: [] },
-        },
+      [VERTEX_LIST_URL]: {
+        body: { publisherModels: [] },
+      },
     });
 
     // Generation resolves `config.project ?? secret.project_id`, so a record
