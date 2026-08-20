@@ -6035,9 +6035,20 @@ QUOTA_ENF_POLICY_ID=$($SOAT_CLI create-policy \
 QUOTA_ENF_KEY=$($SOAT_CLI create-api-key \
   --name smoke-quota-enf-key \
   --policy_ids "[\"$QUOTA_ENF_POLICY_ID\"]" | jq -r '.key')
+# `calendar_month`, not `rolling_1m`: this is a *counted sequence* — request one
+# consumes the allowance that request two must be refused for — and a quota
+# window is a fixed bucket keyed by a truncated timestamp, despite the
+# `rolling_` prefix (`windowKeyFor` in `lib/quotaWindows.ts`). With a
+# minute-sized bucket the assertion holds only while both requests land in the
+# same minute; when they straddle :00 the second one opens a fresh bucket with
+# count 0, is allowed, and the step fails having found nothing wrong. Observed
+# on PR #1094 — quota created at 12:43:59.691Z, second request at 12:44:00.17Z.
+# This is the same trap as #1049, which is why the unit suite pins every counted
+# sequence to `COUNTED_WINDOW = 'calendar_month'` (`rest/quotas.test.ts`). The
+# project is created fresh above, so its month bucket starts empty either way.
 QUOTA_ENF_QUOTA_ID=$($SOAT_CLI create-quota \
   --project-id "$QUOTA_ENF_PROJECT_ID" --scope project --metric requests \
-  --window rolling_1m --limit 1 | jq -r '.id')
+  --window calendar_month --limit 1 | jq -r '.id')
 
 # Positive control first: the allowance admits one request, so the 429 below is
 # the quota firing and not a missing permission.
