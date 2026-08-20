@@ -51,6 +51,22 @@ const fakeFetch = (
 const VERTEX_LIST_URL =
   'https://us-central1-aiplatform.googleapis.com/v1beta1/publishers/google/models?view=PUBLISHER_MODEL_VIEW_FULL';
 
+/**
+ * The same listing at `location: 'global'`. Vertex's global endpoint is
+ * `aiplatform.googleapis.com` with **no** location prefix — `global-` is not a
+ * host Google serves (#1087).
+ */
+const VERTEX_GLOBAL_LIST_URL =
+  'https://aiplatform.googleapis.com/v1beta1/publishers/google/models?view=PUBLISHER_MODEL_VIEW_FULL';
+
+/**
+ * The same listing at the EU data-residency multi-region. `eu` and `us` are
+ * not regions either: they are served from `aiplatform.<eu|us>.rep.googleapis.com`,
+ * a third host shape (#1087).
+ */
+const VERTEX_EU_LIST_URL =
+  'https://aiplatform.eu.rep.googleapis.com/v1beta1/publishers/google/models?view=PUBLISHER_MODEL_VIEW_FULL';
+
 describe('enumerateProviderModels — against a real HTTP server', () => {
   // No `fetchImpl` here: this drives the module's own default, so real `fetch`,
   // real request serialization and real header delivery are exercised end to
@@ -333,6 +349,72 @@ describe('enumerateProviderModels — vertex', () => {
     expect(calls[0].url).toBe(
       'https://us-central1-aiplatform.googleapis.com/v1beta1/publishers/google/models?view=PUBLISHER_MODEL_VIEW_FULL'
     );
+  });
+
+  test('drops the location prefix for the global endpoint', async () => {
+    const { fetchImpl, calls } = fakeFetch({
+      [VERTEX_GLOBAL_LIST_URL]: {
+        body: {
+          publisherModels: [
+            {
+              name: 'publishers/google/models/gemini-3.5-flash',
+              launchStage: 'GA',
+            },
+          ],
+        },
+      },
+    });
+
+    const models = await enumerateProviderModels({
+      provider: 'vertex',
+      config: { project: 'naturali-504614', location: 'global' },
+      accessTokenProvider: () => {
+        return Promise.resolve('ya29.test');
+      },
+      fetchImpl,
+    });
+
+    // `global` is not a region, so it takes no `<location>-` host prefix:
+    // `global-aiplatform.googleapis.com` does not resolve to an endpoint and
+    // answers the same generic HTML 404 that #1080 chased, while the
+    // unprefixed host answers for real (#1087). This is not a corner case —
+    // several current Gemini models are served at `global` and 404 in a
+    // region, so it is the location those providers must be configured with.
+    expect(calls[0].url).toBe(VERTEX_GLOBAL_LIST_URL);
+    expect(models).toEqual([
+      { id: 'gemini-3.5-flash', vendor: 'google', lifecycle: 'active' },
+    ]);
+  });
+
+  test('uses the residency host for the eu and us multi-regions', async () => {
+    const { fetchImpl, calls } = fakeFetch({
+      [VERTEX_EU_LIST_URL]: {
+        body: {
+          publisherModels: [
+            {
+              name: 'publishers/google/models/gemini-2.5-flash',
+              launchStage: 'GA',
+            },
+          ],
+        },
+      },
+    });
+
+    await enumerateProviderModels({
+      provider: 'vertex',
+      config: { project: 'p', location: 'eu' },
+      accessTokenProvider: () => {
+        return Promise.resolve('ya29.test');
+      },
+      fetchImpl,
+    });
+
+    // `eu` and `us` are data-residency multi-regions, not regions, and they
+    // take a third host shape again — `eu-aiplatform.googleapis.com` is the
+    // same non-endpoint 404 as `global-`. Verified with the unauthenticated
+    // probe from #1080: a real endpoint answers `401 UNAUTHENTICATED`, a
+    // non-endpoint answers Google's generic HTML 404.
+    expect(calls[0].url).toBe(VERTEX_EU_LIST_URL);
   });
 
   test('refuses to guess when no project is configured', async () => {
