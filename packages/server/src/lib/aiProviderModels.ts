@@ -300,11 +300,23 @@ const defaultVertexAccessToken = async (
   return token;
 };
 
+/**
+ * Vertex's `launchStage` enum is `LAUNCH_STAGE_UNSPECIFIED | EXPERIMENTAL |
+ * PRIVATE_PREVIEW | PUBLIC_PREVIEW | GA` — `DEPRECATED` is not in it, so the
+ * branch that used to look for it was dead and every model fell through to
+ * `active`, preview and experimental ones included (#1089).
+ *
+ * Only `GA` maps: it is the one stage that means what `active` means. Nothing
+ * in the enum means `legacy` or `deprecated`, and a preview stage is not
+ * `active`, so the remaining stages report no lifecycle at all rather than a
+ * wrong one — a caller reads "the provider did not say" instead of a claim
+ * the listing cannot support.
+ */
 const readVertexLifecycle = (
   launchStage: string | undefined
-): ProviderModel['lifecycle'] => {
-  if (launchStage === 'DEPRECATED') return 'deprecated';
-  return 'active';
+): ProviderModel['lifecycle'] | undefined => {
+  if (launchStage === 'GA') return 'active';
+  return undefined;
 };
 
 const readBedrockLifecycle = (
@@ -362,7 +374,11 @@ const enumerateVertex = async (
     // branch that mints the token, and it is the project the token is billed
     // and quota'd against. The regional host is what scopes the answer to
     // `location`.
-    url: `https://${location}-aiplatform.googleapis.com/v1beta1/publishers/google/models`,
+    // `view=PUBLISHER_MODEL_VIEW_FULL` is what populates `launchStage`; the
+    // default view omits it, which left the lifecycle mapping reading an
+    // always-absent field. `pageSize` stays unsent: the bare call answers the
+    // whole regional catalogue, and 500 is rejected with a `400`.
+    url: `https://${location}-aiplatform.googleapis.com/v1beta1/publishers/google/models?view=PUBLISHER_MODEL_VIEW_FULL`,
     headers: { authorization: `Bearer ${token}` },
     provider: args.provider,
   });
@@ -374,12 +390,16 @@ const enumerateVertex = async (
       ''
     );
     if (!id) return [];
+    const lifecycle = readVertexLifecycle(asString(record?.launchStage));
     return [
       {
         id,
         vendor: 'google',
-        streaming: true,
-        lifecycle: readVertexLifecycle(asString(record?.launchStage)),
+        // No `streaming`: this listing carries no field for it, and it serves
+        // embedding, TTS and classification models alongside Gemini — so the
+        // `streaming: true` that used to be asserted for every entry was
+        // wrong for a good share of them (#1089).
+        ...(lifecycle ? { lifecycle } : {}),
       },
     ];
   });
