@@ -31,7 +31,7 @@ export type GuardrailScope = 'project' | 'agent' | 'tool';
 export type GuardrailEvaluationContext = {
   args?: Record<string, unknown>;
   context?: Record<string, unknown>;
-  soat?: Record<string, unknown>;
+  runtime?: Record<string, unknown>;
 };
 
 /** A guardrail resolved for a call, tagged with the scope it was attached at. */
@@ -86,11 +86,11 @@ const buildLogicContext = (context: GuardrailEvaluationContext) => {
   return {
     args: context.args ?? {},
     context: context.context ?? {},
-    soat: context.soat ?? {},
+    runtime: context.runtime ?? {},
   };
 };
 
-// Reads a dotted path (`soat.activity.actions_24h`) off the logic context,
+// Reads a dotted path (`runtime.activity.actions_24h`) off the logic context,
 // returning `undefined` when any segment is missing.
 const getByPath = (root: unknown, path: string): unknown => {
   let node: unknown = root;
@@ -112,8 +112,8 @@ const varArgPath = (arg: unknown): string | undefined => {
 
 const isFailClosedNamespacePath = (path: string): boolean => {
   return (
-    path === 'soat' ||
-    path.startsWith('soat.') ||
+    path === 'runtime' ||
+    path.startsWith('runtime.') ||
     path === 'context' ||
     path.startsWith('context.')
   );
@@ -135,7 +135,7 @@ const UNSAFE_COMPARISON_OPS: ReadonlySet<string> = new Set([
 ]);
 
 // Whether `node` is a bare `{ var: path }` (or `{ var: [path, default] }`)
-// referencing an unresolved `soat.*`/`context.*` path. `args.*` is deliberately
+// referencing an unresolved `runtime.*`/`context.*` path. `args.*` is deliberately
 // excluded — its `null`-coercion behavior is documented as an existing caveat
 // callers are told to guard against explicitly, not a fail-closed invariant to
 // enforce here.
@@ -154,7 +154,7 @@ const isUnresolvedFailClosedVarNode = (
 
 /**
  * Whether `expression` contains a `<` / `<=` / `>` / `>=` comparison with a
- * direct operand that is an unresolved `soat.*`/`context.*` var — the exact
+ * direct operand that is an unresolved `runtime.*`/`context.*` var — the exact
  * shape whose `null → 0` coercion silently turns an unresolvable reference
  * into a passing comparison (issue #666). Scoped to just these operators (not
  * every `var` reference anywhere in the expression) so an `==`-based
@@ -196,7 +196,7 @@ const hasUnsafeComparisonWithUnresolvedVar = (
  * a JSON Logic `class` expression is evaluated and its result kept only if it is
  * a valid class. Anything else — a missing key (`null`), a typo, a number, an
  * evaluator error, or an unsafe `<`/`<=`/`>`/`>=` comparison over an
- * unresolvable `soat.*`/`context.*` var — resolves to `default_class`, itself
+ * unresolvable `runtime.*`/`context.*` var — resolves to `default_class`, itself
  * defaulting to `C` (fail-closed): a misconfigured or under-resolved
  * classification never grants autonomy.
  */
@@ -231,11 +231,11 @@ const resolveClass = (
 /**
  * Whether a class-B call's guard passes. A B with no guard expression fails
  * closed (nothing to pass); an evaluator error, or an unsafe `<`/`<=`/`>`/`>=`
- * comparison over an unresolvable `soat.*`/`context.*` var, counts as a failed
+ * comparison over an unresolvable `runtime.*`/`context.*` var, counts as a failed
  * guard — forgetting to supply context tightens the posture, never loosens
  * it. The unresolved-var check runs *before* evaluation so a comparison
  * operator's `null → 0` coercion (`{ "<": [{ "var":
- * "soat.activity.actions_24h" }, 100] }` passing when the provider could not
+ * "runtime.activity.actions_24h" }, 100] }` passing when the provider could not
  * resolve the key) can never flip an unresolvable reference into a passing
  * guard. Plain
  * JS truthiness matches the JSON Logic convention used elsewhere in the

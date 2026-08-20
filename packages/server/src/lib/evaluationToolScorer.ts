@@ -152,7 +152,7 @@ export const validateToolScorerRefs = async (args: {
         `scorer '${name}': client tools cannot be used as scorers; they are executed by the calling client, but an eval run scores server-side.`
       );
     }
-    if ((tool.type === 'soat' || tool.type === 'mcp') && !raw.action) {
+    if ((tool.type === 'builtin' || tool.type === 'mcp') && !raw.action) {
       throw new DomainError(
         'VALIDATION_FAILED',
         `scorer '${name}': action is required when the scorer tool type is soat or mcp.`

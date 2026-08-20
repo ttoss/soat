@@ -116,43 +116,43 @@ describe('guardrailEvaluation', () => {
       expect(result.guardResult).toBe(false);
     });
 
-    test('a guard reads soat.* from the soat namespace', () => {
+    test('a guard reads runtime.* from the runtime namespace', () => {
       const result = evaluateGuardrail({
         guardrail: attach({
           class: 'B',
-          guard: { '<': [{ var: 'soat.usage.cost_usd_24h' }, 1000] },
+          guard: { '<': [{ var: 'runtime.usage.cost_usd_24h' }, 1000] },
         }),
-        context: { soat: { usage: { cost_usd_24h: 812.4 } } },
+        context: { runtime: { usage: { cost_usd_24h: 812.4 } } },
       });
       expect(result.decision).toBe('execute');
       expect(result.guardResult).toBe(true);
     });
 
     // json-logic-engine coerces a `null` var to 0 for numeric comparisons, so
-    // `{ var: 'soat.activity.actions_24h' }` on the *left* of `<` would
+    // `{ var: 'runtime.activity.actions_24h' }` on the *left* of `<` would
     // otherwise evaluate `null < 100` as `true` and pass the guard — the
     // opposite of the documented fail-closed invariant (issue #666).
-    test('a guard referencing an unresolvable soat.* var fails closed for <', () => {
+    test('a guard referencing an unresolvable runtime.* var fails closed for <', () => {
       const result = evaluateGuardrail({
         guardrail: attach({
           class: 'B',
-          guard: { '<': [{ var: 'soat.activity.actions_24h' }, 100] },
+          guard: { '<': [{ var: 'runtime.activity.actions_24h' }, 100] },
         }),
-        // An empty `soat` bag stands in for any provider that could not resolve
+        // An empty `runtime` bag stands in for any provider that could not resolve
         // the key — the evaluator's invariant is independent of which one.
-        context: { soat: {} },
+        context: { runtime: {} },
       });
       expect(result.decision).toBe('tripwire');
       expect(result.guardResult).toBe(false);
     });
 
-    test('a guard referencing an unresolvable soat.* var fails closed for <=', () => {
+    test('a guard referencing an unresolvable runtime.* var fails closed for <=', () => {
       const result = evaluateGuardrail({
         guardrail: attach({
           class: 'B',
-          guard: { '<=': [{ var: 'soat.activity.actions_24h' }, 100] },
+          guard: { '<=': [{ var: 'runtime.activity.actions_24h' }, 100] },
         }),
-        context: { soat: {} },
+        context: { runtime: {} },
       });
       expect(result.decision).toBe('tripwire');
       expect(result.guardResult).toBe(false);
@@ -170,13 +170,13 @@ describe('guardrailEvaluation', () => {
       expect(result.guardResult).toBe(false);
     });
 
-    test('a guard still passes when the referenced soat.* var actually resolves', () => {
+    test('a guard still passes when the referenced runtime.* var actually resolves', () => {
       const result = evaluateGuardrail({
         guardrail: attach({
           class: 'B',
-          guard: { '<': [{ var: 'soat.activity.actions_24h' }, 100] },
+          guard: { '<': [{ var: 'runtime.activity.actions_24h' }, 100] },
         }),
-        context: { soat: { activity: { actions_24h: 5 } } },
+        context: { runtime: { activity: { actions_24h: 5 } } },
       });
       expect(result.decision).toBe('execute');
       expect(result.guardResult).toBe(true);
@@ -245,22 +245,22 @@ describe('guardrailEvaluation', () => {
     });
 
     // Same null → 0 coercion bug as the guard case, but here it would let a `<`
-    // comparison over an unresolvable soat.* var pick the "A" branch of an
+    // comparison over an unresolvable runtime.* var pick the "A" branch of an
     // `if`, which is itself a valid class — so the existing "invalid result"
     // check alone can't catch it (issue #666).
-    test('a class expression using an unresolvable soat.* var falls back to default_class', () => {
+    test('a class expression using an unresolvable runtime.* var falls back to default_class', () => {
       const result = evaluateGuardrail({
         guardrail: attach({
           default_class: 'C',
           class: {
             if: [
-              { '<': [{ var: 'soat.activity.actions_24h' }, 100] },
+              { '<': [{ var: 'runtime.activity.actions_24h' }, 100] },
               'A',
               'C',
             ],
           },
         }),
-        context: { soat: {} },
+        context: { runtime: {} },
       });
       expect(result.class).toBe('C');
       expect(result.decision).toBe('route_to_approval');

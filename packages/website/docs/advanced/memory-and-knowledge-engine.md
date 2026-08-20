@@ -184,7 +184,7 @@ The role choice is a security decision, not a formatting one: extraction-sourced
 
 ### Pull retrieval (agent-driven)
 
-Push injection is one-shot: the engine retrieves once, up front, against the latest message. When the agent should decide *whether* and *what* to retrieve — refining queries over multiple steps — bind the `search-knowledge` operation to the agent as a `soat`-type [tool](../modules/tools.md). The two modes compose: inject a small always-on context and let the agent pull more on demand. [Agent over a Library of PDFs — Step 12](/docs/tutorials/agent-with-pdfs#step-12--give-the-agent-a-knowledge-tool-plan-d) walks through it.
+Push injection is one-shot: the engine retrieves once, up front, against the latest message. When the agent should decide *whether* and *what* to retrieve — refining queries over multiple steps — bind the `search-knowledge` operation to the agent as a `builtin`-type [tool](../modules/tools.md). The two modes compose: inject a small always-on context and let the agent pull more on demand. [Agent over a Library of PDFs — Step 12](/docs/tutorials/agent-with-pdfs#step-12--give-the-agent-a-knowledge-tool-plan-d) walks through it.
 
 Orchestrations read knowledge mid-flow with the `knowledge` node and write memory with the `memory_write` node — see [Orchestrations](../modules/orchestrations.md).
 

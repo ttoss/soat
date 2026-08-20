@@ -76,7 +76,7 @@ dataset. The firing record names the `evrun_…` to poll.
 
 **Streaming implies waiting.** `stream: true` holds the response open by definition, so it is a blocking call whether or not you pass `wait`. Asking for both a stream and a background run (`stream: true` with `?wait=false`) is contradictory and returns `400 VALIDATION_FAILED` rather than silently dropping one of the two.
 
-**A `soat` tool call always waits.** When an agent calls another agent through a `soat` tool, the nested call blocks regardless of the default: a tool call is one request returning one result, with no channel to poll a background run later. The field is not offered on the tool surface at all — the same treatment as `stream`, and for the same reason. See [Agent-to-Agent Calls](../modules/agents.md#nested-agent-calls).
+**A `builtin` tool call always waits.** When an agent calls another agent through a `builtin` tool, the nested call blocks regardless of the default: a tool call is one request returning one result, with no channel to poll a background run later. The field is not offered on the tool surface at all — the same treatment as `stream`, and for the same reason. See [Agent-to-Agent Calls](../modules/agents.md#nested-agent-calls).
 
 ## Choosing a mode
 

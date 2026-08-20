@@ -187,7 +187,7 @@ paths:
         is not: the operation ran, so the formation is returned with `201` and
         `status: "failed"`, and `error` explains why (the resources created
         before the failure are rolled back). Read `status` — a `2xx` here means
-        the deploy was attempted, not that it worked. The `soat` CLI exits
+        the deploy was attempted, not that it worked. The `builtin` CLI exits
         non-zero on that body so `create-formation && …` does not lie.
       operationId: createFormation
       requestBody:
@@ -289,7 +289,7 @@ paths:
         A **template-shape** error is refused with `400`. A **deploy** failure
         is not: the operation ran, so the formation is returned with `200` and
         `status: "failed"`, and `error` explains why. Read `status` — a `2xx`
-        here means the deploy was attempted, not that it worked. The `soat` CLI
+        here means the deploy was attempted, not that it worked. The `builtin` CLI
         exits non-zero on that body so `update-formation && …` does not lie.
       operationId: updateFormation
       parameters:
@@ -846,7 +846,7 @@ components:
         type:
           type: string
           nullable: true
-          description: Tool type hint (e.g. http, mcp, soat, pipeline)
+          description: Tool type hint (e.g. http, mcp, builtin, pipeline)
         description:
           type: string
           nullable: true
@@ -905,7 +905,7 @@ components:
           items:
             type: string
           description: >-
-            Allowlist of actions the tool exposes. For `soat` tools: SOAT
+            Allowlist of actions the tool exposes. For `builtin` tools: SOAT
             platform action names. For `mcp` tools: an optional allowlist of MCP
             tool names to scope the server surface (`null` exposes every tool).
         denied_actions:
@@ -1266,7 +1266,7 @@ components:
         action:
           type: string
           nullable: true
-          description: Tool targets only — the action for soat/mcp tools
+          description: Tool targets only — the action for builtin/mcp tools
         input:
           type: object
           nullable: true
@@ -1523,7 +1523,7 @@ components:
         action:
           type: string
           nullable: true
-          description: Operation id, required for soat/mcp tool converters
+          description: Operation id, required for builtin/mcp tool converters
         preset_parameters:
           type: object
           nullable: true

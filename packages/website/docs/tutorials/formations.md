@@ -171,7 +171,7 @@ cat > formation.json << 'EOF'
       "type": "tool",
       "properties": {
         "name": "poem-read",
-        "type": "soat",
+        "type": "builtin",
         "description": "Read the shared poem document",
         "actions": ["get-document"],
         "preset_parameters": { "document_id": { "ref": "poemDoc" } }
@@ -181,7 +181,7 @@ cat > formation.json << 'EOF'
       "type": "tool",
       "properties": {
         "name": "poem-write",
-        "type": "soat",
+        "type": "builtin",
         "description": "Update the shared poem document",
         "actions": ["update-document"],
         "preset_parameters": { "document_id": { "ref": "poemDoc" } }
@@ -247,7 +247,7 @@ cat > formation.json << 'EOF'
       "type": "tool",
       "properties": {
         "name": "call-stanza-1",
-        "type": "soat",
+        "type": "builtin",
         "description": "Call stanza 1 agent",
         "actions": ["create-agent-generation"],
         "preset_parameters": {
@@ -260,7 +260,7 @@ cat > formation.json << 'EOF'
       "type": "tool",
       "properties": {
         "name": "call-stanza-2",
-        "type": "soat",
+        "type": "builtin",
         "description": "Call stanza 2 agent",
         "actions": ["create-agent-generation"],
         "preset_parameters": {
@@ -273,7 +273,7 @@ cat > formation.json << 'EOF'
       "type": "tool",
       "properties": {
         "name": "call-stanza-3",
-        "type": "soat",
+        "type": "builtin",
         "description": "Call stanza 3 agent",
         "actions": ["create-agent-generation"],
         "preset_parameters": {
@@ -286,7 +286,7 @@ cat > formation.json << 'EOF'
       "type": "tool",
       "properties": {
         "name": "call-stanza-4",
-        "type": "soat",
+        "type": "builtin",
         "description": "Call stanza 4 agent",
         "actions": ["create-agent-generation"],
         "preset_parameters": {
@@ -299,7 +299,7 @@ cat > formation.json << 'EOF'
       "type": "tool",
       "properties": {
         "name": "read-final-poem",
-        "type": "soat",
+        "type": "builtin",
         "description": "Read the final poem from the shared document",
         "actions": ["get-document"],
         "preset_parameters": { "document_id": { "ref": "poemDoc" } }
@@ -649,7 +649,7 @@ cat > formation.json << 'EOF'
       "type": "tool",
       "properties": {
         "name": "poem-read",
-        "type": "soat",
+        "type": "builtin",
         "description": "Read the shared poem document",
         "actions": ["get-document"],
         "preset_parameters": { "document_id": { "ref": "poemDoc" } }
@@ -659,7 +659,7 @@ cat > formation.json << 'EOF'
       "type": "tool",
       "properties": {
         "name": "poem-write",
-        "type": "soat",
+        "type": "builtin",
         "description": "Update the shared poem document",
         "actions": ["update-document"],
         "preset_parameters": { "document_id": { "ref": "poemDoc" } }
@@ -725,7 +725,7 @@ cat > formation.json << 'EOF'
       "type": "tool",
       "properties": {
         "name": "call-stanza-1",
-        "type": "soat",
+        "type": "builtin",
         "description": "Call stanza 1 agent",
         "actions": ["create-agent-generation"],
         "preset_parameters": {
@@ -738,7 +738,7 @@ cat > formation.json << 'EOF'
       "type": "tool",
       "properties": {
         "name": "call-stanza-2",
-        "type": "soat",
+        "type": "builtin",
         "description": "Call stanza 2 agent",
         "actions": ["create-agent-generation"],
         "preset_parameters": {
@@ -751,7 +751,7 @@ cat > formation.json << 'EOF'
       "type": "tool",
       "properties": {
         "name": "call-stanza-3",
-        "type": "soat",
+        "type": "builtin",
         "description": "Call stanza 3 agent",
         "actions": ["create-agent-generation"],
         "preset_parameters": {
@@ -764,7 +764,7 @@ cat > formation.json << 'EOF'
       "type": "tool",
       "properties": {
         "name": "call-stanza-4",
-        "type": "soat",
+        "type": "builtin",
         "description": "Call stanza 4 agent",
         "actions": ["create-agent-generation"],
         "preset_parameters": {
@@ -777,7 +777,7 @@ cat > formation.json << 'EOF'
       "type": "tool",
       "properties": {
         "name": "read-final-poem",
-        "type": "soat",
+        "type": "builtin",
         "description": "Read the final poem from the shared document",
         "actions": ["get-document"],
         "preset_parameters": { "document_id": { "ref": "poemDoc" } }

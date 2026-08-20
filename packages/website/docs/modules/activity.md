@@ -103,12 +103,12 @@ Every producer is fire-and-forget: a recording failure is logged and swallowed, 
 
 ### The feed as a guardrail signal
 
-Because `action_executed` counts real executions, the feed doubles as the platform's autonomous-action **rate** signal: [guardrails](./guardrails.md#guards-and-guardrail-context) read it through `soat.activity.actions_1h` and `soat.activity.actions_24h`, the number of `action_executed` entries in this project over a rolling window ending at evaluation time. That is what lets a guard cap how many actions an agent may take per hour or per day:
+Because `action_executed` counts real executions, the feed doubles as the platform's autonomous-action **rate** signal: [guardrails](./guardrails.md#guards-and-guardrail-context) read it through `runtime.activity.actions_1h` and `runtime.activity.actions_24h`, the number of `action_executed` entries in this project over a rolling window ending at evaluation time. That is what lets a guard cap how many actions an agent may take per hour or per day:
 
 ```json
 {
   "class": "B",
-  "guard": { "<": [{ "var": "soat.activity.actions_24h" }, 200] }
+  "guard": { "<": [{ "var": "runtime.activity.actions_24h" }, 200] }
 }
 ```
 

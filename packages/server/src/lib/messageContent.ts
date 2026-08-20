@@ -291,7 +291,7 @@ const resolveToolOutputContent = async (args: {
     action: 'tools:CallTool',
   });
 
-  if (tool.type === 'soat' && args.content.action) {
+  if (tool.type === 'builtin' && args.content.action) {
     assertBoundaryAllowed({
       boundaryPolicy: args.agentBoundaryPolicy,
       action: resolveSoatIamAction(args.content.action),

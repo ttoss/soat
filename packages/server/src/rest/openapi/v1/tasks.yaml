@@ -489,7 +489,7 @@ components:
             type: string
           description: >-
             Key-value pairs forwarded as `X-Soat-Context-<key>` headers on every
-            `http`, `mcp` and `soat` tool call made by this task's automation
+            `http`, `mcp` and `builtin` tool call made by this task's automation
             dispatches — the agent generations a state's `on_enter` starts, and
             the agent nodes of any orchestration run it starts. The header name
             is `X-Soat-Context-` plus the key verbatim; no character is re-cased.

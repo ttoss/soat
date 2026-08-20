@@ -16,7 +16,7 @@ const GUARDRAIL_ACTIONS = [
 const budgetDocument = {
   default_class: 'C',
   class: { if: [{ '<': [{ var: 'args.amount' }, 500] }, 'B', 'C'] },
-  guard: { '<': [{ var: 'soat.usage.cost_usd_24h' }, 1000] },
+  guard: { '<': [{ var: 'runtime.usage.cost_usd_24h' }, 1000] },
 };
 
 describe('Guardrails', () => {
@@ -175,7 +175,7 @@ describe('Guardrails', () => {
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
 
-    test('document referencing an out-of-catalog soat var returns 400', async () => {
+    test('document referencing an out-of-catalog runtime var returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/guardrails')
         .send({
@@ -183,12 +183,12 @@ describe('Guardrails', () => {
           name: 'Bad',
           document: {
             class: 'B',
-            guard: { '<': [{ var: 'soat.usage.cost_usd_90d' }, 1] },
+            guard: { '<': [{ var: 'runtime.usage.cost_usd_90d' }, 1] },
           },
         });
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
-      expect(response.body.error.message).toMatch(/soat\.\* catalog/);
+      expect(response.body.error.message).toMatch(/runtime\.\* catalog/);
     });
 
     test('malformed document string returns 400', async () => {
@@ -602,7 +602,7 @@ describe('Guardrails', () => {
       expect(after.body.data.length).toBe(before.body.data.length);
     });
 
-    test('resolves live soat.usage.* and accepts an optional tool_id', async () => {
+    test('resolves live runtime.usage.* and accepts an optional tool_id', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/guardrails')
         .send({
@@ -610,14 +610,14 @@ describe('Guardrails', () => {
           name: 'Usage Guardrail',
           document: {
             class: 'B',
-            guard: { '<': [{ var: 'soat.usage.cost_usd_24h' }, 1000] },
+            guard: { '<': [{ var: 'runtime.usage.cost_usd_24h' }, 1000] },
           },
         });
       const usageGuardrailId = res.body.id;
 
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/guardrails/${usageGuardrailId}/evaluate`)
-        // A tool_id that need not exist — it only resolves soat.tool.*.
+        // A tool_id that need not exist — it only resolves runtime.tool.*.
         .send({ args: { amount: 1 }, tool_id: 'tool_unknown00000000' });
 
       expect(response.status).toBe(200);
@@ -625,7 +625,7 @@ describe('Guardrails', () => {
       // No usage events → windowed cost is 0, under the ceiling → guard passes.
       expect(response.body.guard_result).toBe(true);
       expect(response.body.decision).toBe('execute');
-      expect(response.body.context_snapshot['soat.usage.cost_usd_24h']).toBe(0);
+      expect(response.body.context_snapshot['runtime.usage.cost_usd_24h']).toBe(0);
     });
 
     test('run-scoped usage keys are catalogued and fail closed outside a run', async () => {
@@ -638,13 +638,13 @@ describe('Guardrails', () => {
             class: 'B',
             guard: {
               '<': [
-                { var: 'soat.usage.run_tokens' },
+                { var: 'runtime.usage.run_tokens' },
                 { var: 'context.action_token_ceiling' },
               ],
             },
           },
         });
-      // An uncatalogued soat.* key would be rejected at write time with 400.
+      // An uncatalogued runtime.* key would be rejected at write time with 400.
       expect(res.status).toBe(201);
 
       const response = await authenticatedTestClient(userToken)
@@ -657,7 +657,7 @@ describe('Guardrails', () => {
       expect(response.body.guard_result).toBe(false);
       expect(response.body.decision).toBe('tripwire');
       expect(
-        response.body.context_snapshot['soat.usage.run_tokens']
+        response.body.context_snapshot['runtime.usage.run_tokens']
       ).toBeNull();
     });
 

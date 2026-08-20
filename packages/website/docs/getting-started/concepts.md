@@ -70,7 +70,7 @@ An **agent** is a named, reusable AI assistant inside a project. It references a
 - **`http`** — call any HTTP endpoint
 - **`mcp`** — connect to an external MCP server
 - **`client`** — pause for client-side execution and resume with the result
-- **`soat`** — call SOAT platform actions (including invoking other agents — multi-agent workflows)
+- **`builtin`** — call SOAT platform actions (including invoking other agents — multi-agent workflows)
 
 Tools are first-class resources, shareable across agents. Agents support `tool_choice`, `step_rules`, `active_tool_ids`, `boundary_policy`, and `max_steps` for fine-grained control over the reasoning loop.
 

@@ -731,7 +731,7 @@ question needs the agent to break it down and search in its own words.
 
 ## Step 12 — Give the agent a knowledge tool (Plan D)
 
-This step wraps the same operation as a [`soat` tool](/docs/modules/tools#soat) and
+This step wraps the same operation as a [`builtin` tool](/docs/modules/tools#builtin) and
 attaches it to an agent, so the model decides for itself, mid-reasoning, when to search
 and what query to write. `preset_parameters` pins the tool to this project and the
 `/manuals/` subtree — those fields are hidden from the model, leaving only `query` (and
@@ -745,7 +745,7 @@ library no matter who talks to the agent.
 KNOWLEDGE_TOOL_ID=$(soat create-tool \
   --project-id "$PROJECT_ID" \
   --name "manuals" \
-  --type soat \
+  --type builtin \
   --description "Searches the ingested product manuals for relevant passages" \
   --actions '["search-knowledge"]' \
   --preset-parameters '{"project_id": "'"$PROJECT_ID"'", "document_paths": ["/manuals/"]}' \
@@ -839,7 +839,7 @@ echo "TOOL_AGENT_ID: $TOOL_AGENT_ID"
 Ask the same kind of question as Step 10. This time the model itself decides to call
 `manuals_search-knowledge`, the server executes it in-process and feeds the results
 back into the loop, and the final response comes back `completed` with no extra
-round-trip on your side — `soat` tools run server-side, unlike `client` tools, which
+round-trip on your side — `builtin` tools run server-side, unlike `client` tools, which
 would pause the generation with `requires_action`:
 
 <Tabs groupId="client">
@@ -895,7 +895,7 @@ curl -s -X POST "$SOAT_URL/api/v1/agents/$TOOL_AGENT_ID/generate?wait=true" \
 </TabItem>
 </Tabs>
 
-`knowledge_config` (Step 9) and a `soat` knowledge tool are not mutually exclusive — an
+`knowledge_config` (Step 9) and a `builtin` knowledge tool are not mutually exclusive — an
 agent can carry both: automatic context on every turn, plus a tool it can call again
 mid-reasoning with a sharper, self-written query when the first pass wasn't enough.
 

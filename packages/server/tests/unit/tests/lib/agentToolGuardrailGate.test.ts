@@ -467,11 +467,11 @@ describe('agentToolGuardrail gate (resolver dispatch path)', () => {
     }
   });
 
-  test('a guard reads windowed soat.usage.* at evaluation time', async () => {
+  test('a guard reads windowed runtime.usage.* at evaluation time', async () => {
     const id = await makeGuardrail({
       class: 'B',
       // No usage events in this project → cost is 0, under the ceiling → passes.
-      guard: { '<': [{ var: 'soat.usage.cost_usd_24h' }, 1000] },
+      guard: { '<': [{ var: 'runtime.usage.cost_usd_24h' }, 1000] },
     });
     const refund = await resolveGuarded({ toolGuardrailIds: [id] });
     const result = await invokeExecute(refund, { amount: 1 });

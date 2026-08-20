@@ -136,7 +136,7 @@ echo "PROJECT_ID: $PROJECT_ID"
 
 ## Step 3 — Create the tool the guardrail gates
 
-The gate sits at the tool-execution boundary, so the guardrail needs a [Tool](/docs/modules/tools#examples) to govern. Create a read-only [SOAT tool](/docs/modules/tools) named `update-budget` so the tutorial needs no external services — in a real system this would be the tool that actually moves money.
+The gate sits at the tool-execution boundary, so the guardrail needs a [Tool](/docs/modules/tools#examples) to govern. Create a read-only [builtin tool](/docs/modules/tools) named `update-budget` so the tutorial needs no external services — in a real system this would be the tool that actually moves money.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -145,7 +145,7 @@ The gate sits at the tool-execution boundary, so the guardrail needs a [Tool](/d
 BUDGET_TOOL_ID=$(soat create-tool \
   --project-id "$PROJECT_ID" \
   --name "update-budget" \
-  --type "soat" \
+  --type "builtin" \
   --description "Stand-in for the sensitive action the guardrail gates" \
   --actions '["get-project"]' \
   --preset-parameters '{"project_id": "'"$PROJECT_ID"'"}' | jq -r '.id')
@@ -240,7 +240,7 @@ echo "GUARDRAIL_ID: $GUARDRAIL_ID"
 </TabItem>
 </Tabs>
 
-The document is validated on write: every `var` must resolve to the `args.*`, `context.*`, or `soat.*` [namespaces](/docs/modules/guardrails#guards-and-guardrail-context), and an out-of-catalog `soat.*` key is rejected with `400` rather than silently reading `null` at runtime.
+The document is validated on write: every `var` must resolve to the `args.*`, `context.*`, or `runtime.*` [namespaces](/docs/modules/guardrails#guards-and-guardrail-context), and an out-of-catalog `runtime.*` key is rejected with `400` rather than silently reading `null` at runtime.
 
 ---
 
@@ -982,7 +982,7 @@ The classification model, fail-closed evaluation rules, and stricter-wins compos
 
 ## Next Steps
 
-- Feed live values into guards with `guardrail_context` and a `context_tool_id`, and cap a runaway run with `soat.usage.run_tokens` — see [Per-run spend ceilings](/docs/modules/guardrails#per-run-spend-ceilings).
+- Feed live values into guards with `guardrail_context` and a `context_tool_id`, and cap a runaway run with `runtime.usage.run_tokens` — see [Per-run spend ceilings](/docs/modules/guardrails#per-run-spend-ceilings).
 - Model an explicit human decision point in the graph instead of a guardrail-driven one with the [`approval` node](/docs/tutorials/approval-gate).
 - Cap aggregate spend rather than individual calls with [Cap Spend Per End User](/docs/tutorials/cap-spend-per-end-user).
 - Triage what a tripwire files — see [Exceptions](/docs/modules/exceptions).

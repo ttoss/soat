@@ -2717,7 +2717,7 @@ describe('Evaluations', () => {
         .send({
           project_id: projectId,
           name: 'platform',
-          type: 'soat',
+          type: 'builtin',
           actions: ['search-knowledge'],
         });
       expect(soatToolRes.status).toBe(201);

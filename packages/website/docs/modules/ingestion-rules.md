@@ -11,7 +11,7 @@ An Ingestion Rule routes a file `content_type` to a converter [Tool](./tools.md)
 
 ## Overview
 
-Native [file ingestion](./documents.md#file-ingestion-and-chunking) only extracts text from PDFs (text layer), `text/plain`, and `text/markdown`. Anything else fails with `FILE_PARSE_FAILED`. An Ingestion Rule fills that gap: it maps a `content_type` glob (e.g. `image/*`, `audio/mpeg`, `application/pdf`) to a **converter** — either a [Tool](./tools.md) (`http`/`mcp`/`soat`/`pipeline`) that calls an external OCR, speech-to-text, or vision service, or an [Agent](./agents.md) with a multimodal model. When [`POST /documents/ingest`](/docs/api/documents/ingest-document) receives a file whose type has no native extractor — or a PDF whose native extraction yields no text — it looks up the best-matching rule and invokes the converter to produce the document text; the existing chunk + embedding pipeline is unchanged.
+Native [file ingestion](./documents.md#file-ingestion-and-chunking) only extracts text from PDFs (text layer), `text/plain`, and `text/markdown`. Anything else fails with `FILE_PARSE_FAILED`. An Ingestion Rule fills that gap: it maps a `content_type` glob (e.g. `image/*`, `audio/mpeg`, `application/pdf`) to a **converter** — either a [Tool](./tools.md) (`http`/`mcp`/`builtin`/`pipeline`) that calls an external OCR, speech-to-text, or vision service, or an [Agent](./agents.md) with a multimodal model. When [`POST /documents/ingest`](/docs/api/documents/ingest-document) receives a file whose type has no native extractor — or a PDF whose native extraction yields no text — it looks up the best-matching rule and invokes the converter to produce the document text; the existing chunk + embedding pipeline is unchanged.
 
 Rules are per-project. SOAT does not perform OCR or transcription itself — the rule points at a tool or agent you configure, so you can use any API or model you like. In the [engine & algorithms pattern](../advanced/engines-and-algorithms.md), a converter tool is the knowledge engine's bring-your-own-algorithm seam: the [contract below](#converter-tool-contract) is the boundary, and everything downstream (chunking, embedding, retrieval) treats your converter's pages exactly like natively extracted ones.
 
@@ -32,9 +32,9 @@ Rules are per-project. SOAT does not perform OCR or transcription itself — the
 | `id` | string | Public identifier prefixed with `igr_` |
 | `project_id` | string | ID of the owning project |
 | `content_type_glob` | string | Glob matched against the file's `content_type` (`image/*`, `image/png`, `audio/mpeg`, `application/pdf`) |
-| `tool_id` | string \| null | Converter tool (`tool_…`). Must be a server-callable type: `http`, `mcp`, `soat`, or `pipeline`. `client` tools are rejected. Mutually exclusive with `agent_id`. |
+| `tool_id` | string \| null | Converter tool (`tool_…`). Must be a server-callable type: `http`, `mcp`, `builtin`, or `pipeline`. `client` tools are rejected. Mutually exclusive with `agent_id`. |
 | `agent_id` | string \| null | Converter agent (`agent_…`). The file is sent to the agent as multimodal input and its text output becomes the document content. Mutually exclusive with `tool_id`. |
-| `action` | string \| null | Operation id, required for `soat`/`mcp` tool converters |
+| `action` | string \| null | Operation id, required for `builtin`/`mcp` tool converters |
 | `preset_parameters` | object \| null | Merged into the tool input before invocation (tool converters only). Cannot contain the reserved keys `file` or `callback`, which ingestion injects. |
 | `native_extraction` | string | For PDFs: `first` (default) converts only when native extraction yields no text; `skip` bypasses native extraction and converts every matching PDF. Ignored for non-native types. |
 | `file_delivery` | string | How the file reaches a tool converter: `base64` (default) or `download_url` |

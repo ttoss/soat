@@ -28,7 +28,7 @@ The platform is organized around the [four layers of an agent system](/docs/agen
 
 ### Agents & conversations
 
-- Configurable [agents](/docs/modules/agents) with HTTP, MCP, client-side, and `soat`-platform tools
+- Configurable [agents](/docs/modules/agents) with HTTP, MCP, client-side, and `builtin`-platform tools
 - Multi-step reasoning loops with `tool_choice`, step rules, and boundary policies
 - **Multi-agent workflows**: agents call other agents as tools
 - **Async generations**: long-running jobs you can poll or wait on

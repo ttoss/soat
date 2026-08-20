@@ -98,7 +98,7 @@ export const resolvedActionName = (args: {
   key: string;
 }): string => {
   const prefix = `${args.toolName}_`;
-  if (args.type === 'soat' && args.key.startsWith(prefix)) {
+  if (args.type === 'builtin' && args.key.startsWith(prefix)) {
     return args.key.slice(prefix.length);
   }
   return args.key;

@@ -120,7 +120,7 @@ than from the request that resolved it: the platform reads the principal
 persisted on the proposing generation
 ([`started_by_principal_type` / `started_by_principal_id`](./generations.md#starting-principal))
 and re-mints a short-lived run-as token from it. That token is what the
-continuation's [`soat` tools](./tools.md#soat) authenticate with, and what the
+continuation's [`builtin` tools](./tools.md#builtin) authenticate with, and what the
 approved action itself executes with. It asserts identity only — authorization
 is still evaluated per request, so a chain a scoped API key started can never
 reach past that key's policies, and revoking the key stops the chain even

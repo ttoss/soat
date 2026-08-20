@@ -2916,9 +2916,9 @@ $SOAT_CLI delete-guardrail --guardrail-id "$GATED_GUARDRAIL_ID" >/dev/null 2>&1 
 echo "Guardrail-gated flow cleanup: OK"
 
 # 22h. Agent-generation tool call: activity recording + the activity-rate guard
-# context. A class-B guardrail whose guard reads `soat.activity.actions_24h`
+# context. A class-B guardrail whose guard reads `runtime.activity.actions_24h`
 # against a very high ceiling must PASS — which only happens if the key really
-# resolves off the feed. An unresolvable `soat.*` var fails closed (tripwire), so
+# resolves off the feed. An unresolvable `runtime.*` var fails closed (tripwire), so
 # a tool call that executes here is itself the proof the provider is wired. The
 # executed call must then appear on the feed as `action_executed`.
 echo "--- Creating activity-recorded tool and rate-guarded agent ---"
@@ -2935,7 +2935,7 @@ echo "Activity-recorded tool id: $ACT_TOOL_ID"
 ACT_GUARDRAIL_RESP=$($SOAT_CLI create-guardrail \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name smoke-activity-rate-guardrail \
-  --document '{"class":"B","guard":{"<":[{"var":"soat.activity.actions_24h"},{"var":"context.action_rate_ceiling"}]}}')
+  --document '{"class":"B","guard":{"<":[{"var":"runtime.activity.actions_24h"},{"var":"context.action_rate_ceiling"}]}}')
 ACT_GUARDRAIL_ID=$(printf '%s\n' "$ACT_GUARDRAIL_RESP" | jq -r '.id')
 echo "Activity-rate guardrail id: $ACT_GUARDRAIL_ID"
 
@@ -3956,7 +3956,7 @@ echo "--- Creating SOAT agent tool ---"
 SOAT_TOOL_RESP=$($SOAT_CLI create-tool \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name soat-platform \
-  --type soat \
+  --type builtin \
   --description "SOAT platform actions exposed as tools." \
   --actions '["list-projects"]')
 SOAT_TOOL_ID=$(printf '%s\n' "$SOAT_TOOL_RESP" | jq -r '.id')
@@ -3977,7 +3977,7 @@ echo "--- Calling a soat list action with a query parameter ---"
 SOAT_QUERY_TOOL_RESP=$($SOAT_CLI create-tool \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name soat-agent-lister \
-  --type soat \
+  --type builtin \
   --actions '["list-agents"]')
 SOAT_QUERY_TOOL_ID=$(printf '%s\n' "$SOAT_QUERY_TOOL_RESP" | jq -r '.id')
 
@@ -3995,7 +3995,7 @@ echo "Caller-supplied query parameter: OK"
 SOAT_PRESET_TOOL_RESP=$($SOAT_CLI create-tool \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name soat-agent-lister-preset \
-  --type soat \
+  --type builtin \
   --actions '["list-agents"]' \
   --preset_parameters '{"limit":1}')
 SOAT_PRESET_TOOL_ID=$(printf '%s\n' "$SOAT_PRESET_TOOL_RESP" | jq -r '.id')
@@ -4017,7 +4017,7 @@ echo "Preset query parameter: OK"
 SOAT_PATH_PRESET_TOOL_RESP=$($SOAT_CLI create-tool \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name soat-agent-getter-preset \
-  --type soat \
+  --type builtin \
   --actions '["get-agent"]' \
   --preset_parameters "{\"agent_id\": \"$AGENT_ID\"}")
 SOAT_PATH_PRESET_TOOL_ID=$(printf '%s\n' "$SOAT_PATH_PRESET_TOOL_RESP" | jq -r '.id')
@@ -4778,7 +4778,7 @@ echo "--- Creating formation with a guardrail resource ---"
 GUARDRAIL_FORMATION_RESP=$($SOAT_CLI create-formation \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-guardrail-formation" \
-  --template '{"resources":{"budgetGuardrail":{"type":"guardrail","properties":{"name":"smoke-formation-guardrail","class":"B","default_class":"C","guard":{"<":[{"var":"soat.usage.cost_usd_24h"},1000]}}}}}')
+  --template '{"resources":{"budgetGuardrail":{"type":"guardrail","properties":{"name":"smoke-formation-guardrail","class":"B","default_class":"C","guard":{"<":[{"var":"runtime.usage.cost_usd_24h"},1000]}}}}}')
 GUARDRAIL_FORMATION_ID=$(printf '%s\n' "$GUARDRAIL_FORMATION_RESP" | jq -r '.id')
 GUARDRAIL_PHYS_ID=$(printf '%s\n' "$GUARDRAIL_FORMATION_RESP" | jq -r '.resources[0].physical_resource_id')
 if ! printf '%s\n' "$GUARDRAIL_PHYS_ID" | grep -q '^guard_'; then
@@ -5406,12 +5406,12 @@ $SOAT_CLI list-tasks --project-id "$PROJECT_PUBLIC_ID" --workflow-id "$WORKFLOW_
 
 # ── on_enter tool dispatch (#1039) ──
 # A state whose work is a single tool call dispatches it directly, with no
-# orchestration in between. A `soat` tool is used so the call exercises the
+# orchestration in between. A `builtin` tool is used so the call exercises the
 # run-as token the dispatch mints for itself, with no external dependency.
 WF_TOOL_RESP=$($SOAT_CLI create-tool \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name smoke-workflow-tool \
-  --type soat \
+  --type builtin \
   --actions '["list-projects"]')
 WF_TOOL_ID=$(printf '%s\n' "$WF_TOOL_RESP" | jq -r '.id')
 if [ -z "$WF_TOOL_ID" ] || [ "$WF_TOOL_ID" = "null" ]; then
@@ -5616,7 +5616,7 @@ $SOAT_CLI delete-workflow --workflow-id "$WORKFLOW_ID" >/dev/null
 # ── A run that transitions its own task (#886) ───────────────────────────────
 #
 # The composed loop the run-identity work exists for: a workflow state
-# dispatches an orchestration, and that run moves the task on through a `soat`
+# dispatches an orchestration, and that run moves the task on through a `builtin`
 # tool node. A task-dispatched run is always durable, so the self-call has no
 # request to borrow a header from — it authenticates with a run-as token minted
 # from the principal persisted on the run.
@@ -5631,7 +5631,7 @@ echo "--- Self-advancing task: workflow -> orchestration -> transition-task ---"
 SELF_TOOL_ID=$($SOAT_CLI create-tool \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name smoke-soat-task-actions \
-  --type soat \
+  --type builtin \
   --description "Platform task actions for a self-advancing workflow." \
   --actions '["transition-task","get-agent"]' | jq -r '.id')
 if [ -z "$SELF_TOOL_ID" ] || [ "$SELF_TOOL_ID" = "null" ]; then
@@ -5736,7 +5736,7 @@ echo "Automated transition attribution: OK"
 # the task was moved with. The run is where the bag is readable; the task never
 # returns it.
 # The run id comes from the run list, not from the task history: this flow's
-# `finish` row is the run's own `soat` tool moving the task with a run-as token,
+# `finish` row is the run's own `builtin` tool moving the task with a run-as token,
 # so it is recorded as the user that started the chain with no run id attached
 # (#786/#887). This orchestration is dispatched by exactly one task, so its run
 # list has exactly one entry.
@@ -5811,7 +5811,7 @@ $SOAT_CLI delete-task --task-id "$CTX_TASK_ID" >/dev/null
 $SOAT_CLI delete-workflow --workflow-id "$CTX_WF_ID" >/dev/null
 echo "Task tool_context validation: OK (400 as expected on both entry points)"
 
-# #879: a `soat` node whose action answers non-2xx fails the run. Before that
+# #879: a `builtin` node whose action answers non-2xx fails the run. Before that
 # the error body was stored as the node's artifact and the run carried on as
 # though the action had happened.
 SELF_FAIL_ORCH_ID=$($SOAT_CLI create-orchestration \
@@ -5846,7 +5846,7 @@ echo "--- Guardrails module ---"
 GUARDRAIL_RESP=$($SOAT_CLI create-guardrail \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name smoke-budget-guardrail \
-  --document '{"default_class":"C","class":{"if":[{"<":[{"var":"args.amount"},500]},"B","C"]},"guard":{"<":[{"var":"soat.usage.cost_usd_24h"},1000000]}}')
+  --document '{"default_class":"C","class":{"if":[{"<":[{"var":"args.amount"},500]},"B","C"]},"guard":{"<":[{"var":"runtime.usage.cost_usd_24h"},1000000]}}')
 GUARDRAIL_ID=$(printf '%s\n' "$GUARDRAIL_RESP" | jq -r '.id')
 if [ -z "$GUARDRAIL_ID" ] || [ "$GUARDRAIL_ID" = "null" ]; then
   echo "ERROR: Failed to create guardrail" >&2
@@ -5880,16 +5880,16 @@ fi
 $SOAT_CLI delete-guardrail --guardrail-id "$GUARDRAIL_ID" >/dev/null
 
 # Per-run cumulative ceiling (#486): the run-scoped usage keys must be in the
-# soat.* catalog (an uncatalogued key is rejected at write time with 400), and
+# runtime.* catalog (an uncatalogued key is rejected at write time with 400), and
 # must fail closed outside a run — the dry-run has no run in scope, so the guard
 # fails and class B trips rather than reading the counter as 0 and passing.
 RUN_CEILING_RESP=$($SOAT_CLI create-guardrail \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name smoke-run-ceiling-guardrail \
-  --document '{"class":"B","guard":{"<":[{"var":"soat.usage.run_tokens"},{"var":"context.action_token_ceiling"}]}}')
+  --document '{"class":"B","guard":{"<":[{"var":"runtime.usage.run_tokens"},{"var":"context.action_token_ceiling"}]}}')
 RUN_CEILING_ID=$(printf '%s\n' "$RUN_CEILING_RESP" | jq -r '.id')
 if [ -z "$RUN_CEILING_ID" ] || [ "$RUN_CEILING_ID" = "null" ]; then
-  echo "ERROR: soat.usage.run_tokens was rejected by the guardrail catalog" >&2
+  echo "ERROR: runtime.usage.run_tokens was rejected by the guardrail catalog" >&2
   echo "$RUN_CEILING_RESP" >&2
   exit 1
 fi

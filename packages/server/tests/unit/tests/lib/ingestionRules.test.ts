@@ -73,7 +73,7 @@ describe('validateIngestionRule', () => {
       validateIngestionRule({
         toolId: 'tool_a',
         agentId: null,
-        toolType: 'soat',
+        toolType: 'builtin',
         action: null,
         contentTypeGlob: 'image/*',
       })
@@ -97,7 +97,7 @@ describe('validateIngestionRule', () => {
       validateIngestionRule({
         toolId: 'tool_a',
         agentId: null,
-        toolType: 'soat',
+        toolType: 'builtin',
         action: 'list-documents',
         contentTypeGlob: 'image/*',
       })

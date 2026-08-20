@@ -72,7 +72,7 @@ resolves the run input from the task with an `input_mapping`. See
 [Per-state automation](/docs/modules/workflows#per-state-automation-on_enter).
 
 **Orchestration → workflow.** A graph moves a task on with an ordinary `tool` node bound
-to a [`soat` tool](/docs/modules/tools#soat) for `create-task` or `transition-task`. There
+to a [`builtin` tool](/docs/modules/tools#builtin) for `create-task` or `transition-task`. There
 is no dedicated node type, and none is needed:
 
 ```json
@@ -88,7 +88,7 @@ is no dedicated node type, and none is needed:
 }
 ```
 
-A dispatched **agent** does the same thing with a `soat` tool of its own.
+A dispatched **agent** does the same thing with a `builtin` tool of its own.
 
 Both kinds of dispatch act as the principal that started the chain — the person or key
 that created the task or fired the transition — and each automated hop inherits that

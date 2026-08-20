@@ -68,7 +68,7 @@ user (`user_…`).
 The pair is durable identity, not a log line: work that resumes after the
 original request is gone re-mints a short-lived credential from it. That is what
 lets an [approval continuation](./approvals.md#continuation-identity) — possibly
-days later — authenticate its `soat` tools as the principal that started the
+days later — authenticate its `builtin` tools as the principal that started the
 chain, and it is why a generation started by a request-less drive (a
 [workflow dispatch](./workflows.md), an
 [orchestration node](./orchestrations.md#durable-background-execution)) records
@@ -215,13 +215,13 @@ Two project settings turn the manual purge into a policy:
 
 ### Sub-agent invocations
 
-`initiator_generation_id` is populated only when an agent calls another agent via a SOAT tool: the child generation records the calling generation's ID, while top-level generations leave it `null`. This is the sole case in which the field is set.
+`initiator_generation_id` is populated only when an agent calls another agent via a builtin tool: the child generation records the calling generation's ID, while top-level generations leave it `null`. This is the sole case in which the field is set.
 
 Multi-step reasoning is composed by the calling application, so intermediate steps appear as ordinary generations of their own rather than as `metadata` on, or child generations of, the calling generation.
 
 ### Tool context
 
-The generation-creation endpoints ([`POST /agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation), and the session and conversation generate endpoints) accept an optional `tool_context` object. Its entries are forwarded as `X-Soat-Context-*` request headers on every `http`, `mcp` and `soat` tool call the generation makes, and an invalid key is rejected with `400 INVALID_TOOL_CONTEXT_KEY` before the provider is called. It is not persisted on the Generation record. See the [Tool Context reference](../advanced/tool-context.md).
+The generation-creation endpoints ([`POST /agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation), and the session and conversation generate endpoints) accept an optional `tool_context` object. Its entries are forwarded as `X-Soat-Context-*` request headers on every `http`, `mcp` and `builtin` tool call the generation makes, and an invalid key is rejected with `400 INVALID_TOOL_CONTEXT_KEY` before the provider is called. It is not persisted on the Generation record. See the [Tool Context reference](../advanced/tool-context.md).
 
 ## Examples
 

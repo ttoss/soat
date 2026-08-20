@@ -27,7 +27,7 @@ This page is the canonical contract. `tool_context` is **not** general templatin
 | --- | --- | --- |
 | `http` | Yes | Injected as request headers on the outbound call |
 | `mcp` | Yes | Injected on the MCP `tools/call` fetch |
-| `soat` | Yes | Propagated into nested agent generations |
+| `builtin` | Yes | Propagated into nested agent generations |
 | `client` | **No** | Executes on the caller's side; nothing is sent |
 
 Context headers are applied **after** any headers configured on the tool's `execute.headers` / `mcp.headers`, so a context header wins over a tool-defined header with the same name.
@@ -181,7 +181,7 @@ The forwarded headers are the point: a tool endpoint can trust them in a way it 
 
 **Verify the caller.** Any client that can reach your tool endpoint can set an `X-Soat-Context-*` header by hand. The headers are trustworthy only if the endpoint also authenticates the request as coming from SOAT (a shared secret in `execute.headers`, mTLS, or network-level restriction). Treat them as *attested by SOAT*, not as *unforgeable*.
 
-**Mind what egresses.** Unless a tool sets [`context_keys`](../modules/tools.md#scoping-which-context-keys-reach-a-tool), every value is transmitted to every `http`, `mcp` and `soat` tool the agent calls, including endpoints you do not control. Set `context_keys` on the tools that need a given key — particularly when a key holds a credential. This applies to the auto-populated `actorExternalId`: if an [Actor](../modules/actors.md)'s `external_id` holds a phone number or an email address, that PII reaches every third-party tool endpoint in the agent's tool set. When the tool set includes third-party endpoints, prefer an opaque internal identifier as `external_id` and correlate to the real contact detail on your own side.
+**Mind what egresses.** Unless a tool sets [`context_keys`](../modules/tools.md#scoping-which-context-keys-reach-a-tool), every value is transmitted to every `http`, `mcp` and `builtin` tool the agent calls, including endpoints you do not control. Set `context_keys` on the tools that need a given key — particularly when a key holds a credential. This applies to the auto-populated `actorExternalId`: if an [Actor](../modules/actors.md)'s `external_id` holds a phone number or an email address, that PII reaches every third-party tool endpoint in the agent's tool set. When the tool set includes third-party endpoints, prefer an opaque internal identifier as `external_id` and correlate to the real contact detail on your own side.
 
 ## Example
 

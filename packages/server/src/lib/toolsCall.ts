@@ -264,7 +264,7 @@ const dispatchDirectTool = async (args: {
       args.idempotencyKey
     );
   }
-  if (args.type === 'soat') {
+  if (args.type === 'builtin') {
     return callSoatTool(args.tool, {
       action: args.action,
       mergedInput: args.mergedInput,

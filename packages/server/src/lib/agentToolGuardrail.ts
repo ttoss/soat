@@ -16,9 +16,9 @@ import type { CollectedGuardrail } from './guardrailCollection';
 import { collectApplicableGuardrails } from './guardrailCollection';
 import {
   buildContextSnapshot,
-  buildGuardrailSoatContext,
+  buildGuardrailRuntimeContext,
   type GuardrailCallIdentity,
-  referencedSoatPaths,
+  referencedRuntimePaths,
   resolveEffectiveContext,
   type SoatRunContext,
 } from './guardrailContext';
@@ -129,7 +129,7 @@ export type EvaluatedGuardrail = {
 /**
  * Evaluates every applying guardrail against one call, each with its own
  * effective `context.*` (caller context combined with its context tool per
- * `context_mode`) over shared `args.*` and `soat.*`. Returns the composed
+ * `context_mode`) over shared `args.*` and `runtime.*`. Returns the composed
  * (strictest) decision plus per-guardrail records for the audit trail.
  */
 const evaluateAll = async (args: {
@@ -142,9 +142,9 @@ const evaluateAll = async (args: {
   evaluated: EvaluatedGuardrail[];
 }> => {
   const now = new Date();
-  const soat = await buildGuardrailSoatContext({
+  const runtime = await buildGuardrailRuntimeContext({
     identity: args.identity,
-    referencedSoatPaths: referencedSoatPaths(args.guardrails),
+    referencedRuntimePaths: referencedRuntimePaths(args.guardrails),
     now,
   });
 
@@ -162,7 +162,7 @@ const evaluateAll = async (args: {
     const evaluationContext = {
       args: args.effectiveArgs,
       context: effectiveContext,
-      soat,
+      runtime,
     };
     const result = evaluateGuardrail({ guardrail, context: evaluationContext });
     const record = buildEvaluationRecord({

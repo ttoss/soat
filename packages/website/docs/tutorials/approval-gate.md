@@ -134,7 +134,7 @@ echo "PROJECT_ID: $PROJECT_ID"
 
 ## Step 3 — Create the tool the approval gates
 
-The `approval` node names the [Tool](/docs/modules/tools#examples) whose call is under review and freezes the proposed arguments onto the item — it records the proposal, it does not run the tool (a downstream node performs the action once approved). Create a read-only [SOAT tool](/docs/modules/tools) so the tutorial needs no external services; in a real system this would be your refund, payment, or deployment tool.
+The `approval` node names the [Tool](/docs/modules/tools#examples) whose call is under review and freezes the proposed arguments onto the item — it records the proposal, it does not run the tool (a downstream node performs the action once approved). Create a read-only [builtin tool](/docs/modules/tools) so the tutorial needs no external services; in a real system this would be your refund, payment, or deployment tool.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -143,7 +143,7 @@ The `approval` node names the [Tool](/docs/modules/tools#examples) whose call is
 REFUND_TOOL_ID=$(soat create-tool \
   --project-id "$PROJECT_ID" \
   --name "issue-refund" \
-  --type "soat" \
+  --type "builtin" \
   --description "Stand-in for the sensitive action the approval gates" \
   --actions '["get-project"]' \
   --preset-parameters '{"project_id": "'"$PROJECT_ID"'"}' | jq -r '.id')

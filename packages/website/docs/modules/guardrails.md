@@ -97,9 +97,9 @@ A guardrail may carry an optional **`expires_in`** (seconds) in its document —
 
 ### Classification
 
-`class` is either a literal (`{ "class": "C" }` always requires sign-off) or a **single JSON Logic expression** returning the class, evaluated over the same three namespaces as guards (`args.*` / `context.*` / `soat.*`). There is no rule list and no matching order: one expression, one result. Anything the expression doesn't account for falls through to `default_class`.
+`class` is either a literal (`{ "class": "C" }` always requires sign-off) or a **single JSON Logic expression** returning the class, evaluated over the same three namespaces as guards (`args.*` / `context.*` / `runtime.*`). There is no rule list and no matching order: one expression, one result. Anything the expression doesn't account for falls through to `default_class`.
 
-A guardrail reasons about **this** call, not about which tool it is: to gate several tools differently, create a guardrail per tool and [attach](#attachment) each to its tool rather than branching on `soat.tool.name`. This example classifies a budget-update call **B** below a threshold and **C** at or above it:
+A guardrail reasons about **this** call, not about which tool it is: to gate several tools differently, create a guardrail per tool and [attach](#attachment) each to its tool rather than branching on `runtime.tool.name`. This example classifies a budget-update call **B** below a threshold and **C** at or above it:
 
 ```json
 {
@@ -117,31 +117,31 @@ Both `class` and `guard` are **single JSON Logic expressions** — the same eval
 | ----------- | -------------------------------------------------------------------------------------------------------------- |
 | `args.*`    | The proposed call's arguments (post preset-merge — the same frozen arguments an [approval item](./approvals.md) records) |
 | `context.*` | The **effective guardrail context** — application-owned, see below                                             |
-| `soat.*`    | Platform-computed values (fixed catalog below); reserved — never writable by the caller or the context tool     |
+| `runtime.*`    | Platform-computed values (fixed catalog below); reserved — never writable by the caller or the context tool     |
 
 **Guardrail context is application-owned.** The caller passes a free-form `guardrail_context` object on the generation request or orchestration-run start; the platform never interprets it. For long-lived work (an orchestration run can park at an approval node for days), a run-start snapshot goes stale, so a guardrail may also name a `context_tool_id` — an ordinary [tool](./tools.md) the platform calls at **evaluation time**, immediately before classifying each gated call. `context_mode` controls the combination: `merge` (default) shallow-merges top-level keys over the caller-supplied object, the tool's value winning on conflict; `replace` substitutes it entirely.
 
 The context tool executes **under the calling agent's credentials** — same project scoping, same secret resolution — so a guardrail can never read data the agent could not reach. The platform's dispatch path invokes it; the model never sees it and its result never enters the model context. If the agent cannot access the tool, the standard fail-closed rule applies. The call is bounded by a per-call timeout and a short per-`(project, guardrail)` TTL cache.
 
-The `soat.*` catalog (windows are baked into the key name — a fixed suffix set `_1h` / `_24h` / `_7d` / `_30d`, each rolling and ending at evaluation time):
+The `runtime.*` catalog (windows are baked into the key name — a fixed suffix set `_1h` / `_24h` / `_7d` / `_30d`, each rolling and ending at evaluation time):
 
 | Key                                                        | Type    | Source                                                  |
 | ---------------------------------------------------------- | ------- | ------------------------------------------------------- |
-| `soat.action` / `soat.tool.id` / `soat.tool.name`          | string  | The call being classified                               |
-| `soat.agent.id` / `soat.project.id`                        | string  | Evaluation identity                                     |
-| `soat.run.node_attempt` / `soat.run.tool_calls`            | integer | Current [orchestration run](./orchestrations.md) state  |
-| `soat.activity.actions_1h` / `soat.activity.actions_24h`   | integer | [Activity feed](./activity.md) (per project)            |
-| `soat.usage.cost_usd_1h` / `_24h` / `_7d` / `_30d`         | number  | [Usage metering](./usage.md) (per project)              |
-| `soat.usage.tokens_24h` / `soat.usage.tokens_30d`          | integer | [Usage metering](./usage.md) (per project)              |
-| `soat.usage.run_tokens` / `soat.usage.run_cost_usd`        | number  | [Usage metering](./usage.md) (**per run**, cumulative)  |
+| `runtime.action` / `runtime.tool.id` / `runtime.tool.name`          | string  | The call being classified                               |
+| `runtime.agent.id` / `runtime.project.id`                        | string  | Evaluation identity                                     |
+| `runtime.run.node_attempt` / `runtime.run.tool_calls`            | integer | Current [orchestration run](./orchestrations.md) state  |
+| `runtime.activity.actions_1h` / `runtime.activity.actions_24h`   | integer | [Activity feed](./activity.md) (per project)            |
+| `runtime.usage.cost_usd_1h` / `_24h` / `_7d` / `_30d`         | number  | [Usage metering](./usage.md) (per project)              |
+| `runtime.usage.tokens_24h` / `runtime.usage.tokens_30d`          | integer | [Usage metering](./usage.md) (per project)              |
+| `runtime.usage.run_tokens` / `runtime.usage.run_cost_usd`        | number  | [Usage metering](./usage.md) (**per run**, cumulative)  |
 
-`soat.activity.actions_1h` / `actions_24h` count this project's `action_executed` entries on the [activity feed](./activity.md#the-feed-as-a-guardrail-signal) over the rolling window, read live. An empty feed reads as a real `0`; only a failing query falls back to the fail-closed rule.
+`runtime.activity.actions_1h` / `actions_24h` count this project's `action_executed` entries on the [activity feed](./activity.md#the-feed-as-a-guardrail-signal) over the rolling window, read live. An empty feed reads as a real `0`; only a failing query falls back to the fail-closed rule.
 
-`soat.usage.run_tokens` / `run_cost_usd` are the odd pair out: they sum only the meter rows of the **current [orchestration run](./orchestrations.md)**, read live — see [Per-run spend ceilings](#per-run-spend-ceilings).
+`runtime.usage.run_tokens` / `run_cost_usd` are the odd pair out: they sum only the meter rows of the **current [orchestration run](./orchestrations.md)**, read live — see [Per-run spend ceilings](#per-run-spend-ceilings).
 
-**Fail-closed at both ends.** At write time, a document referencing a `var` outside the three namespaces — or a `soat.*` key outside the catalog — is rejected with `400`. At evaluation time, a `context.*` key absent from the effective context, a context-tool failure or timeout, or an unresolvable `soat.*` provider all fail closed: in `class`, the result resolves to `default_class`; in `guard`, it counts as a **failed guard** and tripwire semantics apply. Forgetting to supply context tightens the posture, never loosens it.
+**Fail-closed at both ends.** At write time, a document referencing a `var` outside the three namespaces — or a `runtime.*` key outside the catalog — is rejected with `400`. At evaluation time, a `context.*` key absent from the effective context, a context-tool failure or timeout, or an unresolvable `runtime.*` provider all fail closed: in `class`, the result resolves to `default_class`; in `guard`, it counts as a **failed guard** and tripwire semantics apply. Forgetting to supply context tightens the posture, never loosens it.
 
-**Variable casing.** `guardrail_context` (and a dry-run's `args`) is an application-owned bag — keys pass through **verbatim**, with no snake↔camel conversion. Author the document path and the context key in the same case; snake_case is recommended (it matches the `soat.*` catalog), so `{ "var": "context.max_daily_budget" }` reads a supplied `max_daily_budget`.
+**Variable casing.** `guardrail_context` (and a dry-run's `args`) is an application-owned bag — keys pass through **verbatim**, with no snake↔camel conversion. Author the document path and the context key in the same case; snake_case is recommended (it matches the `runtime.*` catalog), so `{ "var": "context.max_daily_budget" }` reads a supplied `max_daily_budget`.
 
 **Missing keys and comparisons.** JSON Logic coerces an absent `var` to a falsy, zero-ish value, so `{ "<": [{ "var": "args.amount" }, 500] }` is `true` when `args.amount` is absent. When a missing argument must **not** reach the permissive branch, test presence explicitly: `{ "and": [{ "var": "args.amount" }, { "<": [{ "var": "args.amount" }, 500] }] }`.
 
@@ -153,7 +153,7 @@ A failing class-B guard is a **tripwire**: by default it aborts the action and f
 
 ### Per-run spend ceilings
 
-A runaway [orchestration run](./orchestrations.md) is not caught by a project-windowed budget guard: the window barely moves while one run burns through its budget. `soat.usage.run_tokens` and `soat.usage.run_cost_usd` expose the **current run's** cumulative metered spend, live at evaluation time, so a ceiling trips mid-run on the tool call that crosses it.
+A runaway [orchestration run](./orchestrations.md) is not caught by a project-windowed budget guard: the window barely moves while one run burns through its budget. `runtime.usage.run_tokens` and `runtime.usage.run_cost_usd` expose the **current run's** cumulative metered spend, live at evaluation time, so a ceiling trips mid-run on the tool call that crosses it.
 
 Give the ceiling itself as `guardrail_context` (or a context tool) so one guardrail serves every run:
 
@@ -164,7 +164,7 @@ soat create-guardrail \
     "class": "B",
     "guard": {
       "<": [
-        { "var": "soat.usage.run_tokens" },
+        { "var": "runtime.usage.run_tokens" },
         { "var": "context.action_token_ceiling" }
       ]
     }
@@ -218,7 +218,7 @@ A guardrail cannot be deleted while it is attached: [`DELETE /api/v1/guardrails/
 
 ### Dry-run Evaluation
 
-[`POST /api/v1/guardrails/{guardrail_id}/evaluate`](/docs/api/guardrails/evaluate-guardrail) runs the full evaluation pipeline — the `class` expression, the guard, the context tool per `context_mode`, live `soat.*` resolution — against caller-supplied `args` and `guardrail_context`, and returns the exact [evaluation record](#evaluation-audit-record) a real call would produce. Nothing executes, no approval item is filed, no activity entry is written. Pass an optional `tool_id` to resolve `soat.tool.*`; an unresolvable `soat.*` key behaves exactly as at runtime (fail-closed).
+[`POST /api/v1/guardrails/{guardrail_id}/evaluate`](/docs/api/guardrails/evaluate-guardrail) runs the full evaluation pipeline — the `class` expression, the guard, the context tool per `context_mode`, live `runtime.*` resolution — against caller-supplied `args` and `guardrail_context`, and returns the exact [evaluation record](#evaluation-audit-record) a real call would produce. Nothing executes, no approval item is filed, no activity entry is written. Pass an optional `tool_id` to resolve `runtime.tool.*`; an unresolvable `runtime.*` key behaves exactly as at runtime (fail-closed).
 
 This is the adoption path: preview a document's decisions against production-shaped calls **before** attaching it — or before editing a widely-attached one.
 
@@ -242,7 +242,7 @@ Every evaluation — execute, route-to-approval, block, or tripwire — writes a
     "args.amount": 450,
     "context.max_daily_budget": 500,
     "context.cost_ceiling": 1000,
-    "soat.usage.cost_usd_24h": 812.4
+    "runtime.usage.cost_usd_24h": 812.4
   },
   "agent_id": "agent_V1StGXR8Z5jdHi6B",
   "orchestration_run_id": "orch_run_V1StGXR8Z5jdHi6B",
@@ -279,7 +279,7 @@ soat create-guardrail \
   --document '{
     "default_class": "C",
     "class": { "if": [{ "<": [{ "var": "args.amount" }, 500] }, "B", "C"] },
-    "guard": { "<": [{ "var": "soat.usage.cost_usd_24h" }, 1000] }
+    "guard": { "<": [{ "var": "runtime.usage.cost_usd_24h" }, 1000] }
   }'
 ```
 
@@ -299,7 +299,7 @@ const { data, error } = await soat.guardrails.createGuardrail({
     document: {
       default_class: 'C',
       class: { if: [{ '<': [{ var: 'args.amount' }, 500] }, 'B', 'C'] },
-      guard: { '<': [{ var: 'soat.usage.cost_usd_24h' }, 1000] },
+      guard: { '<': [{ var: 'runtime.usage.cost_usd_24h' }, 1000] },
     },
   },
 });
@@ -318,7 +318,7 @@ curl -X POST https://api.example.com/api/v1/guardrails \
     "document": {
       "default_class": "C",
       "class": { "if": [{ "<": [{ "var": "args.amount" }, 500] }, "B", "C"] },
-      "guard": { "<": [{ "var": "soat.usage.cost_usd_24h" }, 1000] }
+      "guard": { "<": [{ "var": "runtime.usage.cost_usd_24h" }, 1000] }
     }
   }'
 ```
@@ -363,7 +363,7 @@ curl -X POST https://api.example.com/api/v1/guardrails/guard_V1StGXR8Z5jdHi6B/ev
 </TabItem>
 </Tabs>
 
-The response is the would-be [evaluation record](#evaluation-audit-record) — here class **B** with a passing guard, `soat.usage.cost_usd_24h` resolved live:
+The response is the would-be [evaluation record](#evaluation-audit-record) — here class **B** with a passing guard, `runtime.usage.cost_usd_24h` resolved live:
 
 ```json
 {
@@ -373,7 +373,7 @@ The response is the would-be [evaluation record](#evaluation-audit-record) — h
   "context_source": "none",
   "context_snapshot": {
     "args.amount": 450,
-    "soat.usage.cost_usd_24h": 812.4
+    "runtime.usage.cost_usd_24h": 812.4
   }
 }
 ```

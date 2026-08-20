@@ -3,9 +3,9 @@ import createDebug from 'debug';
 import { db } from '../db';
 import {
   buildContextSnapshot,
-  buildGuardrailSoatContext,
+  buildGuardrailRuntimeContext,
   type GuardrailCallIdentity,
-  referencedSoatPaths,
+  referencedRuntimePaths,
   resolveEffectiveContext,
 } from './guardrailContext';
 import { evaluateGuardrail } from './guardrailEvaluation';
@@ -21,12 +21,12 @@ const log = createDebug('soat:guardrails');
 /**
  * Dry-runs the full evaluation pipeline for one guardrail (task 2.9): resolves
  * the class expression, the guard, the context tool per `context_mode`, and live
- * `soat.*`, over caller-supplied `args` / `guardrail_context`, and returns the
+ * `runtime.*`, over caller-supplied `args` / `guardrail_context`, and returns the
  * exact {@link GuardrailEvaluationRecord} a real call would produce. Nothing
  * executes, no approval item is filed, and no audit row is written — the
  * adoption path before attaching a guardrail (or before editing a widely-attached
  * one). Fail-closed exactly as at runtime: a failing context tool or a missing
- * `soat.*`/`context.*` key resolves the class to `default_class` and fails the
+ * `runtime.*`/`context.*` key resolves the class to `default_class` and fails the
  * guard.
  */
 export const evaluateGuardrailDryRun = async (args: {
@@ -49,7 +49,7 @@ export const evaluateGuardrailDryRun = async (args: {
       id: args.guardrailId,
     });
 
-  // Resolve soat.tool.* from the optional tool_id, exactly as the dispatch path
+  // Resolve runtime.tool.* from the optional tool_id, exactly as the dispatch path
   // would (a tool outside the caller's projects simply leaves the name null).
   let toolName: string | null = null;
   if (args.toolId) {
@@ -73,9 +73,9 @@ export const evaluateGuardrailDryRun = async (args: {
     toolName,
     action: toolName,
   };
-  const soat = await buildGuardrailSoatContext({
+  const runtime = await buildGuardrailRuntimeContext({
     identity,
-    referencedSoatPaths: referencedSoatPaths([guardrail]),
+    referencedRuntimePaths: referencedRuntimePaths([guardrail]),
     now,
   });
 
@@ -90,7 +90,7 @@ export const evaluateGuardrailDryRun = async (args: {
   const evaluationContext = {
     args: callArgs,
     context: effectiveContext,
-    soat,
+    runtime,
   };
   const result = evaluateGuardrail({ guardrail, context: evaluationContext });
 

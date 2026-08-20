@@ -54,7 +54,7 @@ in one place. Four types cover the surface:
 | `http`   | Any HTTP endpoint                                              |
 | `mcp`    | An external MCP server                                         |
 | `client` | Client-side execution — the run pauses and resumes with the result |
-| `soat`   | SOAT platform actions, including invoking another agent        |
+| `builtin`   | SOAT platform actions, including invoking another agent        |
 
 Precision comes from narrowing, and [Agents](/docs/modules/agents) give you three dials
 for it: `active_tool_ids` restricts which of the bound tools are live, `tool_choice` forces
@@ -93,7 +93,7 @@ levels:
 
 - **[IAM](/docs/modules/iam) and [Policies](/docs/modules/policies)** — the caller's
   `resource:Action` permissions, enforced identically across REST, MCP, CLI, and SDK.
-- **`boundary_policy` on the agent** — a ceiling on which `soat` actions the agent itself
+- **`boundary_policy` on the agent** — a ceiling on which `builtin` actions the agent itself
   may perform. Combined with the caller's own permissions, an agent can never be used to
   exceed them.
 - **[Secrets](/docs/modules/secrets)** — provider credentials are encrypted and referenced

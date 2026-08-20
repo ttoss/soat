@@ -13,7 +13,7 @@ Standalone, reusable tool definitions that agents call during generation.
 
 The Tools module lets you define callable tools that agents use during a generation loop. A tool encapsulates its type, input schema, and execution configuration in one project-scoped record. Tools can be shared across multiple agents and invoked directly via the API independently of any agent.
 
-Five tool types are supported: `http` (calls an external HTTP endpoint), `client` (signals the calling application to execute locally), `mcp` (proxies an MCP server), `soat` (invokes a SOAT platform action), and `pipeline` (runs a deterministic sequence of other tools as a single call). Any other `type` is rejected with `400 VALIDATION_FAILED` on create and update.
+Five tool types are supported: `http` (calls an external HTTP endpoint), `client` (signals the calling application to execute locally), `mcp` (proxies an MCP server), `builtin` (invokes a SOAT platform action), and `pipeline` (runs a deterministic sequence of other tools as a single call). Any other `type` is rejected with `400 VALIDATION_FAILED` on create and update.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -22,9 +22,9 @@ To invoke a tool automatically, bind it to a [Trigger](./triggers.md) with `targ
 ## Related Tutorials
 
 - [Execute Agent Tool Calls in Your Own App - Step 4 (Declare the function as a client tool)](/docs/tutorials/client-tools#step-4--declare-the-function-as-a-client-tool)
-- [Agent SOAT Tools and Preset Parameters - Step 6 (Create soat tools)](/docs/tutorials/agent-soat-tools#step-6--create-soat-tools)
+- [Agent SOAT Tools and Preset Parameters - Step 6 (Create builtin tools)](/docs/tutorials/agent-soat-tools#step-6--create-builtin-tools)
 - [Orchestrate a Sonnet - Step 4 (Create the fixed write tool)](/docs/tutorials/orchestrate-a-sonnet#step-4--create-the-poem-document-and-a-fixed-write-tool)
-- [Multi-Agent Sonnet with Nested Agent Calls - Step 5 (Create fixed SOAT tools)](/docs/tutorials/multi-agent-orchestration#step-5--create-fixed-soat-tools-for-stanza-agents)
+- [Multi-Agent Sonnet with Nested Agent Calls - Step 5 (Create fixed builtin tools)](/docs/tutorials/multi-agent-orchestration#step-5--create-fixed-builtin-tools-for-stanza-agents)
 - [Agent over a Library of PDFs - Step 12 (Give the agent a knowledge tool)](/docs/tutorials/agent-with-pdfs#step-12--give-the-agent-a-knowledge-tool-plan-d)
 - [Call AWS and GCP APIs from an Agent - Step 3 (Create a SigV4-signed S3 tool)](/docs/tutorials/call-aws-and-gcp-apis-from-an-agent#step-3--create-a-sigv4-signed-s3-tool)
 
@@ -34,8 +34,8 @@ To invoke a tool automatically, bind it to a [Trigger](./triggers.md) with `targ
 | ------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `id`                | `string`                                        | Public ID (`tool_` prefix)                                                                                        |
 | `project_id`        | `string`                                        | ID of the owning project                                                                                          |
-| `name`              | `string`                                        | Machine-readable tool name sent to the model (or namespace prefix for `mcp`/`soat`)                               |
-| `type`              | `"http"` \| `"client"` \| `"mcp"` \| `"soat"` \| `"pipeline"` | Tool type — determines execution behaviour                                        |
+| `name`              | `string`                                        | Machine-readable tool name sent to the model (or namespace prefix for `mcp`/`builtin`)                               |
+| `type`              | `"http"` \| `"client"` \| `"mcp"` \| `"builtin"` \| `"pipeline"` | Tool type — determines execution behaviour                                        |
 | `description`       | `string \| null`                                | Human-readable description sent to the model for tool selection                                                   |
 | `parameters`        | `object \| null`                                | JSON Schema describing the tool's input. Required for `http` and `client` types.                                  |
 | `execute`           | `object \| null`                                | HTTP execution config (`url`, `method`, `headers`, `body_mode`, `auth`). Required for `http` type.                |
@@ -47,7 +47,7 @@ To invoke a tool automatically, bind it to a [Trigger](./triggers.md) with `targ
 | `mcp`               | `object \| null`                                | MCP server config (`url`, `headers`). Required for `mcp` type.                                                    |
 | `mcp.url`           | `string`                                        | URL of the MCP server (SSE or Streamable HTTP transport).                                                         |
 | `mcp.headers`       | `object`                                        | Additional headers sent when connecting to the MCP server.                                                        |
-| `actions`           | `string[] \| null`                              | Allowlist of actions to expose. `soat`: SOAT platform action names, e.g. `["search-knowledge"]` (required). `mcp`: optional allowlist of MCP tool names to scope the server surface — `null` exposes every tool. See [mcp action scoping](#scoping-an-mcp-tool-to-a-subset-of-actions). |
+| `actions`           | `string[] \| null`                              | Allowlist of actions to expose. `builtin`: SOAT platform action names, e.g. `["search-knowledge"]` (required). `mcp`: optional allowlist of MCP tool names to scope the server surface — `null` exposes every tool. See [mcp action scoping](#scoping-an-mcp-tool-to-a-subset-of-actions). |
 | `denied_actions`    | `string[] \| null`                              | `mcp` only: optional denylist of MCP tool names to hide, applied after `actions` and taking precedence over it. `null` denies nothing. See [mcp action scoping](#scoping-an-mcp-tool-to-a-subset-of-actions). |
 | `context_keys`      | `string[] \| null`                              | Allowlist of [`tool_context`](../advanced/tool-context.md) keys forwarded to this tool as context headers. `null` forwards every key (the default); `[]` forwards none. See [Scoping which context keys reach a tool](#scoping-which-context-keys-reach-a-tool). |
 | `preset_parameters` | `object \| null`                                | Fixed parameter values merged into every call. Keys are hidden from the model and injected automatically.         |
@@ -67,11 +67,11 @@ HTTP header names in `execute.headers` and `mcp.headers` are opaque and preserve
 
 On every `http` and `mcp` tool call, the server injects the generation's [`tool_context`](../advanced/tool-context.md) as `X-Soat-Context-*` request headers — including the auto-populated `sessionId`, `actorId` and `actorExternalId` — in addition to, and after, the headers you configure. This is how a tool endpoint learns who the agent is acting for without trusting the prompt; the prefix is deployment configuration ([`TOOL_CONTEXT_HEADER_PREFIX`](../self-hosting/configuration.md#agent-generation)), so a caller can never overwrite a tool's own credential. When a target needs a context value in a header of its own, declare it with a [`{{context:<key>}}` token](#context-references-in-headers). See the [Tool Context reference](../advanced/tool-context.md) for the key→header rule and security notes.
 
-By default every context key reaches every `http`, `mcp` and `soat` tool; set [`context_keys`](#scoping-which-context-keys-reach-a-tool) to bound that.
+By default every context key reaches every `http`, `mcp` and `builtin` tool; set [`context_keys`](#scoping-which-context-keys-reach-a-tool) to bound that.
 
 ### Tool ID vs Tool Name
 
-A **tool ID** is the resource identifier (e.g., `tool_k8x2f3np`), used in [`tool_bindings`](./agents.md#tool-bindings), `active_tool_ids`, and `step_rules[].active_tool_ids`. A **tool name** is what the AI model sees at runtime. For `http` and `client` tools, one ID → one name; for `mcp` and `soat` tools, one ID exposes **many** names. `tool_choice` and `stop_conditions` on agents reference tools by **name**.
+A **tool ID** is the resource identifier (e.g., `tool_k8x2f3np`), used in [`tool_bindings`](./agents.md#tool-bindings), `active_tool_ids`, and `step_rules[].active_tool_ids`. A **tool name** is what the AI model sees at runtime. For `http` and `client` tools, one ID → one name; for `mcp` and `builtin` tools, one ID exposes **many** names. `tool_choice` and `stop_conditions` on agents reference tools by **name**.
 
 ### Tool Name Resolution
 
@@ -80,9 +80,9 @@ A **tool ID** is the resource identifier (e.g., `tool_k8x2f3np`), used in [`tool
 | `http`    | `{name}`               | `search`                                             |
 | `client`  | `{name}`               | `read_local_file`                                    |
 | `mcp`     | `{name}_{mcpToolName}` | `github_create_issue`, `github_list_repos`           |
-| `soat`    | `{name}_{action}`      | `platform_get-document`, `platform_search-knowledge` |
+| `builtin`    | `{name}_{action}`      | `platform_get-document`, `platform_search-knowledge` |
 
-For `mcp` and `soat`, the tool's `name` is a **prefix** joined with an underscore to each discovered sub-tool name, guaranteeing uniqueness when two servers or action sets share a sub-tool name (e.g., `github_search` vs `jira_search`).
+For `mcp` and `builtin`, the tool's `name` is a **prefix** joined with an underscore to each discovered sub-tool name, guaranteeing uniqueness when two servers or action sets share a sub-tool name (e.g., `github_search` vs `jira_search`).
 
 ### http
 
@@ -137,7 +137,7 @@ A `{{context:<key>}}` token in `execute.headers` or `mcp.headers` is substituted
 
 #### Scoping which context keys reach a tool
 
-A generation's `tool_context` is forwarded, in full, to every `http`, `mcp` and `soat` tool the agent has. When one of those keys is a credential, `context_keys` bounds the egress per tool: with `"context_keys": ["tenant"]` and a caller sending `tool_context: { "ocaToken": "...", "tenant": "acme" }`, the tool receives `X-Soat-Context-tenant` and **not** `X-Soat-Context-ocaToken`.
+A generation's `tool_context` is forwarded, in full, to every `http`, `mcp` and `builtin` tool the agent has. When one of those keys is a credential, `context_keys` bounds the egress per tool: with `"context_keys": ["tenant"]` and a caller sending `tool_context: { "ocaToken": "...", "tenant": "acme" }`, the tool receives `X-Soat-Context-tenant` and **not** `X-Soat-Context-ocaToken`.
 
 | | |
 | --- | --- |
@@ -145,7 +145,7 @@ A generation's `tool_context` is forwarded, in full, to every `http`, `mcp` and 
 | `[]` | No caller key is forwarded. |
 | Identity keys | `sessionId`, `actorId` and `actorExternalId` are server-derived and always forwarded regardless of the list. |
 | `{{context:<key>}}` tokens | Substituted regardless of the list: the tool declared that header itself. A key used only in a token need not be listed. |
-| `soat` tools | The list also bounds the `tool_context` propagated in the action's request body, so a nested generation inherits only the listed keys. |
+| `builtin` tools | The list also bounds the `tool_context` propagated in the action's request body, so a nested generation inherits only the listed keys. |
 | Matching | Case-insensitive (a key names a header). |
 | Invalid entry | An entry outside the [key grammar](../advanced/tool-context.md) is rejected at write time with `400 INVALID_TOOL_CONTEXT_KEY`. |
 
@@ -266,27 +266,27 @@ By default an `mcp` tool exposes the **entire** MCP server surface. Set the `act
 
 The scope is enforced at two points: only allowlisted tools are registered with the model during generation, and [`POST /tools/{id}/call`](/docs/api/tools/call-tool) (and `pipeline` steps) reject an `action` outside the allowlist with `400 VALIDATION_FAILED` before any request reaches the MCP server.
 
-Omit `actions` (or set `null`) to expose the whole surface; `[]` exposes nothing. Because MCP tool names are discovered at runtime, they are **not** validated against a static registry at create/update time (unlike `soat` actions) — a name the server does not advertise is simply never exposed.
+Omit `actions` (or set `null`) to expose the whole surface; `[]` exposes nothing. Because MCP tool names are discovered at runtime, they are **not** validated against a static registry at create/update time (unlike `builtin` actions) — a name the server does not advertise is simply never exposed.
 
 `denied_actions` is the inverse: expose the whole surface minus a denylist (useful for a read+write server where enumerating every read tool would drift). It is enforced at the same two points, applied **after** `actions`, and **takes precedence** over it: a name present in both is denied. Omit or `null` denies nothing.
 
-### soat
+### builtin
 
-A `soat` tool exposes actions from the SOAT platform itself (documents, conversations, files, secrets, etc.). Instead of pointing to an external endpoint, you list the platform actions the agent may use via the `actions` array. Each action name corresponds to an MCP tool registered on the platform (e.g., `get-document`, `search-knowledge`, `create-file`) — **not** the REST operationId (use `search-knowledge`, not `searchKnowledge`). For a worked example of a fixed `soat` write tool, see [Orchestrate a Sonnet - Step 4 (Create the fixed write tool)](/docs/tutorials/orchestrate-a-sonnet#step-4--create-the-poem-document-and-a-fixed-write-tool).
+A `builtin` tool exposes actions from the SOAT platform itself (documents, conversations, files, secrets, etc.). Instead of pointing to an external endpoint, you list the platform actions the agent may use via the `actions` array. Each action name corresponds to an MCP tool registered on the platform (e.g., `get-document`, `search-knowledge`, `create-file`) — **not** the REST operationId (use `search-knowledge`, not `searchKnowledge`). For a worked example of a fixed `builtin` write tool, see [Orchestrate a Sonnet - Step 4 (Create the fixed write tool)](/docs/tutorials/orchestrate-a-sonnet#step-4--create-the-poem-document-and-a-fixed-write-tool).
 
-Creating or updating a `soat` tool validates every entry in `actions` against the platform's action registry. An unrecognized action name returns `400 VALIDATION_FAILED` immediately; a camelCase name matching a known action once kebab-cased gets a suggestion (e.g. `"searchKnowledge" (did you mean "search-knowledge"?)`).
+Creating or updating a `builtin` tool validates every entry in `actions` against the platform's action registry. An unrecognized action name returns `400 VALIDATION_FAILED` immediately; a camelCase name matching a known action once kebab-cased gets a suggestion (e.g. `"searchKnowledge" (did you mean "search-knowledge"?)`).
 
 A platform action that responds non-2xx **fails the tool call** — `502 TOOL_HTTP_ERROR`, with the real status in `meta.tool_status_code` — so a rejected or unauthorized action can't be mistaken for data. An action that answers `204 No Content` (every `delete-*`) yields a `null` result rather than an error.
 
-An operation whose response cannot be a tool result is rejected at create time with `400 VALIDATION_FAILED`: `download-file` (raw bytes — use `download-file-base64`) and `export-audit-entries` (unbounded NDJSON — use `list-audit-entries`). Both remain available over REST, the SDK, and the CLI. For the same reason, `create-agent-generation` is callable as a `soat` action but without `stream`, and returns the completed generation.
+An operation whose response cannot be a tool result is rejected at create time with `400 VALIDATION_FAILED`: `download-file` (raw bytes — use `download-file-base64`) and `export-audit-entries` (unbounded NDJSON — use `list-audit-entries`). Both remain available over REST, the SDK, and the CLI. For the same reason, `create-agent-generation` is callable as a `builtin` action but without `stream`, and returns the completed generation.
 
-#### How a soat action is executed
+#### How a builtin action is executed
 
 The action runs **in the server process**, dispatching through the same middleware stack and route handler a client request goes through — no network hop, so nothing depends on the server being reachable at a particular address. The route's permission check runs per call against the caller's policies, and strict field validation, audit logging, metering and quotas, and the snake_case response contract all apply exactly as for a client request.
 
-A `soat` tool therefore has **no ambient authority**: it acts with the credential it was given, and an action the credential cannot perform fails with `502 TOOL_HTTP_ERROR` / `meta.tool_status_code: 403`. A call that does not settle within `SOAT_TOOL_CALL_TIMEOUT_MS` (default `300000`) fails with a timeout error. Called from an orchestration, a `soat` tool acts as the run's own identity — see [Run identity](./orchestrations.md#durable-background-execution).
+A `builtin` tool therefore has **no ambient authority**: it acts with the credential it was given, and an action the credential cannot perform fails with `502 TOOL_HTTP_ERROR` / `meta.tool_status_code: 403`. A call that does not settle within `SOAT_TOOL_CALL_TIMEOUT_MS` (default `300000`) fails with a timeout error. Called from an orchestration, a `builtin` tool acts as the run's own identity — see [Run identity](./orchestrations.md#durable-background-execution).
 
-When a `soat` tool is called mid-turn by an agent, the server injects `tool_context`, `parent_trace_id`, `root_trace_id`, and `max_call_depth` into the request only for actions whose REST schema declares those fields (currently only `create-agent-generation`); other actions are called as-is.
+When a `builtin` tool is called mid-turn by an agent, the server injects `tool_context`, `parent_trace_id`, `root_trace_id`, and `max_call_depth` into the request only for actions whose REST schema declares those fields (currently only `create-agent-generation`); other actions are called as-is.
 
 ### pipeline
 
@@ -294,7 +294,7 @@ A `pipeline` tool runs a **fixed, ordered sequence of other tools as a single ca
 
 The `pipeline` config has a `steps` array and an optional `output`:
 
-- **`steps[]`** — each step calls a tool either by **`tool_id`** (an existing tool) or by an inline **`tool`** definition (the same shape as [Create Tool](#data-model) minus `project_id`, executed without a Tool row) — never both. An inline step `tool` cannot itself be of type `pipeline`. In a [formation](./formations.md) template, `tool_id` may be a `{ "ref": "ResourceName" }` reference to another tool resource in the same template, resolved at deploy time. Either form accepts an optional **`action`** for `soat`/`mcp` step tools. The step's **`input`** is a mapping object whose values are [JSON Logic](https://jsonlogic.com) expressions evaluated against a `{ input, steps }` context:
+- **`steps[]`** — each step calls a tool either by **`tool_id`** (an existing tool) or by an inline **`tool`** definition (the same shape as [Create Tool](#data-model) minus `project_id`, executed without a Tool row) — never both. An inline step `tool` cannot itself be of type `pipeline`. In a [formation](./formations.md) template, `tool_id` may be a `{ "ref": "ResourceName" }` reference to another tool resource in the same template, resolved at deploy time. Either form accepts an optional **`action`** for `builtin`/`mcp` step tools. The step's **`input`** is a mapping object whose values are [JSON Logic](https://jsonlogic.com) expressions evaluated against a `{ input, steps }` context:
   - `{ "var": "input.<field>" }` reads the pipeline tool's own input; `{ "var": "steps.<id>.<path>" }` reads an earlier step's output.
   - Literals pass through; transforms (`cat`, `+`, `if`, `map`, `filter`, `reduce`, …) are supported, and expressions are resolved **recursively at any nesting depth**.
   - A value is treated as an expression only when it is a single-key object whose key names a real JSON Logic operator. To pass a **literal** object that looks like one, wrap it in `preserve`, which returns its argument unevaluated: `{ "preserve": { "var": "some.var" } }`.
@@ -327,17 +327,17 @@ When no `output_mapping` is configured, the raw result is returned unchanged.
 
 ### Preset Parameters
 
-`preset_parameters` bakes fixed values into a tool definition. When a key matches a field in the action's input schema, that field is **removed from the schema shown to the model** and the preset value is **merged into every call** before dispatch. This eliminates the risk of the model choosing a wrong value for parameters that should always be fixed, and enables multiple tool instances targeting different resources from the same action — e.g. two `soat` tools both binding `update-document`, one with `"preset_parameters": { "id": "doc_abc123" }` and one with `{ "id": "doc_xyz789" }`. See it end to end in [Agent SOAT Tools and Preset Parameters - Step 6 (Create soat tools)](/docs/tutorials/agent-soat-tools#step-6--create-soat-tools).
+`preset_parameters` bakes fixed values into a tool definition. When a key matches a field in the action's input schema, that field is **removed from the schema shown to the model** and the preset value is **merged into every call** before dispatch. This eliminates the risk of the model choosing a wrong value for parameters that should always be fixed, and enables multiple tool instances targeting different resources from the same action — e.g. two `builtin` tools both binding `update-document`, one with `"preset_parameters": { "id": "doc_abc123" }` and one with `{ "id": "doc_xyz789" }`. See it end to end in [Agent SOAT Tools and Preset Parameters - Step 6 (Create builtin tools)](/docs/tutorials/agent-soat-tools#step-6--create-builtin-tools).
 
-Presets and model-supplied arguments reach the action wherever the OpenAPI operation declares the parameter — path, query string, or request body. A `list-*` action's `project_id`, filters, and pagination arguments are query parameters, so a preset like `{ "project_id": "proj_abc123" }` is the way to lock a `soat` tool to one project. An argument the caller omits is left out of the request entirely rather than sent as an empty value.
+Presets and model-supplied arguments reach the action wherever the OpenAPI operation declares the parameter — path, query string, or request body. A `list-*` action's `project_id`, filters, and pagination arguments are query parameters, so a preset like `{ "project_id": "proj_abc123" }` is the way to lock a `builtin` tool to one project. An argument the caller omits is left out of the request entirely rather than sent as an empty value.
 
 ### Calling a Tool Directly
 
-Tools can be invoked independently of an agent via [`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool). The body accepts `action` (required for `soat` and `mcp` types) and `input`. For `pipeline` tools, `input` is the pipeline input and `action` is ignored. When the tool has an `output_mapping`, the response is that mapping's result — see [Output Mapping](#output-mapping).
+Tools can be invoked independently of an agent via [`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool). The body accepts `action` (required for `builtin` and `mcp` types) and `input`. For `pipeline` tools, `input` is the pipeline input and `action` is ignored. When the tool has an `output_mapping`, the response is that mapping's result — see [Output Mapping](#output-mapping).
 
 - A non-2xx target response fails with `502 TOOL_HTTP_ERROR`; the error `meta` carries `tool_status_code`, `tool_response_body`, `tool_url`, and `tool_method`.
 - If [`execute.auth`](#computed-credentials-executeauth) cannot produce the credential, the call fails with `502 TOOL_AUTH_FAILED` instead.
-- A 2xx response whose body isn't valid JSON is returned as raw text; an empty result (e.g. a `soat` action answering `204`) responds `200` with a JSON `null` body.
+- A 2xx response whose body isn't valid JSON is returned as raw text; an empty result (e.g. a `builtin` action answering `204`) responds `200` with a JSON `null` body.
 - This endpoint carries no [`tool_context`](../advanced/tool-context.md), so a tool declaring a [`{{context:<key>}}` token](#context-references-in-headers) fails here with `400 MISSING_TOOL_CONTEXT_KEY` — reach it through an agent.
 
 ## Examples

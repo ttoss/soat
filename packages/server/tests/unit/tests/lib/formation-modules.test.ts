@@ -72,7 +72,7 @@ beforeAll(async () => {
   const toolRes = await admin.post('/api/v1/tools').send({
     project_id: projectId,
     name: 'fm-converter',
-    type: 'soat',
+    type: 'builtin',
     description: 'converter tool',
     actions: ['list-tools'],
   });
@@ -627,7 +627,7 @@ const CASES: RoundTripCase[] = [
           name: `Guardrail ${seed}`,
           class: 'B',
           default_class: 'C',
-          guard: { '<': [{ var: 'soat.usage.cost_usd_24h' }, 1000] },
+          guard: { '<': [{ var: 'runtime.usage.cost_usd_24h' }, 1000] },
           escalate: true,
           context_tool_id: converterToolId,
           context_mode: 'merge',
@@ -636,7 +636,7 @@ const CASES: RoundTripCase[] = [
           name: `Guardrail ${seed}`,
           class: 'B',
           default_class: 'C',
-          guard: { '<': [{ var: 'soat.usage.cost_usd_24h' }, 1000] },
+          guard: { '<': [{ var: 'runtime.usage.cost_usd_24h' }, 1000] },
           escalate: true,
           context_tool_id: converterToolId,
           context_mode: 'merge',

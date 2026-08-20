@@ -1399,7 +1399,7 @@ describe('Agents', () => {
           {
             tool: {
               name: 'inline-gated',
-              type: 'soat',
+              type: 'builtin',
               actions: ['list-documents', 'get-document'],
               denied_actions: ['get-document'],
               preset_parameters: { project_id: projectId },

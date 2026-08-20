@@ -118,7 +118,7 @@ export const emitActivityEntry = async (
 
 /**
  * Counts the project's autonomously executed actions in a rolling window ending
- * now — the value behind the guardrail `soat.activity.actions_1h` /
+ * now — the value behind the guardrail `runtime.activity.actions_1h` /
  * `actions_24h` context keys, so a guard can cap how many actions an agent takes
  * per window. Scoped to `action_executed`: the other kinds record what the
  * platform did *about* an action (an approval resolved, an exception filed, a

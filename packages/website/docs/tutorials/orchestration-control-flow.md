@@ -14,7 +14,7 @@ import TabItem from '@theme/TabItem';
 
 # Orchestration Control Flow: Delay, Poll, and Loop
 
-This tutorial focuses on the **control-flow nodes** of the [Orchestrations](/docs/modules/orchestrations) module — the ones that pace, wait, repeat, and branch a run rather than call an LLM. You will build a sub-orchestration, a [SOAT tool](/docs/modules/tools) for the `poll` node, and a main orchestration wiring `delay → poll → loop → condition → transform`, then run it and inspect the per-node executions.
+This tutorial focuses on the **control-flow nodes** of the [Orchestrations](/docs/modules/orchestrations) module — the ones that pace, wait, repeat, and branch a run rather than call an LLM. You will build a sub-orchestration, a [builtin tool](/docs/modules/tools) for the `poll` node, and a main orchestration wiring `delay → poll → loop → condition → transform`, then run it and inspect the per-node executions.
 
 Everything here is deterministic — **no AI provider is required**. For `agent` nodes (LLM calls), see [Orchestrate a Sonnet](/docs/tutorials/orchestrate-a-sonnet); a [reference table](#every-node-type) at the end maps every node type to where it is demonstrated.
 
@@ -189,7 +189,7 @@ echo "SUB_ORCH_ID: $SUB_ORCH_ID"
 
 ## Step 4 — Create the tool the poll node calls
 
-A `poll` node repeatedly calls a [Tool](/docs/modules/tools#examples) until a JSON Logic exit condition on its response holds. Create a [SOAT tool](/docs/modules/tools) that reads this project back via the `get-project` action. Polling a resource until a field reaches an expected value is the canonical use of a `poll` node — here the project is already readable, so the loop exits on the first attempt.
+A `poll` node repeatedly calls a [Tool](/docs/modules/tools#examples) until a JSON Logic exit condition on its response holds. Create a [builtin tool](/docs/modules/tools) that reads this project back via the `get-project` action. Polling a resource until a field reaches an expected value is the canonical use of a `poll` node — here the project is already readable, so the loop exits on the first attempt.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -198,7 +198,7 @@ A `poll` node repeatedly calls a [Tool](/docs/modules/tools#examples) until a JS
 CHECK_TOOL_ID=$(soat create-tool \
   --project-id "$PROJECT_ID" \
   --name "read-project" \
-  --type "soat" \
+  --type "builtin" \
   --description "Read this project so the poll node can check readiness" \
   --actions '["get-project"]' \
   --preset-parameters '{"project_id": "'"$PROJECT_ID"'"}' | jq -r '.id')
@@ -493,7 +493,7 @@ This tutorial exercises the control-flow nodes. The full set of [node types](/do
 | `loop` | This tutorial — Step 5 ([Loops](/docs/modules/orchestrations#loops-collection-iteration)) |
 | `condition` | This tutorial; [Conditional Branching](/docs/tutorials/conditional-orchestration) |
 | `transform` | This tutorial; [Orchestrate a Sonnet](/docs/tutorials/orchestrate-a-sonnet) |
-| `tool` | This tutorial (the poll's SOAT tool); [Orchestrate a Sonnet](/docs/tutorials/orchestrate-a-sonnet) |
+| `tool` | This tutorial (the poll's builtin tool); [Orchestrate a Sonnet](/docs/tutorials/orchestrate-a-sonnet) |
 | `sub_orchestration` | Same `orchestration_id` field the `loop` uses here — runs a child orchestration as a single step |
 | `agent` | [Orchestrate a Sonnet](/docs/tutorials/orchestrate-a-sonnet), [Multi-Agent Orchestration](/docs/tutorials/multi-agent-orchestration) |
 | `knowledge` | [Knowledge](/docs/modules/knowledge) — searches a knowledge source into state |

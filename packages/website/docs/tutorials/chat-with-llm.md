@@ -713,4 +713,4 @@ curl -s "$SOAT_BASE_URL/api/v1/conversations/$CONV_ID/messages" \
 
 - **Manual generation**: Create a session without `auto_generate` and call `soat generate-session-response --session-id … --wait true` explicitly for full control over when the model responds (omit `--wait true` to run it in the background).
 - **Session tags**: Use `replace-session-tags` / `merge-session-tags` to attach metadata (e.g. user ID, conversation topic) to a session for filtering.
-- **Agents with tools**: Attach SOAT tools or HTTP tools to the agent so the model can take actions. See the [Agents module](/docs/modules/agents#examples).
+- **Agents with tools**: Attach builtin tools or HTTP tools to the agent so the model can take actions. See the [Agents module](/docs/modules/agents#examples).

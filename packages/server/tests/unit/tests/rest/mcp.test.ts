@@ -2027,7 +2027,7 @@ describe('MCP tools - happy path', () => {
   // A guardrail's `document` and an evaluation's `context_snapshot` are
   // free-form, JSON-Logic-bearing bags whose snake_case keys are contract
   // fields (`default_class`, `expires_in`) and fully-qualified var paths
-  // (`soat.usage.cost_usd_24h`, `context.max_daily_budget`). The MCP surface
+  // (`runtime.usage.cost_usd_24h`, `context.max_daily_budget`). The MCP surface
   // must preserve them verbatim, exactly as the REST caseTransform middleware
   // does — the earlier `snakeToCamelDeep` mangled them (`defaultClass`,
   // `costUsd_24h`), breaking read→write round-trips and the audit-key contract.
@@ -2051,7 +2051,7 @@ describe('MCP tools - happy path', () => {
                   { var: 'context.max_daily_budget' },
                 ],
               },
-              { '<': [{ var: 'soat.usage.cost_usd_24h' }, 1000] },
+              { '<': [{ var: 'runtime.usage.cost_usd_24h' }, 1000] },
             ],
           },
           expires_in: 259200,
@@ -2147,13 +2147,13 @@ describe('MCP tools - happy path', () => {
       expect(result.class).toBe('B');
       expect(result.decision).toBe('execute');
       const keys = Object.keys(result.context_snapshot);
-      // Var paths are a fixed contract — snake_case, matching the soat.* catalog.
+      // Var paths are a fixed contract — snake_case, matching the runtime.* catalog.
       expect(keys).toContain('args.amount');
       expect(keys).toContain('context.max_daily_budget');
-      expect(keys).toContain('soat.usage.cost_usd_24h');
+      expect(keys).toContain('runtime.usage.cost_usd_24h');
       // Not camel-mangled to non-catalog names.
       expect(keys).not.toContain('context.maxDailyBudget');
-      expect(keys).not.toContain('soat.usage.costUsd_24h');
+      expect(keys).not.toContain('runtime.usage.costUsd_24h');
     });
 
     test('delete-guardrail removes the guardrail', async () => {
