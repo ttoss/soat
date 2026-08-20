@@ -3,6 +3,23 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.27.0](https://github.com/ttoss/soat/compare/v0.26.0...v0.27.0) (2026-08-20)
+
+* feat!: rename the IAM resource-name prefix from soat: to srn: (#1092) ([115d155](https://github.com/ttoss/soat/commit/115d155deb0b64217faa2b7e07b94537ff2f3dd7)), closes [#1092](https://github.com/ttoss/soat/issues/1092)
+* feat!: rename soat-branded author tokens to vendor-neutral names (#1091) ([538dbac](https://github.com/ttoss/soat/commit/538dbac6500d60792f01deaee036cb7048c3e9ef)), closes [#1091](https://github.com/ttoss/soat/issues/1091)
+
+### Bug Fixes
+
+* **ai-providers:** make the vertex model listing truthful ([#1090](https://github.com/ttoss/soat/issues/1090)) ([7602ed8](https://github.com/ttoss/soat/commit/7602ed86dcbc829eb86058f2c16bc105d73e8f1d)), closes [#1089](https://github.com/ttoss/soat/issues/1089)
+
+### BREAKING CHANGES
+
+* guardrail documents referencing `soat.*` and tools with
+  `type: 'soat'` are rejected until the migration script has been run.
+* policy documents using `soat:<project>:<type>:<id>` resource
+  names are rejected, and stored ones stop matching, until the migration script
+  has been run. Condition keys are unaffected.
+
 # [0.26.0](https://github.com/ttoss/soat/compare/v0.25.1...v0.26.0) (2026-08-19)
 
 ### Bug Fixes
