@@ -45,7 +45,7 @@ const authorizeProjectPrices = async (args: {
     action,
     // Probe with the project's SRN so project-scoped policies grant access,
     // consistent with getProject / resolveProjectIds.
-    resource: `soat:${projectPublicId}:*:*`,
+    resource: `srn:${projectPublicId}:*:*`,
   });
   if (!allowed) {
     throw new DomainError('FORBIDDEN', 'Forbidden');

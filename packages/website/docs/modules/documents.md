@@ -191,10 +191,10 @@ Policies can target documents by their logical path rather than their `id`. When
 
 | SRN form                                 | Matches                                      |
 | ---------------------------------------- | -------------------------------------------- |
-| `soat:proj_ABC:document:doc_XYZ`         | Specific document by ID                      |
-| `soat:proj_ABC:document:/reports/q1.txt` | Document at the exact path `/reports/q1.txt` |
-| `soat:proj_ABC:document:/reports/*`      | All documents under `/reports/`              |
-| `soat:proj_ABC:document:*`               | All documents in the project (id wildcard)   |
+| `srn:proj_ABC:document:doc_XYZ`         | Specific document by ID                      |
+| `srn:proj_ABC:document:/reports/q1.txt` | Document at the exact path `/reports/q1.txt` |
+| `srn:proj_ABC:document:/reports/*`      | All documents under `/reports/`              |
+| `srn:proj_ABC:document:*`               | All documents in the project (id wildcard)   |
 | `*`                                      | All resources in the project                 |
 
 List and search endpoints apply policy filters at the SQL level — the database returns only rows the caller is permitted to see, so pagination counts are always accurate.

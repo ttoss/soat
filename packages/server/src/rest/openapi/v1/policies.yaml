@@ -242,7 +242,7 @@ components:
           type: array
           items:
             type: string
-          example: ['soat:proj_abc:files:*']
+          example: ['srn:proj_abc:files:*']
         condition:
           type: object
           additionalProperties: true

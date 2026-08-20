@@ -237,7 +237,7 @@ FULL_POLICY_ID=$(soat create-policy \
       {
         "effect": "Allow",
         "action": ["*"],
-        "resource": ["soat:'"$PROJECT_ID"':*:*"]
+        "resource": ["srn:'"$PROJECT_ID"':*:*"]
       }
     ]
   }' | jq -r '.id')
@@ -258,7 +258,7 @@ const { data: fullPolicy, error: fullErr } =
           {
             effect: 'Allow',
             action: ['*'],
-            resource: [`soat:${PROJECT_ID}:*:*`],
+            resource: [`srn:${PROJECT_ID}:*:*`],
           },
         ],
       },
@@ -285,7 +285,7 @@ FULL_POLICY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/policies" \
         {
           \"effect\": \"Allow\",
           \"action\": [\"*\"],
-          \"resource\": [\"soat:${PROJECT_ID}:*:*\"]
+          \"resource\": [\"srn:${PROJECT_ID}:*:*\"]
         }
       ]
     }
@@ -317,7 +317,7 @@ READ_POLICY_ID=$(soat create-policy \
           "documents:ListDocuments",
           "documents:GetDocument"
         ],
-        "resource": ["soat:'"$PROJECT_ID"':*:*"]
+        "resource": ["srn:'"$PROJECT_ID"':*:*"]
       }
     ]
   }' | jq -r '.id')
@@ -338,7 +338,7 @@ const { data: readPolicy, error: readErr } =
           {
             effect: 'Allow',
             action: ['files:GetFile'],
-            resource: [`soat:${PROJECT_ID}:*:*`],
+            resource: [`srn:${PROJECT_ID}:*:*`],
           },
         ],
       },
@@ -369,7 +369,7 @@ READ_POLICY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/policies" \
             \"documents:ListDocuments\",
             \"documents:GetDocument\"
           ],
-          \"resource\": [\"soat:${PROJECT_ID}:*:*\"]
+          \"resource\": [\"srn:${PROJECT_ID}:*:*\"]
         }
       ]
     }

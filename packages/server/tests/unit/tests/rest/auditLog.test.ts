@@ -105,7 +105,7 @@ describe('Audit Log — write hook', () => {
     expect(create).toBeDefined();
     expect(create.status).toBe(201);
     // Create authorizes before the resource exists → type-level SRN.
-    expect(create.resource_srn).toBe(`soat:${projectId}:secret:*`);
+    expect(create.resource_srn).toBe(`srn:${projectId}:secret:*`);
     // resource_public_id captured from the response body id.
     expect(create.resource_public_id).toBe(secretId);
     expect(create.request_id).toBe(requestId);
@@ -115,7 +115,7 @@ describe('Audit Log — write hook', () => {
     expect(del).toBeDefined();
     expect(del.status).toBe(204);
     // Delete authorizes against the precise resource SRN.
-    expect(del.resource_srn).toBe(`soat:${projectId}:secret:${secretId}`);
+    expect(del.resource_srn).toBe(`srn:${projectId}:secret:${secretId}`);
     expect(del.resource_public_id).toBe(secretId);
   });
 
@@ -136,7 +136,7 @@ describe('Audit Log — write hook', () => {
       return e.action === 'secrets:DeleteSecret' && e.status === 403;
     });
     expect(denied).toBeDefined();
-    expect(denied!.resource_srn).toBe(`soat:${projectId}:secret:${secretId}`);
+    expect(denied!.resource_srn).toBe(`srn:${projectId}:secret:${secretId}`);
   });
 
   test('GET requests write no audit entries', async () => {
@@ -244,7 +244,7 @@ describe('Audit Log — item-scoped mutations authorized via resolveProjectIds (
     expect(updated).toBeDefined();
     expect(updated!.status).toBe(200);
     expect(updated!.project_id).toBe(projectId);
-    expect(updated!.resource_srn).toBe(`soat:${projectId}:tool:${toolId}`);
+    expect(updated!.resource_srn).toBe(`srn:${projectId}:tool:${toolId}`);
     expect(updated!.principal_type).toBe('user');
   });
 
@@ -272,7 +272,7 @@ describe('Audit Log — item-scoped mutations authorized via resolveProjectIds (
     expect(deleted).toBeDefined();
     expect(deleted!.status).toBe(204);
     expect(deleted!.project_id).toBe(projectId);
-    expect(deleted!.resource_srn).toBe(`soat:${projectId}:tool:${toolId}`);
+    expect(deleted!.resource_srn).toBe(`srn:${projectId}:tool:${toolId}`);
     expect(deleted!.principal_type).toBe('user');
   });
 
@@ -345,14 +345,45 @@ describe('Audit Log — read API filters', () => {
 
   test('?resource_srn= matches by prefix', async () => {
     const entries = await listEntries({
-      resource_srn: `soat:${projectId}:secret:`,
+      resource_srn: `srn:${projectId}:secret:`,
     });
     expect(entries.length).toBeGreaterThan(0);
     for (const e of entries) {
       expect(
-        String(e.resource_srn).startsWith(`soat:${projectId}:secret:`)
+        String(e.resource_srn).startsWith(`srn:${projectId}:secret:`)
       ).toBe(true);
     }
+  });
+
+  test('?resource_srn= also finds rows written under the retired soat: prefix', async () => {
+    // Audit entries are append-only, so rows written before the srn: rename
+    // keep their original `soat:` SRN forever — the one place the rename could
+    // not migrate. A prefix query must still reach them, or every audit search
+    // silently loses its history. Seeded directly because no client can write
+    // the retired spelling any more.
+    const project = await db.Project.findOne({
+      where: { publicId: projectId },
+    });
+    await db.AuditEntry.create({
+      publicId: 'aud_legacysrnprefix01',
+      projectId: project!.id,
+      principalType: 'user',
+      principalId: 'usr_legacy',
+      action: 'secrets:DeleteSecret',
+      resourceSrn: `soat:${projectId}:secret:sec_legacy`,
+      resourcePublicId: 'sec_legacy',
+      status: 200,
+    });
+
+    const entries = await listEntries({
+      resource_srn: `srn:${projectId}:secret:`,
+    });
+
+    expect(
+      entries.some((e) => {
+        return e.resource_public_id === 'sec_legacy';
+      })
+    ).toBe(true);
   });
 
   test('?from=/?to= bound results by createdAt', async () => {
@@ -662,7 +693,7 @@ describe('Audit Log — guardrail_evaluation detail kind (audit-log P2)', () => 
     expect(entry!.principal_type).toBeNull();
     expect(entry!.principal_id).toBeNull();
     expect(entry!.resource_srn).toBe(
-      `soat:${projectId}:guardrail:${guardrailId}`
+      `srn:${projectId}:guardrail:${guardrailId}`
     );
     // The read endpoint snake-cases the detail payload; assert it against the
     // shared schema fixture so the guardrails kind and the audit PRD can't drift.
@@ -764,7 +795,7 @@ describe('Audit Log — read auditing flag (audit-log P3)', () => {
     expect(entry!.action).toBe('secrets:GetSecret');
     expect(entry!.status).toBe(200);
     expect(entry!.resource_srn).toBe(
-      `soat:${readProjectId}:secret:${readSecretId}`
+      `srn:${readProjectId}:secret:${readSecretId}`
     );
     expect(entry!.resource_public_id).toBe(readSecretId);
     expect(entry!.principal_type).toBe('user');

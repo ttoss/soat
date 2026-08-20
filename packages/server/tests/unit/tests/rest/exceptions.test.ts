@@ -210,7 +210,7 @@ describe('Exceptions', () => {
 
     // Regression: exceptionSrn() built the item SRN from `exception.projectId`,
     // but the mapper's wire field is `project_id` — the SRN resource resolved
-    // to `soat:undefined:exception:<id>` and never matched an SRN-scoped
+    // to `srn:undefined:exception:<id>` and never matched an SRN-scoped
     // policy. An action-only policy (like the rest of this describe block)
     // never exercises the resource-matching path, so it slipped through.
     test('a user with an SRN-scoped (not action-only) policy can get the item', async () => {
@@ -225,7 +225,7 @@ describe('Exceptions', () => {
               {
                 effect: 'Allow',
                 action: ['exceptions:GetException'],
-                resource: [`soat:${projectId}:exception:${targetId}`],
+                resource: [`srn:${projectId}:exception:${targetId}`],
               },
             ],
           },

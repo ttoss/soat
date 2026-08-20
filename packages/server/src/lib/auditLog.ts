@@ -277,6 +277,28 @@ const escapeLikePrefix = (value: string): string => {
   return value.replace(/[\\%_]/g, '\\$&');
 };
 
+/**
+ * Prefix matchers for a `resource_srn` filter, covering the retired `soat:`
+ * spelling alongside `srn:`.
+ *
+ * Audit entries are append-only, so rows written before the SRN prefix rename
+ * keep their original `soat:` value forever — they are the one place the rename
+ * could not migrate. Matching only `srn:` would silently drop every historical
+ * row from an audit search, which is the opposite of what an audit log is for.
+ * The stored value is never rewritten: history reads exactly as it was written,
+ * it just stays reachable.
+ */
+const srnPrefixMatchers = (prefix: string) => {
+  const matchers = [{ [Op.like]: `${escapeLikePrefix(prefix)}%` }];
+
+  if (prefix.startsWith('srn:')) {
+    const legacy = `soat:${prefix.slice('srn:'.length)}`;
+    matchers.push({ [Op.like]: `${escapeLikePrefix(legacy)}%` });
+  }
+
+  return matchers;
+};
+
 type AuditListFilters = {
   projectIds?: number[];
   action?: string;
@@ -297,7 +319,7 @@ const buildListWhere = (args: AuditListFilters): Record<string, any> => {
   if (args.principalId) where.principalId = args.principalId;
   if (args.resourcePublicId) where.resourcePublicId = args.resourcePublicId;
   if (args.resourceSrn) {
-    where.resourceSrn = { [Op.like]: `${escapeLikePrefix(args.resourceSrn)}%` };
+    where.resourceSrn = { [Op.or]: srnPrefixMatchers(args.resourceSrn) };
   }
   if (args.from || args.to) {
     where.createdAt = {
@@ -313,7 +335,7 @@ const buildListWhere = (args: AuditListFilters): Record<string, any> => {
  * Lists audit entries visible to the caller (scoped to `projectIds`; `undefined`
  * means no project filter — every project, admin only), newest first. Filters
  * are all optional and combine with AND. `resourceSrn` is a prefix match (e.g.
- * `soat:{project}:secret:` for every secret action); every other filter is
+ * `srn:{project}:secret:` for every secret action); every other filter is
  * exact. Offset/limit pagination; export-before-expiry is paginating this
  * endpoint into NDJSON.
  */

@@ -716,7 +716,7 @@ describe('API Keys', () => {
               {
                 effect: 'Allow',
                 action: ['projects:ListProjects'],
-                resource: [`soat:${projX}:*:*`],
+                resource: [`srn:${projX}:*:*`],
               },
             ],
           },

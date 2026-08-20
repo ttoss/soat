@@ -120,7 +120,7 @@ Project-scoped API keys make `project_id` optional: omit it and the request defa
 
 ### Tags
 
-Tags are key-value string pairs attached to an actor, managed via the `tags` field or the tag sub-endpoints, and matched by IAM conditions (`soat:ResourceTag/<key>`). Actors use the `actor` resource type in SRNs (`soat:proj_ABC:actor:actor_123`). See [IAM — Tags](iam.md#tags) and [SRNs](iam.md#soat-resource-names-srns).
+Tags are key-value string pairs attached to an actor, managed via the `tags` field or the tag sub-endpoints, and matched by IAM conditions (`soat:ResourceTag/<key>`). Actors use the `actor` resource type in SRNs (`srn:proj_ABC:actor:actor_123`). See [IAM — Tags](iam.md#tags) and [SRNs](iam.md#soat-resource-names-srns).
 
 ## Examples
 

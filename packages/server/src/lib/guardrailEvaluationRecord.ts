@@ -145,7 +145,7 @@ const enqueueGuardrailAuditEntries = async (args: {
       // Platform-originated: no principal authorized the evaluation, so the
       // principal columns stay null and the entry is identified by its action.
       action: GUARDRAIL_EVALUATION_AUDIT_ACTION,
-      resourceSrn: `soat:${projectPublicId}:guardrail:${record.guardrailId}`,
+      resourceSrn: `srn:${projectPublicId}:guardrail:${record.guardrailId}`,
       resourcePublicId: record.guardrailId,
       // The evaluation event itself was recorded successfully; the enacted
       // outcome lives in `detail.decision`, not in this HTTP-shaped field

@@ -57,7 +57,7 @@ The permission catalog rendered on the screen is derived from
 API actions automatically.
 
 Whatever the tier, the grant is always scoped to the chosen project via the SRN
-`soat:<project_id>:*:*`. The selection is carried by the issued token as its
+`srn:<project_id>:*:*`. The selection is carried by the issued token as its
 `scope` claim and reconstructed into an IAM [policy document](./policies.md) on
 every request — see [Permission enforcement](#permission-enforcement).
 
@@ -72,7 +72,7 @@ the synthetic `mcp:access` and `prj:<id>` markers) and evaluates the
 1. the owning user's policies (the ceiling — the token can never exceed them, not
    even for an admin), and
 2. the consented scope (restricting to the actions the user approved, within the
-   single `soat:<project_id>:*:*` resource).
+   single `srn:<project_id>:*:*` resource).
 
 Both must independently allow an action. A token whose consent carried no action
 scopes therefore grants nothing, and the `prj` claim hard-locks every request to
@@ -83,7 +83,7 @@ the consented project.
 A SOAT access token is scoped to exactly **one** project. The consent screen
 offers a single-project selector, `/api/v1/oauth/consent` accepts a single
 `project_id`, and the issued JWT carries a single `prj` claim backed by one
-IAM resource (`soat:<project_id>:*:*`). This is a deliberate design choice, not
+IAM resource (`srn:<project_id>:*:*`). This is a deliberate design choice, not
 a limitation to work around.
 
 ### Why

@@ -133,7 +133,7 @@ export const fireQuotaExceeded = async (args: {
       action: 'quotas:MonitorBreach',
       // SRN built inline (the audit middleware does the same) to avoid pulling
       // the heavy iam module into this hot-path event helper.
-      resourceSrn: `soat:${projectPublicId}:quota:${quota.publicId}`,
+      resourceSrn: `srn:${projectPublicId}:quota:${quota.publicId}`,
       resourcePublicId: quota.publicId,
       // Monitor mode lets the request through, so no request was blocked.
       status: 200,

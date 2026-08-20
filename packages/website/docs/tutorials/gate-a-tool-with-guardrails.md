@@ -735,13 +735,13 @@ Expected output — the class-C route and the tripwire are recorded; the autonom
 ```json
 [
   {
-    "resource_srn": "soat:proj_...:guardrail:guard_...",
+    "resource_srn": "srn:proj_...:guardrail:guard_...",
     "class": "B",
     "decision": "tripwire",
     "approval_id": null
   },
   {
-    "resource_srn": "soat:proj_...:guardrail:guard_...",
+    "resource_srn": "srn:proj_...:guardrail:guard_...",
     "class": "C",
     "decision": "route_to_approval",
     "approval_id": "apr_..."

@@ -54,7 +54,8 @@ describe('renameNamespace (guardrail context namespace)', () => {
   });
 
   test('leaves an SRN and a condition key untouched', () => {
-    // IAM keeps its branded prefix — `soat:` is not `soat.`.
+    // A colon prefix is not the dotted namespace — `soat:` is not `soat.`,
+    // so neither an SRN nor a condition key is in scope here.
     expect(
       renameNamespace({
         resource: ['soat:proj_abc:files:*'],

@@ -46,7 +46,7 @@ A policy document contains one or more statements. Each statement specifies an `
     {
       "effect": "Allow",
       "action": ["documents:GetDocument", "documents:ListDocuments"],
-      "resource": ["soat:proj_ABC:document:*"]
+      "resource": ["srn:proj_ABC:document:*"]
     }
   ]
 }
@@ -69,10 +69,10 @@ See [API Keys](./api-keys.md) for details.
 Because policies are global (not project-scoped), resource SRNs in policy statements carry the full project identifier:
 
 ```json
-{ "resource": ["soat:proj_ABC:document:*"] }
+{ "resource": ["srn:proj_ABC:document:*"] }
 ```
 
-Use `soat:*:*:*` to grant access across all projects (admin-level). Use project-specific SRNs to restrict a policy to a single project without scoping the API key to that project.
+Use `srn:*:*:*` to grant access across all projects (admin-level). Use project-specific SRNs to restrict a policy to a single project without scoping the API key to that project.
 
 ## Examples
 
@@ -84,7 +84,7 @@ Use `soat:*:*:*` to grant access across all projects (admin-level). Use project-
 ```bash
 soat create-policy \
   --name "Read Only Documents" \
-  --document '{"statement":[{"effect":"Allow","action":["documents:GetDocument","documents:ListDocuments"],"resource":["soat:proj_ABC:document:*"]}]}'
+  --document '{"statement":[{"effect":"Allow","action":["documents:GetDocument","documents:ListDocuments"],"resource":["srn:proj_ABC:document:*"]}]}'
 ```
 
 </TabItem>
@@ -106,7 +106,7 @@ const { data, error } = await soat.policies.createPolicy({
         {
           effect: 'Allow',
           action: ['documents:GetDocument', 'documents:ListDocuments'],
-          resource: ['soat:proj_ABC:document:*'],
+          resource: ['srn:proj_ABC:document:*'],
         },
       ],
     },
@@ -128,7 +128,7 @@ curl -X POST https://api.example.com/api/v1/policies \
       "statement": [{
         "effect": "Allow",
         "action": ["documents:GetDocument", "documents:ListDocuments"],
-        "resource": ["soat:proj_ABC:document:*"]
+        "resource": ["srn:proj_ABC:document:*"]
       }]
     }
   }'

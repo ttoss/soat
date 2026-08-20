@@ -59,7 +59,7 @@ describe('OAuth consent API', () => {
       expect(res.body.project_id).toBe(projectId);
       expect(res.body.scopes).toEqual(['agents:*']);
       expect(res.body.policy.statement[0].resource).toEqual([
-        `soat:${projectId}:*:*`,
+        `srn:${projectId}:*:*`,
       ]);
     });
 
