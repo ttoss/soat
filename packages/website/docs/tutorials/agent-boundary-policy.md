@@ -14,11 +14,11 @@ import TabItem from '@theme/TabItem';
 
 # Bound an Agent with a Boundary Policy
 
-When a caller runs an agent, SOAT forwards that caller's credential into every `soat` action the agent performs. Permissions are re-checked live at each hop, so **an agent can never grant power** — a chain is capped by whatever the original caller's token allows.
+When a caller runs an agent, SOAT forwards that caller's credential into every `builtin` action the agent performs. Permissions are re-checked live at each hop, so **an agent can never grant power** — a chain is capped by whatever the original caller's token allows.
 
 That cap alone is not least privilege. A summarizer agent that only needs to _read_ documents still executes under a caller who may also _write_ them, so a prompt injection in that agent's context runs at the caller's full ceiling.
 
-`boundary_policy` closes the gap. It is a policy document stored on the agent that limits which `soat` actions **that agent** may perform, whoever calls it. The effective permission is the **intersection** of the caller's policy and the agent's boundary — the same pattern as [API keys](/docs/modules/api-keys#permission-inheritance).
+`boundary_policy` closes the gap. It is a policy document stored on the agent that limits which `builtin` actions **that agent** may perform, whoever calls it. The effective permission is the **intersection** of the caller's policy and the agent's boundary — the same pattern as [API keys](/docs/modules/api-keys#permission-inheritance).
 
 In this tutorial you give alice broad document permissions, bind an agent to a document-writing tool, and then watch the agent be refused the write anyway — because its boundary allows reads only. Alice then performs the same write directly, proving the ceiling that stopped the agent was the agent's, not her token's.
 
@@ -29,7 +29,7 @@ In this tutorial you give alice broad document permissions, bind an agent to a d
 - An [Ollama](https://ollama.com) instance accessible at `http://ollama:11434` with model `qwen2.5:0.5b` pulled (`ollama pull qwen2.5:0.5b`).
 - CLI, SDK, or curl available. The server is at `http://localhost:5047`.
 - For production hardening (secrets, env vars), see [Configuration](/docs/self-hosting/configuration).
-- Familiar with [soat tools](/docs/modules/tools#soat) and `preset_parameters`? If not, run [Agent SOAT Tools](/docs/tutorials/agent-soat-tools) first — this tutorial reuses both.
+- Familiar with [builtin tools](/docs/modules/tools#builtin) and `preset_parameters`? If not, run [Agent SOAT Tools](/docs/tutorials/agent-soat-tools) first — this tutorial reuses both.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -344,7 +344,7 @@ ALICE_TOKEN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users/login" \
 
 ## Step 5 — Bind a write tool to the agent
 
-The agent gets a real [soat tool](/docs/modules/tools#soat) for `update-document`, with `document_id` pinned by `preset_parameters` so the model cannot aim it anywhere else. Nothing here is restricted yet — the tool is fully functional.
+The agent gets a real [builtin tool](/docs/modules/tools#builtin) for `update-document`, with `document_id` pinned by `preset_parameters` so the model cannot aim it anywhere else. Nothing here is restricted yet — the tool is fully functional.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -353,7 +353,7 @@ The agent gets a real [soat tool](/docs/modules/tools#soat) for `update-document
 WRITE_TOOL_ID=$(soat create-tool \
   --project-id "$PROJECT_ID" \
   --name "docs" \
-  --type soat \
+  --type builtin \
   --actions '["update-document"]' \
   --preset-parameters '{"document_id": "'"$DOC_ID"'"}' | jq -r '.id')
 echo "Write tool: $WRITE_TOOL_ID"
@@ -488,7 +488,7 @@ echo "Agent: $AGENT_ID"
 </Tabs>
 
 :::tip Write boundaries as allow-lists
-A boundary that allows only what the agent needs stays correct as the agent gains tools: bind a new `soat` action tomorrow and it is refused until someone widens the boundary on purpose. A boundary written as a list of denials has the opposite property — every action nobody thought to deny is permitted.
+A boundary that allows only what the agent needs stays correct as the agent gains tools: bind a new `builtin` action tomorrow and it is refused until someone widens the boundary on purpose. A boundary written as a list of denials has the opposite property — every action nobody thought to deny is permitted.
 :::
 
 ---
@@ -685,7 +685,7 @@ See the [Permissions Reference](/docs/permissions) for the enforceable `module:O
 
 |                                  | Governed by `boundary_policy`                                            |
 | -------------------------------- | ------------------------------------------------------------------------ |
-| `soat` tools (platform actions)  | **Yes** — every action is checked before dispatch                        |
+| `builtin` tools (platform actions)  | **Yes** — every action is checked before dispatch                        |
 | The built-in `write_memory` tool | **Yes** — fails closed when the boundary denies the memory write actions |
 | `http`, `mcp`, `client` tools    | **No** — these execute outside the platform                              |
 

@@ -643,7 +643,7 @@ components:
           nullable: true
           description: >-
             Key-value pairs forwarded as `X-Soat-Context-<key>` headers on every
-            `http`, `mcp` and `soat` tool call in this session. The header name is
+            `http`, `mcp` and `builtin` tool call in this session. The header name is
             the deployment's configured context prefix (`X-Soat-Context-` by
             default) plus the key verbatim — no character is re-cased.
             Keys are never case-converted — they round-trip exactly as sent.
@@ -757,7 +757,7 @@ components:
           nullable: true
           description: >-
             Key-value pairs forwarded as `X-Soat-Context-<key>` headers on every
-            `http`, `mcp` and `soat` tool call in this session. The header name is
+            `http`, `mcp` and `builtin` tool call in this session. The header name is
             the deployment's configured context prefix (`X-Soat-Context-` by
             default) plus the key verbatim — no character is re-cased.
             Keys are never case-converted — they round-trip exactly as sent.
@@ -798,7 +798,7 @@ components:
           nullable: true
           description: >-
             Key-value pairs forwarded as `X-Soat-Context-<key>` headers on every
-            `http`, `mcp` and `soat` tool call in this session. The header name is
+            `http`, `mcp` and `builtin` tool call in this session. The header name is
             the deployment's configured context prefix (`X-Soat-Context-` by
             default) plus the key verbatim — no character is re-cased.
             Keys are never case-converted — they round-trip exactly as sent.
@@ -837,7 +837,7 @@ components:
               nullable: true
               description: >-
                 Key-value pairs forwarded as `X-Soat-Context-<key>` headers on every
-                `http`, `mcp` and `soat` tool call in this generation. The header name is
+                `http`, `mcp` and `builtin` tool call in this generation. The header name is
                 the deployment's configured context prefix (`X-Soat-Context-` by
                 default) plus the key verbatim — no character is re-cased.
                 Keys are never case-converted — they round-trip exactly as
@@ -867,7 +867,7 @@ components:
               nullable: true
               description: >-
                 Key-value pairs forwarded as `X-Soat-Context-<key>` headers on every
-                `http`, `mcp` and `soat` tool call in this generation. The header name is
+                `http`, `mcp` and `builtin` tool call in this generation. The header name is
                 the deployment's configured context prefix (`X-Soat-Context-` by
                 default) plus the key verbatim — no character is re-cased.
                 Keys are never case-converted — they round-trip exactly as
@@ -917,7 +917,7 @@ components:
           nullable: true
           description: >-
             Key-value pairs forwarded as `X-Soat-Context-<key>` headers on every
-            `http`, `mcp` and `soat` tool call in this generation. The header name is
+            `http`, `mcp` and `builtin` tool call in this generation. The header name is
             the deployment's configured context prefix (`X-Soat-Context-` by
             default) plus the key verbatim — no character is re-cased.
             Keys are never case-converted — they round-trip exactly as sent.

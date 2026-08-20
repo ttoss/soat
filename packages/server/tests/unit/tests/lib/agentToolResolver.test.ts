@@ -1126,7 +1126,7 @@ describe('resolveAgentTools', () => {
       .send({
         project_id: projectId,
         name: 'myPipelineSoatSubTool',
-        type: 'soat',
+        type: 'builtin',
         description: 'SOAT sub-tool used by the pipeline tool',
         actions: ['list-tools'],
       });
@@ -2052,7 +2052,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
       .send({
         project_id: projectId,
         name: 'mySoatTool',
-        type: 'soat',
+        type: 'builtin',
         actions: ['list-files'],
       });
 
@@ -2080,7 +2080,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
       .send({
         project_id: projectId,
         name: 'myDeniedSoatTool',
-        type: 'soat',
+        type: 'builtin',
         actions: ['list-files'],
       });
 
@@ -2116,7 +2116,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
       .send({
         project_id: projectId,
         name: 'myAllowedSoatTool',
-        type: 'soat',
+        type: 'builtin',
         actions: ['list-files'],
       });
 
@@ -2144,7 +2144,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
       .send({
         project_id: projectId,
         name: 'myPresetSoatTool',
-        type: 'soat',
+        type: 'builtin',
         actions: ['get-document'],
         preset_parameters: { documentId: 'doc_preset123' },
       });
@@ -2172,7 +2172,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
       .send({
         project_id: projectId,
         name: 'myPresetTargetTool',
-        type: 'soat',
+        type: 'builtin',
         actions: ['list-files'],
       });
     expect(targetRes.status).toBe(201);
@@ -2182,7 +2182,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
       .send({
         project_id: projectId,
         name: 'myPresetExecTool',
-        type: 'soat',
+        type: 'builtin',
         actions: ['get-tool'],
         preset_parameters: { tool_id: targetRes.body.id },
       });
@@ -2207,7 +2207,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
       .send({
         project_id: projectId,
         name: 'myNoPresetTool',
-        type: 'soat',
+        type: 'builtin',
         actions: ['list-files'],
       });
 
@@ -2228,7 +2228,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
       .send({
         project_id: projectId,
         name: 'pipelineStepSoatTool',
-        type: 'soat',
+        type: 'builtin',
         actions: ['list-files'],
       });
 
@@ -2494,7 +2494,7 @@ describe('executeSoatTool - direct', () => {
     expect(logToolCallingError).toHaveBeenCalledWith(
       expect.objectContaining({
         toolName: 'test_list-tools',
-        toolType: 'soat',
+        toolType: 'builtin',
         method: 'GET',
       })
     );

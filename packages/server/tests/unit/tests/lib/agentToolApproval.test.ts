@@ -16,7 +16,7 @@ describe('agentToolApproval', () => {
     test('strips the tool-name prefix for soat tools', () => {
       expect(
         resolvedActionName({
-          type: 'soat',
+          type: 'builtin',
           toolName: 'docs',
           key: 'docs_update-document',
         })

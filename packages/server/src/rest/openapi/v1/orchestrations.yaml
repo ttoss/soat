@@ -1362,7 +1362,7 @@ components:
             type: string
           description: >-
             Key-value pairs forwarded as `X-Soat-Context-<key>` headers on every
-            `http`, `mcp` and `soat` tool call made by an agent node of this run
+            `http`, `mcp` and `builtin` tool call made by an agent node of this run
             — including the agents of any child run a `loop` or
             `sub_orchestration` node starts. The header name is
             `X-Soat-Context-` plus the key verbatim; no character is re-cased.

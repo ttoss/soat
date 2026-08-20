@@ -384,7 +384,7 @@ Resolve the gate through the standard [approvals](./approvals.md) endpoints:
 A task's automations are a generation entry point like any other, so they can
 carry a [`tool_context`](../advanced/tool-context.md) — a flat
 `Record<string, string>` forwarded as context headers on every `http`, `mcp`
-and `soat` tool call the task's dispatches make. It reaches both dispatch
+and `builtin` tool call the task's dispatches make. It reaches both dispatch
 kinds: an `agent` dispatch's generation, and an `orchestration` dispatch's run
 (which carries it to every node and child run — see
 [Run Tool Context](./orchestrations.md#run-tool-context)).

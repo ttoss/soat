@@ -9,7 +9,7 @@ import { resolveAgentTools } from 'src/lib/agentToolResolver';
 import { clearGuardrailContextToolCache } from 'src/lib/guardrailContext';
 import { createGuardrail } from 'src/lib/guardrails';
 
-// `soat.activity.actions_1h` / `actions_24h` (approvals PRD task 5.4): the
+// `runtime.activity.actions_1h` / `actions_24h` (approvals PRD task 5.4): the
 // project's autonomous-action rate, read off the activity feed at evaluation
 // time so a guardrail can cap how many actions an agent takes per window.
 //
@@ -178,7 +178,7 @@ describe('guardrail activity-rate context', () => {
     class: 'B',
     guard: {
       '<': [
-        { var: 'soat.activity.actions_24h' },
+        { var: 'runtime.activity.actions_24h' },
         { var: 'context.action_rate_ceiling' },
       ],
     },
@@ -188,7 +188,7 @@ describe('guardrail activity-rate context', () => {
     class: 'B',
     guard: {
       '<': [
-        { var: 'soat.activity.actions_1h' },
+        { var: 'runtime.activity.actions_1h' },
         { var: 'context.action_rate_ceiling' },
       ],
     },

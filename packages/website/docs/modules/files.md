@@ -97,7 +97,7 @@ The token is invalidated after a single successful upload. Subsequent uploads re
 
 ### Downloading from a tool
 
-[`GET /api/v1/files/{file_id}/download`](/docs/api/files/download-file) streams the raw bytes and is a REST/SDK/CLI operation only — raw bytes have no JSON form, so it is not offered as an MCP or `soat` tool action. Use `download-file-base64`, which returns the same content as a base64 string in a normal JSON response. Large files are subject to the client's tool-call payload limit, so an agent should fetch the download URL out-of-band with whatever HTTP capability its runtime provides.
+[`GET /api/v1/files/{file_id}/download`](/docs/api/files/download-file) streams the raw bytes and is a REST/SDK/CLI operation only — raw bytes have no JSON form, so it is not offered as an MCP or `builtin` tool action. Use `download-file-base64`, which returns the same content as a base64 string in a normal JSON response. Large files are subject to the client's tool-call payload limit, so an agent should fetch the download URL out-of-band with whatever HTTP capability its runtime provides.
 
 #### Large files via MCP
 

@@ -249,7 +249,7 @@ Runs execute in a **queue-backed durable worker**, detached from the HTTP reques
 - `delay` and `poll` waits park the run as **`sleeping`** — pure DB state, no worker, no memory. The wake time is persisted and the scheduler enqueues a `wake` task when due, so a run containing `delay: "2h"` survives a restart and completes on schedule.
 - `human` and `webhook (mode: receive)` nodes park the run as **`awaiting_input`**; satisfy the pause with `submit-human-input`, which applies the submitted payload, drives the run inline, and returns the settled result. `resume-orchestration-run` only re-drives an `awaiting_input` run from its last checkpoint — it carries no `node_id` or payload, so it cannot satisfy a pause and will simply re-park on the same node.
 
-**Run identity.** A run outlives the request that started it. Each run persists the principal that started it (the user or API key), and every background drive re-mints a short-lived **run-as token** from it, confined to the run's project — this is what lets a [`soat` tool](./tools.md#soat) node call the platform from a durable run.
+**Run identity.** A run outlives the request that started it. Each run persists the principal that started it (the user or API key), and every background drive re-mints a short-lived **run-as token** from it, confined to the run's project — this is what lets a [`builtin` tool](./tools.md#builtin) node call the platform from a durable run.
 
 - **Identity only, not permissions.** Authorization is evaluated per call against policies as they stand at that moment, so revoking access takes effect on a run already in flight.
 - **Never wider than the starting credential.** A run started by an API key is bounded by that key's own policies; revoke the key and the run stops acting rather than falling back to its owner's access.
@@ -435,7 +435,7 @@ Every generation an `agent` node dispatches meters against the run: its [usage](
 
 ### Run Tool Context
 
-`start-orchestration-run` accepts a `tool_context` bag, the same contract as an [agent generation or session](../advanced/tool-context.md): each key/value pair is forwarded as one prefixed context header on every `http`, `mcp` and `soat` tool call an `agent` node of the run makes. This is how a scheduled or orchestrated flow hands a per-user credential to the tools its agents call, without embedding it in the graph.
+`start-orchestration-run` accepts a `tool_context` bag, the same contract as an [agent generation or session](../advanced/tool-context.md): each key/value pair is forwarded as one prefixed context header on every `http`, `mcp` and `builtin` tool call an `agent` node of the run makes. This is how a scheduled or orchestrated flow hands a per-user credential to the tools its agents call, without embedding it in the graph.
 
 The bag is stored **on the run** and re-read at every step, so it survives every way a run gets driven — queued starts, scheduler wakes, human/approval resumes, crash redrives — and is inherited by `loop` / `sub_orchestration` child runs. Rules that carry over from the shared contract: the header name is the deployment's [context prefix](../advanced/tool-context.md#configuring-the-header-prefix) plus the key **verbatim**; an invalid or colliding key is rejected with `400 INVALID_TOOL_CONTEXT_KEY` at start time, before any run is created; the reserved identity keys (`sessionId`, `actorId`, `actorExternalId`) are stripped. `tool_context` reaches the tool calls of **`agent` nodes only** — a `tool` node calls its tool directly and forwards no context headers.
 

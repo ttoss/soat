@@ -16,7 +16,7 @@ const log = createDebug('soat:tools');
 
 type LogToolCallingError = (args: {
   toolName: string;
-  toolType: 'http' | 'mcp' | 'soat' | 'client';
+  toolType: 'http' | 'mcp' | 'builtin' | 'client';
   url?: string;
   method?: string;
   error: unknown;
@@ -270,7 +270,7 @@ export const executeSoatTool = async (args: {
     log('soat tool error: %s', toolId);
     args.logToolCallingError({
       toolName: toolId,
-      toolType: 'soat',
+      toolType: 'builtin',
       url: path,
       method: args.def.method,
       error,

@@ -117,7 +117,7 @@ describe('resolveMessageContent', () => {
     const soat = await createTool({
       projectId,
       name: 'soat-tool',
-      type: 'soat',
+      type: 'builtin',
       description: 'SOAT tool',
       actions: ['list-tools'],
     });

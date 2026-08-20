@@ -455,7 +455,7 @@ paths:
           required: false
           # Pinned to `true` for tool calls; see the agents generate operation.
           x-soat-tool-forced: 'true'
-          description: When omitted or `false` (default), the generation runs in the background and `202 Accepted` is returned immediately. Pass `true` to block until the generation settles and receive the result. A `soat` tool call always waits.
+          description: When omitted or `false` (default), the generation runs in the background and `202 Accepted` is returned immediately. Pass `true` to block until the generation settles and receive the result. A `builtin` tool call always waits.
           schema:
             type: boolean
             default: false
@@ -485,7 +485,7 @@ paths:
                   nullable: true
                   description: >-
                     Key-value pairs forwarded as `X-Soat-Context-<key>` headers on every
-                    `http`, `mcp` and `soat` tool call in this generation. The header
+                    `http`, `mcp` and `builtin` tool call in this generation. The header
                     name is the deployment's configured context prefix
                     (`X-Soat-Context-` by default) plus the key verbatim — no
                     character is re-cased and keys are never case-converted, so

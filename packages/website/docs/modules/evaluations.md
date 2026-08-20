@@ -142,7 +142,7 @@ for `tool` scorers).
 | `output_schema` | `schema` (optional) | 1 when the structured output validates against the schema |
 | `embedding_similarity` | `pass_threshold` | The cosine similarity between the embeddings of the output text and `expected_output`, clamped to 0–1; see [Embedding similarity](#embedding-similarity) |
 | `llm_judge` | `prompt`, `pass_threshold`, `ai_provider_id` (optional), `model` (optional) | The judge's 0–1 score; see [LLM judge](#llm-judge) |
-| `tool` | `name`, `tool_id`, `action` (soat/mcp tools), `preset_parameters` (optional), `pass_threshold` (optional) | Whatever your algorithm answers; see [Custom scorers](#custom-scorers-tool) |
+| `tool` | `name`, `tool_id`, `action` (builtin/mcp tools), `preset_parameters` (optional), `pass_threshold` (optional) | Whatever your algorithm answers; see [Custom scorers](#custom-scorers-tool) |
 
 `exact_match`, `contains`, `embedding_similarity` and `llm_judge` read the final **text**; `output_schema`
 validates the **structured object** the platform already parsed. `json_logic` sees both,
@@ -224,8 +224,8 @@ produces. Aggregation, thresholds, and baseline deltas apply to it unchanged.
 | Config field | Required | Meaning |
 | --- | --- | --- |
 | `name` | yes | Keys this scorer's outcomes and aggregate buckets. Unique within the eval; must not shadow a built-in type. Several `tool` scorers may coexist under distinct names |
-| `tool_id` | yes | The tool that grades each item. Must belong to the eval's project and be server-callable — `http`, `mcp`, `soat`, or `pipeline`. A `client` tool is rejected with `400`: it pauses for a calling client, and an eval run scores server-side |
-| `action` | soat/mcp only | The operation to invoke on a multi-action tool |
+| `tool_id` | yes | The tool that grades each item. Must belong to the eval's project and be server-callable — `http`, `mcp`, `builtin`, or `pipeline`. A `client` tool is rejected with `400`: it pauses for a calling client, and an eval run scores server-side |
+| `action` | builtin/mcp only | The operation to invoke on a multi-action tool |
 | `preset_parameters` | no | Fixed values merged into every call's input at the top level. The engine-injected keys below are reserved and rejected |
 | `pass_threshold` | no | Fallback verdict cutoff; see below |
 

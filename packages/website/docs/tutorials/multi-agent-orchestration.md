@@ -1,5 +1,5 @@
 ---
-description: "Build a nested-agent pipeline where one agent coordinates sub-agents with SOAT tools."
+description: "Build a nested-agent pipeline where one agent coordinates sub-agents with builtin tools."
 keywords:
   - multi-agent system
   - nested agent calls
@@ -14,7 +14,7 @@ import TabItem from '@theme/TabItem';
 
 # Multi-Agent Sonnet with Nested Agent Calls
 
-This tutorial builds a **nested-agent** pipeline where one agent coordinates multiple sub-agents using [SOAT tools](/docs/modules/tools#soat). For the same sonnet workflow driven by the [Orchestrations](/docs/modules/orchestrations#examples) module instead, see [Orchestrate a Sonnet](/docs/tutorials/orchestrate-a-sonnet).
+This tutorial builds a **nested-agent** pipeline where one agent coordinates multiple sub-agents using [builtin tools](/docs/modules/tools#builtin). For the same sonnet workflow driven by the [Orchestrations](/docs/modules/orchestrations#examples) module instead, see [Orchestrate a Sonnet](/docs/tutorials/orchestrate-a-sonnet).
 
 You will build a sonnet composer: an orchestrator agent delegates each stanza to a specialized sub-agent, all collaborating through a shared document, with a [trace](/docs/modules/traces) capturing the full execution tree. The coordinator → workers → shared-state pattern generalizes to any workflow decomposable into sub-tasks.
 
@@ -232,9 +232,9 @@ echo "POEM_DOC_ID: $POEM_DOC_ID"
 
 ---
 
-## Step 5 — Create fixed SOAT tools for stanza agents
+## Step 5 — Create fixed builtin tools for stanza agents
 
-Each stanza agent needs two [SOAT tools](/docs/modules/tools#soat) with fixed parameters:
+Each stanza agent needs two [builtin tools](/docs/modules/tools#builtin) with fixed parameters:
 
 1. **poem-read** — reads the shared poem document (`get-document` action)
 2. **poem-write** — updates the shared poem document (`update-document` action)
@@ -248,7 +248,7 @@ Both tools use `preset_parameters` with `documentId`, so the model never has to 
 READ_POEM_TOOL_ID=$(soat create-tool \
   --project-id "$PROJECT_ID" \
   --name "poem-read" \
-  --type "soat" \
+  --type "builtin" \
   --description "Read the shared poem document" \
   --actions '["get-document"]' \
   --preset-parameters '{"document_id": "'"$POEM_DOC_ID"'"}' | jq -r '.id')
@@ -257,7 +257,7 @@ echo "READ_POEM_TOOL_ID: $READ_POEM_TOOL_ID"
 WRITE_STANZA_TOOL_ID=$(soat create-tool \
   --project-id "$PROJECT_ID" \
   --name "poem-write" \
-  --type "soat" \
+  --type "builtin" \
   --description "Update the shared poem document" \
   --actions '["update-document"]' \
   --preset-parameters '{"document_id": "'"$POEM_DOC_ID"'"}' | jq -r '.id')
@@ -470,7 +470,7 @@ echo "STANZA4_AGENT_ID: $STANZA4_AGENT_ID"
 
 ## Step 7 — Create fixed call tools for the orchestrator
 
-The orchestrator should not choose `agentId` dynamically. Create one tool per stanza with fixed `preset_parameters.agentId`, plus one fixed reader tool for the final poem. See [Agents — SOAT](/docs/modules/tools#soat).
+The orchestrator should not choose `agentId` dynamically. Create one tool per stanza with fixed `preset_parameters.agentId`, plus one fixed reader tool for the final poem. See [Agents — SOAT](/docs/modules/tools#builtin).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -479,7 +479,7 @@ The orchestrator should not choose `agentId` dynamically. Create one tool per st
 CALL_STANZA1_TOOL_ID=$(soat create-tool \
   --project-id "$PROJECT_ID" \
   --name "call-stanza-1" \
-  --type "soat" \
+  --type "builtin" \
   --description "Call stanza 1 agent" \
   --actions '["create-agent-generation"]' \
   --preset-parameters '{"agent_id": "'"$STANZA1_AGENT_ID"'", "messages": [{"role": "user", "content": "Theme: artificial intelligence. Write stanza 1 with title + first quatrain."}]}' | jq -r '.id')
@@ -487,7 +487,7 @@ CALL_STANZA1_TOOL_ID=$(soat create-tool \
 CALL_STANZA2_TOOL_ID=$(soat create-tool \
   --project-id "$PROJECT_ID" \
   --name "call-stanza-2" \
-  --type "soat" \
+  --type "builtin" \
   --description "Call stanza 2 agent" \
   --actions '["create-agent-generation"]' \
   --preset-parameters '{"agent_id": "'"$STANZA2_AGENT_ID"'", "messages": [{"role": "user", "content": "Theme: artificial intelligence. Write stanza 2 (second quatrain)."}]}' | jq -r '.id')
@@ -495,7 +495,7 @@ CALL_STANZA2_TOOL_ID=$(soat create-tool \
 CALL_STANZA3_TOOL_ID=$(soat create-tool \
   --project-id "$PROJECT_ID" \
   --name "call-stanza-3" \
-  --type "soat" \
+  --type "builtin" \
   --description "Call stanza 3 agent" \
   --actions '["create-agent-generation"]' \
   --preset-parameters '{"agent_id": "'"$STANZA3_AGENT_ID"'", "messages": [{"role": "user", "content": "Theme: artificial intelligence. Write stanza 3 (third quatrain)."}]}' | jq -r '.id')
@@ -503,7 +503,7 @@ CALL_STANZA3_TOOL_ID=$(soat create-tool \
 CALL_STANZA4_TOOL_ID=$(soat create-tool \
   --project-id "$PROJECT_ID" \
   --name "call-stanza-4" \
-  --type "soat" \
+  --type "builtin" \
   --description "Call stanza 4 agent" \
   --actions '["create-agent-generation"]' \
   --preset-parameters '{"agent_id": "'"$STANZA4_AGENT_ID"'", "messages": [{"role": "user", "content": "Theme: artificial intelligence. Write stanza 4 (final couplet)."}]}' | jq -r '.id')
@@ -511,7 +511,7 @@ CALL_STANZA4_TOOL_ID=$(soat create-tool \
 READ_FINAL_POEM_TOOL_ID=$(soat create-tool \
   --project-id "$PROJECT_ID" \
   --name "read-final-poem" \
-  --type "soat" \
+  --type "builtin" \
   --description "Read the final poem from the shared document" \
   --actions '["get-document"]' \
   --preset-parameters '{"document_id": "'"$POEM_DOC_ID"'"}' | jq -r '.id')
@@ -1087,5 +1087,5 @@ curl -s "$SOAT_URL/api/v1/traces?project_id=$PROJECT_ID" \
 ## Next Steps
 
 - [Orchestrate a Sonnet](/docs/tutorials/orchestrate-a-sonnet) — the same workflow via the Orchestrations module
-- [Tools — SOAT](/docs/modules/tools#soat) — agent-to-agent calls and preset parameters
+- [Tools — SOAT](/docs/modules/tools#builtin) — agent-to-agent calls and preset parameters
 - [Traces](/docs/modules/traces) — trace ancestry and the `/tree` endpoint

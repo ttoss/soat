@@ -219,7 +219,7 @@ outputs:
                 type: 'tool',
                 properties: {
                   name: 'camel-tool',
-                  type: 'soat',
+                  type: 'builtin',
                   deniedActions: ['list-tools'],
                 },
               },
@@ -3802,7 +3802,7 @@ resources:
           type: 'tool',
           properties: {
             name: 'guardrail-context-tool',
-            type: 'soat',
+            type: 'builtin',
             actions: ['list-tools'],
           },
         },
@@ -3812,7 +3812,7 @@ resources:
             name: 'formation-guardrail',
             class: 'B',
             default_class: 'C',
-            guard: { '<': [{ var: 'soat.usage.cost_usd_24h' }, 1000] },
+            guard: { '<': [{ var: 'runtime.usage.cost_usd_24h' }, 1000] },
             context_tool_id: { ref: 'ContextTool' },
             context_mode: 'merge',
           },

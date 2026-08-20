@@ -184,7 +184,7 @@ export const resolveAndValidateTarget = async (args: {
       'client tools cannot be executed server-side and cannot be a trigger target.'
     );
   }
-  if ((toolType === 'soat' || toolType === 'mcp') && !args.action) {
+  if ((toolType === 'builtin' || toolType === 'mcp') && !args.action) {
     throw new DomainError(
       'TRIGGER_ACTION_NOT_ALLOWED',
       `${toolType} tool targets require an 'action'.`

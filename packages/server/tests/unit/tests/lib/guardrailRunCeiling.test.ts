@@ -10,9 +10,9 @@ import { resolveAgentTools } from 'src/lib/agentToolResolver';
 import { clearGuardrailContextToolCache } from 'src/lib/guardrailContext';
 import { createGuardrail } from 'src/lib/guardrails';
 
-// The per-run cumulative ceiling (#486). `soat.usage.cost_usd_*` / `tokens_*`
+// The per-run cumulative ceiling (#486). `runtime.usage.cost_usd_*` / `tokens_*`
 // are windowed per project — the wrong granularity for aborting a single
-// runaway run — so `soat.usage.run_tokens` / `run_cost_usd` sum only the meter
+// runaway run — so `runtime.usage.run_tokens` / `run_cost_usd` sum only the meter
 // rows recorded against the current run so far.
 //
 // Driven through the resolver dispatch path (the entry point that builds a
@@ -206,7 +206,7 @@ describe('guardrail per-run usage ceiling', () => {
     class: 'B',
     guard: {
       '<': [
-        { var: 'soat.usage.run_tokens' },
+        { var: 'runtime.usage.run_tokens' },
         { var: 'context.action_token_ceiling' },
       ],
     },
@@ -304,7 +304,7 @@ describe('guardrail per-run usage ceiling', () => {
       class: 'B',
       guard: {
         '<': [
-          { var: 'soat.usage.run_cost_usd' },
+          { var: 'runtime.usage.run_cost_usd' },
           { var: 'context.action_cost_ceiling' },
         ],
       },

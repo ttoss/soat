@@ -181,10 +181,10 @@ For platform meter types `group_by=model` mixes model ids with SKUs; add `meter_
 
 ### Spend guards
 
-Metered usage feeds the [guardrail](./guardrails.md) evaluator's `soat.usage.*` context, so a spend limit is enforced deterministically at the tool boundary:
+Metered usage feeds the [guardrail](./guardrails.md) evaluator's `runtime.usage.*` context, so a spend limit is enforced deterministically at the tool boundary:
 
-- **Per project, windowed** — `soat.usage.cost_usd_{1h,24h,7d,30d}` and `soat.usage.tokens_{24h,30d}`.
-- **Per run, cumulative** — `soat.usage.run_tokens` and `soat.usage.run_cost_usd`; see [per-run spend ceilings](./guardrails.md#per-run-spend-ceilings).
+- **Per project, windowed** — `runtime.usage.cost_usd_{1h,24h,7d,30d}` and `runtime.usage.tokens_{24h,30d}`.
+- **Per run, cumulative** — `runtime.usage.run_tokens` and `runtime.usage.run_cost_usd`; see [per-run spend ceilings](./guardrails.md#per-run-spend-ceilings).
 
 Both read live at evaluation time and fail closed. Unlike [thresholds](#thresholds-and-alerts), which alert, a guard **aborts** the call.
 

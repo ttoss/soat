@@ -1,6 +1,6 @@
 import { DomainError } from 'src/errors';
 import {
-  SOAT_CONTEXT_CATALOG,
+  RUNTIME_CONTEXT_CATALOG,
   validateGuardrailDocument,
 } from 'src/lib/guardrailDocument';
 
@@ -34,7 +34,7 @@ describe('validateGuardrailDocument', () => {
       }
     });
 
-    test('accepts a class expression over args with a guard over context/soat', () => {
+    test('accepts a class expression over args with a guard over context/runtime', () => {
       expect(() => {
         return validateGuardrailDocument({
           default_class: 'C',
@@ -42,7 +42,7 @@ describe('validateGuardrailDocument', () => {
           guard: {
             and: [
               { '<=': [{ var: 'args.amount' }, { var: 'context.max_daily' }] },
-              { '<': [{ var: 'soat.usage.cost_usd_24h' }, 1000] },
+              { '<': [{ var: 'runtime.usage.cost_usd_24h' }, 1000] },
             ],
           },
           escalate: true,
@@ -50,8 +50,8 @@ describe('validateGuardrailDocument', () => {
       }).not.toThrow();
     });
 
-    test('accepts every key in the soat catalog', () => {
-      for (const key of SOAT_CONTEXT_CATALOG) {
+    test('accepts every key in the runtime catalog', () => {
+      for (const key of RUNTIME_CONTEXT_CATALOG) {
         expect(() => {
           return validateGuardrailDocument({
             class: 'B',
@@ -132,17 +132,24 @@ describe('validateGuardrailDocument', () => {
       );
     });
 
-    test('rejects a guard referencing a soat key outside the catalog', () => {
+    test('rejects a guard referencing a runtime key outside the catalog', () => {
       expectValidationError(
-        { class: 'B', guard: { '<': [{ var: 'soat.usage.cost_usd_90d' }, 1] } },
-        /not in the soat\.\* catalog/
+        { class: 'B', guard: { '<': [{ var: 'runtime.usage.cost_usd_90d' }, 1] } },
+        /not in the runtime\.\* catalog/
       );
     });
 
-    test('rejects a bare soat namespace reference', () => {
+    test('rejects a bare runtime namespace reference', () => {
       expectValidationError(
-        { class: 'B', guard: { '!=': [{ var: 'soat' }, null] } },
+        { class: 'B', guard: { '!=': [{ var: 'runtime' }, null] } },
         /references an unknown variable/
+      );
+    });
+
+    test('rejects the retired soat.* namespace outright', () => {
+      expectValidationError(
+        { class: 'B', guard: { '<': [{ var: 'soat.usage.cost_usd_24h' }, 1] } },
+        /outside the args\.\* \/ context\.\* \/ runtime\.\* namespaces/
       );
     });
 

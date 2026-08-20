@@ -37,32 +37,32 @@ const DOCUMENT_KEYS = [
 ];
 
 /**
- * The fixed `soat.*` catalog. A `soat.*` variable outside this set is rejected
+ * The fixed `runtime.*` catalog. A `runtime.*` variable outside this set is rejected
  * at write time rather than resolving to `null` at evaluation time. Windows are
  * baked into the key name (`_1h` / `_24h` / `_7d` / `_30d`). Keep in sync with
  * the catalog table in `packages/website/docs/modules/guardrails.md`.
  */
-export const SOAT_CONTEXT_CATALOG: ReadonlySet<string> = new Set([
-  'soat.action',
-  'soat.tool.id',
-  'soat.tool.name',
-  'soat.agent.id',
-  'soat.project.id',
-  'soat.run.node_attempt',
-  'soat.run.tool_calls',
-  'soat.activity.actions_1h',
-  'soat.activity.actions_24h',
-  'soat.usage.cost_usd_1h',
-  'soat.usage.cost_usd_24h',
-  'soat.usage.cost_usd_7d',
-  'soat.usage.cost_usd_30d',
-  'soat.usage.tokens_24h',
-  'soat.usage.tokens_30d',
+export const RUNTIME_CONTEXT_CATALOG: ReadonlySet<string> = new Set([
+  'runtime.action',
+  'runtime.tool.id',
+  'runtime.tool.name',
+  'runtime.agent.id',
+  'runtime.project.id',
+  'runtime.run.node_attempt',
+  'runtime.run.tool_calls',
+  'runtime.activity.actions_1h',
+  'runtime.activity.actions_24h',
+  'runtime.usage.cost_usd_1h',
+  'runtime.usage.cost_usd_24h',
+  'runtime.usage.cost_usd_7d',
+  'runtime.usage.cost_usd_30d',
+  'runtime.usage.tokens_24h',
+  'runtime.usage.tokens_30d',
   // Run-scoped cumulative spend — the current orchestration run's totals so
   // far, not a project window. Unresolvable (→ null → fail-closed) outside a
   // run, where there is no run to accumulate against.
-  'soat.usage.run_tokens',
-  'soat.usage.run_cost_usd',
+  'runtime.usage.run_tokens',
+  'runtime.usage.run_cost_usd',
 ]);
 
 export const isActionClass = (value: unknown): value is ActionClass => {
@@ -134,7 +134,7 @@ export const collectDocumentVarPaths = (
 const isAllowedVarPath = (path: string): boolean => {
   if (path === 'args' || path.startsWith('args.')) return true;
   if (path === 'context' || path.startsWith('context.')) return true;
-  return SOAT_CONTEXT_CATALOG.has(path);
+  return RUNTIME_CONTEXT_CATALOG.has(path);
 };
 
 const assertVarNamespaces = (expression: unknown, field: string): void => {
@@ -142,9 +142,9 @@ const assertVarNamespaces = (expression: unknown, field: string): void => {
   collectVarPaths(expression, paths);
   for (const path of paths) {
     if (isAllowedVarPath(path)) continue;
-    const detail = path.startsWith('soat.')
-      ? `'${path}' is not in the soat.* catalog`
-      : `'${path}' is outside the args.* / context.* / soat.* namespaces`;
+    const detail = path.startsWith('runtime.')
+      ? `'${path}' is not in the runtime.* catalog`
+      : `'${path}' is outside the args.* / context.* / runtime.* namespaces`;
     throw new DomainError(
       'VALIDATION_FAILED',
       `Guardrail ${field} expression references an unknown variable: ${detail}.`,

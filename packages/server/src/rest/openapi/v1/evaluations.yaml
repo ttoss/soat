@@ -1274,7 +1274,7 @@ components:
           type: string
           description: >-
             The tool that scores each item. It must belong to the eval's
-            project and be server-callable (`http`, `mcp`, `soat`, or
+            project and be server-callable (`http`, `mcp`, `builtin`, or
             `pipeline` — a `client` tool pauses for a calling client an eval
             run does not have).
           example: tool_V1StGXR8Z5jdHi6B
@@ -1282,7 +1282,7 @@ components:
           type: string
           nullable: true
           description: >-
-            The operation to invoke; required when the tool type is `soat` or
+            The operation to invoke; required when the tool type is `builtin` or
             `mcp`.
           example: score-toxicity
         preset_parameters:

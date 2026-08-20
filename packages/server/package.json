@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tests/tsconfig.json",
     "lint": "pnpm run lint-openapi && eslint src",
     "lint-openapi": "spectral lint src/rest/openapi/**/*.yaml",
+    "migrate-rename-soat-tokens": "tsx scripts/renameSoatTokens.ts",
     "queue-soak": "tsx scripts/orchestrationQueueSoak.ts",
     "test": "jest --projects tests/unit"
   },

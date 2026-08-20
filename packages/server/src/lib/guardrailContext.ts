@@ -20,13 +20,13 @@ const log = createDebug('soat:guardrails');
 // recorded on the audit record (guardrails.md — Evaluation Audit Record).
 export type GuardrailContextSource = 'caller' | 'tool' | 'merged' | 'none';
 
-/** Orchestration-run state feeding `soat.run.*`; absent for plain generations. */
+/** Orchestration-run state feeding `runtime.run.*`; absent for plain generations. */
 export type SoatRunContext = {
   nodeAttempt?: number | null;
   toolCalls?: number | null;
 };
 
-/** The identity + call inputs every `soat.*` / snapshot resolution reads from. */
+/** The identity + call inputs every `runtime.*` / snapshot resolution reads from. */
 export type GuardrailCallIdentity = {
   projectId: number;
   projectPublicId: string;
@@ -75,9 +75,9 @@ const WINDOW_MS: Record<string, number> = {
   '30d': 30 * 24 * 60 * 60 * 1000,
 };
 
-// Deterministic, synchronous `soat.*` values (identity + run state). The nested
-// shape mirrors the dotted catalog keys so `{ var: 'soat.tool.id' }` resolves.
-const buildDeterministicSoat = (
+// Deterministic, synchronous `runtime.*` values (identity + run state). The nested
+// shape mirrors the dotted catalog keys so `{ var: 'runtime.tool.id' }` resolves.
+const buildDeterministicRuntime = (
   identity: GuardrailCallIdentity
 ): Record<string, unknown> => {
   return {
@@ -123,7 +123,7 @@ const memoizedRunResolver = (
   };
 };
 
-// `soat.usage.run_*` — the current run's cumulative metered spend. Outside a
+// `runtime.usage.run_*` — the current run's cumulative metered spend. Outside a
 // run there is nothing to accumulate against, so the key is left unresolved
 // (→ fail-closed) rather than reading as 0 and letting a ceiling pass.
 const resolveRunUsage = async (args: {
@@ -139,7 +139,7 @@ const resolveRunUsage = async (args: {
       : await runTokens({ runInternalId });
   } catch (error) {
     log(
-      'buildGuardrailSoatContext: run usage failed path=%s %o',
+      'buildGuardrailRuntimeContext: run usage failed path=%s %o',
       args.path,
       error
     );
@@ -147,7 +147,7 @@ const resolveRunUsage = async (args: {
   }
 };
 
-// `soat.usage.cost_usd_*` / `tokens_*` — the project's rolling window ending
+// `runtime.usage.cost_usd_*` / `tokens_*` — the project's rolling window ending
 // now. An unknown window suffix is left unresolved.
 const resolveWindowedUsage = async (args: {
   rel: string;
@@ -164,12 +164,16 @@ const resolveWindowedUsage = async (args: {
       ? await windowedCostUsd({ projectId: args.projectId, start })
       : await windowedTokens({ projectId: args.projectId, start });
   } catch (error) {
-    log('buildGuardrailSoatContext: usage failed path=%s %o', args.path, error);
+    log(
+      'buildGuardrailRuntimeContext: usage failed path=%s %o',
+      args.path,
+      error
+    );
     return null;
   }
 };
 
-// `soat.activity.actions_*` — how many actions this project executed
+// `runtime.activity.actions_*` — how many actions this project executed
 // autonomously in the rolling window ending now, read off the activity feed. An
 // empty feed is a real 0 (not unresolved), so a rate ceiling passes for a
 // project that has taken no actions yet. An unknown window suffix is left
@@ -189,7 +193,7 @@ const resolveWindowedActivity = async (args: {
     return await windowedActionCount({ projectId: args.projectId, start });
   } catch (error) {
     log(
-      'buildGuardrailSoatContext: activity failed path=%s %o',
+      'buildGuardrailRuntimeContext: activity failed path=%s %o',
       args.path,
       error
     );
@@ -198,10 +202,10 @@ const resolveWindowedActivity = async (args: {
 };
 
 // Dispatches one referenced catalog key to the namespace that computes it. A key
-// outside these namespaces is either already set by `buildDeterministicSoat` or
+// outside these namespaces is either already set by `buildDeterministicRuntime` or
 // one we don't compute — returning UNRESOLVED leaves it unset, so it reads as
 // null → fail-closed.
-const resolveAsyncSoatKey = (args: {
+const resolveAsyncRuntimeKey = (args: {
   rel: string;
   path: string;
   projectId: number;
@@ -221,38 +225,40 @@ const resolveAsyncSoatKey = (args: {
 };
 
 /**
- * Populates the `soat.*` namespace for a call, filling **only** the catalog keys
- * the applying guardrails actually reference (`referencedSoatPaths`). Identity
- * and run keys are synchronous; `soat.usage.cost_usd_*` / `tokens_*` sum the
- * project's windowed usage at evaluation time; `soat.usage.run_tokens` /
+ * Populates the `runtime.*` namespace for a call, filling **only** the catalog keys
+ * the applying guardrails actually reference (`referencedRuntimePaths`). Identity
+ * and run keys are synchronous; `runtime.usage.cost_usd_*` / `tokens_*` sum the
+ * project's windowed usage at evaluation time; `runtime.usage.run_tokens` /
  * `run_cost_usd` sum only the current orchestration run's meters so far, so a
- * per-run ceiling can abort one runaway run mid-flight; `soat.activity.actions_*`
+ * per-run ceiling can abort one runaway run mid-flight; `runtime.activity.actions_*`
  * count the project's executed actions over the same rolling windows, off the
  * activity feed. Fail-closed throughout: a usage or activity query that throws,
  * or a run key read outside a run, leaves the key `null`.
  */
-export const buildGuardrailSoatContext = async (args: {
+export const buildGuardrailRuntimeContext = async (args: {
   identity: GuardrailCallIdentity;
-  referencedSoatPaths: string[];
+  referencedRuntimePaths: string[];
   now: Date;
 }): Promise<Record<string, unknown>> => {
-  const soat = buildDeterministicSoat(args.identity);
+  const runtime = buildDeterministicRuntime(args.identity);
   const resolveRun = memoizedRunResolver(args.identity);
 
-  for (const path of args.referencedSoatPaths) {
-    // path is like 'soat.usage.cost_usd_24h' — strip the leading namespace.
-    const rel = path.startsWith('soat.') ? path.slice('soat.'.length) : path;
-    const value = await resolveAsyncSoatKey({
+  for (const path of args.referencedRuntimePaths) {
+    // path is like 'runtime.usage.cost_usd_24h' — strip the leading namespace.
+    const rel = path.startsWith('runtime.')
+      ? path.slice('runtime.'.length)
+      : path;
+    const value = await resolveAsyncRuntimeKey({
       rel,
       path,
       projectId: args.identity.projectId,
       now: args.now,
       resolveRun,
     });
-    if (value !== UNRESOLVED) setByPath(soat, rel, value);
+    if (value !== UNRESOLVED) setByPath(runtime, rel, value);
   }
 
-  return soat;
+  return runtime;
 };
 
 // ── Per-guardrail context tool ───────────────────────────────────────────────
@@ -406,7 +412,7 @@ export const buildContextSnapshot = (args: {
   const root = {
     args: args.evaluationContext.args ?? {},
     context: args.evaluationContext.context ?? {},
-    soat: args.evaluationContext.soat ?? {},
+    runtime: args.evaluationContext.runtime ?? {},
   };
   const snapshot: Record<string, unknown> = {};
   for (const path of collectDocumentVarPaths(args.guardrail.document)) {
@@ -417,17 +423,17 @@ export const buildContextSnapshot = (args: {
 };
 
 /**
- * The union of `soat.*` var paths referenced across every applying guardrail —
- * the set {@link buildGuardrailSoatContext} needs to compute (nothing else is
+ * The union of `runtime.*` var paths referenced across every applying guardrail —
+ * the set {@link buildGuardrailRuntimeContext} needs to compute (nothing else is
  * populated, keeping usage queries to only what a guard reads).
  */
-export const referencedSoatPaths = (
+export const referencedRuntimePaths = (
   guardrails: CollectedGuardrail[]
 ): string[] => {
   const paths = new Set<string>();
   for (const guardrail of guardrails) {
     for (const path of collectDocumentVarPaths(guardrail.document)) {
-      if (path === 'soat' || path.startsWith('soat.')) {
+      if (path === 'runtime' || path.startsWith('runtime.')) {
         paths.add(path);
       }
     }

@@ -13,12 +13,12 @@ import TabItem from '@theme/TabItem';
 
 # Orchestrate a Sonnet
 
-This tutorial shows how to build a poem pipeline with the [Orchestrations](/docs/modules/orchestrations#examples) module. Unlike [Multi-Agent Sonnet with Nested Agent Calls](/docs/tutorials/multi-agent-orchestration), the agents here do not call one another. The orchestration graph invokes each agent directly, stores their outputs in typed state, assembles the final poem, and persists it through a SOAT tool.
+This tutorial shows how to build a poem pipeline with the [Orchestrations](/docs/modules/orchestrations#examples) module. Unlike [Multi-Agent Sonnet with Nested Agent Calls](/docs/tutorials/multi-agent-orchestration), the agents here do not call one another. The orchestration graph invokes each agent directly, stores their outputs in typed state, assembles the final poem, and persists it through a builtin tool.
 
 You will:
 
 1. Create a project, an AI provider, and a shared [document](/docs/modules/documents#examples) for the poem.
-2. Create one fixed SOAT tool that writes the finished poem to that document.
+2. Create one fixed builtin tool that writes the finished poem to that document.
 3. Create five specialized [agents](/docs/modules/agents#examples): one for the title and four for the sonnet sections.
 4. Define an [orchestration](/docs/modules/orchestrations#examples) whose `agent` nodes call those agents in sequence.
 5. Run the orchestration with a theme and inspect both the persisted document and the run state.
@@ -188,7 +188,7 @@ echo "AI_PROVIDER_ID: $AI_PROVIDER_ID"
 
 ## Step 4 — Create the poem document and a fixed write tool
 
-The final poem will be persisted in a [document](/docs/modules/documents#examples). A fixed [SOAT tool](/docs/modules/tools#soat) will later update that document from the orchestration.
+The final poem will be persisted in a [document](/docs/modules/documents#examples). A fixed [builtin tool](/docs/modules/tools#builtin) will later update that document from the orchestration.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -203,7 +203,7 @@ echo "POEM_DOC_ID: $POEM_DOC_ID"
 WRITE_POEM_TOOL_ID=$(soat create-tool \
   --project-id "$PROJECT_ID" \
   --name "persist-poem" \
-  --type "soat" \
+  --type "builtin" \
   --description "Write the completed poem to the shared document" \
   --actions '["update-document"]' \
   --preset-parameters '{"document_id": "'"$POEM_DOC_ID"'"}' | jq -r '.id')

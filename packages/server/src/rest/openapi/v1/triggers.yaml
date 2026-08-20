@@ -403,7 +403,7 @@ components:
         action:
           type: string
           nullable: true
-          description: Tool targets only — the action for soat/mcp tools
+          description: Tool targets only — the action for builtin/mcp tools
         input:
           type: object
           nullable: true
@@ -476,7 +476,7 @@ components:
           type: string
         action:
           type: string
-          description: Tool targets only — the action for soat/mcp tools
+          description: Tool targets only — the action for builtin/mcp tools
         input:
           type: object
         cron:

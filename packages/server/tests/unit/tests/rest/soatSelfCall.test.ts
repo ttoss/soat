@@ -107,7 +107,7 @@ describe('SOAT self-call', () => {
         .send({
           project_id: projectId,
           name: 'soat-get-agent',
-          type: 'soat',
+          type: 'builtin',
           actions: ['get-agent'],
         });
       expect(toolRes.status).toBe(201);
@@ -190,13 +190,13 @@ describe('SOAT self-call', () => {
       soatToolId = await createTool({
         project_id: projectId,
         name: 'q924-soat',
-        type: 'soat',
+        type: 'builtin',
         actions: ['list-tools'],
       });
       presetSoatToolId = await createTool({
         project_id: projectId,
         name: 'q924-soat-preset',
-        type: 'soat',
+        type: 'builtin',
         actions: ['list-tools'],
         preset_parameters: { project_id: projectId },
       });
@@ -286,7 +286,7 @@ describe('SOAT self-call', () => {
         .send({
           project_id: projectId,
           name: 'soat-list-tools-bg',
-          type: 'soat',
+          type: 'builtin',
           actions: ['list-tools'],
         });
       expect(toolRes.status).toBe(201);
@@ -357,7 +357,7 @@ describe('SOAT self-call', () => {
         .send({
           project_id: projectId,
           name: 'soat-transition-task',
-          type: 'soat',
+          type: 'builtin',
           actions: ['transition-task'],
         });
       expect(toolRes.status).toBe(201);
@@ -478,7 +478,7 @@ describe('SOAT self-call', () => {
         .send({
           project_id: projectId,
           name: 'soat-transition-task-key',
-          type: 'soat',
+          type: 'builtin',
           actions: ['transition-task'],
         });
       expect(toolRes.status).toBe(201);
@@ -587,7 +587,7 @@ describe('SOAT self-call', () => {
         .send({
           project_id: projectId,
           name: 'soat-list-tools-key',
-          type: 'soat',
+          type: 'builtin',
           actions: ['list-tools'],
         });
       expect(listToolRes.status).toBe(201);
@@ -597,7 +597,7 @@ describe('SOAT self-call', () => {
         .send({
           project_id: projectId,
           name: 'soat-create-tool-key',
-          type: 'soat',
+          type: 'builtin',
           actions: ['create-tool'],
         });
       expect(writeToolRes.status).toBe(201);
@@ -742,7 +742,7 @@ describe('SOAT self-call', () => {
         .send({
           project_id: projectId,
           name: `${args.name}-tool`,
-          type: 'soat',
+          type: 'builtin',
           actions: [args.action],
         });
       expect(toolRes.status).toBe(201);
@@ -1056,7 +1056,7 @@ describe('SOAT self-call', () => {
         .send({
           project_id: projectId,
           name: 'approval-continuation-tool',
-          type: 'soat',
+          type: 'builtin',
           actions: ['list-tools', 'create-tool'],
         });
       expect(toolRes.status).toBe(201);

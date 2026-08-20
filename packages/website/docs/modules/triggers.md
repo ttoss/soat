@@ -42,7 +42,7 @@ firing record is the source of truth for the outcome.
 | `type`         | `manual` \| `webhook` \| `schedule`     | Starter type. **Immutable after creation**                                        |
 | `target_type`  | `orchestration` \| `agent` \| `tool` \| `eval` | Kind of resource activated                                                   |
 | `target_id`    | string                                  | Public ID of the target; must exist in the same project at create/update time     |
-| `action`       | string \| null                          | Tool targets only: the action for `soat`/`mcp` tools (required for those, rejected otherwise) |
+| `action`       | string \| null                          | Tool targets only: the action for `builtin`/`mcp` tools (required for those, rejected otherwise) |
 | `input`        | object \| null                          | Static input, shallow-merged under fire-time input (fire-time keys win)           |
 | `cron`         | string \| null                          | 5-field cron expression (UTC). Required iff `type=schedule`, rejected otherwise   |
 | `active`       | boolean                                 | Inactive triggers never fire                                                      |
@@ -98,7 +98,7 @@ How the effective input reaches each target:
   becomes a single user message; otherwise a non-empty object is JSON-encoded
   into a user message. Empty input returns `400 TRIGGER_INPUT_INVALID`.
 - **Tool** → passed as the tool call input, with `trigger.action` forwarded for
-  `soat`/`mcp` tools. `client`-type tools cannot execute server-side and are
+  `builtin`/`mcp` tools. `client`-type tools cannot execute server-side and are
   rejected at trigger creation time.
 - **Eval** → starts a **queued** run; `input.agent_version` and
   `input.baseline_run_id` are forwarded, anything else is ignored, and the

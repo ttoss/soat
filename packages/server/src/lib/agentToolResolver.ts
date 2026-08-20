@@ -184,7 +184,7 @@ const toToolErrorText = (args: { error: unknown }) => {
 
 const logToolCallingError = (args: {
   toolName: string;
-  toolType: 'http' | 'mcp' | 'soat' | 'client';
+  toolType: 'http' | 'mcp' | 'builtin' | 'client';
   url?: string;
   method?: string;
   error: unknown;
@@ -867,7 +867,7 @@ export const AGENT_TOOL_TYPES = [
   'client',
   'pipeline',
   'mcp',
-  'soat',
+  'builtin',
 ] as const;
 
 export type AgentToolType = (typeof AGENT_TOOL_TYPES)[number];
@@ -922,7 +922,7 @@ const resolveToolByType = async (
       };
     case 'mcp':
       return resolveMcpToolEntry(typedTool, args.toolContext);
-    case 'soat':
+    case 'builtin':
       return resolveSoatTools({
         typedTool,
         boundaryPolicy: args.boundaryPolicy,

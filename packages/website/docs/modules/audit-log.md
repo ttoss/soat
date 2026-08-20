@@ -98,7 +98,7 @@ Entries are never updated or deleted through the API; the model layer rejects up
 - The response streams and pages internally, so exporting a large project holds neither the server nor the client at full size in memory.
 - It is authorized by its own action, `audit:ExportAuditEntries` — bulk egress is granted separately from `audit:ListAuditEntries`.
 
-The export is a REST/SDK/CLI operation and is deliberately **not** an MCP or `soat` tool action — its response is an unbounded stream. Read the log from a tool with `list-audit-entries`, which is paged and takes the same filters.
+The export is a REST/SDK/CLI operation and is deliberately **not** an MCP or `builtin` tool action — its response is an unbounded stream. Read the log from a tool with `list-audit-entries`, which is paged and takes the same filters.
 
 ### `audit.entry_created` webhook
 

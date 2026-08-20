@@ -35,8 +35,8 @@ paths:
         Creates a new guardrail in the project, archiving its document as
         version 1. The `document` is validated on write: `class` must be a
         literal (A/B/C/D) or a JSON Logic expression, and every variable it (and
-        `guard`) reference must resolve to the `args.*` / `context.*` / `soat.*`
-        namespaces — an out-of-catalog `soat.*` key is rejected with 400.
+        `guard`) reference must resolve to the `args.*` / `context.*` / `runtime.*`
+        namespaces — an out-of-catalog `runtime.*` key is rejected with 400.
       operationId: createGuardrail
       requestBody:
         required: true
@@ -66,7 +66,7 @@ paths:
                         - C
                     guard:
                       '<':
-                        - var: soat.usage.cost_usd_24h
+                        - var: runtime.usage.cost_usd_24h
                         - 1000
       responses:
         '201':
@@ -484,13 +484,13 @@ paths:
       summary: Dry-run evaluate a guardrail
       description: >
         Runs the full evaluation pipeline — the `class` expression, the guard,
-        the context tool per `context_mode`, live `soat.*` resolution — against
+        the context tool per `context_mode`, live `runtime.*` resolution — against
         caller-supplied `args` and `guardrail_context`, and returns the exact
         `guardrail_evaluation` record a real call would produce. Nothing
         executes, no approval item is filed, and no activity entry is written.
         This is the adoption path: preview a document's decisions against
         production-shaped calls before attaching it — or before editing a
-        widely-attached one. Pass an optional `tool_id` to resolve `soat.tool.*`.
+        widely-attached one. Pass an optional `tool_id` to resolve `runtime.tool.*`.
       operationId: evaluateGuardrail
       parameters:
         - name: guardrail_id
@@ -517,7 +517,7 @@ paths:
                     namespace), combined with the context tool per `context_mode`.
                 tool_id:
                   type: string
-                  description: Optional tool to resolve `soat.tool.*` against.
+                  description: Optional tool to resolve `runtime.tool.*` against.
       responses:
         '200':
           description: The would-be evaluation record (nothing executed)
@@ -564,7 +564,7 @@ components:
       description: >
         The action-class document. `class` maps a call to an action class;
         `guard` gates class-B autonomy. Both are single JSON Logic expressions
-        over the `args.*` / `context.*` / `soat.*` namespaces.
+        over the `args.*` / `context.*` / `runtime.*` namespaces.
       properties:
         class:
           description: >

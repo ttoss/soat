@@ -44,7 +44,7 @@ Agents differ from [Chats](./chats.md) in that they can call tools, observe resu
 | `active_tool_ids`          | array         | Subset of bound tool IDs available at each step — see [Active Tools](#active-tools)                                              |
 | `guardrail_ids`            | array         | Guardrails attached at the agent scope, governing every tool call the agent makes — see [Guardrails — Attachment](./guardrails.md#attachment) |
 | `step_rules`               | array         | Per-step overrides for `tool_choice` and `active_tool_ids` — see [Step Rules](#step-rules)                                       |
-| `boundary_policy`          | object        | Boundary policy that limits which `soat` actions the agent can perform — see [SOAT Action Permissions](#soat-action-permissions) |
+| `boundary_policy`          | object        | Boundary policy that limits which `builtin` actions the agent can perform — see [SOAT Action Permissions](#soat-action-permissions) |
 | `temperature`              | number        | Sampling temperature                                                                                                             |
 | `knowledge_config`         | object        | Knowledge retrieval config injected before every generation — see [Knowledge Config](#knowledge-config)                          |
 | `output_schema`            | object        | JSON Schema constraining the model's final answer to a structured object — see [Structured Output](#structured-output)          |
@@ -130,7 +130,7 @@ When `status` is `completed`, `stop_reason` indicates why:
 
 ### Tools
 
-Agents attach [Tools](./tools.md) through the `tool_bindings` array — one binding object per tool; a single persisted tool can be bound to many agents. Tool types (`http`, `client`, `mcp`, `soat`), execution behavior, preset parameters, and name resolution are defined in the [Tools module](./tools.md). Tool-call gating is owned by [Guardrails](./guardrails.md), attached via `guardrail_ids` on the project, agent, or tool — not by the binding.
+Agents attach [Tools](./tools.md) through the `tool_bindings` array — one binding object per tool; a single persisted tool can be bound to many agents. Tool types (`http`, `client`, `mcp`, `builtin`), execution behavior, preset parameters, and name resolution are defined in the [Tools module](./tools.md). Tool-call gating is owned by [Guardrails](./guardrails.md), attached via `guardrail_ids` on the project, agent, or tool — not by the binding.
 
 `tool_choice` and `stop_conditions` reference tools by their **resolved name** (e.g., `github_create_issue`), not by ID — see [Tool Name Resolution](./tools.md#tool-name-resolution).
 
@@ -275,7 +275,7 @@ Running an agent with [`POST /agents/{agent_id}/generate`](/docs/api/agents/crea
 
 The generation record exists before the response is written, so `generation_id` is immediately pollable via [`GET /generations/{generation_id}`](/docs/api/generations/get-generation). Validation, permissions, the call-depth guard and quota admission all still run **synchronously**, so a bad request is a `400`/`403`/`404`/`429` rather than a failure you discover by polling.
 
-Pass `?wait=true` to block and receive the result inline. Waiting is required to observe `requires_action` (client tools) in the response, so a client-tool flow should always pass it. See [Synchronous & Asynchronous Execution](../advanced/sync-and-async.md) for the platform-wide `wait` contract — including how `stream` and `soat` tool calls interact with it (both always wait).
+Pass `?wait=true` to block and receive the result inline. Waiting is required to observe `requires_action` (client tools) in the response, so a client-tool flow should always pass it. See [Synchronous & Asynchronous Execution](../advanced/sync-and-async.md) for the platform-wide `wait` contract — including how `stream` and `builtin` tool calls interact with it (both always wait).
 
 #### Tool Output Message Content
 
@@ -299,7 +299,7 @@ When `content.type` is `tool_output`, the server executes the referenced tool be
 }
 ```
 
-`tool_id` is required. `output_path` is an optional jq expression selecting a value from the tool result (e.g. `.items[] | select(.lang == "pt-BR") | .text`); if omitted, the entire tool output is used. For tools that expose multiple actions (`soat`, `mcp`), provide `action` as well.
+`tool_id` is required. `output_path` is an optional jq expression selecting a value from the tool result (e.g. `.items[] | select(.lang == "pt-BR") | .text`); if omitted, the entire tool output is used. For tools that expose multiple actions (`builtin`, `mcp`), provide `action` as well.
 
 When `content.type` is `document`, the server loads the referenced document (`{ "type": "document", "document_id": "doc_abc123" }`) and uses its content as the message content.
 
@@ -307,7 +307,7 @@ When `content.type` is `document`, the server loads the referenced document (`{ 
 
 Pass `stream: true` to receive results as Server-Sent Events (SSE), each step's output streamed as it is generated.
 
-Streaming is a REST/SDK/CLI capability only. A tool call — from an MCP client or from an agent's own `soat` tool — is one request returning one result, so `stream` is not offered on the `create-agent-generation` tool; calling it returns the completed generation.
+Streaming is a REST/SDK/CLI capability only. A tool call — from an MCP client or from an agent's own `builtin` tool — is one request returning one result, so `stream` is not offered on the `create-agent-generation` tool; calling it returns the completed generation.
 
 A completed stream ends with `data: [DONE]`.
 
@@ -329,7 +329,7 @@ Three consequences worth relying on:
 
 `tool_context` is a flat `Record<string, string>` of key-value pairs forwarded as HTTP headers to every tool call in a generation, so server-side tools can make authorization decisions without trusting data embedded in the prompt. The header name is `X-Soat-Context-` followed by the key verbatim (e.g. `userId` → `X-Soat-Context-userId`); read headers case-insensitively at your endpoint.
 
-Context headers are forwarded to `http` and `mcp` tools, propagated into nested generations for `soat` tools, and not sent to `client` tools (they execute on the caller's side). They are injected **after** any headers configured on the tool definition, and are preserved and reapplied when a `requires_action` pause resumes.
+Context headers are forwarded to `http` and `mcp` tools, propagated into nested generations for `builtin` tools, and not sent to `client` tools (they execute on the caller's side). They are injected **after** any headers configured on the tool definition, and are preserved and reapplied when a `requires_action` pause resumes.
 
 A [session](./sessions.md) also auto-populates `sessionId`, `actorId` and `actorExternalId`, which caller-supplied keys override. For the exact key→header rule, validation (`400 INVALID_TOOL_CONTEXT_KEY`), and the security notes on header trust and PII egress, see the [Tool Context reference](../advanced/tool-context.md).
 
@@ -435,7 +435,7 @@ The check is deliberately narrow and fires only when all of these hold: the text
 
 ### SOAT Action Permissions
 
-When an agent executes a `soat` tool action, two policies are evaluated — both must allow the action:
+When an agent executes a `builtin` tool action, two policies are evaluated — both must allow the action:
 
 1. **Caller policy** — the permissions of the user or API key that triggered the generation.
 2. **Agent boundary policy** — an optional `boundary_policy` stored on the agent itself.
@@ -446,7 +446,7 @@ The boundary policy also gates the native **`write_memory`** tool (injected by `
 
 Action strings are validated when the boundary policy is created or applied (via `validate-formation`, `create-policy`, or agent create/update): an unknown or mis-named action is rejected, so a typo'd `Deny` cannot no-op. See the [Permissions Reference](../permissions.md) for the enforceable `module:Operation` action names.
 
-The boundary policy only governs `soat` actions. For `http`, `client`, and `mcp` tools the actions execute externally and are outside the platform's permission model.
+The boundary policy only governs `builtin` actions. For `http`, `client`, and `mcp` tools the actions execute externally and are outside the platform's permission model.
 
 Example — agent restricted to reading and searching documents regardless of caller permissions:
 
@@ -466,7 +466,7 @@ Example — agent restricted to reading and searching documents regardless of ca
 
 ### Nested Agent Calls
 
-An agent can invoke another agent through a `soat` tool action (`create-agent-generation`). The server enforces a **maximum call depth** controlled by `max_call_depth` on the generate request (default: **10**). Each nested generation receives `remaining_depth - 1`; at `0`, the call returns an error instead of spawning the child.
+An agent can invoke another agent through a `builtin` tool action (`create-agent-generation`). The server enforces a **maximum call depth** controlled by `max_call_depth` on the generate request (default: **10**). Each nested generation receives `remaining_depth - 1`; at `0`, the call returns an error instead of spawning the child.
 
 Every generation creates its own trace linked to its parent — see [Traces](./traces.md#trace-ancestry-model) for the ancestry model, invariants, and tree traversal. See it end to end in [Multi-Agent Sonnet with Nested Agent Calls — Step 6](/docs/tutorials/multi-agent-orchestration#step-6--create-the-four-stanza-agents).
 

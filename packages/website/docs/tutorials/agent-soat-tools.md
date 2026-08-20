@@ -1,5 +1,5 @@
 ---
-description: "Give an agent access to platform documents with soat tools, and lock a tool to a document ID using preset parameters."
+description: "Give an agent access to platform documents with builtin tools, and lock a tool to a document ID using preset parameters."
 keywords:
   - AI agent tools
   - tool calling
@@ -14,7 +14,7 @@ import TabItem from '@theme/TabItem';
 
 # Agent SOAT Tools and Preset Parameters
 
-This tutorial shows how to give an agent access to platform documents using **soat tools** — and how to use **preset parameters** to lock a tool to a specific document ID so the model never has to guess it. You will create a public and a private note, a restricted user **alice**, three soat tools (`docs_list-documents`, `docs_get-document`, and `docs_update-document` with the public document's ID preset), and an agent that uses them — then verify the agent updates the right document and that alice's IAM policy blocks the private one.
+This tutorial shows how to give an agent access to platform documents using **builtin tools** — and how to use **preset parameters** to lock a tool to a specific document ID so the model never has to guess it. You will create a public and a private note, a restricted user **alice**, three builtin tools (`docs_list-documents`, `docs_get-document`, and `docs_update-document` with the public document's ID preset), and an agent that uses them — then verify the agent updates the right document and that alice's IAM policy blocks the private one.
 
 ## Prerequisites
 
@@ -362,7 +362,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/policies/attach-user" \
 
 ---
 
-## Step 6 — Create soat tools
+## Step 6 — Create builtin tools
 
 Create three [tools](/docs/modules/tools#examples). Notice the third tool — `docs-write` — has `preset_parameters` containing the public document's ID. The key uses the parameter's wire name — **snake_case** (`document_id`). The model will never see the `document_id` field; it will be injected automatically at call time.
 
@@ -374,21 +374,21 @@ Create three [tools](/docs/modules/tools#examples). Notice the third tool — `d
 LIST_TOOL_ID=$(soat create-tool \
   --project-id "$PROJECT_ID" \
   --name "docs" \
-  --type soat \
+  --type builtin \
   --actions '["list-documents"]' | jq -r '.id')
 
 # Tool 2 — read any document (model supplies document_id)
 READ_TOOL_ID=$(soat create-tool \
   --project-id "$PROJECT_ID" \
   --name "docs" \
-  --type soat \
+  --type builtin \
   --actions '["get-document"]' | jq -r '.id')
 
 # Tool 3 — update the public document (document_id is preset)
 WRITE_TOOL_ID=$(soat create-tool \
   --project-id "$PROJECT_ID" \
   --name "docs" \
-  --type soat \
+  --type builtin \
   --actions '["update-document"]' \
   --preset-parameters '{"document_id": "'"$PUBLIC_DOC_ID"'"}' | jq -r '.id')
 
@@ -792,7 +792,7 @@ The private document is inaccessible. If you asked the agent to update the priva
 
 You can invoke any non-client tool directly without creating an agent or a generation — useful for testing tool configurations, building custom pipelines, or integrating tool execution into your own code.
 
-The `list-documents` SOAT tool you created in step 6 already has `project_id` preset, so no extra parameters are needed in the request body.
+The `list-documents` builtin tool you created in step 6 already has `project_id` preset, so no extra parameters are needed in the request body.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>

@@ -211,7 +211,7 @@ export const executeToolNode = async (args: {
   // `Idempotency-Key` request header (D7).
   idempotencyKey?: string;
   // The run's public id — threaded into the guardrail evaluation identity so a
-  // guard can read `soat.run.*`.
+  // guard can read `runtime.run.*`.
   orchestrationRunId?: string | null;
   // Set when re-dispatching after a class-C approval: the frozen (or edited)
   // arguments the human approved. Their presence bypasses the guardrail gate

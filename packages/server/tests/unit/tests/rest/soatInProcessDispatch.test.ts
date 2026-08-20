@@ -62,7 +62,7 @@ describe('SOAT in-process dispatch', () => {
       .send({
         project_id: projectId,
         name: 'soat-inproc-list-tools',
-        type: 'soat',
+        type: 'builtin',
         actions: ['list-tools'],
       });
     expect(toolRes.status).toBe(201);
@@ -110,7 +110,7 @@ describe('SOAT in-process dispatch', () => {
       .send({
         project_id: projectId,
         name: 'soat-inproc-get-agent',
-        type: 'soat',
+        type: 'builtin',
         actions: ['get-agent'],
       });
     expect(toolRes.status).toBe(201);
@@ -134,7 +134,7 @@ describe('SOAT in-process dispatch', () => {
       .send({
         project_id: projectId,
         name: 'soat-inproc-doomed-tool',
-        type: 'soat',
+        type: 'builtin',
         actions: ['list-tools'],
       });
     expect(doomedRes.status).toBe(201);
@@ -144,7 +144,7 @@ describe('SOAT in-process dispatch', () => {
       .send({
         project_id: projectId,
         name: 'soat-inproc-delete-tool',
-        type: 'soat',
+        type: 'builtin',
         actions: ['delete-tool'],
       });
     expect(toolRes.status).toBe(201);
@@ -174,7 +174,7 @@ describe('SOAT in-process dispatch', () => {
       .send({
         project_id: projectId,
         name: 'soat-inproc-download',
-        type: 'soat',
+        type: 'builtin',
         actions: ['download-file'],
       });
 
@@ -192,7 +192,7 @@ describe('SOAT in-process dispatch', () => {
       .send({
         project_id: projectId,
         name: 'soat-inproc-download-base64',
-        type: 'soat',
+        type: 'builtin',
         actions: ['download-file-base64'],
       });
     expect(callable.status).toBe(201);
@@ -232,7 +232,7 @@ describe('SOAT in-process dispatch', () => {
       .send({
         project_id: projectId,
         name: 'soat-inproc-create-tool',
-        type: 'soat',
+        type: 'builtin',
         actions: ['create-tool'],
       });
     expect(creatorRes.status).toBe(201);
@@ -243,7 +243,7 @@ describe('SOAT in-process dispatch', () => {
         input: {
           project_id: projectId,
           name,
-          type: 'soat',
+          type: 'builtin',
           actions: ['list-tools'],
         },
       };
@@ -318,7 +318,7 @@ describe('SOAT in-process dispatch', () => {
       .send({
         project_id: projectId,
         name: 'soat-inproc-transition',
-        type: 'soat',
+        type: 'builtin',
         actions: ['transition-task'],
       });
     expect(toolRes.status).toBe(201);
@@ -359,7 +359,7 @@ describe('SOAT in-process dispatch', () => {
       .send({
         project_id: projectId,
         name: 'soat-inproc-unauth',
-        type: 'soat',
+        type: 'builtin',
         actions: ['list-tools'],
       });
     expect(toolRes.status).toBe(201);

@@ -175,7 +175,7 @@ const buildToolCreateAttributes = (args: CreateToolArgs) => {
  * agent's toolset and fail at call time with a misleading error — reject it at
  * write time instead.
  */
-const TOOL_TYPES = ['http', 'client', 'mcp', 'soat', 'pipeline'] as const;
+const TOOL_TYPES = ['http', 'client', 'mcp', 'builtin', 'pipeline'] as const;
 
 const assertToolTypeSupported = (type: string): void => {
   if (!(TOOL_TYPES as readonly string[]).includes(type)) {
@@ -217,7 +217,7 @@ export const validateToolDefinition = async (args: {
     });
   }
 
-  if ((definition.type ?? 'http') === 'soat') {
+  if ((definition.type ?? 'http') === 'builtin') {
     validateSoatActions(definition.actions);
   }
 
@@ -364,7 +364,7 @@ const validateToolUpdate = async (params: {
       projectIds: args.projectIds,
     });
   }
-  if (args.actions !== undefined && (args.type ?? tool.type) === 'soat') {
+  if (args.actions !== undefined && (args.type ?? tool.type) === 'builtin') {
     validateSoatActions(args.actions);
   }
   if (args.contextKeys !== undefined) {

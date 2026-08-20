@@ -37,7 +37,7 @@ describe('Tools', () => {
       .send({
         project_id: projectId,
         name: 'soat-tools-list',
-        type: 'soat',
+        type: 'builtin',
         description: 'Lists tools via SOAT',
         actions: ['list-tools'],
       });
@@ -396,6 +396,19 @@ describe('Tools', () => {
       expect(response.status).toBe(422);
     });
 
+    test('the retired `soat` tool type is rejected at write time', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'retired-soat-type',
+          type: 'soat',
+          actions: ['listAgents'],
+        });
+      expect(response.status).toBe(400);
+      expect(response.body.error.message).toMatch(/Unsupported tool type 'soat'/);
+    });
+
     test('calling a soat tool without action returns 400 with operationId in error message', async () => {
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/tools/${soatToolId}/call`)
@@ -410,7 +423,7 @@ describe('Tools', () => {
         .send({
           project_id: projectId,
           name: 'soat-preset-action-tool',
-          type: 'soat',
+          type: 'builtin',
           description: 'SOAT tool with preset action',
           actions: ['list-tools'],
           preset_parameters: { action: 'list-tools' },
@@ -633,7 +646,7 @@ describe('Tools', () => {
             steps: [
               {
                 id: 'inline',
-                tool: { name: 'inline-step-tool', type: 'soat' },
+                tool: { name: 'inline-step-tool', type: 'builtin' },
                 action: 'list-tools',
               },
             ],
@@ -643,7 +656,7 @@ describe('Tools', () => {
       expect(res.status).toBe(201);
       expect(res.body.pipeline.steps[0].tool).toEqual({
         name: 'inline-step-tool',
-        type: 'soat',
+        type: 'builtin',
       });
       expect(res.body.pipeline.steps[0].tool_id).toBeUndefined();
 
@@ -1880,7 +1893,7 @@ describe('Tools', () => {
         .send({
           project_id: projectId,
           name: 'unknown-soat-action-tool',
-          type: 'soat',
+          type: 'builtin',
           actions: ['not-a-real-soat-action'],
         });
 
@@ -1897,7 +1910,7 @@ describe('Tools', () => {
         .send({
           project_id: projectId,
           name: 'camel-case-action-tool',
-          type: 'soat',
+          type: 'builtin',
           actions: ['searchKnowledge'],
         });
 

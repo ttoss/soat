@@ -369,7 +369,7 @@ components:
             action:
               type: string
               description: >-
-                Resolved action name (the soat/mcp action) for `tool_call`-origin
+                Resolved action name (the builtin/mcp action) for `tool_call`-origin
                 items — always present there, even for single-action tools.
                 Omitted for `node`-origin items, whose downstream execution is
                 wired by a separate `tool` node in the graph.

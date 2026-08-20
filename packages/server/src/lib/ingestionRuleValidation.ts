@@ -11,7 +11,10 @@ const validateConverterToolType = (args: {
   if (args.toolType === 'client') {
     return 'client tools cannot be used as ingestion rule converters; they must be executed by the calling client, but ingestion runs server-side';
   }
-  if ((args.toolType === 'soat' || args.toolType === 'mcp') && !args.action) {
+  if (
+    (args.toolType === 'builtin' || args.toolType === 'mcp') &&
+    !args.action
+  ) {
     return 'action is required when the converter tool type is soat or mcp';
   }
   return null;

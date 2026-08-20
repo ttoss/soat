@@ -72,7 +72,7 @@ everything a production algorithm needs:
   fixed in one place.
 - **Credentialed safely** — API keys live in [Secrets](/docs/modules/secrets) references,
   never in configs.
-- **Server-callable** — `http`, `mcp`, `soat`, and `pipeline` tools all work; the engine
+- **Server-callable** — `http`, `mcp`, `builtin`, and `pipeline` tools all work; the engine
   calls them through the same invocation path agents use. (`client` tools are refused at
   these seams: they pause for a calling client, and an engine runs server-side.)
 - **Governed** — the call is project-scoped, traceable, and subject to the same platform

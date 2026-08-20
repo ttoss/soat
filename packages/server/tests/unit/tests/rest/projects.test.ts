@@ -775,7 +775,7 @@ describe('Projects', () => {
         .send({
           project_id: forceProjectId,
           name: 'force-delete-tool',
-          type: 'soat',
+          type: 'builtin',
           description: 'A tool scoped to the project being force-deleted',
           actions: ['list-tools'],
         });

@@ -126,11 +126,11 @@ paths:
                     properties:
                       message:
                         type: string
-              soat:
+              builtin:
                 summary: SOAT platform tool
                 value:
-                  name: soat-files
-                  type: soat
+                  name: builtin-files
+                  type: builtin
                   actions:
                     - files:ListFiles
                     - files:GetFile
@@ -399,14 +399,14 @@ paths:
       summary: Call a tool
       description: >
         Directly invokes a tool and returns its output. Supported for `http`,
-        `soat`, `mcp`, and `pipeline` tools. `client` tools cannot be invoked
+        `builtin`, `mcp`, and `pipeline` tools. `client` tools cannot be invoked
         server-side and will return 422. A `pipeline` tool runs its declared
         steps in order and returns the mapped `output` (or the last step's
         output); `action` is ignored and `input` is the pipeline input.
 
-        For `soat` and `mcp` tools the `action` field is required and identifies
+        For `builtin` and `mcp` tools the `action` field is required and identifies
         which action (SOAT) or tool name (MCP) to invoke. For `http` tools
-        `action` is ignored. When a `soat` or `mcp` tool declares an `actions`
+        `action` is ignored. When a `builtin` or `mcp` tool declares an `actions`
         allowlist, an action outside it is rejected with `400 VALIDATION_FAILED`
         ("not available on this tool") before any outbound request is made.
 
@@ -426,7 +426,7 @@ paths:
             schema:
               $ref: '#/components/schemas/CallToolRequest'
             examples:
-              soat_list_documents:
+              builtin_list_documents:
                 summary: Call a SOAT list-documents action
                 value:
                   action: list-documents
@@ -452,7 +452,7 @@ paths:
                 description: >-
                   The raw output returned by the tool — any JSON value (object,
                   array, string, number, boolean). `null` when the tool
-                  produced no output — a `soat` action answering `204 No
+                  produced no output — a `builtin` action answering `204 No
                   Content`, for instance.
         '400':
           description: Bad Request — invalid input or unknown action
@@ -524,7 +524,7 @@ components:
             - http
             - client
             - mcp
-            - soat
+            - builtin
             - pipeline
           description: Tool type
           example: http
@@ -600,7 +600,7 @@ components:
           items:
             type: string
           description: >-
-            Allowlist of actions to expose. For `soat` tools: SOAT platform
+            Allowlist of actions to expose. For `builtin` tools: SOAT platform
             action names (required). For `mcp` tools: an optional allowlist of
             MCP tool names — when set, only those tools are exposed to the model
             and callable via `/call`; when `null`, the entire MCP server surface
@@ -639,7 +639,7 @@ components:
           type: object
           nullable: true
           description: >-
-            Fixed parameters merged into every soat tool call. Keys matching
+            Fixed parameters merged into every builtin tool call. Keys matching
             fields in the action's input schema are removed from the schema
             shown to the model and injected automatically at execution time.
         pipeline:
@@ -660,7 +660,7 @@ components:
           nullable: true
           description: >-
             Universal JSON Logic mapping applied to the tool's raw result,
-            for every tool type (`http`, `mcp`, `soat`, `pipeline`, `client`).
+            for every tool type (`http`, `mcp`, `builtin`, `pipeline`, `client`).
             Evaluated over `{ output: <raw result>, input: <merged input> }`,
             so `{ "var": "output.text" }` extracts a bare scalar field instead
             of requiring a wrapping `pipeline` tool, and `{ "var": "input.title" }`
@@ -701,7 +701,7 @@ components:
             - http
             - client
             - mcp
-            - soat
+            - builtin
             - pipeline
           description: Tool type (default http)
         description:
@@ -771,7 +771,7 @@ components:
           items:
             type: string
           description: >-
-            Allowlist of actions. For `soat` tools: SOAT platform action names
+            Allowlist of actions. For `builtin` tools: SOAT platform action names
             (required). For `mcp` tools: an optional allowlist of MCP tool names
             to scope the server surface — omit or set `null` to expose every
             tool the MCP server offers. Ignored for other tool types.
@@ -805,7 +805,7 @@ components:
         preset_parameters:
           type: object
           description: >-
-            Fixed parameters merged into every soat tool call. Keys matching
+            Fixed parameters merged into every builtin tool call. Keys matching
             fields in the action's input schema are removed from the schema
             shown to the model and injected automatically at execution time.
         pipeline:
@@ -837,7 +837,7 @@ components:
             - http
             - client
             - mcp
-            - soat
+            - builtin
             - pipeline
         description:
           type: string
@@ -909,7 +909,7 @@ components:
           items:
             type: string
           description: >-
-            Allowlist of actions. For `soat` tools: SOAT platform action names.
+            Allowlist of actions. For `builtin` tools: SOAT platform action names.
             For `mcp` tools: an optional allowlist of MCP tool names to scope
             the server surface (`null` exposes every tool). Ignored for other
             tool types.
@@ -944,7 +944,7 @@ components:
           type: object
           nullable: true
           description: >-
-            Fixed parameters merged into every soat tool call. Keys matching
+            Fixed parameters merged into every builtin tool call. Keys matching
             fields in the action's input schema are removed from the schema
             shown to the model and injected automatically at execution time.
         pipeline:
@@ -973,7 +973,7 @@ components:
         action:
           type: string
           description: >
-            For `soat` tools: the action name (must be in the tool's `actions`
+            For `builtin` tools: the action name (must be in the tool's `actions`
             list). For `mcp` tools: the MCP tool name to invoke (must be in the
             tool's `actions` allowlist when one is set, and must not be in its
             `denied_actions` denylist). Ignored for `http` tools.

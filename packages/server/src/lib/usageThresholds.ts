@@ -246,7 +246,7 @@ const readTotal = (
 };
 
 // Sums the windowed cost across all meter types (nulls ignored by SUM).
-// Exported for the guardrail `soat.usage.cost_usd_*` context providers, which
+// Exported for the guardrail `runtime.usage.cost_usd_*` context providers, which
 // sum the same events over their own rolling windows.
 export const windowedCostUsd = async (args: {
   projectId: number;
@@ -262,7 +262,7 @@ export const windowedCostUsd = async (args: {
 // Sums the windowed billable token count (input + output + cached). Resolves the
 // window's event ids first, then sums their token components — avoids a
 // join+aggregate whose column alias is brittle across Sequelize versions.
-// Exported for the guardrail `soat.usage.tokens_*` context providers.
+// Exported for the guardrail `runtime.usage.tokens_*` context providers.
 export const windowedTokens = async (args: {
   projectId: number;
   start: Date;
@@ -291,7 +291,7 @@ export const windowedTokens = async (args: {
  * meter type (nulls ignored by SUM). Run-scoped rather than windowed: this is
  * the signal a per-run spend ceiling compares against, so a single runaway run
  * can be aborted mid-flight without waiting for a project window to move.
- * Exported for the guardrail `soat.usage.run_cost_usd` context provider.
+ * Exported for the guardrail `runtime.usage.run_cost_usd` context provider.
  */
 export const runCostUsd = async (args: {
   runInternalId: number;
@@ -308,7 +308,7 @@ export const runCostUsd = async (args: {
  * orchestration run so far. Resolves the run's event ids first, then sums their
  * token components — the same two-step `windowedTokens` uses, for the same
  * reason (a join+aggregate alias is brittle across Sequelize versions).
- * Exported for the guardrail `soat.usage.run_tokens` context provider.
+ * Exported for the guardrail `runtime.usage.run_tokens` context provider.
  */
 export const runTokens = async (args: {
   runInternalId: number;
