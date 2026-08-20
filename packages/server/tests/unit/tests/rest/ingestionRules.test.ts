@@ -1242,7 +1242,7 @@ describe('IngestionRules', () => {
                   'ingestion-rules:UpdateIngestionRule',
                   'ingestion-rules:DeleteIngestionRule',
                 ],
-                resource: [`soat:${otherProjectId}:*:*`],
+                resource: [`srn:${otherProjectId}:*:*`],
               },
             ],
           },

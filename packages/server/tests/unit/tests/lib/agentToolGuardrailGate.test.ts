@@ -518,7 +518,7 @@ describe('agentToolGuardrail gate (resolver dispatch path)', () => {
     // Platform-originated: no principal authorized the evaluation.
     expect(entry!.principalType).toBeNull();
     expect(entry!.principalId).toBeNull();
-    expect(entry!.resourceSrn).toBe(`soat:${projectPublicId}:guardrail:${id}`);
+    expect(entry!.resourceSrn).toBe(`srn:${projectPublicId}:guardrail:${id}`);
     expect(entry!.resourcePublicId).toBe(id);
     const detail = entry!.detail as Record<string, unknown>;
     assertGuardrailEvaluationDetail(detail, 'camel');

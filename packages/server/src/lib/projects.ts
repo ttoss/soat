@@ -121,7 +121,7 @@ export const getProject = async (args: { id: string; authUser: AuthUser }) => {
     // Probe with the project's SRN (consistent with listProjects /
     // resolveProjectIds) so project-scoped policies grant access, not just
     // unscoped `*` policies.
-    resource: `soat:${args.id}:*:*`,
+    resource: `srn:${args.id}:*:*`,
   });
 
   if (!allowed) {

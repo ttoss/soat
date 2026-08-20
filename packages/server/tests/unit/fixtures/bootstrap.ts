@@ -89,7 +89,7 @@ export const setupProjectWithUsers = async (args: {
 
 /**
  * Provisions a principal whose policy is SRN-scoped to a single project
- * (`resource: ["soat:<project>:*:*"]`) rather than the wildcard `*` that
+ * (`resource: ["srn:<project>:*:*"]`) rather than the wildcard `*` that
  * {@link setupProjectWithUsers} grants. This mirrors the effective boundary of a
  * project-scoped credential (project key / OAuth access token, see
  * `buildConsentPolicyFromScopeClaim`), and is the shape that exposes handlers
@@ -115,7 +115,7 @@ export const createScopedPrincipal = async (args: {
           {
             effect: 'Allow',
             action: args.actions,
-            resource: [`soat:${args.projectId}:*:*`],
+            resource: [`srn:${args.projectId}:*:*`],
           },
         ],
       },

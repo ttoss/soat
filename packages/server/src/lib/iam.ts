@@ -36,8 +36,8 @@ const isValidAction = (action: string): boolean => {
 
 const isValidSrnPattern = (srn: string): boolean => {
   if (srn === '*') return true;
-  // soat:<projectPublicId>:<resourceType>:<resourceId|*>
-  return /^soat:[^:]+:[^:]+:[^:]+$/.test(srn);
+  // srn:<projectPublicId>:<resourceType>:<resourceId|*>
+  return /^srn:[^:]+:[^:]+:[^:]+$/.test(srn);
 };
 
 const validateEffectField = (
@@ -83,7 +83,7 @@ const validateResourceField = (
     for (const res of resource) {
       if (typeof res !== 'string' || !isValidSrnPattern(res)) {
         errors.push(
-          `${prefix}.resource: "${res}" is invalid — must be * or soat:<project>:<type>:<id>`
+          `${prefix}.resource: "${res}" is invalid — must be * or srn:<project>:<type>:<id>`
         );
       }
     }
@@ -254,7 +254,7 @@ export const buildSrn = (args: {
   resourceType: string;
   resourceId: string;
 }): string => {
-  return `soat:${args.projectPublicId}:${args.resourceType}:${args.resourceId}`;
+  return `srn:${args.projectPublicId}:${args.resourceType}:${args.resourceId}`;
 };
 
 export const matchesPattern = (args: {
@@ -441,7 +441,7 @@ export const evaluatePoliciesMultiResource = (args: {
  * policies by parsing SRN resource patterns.
  *
  * Returns `undefined` when any statement grants access to all projects
- * (wildcard `*` or `soat:*:...`), meaning the caller should treat the result
+ * (wildcard `*` or `srn:*:...`), meaning the caller should treat the result
  * as "all projects".
  *
  * Returns a (possibly empty) string[] of project publicIds when all patterns
@@ -458,7 +458,7 @@ export const extractProjectIdsFromPolicies = (
       const resources = statement.resource ?? ['*'];
       for (const resource of resources) {
         if (resource === '*') return undefined;
-        if (!resource.startsWith('soat:')) continue;
+        if (!resource.startsWith('srn:')) continue;
         const parts = resource.split(':');
         if (parts.length < 4) continue;
         const projectId = parts[1];

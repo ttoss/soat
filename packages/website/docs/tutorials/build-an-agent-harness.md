@@ -308,7 +308,7 @@ RUNNER_POLICY_ID=$(soat create-policy \
       {
         "effect": "Allow",
         "action": ["agents:CreateAgentGeneration"],
-        "resource": ["soat:'"$PROJECT_ID"':*:*"]
+        "resource": ["srn:'"$PROJECT_ID"':*:*"]
       }
     ]
   }' | jq -r '.id')
@@ -335,7 +335,7 @@ const { data: runnerPolicy } = await adminSoat.policies.createPolicy({
         {
           effect: 'Allow',
           action: ['agents:CreateAgentGeneration'],
-          resource: [`soat:${projectId}:*:*`],
+          resource: [`srn:${projectId}:*:*`],
         },
       ],
     },
@@ -377,7 +377,7 @@ RUNNER_POLICY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/policies" \
         {
           "effect": "Allow",
           "action": ["agents:CreateAgentGeneration"],
-          "resource": ["soat:'"$PROJECT_ID"':*:*"]
+          "resource": ["srn:'"$PROJECT_ID"':*:*"]
         }
       ]
     }

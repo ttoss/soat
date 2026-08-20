@@ -849,7 +849,7 @@ soat list-audit-entries --project-id "$PROJECT_ID" --action "quotas:MonitorBreac
 ```json
 {
   "action": "quotas:MonitorBreach",
-  "resource_srn": "soat:proj_...:quota:quota_...",
+  "resource_srn": "srn:proj_...:quota:quota_...",
   "principal_type": null,
   "principal_id": null,
   "detail": {

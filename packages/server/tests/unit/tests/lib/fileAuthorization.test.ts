@@ -21,7 +21,7 @@ describe('fileAuthorization', () => {
     expect(isAllowed).toHaveBeenCalledWith({
       projectPublicId: 'prj_1',
       action: 'files:GetFile',
-      resources: ['soat:prj_1:file:fil_1'],
+      resources: ['srn:prj_1:file:fil_1'],
       context: {
         'soat:ResourceType': 'file',
       },
@@ -48,7 +48,7 @@ describe('fileAuthorization', () => {
     expect(isAllowed).toHaveBeenCalledWith({
       projectPublicId: 'prj_2',
       action: 'files:DownloadFile',
-      resources: ['soat:prj_2:file:fil_2', 'soat:prj_2:file:folder/report.csv'],
+      resources: ['srn:prj_2:file:fil_2', 'srn:prj_2:file:folder/report.csv'],
       context: {
         'soat:ResourceType': 'file',
         'soat:ResourceTag/env': 'prod',

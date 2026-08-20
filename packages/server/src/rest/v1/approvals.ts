@@ -19,7 +19,7 @@ const approvalsRouter = new Router<Context>();
  * Item-level SRN for a single approval. The get/resolve handlers authorize
  * against this concrete resource rather than the implicit `*` default so a
  * project-scoped principal — whose policy grants an SRN pattern such as
- * `soat:<project>:*:*`, never the bare `*` — is granted access. Passing no
+ * `srn:<project>:*:*`, never the bare `*` — is granted access. Passing no
  * resource defaults to `*`, which such a policy cannot match, wrongly denying
  * get/approve/reject while `list` (already SRN-checked) succeeds.
  */

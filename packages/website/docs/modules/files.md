@@ -77,10 +77,10 @@ Policies can target files by their logical `path` rather than their `id`. When a
 
 | SRN form                              | Matches                                   |
 | ------------------------------------- | ----------------------------------------- |
-| `soat:proj_ABC:file:file_XYZ`         | Specific file by ID                       |
-| `soat:proj_ABC:file:/assets/logo.png` | File at the exact path `/assets/logo.png` |
-| `soat:proj_ABC:file:/exports/*`       | All files under `/exports/`               |
-| `soat:proj_ABC:file:*`                | All files in the project (id wildcard)    |
+| `srn:proj_ABC:file:file_XYZ`         | Specific file by ID                       |
+| `srn:proj_ABC:file:/assets/logo.png` | File at the exact path `/assets/logo.png` |
+| `srn:proj_ABC:file:/exports/*`       | All files under `/exports/`               |
+| `srn:proj_ABC:file:*`                | All files in the project (id wildcard)    |
 
 The list endpoint applies policy filters at the SQL level — the database returns only rows the caller is permitted to see. See [IAM](./iam.md) for full SRN syntax and policy authoring guidance, or walk through scoping a read-only policy to files in [Permissions in Practice - Step 7 (Verify permissions with file operations)](/docs/tutorials/permissions#step-7--verify-permissions).
 

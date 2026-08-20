@@ -47,12 +47,12 @@ A policy document is a JSON object containing one or more statements. Each state
     {
       "effect": "Allow",
       "action": ["documents:GetDocument", "documents:ListDocuments"],
-      "resource": ["soat:proj_ABC:document:doc_XYZ"]
+      "resource": ["srn:proj_ABC:document:doc_XYZ"]
     },
     {
       "effect": "Deny",
       "action": ["secrets:*"],
-      "resource": ["soat:proj_ABC:secret:sec_PROD_KEY"]
+      "resource": ["srn:proj_ABC:secret:sec_PROD_KEY"]
     }
   ]
 }
@@ -74,18 +74,18 @@ Policy documents are created and managed globally via the [Policies](./policies.
 Every addressable entity has a canonical identifier called a SOAT Resource Name:
 
 ```
-soat:<project_id>:<resource_type>:<resource_id>
+srn:<project_id>:<resource_type>:<resource_id>
 ```
 
 Examples:
 
 | SRN                              | Description                |
 | -------------------------------- | -------------------------- |
-| `soat:proj_ABC:document:doc_XYZ` | A specific document        |
-| `soat:proj_ABC:document:*`       | All documents in a project |
-| `soat:proj_ABC:file:*`           | All files in a project     |
-| `soat:proj_ABC:actor:actor_123`  | A specific actor           |
-| `soat:*:*:*`                     | Everything (admin-level)   |
+| `srn:proj_ABC:document:doc_XYZ` | A specific document        |
+| `srn:proj_ABC:document:*`       | All documents in a project |
+| `srn:proj_ABC:file:*`           | All files in a project     |
+| `srn:proj_ABC:actor:actor_123`  | A specific actor           |
+| `srn:*:*:*`                     | Everything (admin-level)   |
 
 ### Project Segment and Policy Scoping
 
@@ -94,11 +94,11 @@ Because policies are **global** (not scoped to any project), the `<project_id>` 
 In practice:
 
 - `resource: ["*"]` — matches all resources in **all projects**. Use only for broad access.
-- `resource: ["soat:proj_ABC:*:*"]` — restricts access to resources in `proj_ABC` only.
-- `resource: ["soat:*:document:*"]` — matches all documents across all projects.
+- `resource: ["srn:proj_ABC:*:*"]` — restricts access to resources in `proj_ABC` only.
+- `resource: ["srn:*:document:*"]` — matches all documents across all projects.
 
 :::tip
-To give a **user** (JWT) access to a specific project, create a policy with `resource: ["soat:proj_ABC:*:*"]`. This achieves project-level scoping entirely through the policy engine. API keys are always scoped to a single project via `project_id` (see [API Keys](./api-keys.md#project-scoping)).
+To give a **user** (JWT) access to a specific project, create a policy with `resource: ["srn:proj_ABC:*:*"]`. This achieves project-level scoping entirely through the policy engine. API keys are always scoped to a single project via `project_id` (see [API Keys](./api-keys.md#project-scoping)).
 :::
 
 ### Resource Types
@@ -197,8 +197,8 @@ When an API key has policies attached — or an OAuth token carries a consented 
 | Scenario                                                            | Result  | Reason                                   |
 | ------------------------------------------------------------------- | ------- | ---------------------------------------- |
 | Admin accessing any resource                                        | Allowed | Admins bypass policy evaluation          |
-| User with `resource: ["soat:proj_A:*:*"]` accessing proj_A          | Allowed | Policy covers the SRN                    |
-| User with `resource: ["soat:proj_A:*:*"]` accessing proj_B          | Denied  | Policy does not cover proj_B SRN         |
+| User with `resource: ["srn:proj_A:*:*"]` accessing proj_A          | Allowed | Policy covers the SRN                    |
+| User with `resource: ["srn:proj_A:*:*"]` accessing proj_B          | Denied  | Policy does not cover proj_B SRN         |
 | API key scoped to proj_A, accessing proj_B                          | Denied  | Key is hard-locked to proj_A             |
 | API key with key policy allowed, but user policy denied             | Denied  | Intersection semantics — both must allow |
 | API key without policies, accessing resource allowed by user policy | Allowed | Key inherits user permissions            |
@@ -239,7 +239,7 @@ A statement matches a request when **all** of the following are true:
 
 - `*` matches everything.
 - `module:*` matches all actions in a module.
-- `soat:proj_ABC:document:*` matches all documents in a project.
+- `srn:proj_ABC:document:*` matches all documents in a project.
 - Wildcards apply only at segment boundaries — partial wildcards like `doc_X*` are not supported.
 - **Path-based patterns**: when a resource has a `path` field, the resource ID segment of the SRN may be a logical path. Both the resource's `id` and its `path` are tested when evaluating a single-resource check. Glob patterns (`/reports/*`) are expanded to SQL `LIKE` for list queries.
 
@@ -314,7 +314,7 @@ Grants read access to a specific project's resources. Attach this to a user or A
         "files:GetFile",
         "files:ListFiles"
       ],
-      "resource": ["soat:proj_ABC:*:*"]
+      "resource": ["srn:proj_ABC:*:*"]
     }
   ]
 }
@@ -328,12 +328,12 @@ Grants read access to a specific project's resources. Attach this to a user or A
     {
       "effect": "Allow",
       "action": ["files:*"],
-      "resource": ["soat:proj_ABC:file:*"]
+      "resource": ["srn:proj_ABC:file:*"]
     },
     {
       "effect": "Deny",
       "action": ["files:DeleteFile"],
-      "resource": ["soat:proj_ABC:file:*"]
+      "resource": ["srn:proj_ABC:file:*"]
     }
   ]
 }
@@ -349,7 +349,7 @@ Allow only actors tagged `"internal"`:
     {
       "effect": "Allow",
       "action": ["actors:GetActor"],
-      "resource": ["soat:proj_ABC:actor:*"],
+      "resource": ["srn:proj_ABC:actor:*"],
       "condition": {
         "StringEquals": {
           "soat:ResourceTag/visibility": "internal"

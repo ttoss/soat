@@ -33,7 +33,7 @@ describe('IAM', () => {
           {
             effect: 'Allow',
             action: ['files:GetFile', 'files:*'],
-            resource: ['soat:proj_ABC:file:*'],
+            resource: ['srn:proj_ABC:file:*'],
             condition: {
               StringEquals: { 'soat:tag:env': 'prod' },
             },
@@ -109,12 +109,31 @@ describe('IAM', () => {
           {
             effect: 'Allow',
             action: ['files:GetFile'],
-            resource: ['soat:proj_123:file:*'],
+            resource: ['srn:proj_123:file:*'],
           },
         ],
       };
       const result = validatePolicyDocument(doc);
       expect(result.valid).toBe(true);
+    });
+
+    test('the retired soat: resource prefix is rejected', () => {
+      const doc = {
+        statement: [
+          {
+            effect: 'Allow',
+            action: ['files:GetFile'],
+            resource: ['soat:proj_123:file:*'],
+          },
+        ],
+      };
+      const result = validatePolicyDocument(doc);
+      expect(result.valid).toBe(false);
+      expect(
+        result.errors.some((e) => {
+          return e.includes('srn:');
+        })
+      ).toBe(true);
     });
 
     test('invalid condition operator fails', () => {
@@ -296,7 +315,7 @@ describe('IAM', () => {
         resourceType: 'file',
         resourceId: 'file_123',
       });
-      expect(srn).toBe('soat:proj_ABC:file:file_123');
+      expect(srn).toBe('srn:proj_ABC:file:file_123');
     });
 
     test('works with different resource types', () => {
@@ -306,7 +325,7 @@ describe('IAM', () => {
           resourceType: 'document',
           resourceId: 'd',
         })
-      ).toBe('soat:p:document:d');
+      ).toBe('srn:p:document:d');
     });
   });
 
@@ -338,14 +357,14 @@ describe('IAM', () => {
     test('SRN resource wildcard matches', () => {
       expect(
         matchesPattern({
-          pattern: 'soat:proj_ABC:file:*',
-          value: 'soat:proj_ABC:file:file_123',
+          pattern: 'srn:proj_ABC:file:*',
+          value: 'srn:proj_ABC:file:file_123',
         })
       ).toBe(true);
       expect(
         matchesPattern({
-          pattern: 'soat:proj_ABC:file:*',
-          value: 'soat:proj_XYZ:file:file_123',
+          pattern: 'srn:proj_ABC:file:*',
+          value: 'srn:proj_XYZ:file:file_123',
         })
       ).toBe(false);
     });
@@ -454,7 +473,7 @@ describe('IAM', () => {
         {
           effect: 'Allow',
           action: ['files:GetFile'],
-          resource: ['soat:proj_A:file:*'],
+          resource: ['srn:proj_A:file:*'],
         },
       ],
     };
@@ -465,7 +484,7 @@ describe('IAM', () => {
         evaluatePoliciesMultiResource({
           policies: [scopedPolicy],
           action: 'files:GetFile',
-          resources: ['soat:proj_B:file:file_1', 'soat:proj_A:file:file_1'],
+          resources: ['srn:proj_B:file:file_1', 'srn:proj_A:file:file_1'],
         })
       ).toBe(true);
     });
@@ -476,7 +495,7 @@ describe('IAM', () => {
           {
             effect: 'Deny',
             action: ['files:GetFile'],
-            resource: ['soat:proj_A:file:*'],
+            resource: ['srn:proj_A:file:*'],
           },
         ],
       };
@@ -484,7 +503,7 @@ describe('IAM', () => {
         evaluatePoliciesMultiResource({
           policies: [scopedPolicy, denyPolicy],
           action: 'files:GetFile',
-          resources: ['soat:proj_A:file:file_1'],
+          resources: ['srn:proj_A:file:file_1'],
           context: {},
         })
       ).toBe(false);
@@ -495,7 +514,7 @@ describe('IAM', () => {
         evaluatePoliciesMultiResource({
           policies: [scopedPolicy],
           action: 'files:GetFile',
-          resources: ['soat:proj_Z:file:file_1'],
+          resources: ['srn:proj_Z:file:file_1'],
         })
       ).toBe(false);
     });
@@ -510,9 +529,9 @@ describe('IAM', () => {
               effect: 'Allow',
               action: ['files:GetFile'],
               resource: [
-                'soat:proj_A:file:*',
-                'soat:proj_B:file:*',
-                'soat:proj_A:file:file_1',
+                'srn:proj_A:file:*',
+                'srn:proj_B:file:*',
+                'srn:proj_A:file:file_1',
               ],
             },
           ],
@@ -528,7 +547,7 @@ describe('IAM', () => {
             {
               effect: 'Deny',
               action: ['files:GetFile'],
-              resource: ['soat:proj_A:file:*'],
+              resource: ['srn:proj_A:file:*'],
             },
           ],
         },
@@ -536,14 +555,14 @@ describe('IAM', () => {
       expect(result).toEqual([]);
     });
 
-    test('skips resources that are not soat SRNs or are too short', () => {
+    test('skips non-SRN resources, retired soat: ones, and too-short SRNs', () => {
       const result = extractProjectIdsFromPolicies([
         {
           statement: [
             {
               effect: 'Allow',
               action: ['files:GetFile'],
-              resource: ['other:thing', 'soat:proj_A'],
+              resource: ['other:thing', 'soat:proj_A:file:*', 'srn:proj_A'],
             },
           ],
         },
@@ -569,7 +588,7 @@ describe('IAM', () => {
             {
               effect: 'Allow',
               action: ['files:GetFile'],
-              resource: ['soat:*:file:file_1'],
+              resource: ['srn:*:file:file_1'],
             },
           ],
         },
@@ -582,7 +601,7 @@ describe('IAM', () => {
     const baseStatement = {
       effect: 'Allow' as const,
       action: ['files:GetFile'],
-      resource: ['soat:proj_ABC:file:*'],
+      resource: ['srn:proj_ABC:file:*'],
     };
 
     test('matches when action and resource match', () => {
@@ -590,7 +609,7 @@ describe('IAM', () => {
         statementMatches({
           statement: baseStatement,
           action: 'files:GetFile',
-          resource: 'soat:proj_ABC:file:file_123',
+          resource: 'srn:proj_ABC:file:file_123',
           context: {},
         })
       ).toBe(true);
@@ -601,7 +620,7 @@ describe('IAM', () => {
         statementMatches({
           statement: baseStatement,
           action: 'files:DeleteFile',
-          resource: 'soat:proj_ABC:file:file_123',
+          resource: 'srn:proj_ABC:file:file_123',
           context: {},
         })
       ).toBe(false);
@@ -612,7 +631,7 @@ describe('IAM', () => {
         statementMatches({
           statement: baseStatement,
           action: 'files:GetFile',
-          resource: 'soat:proj_XYZ:file:file_123',
+          resource: 'srn:proj_XYZ:file:file_123',
           context: {},
         })
       ).toBe(false);
@@ -624,7 +643,7 @@ describe('IAM', () => {
         statementMatches({
           statement: stmt,
           action: 'files:GetFile',
-          resource: 'soat:proj_ABC:file:file_123',
+          resource: 'srn:proj_ABC:file:file_123',
           context: {},
         })
       ).toBe(true);
@@ -639,7 +658,7 @@ describe('IAM', () => {
         statementMatches({
           statement: stmt,
           action: 'files:GetFile',
-          resource: 'soat:proj_ABC:file:file_123',
+          resource: 'srn:proj_ABC:file:file_123',
           context: { 'soat:tag:env': 'dev' },
         })
       ).toBe(false);
@@ -700,7 +719,7 @@ describe('IAM', () => {
           {
             effect: 'Allow',
             action: ['files:GetFile'],
-            resource: ['soat:proj_A:file:*'],
+            resource: ['srn:proj_A:file:*'],
           },
         ],
       };
@@ -708,14 +727,14 @@ describe('IAM', () => {
         evaluatePolicies({
           policies: [scopedPolicy],
           action: 'files:GetFile',
-          resource: 'soat:proj_A:file:file_123',
+          resource: 'srn:proj_A:file:file_123',
         })
       ).toBe(true);
       expect(
         evaluatePolicies({
           policies: [scopedPolicy],
           action: 'files:GetFile',
-          resource: 'soat:proj_B:file:file_123',
+          resource: 'srn:proj_B:file:file_123',
         })
       ).toBe(false);
     });

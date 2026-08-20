@@ -11,14 +11,14 @@ export type IsAllowedFn = (args: {
 /**
  * SRN used to probe project accessibility for a list/scoping check. When a
  * `resourceType` is known the probe is scoped to the type
- * (`soat:{project}:{type}:*`) so resource-scoped policies are enforced; without
- * one it falls back to the project-wildcard (`soat:{project}:*:*`), used only
+ * (`srn:{project}:{type}:*`) so resource-scoped policies are enforced; without
+ * one it falls back to the project-wildcard (`srn:{project}:*:*`), used only
  * where the project itself is the target.
  */
 const scopingSrn = (projectPublicId: string, resourceType?: string): string => {
   return resourceType
-    ? `soat:${projectPublicId}:${resourceType}:*`
-    : `soat:${projectPublicId}:*:*`;
+    ? `srn:${projectPublicId}:${resourceType}:*`
+    : `srn:${projectPublicId}:*:*`;
 };
 
 const filterAccessibleProjects = async (args: {

@@ -16,7 +16,7 @@ describe('oauthConsent', () => {
         {
           effect: 'Allow',
           action: ['agents:*', 'files:GetFile'],
-          resource: ['soat:proj_abc:*:*'],
+          resource: ['srn:proj_abc:*:*'],
         },
       ]);
     });
@@ -27,7 +27,7 @@ describe('oauthConsent', () => {
         scopeClaim: 'mcp:access prj:proj_abc',
       });
       expect(policy.statement[0].action).toEqual([]);
-      expect(policy.statement[0].resource).toEqual(['soat:proj_abc:*:*']);
+      expect(policy.statement[0].resource).toEqual(['srn:proj_abc:*:*']);
     });
 
     test('a missing scope claim grants no actions', () => {
@@ -99,7 +99,7 @@ describe('oauthConsent', () => {
           {
             effect: 'Allow',
             action: ['agents:*'],
-            resource: ['soat:prj_123:*:*'],
+            resource: ['srn:prj_123:*:*'],
           },
         ],
       });
@@ -111,7 +111,7 @@ describe('oauthConsent', () => {
         selection: { kind: 'all' },
       });
       expect(policy.statement[0].action).toEqual(['*']);
-      expect(policy.statement[0].resource).toEqual(['soat:prj_abc:*:*']);
+      expect(policy.statement[0].resource).toEqual(['srn:prj_abc:*:*']);
     });
 
     test('produced policy is a valid IAM policy document', () => {
@@ -120,7 +120,7 @@ describe('oauthConsent', () => {
         projectPublicId: 'prj_1',
         selection: { kind: 'actions', actions: ['files:GetFile'] },
       });
-      expect(policy.statement[0].resource).toEqual(['soat:prj_1:*:*']);
+      expect(policy.statement[0].resource).toEqual(['srn:prj_1:*:*']);
     });
   });
 });

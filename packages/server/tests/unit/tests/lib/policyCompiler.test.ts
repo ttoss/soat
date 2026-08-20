@@ -138,7 +138,7 @@ describe('compilePolicy', () => {
             {
               effect: 'Allow',
               action: ['test:Do'],
-              resource: ['soat:prj_1:testResource:res_abc123'],
+              resource: ['srn:prj_1:testResource:res_abc123'],
             },
           ],
         },
@@ -161,7 +161,7 @@ describe('compilePolicy', () => {
             {
               effect: 'Allow',
               action: ['test:Do'],
-              resource: ['soat:prj_1:testResource:res_*'],
+              resource: ['srn:prj_1:testResource:res_*'],
             },
           ],
         },
@@ -271,7 +271,7 @@ describe('compilePolicy', () => {
             {
               effect: 'Allow',
               action: ['test:Do'],
-              resource: ['soat:prj_1:testResource:/docs/readme.txt'],
+              resource: ['srn:prj_1:testResource:/docs/readme.txt'],
             },
           ],
         },
@@ -295,7 +295,7 @@ describe('compilePolicy', () => {
             {
               effect: 'Deny',
               action: ['test:Do'],
-              resource: ['soat:prj_1:testResource:res_secret'],
+              resource: ['srn:prj_1:testResource:res_secret'],
             },
           ],
         },
@@ -338,8 +338,8 @@ describe('compilePolicy', () => {
               effect: 'Allow',
               action: ['test:Do'],
               resource: [
-                'soat:prj_1:testResource:res_abc',
-                'soat:prj_1:testResource:res_xyz',
+                'srn:prj_1:testResource:res_abc',
+                'srn:prj_1:testResource:res_xyz',
               ],
             },
           ],
@@ -376,7 +376,7 @@ describe('compilePolicy', () => {
             {
               effect: 'Allow',
               action: ['test:Do'],
-              resource: ['soat:prj_1:testResource:/docs/*'],
+              resource: ['srn:prj_1:testResource:/docs/*'],
             },
           ],
         },
@@ -403,7 +403,7 @@ describe('compilePolicy', () => {
             {
               effect: 'Allow',
               action: ['test:Do'],
-              resource: ['soat:prj_1:aliasedResource:res_abc'],
+              resource: ['srn:prj_1:aliasedResource:res_abc'],
             },
           ],
         },
@@ -544,7 +544,7 @@ describe('compilePolicy', () => {
             {
               effect: 'Allow',
               action: ['test:Do'],
-              resource: ['soat:prj_1:testResource'],
+              resource: ['srn:prj_1:testResource'],
             },
           ],
         },

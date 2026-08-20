@@ -239,7 +239,7 @@ POLICY_ID=$(soat create-policy \
           "traces:GetTrace",
           "traces:ListTraces"
         ],
-        "resource": ["soat:'"$PROJECT_ID"':*:*"]
+        "resource": ["srn:'"$PROJECT_ID"':*:*"]
       }
     ]
   }' | jq -r '.id')
@@ -274,7 +274,7 @@ const { data: policy } = await adminSoat.policies.createPolicy({
             'traces:GetTrace',
             'traces:ListTraces',
           ],
-          resource: [`soat:${projectId}:*:*`],
+          resource: [`srn:${projectId}:*:*`],
         },
       ],
     },
@@ -321,7 +321,7 @@ POLICY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/policies" \
             \"traces:GetTrace\",
             \"traces:ListTraces\"
           ],
-          \"resource\": [\"soat:$PROJECT_ID:*:*\"]
+          \"resource\": [\"srn:$PROJECT_ID:*:*\"]
         }
       ]
     }

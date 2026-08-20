@@ -10,7 +10,7 @@
  * - `actions` → individually selected actions (`<module>:<Action>`)
  *
  * Whatever the tier, the resulting policy is always scoped to a single project
- * via the SRN `soat:<project>:*:*`.
+ * via the SRN `srn:<project>:*:*`.
  */
 import createDebug from 'debug';
 
@@ -107,7 +107,7 @@ const isActionScope = (scope: string): boolean => {
  * Reconstructs the project-scoped IAM policy document from the `scope` claim of
  * an issued access token. Synthetic scopes (`mcp:access`, `prj:<id>`) are
  * stripped; the remaining action patterns become a single Allow statement
- * scoped to the token's project (`soat:<project>:*:*`).
+ * scoped to the token's project (`srn:<project>:*:*`).
  *
  * An empty action list yields a statement that matches nothing — i.e. the token
  * grants no access — which is the intended strict behaviour for a token whose
@@ -136,7 +136,7 @@ export const buildConsentPolicyFromScopeClaim = (args: {
 /**
  * Builds the project-scoped IAM policy document for a consent grant. The
  * actions come from {@link buildConsentScopes}; the resource is always the
- * single chosen project (`soat:<project>:*:*`).
+ * single chosen project (`srn:<project>:*:*`).
  */
 export const buildConsentPolicy = (args: {
   projectPublicId: string;

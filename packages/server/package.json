@@ -14,6 +14,7 @@
     "lint": "pnpm run lint-openapi && eslint src",
     "lint-openapi": "spectral lint src/rest/openapi/**/*.yaml",
     "migrate-rename-soat-tokens": "tsx scripts/renameSoatTokens.ts",
+    "migrate-rename-srn-prefix": "tsx scripts/renameSrnPrefix.ts",
     "queue-soak": "tsx scripts/orchestrationQueueSoak.ts",
     "test": "jest --projects tests/unit"
   },

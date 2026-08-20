@@ -33,7 +33,7 @@ The API is read-only. Writes happen internally through a fire-and-forget queue, 
 | `principal_type`     | string  | `user` or `api_key`; `null` for platform-originated entries (see [System-originated entries](#system-originated-entries)) |
 | `principal_id`       | string  | Public id of the principal (`user_…` or `key_…`); `null` for platform-originated entries |
 | `action`             | string  | The permission-action string that authorized the request                                         |
-| `resource_srn`       | string  | SRN the action targeted; type-level (`soat:{project}:{type}:*`) on creates                        |
+| `resource_srn`       | string  | SRN the action targeted; type-level (`srn:{project}:{type}:*`) on creates                        |
 | `resource_public_id` | string  | Target resource id — from the SRN, or the response body `id` on creates                           |
 | `status`             | integer | HTTP status of the response (recorded post-commit)                                                |
 | `request_id`         | string  | Per-request correlation id (also returned in the `X-Request-Id` response header)                  |
@@ -50,7 +50,7 @@ Every response carries an `X-Request-Id` header, and the matching entry stores t
 
 ### Resource SRN precision
 
-On operations against an existing resource (`get`/`update`/`delete`), `resource_srn` is the precise SRN (`soat:{project}:secret:sec_…`) and `resource_public_id` is its last segment. Creates authorize *before* the resource exists, so `resource_srn` is type-level (`soat:{project}:secret:*`) and `resource_public_id` is captured from the response body `id`.
+On operations against an existing resource (`get`/`update`/`delete`), `resource_srn` is the precise SRN (`srn:{project}:secret:sec_…`) and `resource_public_id` is its last segment. Creates authorize *before* the resource exists, so `resource_srn` is type-level (`srn:{project}:secret:*`) and `resource_public_id` is captured from the response body `id`.
 
 ### Multiple checks per request
 

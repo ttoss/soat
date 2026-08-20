@@ -596,7 +596,7 @@ describe('Approvals', () => {
   });
 
   // A project-scoped principal (project key / OAuth token) carries a policy
-  // whose resources are SRN-scoped to the project (`soat:<project>:*:*`) rather
+  // whose resources are SRN-scoped to the project (`srn:<project>:*:*`) rather
   // than the wildcard `*` the other tests use. The get/approve/reject handlers
   // must therefore check against a concrete item SRN — not the implicit `*`
   // default — or the SRN-scoped Allow never matches and every resolution 403s

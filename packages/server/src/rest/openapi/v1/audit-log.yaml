@@ -31,7 +31,7 @@ paths:
       description: >-
         Returns audit-log entries visible to the caller, newest first. All
         filters are optional and combine with AND. `resource_srn` is a prefix
-        match (e.g. `soat:{project}:secret:` matches every secret action); every
+        match (e.g. `srn:{project}:secret:` matches every secret action); every
         other filter is exact.
       operationId: listAuditEntries
       parameters:
@@ -59,7 +59,11 @@ paths:
             type: string
         - name: resource_srn
           in: query
-          description: SRN prefix match, e.g. `soat:{project}:secret:`
+          description: >-
+            SRN prefix match, e.g. `srn:{project}:secret:`. Entries written
+            before the `soat:` → `srn:` rename keep their original SRN (the
+            log is append-only), so an `srn:` prefix also matches the
+            equivalent `soat:` one and history stays reachable.
           schema:
             type: string
         - name: from
@@ -155,7 +159,11 @@ paths:
             type: string
         - name: resource_srn
           in: query
-          description: SRN prefix match, e.g. `soat:{project}:secret:`
+          description: >-
+            SRN prefix match, e.g. `srn:{project}:secret:`. Entries written
+            before the `soat:` → `srn:` rename keep their original SRN (the
+            log is append-only), so an `srn:` prefix also matches the
+            equivalent `soat:` one and history stays reachable.
           schema:
             type: string
         - name: from
@@ -249,8 +257,8 @@ components:
         resource_srn:
           type: string
           nullable: true
-          description: SRN the action targeted (type-level `soat:{project}:{type}:*` on creates)
-          example: soat:proj_V1StGXR8Z5jdHi6B:secret:sec_V1StGXR8Z5jdHi6B
+          description: SRN the action targeted (type-level `srn:{project}:{type}:*` on creates)
+          example: srn:proj_V1StGXR8Z5jdHi6B:secret:sec_V1StGXR8Z5jdHi6B
         resource_public_id:
           type: string
           nullable: true

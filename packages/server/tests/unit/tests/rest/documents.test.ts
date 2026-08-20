@@ -316,7 +316,7 @@ describe('Documents', () => {
 
     // Regression: checkDocumentPermission built the SRN and isAllowed check
     // from `doc.projectId`, but getDocument's mapped shape only has
-    // `project_id` — the SRN resolved to `soat:undefined:document:<id>` and
+    // `project_id` — the SRN resolved to `srn:undefined:document:<id>` and
     // never matched an SRN-scoped policy. The rest of this describe block
     // only uses `userToken`'s action-only policy, which never exercises
     // resource matching, so it never caught this.
@@ -332,7 +332,7 @@ describe('Documents', () => {
               {
                 effect: 'Allow',
                 action: ['documents:GetDocument'],
-                resource: [`soat:${projectId}:document:${documentId}`],
+                resource: [`srn:${projectId}:document:${documentId}`],
               },
             ],
           },

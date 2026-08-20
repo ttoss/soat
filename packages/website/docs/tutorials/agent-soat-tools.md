@@ -281,7 +281,7 @@ POLICY_ID=$(soat create-policy \
       {
         "effect": "Allow",
         "action": ["documents:GetDocument", "documents:UpdateDocument"],
-        "resource": ["soat:'"$PROJECT_ID"':document:/notes/public/*"]
+        "resource": ["srn:'"$PROJECT_ID"':document:/notes/public/*"]
       }
     ]
   }' | jq -r '.id')
@@ -310,7 +310,7 @@ const { data: policy } = await adminSoat.policies.createPolicy({
         {
           effect: 'Allow',
           action: ['documents:GetDocument', 'documents:UpdateDocument'],
-          resource: [`soat:${projectId}:document:/notes/public/*`],
+          resource: [`srn:${projectId}:document:/notes/public/*`],
         },
       ],
     },
@@ -345,7 +345,7 @@ POLICY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/policies" \
         {
           \"effect\": \"Allow\",
           \"action\": [\"documents:GetDocument\", \"documents:UpdateDocument\"],
-          \"resource\": [\"soat:$PROJECT_ID:document:/notes/public/*\"]
+          \"resource\": [\"srn:$PROJECT_ID:document:/notes/public/*\"]
         }
       ]
     }

@@ -83,7 +83,7 @@ const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
  *
  * The `resolveProjectIds` wrapper records two shapes:
  * - an explicit `projectPublicId` — the create/write path (type-level SRN
- *   `soat:{project}:{type}:*`).
+ *   `srn:{project}:{type}:*`).
  * - no `projectPublicId` on a *mutating* method — an item-scoped `PATCH`/
  *   `DELETE`/etc. that authorizes against the caller's allowed project set
  *   before the target resource (and its real project) is resolved deeper in
@@ -119,7 +119,7 @@ const instrumentAuthUser = (
       const type = reqArgs.resourceType ?? '*';
       checks.push({
         action: reqArgs.action,
-        resource: `soat:${reqArgs.projectPublicId}:${type}:*`,
+        resource: `srn:${reqArgs.projectPublicId}:${type}:*`,
         projectPublicId: reqArgs.projectPublicId,
         resourceType: reqArgs.resourceType ?? null,
         allowed: result !== null,
@@ -334,7 +334,7 @@ const resolveEntryTarget = (
 
   if (!resourceSrn && projectPublicId) {
     const type = primary.resourceType ?? '*';
-    resourceSrn = `soat:${projectPublicId}:${type}:${resourcePublicIdHint ?? '*'}`;
+    resourceSrn = `srn:${projectPublicId}:${type}:${resourcePublicIdHint ?? '*'}`;
   }
 
   return { projectPublicId, resourceSrn, resourcePublicIdHint };

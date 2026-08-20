@@ -1114,7 +1114,7 @@ describe('Quotas', () => {
               {
                 effect: 'Allow',
                 action: QUOTA_ACTIONS,
-                resource: [`soat:${otherProjectId}:*:*`],
+                resource: [`srn:${otherProjectId}:*:*`],
               },
             ],
           },
@@ -1647,7 +1647,7 @@ describe('Quotas', () => {
       expect(entry!.principal_id).toBeNull();
       expect(entry!.action).toBe('quotas:MonitorBreach');
       expect(entry!.resource_srn).toBe(
-        `soat:${enfProjectId}:quota:${quotaRes.body.id}`
+        `srn:${enfProjectId}:quota:${quotaRes.body.id}`
       );
       expect(entry!.status).toBe(200);
       const detail = entry!.detail as Record<string, unknown>;

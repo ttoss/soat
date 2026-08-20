@@ -49,7 +49,7 @@ Project access is entirely policy-driven; there is no membership list to maintai
     {
       "effect": "Allow",
       "action": ["projects:GetProject", "files:ListFiles", "files:GetFile"],
-      "resource": ["soat:proj_ABC:*:*"]
+      "resource": ["srn:proj_ABC:*:*"]
     }
   ]
 }
@@ -60,7 +60,7 @@ For a complete scoped-access walkthrough, see [Permissions in Practice - Step 3 
 To grant a user access to all projects, use a wildcard project segment:
 
 ```json
-{ "resource": ["soat:*:*:*"] }
+{ "resource": ["srn:*:*:*"] }
 ```
 
 ### Visibility Rules
@@ -100,7 +100,7 @@ The [audit log](./audit-log.md) is the one deliberate exception: its entries out
 | Status | Body                                            | Cause                                                                                                   | What to do                                                                                             |
 | ------ | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | `403`  | `{ "error": "Forbidden" }`                       | Caller isn't the `admin` role — creating, renaming, and deleting a project are admin-only               | Authenticate as the admin user, or have an admin perform the operation                                   |
-| `403`  | `{ "error": "Forbidden" }`                       | [`GET /projects/{id}`](/docs/api/projects/get-project) (or a nested resource route) with a policy/API key that doesn't cover this project's SRN — e.g. a project key created for a **different** project | Check the caller's attached policies cover `soat:<this-project-id>:*:*`, or use a key scoped to this project — see [Project Access via Policies](#project-access-via-policies) |
+| `403`  | `{ "error": "Forbidden" }`                       | [`GET /projects/{id}`](/docs/api/projects/get-project) (or a nested resource route) with a policy/API key that doesn't cover this project's SRN — e.g. a project key created for a **different** project | Check the caller's attached policies cover `srn:<this-project-id>:*:*`, or use a key scoped to this project — see [Project Access via Policies](#project-access-via-policies) |
 | `404`  | —                                                | The project ID doesn't exist, or the caller can't see it because no policy grants access to it (existence isn't leaked) | Verify the ID; if it should exist, confirm a policy grants visibility — see [Visibility Rules](#visibility-rules) |
 | `409`  | `{ "error": { "code": "PROJECT_HAS_DEPENDENTS" } }` | Deleting a project that still has dependent resources                                                  | Pass `?force=true`, or delete the dependent resources first — see [Deletion](#deletion)                   |
 | `409`  | `{ "error": { "code": "PROJECT_DEFAULT_ROUTE_INHERITED" } }` | Clearing `default_model_route_id` while consumers that bind nothing inherit it — they would be left with no resolvable model | Bind those consumers explicitly (`meta.sample` names some), or repoint the default to another route, which is always allowed — see [Project default route](./model-routes.md#project-default-route) |

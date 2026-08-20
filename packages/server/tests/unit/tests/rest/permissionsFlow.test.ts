@@ -3,10 +3,10 @@ import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 // ─── Group 15: Resource-level SRN precision (audit-log Phase 0) ────────────
 //
 // A policy that grants an action on ONE specific resource
-// (`soat:{project}:secret:{sec_a}`) must permit that resource and deny a
+// (`srn:{project}:secret:{sec_a}`) must permit that resource and deny a
 // sibling in the same project (`sec_b`). Before Phase 0 the by-id route
 // handlers probed `isAllowed` with the project-wildcard SRN
-// (`soat:{project}:*:*`), so a policy scoped to a single resource could never
+// (`srn:{project}:*:*`), so a policy scoped to a single resource could never
 // match — resource-level policy statements were effectively unenforceable.
 
 describe('Group 15: JWT — policy scoped to a single resource SRN is enforced per-resource', () => {
@@ -52,7 +52,7 @@ describe('Group 15: JWT — policy scoped to a single resource SRN is enforced p
             {
               effect: 'Allow',
               action: ['secrets:GetSecret'],
-              resource: [`soat:${projectId}:secret:${secretAId}`],
+              resource: [`srn:${projectId}:secret:${secretAId}`],
             },
           ],
         },
@@ -945,7 +945,7 @@ describe('Group 9: notPermissions overrides permissions when action appears in b
 // Before the auth.ts fix, isAllowed() was called without a `resource` arg when
 // resolving which projects a user can access. That caused the default resource
 // value of '*' to be tested against a policy pattern like
-// `soat:proj_xxx:*:*`, which never matched — so every policy-scoped user got
+// `srn:proj_xxx:*:*`, which never matched — so every policy-scoped user got
 // 403 even when their policy explicitly granted access.
 //
 // These tests would have failed on main before the fix.
@@ -996,7 +996,7 @@ describe('Group 10: JWT — policy with explicit project-scoped resource SRN gra
             {
               effect: 'Allow',
               action: ['files:GetFile'],
-              resource: [`soat:${projectAId}:*:*`],
+              resource: [`srn:${projectAId}:*:*`],
             },
           ],
         },
@@ -1123,7 +1123,7 @@ describe('Group 11: API key — scoped key with project-resource SRN in key poli
             {
               effect: 'Allow',
               action: ['files:GetFile'],
-              resource: [`soat:${projectAId}:*:*`],
+              resource: [`srn:${projectAId}:*:*`],
             },
           ],
         },
@@ -1251,7 +1251,7 @@ describe('Group 12: Admin API key with full-access policy is not 403', () => {
 // ─── Group 13: Regression — https://github.com/ttoss/soat/issues/355 ─────
 //
 // A project-scoped API key with a policy whose resource SRN is scoped to the
-// project (e.g. `soat:{projectId}:*:*`), the same pattern proven to work for
+// project (e.g. `srn:{projectId}:*:*`), the same pattern proven to work for
 // files in Group 11, returned 403 for memories, ai-providers, and
 // memory-entries single-resource routes (get/update/delete), because those
 // route handlers called `isAllowed` without a `resource`/`resources` field —
@@ -1302,7 +1302,7 @@ describe('Group 13: API key with project-scoped SRN policy — memories, ai-prov
             {
               effect: 'Allow',
               action: ['memories:*', 'ai-providers:*'],
-              resource: [`soat:${projectId}:*:*`],
+              resource: [`srn:${projectId}:*:*`],
             },
           ],
         },
@@ -1401,7 +1401,7 @@ describe('Group 13: API key with project-scoped SRN policy — memories, ai-prov
 //
 // Same bug pattern as Group 13 (#355/#361), reproduced for the `formations`
 // module: GET/PUT/DELETE/events-by-id routes called `isAllowed` without a
-// `resource` field, so a project-scoped SRN policy (`soat:{projectId}:*:*`)
+// `resource` field, so a project-scoped SRN policy (`srn:{projectId}:*:*`)
 // never matched and every by-ID formations route returned 403.
 
 describe('Group 14: API key with project-scoped SRN policy — formations', () => {
@@ -1459,7 +1459,7 @@ describe('Group 14: API key with project-scoped SRN policy — formations', () =
             {
               effect: 'Allow',
               action: ['formations:*', 'memories:*'],
-              resource: [`soat:${projectId}:*:*`],
+              resource: [`srn:${projectId}:*:*`],
             },
           ],
         },
