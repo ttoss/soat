@@ -8,6 +8,11 @@
 .docusaurus
 .cache-loader
 /static/openapi
+/static/openapi.json
+/static/openapi.yaml
+/static/api
+/static/errors.json
+/static/404.md
 /docs/openapi-specs.md
 /docs/permissions.md
 /docs/webhook-events.md

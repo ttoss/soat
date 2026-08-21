@@ -1,6 +1,7 @@
 import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import HomepageSurfaces from '@site/src/components/HomepageSurfaces';
+import { AGENT_RESOURCES } from '@site/src/data/agentResources';
 import CodeBlock from '@theme/CodeBlock';
 import Heading from '@theme/Heading';
 import Layout from '@theme/Layout';
@@ -221,6 +222,55 @@ soat generate-session-response \\
   );
 };
 
+const AgentSurfaces = () => {
+  return (
+    <section className={styles.agents}>
+      <div className="container">
+        <div className={styles.agentsHeader}>
+          <p className={styles.eyebrow}>Built for agents</p>
+          <Heading as="h2">
+            Everything on this site is readable by a machine.
+          </Heading>
+          <p>
+            SOAT is infrastructure for agents, so its documentation is published
+            the way an agent wants to read it. Every page is server-rendered —
+            the full text is in the HTML, with no JavaScript required — and has
+            a Markdown twin one URL away. The REST surface is published as a
+            single OpenAPI description, and the error contract as a catalog of
+            stable codes, so a client can be generated and its failures handled
+            without scraping a page.
+          </p>
+        </div>
+        <div className={styles.agentGrid}>
+          {AGENT_RESOURCES.map((resource) => {
+            return (
+              <div className={styles.agentCard} key={resource.href}>
+                <a href={resource.href}>{resource.title}</a>
+                <p>{resource.description}</p>
+                <span className={styles.agentCardMeta}>
+                  {resource.mediaType}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        <p className={styles.agentsNote}>
+          Append <code>.md</code> to any documentation URL for the Markdown
+          source of that page — for example{' '}
+          <a href="/docs/introduction.md">/docs/introduction.md</a>. Every HTML
+          page advertises its own twin with a{' '}
+          <code>
+            &lt;link rel=&quot;alternate&quot;
+            type=&quot;text/markdown&quot;&gt;
+          </code>{' '}
+          tag, and dead URLs answer with a real HTTP 404 carrying a Markdown
+          recovery map instead of a soft 200.
+        </p>
+      </div>
+    </section>
+  );
+};
+
 const FinalCta = () => {
   return (
     <section className={styles.finalCta}>
@@ -265,12 +315,16 @@ export default function Home(): React.ReactNode {
       title={`${siteConfig.title} — Infrastructure for production-ready AI agents`}
       description="Durable sessions, multi-agent orchestration, knowledge, memory, guardrails, IAM, and traces — all from one self-hosted Node.js server."
     >
-      <HomepageHeader />
+      {/* The <h1> lives inside <main> on purpose: content extractors (and the
+          AI crawlers built on them) read the main content region, and a hero
+          heading parked outside it reads as a page with no heading at all. */}
       <main>
+        <HomepageHeader />
         <ArchitectureBand />
         <HomepageSurfaces />
         <FormationsSpotlight />
         <CodeShowcase />
+        <AgentSurfaces />
         <FinalCta />
       </main>
     </Layout>

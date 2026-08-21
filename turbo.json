@@ -17,6 +17,16 @@
       "inputs": ["$TURBO_DEFAULT$", "../server/src/rest/openapi/v1/**"],
       "outputs": ["dist/**", "src/generated/**"]
     },
+    "@soat/website#build": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "../server/src/rest/openapi/v1/**",
+        "../server/src/errors/**",
+        "../server/src/permissions/**"
+      ],
+      "outputs": ["build/**"]
+    },
     "@soat/server#build": {
       "dependsOn": ["^build", "@soat/app#build"],
       "outputs": ["dist/**"]

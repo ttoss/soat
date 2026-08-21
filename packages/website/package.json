@@ -5,7 +5,7 @@
   "scripts": {
     "docusaurus": "docusaurus",
     "dev": "pnpm generate-all && docusaurus start",
-    "build": "pnpm generate-all && docusaurus build",
+    "build": "pnpm generate-all && docusaurus build && pnpm advertise-markdown-twins && pnpm check-agent-surfaces",
     "swizzle": "docusaurus swizzle",
     "deploy": "carlin deploy static-app",
     "deploy-report": "carlin deploy report --channel=github-pr",
@@ -17,14 +17,17 @@
     "test": "node --import tsx --test scripts/*.test.ts",
     "clean-api-docs": "docusaurus clean-api-docs all",
     "generate-api-docs": "docusaurus gen-api-docs all",
-    "generate-all": "pnpm generate-openapi-specs-page && pnpm generate-api-docs && pnpm generate-mcp-tools-docs && pnpm generate-sdk-services-docs && pnpm generate-cli-commands-docs && pnpm generate-permissions-page && pnpm generate-webhook-events-page && pnpm generate-formations-resource-docs",
+    "generate-all": "pnpm generate-openapi-specs-page && pnpm generate-agent-surfaces && pnpm generate-api-docs && pnpm generate-mcp-tools-docs && pnpm generate-sdk-services-docs && pnpm generate-cli-commands-docs && pnpm generate-permissions-page && pnpm generate-webhook-events-page && pnpm generate-formations-resource-docs",
     "generate-formations-resource-docs": "tsx scripts/generateFormationsResourceDocs.ts",
     "generate-mcp-tools-docs": "tsx scripts/generateMcpToolsDocs.ts",
     "generate-permissions-page": "tsx scripts/generatePermissionsPage.ts",
     "generate-webhook-events-page": "tsx scripts/generateWebhookEventsPage.ts",
     "generate-sdk-services-docs": "tsx scripts/generateSdkServicesDocs.ts",
     "generate-cli-commands-docs": "tsx scripts/generateCliCommandsDocs.ts",
-    "generate-openapi-specs-page": "tsx scripts/generateOpenApiSpecsPage.ts"
+    "generate-openapi-specs-page": "tsx scripts/generateOpenApiSpecsPage.ts",
+    "generate-agent-surfaces": "tsx scripts/generateAgentSurfaces.ts",
+    "advertise-markdown-twins": "tsx scripts/advertiseMarkdownTwins.ts",
+    "check-agent-surfaces": "tsx scripts/checkAgentSurfaces.ts"
   },
   "dependencies": {
     "@docusaurus/core": "3.10.2",
