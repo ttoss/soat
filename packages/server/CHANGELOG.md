@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.28.0](https://github.com/ttoss/soat/compare/v0.27.0...v0.28.0) (2026-08-21)
+
+### Bug Fixes
+
+* **ai-providers:** list vertex models from the non-regional hosts ([#1094](https://github.com/ttoss/soat/issues/1094)) ([4c83d74](https://github.com/ttoss/soat/commit/4c83d7413103aa838b9ed95b530828e18df05a70)), closes [#1087](https://github.com/ttoss/soat/issues/1087) [#1080](https://github.com/ttoss/soat/issues/1080) [#1087](https://github.com/ttoss/soat/issues/1087)
+
 # [0.27.0](https://github.com/ttoss/soat/compare/v0.26.0...v0.27.0) (2026-08-20)
 
 * feat!: rename the IAM resource-name prefix from soat: to srn: (#1092) ([115d155](https://github.com/ttoss/soat/commit/115d155deb0b64217faa2b7e07b94537ff2f3dd7)), closes [#1092](https://github.com/ttoss/soat/issues/1092)
