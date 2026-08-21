@@ -1,5 +1,5 @@
 ---
-description: "Overview of the SOAT REST API: versioned, authenticated HTTP endpoints that return JSON for every platform operation."
+description: 'Overview of the SOAT REST API: versioned, authenticated HTTP endpoints that return JSON for every platform operation.'
 sidebar_label: Overview
 sidebar_position: 1
 ---
@@ -85,13 +85,19 @@ an object with a `code` and a `message`, so a client can read `error.code`
 without first testing what it got. That includes the responses most likely to be
 special-cased:
 
-| Situation | Status | Body |
-|---|---|---|
-| Missing or invalid credentials | `401` | `{ "error": { "code": "UNAUTHORIZED", "message": "Unauthorized" } }` |
-| Insufficient permissions | `403` | `{ "error": { "code": "FORBIDDEN", "message": "Forbidden" } }` |
-| Unparseable request body | `400` | `{ "error": { "code": "VALIDATION_FAILED", "message": "Malformed request body: …" } }` |
-| Rejected by the HTTP layer before routing | varies | `{ "error": { "code": "REQUEST_REJECTED", "message": "…" } }` |
-| Unhandled server failure | `500` | `{ "error": { "code": "INTERNAL_ERROR", "message": "Internal Server Error" } }` |
+| Situation                                 | Status | Body                                                                                   |
+| ----------------------------------------- | ------ | -------------------------------------------------------------------------------------- |
+| Missing or invalid credentials            | `401`  | `{ "error": { "code": "UNAUTHORIZED", "message": "Unauthorized" } }`                   |
+| Insufficient permissions                  | `403`  | `{ "error": { "code": "FORBIDDEN", "message": "Forbidden" } }`                         |
+| Unparseable request body                  | `400`  | `{ "error": { "code": "VALIDATION_FAILED", "message": "Malformed request body: …" } }` |
+| Rejected by the HTTP layer before routing | varies | `{ "error": { "code": "REQUEST_REJECTED", "message": "…" } }`                          |
+| Unhandled server failure                  | `500`  | `{ "error": { "code": "INTERNAL_ERROR", "message": "Internal Server Error" } }`        |
+
+The full catalog of codes — every `error.code` the API can return, with its HTTP
+status and what it means — is published as JSON at
+[/errors.json](/errors.json), and as the `x-error-codes` extension of
+[/openapi.json](/openapi.json). Both are generated from the server source, so a
+client can branch on codes without scraping this page.
 
 `INTERNAL_ERROR` always carries exactly that message: the underlying exception is
 logged server-side and never forwarded to the client, so the body carries no
@@ -115,10 +121,10 @@ Common status codes:
 
 ```jsonc
 {
-  "data": [ /* the page of resources */ ],
-  "total": 128,   // total rows matching the query, across all pages
-  "limit": 50,    // the effective page size applied
-  "offset": 0     // the offset this page started at
+  "data": [/* the page of resources */],
+  "total": 128, // total rows matching the query, across all pages
+  "limit": 50, // the effective page size applied
+  "offset": 0, // the offset this page started at
 }
 ```
 

@@ -55,14 +55,41 @@ const generate = () => {
 
   const content = `---
 title: OpenAPI Specifications
-description: Machine-readable OpenAPI YAML specifications for the SOAT REST API.
+description: Machine-readable OpenAPI specifications for the SOAT REST API, as one merged bundle or one file per module.
 ---
 
 # OpenAPI Specifications
 
-The SOAT REST API is fully documented using OpenAPI 3.x specifications. Each module has its own YAML file served at \`/openapi/<module>.yaml\`.
+The SOAT REST API is fully documented using OpenAPI 3.x specifications. They are
+the source of truth for the [TypeScript SDK](./sdk/introduction.md), the
+[\`soat\` CLI](./cli/introduction.md) and the [MCP tool surface](./mcp/introduction.md), and they
+are published here for any OpenAPI-compatible tool — Postman, Swagger UI, code
+generators, AI agents.
 
-These specs can be used directly with any OpenAPI-compatible tool (Postman, Swagger UI, code generators, AI agents, etc.).
+## Merged bundle
+
+Every module in one document, with all \`$ref\`s resolved inside the bundle:
+
+| Document | URL |
+| -------- | --- |
+| OpenAPI (JSON) | [/openapi.json](/openapi.json) |
+| OpenAPI (YAML) | [/openapi.yaml](/openapi.yaml) |
+| OpenAPI (YAML, \`/api\` path) | [/api/openapi.yaml](/api/openapi.yaml) |
+| Error-code catalog (JSON) | [/errors.json](/errors.json) |
+
+The bundle's \`servers\` entry is a \`baseUrl\` variable: SOAT is self-hosted, so
+point it at your own deployment. A running deployment serves the same merged
+document at \`/api/v1/openapi.json\` (authenticated).
+
+Errors are documented twice over, for machines: the \`ErrorResponse\` schema
+describes the envelope, and the \`x-error-codes\` extension — the same data as
+[/errors.json](/errors.json) — lists every code with its HTTP status and
+meaning. See [Error Responses](./api/index.md) for the contract in prose.
+
+## Per-module specs
+
+One YAML file per module, served at \`/openapi/<module>.yaml\`, for tools that
+prefer a narrower surface.
 
 | Module | URL |
 | ------ | --- |
