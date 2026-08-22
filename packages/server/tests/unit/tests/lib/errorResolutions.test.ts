@@ -1,4 +1,5 @@
 import {
+  DEFAULT_RESOLUTION,
   docsUrlFor,
   ERROR_CODES,
   ERROR_RESOLUTIONS,
@@ -70,6 +71,17 @@ describe('error resolutions', () => {
     });
 
     expect(uncovered).toEqual([]);
+  });
+
+  test('a code the registry does not know still gets a hint', () => {
+    // `resolutionFor` takes a plain string, so the docs generators and log
+    // lines can call it with text that is not a registered code — and an empty
+    // hint would be worse than a generic one, since a caller reading `hint`
+    // would find nothing there.
+    expect(resolutionFor({ code: 'NOT_A_REGISTERED_CODE' })).toBe(
+      DEFAULT_RESOLUTION
+    );
+    expect(DEFAULT_RESOLUTION).toMatch(/errors\.json/);
   });
 
   test('the docs URL is the reference-page anchor for the code', () => {

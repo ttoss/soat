@@ -96,8 +96,12 @@ export const STATUS_RESOLUTIONS: Record<number, string> = {
   503: 'A capability this operation needs is not configured on this deployment. Configure it — the message names which — rather than retrying.',
 };
 
-/** The last-resort hint, for a status class with no entry above. */
-const DEFAULT_RESOLUTION =
+/**
+ * The last-resort hint, for a code the registry does not know — `resolutionFor`
+ * takes a plain string so the docs generators and log lines can call it, which
+ * means "not a registered code" is a reachable input, not a defensive branch.
+ */
+export const DEFAULT_RESOLUTION =
   'Read `code` against the catalog at https://soat.ttoss.dev/errors.json to decide how to proceed.';
 
 /**
