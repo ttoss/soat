@@ -1,0 +1,94 @@
+/* The decision band. A light surface on purpose: it sits between two dark
+   bands (Formations, Getting access) and keeps the page's alternating rhythm. */
+.section {
+  padding: 4rem 0;
+  border-top: 1px solid rgba(0, 229, 255, 0.08);
+}
+
+.eyebrow {
+  margin-bottom: 0.75rem;
+  color: var(--ifm-color-primary);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.header {
+  max-width: 780px;
+  margin-bottom: 2.25rem;
+}
+
+.header h2 {
+  margin-bottom: 0.75rem;
+}
+
+.header p:not(.eyebrow) {
+  font-size: 1.05rem;
+  line-height: 1.7;
+}
+
+.list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.card {
+  padding: 1.4rem;
+  border: 1px solid var(--ifm-color-emphasis-200);
+  border-radius: 0.75rem;
+  background: var(--ifm-background-surface-color);
+  transition:
+    transform 300ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 300ms ease;
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(0, 229, 255, 0.28);
+}
+
+.card h3 {
+  margin-bottom: 0.5rem;
+  font-size: 1.05rem;
+}
+
+.card p {
+  margin: 0;
+  color: var(--ifm-color-emphasis-700);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.notFor {
+  max-width: 860px;
+  margin-top: 2rem;
+  padding: 1.4rem 1.6rem;
+  border-left: 3px solid var(--ifm-color-primary);
+  border-radius: 0.5rem;
+  background: var(--ifm-color-emphasis-100);
+}
+
+.notFor h3 {
+  margin-bottom: 0.6rem;
+  font-size: 1.05rem;
+}
+
+.notFor ul {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: var(--ifm-color-emphasis-700);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+@media screen and (max-width: 996px) {
+  .section {
+    padding: 3rem 0;
+  }
+
+  .list {
+    grid-template-columns: 1fr;
+  }
+}

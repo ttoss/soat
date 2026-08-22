@@ -20,6 +20,53 @@ consent, and refresh validation — plus the consent screen.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
+## Discovery endpoints
+
+An OAuth-aware client is never told these paths — it finds them. Point it at the
+deployment's base URL and it fetches the metadata below, reads the endpoints out
+of it, registers itself, and runs the flow. Nothing here needs an operator step.
+
+| Path | Spec | What it answers |
+|---|---|---|
+| `/.well-known/oauth-authorization-server` | [RFC 8414](https://www.rfc-editor.org/rfc/rfc8414) | Where `/authorize`, `/token` and `/register` are, which grants and PKCE methods are supported, and which scopes exist |
+| `/.well-known/oauth-protected-resource` | [RFC 9728](https://www.rfc-editor.org/rfc/rfc9728) | That `/mcp` is a protected resource, and which authorization server guards it |
+| `/register` | [RFC 7591](https://www.rfc-editor.org/rfc/rfc7591) | Dynamic Client Registration — the client mints its own `client_id` |
+| `/authorize` | OAuth 2.1 | Authorization request; redirects to the consent screen when no grant exists |
+| `/token` | OAuth 2.1 | Authorization-code (PKCE) and refresh-token grants |
+
+All five are served by the server itself, unauthenticated where the protocol
+requires it — a client that needed a token to discover where tokens come from
+could never start.
+
+```bash
+curl -s http://localhost:5047/.well-known/oauth-authorization-server | jq
+```
+
+```json
+{
+  "issuer": "http://localhost:5047",
+  "authorization_endpoint": "http://localhost:5047/authorize",
+  "token_endpoint": "http://localhost:5047/token",
+  "registration_endpoint": "http://localhost:5047/register",
+  "response_types_supported": ["code"],
+  "grant_types_supported": ["authorization_code", "refresh_token"],
+  "code_challenge_methods_supported": ["S256"],
+  "token_endpoint_auth_methods_supported": [
+    "client_secret_basic",
+    "client_secret_post",
+    "none"
+  ],
+  "scopes_supported": ["mcp:access"]
+}
+```
+
+The `issuer` — and therefore every advertised endpoint — comes from
+`SOAT_BASE_URL`. A deployment that leaves it unset advertises `localhost`, which
+a remote client cannot reach; see [Configuration](#configuration).
+
+`code_challenge_methods_supported` is `["S256"]` only. PKCE is mandatory in
+OAuth 2.1, and `plain` is deliberately not offered.
+
 ## Flow
 
 ```mermaid

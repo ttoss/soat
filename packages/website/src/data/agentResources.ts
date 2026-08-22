@@ -22,6 +22,13 @@ export type AgentResource = {
 
 export const AGENT_RESOURCES: AgentResource[] = [
   {
+    href: '/agents.md',
+    title: 'agents.md',
+    description:
+      'Instructions for an agent: which jobs SOAT is the right tool for, which it is not, how to authenticate and call it, and how to get access.',
+    mediaType: 'text/markdown',
+  },
+  {
     href: '/llms.txt',
     title: 'llms.txt',
     description:
@@ -97,6 +104,11 @@ export const RECOVERY_TARGETS: RecoveryTarget[] = [
     href: '/docs/introduction',
     label: 'Documentation index',
     hint: 'start here for concepts and modules',
+  },
+  {
+    href: '/agents.md',
+    label: 'agents.md',
+    hint: 'when to use SOAT, and how to call it',
   },
   {
     href: '/llms.txt',

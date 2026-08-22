@@ -4,7 +4,12 @@ import { DatabaseError } from '@ttoss/postgresdb';
 import { APICallError } from 'ai';
 
 import type { Context } from '../Context';
-import { DomainError, type ErrorCode } from '../errors';
+import {
+  docsUrlFor,
+  DomainError,
+  type ErrorCode,
+  resolutionFor,
+} from '../errors';
 
 type Next = () => Promise<void>;
 
@@ -178,7 +183,7 @@ const OPAQUE_MESSAGE = 'Internal Server Error';
 
 /**
  * The response body, in the one shape the API has: `{ error: { code, message,
- * meta? } }`.
+ * hint, docs_url, meta? } }`.
  *
  * Every branch below routes through here, the catch-all included. A response a
  * caller cannot parse the same way as every other response is the branch #913
@@ -195,6 +200,11 @@ const errorBody = (args: {
     error: {
       code: args.code,
       message: args.message,
+      // What to do about it, and where the code is documented. A caller that
+      // has never seen this code before can act on the response without
+      // leaving it — which is the whole point of a machine-readable error.
+      hint: resolutionFor({ code: args.code }),
+      docs_url: docsUrlFor({ code: args.code }),
       ...(args.meta !== undefined && { meta: args.meta }),
     },
   };

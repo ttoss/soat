@@ -81,6 +81,19 @@ const errorCodes = {
   VALIDATION_FAILED: { httpStatus: 400, description: 'Bad body.' },
 };
 
+/**
+ * Stand-ins for the server's own lookups. Injected rather than imported so a
+ * change to the real hint wording cannot break the bundle's structural tests.
+ */
+const errorHints = {
+  resolutionFor: (args: { code: string }) => {
+    return `do something about ${args.code}`;
+  },
+  docsUrlFor: (args: { code: string }) => {
+    return `https://example.test/#${args.code.toLowerCase()}`;
+  },
+};
+
 const bundle = () => {
   return buildOpenApiBundle({
     specs: [
@@ -89,6 +102,7 @@ const bundle = () => {
     ],
     version: '0.27.0',
     errorCodes,
+    errorHints,
   });
 };
 
@@ -134,6 +148,7 @@ test('tags are merged and deduplicated by name', () => {
     ],
     version: '1.0.0',
     errorCodes,
+    errorHints,
   });
 
   assert.deepEqual(
@@ -152,7 +167,22 @@ test('the bundle documents the error contract agents have to parse', () => {
   assert.deepEqual(merged['x-error-codes'].RESOURCE_NOT_FOUND, {
     http_status: 404,
     description: 'Gone missing.',
+    resolution: 'do something about RESOURCE_NOT_FOUND',
+    docs_url: 'https://example.test/#resource_not_found',
   });
+});
+
+test('the published ErrorResponse schema requires the hint and the docs URL', () => {
+  // A caller generated from this document must see `hint` as always-present,
+  // not optional: it is the field that makes an unfamiliar code actionable, so
+  // an optional one would be read as "handle its absence" and skipped.
+  // Asserted against the serialized schema: `components.schemas` is `unknown`
+  // by design (it holds whatever the module specs declared), and narrowing it
+  // here would mean casting.
+  const schema = JSON.stringify(bundle().components.schemas.ErrorResponse);
+
+  assert.match(schema, /"required":\["code","message","hint","docs_url"\]/);
+  assert.match(schema, /"docs_url":\{"type":"string","format":"uri"/);
 });
 
 test('an existing ErrorResponse schema from the specs is not overwritten', () => {
@@ -172,13 +202,18 @@ test('an existing ErrorResponse schema from the specs is not overwritten', () =>
     ],
     version: '1.0.0',
     errorCodes,
+    errorHints,
   });
 
   assert.deepEqual(merged.components.schemas.ErrorResponse, declared);
 });
 
 test('the error catalog is a flat, sorted, machine-readable document', () => {
-  const catalog = buildErrorCatalog({ errorCodes, version: '0.27.0' });
+  const catalog = buildErrorCatalog({
+    errorCodes,
+    version: '0.27.0',
+    errorHints,
+  });
 
   assert.equal(catalog.version, '0.27.0');
   assert.match(catalog.shape.example.error.code, /^[A-Z_]+$/);
@@ -192,6 +227,8 @@ test('the error catalog is a flat, sorted, machine-readable document', () => {
     code: 'RESOURCE_NOT_FOUND',
     http_status: 404,
     description: 'Gone missing.',
+    resolution: 'do something about RESOURCE_NOT_FOUND',
+    docs_url: 'https://example.test/#resource_not_found',
   });
 });
 
@@ -203,6 +240,7 @@ test('every components section survives the merge, not just schemas', () => {
     ],
     version: '1.0.0',
     errorCodes,
+    errorHints,
   });
 
   assert.ok(merged.components.parameters?.orchestration_id, 'parameters');
@@ -217,6 +255,7 @@ test('cross-file refs are rewritten to the bundle-local component', () => {
     ],
     version: '1.0.0',
     errorCodes,
+    errorHints,
   });
 
   assert.match(
@@ -232,6 +271,7 @@ test('a ref with no target in the bundle is reported, not published silently', (
     specs: [{ name: 'orchestrations', spec: specWithComponents }],
     version: '1.0.0',
     errorCodes,
+    errorHints,
   });
 
   assert.deepEqual(findDanglingRefs({ bundle: merged }), [

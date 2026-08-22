@@ -13,9 +13,11 @@
 /static/api
 /static/errors.json
 /static/404.md
+/static/agents.md
 /docs/openapi-specs.md
 /docs/permissions.md
 /docs/webhook-events.md
+/docs/error-codes.md
 
 # Misc
 .DS_Store

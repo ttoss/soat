@@ -15,6 +15,16 @@ export type ErrorCodeEntry = {
 
 export type ErrorCodes = Record<string, ErrorCodeEntry>;
 
+/**
+ * The hint lookups the server resolves an error's `hint` and `docs_url` with,
+ * injected rather than imported so the bundle stays a pure function of its
+ * inputs (and so the tests can drive it with a synthetic registry).
+ */
+export type ErrorHints = {
+  resolutionFor: (args: { code: string }) => string;
+  docsUrlFor: (args: { code: string }) => string;
+};
+
 export type OpenApiTag = {
   name: string;
   description?: string;
@@ -73,7 +83,15 @@ export type OpenApiBundle = {
   tags: OpenApiTag[];
   paths: Record<string, unknown>;
   components: BundleComponents;
-  'x-error-codes': Record<string, { http_status: number; description: string }>;
+  'x-error-codes': Record<
+    string,
+    {
+      http_status: number;
+      description: string;
+      resolution: string;
+      docs_url: string;
+    }
+  >;
 };
 
 export type ErrorCatalog = {
@@ -83,9 +101,22 @@ export type ErrorCatalog = {
   description: string;
   shape: {
     description: string;
-    example: { error: { code: string; message: string } };
+    example: {
+      error: {
+        code: string;
+        message: string;
+        hint: string;
+        docs_url: string;
+      };
+    };
   };
-  codes: { code: string; http_status: number; description: string }[];
+  codes: {
+    code: string;
+    http_status: number;
+    description: string;
+    resolution: string;
+    docs_url: string;
+  }[];
 };
 
 const BUNDLE_DESCRIPTION = `Complete REST surface of a SOAT deployment, merged from the per-module OpenAPI
@@ -98,13 +129,15 @@ or a project key (\`sk_…\`). Request and response bodies are snake_case.
 
 Every error response — including the ones a client is most tempted to
 special-case (401, 403, 429, 500) — is JSON of the same shape:
-\`{ "error": { "code": "RESOURCE_NOT_FOUND", "message": "…", "meta": { … } } }\`.
-\`error.code\` is stable and safe to branch on; the full catalog of codes, their
+\`{ "error": { "code": "RESOURCE_NOT_FOUND", "message": "…", "hint": "…",
+"docs_url": "…", "meta": { … } } }\`.
+\`error.code\` is stable and safe to branch on, and \`error.hint\` says what to do
+about the failure; the full catalog of codes, their
 HTTP statuses and what they mean is in this document's \`x-error-codes\`
 extension and at https://soat.ttoss.dev/errors.json.`;
 
 const ERROR_SHAPE_DESCRIPTION =
-  'Every 4xx and 5xx response body. `error.code` is a stable identifier safe to branch on; `error.message` is human-readable and may change; `error.meta` carries per-code context when available.';
+  'Every 4xx and 5xx response body. `error.code` is a stable identifier safe to branch on; `error.message` is human-readable and may change; `error.hint` says what to do about the failure and `error.docs_url` addresses the reference section for the code; `error.meta` carries per-code context when available.';
 
 const errorResponseSchema = () => {
   return {
@@ -114,7 +147,7 @@ const errorResponseSchema = () => {
     properties: {
       error: {
         type: 'object',
-        required: ['code', 'message'],
+        required: ['code', 'message', 'hint', 'docs_url'],
         properties: {
           code: {
             type: 'string',
@@ -124,6 +157,17 @@ const errorResponseSchema = () => {
           message: {
             type: 'string',
             description: 'Human-readable description of what went wrong.',
+          },
+          hint: {
+            type: 'string',
+            description:
+              'What to do about this error, resolved per code so a caller meeting it for the first time can act without leaving the response.',
+          },
+          docs_url: {
+            type: 'string',
+            format: 'uri',
+            description:
+              'Reference-page anchor documenting this code, e.g. https://soat.ttoss.dev/docs/error-codes#resource_not_found.',
           },
           meta: {
             type: 'object',
@@ -276,6 +320,7 @@ export const buildOpenApiBundle = (args: {
   specs: { name: string; spec: ModuleSpec }[];
   version: string;
   errorCodes: ErrorCodes;
+  errorHints: ErrorHints;
 }): OpenApiBundle => {
   const { paths, components, tags } = mergeSpecs(args.specs);
 
@@ -324,6 +369,8 @@ export const buildOpenApiBundle = (args: {
           {
             http_status: args.errorCodes[code].httpStatus,
             description: args.errorCodes[code].description,
+            resolution: args.errorHints.resolutionFor({ code }),
+            docs_url: args.errorHints.docsUrlFor({ code }),
           },
         ];
       })
@@ -334,6 +381,7 @@ export const buildOpenApiBundle = (args: {
 export const buildErrorCatalog = (args: {
   errorCodes: ErrorCodes;
   version: string;
+  errorHints: ErrorHints;
 }): ErrorCatalog => {
   return {
     $schema: 'https://json-schema.org/draft/2020-12/schema',
@@ -347,6 +395,8 @@ export const buildErrorCatalog = (args: {
         error: {
           code: 'RESOURCE_NOT_FOUND',
           message: "Project 'proj_abc123' not found.",
+          hint: args.errorHints.resolutionFor({ code: 'RESOURCE_NOT_FOUND' }),
+          docs_url: args.errorHints.docsUrlFor({ code: 'RESOURCE_NOT_FOUND' }),
         },
       },
     },
@@ -355,6 +405,8 @@ export const buildErrorCatalog = (args: {
         code,
         http_status: args.errorCodes[code].httpStatus,
         description: args.errorCodes[code].description,
+        resolution: args.errorHints.resolutionFor({ code }),
+        docs_url: args.errorHints.docsUrlFor({ code }),
       };
     }),
   };
