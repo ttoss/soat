@@ -1,6 +1,7 @@
 import { models } from '@soat/postgresdb';
 import { App, Router } from '@ttoss/http-server';
 import { APICallError } from 'ai';
+import { DomainError, docsUrlFor, resolutionFor } from 'src/errors';
 import { errorLoggerMiddleware } from 'src/middleware/errorLogger';
 import request from 'supertest';
 
@@ -36,7 +37,12 @@ describe('errorLogger middleware', () => {
 
     expect(response.status).toBe(500);
     expect(response.body).toEqual({
-      error: { code: 'INTERNAL_ERROR', message: 'Internal Server Error' },
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'Internal Server Error',
+        hint: resolutionFor({ code: 'INTERNAL_ERROR' }),
+        docs_url: docsUrlFor({ code: 'INTERNAL_ERROR' }),
+      },
     });
   });
 
@@ -60,7 +66,12 @@ describe('errorLogger middleware', () => {
 
     expect(response.status).toBe(500);
     expect(response.body).toEqual({
-      error: { code: 'INTERNAL_ERROR', message: 'Internal Server Error' },
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'Internal Server Error',
+        hint: resolutionFor({ code: 'INTERNAL_ERROR' }),
+        docs_url: docsUrlFor({ code: 'INTERNAL_ERROR' }),
+      },
     });
   });
 
@@ -91,7 +102,12 @@ describe('errorLogger middleware', () => {
 
     expect(response.status).toBe(500);
     expect(response.body).toEqual({
-      error: { code: 'INTERNAL_ERROR', message: 'Internal Server Error' },
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'Internal Server Error',
+        hint: resolutionFor({ code: 'INTERNAL_ERROR' }),
+        docs_url: docsUrlFor({ code: 'INTERNAL_ERROR' }),
+      },
     });
   });
 
@@ -115,7 +131,12 @@ describe('errorLogger middleware', () => {
 
     expect(response.status).toBe(500);
     expect(response.body).toEqual({
-      error: { code: 'INTERNAL_ERROR', message: 'Internal Server Error' },
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'Internal Server Error',
+        hint: resolutionFor({ code: 'INTERNAL_ERROR' }),
+        docs_url: docsUrlFor({ code: 'INTERNAL_ERROR' }),
+      },
     });
   });
 });
@@ -187,5 +208,73 @@ describe('every error response carries the object shape', () => {
     expect(response.body.error.code).toBe('INTERNAL_ERROR');
     expect(response.body.error.message).toBe('Internal Server Error');
     expect(JSON.stringify(response.body)).not.toMatch(/routing detail/);
+  });
+});
+
+/**
+ * `code` and `message` say what happened; `hint` and `docs_url` say what to do
+ * about it. They are part of the shape, not a nicety: an agent handling a code
+ * it has never seen has nothing else in the response to act on, and the audit
+ * that prompted this read the API as returning no resolution guidance at all.
+ */
+describe('every error response carries a resolution hint', () => {
+  const appAnswering = (thrown: unknown) => {
+    const app = new App();
+    const router = new Router();
+
+    app.use(errorLoggerMiddleware);
+    router.get('/boom', async () => {
+      throw thrown;
+    });
+    app.use(router.routes());
+
+    return request(app.callback()).get('/boom');
+  };
+
+  test('a DomainError carries the hint and docs URL of its own code', async () => {
+    const response = await appAnswering(
+      new DomainError('RESOURCE_NOT_FOUND', "Project 'proj_abc' not found.")
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.body.error.hint).toBe(
+      resolutionFor({ code: 'RESOURCE_NOT_FOUND' })
+    );
+    expect(response.body.error.docs_url).toBe(
+      'https://soat.ttoss.dev/docs/error-codes#resource_not_found'
+    );
+  });
+
+  test('meta still rides alongside the hint', async () => {
+    const response = await appAnswering(
+      new DomainError('RESOURCE_NOT_FOUND', 'nope', { id: 'proj_abc' })
+    );
+
+    expect(response.body.error.meta).toEqual({ id: 'proj_abc' });
+    expect(response.body.error.hint.length).toBeGreaterThan(0);
+  });
+
+  test('the catch-all 500 carries one too', async () => {
+    const response = await appAnswering(new Error('boom'));
+
+    expect(response.body.error.hint).toBe(
+      resolutionFor({ code: 'INTERNAL_ERROR' })
+    );
+    expect(response.body.error.docs_url).toBe(
+      'https://soat.ttoss.dev/docs/error-codes#internal_error'
+    );
+  });
+
+  test('an exposed koa error is labelled REQUEST_REJECTED and hinted as one', async () => {
+    const response = await appAnswering(
+      Object.assign(new Error('Payload Too Large'), {
+        status: 413,
+        expose: true,
+      })
+    );
+
+    expect(response.body.error.hint).toBe(
+      resolutionFor({ code: 'REQUEST_REJECTED' })
+    );
   });
 });

@@ -32,6 +32,7 @@ test('the machine-readable entry points an agent looks for are published', () =>
   });
 
   for (const href of [
+    '/agents.md',
     '/openapi.json',
     '/errors.json',
     '/llms.txt',

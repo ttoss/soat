@@ -923,6 +923,8 @@ components:
           required:
             - code
             - message
+            - hint
+            - docs_url
           properties:
             code:
               type: string
@@ -931,6 +933,21 @@ components:
             message:
               type: string
               example: 'Resource not found'
+            hint:
+              type: string
+              description: >-
+                What to do about this error. Resolved per code, so a caller that
+                has never seen the code before can act on the response without
+                leaving it.
+              example: >-
+                Check the id, and check that the credential can see the project
+                that owns the resource.
+            docs_url:
+              type: string
+              format: uri
+              description: The reference-page anchor documenting this code.
+              example: >-
+                https://soat.ttoss.dev/docs/error-codes#resource_not_found
             meta:
               type: object
               description: Optional structured context for the error.

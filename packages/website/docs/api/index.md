@@ -73,11 +73,17 @@ All errors return a 4xx or 5xx status code. Most business-logic errors use a str
   "error": {
     "code": "RESOURCE_NOT_FOUND",
     "message": "Project 'proj_abc123' not found.",
+    "hint": "Check the id, and check that the credential can see the project that owns the resource — a resource in another project is indistinguishable from one that does not exist. List the collection to confirm.",
+    "docs_url": "https://soat.ttoss.dev/docs/error-codes#resource_not_found",
     "meta": { "id": "proj_abc123" }
   }
 }
 ```
 
+`code` is stable and safe to branch on; `message` describes this occurrence.
+`hint` says what to do about the failure, and `docs_url` addresses the section
+for that code on the [Error Codes](/docs/error-codes) page — together they mean a
+caller meeting a code for the first time can act without leaving the response.
 `meta` is optional and present only for some error codes.
 
 **Every** error response uses this shape, with no exceptions — `error` is always
@@ -87,17 +93,21 @@ special-cased:
 
 | Situation                                 | Status | Body                                                                                   |
 | ----------------------------------------- | ------ | -------------------------------------------------------------------------------------- |
-| Missing or invalid credentials            | `401`  | `{ "error": { "code": "UNAUTHORIZED", "message": "Unauthorized" } }`                   |
-| Insufficient permissions                  | `403`  | `{ "error": { "code": "FORBIDDEN", "message": "Forbidden" } }`                         |
-| Unparseable request body                  | `400`  | `{ "error": { "code": "VALIDATION_FAILED", "message": "Malformed request body: …" } }` |
-| Rejected by the HTTP layer before routing | varies | `{ "error": { "code": "REQUEST_REJECTED", "message": "…" } }`                          |
-| Unhandled server failure                  | `500`  | `{ "error": { "code": "INTERNAL_ERROR", "message": "Internal Server Error" } }`        |
+| Missing or invalid credentials            | `401`  | `code: "UNAUTHORIZED"`, `message: "Unauthorized"`                   |
+| Insufficient permissions                  | `403`  | `code: "FORBIDDEN"`, `message: "Forbidden"`                         |
+| Unparseable request body                  | `400`  | `code: "VALIDATION_FAILED"`, `message: "Malformed request body: …"` |
+| Rejected by the HTTP layer before routing | varies | `code: "REQUEST_REJECTED"`                          |
+| Unhandled server failure                  | `500`  | `code: "INTERNAL_ERROR"`, `message: "Internal Server Error"`        |
+
+Each of these carries its own `hint` and `docs_url` as well; only `code` and
+`message` are shown above.
 
 The full catalog of codes — every `error.code` the API can return, with its HTTP
-status and what it means — is published as JSON at
-[/errors.json](/errors.json), and as the `x-error-codes` extension of
-[/openapi.json](/openapi.json). Both are generated from the server source, so a
-client can branch on codes without scraping this page.
+status, what it means, and what to do about it — is published as JSON at
+[/errors.json](/errors.json), as the `x-error-codes` extension of
+[/openapi.json](/openapi.json), and as a page at
+[Error Codes](/docs/error-codes). All three are generated from the server
+source, so a client can branch on codes without scraping this page.
 
 `INTERNAL_ERROR` always carries exactly that message: the underlying exception is
 logged server-side and never forwarded to the client, so the body carries no

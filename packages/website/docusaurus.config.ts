@@ -5,6 +5,8 @@ import type * as Preset from '@docusaurus/preset-classic';
 import type { Config } from '@docusaurus/types';
 import { themes as prismThemes } from 'prism-react-renderer';
 
+import { buildLlmsRootContent } from './src/data/agentInstructions';
+
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
 const buildOpenApiConfig = () => {
@@ -65,6 +67,48 @@ const config: Config = {
       },
     },
     {
+      // Brand identity, so a search for "SOAT" can be tied to this domain
+      // rather than to one of the many unrelated things spelled the same way.
+      // `alternateName` carries the qualified forms people actually type, and
+      // `sameAs` the profiles that corroborate the name.
+      tagName: 'script',
+      attributes: { type: 'application/ld+json' },
+      innerHTML: JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'WebSite',
+        '@id': 'https://soat.ttoss.dev/#website',
+        name: 'SOAT',
+        alternateName: [
+          'SOAT by ttoss',
+          'ttoss SOAT',
+          'SOAT AI agent infrastructure',
+        ],
+        url: 'https://soat.ttoss.dev',
+        description:
+          'Documentation for SOAT, the self-hostable infrastructure layer for production-ready AI agents.',
+        inLanguage: 'en',
+        publisher: { '@id': 'https://ttoss.dev/#organization' },
+      }),
+    },
+    {
+      tagName: 'script',
+      attributes: { type: 'application/ld+json' },
+      innerHTML: JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'Organization',
+        '@id': 'https://ttoss.dev/#organization',
+        name: 'Terezinha Tech Operations',
+        alternateName: 'ttoss',
+        url: 'https://ttoss.dev',
+        logo: 'https://soat.ttoss.dev/img/soat-logo.png',
+        sameAs: [
+          'https://github.com/ttoss',
+          'https://github.com/ttoss/soat',
+          'https://www.npmjs.com/org/soat',
+        ],
+      }),
+    },
+    {
       tagName: 'script',
       attributes: { type: 'application/ld+json' },
       innerHTML: JSON.stringify({
@@ -76,6 +120,12 @@ const config: Config = {
         description:
           'Self-hostable infrastructure layer for production-ready AI agents: IAM, storage, vector search, memory, orchestration, RAG, and a full MCP server.',
         url: 'https://soat.ttoss.dev',
+        sameAs: [
+          'https://github.com/ttoss/soat',
+          'https://www.npmjs.com/package/@soat/cli',
+          'https://hub.docker.com/r/ttoss/soat',
+        ],
+        isPartOf: { '@id': 'https://soat.ttoss.dev/#website' },
         license: 'https://github.com/ttoss/soat/blob/main/LICENSE',
         offers: {
           '@type': 'Offer',
@@ -188,6 +238,12 @@ const config: Config = {
         description:
           'Infrastructure for AI Apps — Backend, identity, storage, memory, and orchestration.',
         generateLLMsTxt: true,
+        // The link index answers "what is documented". An agent's first
+        // question is "should I be here at all", so the when-to-use guidance
+        // leads both files. `checkAgentSurfaces` fails the build if it is not
+        // in the output — this is one config key away from vanishing silently.
+        rootContent: buildLlmsRootContent(),
+        fullRootContent: buildLlmsRootContent(),
         // llms-full.txt is generated via customLLMFiles below so it can
         // exclude the generated API reference: the split keeps every page —
         // including all /docs/api/* operations — linkable from llms.txt (and
@@ -223,6 +279,7 @@ const config: Config = {
               'openapi-specs.md',
             ],
             includeUnmatchedLast: true,
+            rootContent: buildLlmsRootContent(),
             description:
               'Infrastructure for AI Apps — Backend, identity, storage, memory, and orchestration.',
           },
