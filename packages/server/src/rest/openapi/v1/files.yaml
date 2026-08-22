@@ -838,3 +838,8 @@ components:
             error:
               code: 'FORBIDDEN'
               message: 'Forbidden'
+              hint: >-
+                The credential authenticated but is not allowed this action.
+                Attach an IAM policy granting the action to the caller, or use a
+                credential that has it.
+              docs_url: 'https://soat.ttoss.dev/docs/error-codes#forbidden'

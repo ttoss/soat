@@ -30,7 +30,7 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   FORBIDDEN:
     'The credential authenticated but is not allowed this action. Attach an IAM policy granting the action to the caller, or use a credential that has it.',
   API_KEY_PROJECT_SCOPE:
-    'This API key is scoped to a single project and the request targets another one (or none). Omit `project_id` to use the key\'s own project, or use an unscoped credential.',
+    "This API key is scoped to a single project and the request targets another one (or none). Omit `project_id` to use the key's own project, or use an unscoped credential.",
   RESOURCE_NOT_FOUND:
     'Check the id, and check that the credential can see the project that owns the resource — a resource in another project is indistinguishable from one that does not exist. List the collection to confirm.',
   VALIDATION_FAILED:
@@ -54,7 +54,7 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   SINGLE_SESSION_CONFLICT:
     'The agent allows one open session per actor. Reuse the session named in `meta.session_id`, or close it first.',
   SESSION_EXPIRED:
-    'Open a new session; an expired one cannot be revived. Raise the agent\'s session TTL if this happens sooner than the workload needs.',
+    "Open a new session; an expired one cannot be revived. Raise the agent's session TTL if this happens sooner than the workload needs.",
   SESSION_CLOSED:
     'The session is closed and accepts no further messages. Open a new one, or fork this one to keep its history.',
   NAME_CONFLICT:
@@ -68,7 +68,7 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   UPLOAD_TOKEN_USED:
     'This upload token has already been redeemed. Request a new one for another upload.',
   UNSUPPORTED_FILE_TYPE:
-    'The file\'s media type has no parser on this deployment. Convert it to a supported type, or add an ingestion rule that does.',
+    "The file's media type has no parser on this deployment. Convert it to a supported type, or add an ingestion rule that does.",
   FILE_TOO_LARGE_FOR_SYNC:
     'The file is too large to parse inside the request. Call the same operation without `wait=true` and poll the handle it returns.',
   BOOTSTRAP_ALREADY_COMPLETED:
