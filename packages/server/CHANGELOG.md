@@ -3,6 +3,26 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.29.0](https://github.com/ttoss/soat/compare/v0.28.0...v0.29.0) (2026-08-23)
+
+### Features
+
+* **brand:** describe SOAT the same way on every property it owns ([#1102](https://github.com/ttoss/soat/issues/1102)) ([2210234](https://github.com/ttoss/soat/commit/22102342f6a8129bc7e64b2d2f0f9e7d4ba41a97)), closes [#1099](https://github.com/ttoss/soat/issues/1099)
+* default-deny tool egress to non-public destinations ([#1105](https://github.com/ttoss/soat/issues/1105)) ([030d203](https://github.com/ttoss/soat/commit/030d203ba6e792d383f6a93e3f267879bcefd576))
+* **oauth:** describe the OAuth 2.1 endpoints in the OpenAPI specs ([#1100](https://github.com/ttoss/soat/issues/1100)) ([28f2085](https://github.com/ttoss/soat/commit/28f20859365902aa78c79173d53a1ff530a3c59f)), closes [#1099](https://github.com/ttoss/soat/issues/1099)
+* **website:** tell agents when to use SOAT and what to do when a call fails ([#1098](https://github.com/ttoss/soat/issues/1098)) ([efc23cd](https://github.com/ttoss/soat/commit/efc23cdf8ac189a9b86137d2d8b2d2f5d3520928))
+
+### BREAKING CHANGES
+
+* an `http` or `mcp` tool whose target is not publicly routable
+  now fails with `403 TOOL_EGRESS_BLOCKED` unless the destination is listed in
+  the new `TOOL_EGRESS_ALLOWED_HOSTS` environment variable. Deployments whose
+  tools call internal services must declare them; when the destination is SOAT's
+  own API, prefer a `builtin` tool, which dispatches in-process under the
+  caller's permissions instead of leaving the network. The production Docker
+  image now runs as uid 1000 (`node`), so a bind-mounted files volume needs
+  `chown 1000:1000` once.
+
 # [0.28.0](https://github.com/ttoss/soat/compare/v0.27.0...v0.28.0) (2026-08-21)
 
 ### Bug Fixes
