@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.29.0](https://github.com/ttoss/soat/compare/v0.28.0...v0.29.0) (2026-08-23)
+
+### Features
+
+* **oauth:** describe the OAuth 2.1 endpoints in the OpenAPI specs ([#1100](https://github.com/ttoss/soat/issues/1100)) ([28f2085](https://github.com/ttoss/soat/commit/28f20859365902aa78c79173d53a1ff530a3c59f)), closes [#1099](https://github.com/ttoss/soat/issues/1099)
+
 # [0.28.0](https://github.com/ttoss/soat/compare/v0.27.0...v0.28.0) (2026-08-21)
 
 **Note:** Version bump only for package @soat/app
