@@ -15,9 +15,24 @@
  *
  * Run with: pnpm tsx scripts/advertiseMarkdownTwins.ts [buildDir]
  *
- * Note this is discovery, not negotiation: serving Markdown from the *same*
- * URL under `Accept: text/markdown` (with `Vary: Accept`) needs logic at the
- * edge, which the static S3 + CloudFront origin cannot run today.
+ * Note this is discovery, not negotiation, and the difference is not a choice
+ * made here. acceptmarkdown.com asks for four things on the *same* URL —
+ * Markdown under `Accept: text/markdown`, `Vary: Accept` on the response, `406`
+ * for an unsupported type, and q-value ordering — and every one of them is
+ * request-time logic. An S3 origin cannot run any of it, and the distribution
+ * in front of it is not ours to change: `carlin deploy static-app` builds the
+ * whole `AWS::CloudFront::Distribution` from a fixed template (cache policy,
+ * response-headers policy, and a single `AppendIndexDotHtml` viewer function
+ * included), and exposes no hook for another function association or for a
+ * policy that adds `Accept` to `Vary` — which is why the site answers
+ * `Vary: Origin` today.
+ *
+ * Closing it needs one of: a `carlin` option for extra viewer-request functions
+ * and a custom response-headers policy (upstream, `@ttoss`), or the same two
+ * resources attached to the distribution out-of-band. The rewrite itself is
+ * four lines — map an `Accept` that prefers `text/markdown` onto the `.md` twin
+ * this script already advertises, since every page has one — so the work is the
+ * plumbing, not the logic.
  */
 
 import * as fs from 'node:fs';
@@ -33,13 +48,21 @@ export type MarkdownTwin = {
 
 /**
  * The Markdown twin of a built HTML file, or `null` when the file is not a
- * page directory (`index.html` at the root, `404.html`, …) and therefore has
- * no `<page>.md` sibling.
+ * page directory (`index.html` at the root, …) and therefore has no
+ * `<page>.md` sibling. `404.html` is the one special case — see below.
  */
 export const markdownTwinOf = (args: {
   htmlRelativePath: string;
 }): MarkdownTwin | null => {
   const normalized = args.htmlRelativePath.split(path.sep).join('/');
+
+  // The 404 page is the one page whose Markdown twin is not derived from its
+  // own path: Docusaurus emits it as a bare `404.html`, and its twin is the
+  // generated recovery map. It is also the page that needs the pointer most —
+  // an agent lands there precisely when it has lost the thread.
+  if (normalized === '404.html') {
+    return { markdownRelativePath: '404.md', href: '/404.md' };
+  }
 
   if (!normalized.endsWith('/index.html')) return null;
 

@@ -3,3 +3,13 @@ User-agent: *
 Allow: /
 
 Sitemap: https://soat.ttoss.dev/sitemap.xml
+
+# Written for agents, not only for crawlers:
+#   /agents.md      when to use SOAT, when not to, how to call it, how to get access
+#   /llms.txt       every documentation page, one line each
+#   /llms-full.txt  the whole prose corpus in one file
+#   /openapi.json   the entire REST surface as one OpenAPI 3.0 document
+#   /errors.json    every error code, its HTTP status, and what to do about it
+#
+# Every documentation page has a Markdown twin: append .md to its URL
+# (https://soat.ttoss.dev/docs/introduction.md).

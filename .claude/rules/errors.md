@@ -100,13 +100,34 @@ to HTTP responses** — let errors propagate to the middleware.
 
 | Error type              | HTTP status         | Response body                                                        |
 | ----------------------- | ------------------- | -------------------------------------------------------------------- |
-| `DomainError`           | `error.httpStatus`  | `{ error: { code, message, meta? } }`                                |
-| Koa HTTP error, exposed | the error's status  | `{ error: { code: 'REQUEST_REJECTED', message } }`                   |
-| Anything else           | 500                 | `{ error: { code: 'INTERNAL_ERROR', message: 'Internal Server Error' } }` — **raw `error.message` is never forwarded** |
+| `DomainError`           | `error.httpStatus`  | `{ error: { code, message, hint, docs_url, meta? } }`                |
+| Koa HTTP error, exposed | the error's status  | `{ error: { code: 'REQUEST_REJECTED', message, hint, docs_url } }`   |
+| Anything else           | 500                 | `{ error: { code: 'INTERNAL_ERROR', message: 'Internal Server Error', hint, docs_url } }` — **raw `error.message` is never forwarded** |
 
-`{ error: { code, message, meta? } }` is the **only** error shape the API
-returns — `401`, `403` and the 500 catch-all included. A client never has to
-test the type of `error` before reading `error.code`.
+`{ error: { code, message, hint, docs_url, meta? } }` is the **only** error shape
+the API returns — `401`, `403` and the 500 catch-all included. A client never has
+to test the type of `error` before reading `error.code`.
+
+`hint` and `docs_url` are not optional and are never written by a handler:
+`errorBody` resolves both from the code via `resolutionFor` / `docsUrlFor`
+(`src/errors/resolutions.ts`), so every code — including one added tomorrow with
+no explicit entry — answers with an actionable hint and a link that resolves.
+
+- **`hint`** — what to do about the failure. An explicit per-code entry in
+  `ERROR_RESOLUTIONS` where the status class is too vague to act on, otherwise
+  the `STATUS_RESOLUTIONS` fallback for the code's HTTP status.
+  `lib/errorResolutions.test.ts` asserts totality: every registered code
+  resolves to a non-empty sentence.
+- **`docs_url`** — the anchor for the code on the generated
+  [Error Codes](https://soat.ttoss.dev/docs/error-codes) page. The page is
+  generated from this registry by
+  `packages/website/scripts/generateErrorCodesPage.ts`, and
+  `errorCodesPage.test.ts` asserts the anchor rule there and the one in
+  `docsUrlFor` agree — a mismatch would be a dead link that still returns `200`.
+
+Adding a code therefore needs nothing beyond the `ERROR_CODES` entry. Add an
+`ERROR_RESOLUTIONS` entry too whenever "what to do" is more specific than the
+status class.
 
 Leaving the catch-all as a bare string was the last exception, and it was the
 worst one to leave: a catch-all is the response that arrives unannounced, so it
@@ -177,6 +198,8 @@ lost:
 | `rest/adminGateContract.test.ts` | a hand-rolled `role !== 'admin'` gate that answers `403` — in either denial form |
 | `rest/wireKeyContract.test.ts` | a handler reading a camelCase wire key |
 | `rest/readScopeHelperContract.test.ts` | `resolveReadProjectIds` guarding an action that is not a `Get`/`List`/`Search`/`Export` — the read helper on a write route |
+| `lib/errorResolutions.test.ts` | a registered code with no actionable `hint`, a stale `ERROR_RESOLUTIONS` key, or a status class with no fallback |
+| `@soat/website` `errorCodesPage.test.ts` | a `docs_url` whose anchor no heading on the generated Error Codes page provides |
 
 That last one is the fourth copy of the same lesson. Thirteen write routes —
 agent update/delete, version restore, release set/promote/abort, guardrail

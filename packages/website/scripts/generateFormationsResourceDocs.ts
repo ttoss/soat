@@ -11,6 +11,7 @@ import * as path from 'node:path';
 import * as url from 'node:url';
 
 import { load } from 'js-yaml';
+import { escapeMdx } from './mdx';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
@@ -58,10 +59,6 @@ const toTitle = (resourceType: string): string =>
     .split('_')
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ');
-
-/** Escape MDX-special characters in description strings so Docusaurus doesn't treat { } as JSX. */
-const escapeMdx = (text: string): string =>
-  text.replace(/\{/g, '&#123;').replace(/\}/g, '&#125;');
 
 // ── Type name helpers ─────────────────────────────────────────────────────
 

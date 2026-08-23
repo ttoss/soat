@@ -40,6 +40,7 @@ test('text length counts prose, not markup, scripts or styles', () => {
 test('the required surfaces include every machine-readable entry point', () => {
   assert.deepEqual([...REQUIRED_SURFACES].sort(), [
     '404.md',
+    'agents.md',
     'api/openapi.yaml',
     'errors.json',
     'llms-full.txt',

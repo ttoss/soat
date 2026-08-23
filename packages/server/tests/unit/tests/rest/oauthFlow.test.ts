@@ -475,3 +475,40 @@ describe('OAuth authorization server (SPA consent)', () => {
     });
   });
 });
+
+/**
+ * RFC 8414 discovery. The flow above is only reachable by a client that can
+ * *find* it, and an OAuth-aware MCP client finds it exactly one way: by
+ * fetching this document and reading the endpoints out of it. Nothing else in
+ * this file would notice if the metadata stopped being served — the tests drive
+ * `/authorize` and `/token` by their known paths — so the discovery contract is
+ * pinned here on its own.
+ */
+describe('GET /.well-known/oauth-authorization-server (RFC 8414)', () => {
+  test('advertises the endpoints and capabilities of the authorization server', async () => {
+    const res = await testClient.get('/.well-known/oauth-authorization-server');
+
+    expect(res.status).toBe(200);
+    expect(typeof res.body.issuer).toBe('string');
+    expect(res.body.authorization_endpoint).toBe(`${res.body.issuer}/authorize`);
+    expect(res.body.token_endpoint).toBe(`${res.body.issuer}/token`);
+    // Dynamic Client Registration (RFC 7591) is what lets an MCP client
+    // onboard itself with no operator step — the self-serve half of the flow.
+    expect(res.body.registration_endpoint).toBe(`${res.body.issuer}/register`);
+    expect(res.body.response_types_supported).toContain('code');
+    expect(res.body.grant_types_supported).toEqual(
+      expect.arrayContaining(['authorization_code', 'refresh_token'])
+    );
+    // PKCE is mandatory in OAuth 2.1; `plain` must not be offered.
+    expect(res.body.code_challenge_methods_supported).toEqual(['S256']);
+    expect(res.body.scopes_supported).toContain('mcp:access');
+  });
+
+  test('is reachable without a credential', async () => {
+    // Discovery precedes authentication by definition: a client that needed a
+    // token to learn where to get a token could never start.
+    const res = await testClient.get('/.well-known/oauth-authorization-server');
+
+    expect(res.status).toBe(200);
+  });
+});

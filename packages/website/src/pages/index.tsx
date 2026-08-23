@@ -1,6 +1,9 @@
+import Head from '@docusaurus/Head';
 import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
+import HomepageOnboarding from '@site/src/components/HomepageOnboarding';
 import HomepageSurfaces from '@site/src/components/HomepageSurfaces';
+import HomepageWhenToUse from '@site/src/components/HomepageWhenToUse';
 import { AGENT_RESOURCES } from '@site/src/data/agentResources';
 import CodeBlock from '@theme/CodeBlock';
 import Heading from '@theme/Heading';
@@ -315,6 +318,17 @@ export default function Home(): React.ReactNode {
       title={`${siteConfig.title} — Infrastructure for production-ready AI agents`}
       description="Durable sessions, multi-agent orchestration, knowledge, memory, guardrails, IAM, and traces — all from one self-hosted Node.js server."
     >
+      {/* The homepage is the only page with no Markdown twin of its own, so it
+          is the one place the agent instruction file can be advertised as an
+          alternate without competing with a page's own `.md` link. */}
+      <Head>
+        <link
+          rel="alternate"
+          type="text/markdown"
+          title="Agent instructions"
+          href="/agents.md"
+        />
+      </Head>
       {/* The <h1> lives inside <main> on purpose: content extractors (and the
           AI crawlers built on them) read the main content region, and a hero
           heading parked outside it reads as a page with no heading at all. */}
@@ -324,6 +338,8 @@ export default function Home(): React.ReactNode {
         <HomepageSurfaces />
         <FormationsSpotlight />
         <CodeShowcase />
+        <HomepageWhenToUse />
+        <HomepageOnboarding />
         <AgentSurfaces />
         <FinalCta />
       </main>

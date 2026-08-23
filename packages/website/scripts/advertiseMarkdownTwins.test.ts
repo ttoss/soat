@@ -25,7 +25,17 @@ test('a page directory maps to the Markdown twin the llms plugin emits', () => {
 
 test('pages with no page directory have no twin', () => {
   assert.equal(markdownTwinOf({ htmlRelativePath: 'index.html' }), null);
-  assert.equal(markdownTwinOf({ htmlRelativePath: '404.html' }), null);
+  assert.equal(markdownTwinOf({ htmlRelativePath: 'docs/x.html' }), null);
+});
+
+test('the 404 page is advertised against the generated recovery map', () => {
+  // Not derived from its path: Docusaurus emits a bare `404.html`, and the twin
+  // is `/404.md`, written by generateAgentSurfaces. An agent that lands on a
+  // dead URL has no other way to ask for the Markdown recovery body.
+  assert.deepEqual(markdownTwinOf({ htmlRelativePath: '404.html' }), {
+    markdownRelativePath: '404.md',
+    href: '/404.md',
+  });
 });
 
 test('the alternate link is injected once, just before </head>', () => {

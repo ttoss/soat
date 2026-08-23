@@ -6,6 +6,7 @@
  *   static/api/openapi.yaml  the same document at the conventional /api path
  *   static/errors.json       the error-code catalog agents parse errors with
  *   static/404.md            the Markdown recovery map also served with the 404
+ *   static/agents.md         when to use SOAT, how to call it, how to get access
  *
  * Run with: pnpm tsx scripts/generateAgentSurfaces.ts
  */
@@ -17,6 +18,8 @@ import * as url from 'node:url';
 import { dump, load } from 'js-yaml';
 
 import { ERROR_CODES } from '../../server/src/errors/codes';
+import { docsUrlFor, resolutionFor } from '../../server/src/errors/resolutions';
+import { buildAgentInstructionsMarkdown } from '../src/data/agentInstructions';
 import { buildNotFoundMarkdown } from '../src/data/agentResources';
 import type { ErrorCodes, ModuleSpec } from './openApiBundle';
 import {
@@ -69,10 +72,13 @@ const generate = () => {
   const version = readVersion();
   const errorCodes: ErrorCodes = ERROR_CODES;
 
+  const errorHints = { resolutionFor, docsUrlFor };
+
   const bundle = buildOpenApiBundle({
     specs: readSpecs(),
     version,
     errorCodes,
+    errorHints,
   });
 
   const dangling = findDanglingRefs({ bundle });
@@ -91,9 +97,10 @@ const generate = () => {
   writeFile(path.join('api', 'openapi.yaml'), yaml);
   writeFile(
     'errors.json',
-    `${JSON.stringify(buildErrorCatalog({ errorCodes, version }), null, 2)}\n`
+    `${JSON.stringify(buildErrorCatalog({ errorCodes, version, errorHints }), null, 2)}\n`
   );
   writeFile('404.md', buildNotFoundMarkdown({}));
+  writeFile('agents.md', buildAgentInstructionsMarkdown());
 };
 
 generate();

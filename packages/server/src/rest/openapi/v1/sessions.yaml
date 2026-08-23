@@ -66,6 +66,11 @@ paths:
                 error:
                   code: SINGLE_SESSION_CONFLICT
                   message: An open session already exists for this actor.
+                  hint: >-
+                    The agent allows one open session per actor. Reuse the
+                    session named in `meta.session_id`, or close it first.
+                  docs_url: >-
+                    https://soat.ttoss.dev/docs/error-codes#single_session_conflict
                   meta:
                     session_id: sess_abc123
     get:
@@ -399,6 +404,12 @@ paths:
                 error:
                   code: VALIDATION_FAILED
                   message: fork_at_position 9 does not exist in the parent conversation.
+                  hint: >-
+                    Fix the request and retry. Unknown fields are rejected
+                    outright, so compare the payload against the operation in
+                    `/openapi.json`; `meta` names the offending field when the
+                    check can identify one.
+                  docs_url: 'https://soat.ttoss.dev/docs/error-codes#validation_failed'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -573,6 +584,8 @@ components:
           required:
             - code
             - message
+            - hint
+            - docs_url
           properties:
             code:
               type: string
@@ -581,6 +594,21 @@ components:
             message:
               type: string
               example: 'Resource not found'
+            hint:
+              type: string
+              description: >-
+                What to do about this error. Resolved per code, so a caller that
+                has never seen the code before can act on the response without
+                leaving it.
+              example: >-
+                Check the id, and check that the credential can see the project
+                that owns the resource.
+            docs_url:
+              type: string
+              format: uri
+              description: The reference-page anchor documenting this code.
+              example: >-
+                https://soat.ttoss.dev/docs/error-codes#resource_not_found
             meta:
               type: object
               description: Optional structured context for the error.
