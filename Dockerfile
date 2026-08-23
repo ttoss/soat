@@ -96,10 +96,18 @@ ENV FILES_STORAGE_DIR=/data/files
 # cost" guarantee.
 ENV NODE_ENV=production
 
-# Create the default storage directory
-RUN mkdir -p /data/files
+# Create the default storage directory, owned by the unprivileged user the
+# server runs as.
+RUN mkdir -p /data/files && chown -R node:node /data/files
 
 VOLUME ["/data/files"]
+
+# The server needs no root capability at runtime: it binds 5047 (above 1024)
+# and writes only under /data/files. Root buys nothing here and hands a
+# container-escape or a path-handling bug the whole filesystem, so drop it.
+# A bind-mounted host volume must be writable by uid 1000 (node); an existing
+# deployment mounting a root-owned directory needs `chown 1000:1000` on it once.
+USER node
 
 EXPOSE 5047
 

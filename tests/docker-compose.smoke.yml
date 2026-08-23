@@ -115,6 +115,11 @@ services:
       DATABASE_NAME: soat_test
       DATABASE_USER: soat_user
       DATABASE_PASSWORD: soat_password
+      # Tool egress is default-deny for non-public destinations (see
+      # packages/server/src/lib/toolEgress.ts). These suites point http and mcp
+      # tools at sibling containers, which is exactly the case an operator has
+      # to declare.
+      TOOL_EGRESS_ALLOWED_HOSTS: server:50477
       SECRETS_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       JWT_SECRET: smoke-test-jwt-secret
       FILES_STORAGE_DIR: /data/files
@@ -168,6 +173,11 @@ services:
       DATABASE_NAME: soat_test
       DATABASE_USER: soat_user
       DATABASE_PASSWORD: soat_password
+      # Tool egress is default-deny for non-public destinations (see
+      # packages/server/src/lib/toolEgress.ts). These suites point http and mcp
+      # tools at sibling containers, which is exactly the case an operator has
+      # to declare.
+      TOOL_EGRESS_ALLOWED_HOSTS: server:50477
       SECRETS_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       JWT_SECRET: smoke-test-jwt-secret
       FILES_STORAGE_DIR: /data/files
