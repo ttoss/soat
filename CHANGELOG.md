@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.29.2](https://github.com/ttoss/soat/compare/v0.29.1...v0.29.2) (2026-08-23)
+
+### Bug Fixes
+
+* **website:** finish Markdown negotiation — Vary: Accept, and the 404 page's wording ([#1108](https://github.com/ttoss/soat/issues/1108)) ([0ce8158](https://github.com/ttoss/soat/commit/0ce8158cd66748477c1988cfe92b1d0c45356358)), closes [#1106](https://github.com/ttoss/soat/issues/1106) [#1106](https://github.com/ttoss/soat/issues/1106) [#1111](https://github.com/ttoss/soat/issues/1111) [ttoss/ttoss#1205](https://github.com/ttoss/ttoss/issues/1205)
+
 ## [0.29.1](https://github.com/ttoss/soat/compare/v0.29.0...v0.29.1) (2026-08-23)
 
 **Note:** Version bump only for package ttoss-soat
