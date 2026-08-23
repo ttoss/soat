@@ -511,8 +511,12 @@ the card lands in `review`. See
 [Per-state automation](/docs/modules/workflows#per-state-automation-on_enter).
 
 Five generations run back to back, so the card takes a while to arrive — poll
-until `.state` is `review` (the `# → retry 240` budget is roughly double the
-~179s the five generations measured on the CI sandbox).
+until `.state` is `review`. The `# → retry 480` budget is deliberately generous:
+each attempt costs about a second of sleep plus a CLI round trip, so it buys
+roughly ten minutes, against the 303s the five generations took on the CI sandbox
+in the slowest run measured so far. The sandbox model is CPU-only and shares the
+box with whatever the previous tutorial left running in the background, so a
+budget sized to the _typical_ run expires on the slow ones.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -520,7 +524,7 @@ until `.state` is `review` (the `# → retry 240` budget is roughly double the
 ```bash
 soat transition-task --task-id "$TASK_ID" --transition start | jq '{ state, automation_status }'
 
-# → retry 240
+# → retry 480
 soat get-task --task-id "$TASK_ID" | jq -e '.state == "review"'
 
 soat get-task --task-id "$TASK_ID" | jq '{ state, status, sonnet: .last_result.content }'
@@ -536,8 +540,8 @@ await adminSoat.tasks.transitionTask({
 });
 
 const waitForState = async (target: string) => {
-  // ~4 minutes: the five sandbox generations measured 179s end to end.
-  for (let attempt = 0; attempt < 240; attempt += 1) {
+  // ~8 minutes: the five sandbox generations measured 303s end to end.
+  for (let attempt = 0; attempt < 480; attempt += 1) {
     const { data: current } = await adminSoat.tasks.getTask({
       path: { task_id: TASK_ID },
     });
@@ -591,7 +595,7 @@ one generation, not five.
 ```bash
 soat transition-task --task-id "$TASK_ID" --transition revise --note "tighten the closing couplet" | jq '{ state }'
 
-# → retry 120
+# → retry 240
 soat get-task --task-id "$TASK_ID" | jq -e '.state == "review"'
 ```
 

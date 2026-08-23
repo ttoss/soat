@@ -685,7 +685,7 @@ printf '%s' "$FIRING" | jq '{status, result}'
 
 NIGHTLY_RUN_ID=$(printf '%s' "$FIRING" | jq -r '.result.result_id')
 
-# → retry 60
+# → retry 180
 soat get-eval-run --eval-id "$EVAL_ID" --eval-run-id "$NIGHTLY_RUN_ID" | jq -e '.status == "completed"'
 
 soat get-eval-run --eval-id "$EVAL_ID" --eval-run-id "$NIGHTLY_RUN_ID" \
