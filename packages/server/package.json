@@ -1,6 +1,22 @@
 {
   "name": "@soat/server",
   "version": "0.28.0",
+  "description": "SOAT server — open-source infrastructure for production-ready AI agents.",
+  "keywords": [
+    "ai-agents",
+    "ai-infrastructure",
+    "mcp",
+    "llm",
+    "rag",
+    "self-hosted",
+    "soat"
+  ],
+  "homepage": "https://soat.ttoss.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ttoss/soat",
+    "directory": "packages/server"
+  },
   "license": "Apache-2.0",
   "main": "dist/server.mjs",
   "scripts": {

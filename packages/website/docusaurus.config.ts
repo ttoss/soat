@@ -33,7 +33,13 @@ const buildOpenApiConfig = () => {
 
 const config: Config = {
   title: 'SOAT',
-  tagline: 'Infrastructure for AI Apps',
+  // The canonical descriptor, minus the name the theme already renders beside
+  // it. "SOAT" collides with the mandatory vehicle-insurance scheme in
+  // Colombia, Peru and Ecuador and with the SOAT1/SOAT2 enzymes, so the
+  // qualifying words are what make the site resolvable — and they only
+  // consolidate onto one entity if every property repeats them verbatim
+  // (the published packages, the GitHub description, the JSON-LD below).
+  tagline: 'Infrastructure for production-ready AI agents',
   favicon: 'img/favicon.ico',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
@@ -85,7 +91,7 @@ const config: Config = {
         ],
         url: 'https://soat.ttoss.dev',
         description:
-          'Documentation for SOAT, the self-hostable infrastructure layer for production-ready AI agents.',
+          'Documentation for SOAT — open-source infrastructure for production-ready AI agents.',
         inLanguage: 'en',
         publisher: { '@id': 'https://ttoss.dev/#organization' },
       }),
@@ -118,7 +124,7 @@ const config: Config = {
         applicationCategory: 'DeveloperApplication',
         operatingSystem: 'Linux, macOS, Windows',
         description:
-          'Self-hostable infrastructure layer for production-ready AI agents: IAM, storage, vector search, memory, orchestration, RAG, and a full MCP server.',
+          'Open-source infrastructure for production-ready AI agents: IAM, storage, vector search, memory, orchestration, RAG, and a full MCP server.',
         url: 'https://soat.ttoss.dev',
         sameAs: [
           'https://github.com/ttoss/soat',
@@ -236,7 +242,7 @@ const config: Config = {
       {
         title: 'SOAT',
         description:
-          'Infrastructure for AI Apps — Backend, identity, storage, memory, and orchestration.',
+          'Open-source infrastructure for production-ready AI agents — backend, identity, storage, memory, and orchestration.',
         generateLLMsTxt: true,
         // The link index answers "what is documented". An agent's first
         // question is "should I be here at all", so the when-to-use guidance
@@ -281,7 +287,7 @@ const config: Config = {
             includeUnmatchedLast: true,
             rootContent: buildLlmsRootContent(),
             description:
-              'Infrastructure for AI Apps — Backend, identity, storage, memory, and orchestration.',
+              'Open-source infrastructure for production-ready AI agents — backend, identity, storage, memory, and orchestration.',
           },
         ],
       },

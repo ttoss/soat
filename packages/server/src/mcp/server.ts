@@ -20,7 +20,7 @@ const mcpServer = new McpServer({
   title: 'SOAT',
   version,
   description:
-    'Infrastructure for AI Apps — backend, identity, storage, memory, and orchestration. LLMs docs: https://soat.ttoss.dev/llms.txt',
+    'Open-source infrastructure for production-ready AI agents — backend, identity, storage, memory, and orchestration. LLMs docs: https://soat.ttoss.dev/llms.txt',
   websiteUrl: 'https://soat.ttoss.dev',
   icons: [
     {
