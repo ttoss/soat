@@ -14,6 +14,19 @@ type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
 
 const SKIP_TAGS = new Set(['Generations', 'Actor Tags']);
 
+/**
+ * The prefix every REST operation shares.
+ *
+ * The served spec also describes endpoints mounted at the root — the OAuth 2.1
+ * protocol endpoints, whose paths the RFCs fix. The engine builds a module per
+ * tag out of whatever the spec declares, so without this an "OAuth" module
+ * would appear in the sidebar rendering `/token` as a create form and
+ * `/authorize` — a browser redirect — as an action. They are described for
+ * clients to discover the flow, not for a CRUD UI to drive. The SDK, CLI and
+ * MCP tool surfaces apply the same rule to the same specs.
+ */
+const REST_PATH_PREFIX = '/api/v1/';
+
 const toLabel = (tag: string): string => {
   return tag.replace(/([a-z])([A-Z])/g, '$1 $2');
 };
@@ -199,6 +212,8 @@ export const parseModules = (spec: OpenApiSpec): ModuleInfo[] => {
   const tagOps = new Map<string, ModuleOp[]>();
 
   for (const [pathTemplate, pathItem] of Object.entries(spec.paths ?? {})) {
+    if (!pathTemplate.startsWith(REST_PATH_PREFIX)) continue;
+
     for (const method of methods) {
       collectTagOps(
         pathTemplate,

@@ -47,6 +47,21 @@ export const MIN_HOMEPAGE_TEXT = 4000;
  */
 export const LLMS_WHEN_TO_USE_HEADING = '## When to use SOAT';
 
+/**
+ * Endpoints the published description must declare, because they are the ones a
+ * client is expected to find without being told where to look.
+ *
+ * `soat.ttoss.dev` hosts no API, so an agent-readiness audit that cannot probe a
+ * live host falls back to reading `/openapi.json` — and reported "OAuth
+ * mentioned but no standard endpoints found" while the OAuth metadata endpoints
+ * existed in every deployment and in no spec (#1099). They live in
+ * `packages/server/src/rest/openapi/v1/oauth.yaml` now; this keeps them there.
+ */
+export const DISCOVERY_PATHS = [
+  '/.well-known/oauth-authorization-server',
+  '/.well-known/oauth-protected-resource',
+] as const;
+
 const mainOf = (html: string): string | null => {
   const match = /<main[^>]*>([\s\S]*)<\/main>/.exec(html);
   return match ? match[1] : null;
@@ -109,6 +124,21 @@ const bundleProblems = (raw: string | null): string[] => {
   const declared =
     typeof paths === 'object' && paths !== null ? Object.keys(paths).length : 0;
   return declared > 0 ? [] : ['/openapi.json declares no paths'];
+};
+
+/** Whether the bundle declares each endpoint an agent is expected to find. */
+export const publishedPathProblems = (raw: string | null): string[] => {
+  if (!raw) return [];
+
+  const paths = jsonMember(raw, 'paths');
+  const declared =
+    typeof paths === 'object' && paths !== null ? Object.keys(paths) : [];
+
+  return DISCOVERY_PATHS.filter((required) => {
+    return !declared.includes(required);
+  }).map((required) => {
+    return `/openapi.json does not declare ${required}`;
+  });
 };
 
 const catalogProblems = (raw: string | null): string[] => {
@@ -209,6 +239,7 @@ export const checkBuild = (args: { outDir: string }): string[] => {
   return [
     ...missingSurfaces(args.outDir),
     ...bundleProblems(at('openapi.json')),
+    ...publishedPathProblems(at('openapi.json')),
     ...catalogProblems(at('errors.json')),
     ...homepageProblems(at('index.html')),
     ...notFoundProblems(at('404.html')),

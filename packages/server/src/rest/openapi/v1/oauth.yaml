@@ -1,0 +1,474 @@
+openapi: 3.0.3
+info:
+  title: SOAT OAuth 2.1 Authorization Server
+  version: 1.0.0
+  description: |
+    The OAuth 2.1 authorization server SOAT runs so that MCP clients (Claude, Cursor, VS Code) can
+    discover it, register themselves, and obtain an access token with no operator step.
+
+    These endpoints are mounted at the **root** of a deployment, not under `/api/v1`: their paths are
+    fixed by the RFCs, and a client finds them by fetching the discovery document below. They are
+    described here so that a client — or an agent reading `/openapi.json` — can find the flow without
+    a live host to probe. They are implemented by `@ttoss/auth-core`, not by a handler in
+    `src/rest/v1/`, and `tests/unit/tests/rest/oauthSpecContract.test.ts` pins this description
+    against the metadata the server actually serves.
+
+    Being protocol endpoints rather than REST resources, they are deliberately absent from the
+    generated SDK, CLI and MCP tool surfaces, which wrap `/api/v1` only.
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+servers:
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
+    variables:
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
+tags:
+  - name: OAuth
+    description: OAuth 2.1 discovery, dynamic client registration, and the authorization code flow
+paths:
+  /.well-known/oauth-authorization-server:
+    get:
+      tags:
+        - OAuth
+      summary: Get authorization server metadata
+      description: |
+        Returns the [RFC 8414](https://www.rfc-editor.org/rfc/rfc8414) Authorization Server Metadata
+        document: where `/authorize`, `/token` and `/register` are, which grants and PKCE methods are
+        supported, and which scopes exist.
+
+        Discovery precedes authentication by definition, so this endpoint takes no credential.
+      operationId: getOauthAuthorizationServerMetadata
+      security: []
+      responses:
+        '200':
+          description: Authorization server metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OauthAuthorizationServerMetadata'
+  /.well-known/oauth-protected-resource:
+    get:
+      tags:
+        - OAuth
+      summary: Get protected resource metadata
+      description: |
+        Returns the [RFC 9728](https://www.rfc-editor.org/rfc/rfc9728) Protected Resource Metadata
+        document, naming the authorization server that guards `/mcp`. An unauthenticated request to
+        `/mcp` answers `401` with a `WWW-Authenticate: Bearer resource_metadata="…"` header pointing
+        here, which is how an OAuth-aware MCP client bootstraps the flow.
+      operationId: getOauthProtectedResourceMetadata
+      security: []
+      responses:
+        '200':
+          description: Protected resource metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OauthProtectedResourceMetadata'
+  /register:
+    post:
+      tags:
+        - OAuth
+      summary: Register an OAuth client
+      description: |
+        [RFC 7591](https://www.rfc-editor.org/rfc/rfc7591) Dynamic Client Registration — the
+        self-serve half of the flow, which lets a client onboard itself with no operator step.
+
+        A client that registers with `token_endpoint_auth_method: none` is public and receives no
+        secret; any other method yields a `client_secret` that does not expire.
+      operationId: registerOauthClient
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OauthClientRegistrationRequest'
+      responses:
+        '201':
+          description: Client registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OauthClientRegistrationResponse'
+        '400':
+          description: '`redirect_uris` is missing or is not an array of strings'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OauthErrorResponse'
+  /authorize:
+    get:
+      tags:
+        - OAuth
+      summary: Start the authorization code flow
+      description: |
+        The authorization endpoint. PKCE is mandatory — `code_challenge` is required and
+        `code_challenge_method` must be `S256`; OAuth 2.1 forbids `plain`.
+
+        A user who has not yet consented is redirected to the consent screen at
+        `/app/oauth/consent`; once consent is recorded, a second call to this endpoint redirects to
+        `redirect_uri` with a single-use `code`. Parameter errors that can be attributed to a
+        registered `redirect_uri` are reported as a redirect carrying `error`, per RFC 6749;
+        an unknown `client_id` or an unregistered `redirect_uri` answers `400` directly, because
+        there is no trustworthy place to send the user.
+      operationId: authorizeOauthClient
+      security: []
+      parameters:
+        - name: client_id
+          in: query
+          required: true
+          description: The registered client identifier.
+          schema:
+            type: string
+        - name: redirect_uri
+          in: query
+          required: true
+          description: Must exactly match one of the client's registered redirect URIs.
+          schema:
+            type: string
+            format: uri
+        - name: response_type
+          in: query
+          required: true
+          description: Must be `code`.
+          schema:
+            type: string
+            enum:
+              - code
+        - name: code_challenge
+          in: query
+          required: true
+          description: PKCE challenge, the base64url-encoded SHA-256 of the verifier.
+          schema:
+            type: string
+        - name: code_challenge_method
+          in: query
+          required: true
+          description: Must be `S256`.
+          schema:
+            type: string
+            enum:
+              - S256
+        - name: scope
+          in: query
+          required: false
+          description: Space-separated scopes, e.g. `mcp:access`.
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: false
+          description: Opaque value echoed back on the redirect. Optional.
+          schema:
+            type: string
+      responses:
+        '302':
+          description: |
+            Redirect to `redirect_uri` with `code` and `state`, to the consent screen when consent is
+            still needed, or back to `redirect_uri` with `error` for a parameter the client can fix.
+          headers:
+            Location:
+              description: Where the user agent is sent next.
+              schema:
+                type: string
+                format: uri
+        '400':
+          description: '`client_id` is missing or unknown, or `redirect_uri` is not registered for it'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OauthErrorResponse'
+  /token:
+    post:
+      tags:
+        - OAuth
+      summary: Exchange a code or refresh token for an access token
+      description: |
+        The token endpoint, serving the `authorization_code` and `refresh_token` grants. The client
+        authenticates with `client_secret_basic`, `client_secret_post`, or `none` for a public client.
+
+        The access token it returns is a SOAT-issued JWT: send it as `Authorization: Bearer <token>`
+        to `/mcp` and to the REST API. Refresh tokens are single-use and rotated on every exchange.
+      operationId: createOauthToken
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OauthTokenRequest'
+      responses:
+        '200':
+          description: Access token issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OauthTokenResponse'
+        '400':
+          description: Invalid grant, missing parameter, or unsupported `grant_type`
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OauthErrorResponse'
+        '401':
+          description: Client authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OauthErrorResponse'
+components:
+  schemas:
+    OauthAuthorizationServerMetadata:
+      type: object
+      description: RFC 8414 Authorization Server Metadata.
+      required:
+        - issuer
+        - authorization_endpoint
+        - token_endpoint
+        - response_types_supported
+        - grant_types_supported
+        - code_challenge_methods_supported
+        - token_endpoint_auth_methods_supported
+      properties:
+        issuer:
+          type: string
+          format: uri
+          description: The deployment's base URL, which every endpoint below is relative to.
+          example: http://localhost:5047
+        authorization_endpoint:
+          type: string
+          format: uri
+          example: http://localhost:5047/authorize
+        token_endpoint:
+          type: string
+          format: uri
+          example: http://localhost:5047/token
+        registration_endpoint:
+          type: string
+          format: uri
+          description: RFC 7591 dynamic client registration.
+          example: http://localhost:5047/register
+        response_types_supported:
+          type: array
+          items:
+            type: string
+          example:
+            - code
+        grant_types_supported:
+          type: array
+          items:
+            type: string
+          example:
+            - authorization_code
+            - refresh_token
+        code_challenge_methods_supported:
+          type: array
+          description: PKCE is mandatory in OAuth 2.1, so `plain` is not offered.
+          items:
+            type: string
+          example:
+            - S256
+        token_endpoint_auth_methods_supported:
+          type: array
+          items:
+            type: string
+          example:
+            - client_secret_basic
+            - client_secret_post
+            - none
+        scopes_supported:
+          type: array
+          description: The scopes a client may request. `mcp:access` grants use of the MCP endpoint.
+          items:
+            type: string
+          example:
+            - 'mcp:access'
+    OauthProtectedResourceMetadata:
+      type: object
+      description: RFC 9728 Protected Resource Metadata.
+      required:
+        - resource
+        - authorization_servers
+      properties:
+        resource:
+          type: string
+          format: uri
+          description: The protected resource's identifier.
+          example: http://localhost:5047
+        authorization_servers:
+          type: array
+          description: Issuers of the authorization servers that guard this resource.
+          items:
+            type: string
+            format: uri
+          example:
+            - http://localhost:5047
+    OauthClientRegistrationRequest:
+      type: object
+      description: RFC 7591 client metadata. Fields beyond those listed are stored as sent.
+      required:
+        - redirect_uris
+      properties:
+        redirect_uris:
+          type: array
+          description: At least one redirect URI. `/authorize` accepts only an exact match.
+          items:
+            type: string
+            format: uri
+          example:
+            - https://client.example.com/callback
+        client_name:
+          type: string
+          description: Human-readable name, shown on the consent screen.
+          example: My MCP Client
+        token_endpoint_auth_method:
+          type: string
+          description: '`none` registers a public client, which receives no secret. Defaults to `client_secret_basic`.'
+          example: none
+        grant_types:
+          type: array
+          description: Defaults to `authorization_code` and `refresh_token`.
+          items:
+            type: string
+        response_types:
+          type: array
+          description: Defaults to `code`.
+          items:
+            type: string
+    OauthClientRegistrationResponse:
+      type: object
+      description: The registered client, echoing the metadata sent plus the server-assigned fields.
+      required:
+        - client_id
+        - redirect_uris
+        - token_endpoint_auth_method
+        - grant_types
+        - response_types
+        - client_id_issued_at
+      properties:
+        client_id:
+          type: string
+          example: 8f14e45fceea167a
+        client_secret:
+          type: string
+          description: 'Absent for a public client (`token_endpoint_auth_method: none`).'
+        client_secret_expires_at:
+          type: integer
+          description: '`0` means the secret does not expire. Absent for a public client.'
+          example: 0
+        client_id_issued_at:
+          type: integer
+          description: Unix time, in seconds, at which the client was registered.
+          example: 1735689600
+        redirect_uris:
+          type: array
+          items:
+            type: string
+            format: uri
+        client_name:
+          type: string
+        token_endpoint_auth_method:
+          type: string
+          example: none
+        grant_types:
+          type: array
+          items:
+            type: string
+          example:
+            - authorization_code
+            - refresh_token
+        response_types:
+          type: array
+          items:
+            type: string
+          example:
+            - code
+    OauthTokenRequest:
+      type: object
+      description: |
+        Form-encoded token request. `code`, `redirect_uri` and `code_verifier` belong to the
+        `authorization_code` grant; `refresh_token` to the `refresh_token` grant.
+      required:
+        - grant_type
+      properties:
+        grant_type:
+          type: string
+          enum:
+            - authorization_code
+            - refresh_token
+          example: authorization_code
+        code:
+          type: string
+          description: The single-use authorization code from the `/authorize` redirect.
+        redirect_uri:
+          type: string
+          format: uri
+          description: Must match the `redirect_uri` the code was issued for.
+        code_verifier:
+          type: string
+          description: The PKCE verifier whose SHA-256 is the `code_challenge` sent to `/authorize`.
+        refresh_token:
+          type: string
+          description: The refresh token to exchange. Single-use — a new one is returned.
+        scope:
+          type: string
+          description: Space-separated scopes, to narrow those of the refreshed token.
+        client_id:
+          type: string
+          description: Required for a public client, which sends no secret.
+        client_secret:
+          type: string
+          description: For `client_secret_post`. With `client_secret_basic`, send it in the `Authorization` header instead.
+    OauthTokenResponse:
+      type: object
+      required:
+        - access_token
+        - token_type
+        - scope
+      properties:
+        access_token:
+          type: string
+          description: 'A SOAT-issued JWT. Send it as `Authorization: Bearer <token>`.'
+        token_type:
+          type: string
+          example: Bearer
+        expires_in:
+          type: integer
+          description: Lifetime of the access token, in seconds.
+          example: 3600
+        refresh_token:
+          type: string
+          description: Single-use; rotated on every exchange.
+        scope:
+          type: string
+          description: Space-separated scopes actually granted.
+          example: 'mcp:access'
+    OauthErrorResponse:
+      type: object
+      description: |
+        RFC 6749 error. These endpoints answer in the OAuth error shape rather than SOAT's
+        `{ code, message, hint, docs_url }`, because an OAuth client parses `error` to decide what to
+        do next.
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: RFC 6749 error code.
+          enum:
+            - invalid_request
+            - invalid_client
+            - invalid_grant
+            - invalid_redirect_uri
+            - unsupported_grant_type
+            - unsupported_response_type
+            - access_denied
+            - server_error
+        error_description:
+          type: string
+          description: Human-readable detail.
+          example: PKCE verification failed
