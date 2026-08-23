@@ -144,6 +144,7 @@ export type TokenEventAttribution = {
    * production spend.
    */
   source: string | null;
+  tags: Record<string, string> | null;
 };
 
 /**
@@ -178,6 +179,7 @@ export const persistTokenEvent = async (args: {
         triggerId: attribution.triggerId,
         actionId: attribution.actionId,
         source: attribution.source,
+        tags: attribution.tags,
         meterType: 'llm_tokens',
         provider: args.provider,
         model: args.model,

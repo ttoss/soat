@@ -229,6 +229,11 @@ export class UsageEvent extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare source: string | null;
 
+  // End-user cost-allocation tags frozen when the event is written. Historical
+  // usage must not change when an actor or session changes its tags later.
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare tags: Record<string, string> | null;
+
   // Meter-type discriminator: `llm_tokens`, `compute_execution`, `api_request`,
   // `storage`. Selects which components an event carries.
   @Column({ type: DataType.STRING, allowNull: false })

@@ -20,6 +20,8 @@ type GenerationWithAgent = InstanceType<(typeof db)['Generation']> & {
         aiProvider?: InstanceType<(typeof db)['AiProvider']> | null;
       })
     | null;
+  startedByActor?: InstanceType<(typeof db)['Actor']> | null;
+  session?: InstanceType<(typeof db)['Session']> | null;
 };
 
 type Attribution = {
@@ -93,6 +95,8 @@ const writeGenerationEvent = async (args: {
         as: 'agent',
         include: [{ model: db.AiProvider, as: 'aiProvider' }],
       },
+      { model: db.Actor, as: 'startedByActor' },
+      { model: db.Session, as: 'session' },
     ],
   });
 
@@ -117,6 +121,9 @@ const writeGenerationEvent = async (args: {
   );
 
   const orchestrationRunId = await resolveRunId(attribution.runPublicId);
+  const actorTags = generation.startedByActor?.tags ?? {};
+  const sessionTags = generation.session?.tags ?? {};
+  const tags = { ...actorTags, ...sessionTags };
   const idempotencyKey = buildIdempotencyKey({
     generationPublicId: generation.publicId,
     runPublicId: attribution.runPublicId,
@@ -141,6 +148,7 @@ const writeGenerationEvent = async (args: {
       // Copied off the generation's own column, so a caller cannot bill eval
       // spend as production or vice versa.
       source: generation.source,
+      tags: Object.keys(tags).length > 0 ? tags : null,
     },
     idempotencyKey,
     provider: attribution.provider,
@@ -244,6 +252,7 @@ export const recordCompletionUsage = async (args: {
         // identify the workload by, so it labels itself: the same value that
         // names it in the idempotency key.
         source: args.source,
+        tags: null,
       },
       idempotencyKey: `completion:${args.source}:${randomUUID()}`,
       provider: args.provider,
