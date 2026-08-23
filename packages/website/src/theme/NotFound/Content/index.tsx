@@ -49,8 +49,9 @@ export default function NotFoundContent({
             })}
           </ul>
           <p>
-            Every documentation page also has a Markdown twin: append{' '}
-            <code>.md</code> to its URL, e.g.{' '}
+            Every documentation page also has a Markdown twin: send{' '}
+            <code>Accept: text/markdown</code> to the page URL, or append{' '}
+            <code>.md</code> to it, e.g.{' '}
             <a href="/docs/introduction.md">/docs/introduction.md</a>.
           </p>
           <Heading as="h2">Recovery map</Heading>
