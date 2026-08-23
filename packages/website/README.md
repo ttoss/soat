@@ -67,3 +67,18 @@ Module page structure, cross-referencing rules, and the docs drift guardrails (`
 `Accept: text/markdown` on a page URL returns that page's `.md` twin, an `Accept` that accepts neither `text/html` nor `text/markdown` gets a `406`, and q-values order the two — the [acceptmarkdown.com](https://acceptmarkdown.com) criteria. Discovery (the `<link rel="alternate">` tag on every page) is the build's half, in `scripts/advertiseMarkdownTwins.ts`.
 
 The function runs on the `cloudfront-js-2.0` runtime — ES 5.1, no network or filesystem, 10 KB including the `appendIndexHtml` helper carlin injects — and `appendIndexHtml` cannot be set alongside it, because a cache behavior takes a single viewer request function. `scripts/viewerRequest.test.ts` runs the function against that same composition and asserts the two `carlin.yml` settings ship together; there is no way to exercise it locally, since `docusaurus serve` has no edge.
+
+`Vary: Accept` needs `carlin@>=2.2.1`. Earlier versions accepted the setting and dropped it: CloudFront's CORS handling owns `Vary`, so a policy with a `CorsConfig` sends `Vary: Origin` on a plain request and no `Vary` at all on a cross-origin one ([carlin#1205](https://github.com/ttoss/ttoss/pull/1205), [#1111](https://github.com/ttoss/soat/issues/1111)). carlin now emits the CORS headers as custom headers instead when `vary` is defined — `Access-Control-Allow-Origin` stays `*`, so cross-origin `fetch` of `/openapi.json` and friends still works, but CloudFront no longer answers `OPTIONS` preflights itself. Static GETs don't preflight.
+
+### Verifying a deploy
+
+The four criteria live on the edge, not in the build, so a green test suite says nothing about them. After a Production deploy:
+
+```bash
+curl -sI -H 'Accept: text/markdown' https://soat.ttoss.dev/docs/introduction   # text/markdown + vary: Accept
+curl -sI -H 'Accept: application/json' https://soat.ttoss.dev/docs/introduction # 406
+curl -sI -H 'Accept: text/markdown' https://soat.ttoss.dev/                     # /agents.md
+curl -sI -H 'Origin: https://example.com' https://soat.ttoss.dev/openapi.json   # access-control-allow-origin: *
+```
+
+Edge configuration takes a few minutes to reach every location, so a probe run immediately after the deploy can still show the previous policy.
