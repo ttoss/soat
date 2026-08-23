@@ -258,8 +258,9 @@ const AgentSurfaces = () => {
           })}
         </div>
         <p className={styles.agentsNote}>
-          Append <code>.md</code> to any documentation URL for the Markdown
-          source of that page — for example{' '}
+          Send <code>Accept: text/markdown</code> to any documentation URL and
+          that page answers in Markdown — or append <code>.md</code> for the
+          same file by name, for example{' '}
           <a href="/docs/introduction.md">/docs/introduction.md</a>. Every HTML
           page advertises its own twin with a{' '}
           <code>
@@ -320,7 +321,10 @@ export default function Home(): React.ReactNode {
     >
       {/* The homepage is the only page with no Markdown twin of its own, so it
           is the one place the agent instruction file can be advertised as an
-          alternate without competing with a page's own `.md` link. */}
+          alternate without competing with a page's own `.md` link. The edge
+          function resolves `Accept: text/markdown` on `/` to this same file
+          (`cloudfront/viewerRequest.js`), so what the page advertises and what
+          negotiation returns are one thing. */}
       <Head>
         <link
           rel="alternate"
