@@ -7,6 +7,7 @@ keywords:
   - AI agent infrastructure
 sidebar_position: 0
 title: Tutorials
+slug: /tutorials
 ---
 
 Tutorials walk you through complete, end-to-end workflows using SOAT. Each one starts from scratch and demonstrates how the platform's building blocks fit together in a real scenario — every step comes with CLI, SDK, and curl examples, and every tutorial is validated against a live server in CI.

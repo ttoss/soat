@@ -2,6 +2,7 @@
 description: "Overview of SOAT platform modules exposed through the REST API, MCP server, CLI, and SDK."
 title: Platform
 sidebar_label: Platform Overview
+slug: /modules
 ---
 
 # Platform

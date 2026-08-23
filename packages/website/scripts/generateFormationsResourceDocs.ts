@@ -388,6 +388,9 @@ const renderIndexPage = (
     '---',
     'sidebar_label: Resource Types',
     'sidebar_position: 1',
+    // Slash-less route, so the canonical matches the URL every link uses.
+    // Pinned by `scripts/docsIndexSlug.test.ts`.
+    'slug: /formations-types',
     '---',
     '',
     '# Formation Resource Types',
@@ -427,7 +430,10 @@ const renderIndexPage = (
   for (const { resourceType, description } of resourceTypes) {
     const title = toTitle(resourceType);
     const slug = toSlug(resourceType);
-    lines.push(`| [\`${resourceType}\`](./${slug}) | ${description} |`);
+    // Absolute: the slug above lifts this page's route one level, so a
+    // relative link would no longer resolve inside the folder.
+    const href = `/docs/formations-types/${slug}`;
+    lines.push(`| [\`${resourceType}\`](${href}) | ${description} |`);
   }
 
   lines.push('');
