@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
+  DISCOVERY_PATHS,
   hasHeadingInMain,
   mainTextLength,
+  publishedPathProblems,
   REQUIRED_SURFACES,
 } from './checkAgentSurfaces';
 
@@ -50,4 +52,29 @@ test('the required surfaces include every machine-readable entry point', () => {
     'robots.txt',
     'sitemap.xml',
   ]);
+});
+
+test('the published bundle must declare the standard discovery endpoints', () => {
+  const bundle = (paths: string[]) => {
+    return JSON.stringify({
+      paths: Object.fromEntries(
+        paths.map((p) => {
+          return [p, { get: {} }];
+        })
+      ),
+    });
+  };
+
+  assert.deepEqual(publishedPathProblems(bundle([...DISCOVERY_PATHS])), []);
+
+  // An audit that cannot probe a live host reads the description instead; a
+  // bundle that omits the OAuth metadata endpoints reports "OAuth mentioned but
+  // no standard endpoints found", which is what #1099 recorded.
+  assert.deepEqual(publishedPathProblems(bundle(['/api/v1/projects'])), [
+    '/openapi.json does not declare /.well-known/oauth-authorization-server',
+    '/openapi.json does not declare /.well-known/oauth-protected-resource',
+  ]);
+
+  // Nothing to check when the file was not built; `missingSurfaces` reports that.
+  assert.deepEqual(publishedPathProblems(null), []);
 });

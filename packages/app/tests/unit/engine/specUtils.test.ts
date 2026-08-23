@@ -621,3 +621,26 @@ describe('resolveSchema — snake_cased component keys (served spec)', () => {
     expect(extractRefFields(item, spec)).toEqual({ project_id: 'projects' });
   });
 });
+
+test('ignores operations mounted outside the REST API', () => {
+  // The served spec also describes the OAuth 2.1 protocol endpoints, whose
+  // paths the RFCs fix at the root. The engine builds a module per tag from
+  // whatever the spec declares, so without a boundary an "OAuth" module would
+  // appear in the sidebar offering to "create" a token — a browser redirect and
+  // a form-encoded grant rendered as CRUD.
+  const modules = parseModules({
+    paths: {
+      '/token': {
+        post: { operationId: 'createOauthToken', tags: ['OAuth'] },
+      },
+      '/.well-known/oauth-authorization-server': {
+        get: {
+          operationId: 'getOauthAuthorizationServerMetadata',
+          tags: ['OAuth'],
+        },
+      },
+    },
+  });
+
+  expect(modules).toEqual([]);
+});

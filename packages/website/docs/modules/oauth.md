@@ -28,15 +28,27 @@ of it, registers itself, and runs the flow. Nothing here needs an operator step.
 
 | Path | Spec | What it answers |
 |---|---|---|
-| `/.well-known/oauth-authorization-server` | [RFC 8414](https://www.rfc-editor.org/rfc/rfc8414) | Where `/authorize`, `/token` and `/register` are, which grants and PKCE methods are supported, and which scopes exist |
-| `/.well-known/oauth-protected-resource` | [RFC 9728](https://www.rfc-editor.org/rfc/rfc9728) | That `/mcp` is a protected resource, and which authorization server guards it |
-| `/register` | [RFC 7591](https://www.rfc-editor.org/rfc/rfc7591) | Dynamic Client Registration — the client mints its own `client_id` |
-| `/authorize` | OAuth 2.1 | Authorization request; redirects to the consent screen when no grant exists |
-| `/token` | OAuth 2.1 | Authorization-code (PKCE) and refresh-token grants |
+| [`GET /.well-known/oauth-authorization-server`](/docs/api/oauth/get-oauth-authorization-server-metadata) | [RFC 8414](https://www.rfc-editor.org/rfc/rfc8414) | Where `/authorize`, `/token` and `/register` are, which grants and PKCE methods are supported, and which scopes exist |
+| [`GET /.well-known/oauth-protected-resource`](/docs/api/oauth/get-oauth-protected-resource-metadata) | [RFC 9728](https://www.rfc-editor.org/rfc/rfc9728) | That `/mcp` is a protected resource, and which authorization server guards it |
+| [`POST /register`](/docs/api/oauth/register-oauth-client) | [RFC 7591](https://www.rfc-editor.org/rfc/rfc7591) | Dynamic Client Registration — the client mints its own `client_id` |
+| [`GET /authorize`](/docs/api/oauth/authorize-oauth-client) | OAuth 2.1 | Authorization request; redirects to the consent screen when no grant exists |
+| [`POST /token`](/docs/api/oauth/create-oauth-token) | OAuth 2.1 | Authorization-code (PKCE) and refresh-token grants |
 
 All five are served by the server itself, unauthenticated where the protocol
 requires it — a client that needed a token to discover where tokens come from
 could never start.
+
+They are also declared in the published OpenAPI description
+([`/openapi.json`](https://soat.ttoss.dev/openapi.json)), so a client that has
+no deployment to probe can still read the flow — the request and response shapes
+above are the reference pages linked in the table. Because their paths are fixed
+by the RFCs and sit outside `/api/v1`, they are deliberately **not** wrapped by
+the generated SDK, CLI, or MCP tool surface: `/authorize` is a browser redirect
+and `/token` takes a form-encoded body, so a generated caller for either would
+be broken rather than merely unused. Unlike the REST API, these endpoints answer
+errors in the RFC 6749 shape (`{ error, error_description }`) rather than SOAT's
+`{ code, message, hint, docs_url }`, because an OAuth client branches on
+`error`.
 
 ```bash
 curl -s http://localhost:5047/.well-known/oauth-authorization-server | jq

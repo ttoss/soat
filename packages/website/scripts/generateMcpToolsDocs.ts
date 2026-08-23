@@ -75,6 +75,11 @@ const buildTool = (args: {
 }): ToolEntry | null => {
   const { entry, mod } = args;
   if (entry.operation['x-soat-mcp-exclude']) return null;
+  // The MCP surface wraps the REST API. A spec may also describe endpoints
+  // mounted at the root — the OAuth protocol endpoints, whose paths the RFCs
+  // fix — which are described for discovery, not for wrapping. The server's
+  // `soatTools` applies the same prefix rule, so the docs match the surface.
+  if (!entry.apiPath.startsWith('/api/v1/')) return null;
 
   const params = getOperationParams({
     operation: entry.operation,

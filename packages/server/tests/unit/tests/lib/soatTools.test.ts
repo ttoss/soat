@@ -57,10 +57,16 @@ describe('soatTools', () => {
       return {
         load: jest.fn((content: string) => {
           if (content.includes('a.yaml')) {
-            return { paths: { '/a': { get: { operationId: 'getAThing' } } } };
+            return {
+              paths: {
+                '/api/v1/a': { get: { operationId: 'getAThing' } },
+              },
+            };
           }
           return {
-            paths: { '/b': { post: { operationId: 'createBThing' } } },
+            paths: {
+              '/api/v1/b': { post: { operationId: 'createBThing' } },
+            },
           };
         }),
       };
@@ -96,7 +102,9 @@ describe('soatTools', () => {
           if (content.includes('broken.yaml')) {
             throw new Error('bad yaml');
           }
-          return { paths: { '/ok': { get: { operationId: 'getOk' } } } };
+          return {
+            paths: { '/api/v1/ok': { get: { operationId: 'getOk' } } },
+          };
         }),
       };
     });
