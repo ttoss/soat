@@ -7,6 +7,7 @@ import { HttpToolError } from './httpToolError';
 import { dispatchApiRequestOrThrow, withCallTimeout } from './inProcessApi';
 import { soatTools } from './soatTools';
 import { buildSoatActionTarget } from './soatToolsHelpers';
+import { fetchWithEgressGuard } from './toolEgress';
 
 const SOAT_TOOL_CALL_TIMEOUT_MS = process.env.SOAT_TOOL_CALL_TIMEOUT_MS
   ? parseInt(process.env.SOAT_TOOL_CALL_TIMEOUT_MS, 10)
@@ -30,7 +31,7 @@ export const buildMcpToolExecute = (args: {
 }) => {
   return async (toolArgs: unknown) => {
     try {
-      const callResponse = await fetch(args.mcpUrl, {
+      const callResponse = await fetchWithEgressGuard(args.mcpUrl, {
         method: 'POST',
         headers: args.mcpHeaders,
         signal: AbortSignal.timeout(SOAT_TOOL_CALL_TIMEOUT_MS),
@@ -108,7 +109,7 @@ export const resolveMcpTools = async (args: {
   };
 
   try {
-    const listResponse = await fetch(mcpUrl, {
+    const listResponse = await fetchWithEgressGuard(mcpUrl, {
       method: 'POST',
       headers: mcpHeaders,
       signal: AbortSignal.timeout(SOAT_TOOL_CALL_TIMEOUT_MS),

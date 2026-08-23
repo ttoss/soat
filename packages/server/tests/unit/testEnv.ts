@@ -24,4 +24,11 @@ export const applyTestEnv = () => {
   process.env.EMBEDDING_DIMENSIONS = '1024';
   process.env.SECRETS_ENCRYPTION_KEY = '0'.repeat(64);
   process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret';
+  // Tool egress is default-deny for non-public destinations
+  // (src/lib/toolEgress.ts). Nearly every http/mcp tool test points at a
+  // `createServer` on loopback, which is exactly a destination an operator has
+  // to declare — so the suite declares it, the same way the smoke and tutorials
+  // stacks name their sibling containers. Tests that assert the *block* pass an
+  // explicit allowlist instead of relying on this (lib/toolEgress.test.ts).
+  process.env.TOOL_EGRESS_ALLOWED_HOSTS = '127.0.0.1,localhost,::1';
 };

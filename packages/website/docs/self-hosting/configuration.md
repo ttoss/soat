@@ -160,6 +160,56 @@ Production requirement
 `SECRETS_ENCRYPTION_KEY` must be set in production. Changing it after secrets have been stored will make those secrets, as well as webhook and trigger signing secrets, unreadable.
 :::
 
+### Tool Egress
+
+| Variable                    | Default        | Description                                                                       |
+| --------------------------- | -------------- | --------------------------------------------------------------------------------- |
+| `TOOL_EGRESS_ALLOWED_HOSTS` | _(unset)_      | Comma-separated non-public destinations `http`/`mcp` tools may reach               |
+
+An [`http` or `mcp` tool](../modules/tools.md) is a request **the server makes on
+the agent's behalf**, so by default its target may only be a publicly routable
+address. Everything that is not — loopback, RFC1918 (`10/8`, `172.16/12`,
+`192.168/16`), link-local (`169.254/16`, where every cloud provider's metadata
+service lives), CGNAT, IPv6 ULA — is refused with `403 TOOL_EGRESS_BLOCKED`
+unless this variable lists it.
+
+Unset, tools still reach the whole public internet; only your own network is
+closed. List what a tool legitimately needs:
+
+```yaml
+environment:
+  # hostname, host:port, *.suffix, or CIDR — comma-separated
+  TOOL_EGRESS_ALLOWED_HOSTS: 'billing.svc.cluster.local,*.internal.acme.com,10.42.0.0/16'
+```
+
+| Entry form                  | Matches                                                              |
+| --------------------------- | -------------------------------------------------------------------- |
+| `billing.svc.cluster.local` | that hostname, on any port, whatever it resolves to                  |
+| `server:5047`               | that hostname, only on port 5047 (the URL's implicit scheme port counts) |
+| `*.internal.acme.com`       | any subdomain of that suffix                                         |
+| `10.42.0.0/16`              | any hostname whose **resolved** address falls in the range           |
+| `[::1]:8080`                | an IPv6 literal with a port                                          |
+
+A malformed entry fails loudly rather than being dropped — an operator who
+believes an internal host is allowed and silently isn't is the failure this
+setting exists to prevent.
+
+Two properties worth knowing, because they are what makes this a control rather
+than a check on the URL string:
+
+- **The resolved address is what is checked.** A public-looking hostname whose
+  A record points at `169.254.169.254` is refused.
+- **Every redirect hop is checked**, and credential headers
+  (`Authorization`, `Cookie`) are dropped when a redirect changes origin.
+
+:::note
+This is a deployment-wide setting, not a per-project one: it applies to every
+tool of every project on the server. When the destination is SOAT's own API,
+prefer a [`builtin` tool](../modules/tools.md) over an `http` tool pointed at
+your own base URL — it dispatches in-process under the caller's own
+permissions instead of leaving the network at all.
+:::
+
 ### File Storage
 
 | Variable            | Default       | Description                                     |

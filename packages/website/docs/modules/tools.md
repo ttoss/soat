@@ -331,10 +331,33 @@ When no `output_mapping` is configured, the raw result is returned unchanged.
 
 Presets and model-supplied arguments reach the action wherever the OpenAPI operation declares the parameter — path, query string, or request body. A `list-*` action's `project_id`, filters, and pagination arguments are query parameters, so a preset like `{ "project_id": "proj_abc123" }` is the way to lock a `builtin` tool to one project. An argument the caller omits is left out of the request entirely rather than sent as an empty value.
 
+### Where a Tool May Reach (Egress)
+
+An `http` or `mcp` tool is a request **the server makes**, so its target is
+bounded by the deployment, not by the tool definition. The default is: any
+publicly routable address, and nothing else. A target that is not — loopback,
+`10/8`, `172.16/12`, `192.168/16`, link-local `169.254/16` (cloud metadata),
+CGNAT, IPv6 ULA — fails with `403 TOOL_EGRESS_BLOCKED`, with the refused
+address in `meta.tool_address`.
+
+The address the hostname **resolves to** is what is checked, and the check runs
+again on every redirect hop; credential headers (`Authorization`, `Cookie`) are
+dropped when a redirect changes origin. So a public-looking hostname pointing at
+`169.254.169.254`, and a legitimate target answering
+`302 Location: http://169.254.169.254/…`, are both refused.
+
+To reach an internal service on purpose, the operator lists it in
+[`TOOL_EGRESS_ALLOWED_HOSTS`](../self-hosting/configuration.md#tool-egress) —
+a deployment-wide setting, not a per-project one. When the destination is SOAT's
+own API, use a [`builtin` tool](#builtin) instead of an `http` tool pointed at
+your own base URL: it dispatches in-process under the caller's own permissions
+and never leaves the network.
+
 ### Calling a Tool Directly
 
 Tools can be invoked independently of an agent via [`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool). The body accepts `action` (required for `builtin` and `mcp` types) and `input`. For `pipeline` tools, `input` is the pipeline input and `action` is ignored. When the tool has an `output_mapping`, the response is that mapping's result — see [Output Mapping](#output-mapping).
 
+- A target that is not publicly routable, and not listed in the deployment's `TOOL_EGRESS_ALLOWED_HOSTS`, fails with `403 TOOL_EGRESS_BLOCKED` before any connection is opened — see [Where a Tool May Reach](#where-a-tool-may-reach-egress).
 - A non-2xx target response fails with `502 TOOL_HTTP_ERROR`; the error `meta` carries `tool_status_code`, `tool_response_body`, `tool_url`, and `tool_method`.
 - If [`execute.auth`](#computed-credentials-executeauth) cannot produce the credential, the call fails with `502 TOOL_AUTH_FAILED` instead.
 - A 2xx response whose body isn't valid JSON is returned as raw text; an empty result (e.g. a `builtin` action answering `204`) responds `200` with a JSON `null` body.

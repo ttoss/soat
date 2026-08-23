@@ -389,6 +389,31 @@ describe('Tools', () => {
       expect(response.status).toBe(403);
     });
 
+    test('calling an http tool whose target is not publicly routable returns 403', async () => {
+      // The deployment-level egress control, seen through the entry point a
+      // caller (or a prompt-injected agent) actually reaches: the unit suite
+      // allows loopback, so this names an internal address it does not allow.
+      // Nothing listens there — a connection error would be a 502, so the 403
+      // proves the call was refused before any socket was opened.
+      const created = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'internal-target-tool',
+          type: 'http',
+          parameters: { type: 'object', properties: {} },
+          execute: { url: 'http://10.255.255.1/secrets', method: 'GET' },
+        });
+      expect(created.status).toBe(201);
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/tools/${created.body.id}/call`)
+        .send({});
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('TOOL_EGRESS_BLOCKED');
+      expect(response.body.error.meta.tool_address).toBe('10.255.255.1');
+    });
+
     test('calling a client tool returns 422', async () => {
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/tools/${clientToolId}/call`)
