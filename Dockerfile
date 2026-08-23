@@ -3,7 +3,7 @@ FROM node:24-slim AS builder
 WORKDIR /app
 
 # Install pnpm
-RUN corepack enable && corepack prepare pnpm@10.33.2 --activate
+RUN corepack enable && corepack prepare pnpm@11.23.0 --activate
 
 # Copy workspace manifests
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
@@ -43,7 +43,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends curl jq \
 	&& rm -rf /var/lib/apt/lists/*
 
-RUN corepack enable && corepack prepare pnpm@10.33.2 --activate
+RUN corepack enable && corepack prepare pnpm@11.23.0 --activate
 
 # Copy workspace manifests and lock file
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
@@ -72,7 +72,7 @@ FROM node:24-slim AS production
 
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@10.33.2 --activate
+RUN corepack enable && corepack prepare pnpm@11.23.0 --activate
 
 # Copy workspace manifests
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
