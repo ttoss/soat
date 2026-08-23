@@ -141,17 +141,17 @@ jobs:
       - name: Build SDK and CLI
         run: pnpm turbo run build --filter=@soat/sdk --filter=@soat/cli
 
-      - name: Create .npmrc
-        run: echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > .npmrc
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
+      # Published via npm trusted publishing (OIDC), not a token: the `id-token:
+      # write` permission above lets pnpm exchange a GitHub OIDC token for a
+      # short-lived npm credential. Each package registers this repo and the
+      # workflow *filename* (`main.yml`) as its trusted publisher on npmjs.com,
+      # so renaming this file breaks the release until npm is updated to match.
+      # npm generates provenance attestations automatically here — `--provenance`
+      # is not needed.
       - name: Publish SDK and CLI
         run: |
-          pnpm --filter @soat/sdk publish --no-git-checks --provenance
-          pnpm --filter @soat/cli publish --no-git-checks --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          pnpm --filter @soat/sdk publish --no-git-checks
+          pnpm --filter @soat/cli publish --no-git-checks
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
