@@ -10,7 +10,7 @@ Agents working on the website package must adhere to the following guidelines to
 ## Branding Compliance
 
 - **Always follow the `soat-design` skill**: All content, design, and visual elements must strictly adhere to the SOAT brand system defined in the `.claude/skills/soat-design/` skill (see its `readme.md`, `guidelines/`, and `tokens/`). This includes color palettes, typography, visual language, and tone of voice.
-- **Brand Consistency**: Ensure all new content, pages, and components align with the infrastructure-for-AI-apps positioning and the Vector Galaxy logo concept.
+- **Brand Consistency**: Ensure all new content, pages, and components align with the Vector Galaxy logo concept and with the canonical descriptor — **"SOAT — open-source infrastructure for production-ready AI agents."** Use that wording verbatim wherever the project describes itself (the site tagline and JSON-LD, the published `package.json` descriptions, the MCP server description, the GitHub and Docker Hub descriptions). "SOAT" collides with the mandatory vehicle-insurance scheme in Colombia, Peru and Ecuador and with the SOAT1/SOAT2 enzymes, so the qualifying words are what make the project findable at all — and they only consolidate onto one entity if every property repeats them. `tests/harness/packageMetadata.test.mjs` enforces the package half.
 
 ## Documentation Structure
 
