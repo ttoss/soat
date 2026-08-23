@@ -1,9 +1,10 @@
 /**
- * Advertises the Markdown twin of every page in the page itself.
+ * Puts the Markdown twin of every page at `<page>.md`, and advertises it in the
+ * page itself.
  *
- * `docusaurus-plugin-llms` already emits `<page>.md` next to each generated
- * page, but nothing in the HTML says so, which leaves an agent guessing. This
- * plugin adds the RFC 8288 link relation that names it:
+ * `docusaurus-plugin-llms` emits a Markdown file per generated page, but
+ * nothing in the HTML says so, which leaves an agent guessing. This step adds
+ * the RFC 8288 link relation that names it:
  *
  *   <link rel="alternate" type="text/markdown" href="/docs/introduction.md"/>
  *
@@ -15,24 +16,23 @@
  *
  * Run with: pnpm tsx scripts/advertiseMarkdownTwins.ts [buildDir]
  *
- * Note this is discovery, not negotiation, and the difference is not a choice
- * made here. acceptmarkdown.com asks for four things on the *same* URL —
- * Markdown under `Accept: text/markdown`, `Vary: Accept` on the response, `406`
- * for an unsupported type, and q-value ordering — and every one of them is
- * request-time logic. An S3 origin cannot run any of it, and the distribution
- * in front of it is not ours to change: `carlin deploy static-app` builds the
- * whole `AWS::CloudFront::Distribution` from a fixed template (cache policy,
- * response-headers policy, and a single `AppendIndexDotHtml` viewer function
- * included), and exposes no hook for another function association or for a
- * policy that adds `Accept` to `Vary` — which is why the site answers
- * `Vary: Origin` today.
+ * The plugin does not write every twin at `<page>.md`: a folder-index page
+ * gets `<page>/<docId>.md`, and a page under a route base path gets the path
+ * without that prefix. Twins are therefore normalized first — copied, never
+ * moved, since the URLs the plugin published are linked from `llms.txt` — and
+ * a redirect stub, whose only content is where the page went, gets a twin
+ * saying so.
  *
- * Closing it needs one of: a `carlin` option for extra viewer-request functions
- * and a custom response-headers policy (upstream, `@ttoss`), or the same two
- * resources attached to the distribution out-of-band. The rewrite itself is
- * four lines — map an `Accept` that prefers `text/markdown` onto the `.md` twin
- * this script already advertises, since every page has one — so the work is the
- * plumbing, not the logic.
+ * That one rule, `<page>.md`, is what the other half depends on: negotiation
+ * on the *same* URL — the four acceptmarkdown.com criteria — runs at the edge
+ * in `cloudfront/viewerRequest.js`, which maps an `Accept` preferring
+ * `text/markdown` onto the twin, answers `406` when a page request accepts
+ * neither representation, and orders the two by q-value, while the
+ * `vary: Accept` response header in `carlin.yml` tells caches which header
+ * decided. The edge cannot test whether a file exists, so it applies the rule
+ * blind; `scripts/viewerRequest.test.ts` negotiates every built page against
+ * the build and fails on any that would resolve to a file this step did not
+ * produce.
  */
 
 import * as fs from 'node:fs';
@@ -75,6 +75,101 @@ export const markdownTwinOf = (args: {
   };
 };
 
+const htmlFilesIn = (root: string, current = root): string[] => {
+  return fs.readdirSync(current, { withFileTypes: true }).flatMap((entry) => {
+    const absolute = path.join(current, entry.name);
+    if (entry.isDirectory()) return htmlFilesIn(root, absolute);
+    return entry.name.endsWith('.html') ? [path.relative(root, absolute)] : [];
+  });
+};
+
+/**
+ * The target of a `@docusaurus/plugin-client-redirects` stub, whose whole body
+ * is a meta refresh and a canonical link, or `null` for a real page.
+ */
+export const redirectTargetOf = (args: { html: string }): string | null => {
+  const match =
+    /<meta\s+http-equiv="refresh"\s+content="[^"]*url=([^"]+)"/i.exec(
+      args.html
+    );
+
+  return match ? match[1].trim() : null;
+};
+
+/**
+ * Where the llms plugin may have written a page's Markdown, in the order the
+ * paths are tried. `<page>.md` is the destination as well as the first
+ * candidate, so a page already normalized costs one `existsSync`.
+ */
+const twinCandidatesOf = (args: { pagePath: string }): string[] => {
+  const { pagePath } = args;
+  const basename = pagePath.slice(pagePath.lastIndexOf('/') + 1);
+  const segments = pagePath.split('/');
+
+  return [
+    `${pagePath}.md`,
+    // A folder-index page: named after its doc id, inside the page directory.
+    `${pagePath}/${basename}.md`,
+    // A page under a route base path (`/docs/mcp/tools/agents` →
+    // `mcp/tools/agents.md`): the plugin writes it without the prefix.
+    segments.length > 1 ? `${segments.slice(1).join('/')}.md` : '',
+  ].filter(Boolean);
+};
+
+const redirectTwin = (args: { target: string }): string => {
+  const { target } = args;
+  return `# Moved\n\nThis page has moved to [${target}](${target}).\n`;
+};
+
+/**
+ * Makes `<page>.md` the Markdown twin of every page that has one: copying the
+ * file the llms plugin wrote elsewhere, or writing the twin of a redirect stub.
+ * A page with no Markdown anywhere — an interactive React page — is left
+ * without one, and is declared as such in `cloudfront/viewerRequest.js`.
+ */
+export const ensureMarkdownTwins = (args: {
+  outDir: string;
+}): { copied: number; written: number } => {
+  let copied = 0;
+  let written = 0;
+
+  for (const htmlRelativePath of htmlFilesIn(args.outDir)) {
+    const normalized = htmlRelativePath.split(path.sep).join('/');
+    if (!normalized.endsWith('/index.html')) continue;
+
+    const pagePath = normalized.slice(0, -'/index.html'.length);
+    if (pagePath.length === 0) continue;
+
+    const destination = path.join(args.outDir, `${pagePath}.md`);
+    if (fs.existsSync(destination)) continue;
+
+    const source = twinCandidatesOf({ pagePath })
+      .map((candidate) => {
+        return path.join(args.outDir, candidate);
+      })
+      .find((candidate) => {
+        return candidate !== destination && fs.existsSync(candidate);
+      });
+
+    if (source) {
+      fs.copyFileSync(source, destination);
+      copied += 1;
+      continue;
+    }
+
+    const target = redirectTargetOf({
+      html: fs.readFileSync(path.join(args.outDir, htmlRelativePath), 'utf-8'),
+    });
+
+    if (target) {
+      fs.writeFileSync(destination, redirectTwin({ target }), 'utf-8');
+      written += 1;
+    }
+  }
+
+  return { copied, written };
+};
+
 const linkTag = (href: string): string => {
   return `<link rel="alternate" type="text/markdown" href="${href}"/>`;
 };
@@ -91,14 +186,6 @@ export const injectAlternateLink = (args: {
   if (headEnd < 0) return args.html;
 
   return `${args.html.slice(0, headEnd)}${tag}${args.html.slice(headEnd)}`;
-};
-
-const htmlFilesIn = (root: string, current = root): string[] => {
-  return fs.readdirSync(current, { withFileTypes: true }).flatMap((entry) => {
-    const absolute = path.join(current, entry.name);
-    if (entry.isDirectory()) return htmlFilesIn(root, absolute);
-    return entry.name.endsWith('.html') ? [path.relative(root, absolute)] : [];
-  });
 };
 
 export const advertiseMarkdownTwins = (args: {
@@ -135,8 +222,10 @@ if (!fs.existsSync(outDir)) {
   );
 }
 
+const { copied, written } = ensureMarkdownTwins({ outDir });
+
 const { advertised } = advertiseMarkdownTwins({ outDir });
 
 process.stdout.write(
-  `[markdown-twins] advertised ${advertised} Markdown alternates\n`
+  `[markdown-twins] normalized ${copied} twins, wrote ${written} redirect twins, advertised ${advertised} Markdown alternates\n`
 );

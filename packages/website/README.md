@@ -54,3 +54,16 @@ Never edit generated files by hand — change the source (OpenAPI specs, permiss
 ## Authoring rules
 
 Module page structure, cross-referencing rules, and the docs drift guardrails (`scripts/docs-lint.mjs`, ID-prefix checks) are documented in `.claude/rules/website.md`. Follow them for any docs change.
+
+## Serving
+
+`carlin.yml` deploys the built site to S3 behind CloudFront (`pnpm deploy -- -e Production`). Two settings there carry behavior the build cannot provide on its own:
+
+| Setting | What it does |
+| --- | --- |
+| `viewerRequestFunctionCode` | Associates `cloudfront/viewerRequest.js` as the distribution's viewer request function: it negotiates between a page and its Markdown twin, then appends `index.html`. |
+| `responseHeaders.vary` | Sends `Vary: Accept`, since a page URL now has two representations and every cache downstream has to key on the header that picks one. |
+
+`Accept: text/markdown` on a page URL returns that page's `.md` twin, an `Accept` that accepts neither `text/html` nor `text/markdown` gets a `406`, and q-values order the two — the [acceptmarkdown.com](https://acceptmarkdown.com) criteria. Discovery (the `<link rel="alternate">` tag on every page) is the build's half, in `scripts/advertiseMarkdownTwins.ts`.
+
+The function runs on the `cloudfront-js-2.0` runtime — ES 5.1, no network or filesystem, 10 KB including the `appendIndexHtml` helper carlin injects — and `appendIndexHtml` cannot be set alongside it, because a cache behavior takes a single viewer request function. `scripts/viewerRequest.test.ts` runs the function against that same composition and asserts the two `carlin.yml` settings ship together; there is no way to exercise it locally, since `docusaurus serve` has no edge.

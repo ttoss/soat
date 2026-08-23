@@ -11,5 +11,5 @@ Sitemap: https://soat.ttoss.dev/sitemap.xml
 #   /openapi.json   the entire REST surface as one OpenAPI 3.0 document
 #   /errors.json    every error code, its HTTP status, and what to do about it
 #
-# Every documentation page has a Markdown twin: append .md to its URL
-# (https://soat.ttoss.dev/docs/introduction.md).
+# Every documentation page has a Markdown twin: send Accept: text/markdown to
+# the page URL, or append .md to it (https://soat.ttoss.dev/docs/introduction.md).

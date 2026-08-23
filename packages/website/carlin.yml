@@ -1,4 +1,3 @@
-appendIndexHtml: true
 hostedZoneName: ttoss.dev
 
 environments:
@@ -6,3 +5,11 @@ environments:
     aliases:
       - soat.ttoss.dev
     cloudfront: true
+    # `appendIndexHtml` is not set: a cache behavior takes a single viewer
+    # request function, and this one calls the `appendIndexHtml` helper carlin
+    # injects into it after negotiating the page representation.
+    viewerRequestFunctionCode: ./cloudfront/viewerRequest.js
+    responseHeaders:
+      # The function serves two representations of the same page URL, so every
+      # cache downstream has to key on the header that decides which one.
+      vary: Accept
