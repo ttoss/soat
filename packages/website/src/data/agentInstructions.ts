@@ -240,9 +240,7 @@ rewriting on your side.
 
 ## Source
 
-Apache-2.0, developed in the open at <https://github.com/ttoss/soat>. Every
-developer entry point — reference, specs, SDK, CLI, MCP, and how to get a
-credential — is collected at <https://soat.ttoss.dev/developers>.
+Apache-2.0, developed in the open at <https://github.com/ttoss/soat>.
 `;
 };
 

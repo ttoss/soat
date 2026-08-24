@@ -34,7 +34,6 @@ export const REQUIRED_SURFACES = [
   'about.md',
   'contact.md',
   'privacy.md',
-  'developers.md',
 ] as const;
 
 /**

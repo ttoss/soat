@@ -44,7 +44,7 @@ test('every Markdown page under src/pages is picked up', () => {
   // is negotiated into a 404.
   const names = markdownPageNames();
 
-  for (const expected of ['about', 'contact', 'privacy', 'developers']) {
+  for (const expected of ['about', 'contact', 'privacy']) {
     assert.ok(
       names.includes(expected),
       `${expected} is missing from the generated Markdown twins`
