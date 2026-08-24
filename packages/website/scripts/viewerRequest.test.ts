@@ -6,6 +6,8 @@ import * as url from 'node:url';
 
 import { load } from 'js-yaml';
 
+import { markdownPageNames, twinFileName } from './generatePageTwins';
+
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
 const FUNCTION_PATH = path.resolve(
@@ -230,6 +232,42 @@ test('every page outside the docs tree either has a twin or is declared HTML-onl
     assert.ok(
       noMarkdownUris.includes(pageUri),
       `${pageUri} is a page with no Markdown twin: add it to NO_MARKDOWN_URIS in cloudfront/viewerRequest.js, or generate a twin for it`
+    );
+  }
+});
+
+test('every Markdown page under src/pages has a generated twin', () => {
+  // The `.tsx` case above is the HTML-only half of the same invariant. A
+  // Markdown page is the other half: it must NOT be declared HTML-only, and the
+  // twin the function rewrites to must actually be generated — the function
+  // cannot check that a file exists, so `/about` with `Accept: text/markdown`
+  // becomes a 404 the moment the twin stops being written.
+  const pagesDir = path.resolve(__dirname, '..', 'src', 'pages');
+
+  const markdownPages = fs
+    .readdirSync(pagesDir)
+    .filter((entry) => {
+      return entry.endsWith('.md') || entry.endsWith('.mdx');
+    })
+    .map((entry) => {
+      return path.basename(entry, path.extname(entry));
+    });
+
+  for (const pageName of markdownPages) {
+    assert.ok(
+      !noMarkdownUris.includes(`/${pageName}`),
+      `/${pageName} is a Markdown page: it has a twin, so it must not be declared HTML-only`
+    );
+
+    assert.ok(
+      markdownPageNames().includes(pageName),
+      `/${pageName} has no generated Markdown twin (see scripts/generatePageTwins.ts)`
+    );
+
+    // The negotiated URI is the twin's own path, so the two cannot disagree.
+    assert.equal(
+      run({ uri: `/${pageName}`, accept: 'text/markdown' }).uri,
+      `/${twinFileName({ pageName })}`
     );
   }
 });
