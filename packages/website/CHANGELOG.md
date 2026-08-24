@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.29.5](https://github.com/ttoss/soat/compare/v0.29.4...v0.29.5) (2026-08-24)
+
+### Features
+
+* **website:** publish the trust anchor, developer, and entity signals an agent-readiness audit reads ([#1118](https://github.com/ttoss/soat/issues/1118)) ([4b08b3a](https://github.com/ttoss/soat/commit/4b08b3ad94247a8a50e247f17cdc55f2091e0666))
+
 ## [0.29.4](https://github.com/ttoss/soat/compare/v0.29.3...v0.29.4) (2026-08-24)
 
 ### Features
