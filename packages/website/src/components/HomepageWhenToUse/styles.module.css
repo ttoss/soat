@@ -65,25 +65,31 @@
   line-height: 1.6;
 }
 
-/* Pins the command block to the bottom of the card and shrinks the
-   Docusaurus CodeBlock chrome so nine of these read as a compact, uniform
-   grid rather than nine full-size doc snippets. */
-.command {
+/* Pins the module-doc link to the bottom of the card, so cards with a
+   one-line description and cards with two align on the same baseline. */
+.moduleLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   margin-top: auto;
   padding-top: 1rem;
+  color: var(--ifm-color-primary);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
 }
 
-.command pre {
-  margin: 0;
-  padding: 0.75rem 0.9rem;
-  border: 1px solid rgba(0, 229, 255, 0.16);
-  border-radius: 0.5rem;
-  font-size: 0.78rem;
-  line-height: 1.55;
+.moduleLink span {
+  transition: transform 200ms ease;
 }
 
-.command code {
-  background: none;
+.moduleLink:hover {
+  color: var(--ifm-color-primary);
+  text-decoration: underline;
+}
+
+.moduleLink:hover span {
+  transform: translateX(3px);
 }
 
 .notFor {
