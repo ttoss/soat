@@ -292,17 +292,13 @@ test('the function fits what CloudFront accepts', () => {
   assert.match(source, /appendIndexHtml\(/);
 });
 
-test('the deploy config associates the function and varies on Accept', () => {
+test('the deploy config associates the function and does not set responseHeaders', () => {
   const config = load(fs.readFileSync(CARLIN_YML_PATH, 'utf-8')) as {
     appendIndexHtml?: boolean;
     environments: {
       Production: {
         cloudfront?: boolean;
-        responseHeaders?: {
-          header: string;
-          value: string;
-          override: boolean;
-        }[];
+        responseHeaders?: unknown;
         viewerRequestFunctionCode?: string;
       };
     };
@@ -321,25 +317,19 @@ test('the deploy config associates the function and varies on Accept', () => {
   // calls the injected helper instead.
   assert.equal(config.appendIndexHtml, undefined);
 
-  // Serving two representations of one URL without telling caches which header
-  // decides is what breaks them, so the header ships with the function or not
-  // at all.
-  //
-  // Asserted as the *array* form, which is the whole point: carlin applies
-  // environment overrides after yargs `coerce`, so the object form arrives at
-  // the template unparsed, fails its `responseHeaders.length > 0` check, and
-  // leaves the managed policy attached with no error anywhere. v0.29.2 shipped
-  // exactly that and answered `vary: Origin` (#1111). An assertion that only
-  // reads the value back — `responseHeaders.vary === 'Accept'` — passes in both
-  // cases and is why this went out; this one pins the shape carlin consumes.
-  assert.ok(
-    Array.isArray(production.responseHeaders),
-    'responseHeaders must use the array form: the object form is silently dropped from an environment block'
+  // `Vary: Accept` belongs here and is deliberately absent: carlin >= 2.2.1
+  // answers a defined `vary` by moving the CORS headers into
+  // `CustomHeadersConfig`, and CloudFront rejects that with "The parameter
+  // CustomHeaders contains access-control-allow-origin that is a CORS header
+  // and cannot be set as custom header" (400). The v0.29.3 deploy failed on it
+  // and rolled the stack back. Re-adding it without an upstream change breaks
+  // the release, so this asserts the absence rather than trusting the comment
+  // in `carlin.yml` to be read (#1111).
+  assert.equal(
+    production.responseHeaders,
+    undefined,
+    'responseHeaders makes the Production deploy fail until carlin can set Vary without touching the CORS headers'
   );
-
-  assert.deepEqual(production.responseHeaders, [
-    { header: 'vary', value: 'Accept', override: true },
-  ]);
 });
 
 test('every page the function rewrites has the file it rewrites to', () => {

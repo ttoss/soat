@@ -9,18 +9,22 @@ environments:
     # request function, and this one calls the `appendIndexHtml` helper carlin
     # injects into it after negotiating the page representation.
     viewerRequestFunctionCode: ./cloudfront/viewerRequest.js
-    # The function serves two representations of the same page URL, so every
-    # cache downstream has to key on the header that decides which one.
+    # `Vary: Accept` is NOT set here, and cannot be today.
     #
-    # The array form is load-bearing here, not a style choice. carlin applies
-    # environment overrides in a middleware that assigns `argv[key] = value`
-    # after yargs has already run each option's `coerce`, so the object form
-    # (`vary: Accept`) reaches the template as a plain object: its `.length` is
-    # undefined, the `responseHeaders.length > 0` branch is not taken, and the
-    # distribution silently keeps the managed policy — which is what shipped in
-    # v0.29.2 and answered `vary: Origin` (#1111). The array form is already
-    # the shape the template maps, so it needs no coercion.
-    responseHeaders:
-      - header: vary
-        value: Accept
-        override: true
+    # The page URL has two representations, so caches downstream ought to key
+    # on `Accept` — but neither carlin path can express that on this
+    # distribution:
+    #
+    #   * carlin >= 2.2.1 drops `CorsConfig` when `vary` is defined and emits
+    #     the CORS headers as custom headers instead. CloudFront rejects that
+    #     outright: "The parameter CustomHeaders contains
+    #     access-control-allow-origin that is a CORS header and cannot be set
+    #     as custom header" (400). The v0.29.3 deploy failed on it and rolled
+    #     back, which is why this is empty rather than clever.
+    #   * carlin <= 2.2.0 keeps `CorsConfig`, whose interaction with a custom
+    #     `Vary` is untested — the created policy has never been attached here.
+    #
+    # So the distribution keeps the managed policy: negotiation works, CORS
+    # works, and `Vary` is missing. #1111 tracks it; the fix is upstream (keep
+    # `CorsConfig` and allow a caller-defined `Vary` alongside it) or a
+    # hand-managed policy passed via `responseHeadersPolicy`.
