@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.29.3](https://github.com/ttoss/soat/compare/v0.29.2...v0.29.3) (2026-08-24)
+
+### Bug Fixes
+
+* **tutorials:** size the LLM-bound poll budgets from a measurement ([#1113](https://github.com/ttoss/soat/issues/1113)) ([9131806](https://github.com/ttoss/soat/commit/913180682eea676fb4433fdf7ad4a7a9cc90fe56))
+* **website:** use the array form so responseHeaders reaches the template ([#1114](https://github.com/ttoss/soat/issues/1114)) ([31ef600](https://github.com/ttoss/soat/commit/31ef60079dbdaba221c308c04d4e909536bdf93b)), closes [#1111](https://github.com/ttoss/soat/issues/1111)
+
 ## [0.29.2](https://github.com/ttoss/soat/compare/v0.29.1...v0.29.2) (2026-08-23)
 
 ### Bug Fixes
