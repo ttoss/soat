@@ -62,7 +62,7 @@ Module page structure, cross-referencing rules, and the docs drift guardrails (`
 | Setting | What it does |
 | --- | --- |
 | `viewerRequestFunctionCode` | Associates `cloudfront/viewerRequest.js` as the distribution's viewer request function: it negotiates between a page and its Markdown twin, then appends `index.html`. |
-| `responseHeaders.vary` | Sends `Vary: Accept`, since a page URL now has two representations and every cache downstream has to key on the header that picks one. |
+| `responseHeaders` | Sends `Vary: Accept`, since a page URL now has two representations and every cache downstream has to key on the header that picks one. Must use the **array** form (`- header: vary`): carlin applies environment overrides after yargs `coerce`, so the object form reaches the template unparsed and the distribution silently keeps the managed policy ([#1111](https://github.com/ttoss/soat/issues/1111)). |
 
 `Accept: text/markdown` on a page URL returns that page's `.md` twin, an `Accept` that accepts neither `text/html` nor `text/markdown` gets a `406`, and q-values order the two — the [acceptmarkdown.com](https://acceptmarkdown.com) criteria. Discovery (the `<link rel="alternate">` tag on every page) is the build's half, in `scripts/advertiseMarkdownTwins.ts`.
 
