@@ -726,17 +726,50 @@ describe('webhookDispatcher', () => {
       timestamp: new Date().toISOString(),
     });
 
-    // Should retry up to MAX_ATTEMPTS since status is not ok.
-    await waitFor(async () => {
-      await sweepDueWebhookDeliveries({ now: pastAnyBackoff() });
-      return callsToUrl(url).length >= 3;
-    });
-
-    expect(callsToUrl(url)).toHaveLength(3);
-
     const webhookRow = await db.Webhook.findOne({
       where: { publicId: created.body.id },
     });
+
+    /** Attempts the delivery row has actually *recorded*, not merely started. */
+    const attemptsRecorded = async () => {
+      const row = await db.WebhookDelivery.findOne({
+        where: { webhookId: webhookRow!.id },
+      });
+      return row?.attempts ?? 0;
+    };
+
+    const waitForAttempts = async (n: number) => {
+      await waitFor(async () => {
+        return (await attemptsRecorded()) >= n;
+      });
+    };
+
+    // Should retry up to MAX_ATTEMPTS since status is not ok.
+    //
+    // Drive the attempts deliberately — wait for each one to be recorded before
+    // sweeping for the next. The obvious "sweep in a loop until 3 fetch calls"
+    // shape loses to two separate races:
+    //
+    //   - `attemptDelivery` records a `fetch` call the instant it *invokes* it,
+    //     but the attempt only reaches the row once the response is awaited and
+    //     `recordFailedAttempt` writes it. Polling the call count can return
+    //     inside that window and read a still-`pending` delivery — which is how
+    //     this test failed the v0.29.6 release run.
+    //   - `pastAnyBackoff()` is ten minutes ahead, well past the lease an
+    //     in-flight attempt holds, so `duePredicate` sees that delivery as
+    //     claimable again. A sweep issued while attempt N is still running
+    //     re-dispatches it, producing a 4th call for the same delivery.
+    //
+    // Sweeping only once the previous attempt has landed closes both, and needs
+    // no sleep: every wait is bounded by an observed row change.
+    await waitForAttempts(1);
+    await sweepDueWebhookDeliveries({ now: pastAnyBackoff() });
+    await waitForAttempts(2);
+    await sweepDueWebhookDeliveries({ now: pastAnyBackoff() });
+    await waitForAttempts(3);
+
+    expect(callsToUrl(url)).toHaveLength(3);
+
     const delivery = await db.WebhookDelivery.findOne({
       where: { webhookId: webhookRow!.id },
     });
