@@ -1,38 +1,26 @@
 /**
  * Puts the Markdown twin of every page at `<page>.md`, and advertises it in the
- * page itself.
- *
- * `docusaurus-plugin-llms` emits a Markdown file per generated page, but
- * nothing in the HTML says so, which leaves an agent guessing. This step adds
- * the RFC 8288 link relation that names it:
+ * page itself with the RFC 8288 link relation:
  *
  *   <link rel="alternate" type="text/markdown" href="/docs/introduction.md"/>
  *
  * It runs over the emitted files after `docusaurus build`, so it covers every
  * page — including the generated API reference — without swizzling a theme
- * component per route type. It deliberately is not a plugin: `postBuild` hooks
- * do not run strictly after `docusaurus-plugin-llms` has written the `.md`
- * files this step looks for.
+ * component per route type. It is not a plugin because `postBuild` hooks do not
+ * run strictly after `docusaurus-plugin-llms` has written the `.md` files.
  *
  * Run with: pnpm tsx scripts/advertiseMarkdownTwins.ts [buildDir]
  *
- * The plugin does not write every twin at `<page>.md`: a folder-index page
- * gets `<page>/<docId>.md`, and a page under a route base path gets the path
- * without that prefix. Twins are therefore normalized first — copied, never
- * moved, since the URLs the plugin published are linked from `llms.txt` — and
- * a redirect stub, whose only content is where the page went, gets a twin
- * saying so.
+ * The plugin does not write every twin at `<page>.md`: a folder-index page gets
+ * `<page>/<docId>.md`, and a page under a route base path gets the path without
+ * that prefix. Twins are normalized first — copied, never moved, since the URLs
+ * the plugin published are linked from `llms.txt` — and a redirect stub gets a
+ * twin naming where the page went.
  *
- * That one rule, `<page>.md`, is what the other half depends on: negotiation
- * on the *same* URL — the four acceptmarkdown.com criteria — runs at the edge
- * in `cloudfront/viewerRequest.js`, which maps an `Accept` preferring
- * `text/markdown` onto the twin, answers `406` when a page request accepts
- * neither representation, and orders the two by q-value, while the
- * `vary: Accept` response header in `carlin.yml` tells caches which header
- * decided. The edge cannot test whether a file exists, so it applies the rule
- * blind; `scripts/viewerRequest.test.ts` negotiates every built page against
- * the build and fails on any that would resolve to a file this step did not
- * produce.
+ * That one rule is what `cloudfront/viewerRequest.js` depends on: it maps an
+ * `Accept` preferring `text/markdown` onto `<page>.md` without being able to
+ * test whether the file exists. `scripts/viewerRequest.test.ts` negotiates
+ * every built page and fails on any that would resolve to a missing file.
  */
 
 import * as fs from 'node:fs';

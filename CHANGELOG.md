@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.29.4](https://github.com/ttoss/soat/compare/v0.29.3...v0.29.4) (2026-08-24)
+
+### Features
+
+* **website:** send Vary: Accept, and trim the negotiation comments ([#1116](https://github.com/ttoss/soat/issues/1116)) ([cb8d037](https://github.com/ttoss/soat/commit/cb8d037b685e429623b1e31c3621748d43afd356)), closes [ttoss/ttoss#1206](https://github.com/ttoss/ttoss/issues/1206) [#1111](https://github.com/ttoss/soat/issues/1111)
+
 ## [0.29.3](https://github.com/ttoss/soat/compare/v0.29.2...v0.29.3) (2026-08-24)
 
 ### Bug Fixes

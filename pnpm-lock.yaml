@@ -36,8 +36,8 @@ importers:
         specifier: ^1.29.17
         version: 1.29.17
       carlin:
-        specifier: ^2.2.1
-        version: 2.2.1(@swc/core@1.15.43)(@types/node@26.1.1)(debug@4.4.3(supports-color@8.1.1))(supports-color@8.1.1)(typescript@6.0.3)
+        specifier: ^2.2.2
+        version: 2.2.2(@swc/core@1.15.43)(@types/node@26.1.1)(debug@4.4.3(supports-color@8.1.1))(supports-color@8.1.1)(typescript@6.0.3)
       eslint:
         specifier: ^9
         version: 9.39.5(jiti@2.7.0)(supports-color@8.1.1)
@@ -5934,8 +5934,8 @@ packages:
   caniuse-lite@1.0.30001805:
     resolution: {integrity: sha512-52noaS3DubycKSXaU30TwPGIp+POyQSUVa5jBEq3vkRkY0kjyb3LQgvhU6WGyCcyXqVLWO0Cw0Q6BSdD0kUfVA==}
 
-  carlin@2.2.1:
-    resolution: {integrity: sha512-uLb2t94W9ozNyc2PnJoTRTXQThd/TAay0uToOlondb5ioeAgLbAmZCqio0wBq4s7+upFnKqJHo9f9gBJvPyp2A==}
+  carlin@2.2.2:
+    resolution: {integrity: sha512-kdX8O0va29Wjcdbbd7rMWr0wGKuXteObRrZqerpJwVR1NuOaOR7KRNAkk3FY4v5ngLr/b9zJGsmgLb6K3bQq+A==}
     hasBin: true
 
   ccount@2.0.1:
@@ -20243,7 +20243,7 @@ snapshots:
 
   caniuse-lite@1.0.30001805: {}
 
-  carlin@2.2.1(@swc/core@1.15.43)(@types/node@26.1.1)(debug@4.4.3(supports-color@8.1.1))(supports-color@8.1.1)(typescript@6.0.3):
+  carlin@2.2.2(@swc/core@1.15.43)(@types/node@26.1.1)(debug@4.4.3(supports-color@8.1.1))(supports-color@8.1.1)(typescript@6.0.3):
     dependencies:
       '@aws-sdk/client-cloudformation': 3.1086.0
       '@aws-sdk/client-s3': 3.1086.0

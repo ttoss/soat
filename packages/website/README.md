@@ -57,28 +57,24 @@ Module page structure, cross-referencing rules, and the docs drift guardrails (`
 
 ## Serving
 
-`carlin.yml` deploys the built site to S3 behind CloudFront (`pnpm deploy -- -e Production`). Two settings there carry behavior the build cannot provide on its own:
-
-| Setting | What it does |
-| --- | --- |
-| `viewerRequestFunctionCode` | Associates `cloudfront/viewerRequest.js` as the distribution's viewer request function: it negotiates between a page and its Markdown twin, then appends `index.html`. |
-| `responseHeaders` | Sends `Vary: Accept`, since a page URL now has two representations and every cache downstream has to key on the header that picks one. Must use the **array** form (`- header: vary`): carlin applies environment overrides after yargs `coerce`, so the object form reaches the template unparsed and the distribution silently keeps the managed policy ([#1111](https://github.com/ttoss/soat/issues/1111)). |
+`carlin.yml` deploys the built site to S3 behind CloudFront (`pnpm deploy -- -e Production`). `viewerRequestFunctionCode` associates `cloudfront/viewerRequest.js` as the distribution's viewer request function: it negotiates between a page and its Markdown twin, then appends `index.html`.
 
 `Accept: text/markdown` on a page URL returns that page's `.md` twin, an `Accept` that accepts neither `text/html` nor `text/markdown` gets a `406`, and q-values order the two — the [acceptmarkdown.com](https://acceptmarkdown.com) criteria. Discovery (the `<link rel="alternate">` tag on every page) is the build's half, in `scripts/advertiseMarkdownTwins.ts`.
 
-The function runs on the `cloudfront-js-2.0` runtime — ES 5.1, no network or filesystem, 10 KB including the `appendIndexHtml` helper carlin injects — and `appendIndexHtml` cannot be set alongside it, because a cache behavior takes a single viewer request function. `scripts/viewerRequest.test.ts` runs the function against that same composition and asserts the two `carlin.yml` settings ship together; there is no way to exercise it locally, since `docusaurus serve` has no edge.
+The function runs on the `cloudfront-js-2.0` runtime — ES 5.1, no network or filesystem, 10 KB including the `appendIndexHtml` helper carlin injects — and `appendIndexHtml` cannot be set alongside it, because a cache behavior takes a single viewer request function. `scripts/viewerRequest.test.ts` runs the function against that same composition.
 
-`Vary: Accept` needs `carlin@>=2.2.1`. Earlier versions accepted the setting and dropped it: CloudFront's CORS handling owns `Vary`, so a policy with a `CorsConfig` sends `Vary: Origin` on a plain request and no `Vary` at all on a cross-origin one ([carlin#1205](https://github.com/ttoss/ttoss/pull/1205), [#1111](https://github.com/ttoss/soat/issues/1111)). carlin now emits the CORS headers as custom headers instead when `vary` is defined — `Access-Control-Allow-Origin` stays `*`, so cross-origin `fetch` of `/openapi.json` and friends still works, but CloudFront no longer answers `OPTIONS` preflights itself. Static GETs don't preflight.
+`responseHeaders` sends `Vary: Accept`, so caches downstream key on the header the function reads. carlin builds a response headers policy with no `CorsConfig` for it — CloudFront's CORS handling owns `Vary` otherwise — and CORS comes from the bucket, forwarded through the `Managed-CORS-S3Origin` origin request policy. The array form is required: per-environment options are assigned after yargs runs its `coerce`, so the object form is silently ignored.
 
 ### Verifying a deploy
 
-The four criteria live on the edge, not in the build, so a green test suite says nothing about them. After a Production deploy:
+The criteria live on the edge, not in the build. After a Production deploy:
 
 ```bash
-curl -sI -H 'Accept: text/markdown' https://soat.ttoss.dev/docs/introduction   # text/markdown + vary: Accept
+curl -sI -H 'Accept: text/markdown' https://soat.ttoss.dev/docs/introduction   # text/markdown
 curl -sI -H 'Accept: application/json' https://soat.ttoss.dev/docs/introduction # 406
 curl -sI -H 'Accept: text/markdown' https://soat.ttoss.dev/                     # /agents.md
+curl -sI -H 'Accept: text/markdown' https://soat.ttoss.dev/docs/introduction   # vary: Accept
 curl -sI -H 'Origin: https://example.com' https://soat.ttoss.dev/openapi.json   # access-control-allow-origin: *
 ```
 
-Edge configuration takes a few minutes to reach every location, so a probe run immediately after the deploy can still show the previous policy.
+Edge configuration takes a few minutes to propagate.

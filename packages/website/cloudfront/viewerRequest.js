@@ -1,59 +1,37 @@
 /**
  * CloudFront viewer request function of the docs distribution.
  *
- * It does two things, in this order:
+ * It negotiates the page representation, then appends `index.html` via the
+ * `appendIndexHtml(request)` helper carlin injects into this file. Negotiation
+ * runs first: appending would otherwise turn `/docs/x` into
+ * `/docs/x/index.html` before there is a page path to map onto `/docs/x.md`.
+ * A cache behavior takes a single viewer request function, so the
+ * `appendIndexHtml` option and this file are mutually exclusive.
  *
- * 1. Content negotiation between the HTML page and its Markdown twin. Every
- *    documentation page is built with a `<page>.md` sibling (see
- *    `scripts/advertiseMarkdownTwins.ts`), so `Accept: text/markdown` on the
- *    page URL is answered with the Markdown of that same page instead of the
- *    HTML — the four acceptmarkdown.com criteria: the Markdown variant,
- *    `Vary: Accept` (added by the response headers policy carlin creates from
- *    `responseHeaders` in `carlin.yml`, since a viewer request function cannot
- *    touch the response), `406` for a request that accepts neither
- *    representation, and q-value ordering.
- * 2. Appending `index.html`, via the `appendIndexHtml(request)` helper carlin
- *    injects into this file. A cache behavior takes a single viewer request
- *    function, so the `appendIndexHtml` option and this file are mutually
- *    exclusive and the option's logic is called from here. Negotiation runs
- *    first: appending would otherwise turn `/docs/x` into `/docs/x/index.html`
- *    before there is a page path left to map onto `/docs/x.md`.
- *
- * The runtime is `cloudfront-js-2.0`: ES 5.1 with no network, filesystem,
- * timers or dynamic evaluation, and a 10 KB limit on this file plus the
- * injected helper. `scripts/viewerRequest.test.ts` runs it against that same
- * composition.
+ * The runtime is `cloudfront-js-2.0`: ES 5.1, no network, filesystem, timers or
+ * dynamic evaluation, and a 10 KB limit on this file plus the injected helper.
+ * `scripts/viewerRequest.test.ts` runs it against that same composition.
  */
 
 /**
- * The two representations a page can have. HTML is the default one: a tie —
- * which is what the full wildcard range every browser and CLI client sends
- * produces — resolves to it, so no one is handed a Markdown file for asking
- * for anything.
+ * The two representations a page can have. HTML is the default: a tie resolves
+ * to it, so a wildcard `Accept` is never answered with Markdown.
  */
 var HTML_TYPE = 'text/html';
 var MARKDOWN_TYPE = 'text/markdown';
 
 /**
- * The Markdown representation of the homepage. It is not a doc page and has no
- * `.md` twin of its own, and `/agents.md` — when to use SOAT, how to call it,
- * how to get access — is what its HTML already advertises as its
- * `rel="alternate"` (`src/pages/index.tsx`). Negotiation resolves to what the
- * page advertises; the two cannot disagree.
+ * The Markdown representation of the homepage, which has no `.md` twin of its
+ * own. This is what its HTML advertises as `rel="alternate"`, so negotiation
+ * and discovery cannot disagree.
  */
 var HOME_MARKDOWN_URI = '/agents.md';
 
 /**
- * Pages with no Markdown representation at all: the interactive React pages,
- * which the Markdown pipeline never sees. Every other page has a twin at
- * `<page>.md` — `scripts/advertiseMarkdownTwins.ts` puts it there, redirect
- * stubs included — so this is the whole exception list. They are served as
- * HTML, and refused with a `406` when the request rules HTML out.
- *
- * `scripts/viewerRequest.test.ts` negotiates every built page against the
- * build and fails on a page that would resolve to a file the build does not
- * emit, which is how this list stays current: the edge cannot test whether a
- * file exists.
+ * Pages with no Markdown representation: the interactive React pages, which the
+ * Markdown pipeline never sees. Every other page has a twin at `<page>.md`.
+ * These are served as HTML, and refused with a `406` when the request rules
+ * HTML out. `scripts/viewerRequest.test.ts` keeps the list current.
  */
 var NO_MARKDOWN_URIS = ['/benchmark', '/blog'];
 
@@ -103,10 +81,8 @@ function quality(accept, type) {
 
 /**
  * Whether the URI addresses a page, which is what has two representations. A
- * file — an asset, `/openapi.json`, a `.md` twin asked for by name — is passed
- * through untouched, and is never answered with a `406`: it has one
- * representation, and refusing it would break clients that send an `Accept`
- * naming neither page type.
+ * file — an asset, `/openapi.json`, a `.md` twin asked for by name — passes
+ * through untouched and is never refused with a `406`.
  */
 function isPage(uri) {
   var lastSlash = uri.lastIndexOf('/');
