@@ -51,7 +51,6 @@ test('the required surfaces include every machine-readable entry point', () => {
     'agents.md',
     'api/openapi.yaml',
     'contact.md',
-    'developers.md',
     'errors.json',
     'llms-full.txt',
     'llms.txt',

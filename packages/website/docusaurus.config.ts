@@ -124,6 +124,15 @@ const config: Config = {
       {
         redirects: [
           {
+            // /developers was a portal collecting the entry points the docs
+            // tree already is. It shipped in v0.29.5, so the URL is live and
+            // gets a redirect rather than a 404. `advertiseMarkdownTwins`
+            // writes the `.md` twin of this stub, so /developers.md resolves
+            // too.
+            from: '/developers',
+            to: '/docs/introduction',
+          },
+          {
             from: '/docs/getting-started/advanced-config',
             to: '/docs/self-hosting/configuration',
           },
@@ -245,11 +254,6 @@ const config: Config = {
           label: 'Reference',
         },
         {
-          to: '/developers',
-          label: 'Developers',
-          position: 'left',
-        },
-        {
           to: '/benchmark',
           label: 'Benchmark',
           position: 'left',
@@ -312,10 +316,6 @@ const config: Config = {
             {
               label: 'About',
               to: '/about',
-            },
-            {
-              label: 'Developers',
-              to: '/developers',
             },
             {
               label: 'Contact',

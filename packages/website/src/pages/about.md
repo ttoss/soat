@@ -48,6 +48,5 @@ The name and logo are covered separately by the
 ## Where to go next
 
 - [Documentation](/docs/introduction) — concepts, modules, and tutorials
-- [Developer entry points](/developers) — API, SDK, CLI, MCP, and specs in one place
 - [Contact](/contact) — how to reach the maintainers
 - [Source on GitHub](https://github.com/ttoss/soat)
