@@ -9,7 +9,16 @@ environments:
     # request function, and this one calls the `appendIndexHtml` helper carlin
     # injects into it after negotiating the page representation.
     viewerRequestFunctionCode: ./cloudfront/viewerRequest.js
-    # `responseHeaders` is unset: CloudFront rejects `access-control-*` as
-    # custom headers, which is how carlin builds the policy when `vary` is
-    # defined, so the deploy fails. The distribution keeps the managed policy —
-    # negotiation and CORS work, `Vary: Accept` is not sent (#1111).
+    # The function serves two representations of the same page URL, so every
+    # cache downstream has to key on the header that decides which one. carlin
+    # builds a policy with no `CorsConfig` for a defined `vary` — CloudFront's
+    # CORS handling owns the header otherwise — and the bucket answers CORS.
+    #
+    # The array form is load-bearing: environment overrides are assigned after
+    # yargs runs each option's `coerce`, so the object form reaches the
+    # template unparsed and is silently ignored. The array form is already the
+    # shape the template maps.
+    responseHeaders:
+      - header: vary
+        value: Accept
+        override: true

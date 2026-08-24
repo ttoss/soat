@@ -270,13 +270,13 @@ test('the function fits what CloudFront accepts', () => {
   assert.match(source, /appendIndexHtml\(/);
 });
 
-test('the deploy config associates the function and does not set responseHeaders', () => {
+test('the deploy config associates the function and sends Vary: Accept', () => {
   const config = load(fs.readFileSync(CARLIN_YML_PATH, 'utf-8')) as {
     appendIndexHtml?: boolean;
     environments: {
       Production: {
         cloudfront?: boolean;
-        responseHeaders?: unknown;
+        responseHeaders?: unknown[];
         viewerRequestFunctionCode?: string;
       };
     };
@@ -294,12 +294,12 @@ test('the deploy config associates the function and does not set responseHeaders
   // behavior takes one viewer request function.
   assert.equal(config.appendIndexHtml, undefined);
 
-  // `responseHeaders` is deliberately unset: CloudFront rejects the policy
-  // carlin builds for a defined `vary`, which fails the deploy (#1111).
-  assert.equal(
+  // The function serves a different representation of the same URL depending on
+  // `Accept`, so a cache that does not key on it can hand Markdown to a browser.
+  assert.deepEqual(
     production.responseHeaders,
-    undefined,
-    'responseHeaders makes the Production deploy fail until carlin can set Vary without touching the CORS headers'
+    [{ header: 'vary', override: true, value: 'Accept' }],
+    'Vary: Accept is what makes the negotiation safe to cache'
   );
 });
 

@@ -63,7 +63,7 @@ Module page structure, cross-referencing rules, and the docs drift guardrails (`
 
 The function runs on the `cloudfront-js-2.0` runtime — ES 5.1, no network or filesystem, 10 KB including the `appendIndexHtml` helper carlin injects — and `appendIndexHtml` cannot be set alongside it, because a cache behavior takes a single viewer request function. `scripts/viewerRequest.test.ts` runs the function against that same composition.
 
-`Vary: Accept` is not sent. carlin cannot set it without moving the CORS headers into `CustomHeadersConfig`, which CloudFront rejects, so the distribution keeps the managed policy. Tracked in [#1111](https://github.com/ttoss/soat/issues/1111).
+`responseHeaders` sends `Vary: Accept`, so caches downstream key on the header the function reads. carlin builds a response headers policy with no `CorsConfig` for it — CloudFront's CORS handling owns `Vary` otherwise — and CORS comes from the bucket, forwarded through the `Managed-CORS-S3Origin` origin request policy. The array form is required: per-environment options are assigned after yargs runs its `coerce`, so the object form is silently ignored.
 
 ### Verifying a deploy
 
@@ -73,6 +73,7 @@ The criteria live on the edge, not in the build. After a Production deploy:
 curl -sI -H 'Accept: text/markdown' https://soat.ttoss.dev/docs/introduction   # text/markdown
 curl -sI -H 'Accept: application/json' https://soat.ttoss.dev/docs/introduction # 406
 curl -sI -H 'Accept: text/markdown' https://soat.ttoss.dev/                     # /agents.md
+curl -sI -H 'Accept: text/markdown' https://soat.ttoss.dev/docs/introduction   # vary: Accept
 curl -sI -H 'Origin: https://example.com' https://soat.ttoss.dev/openapi.json   # access-control-allow-origin: *
 ```
 
