@@ -35,18 +35,22 @@
 }
 
 .card {
+  display: flex;
+  flex-direction: column;
   padding: 1.4rem;
   border: 1px solid var(--ifm-color-emphasis-200);
   border-radius: 0.75rem;
   background: var(--ifm-background-surface-color);
   transition:
     transform 300ms cubic-bezier(0.16, 1, 0.3, 1),
-    border-color 300ms ease;
+    border-color 300ms ease,
+    box-shadow 300ms ease;
 }
 
 .card:hover {
   transform: translateY(-4px);
   border-color: rgba(0, 229, 255, 0.28);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.12);
 }
 
 .card h3 {
@@ -59,6 +63,27 @@
   color: var(--ifm-color-emphasis-700);
   font-size: 0.95rem;
   line-height: 1.6;
+}
+
+/* Pins the command block to the bottom of the card and shrinks the
+   Docusaurus CodeBlock chrome so nine of these read as a compact, uniform
+   grid rather than nine full-size doc snippets. */
+.command {
+  margin-top: auto;
+  padding-top: 1rem;
+}
+
+.command pre {
+  margin: 0;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid rgba(0, 229, 255, 0.16);
+  border-radius: 0.5rem;
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+.command code {
+  background: none;
 }
 
 .notFor {

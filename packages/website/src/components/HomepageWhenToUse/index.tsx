@@ -1,4 +1,5 @@
 import { NOT_FOR, USE_CASES } from '@site/src/data/agentInstructions';
+import CodeBlock from '@theme/CodeBlock';
 import Heading from '@theme/Heading';
 import type * as React from 'react';
 
@@ -33,7 +34,14 @@ const HomepageWhenToUse = (): React.ReactNode => {
             return (
               <div className={styles.card} key={useCase.job}>
                 <Heading as="h3">{useCase.job}</Heading>
-                <p>{useCase.how.replace(/`/g, '')}</p>
+                <p>{useCase.description}</p>
+                {useCase.cli ? (
+                  <div className={styles.command}>
+                    <CodeBlock language="bash">
+                      {useCase.cli.join('\n')}
+                    </CodeBlock>
+                  </div>
+                ) : null}
               </div>
             );
           })}
