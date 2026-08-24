@@ -33,7 +33,11 @@ const HomepageWhenToUse = (): React.ReactNode => {
             return (
               <div className={styles.card} key={useCase.job}>
                 <Heading as="h3">{useCase.job}</Heading>
-                <p>{useCase.how.replace(/`/g, '')}</p>
+                <p>{useCase.description}</p>
+                <a className={styles.moduleLink} href={useCase.moduleLink.href}>
+                  {useCase.moduleLink.label} docs
+                  <span aria-hidden="true">→</span>
+                </a>
               </div>
             );
           })}

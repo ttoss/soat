@@ -19,6 +19,18 @@ export type UseCase = {
   job: string;
   /** What SOAT does about it, and the concrete call that does it. */
   how: string;
+  /**
+   * `how`, minus the trailing endpoint clause — the prose the homepage card
+   * shows above its "Learn more" link. `agents.md` and llms.txt render `how`
+   * in full, since REST/MCP is the call surface an agent uses; the homepage
+   * pairs this with `moduleLink` instead.
+   */
+  description: string;
+  /** Where the homepage card's "Learn more" link points. */
+  moduleLink: {
+    href: string;
+    label: string;
+  };
 };
 
 /**
@@ -29,38 +41,71 @@ export const USE_CASES: UseCase[] = [
   {
     job: 'Give an agent memory that survives the process',
     how: 'Sessions and conversations persist message history in PostgreSQL. `POST /api/v1/agents/{agent_id}/sessions`, then `POST /api/v1/sessions/{session_id}/messages` and `POST /api/v1/sessions/{session_id}/generate`.',
+    description:
+      'Sessions and conversations persist message history in PostgreSQL.',
+    moduleLink: { href: '/docs/modules/sessions', label: 'Sessions' },
   },
   {
     job: 'Ground an agent in your own documents',
     how: 'Ingest files into chunked, embedded documents and search them with pgvector. `POST /api/v1/documents/ingest`, then `POST /api/v1/knowledge/search`.',
+    description:
+      'Ingest files into chunked, embedded documents and search them with pgvector.',
+    moduleLink: { href: '/docs/modules/documents', label: 'Documents' },
   },
   {
     job: 'Run multi-step work deterministically instead of hoping one prompt covers it',
     how: 'Orchestrations are DAGs of agent, tool, and human nodes; workflows are state machines for long-running work. `POST /api/v1/orchestrations/{orchestration_id}/runs`.',
+    description:
+      'Orchestrations are DAGs of agent, tool, and human nodes; workflows are state machines for long-running work.',
+    moduleLink: {
+      href: '/docs/modules/orchestrations',
+      label: 'Orchestrations',
+    },
   },
   {
     job: 'Bound what an agent is allowed to do',
     how: 'IAM policies gate every action, API keys scope to one project, guardrails screen input and output, and quotas cap spend. `POST /api/v1/policies`, `POST /api/v1/api-keys`, `POST /api/v1/quotas`.',
+    description:
+      'IAM policies gate every action, API keys scope to one project, guardrails screen input and output, and quotas cap spend.',
+    moduleLink: { href: '/docs/modules/iam', label: 'IAM' },
   },
   {
     job: 'Put a human in the loop without stopping the run',
     how: 'Approval nodes and exceptions pause a run, record who decided what, and resume from the same point. `POST /api/v1/approvals/{approval_id}/approve`.',
+    description:
+      'Approval nodes and exceptions pause a run, record who decided what, and resume from the same point.',
+    moduleLink: { href: '/docs/modules/approvals', label: 'Approvals' },
   },
   {
     job: 'Prove after the fact what an agent did and what it cost',
     how: 'Every generation writes a trace with each tool call, model response, and token count, alongside an append-only audit log. `GET /api/v1/traces/{trace_id}/tree`.',
+    description:
+      'Every generation writes a trace with each tool call, model response, and token count, alongside an append-only audit log.',
+    moduleLink: { href: '/docs/modules/traces', label: 'Traces' },
   },
   {
     job: 'Change an agent in production without guessing whether it got worse',
     how: 'Agent versions are append-only; a canary release splits traffic, and promotion is gated on a passing eval run. `POST /api/v1/agents/{agent_id}/release`.',
+    description:
+      'Agent versions are append-only; a canary release splits traffic, and promotion is gated on a passing eval run.',
+    moduleLink: {
+      href: '/docs/modules/agents#agent-release',
+      label: 'Agents',
+    },
   },
   {
     job: 'Expose your own backend to an MCP client (Claude, Cursor, VS Code)',
     how: 'Every REST operation is also an MCP tool at `POST /mcp`, behind the same permission engine, with OAuth 2.1 discovery and Dynamic Client Registration.',
+    description:
+      'Every REST operation is also an MCP tool, behind the same permission engine, with OAuth 2.1 discovery and Dynamic Client Registration.',
+    moduleLink: { href: '/docs/mcp', label: 'MCP' },
   },
   {
     job: 'Stand up a whole agent stack reproducibly',
     how: 'Agent Formations declare providers, tools, agents, orchestrations, and webhooks in one template, resolve the dependency graph, and apply it. `POST /api/v1/formations`.',
+    description:
+      'Agent Formations declare providers, tools, agents, orchestrations, and webhooks in one template, resolve the dependency graph, and apply it.',
+    moduleLink: { href: '/docs/modules/formations', label: 'Formations' },
   },
 ];
 
