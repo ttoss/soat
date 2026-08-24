@@ -28,11 +28,8 @@ const MAX_FUNCTION_SIZE_BYTES = 10 * 1024;
 const source = fs.readFileSync(FUNCTION_PATH, 'utf-8');
 
 /**
- * The helper carlin injects into the function (`appendIndexHtml` in
- * `packages/carlin/src/deploy/staticApp/viewerRequestFunction.ts`), transcribed
- * so the tests exercise the same composition CloudFront runs. A cache behavior
- * takes a single viewer request function, so this logic — the `appendIndexHtml`
- * option carlin used to associate — is called from ours instead.
+ * The helper carlin injects into the function, transcribed so the tests
+ * exercise the same composition CloudFront runs.
  */
 const appendIndexHtml = (request: { uri: string }) => {
   const uri = request.uri;
@@ -82,8 +79,7 @@ test('a Markdown request for a page is served the page Markdown twin', () => {
     '/docs/introduction.md'
   );
 
-  // The same page reached with a trailing slash is the same resource, so it
-  // resolves to the same twin rather than to `/docs/introduction/.md`.
+  // A trailing slash addresses the same resource, so it resolves to the same twin.
   assert.equal(
     run({ uri: '/docs/introduction/', accept: 'text/markdown' }).uri,
     '/docs/introduction.md'
@@ -96,9 +92,8 @@ test('a Markdown request for a page is served the page Markdown twin', () => {
 });
 
 test('a Markdown request for the homepage is served the agent instructions', () => {
-  // The homepage has no `.md` twin of its own — it is not a doc page — and
-  // already advertises `/agents.md` as its `rel="alternate"` (see
-  // `src/pages/index.tsx`). Negotiation resolves to what the HTML advertises.
+  // The homepage has no `.md` twin and advertises `/agents.md` as its
+  // `rel="alternate"`, so negotiation resolves to the same file.
   assert.equal(run({ uri: '/', accept: 'text/markdown' }).uri, '/agents.md');
 });
 
@@ -114,9 +109,7 @@ test('an HTML request is served the page, index appended', () => {
 });
 
 test('a request that states no preference is served HTML', () => {
-  // No `Accept` at all, and the `*/*` every CLI client sends, both match HTML
-  // and Markdown equally. HTML is the default representation, so a tie is not
-  // a reason to hand a browser a Markdown file.
+  // A tie resolves to HTML, the default representation.
   assert.equal(
     run({ uri: '/docs/introduction' }).uri,
     '/docs/introduction/index.html'
@@ -148,8 +141,7 @@ test('q-values decide which representation wins', () => {
     '/docs/introduction/index.html'
   );
 
-  // `q=0` is a refusal, so HTML wins through the wildcard even though the
-  // Markdown media type is named explicitly.
+  // `q=0` is a refusal, so HTML wins through the wildcard.
   assert.equal(
     run({
       uri: '/docs/introduction',
@@ -160,9 +152,7 @@ test('q-values decide which representation wins', () => {
 });
 
 test('a more specific media range outranks a wildcard regardless of its q', () => {
-  // RFC 9110 §12.5.1: precedence is by specificity, not by q. `text/html;q=0.1`
-  // is the quality of HTML even though `text/*;q=0.9` also matches it, so
-  // Markdown — which only matches the wildcard — wins at 0.9.
+  // RFC 9110 §12.5.1: precedence is by specificity, not by q.
   assert.equal(
     run({ uri: '/docs/introduction', accept: 'text/*;q=0.9, text/html;q=0.1' })
       .uri,
@@ -185,8 +175,7 @@ test('a page request that accepts neither representation gets a 406', () => {
   assert.equal(response.statusCode, 406);
   assert.equal(response.statusDescription, 'Not Acceptable');
   assert.equal(response.headers?.['content-type']?.value, 'text/plain');
-  // The body names both representations, so a client that got here can retry
-  // without reading the docs.
+  // The body names both representations so the client can retry.
   assert.match(String(response.body), /text\/html/);
   assert.match(String(response.body), /text\/markdown/);
 });
@@ -202,9 +191,7 @@ test('refusing every type with q=0 is also a 406', () => {
 });
 
 test('a page with no Markdown representation never rewrites to a missing twin', () => {
-  // `/benchmark` is a React page, not a doc page, so no `.md` is built for it.
-  // Rewriting to a twin that does not exist would answer with a 404 for a page
-  // that is right there in HTML.
+  // `/benchmark` is a React page with no `.md` twin, so it is never rewritten.
   assert.equal(
     run({
       uri: '/benchmark',
@@ -213,23 +200,18 @@ test('a page with no Markdown representation never rewrites to a missing twin', 
     '/benchmark/index.html'
   );
 
-  // It is HTML-only, not exempt from negotiation: a client that asked for
-  // Markdown and nothing else is told so, rather than handed HTML it said it
-  // would not take.
+  // HTML-only, not exempt: a Markdown-only request is refused, not served HTML.
   const refused = run({ uri: '/benchmark', accept: 'text/markdown' });
 
   assert.equal(refused.statusCode, 406);
-  // And told what it can have: naming a Markdown variant this page never had
-  // would send the client back for a 404.
+  // The body names only what this page has.
   assert.match(String(refused.body), /text\/html/);
   assert.doesNotMatch(String(refused.body), /text\/markdown/);
 });
 
 test('every page outside the docs tree either has a twin or is declared HTML-only', () => {
-  // The function cannot test whether a `.md` twin exists, so the pages that
-  // have none are named in it. This is the check that keeps that list current:
-  // a new React page under `src/pages` is negotiable the moment it ships,
-  // which — with no twin built for it — means a 404 on the Markdown variant.
+  // The function cannot test whether a twin exists, so pages without one are
+  // named in it. This keeps that list current as `src/pages` grows.
   const pagesDir = path.resolve(__dirname, '..', 'src', 'pages');
 
   const pageUris = fs
@@ -253,9 +235,8 @@ test('every page outside the docs tree either has a twin or is declared HTML-onl
 });
 
 test('files are outside negotiation', () => {
-  // Only pages have two representations. An asset request is passed through
-  // untouched — including one whose `Accept` names neither page type, which
-  // must not turn into a 406.
+  // Only pages have two representations; assets pass through untouched and are
+  // never refused.
   assert.equal(
     run({ uri: '/openapi.json', accept: 'application/json' }).uri,
     '/openapi.json'
@@ -270,8 +251,7 @@ test('files are outside negotiation', () => {
     '/img/soat-architecture.png'
   );
 
-  // A URL that already names the Markdown twin is served as asked, not
-  // rewritten to `/docs/introduction.md.md`.
+  // A URL naming the twin is served as asked, not rewritten twice.
   assert.equal(
     run({ uri: '/docs/introduction.md', accept: 'text/markdown' }).uri,
     '/docs/introduction.md'
@@ -279,15 +259,13 @@ test('files are outside negotiation', () => {
 });
 
 test('the function fits what CloudFront accepts', () => {
-  // carlin injects `appendIndexHtml` into the same file, and the helper counts
-  // against this budget, so the margin measured here is optimistic by its size.
+  // The injected helper counts against this budget too.
   assert.ok(
     Buffer.byteLength(source, 'utf-8') < MAX_FUNCTION_SIZE_BYTES,
     'the viewer request function must stay under 10 KB'
   );
 
-  // Two `handler` declarations would silently drop one behavior: the composed
-  // source carlin builds keeps a single entry point, which is ours.
+  // Two `handler` declarations would silently drop one behavior.
   assert.equal(source.match(/function\s+handler\s*\(/g)?.length, 1);
   assert.match(source, /appendIndexHtml\(/);
 });
@@ -312,19 +290,12 @@ test('the deploy config associates the function and does not set responseHeaders
     './cloudfront/viewerRequest.js'
   );
 
-  // `appendIndexHtml` and a function of our own are mutually exclusive in
-  // carlin — a cache behavior takes one viewer request function — and ours
-  // calls the injected helper instead.
+  // `appendIndexHtml` and a function of our own are mutually exclusive: a cache
+  // behavior takes one viewer request function.
   assert.equal(config.appendIndexHtml, undefined);
 
-  // `Vary: Accept` belongs here and is deliberately absent: carlin >= 2.2.1
-  // answers a defined `vary` by moving the CORS headers into
-  // `CustomHeadersConfig`, and CloudFront rejects that with "The parameter
-  // CustomHeaders contains access-control-allow-origin that is a CORS header
-  // and cannot be set as custom header" (400). The v0.29.3 deploy failed on it
-  // and rolled the stack back. Re-adding it without an upstream change breaks
-  // the release, so this asserts the absence rather than trusting the comment
-  // in `carlin.yml` to be read (#1111).
+  // `responseHeaders` is deliberately unset: CloudFront rejects the policy
+  // carlin builds for a defined `vary`, which fails the deploy (#1111).
   assert.equal(
     production.responseHeaders,
     undefined,
@@ -333,13 +304,8 @@ test('the deploy config associates the function and does not set responseHeaders
 });
 
 test('every page the function rewrites has the file it rewrites to', () => {
-  // The edge cannot test whether a file exists, so this is where that is
-  // checked: the built output is walked and every page is negotiated for
-  // Markdown, which must land on a file that was actually emitted. It is the
-  // check that catches a new page tree whose twins the build does not produce,
-  // and the counterpart of `advertiseMarkdownTwins` — a page is advertised and
-  // negotiable, or neither.
-  //
+  // The edge cannot test whether a file exists, so it is checked here: every
+  // built page is negotiated for Markdown and must land on an emitted file.
   // `turbo run test` depends on `build`, so the output is there in CI.
   const outDir = path.resolve(__dirname, '..', 'build');
 
@@ -355,7 +321,7 @@ test('every page the function rewrites has the file it rewrites to', () => {
 
   const pages = pagesIn(outDir);
 
-  // A tree this size means the walk found the real output, not an empty dir.
+  // Guards against walking an empty directory.
   assert.ok(
     pages.length > 100,
     `only ${pages.length} pages found in ${outDir}`

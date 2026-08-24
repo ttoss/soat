@@ -9,22 +9,7 @@ environments:
     # request function, and this one calls the `appendIndexHtml` helper carlin
     # injects into it after negotiating the page representation.
     viewerRequestFunctionCode: ./cloudfront/viewerRequest.js
-    # `Vary: Accept` is NOT set here, and cannot be today.
-    #
-    # The page URL has two representations, so caches downstream ought to key
-    # on `Accept` — but neither carlin path can express that on this
-    # distribution:
-    #
-    #   * carlin >= 2.2.1 drops `CorsConfig` when `vary` is defined and emits
-    #     the CORS headers as custom headers instead. CloudFront rejects that
-    #     outright: "The parameter CustomHeaders contains
-    #     access-control-allow-origin that is a CORS header and cannot be set
-    #     as custom header" (400). The v0.29.3 deploy failed on it and rolled
-    #     back, which is why this is empty rather than clever.
-    #   * carlin <= 2.2.0 keeps `CorsConfig`, whose interaction with a custom
-    #     `Vary` is untested — the created policy has never been attached here.
-    #
-    # So the distribution keeps the managed policy: negotiation works, CORS
-    # works, and `Vary` is missing. #1111 tracks it; the fix is upstream (keep
-    # `CorsConfig` and allow a caller-defined `Vary` alongside it) or a
-    # hand-managed policy passed via `responseHeadersPolicy`.
+    # `responseHeaders` is unset: CloudFront rejects `access-control-*` as
+    # custom headers, which is how carlin builds the policy when `vary` is
+    # defined, so the deploy fails. The distribution keeps the managed policy —
+    # negotiation and CORS work, `Vary: Accept` is not sent (#1111).
