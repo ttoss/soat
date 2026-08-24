@@ -122,6 +122,24 @@ describe('tutorials-tests.sh retry annotation', () => {
     assert.match(output, /failed after 3 attempts/);
   });
 
+  // Every tutorials failure so far has been a budget sized by guesswork, and the
+  // log gave no way to tell "the feature is broken" from "it needed 12 more
+  // seconds" — the container buffers its output, so the line timestamps all
+  // collapse to the flush. Reporting the elapsed wall-clock makes the next
+  // budget a measurement instead of another guess (#1112 tutorials run).
+  test('reports the elapsed wall-clock when the budget is exhausted', async () => {
+    const [cmd] = flakyCommand('never-passes-timed', 99);
+    const file = await writeTutorial(
+      'never-passes-timed',
+      ['# → retry 3', cmd].join('\n')
+    );
+
+    const { code, output } = await runTutorial(file);
+
+    assert.equal(code, 1);
+    assert.match(output, /failed after 3 attempts \(\d+s elapsed\)/);
+  });
+
   test('runs an annotated command exactly once when it passes first try', async () => {
     const [cmd, counter] = flakyCommand('passes-first', 0);
     const file = await writeTutorial(

@@ -622,7 +622,7 @@ The runner itself is covered by `tests/harness/` (`pnpm run test:harness`, wired
 |---|---|
 | `# → 403` / `# → expect-fail` | The command must exit non-zero. A zero exit fails the run. |
 | `# → ignore` | Run the command, ignore its exit code entirely. |
-| `# → retry N` | Re-run until the command exits 0, up to N attempts, 1s apart. Fails after N. |
+| `# → retry N` | Re-run until the command exits 0, up to N attempts, 1s apart. Fails after N, printing the elapsed wall-clock. |
 
 **An annotation must sit on its own line, immediately _before_ the command it
 applies to.** Both other placements silently fail:
@@ -648,6 +648,20 @@ the following command.
 
 The behavior is pinned by `tests/harness/tutorialsRetryAnnotation.test.mjs`,
 where every case places the annotation on the preceding line.
+
+**Size the budget from a measurement, not a guess.** N attempts is not N seconds:
+each attempt pays a 1s sleep _plus_ a CLI round trip, so the wall-clock is closer
+to `N × 1.3s`. The failure line prints the elapsed seconds precisely so the next
+budget can be read off a real run — the tutorials container buffers its stdout,
+so the log timestamps all collapse to the flush and are useless for timing.
+
+Budget generously for anything LLM-bound. The sandbox model is CPU-only and the
+box is shared with whatever the _previous_ tutorial left running in the
+background, so the same step can take twice as long between runs; the three
+tutorials that failed on the #1112 tutorials run had all in fact succeeded, 11 to
+50 seconds past their budgets. Aim for roughly 3× the slowest observed run — the
+cost is paid only when something is genuinely broken, and the job has no
+`timeout-minutes`.
 
 `# → retry N` is for steps that are **slow to converge** — an async webhook delivery, a
 queued job, an ingestion that finishes shortly after the call returns. It replaces

@@ -364,7 +364,7 @@ QUEUED_RUN_ID=$(printf '%s' "$QUEUED_RUN" | jq -r '.id')
 
 printf '%s' "$QUEUED_RUN" | jq '{status, item_count, aggregate_scores}'
 
-# → retry 60
+# → retry 180
 soat get-eval-run --eval-id "$EVAL_ID" --eval-run-id "$QUEUED_RUN_ID" | jq -e '.status == "completed"'
 
 soat get-eval-run --eval-id "$EVAL_ID" --eval-run-id "$QUEUED_RUN_ID" \
