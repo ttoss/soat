@@ -49,6 +49,10 @@ type DispatchArgs = {
   authHeader?: string;
   // 1-based attempt number for a resuming poll node; undefined for a first run.
   pollAttempt?: number;
+  // The node's own 1-based retry attempt (distinct from `pollAttempt`, which
+  // counts a poll node's polls). Stamped on an agent node's generation so the
+  // run → generation lookup can tell one attempt's generation from another's.
+  nodeAttempt?: number;
   // Run-scoped idempotency key for this node execution. Forwarded by the HTTP
   // tool executor as the `Idempotency-Key` request header (D7) so downstream
   // services can dedupe a redelivered call.
@@ -116,6 +120,7 @@ const dispatchNodeExecution = async (
     traceId,
     authHeader,
     pollAttempt,
+    nodeAttempt,
     idempotencyKey,
   } = args;
   const simple = dispatchSimpleNode(args);
@@ -139,6 +144,7 @@ const dispatchNodeExecution = async (
         authHeader,
         runPublicId,
         triggerId,
+        nodeAttempt,
         toolContext,
       });
     case 'tool':
@@ -183,6 +189,7 @@ export const executeNodeById = async (args: {
   traceId: string | null;
   authHeader?: string;
   pollAttempt?: number;
+  nodeAttempt?: number;
   idempotencyKey?: string;
 }): Promise<{
   nodeId: string;
@@ -201,6 +208,7 @@ export const executeNodeById = async (args: {
     traceId,
     authHeader,
     pollAttempt,
+    nodeAttempt,
     idempotencyKey,
   } = args;
   const nodeDefn = nodes.find((n) => {
@@ -223,6 +231,7 @@ export const executeNodeById = async (args: {
     traceId,
     authHeader,
     pollAttempt,
+    nodeAttempt,
     idempotencyKey,
   });
   return { nodeId, nodeDefn, execResult };

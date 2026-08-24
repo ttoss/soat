@@ -150,6 +150,11 @@ export const executeAgentNode = async (args: {
   // trigger.
   runPublicId?: string;
   triggerId?: string;
+  // This node's 1-based retry attempt. Stamped on the generation next to the run
+  // and node so a retried node's generations are told apart — the node execution
+  // row stores no generation id, so this is what makes the run → generation
+  // lookup exact rather than a guess from timestamps.
+  nodeAttempt?: number;
   // The run's `tool_context`, forwarded to this generation so the agent's
   // `http`/`mcp`/`soat` tool calls carry the caller's context headers (#945).
   toolContext?: Record<string, string>;
@@ -162,6 +167,7 @@ export const executeAgentNode = async (args: {
     authHeader,
     runPublicId,
     triggerId,
+    nodeAttempt,
     toolContext,
   } = args;
   const agentId = requireNodeField(node, 'agentId');
@@ -184,6 +190,7 @@ export const executeAgentNode = async (args: {
     authHeader,
     orchestrationRunId: runPublicId,
     nodeId: node.id,
+    nodeAttempt,
     triggerId,
     toolContext,
   });

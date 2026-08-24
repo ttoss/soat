@@ -18,6 +18,7 @@ export type PersistedGeneration = {
   trigger_id: string | null;
   orchestration_run_id: string | null;
   node_id: string | null;
+  node_attempt: number | null;
   agent_version: number | null;
   source: string | null;
   routing: Record<string, unknown> | null;
@@ -60,6 +61,7 @@ export const mapGeneration = (
     trigger_id: gen.triggerId,
     orchestration_run_id: gen.orchestrationRunId,
     node_id: gen.nodeId,
+    node_attempt: gen.nodeAttempt,
     agent_version: gen.agentVersion,
     // `eval` when an eval run produced this generation; null for production
     // traffic. Part of the attribution skeleton a content purge preserves.

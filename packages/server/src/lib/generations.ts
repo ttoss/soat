@@ -46,6 +46,10 @@ type GenerationAttribution = {
   triggerId?: string | null;
   orchestrationRunId?: string | null;
   nodeId?: string | null;
+  // The node's retry attempt, so a retried node's generations are told apart
+  // rather than inferred from creation order. Set only by the orchestration
+  // agent-node path; null everywhere else.
+  nodeAttempt?: number | null;
   agentVersion?: number | null;
   // The workload behind the generation when it is not production traffic
   // (`eval`). Read back at metering time onto the usage event's own `source`
@@ -61,6 +65,7 @@ const attributionColumns = (args: GenerationAttribution) => {
     triggerId: args.triggerId ?? null,
     orchestrationRunId: args.orchestrationRunId ?? null,
     nodeId: args.nodeId ?? null,
+    nodeAttempt: args.nodeAttempt ?? null,
     agentVersion: args.agentVersion ?? null,
     source: args.source ?? null,
   };
@@ -357,6 +362,8 @@ export const listGenerations = async (args: {
   agentId?: string;
   traceId?: string;
   initiatorGenerationId?: string;
+  orchestrationRunId?: string;
+  nodeId?: string;
   status?: string;
   limit?: number;
   offset?: number;
@@ -376,6 +383,15 @@ export const listGenerations = async (args: {
     projectIds: args.projectIds,
   });
   if (!resolved) return emptyPage(args);
+
+  // Plain equality, unlike the filters above: these columns store the run's
+  // public id and the node id verbatim rather than an internal FK, so there is
+  // nothing to resolve. An unknown value simply matches no row, and project
+  // scoping is already applied via `where.projectId`.
+  if (args.orchestrationRunId !== undefined) {
+    where.orchestrationRunId = args.orchestrationRunId;
+  }
+  if (args.nodeId !== undefined) where.nodeId = args.nodeId;
 
   if (args.status !== undefined) where.status = args.status;
 
