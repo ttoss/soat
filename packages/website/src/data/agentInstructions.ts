@@ -234,7 +234,9 @@ ${buildOnboardingMarkdown()}
 
 Append \`.md\` to any documentation URL for its Markdown source, e.g.
 <https://soat.ttoss.dev/docs/introduction.md>. Each HTML page advertises its own
-twin with \`<link rel="alternate" type="text/markdown">\`.
+twin with \`<link rel="alternate" type="text/markdown">\`, and sending
+\`Accept: text/markdown\` to the page URL itself returns that Markdown — no URL
+rewriting on your side.
 
 ## Source
 

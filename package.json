@@ -34,7 +34,7 @@
     "@ttoss/config": "^1.37.17",
     "@ttoss/eslint-config": "^1.27.0",
     "@ttoss/monorepo": "^1.29.17",
-    "carlin": "^1.49.21",
+    "carlin": "^2.2.1",
     "eslint": "^9",
     "husky": "^9.1.7",
     "istanbul-lib-coverage": "^3.2.2",
@@ -48,5 +48,5 @@
     "node": "^24.0.0",
     "pnpm": "^11.0.0"
   },
-  "packageManager": "pnpm@11.5.2"
+  "packageManager": "pnpm@11.23.0"
 }

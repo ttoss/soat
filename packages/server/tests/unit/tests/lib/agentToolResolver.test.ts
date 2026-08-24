@@ -1028,10 +1028,14 @@ describe('resolveAgentTools', () => {
       expect.objectContaining({
         method: 'DELETE',
         body: JSON.stringify({ item_id: 'abc' }),
-        headers: expect.objectContaining({
-          'Content-Type': 'application/json',
-        }),
       })
+    );
+    // Headers reach fetch as a `Headers` instance (the egress guard has to be
+    // able to drop credential headers across a redirect), so read the value
+    // rather than pinning the literal key casing of a plain object.
+    const [, sentInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(new Headers(sentInit.headers).get('content-type')).toBe(
+      'application/json'
     );
 
     fetchMock.mockRestore();

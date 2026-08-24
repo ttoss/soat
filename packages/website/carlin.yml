@@ -1,4 +1,3 @@
-appendIndexHtml: true
 hostedZoneName: ttoss.dev
 
 environments:
@@ -6,3 +5,22 @@ environments:
     aliases:
       - soat.ttoss.dev
     cloudfront: true
+    # `appendIndexHtml` is not set: a cache behavior takes a single viewer
+    # request function, and this one calls the `appendIndexHtml` helper carlin
+    # injects into it after negotiating the page representation.
+    viewerRequestFunctionCode: ./cloudfront/viewerRequest.js
+    # The function serves two representations of the same page URL, so every
+    # cache downstream has to key on the header that decides which one.
+    #
+    # The array form is load-bearing here, not a style choice. carlin applies
+    # environment overrides in a middleware that assigns `argv[key] = value`
+    # after yargs has already run each option's `coerce`, so the object form
+    # (`vary: Accept`) reaches the template as a plain object: its `.length` is
+    # undefined, the `responseHeaders.length > 0` branch is not taken, and the
+    # distribution silently keeps the managed policy — which is what shipped in
+    # v0.29.2 and answered `vary: Origin` (#1111). The array form is already
+    # the shape the template maps, so it needs no coercion.
+    responseHeaders:
+      - header: vary
+        value: Accept
+        override: true

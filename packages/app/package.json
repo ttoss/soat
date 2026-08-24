@@ -1,6 +1,6 @@
 {
   "name": "@soat/app",
-  "version": "0.28.0",
+  "version": "0.29.3",
   "private": true,
   "type": "module",
   "scripts": {

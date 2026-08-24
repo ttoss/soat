@@ -1,7 +1,22 @@
 {
   "name": "@soat/sdk",
-  "version": "0.28.0",
-  "description": "TypeScript SDK for the SOAT API",
+  "version": "0.29.3",
+  "description": "TypeScript SDK for SOAT — open-source infrastructure for production-ready AI agents.",
+  "keywords": [
+    "ai-agents",
+    "ai-infrastructure",
+    "mcp",
+    "llm",
+    "rag",
+    "self-hosted",
+    "soat"
+  ],
+  "homepage": "https://soat.ttoss.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ttoss/soat",
+    "directory": "packages/sdk"
+  },
   "license": "Apache-2.0",
   "type": "module",
   "main": "dist/index.mjs",
@@ -27,10 +42,6 @@
   "files": [
     "dist"
   ],
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/ttoss/soat"
-  },
   "publishConfig": {
     "access": "public",
     "provenance": true

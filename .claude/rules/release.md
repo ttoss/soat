@@ -36,6 +36,33 @@ push-release-tag   →   release (npm publish + website deploy)   →   publish-
 - `release` publishes `@soat/sdk` and `@soat/cli` to npm and deploys the website.
 - `publish-docker` builds and pushes the Docker image to Docker Hub.
 
+### npm authentication: trusted publishing, not a token
+
+The `release` job publishes with **npm trusted publishing (OIDC)**. There is no
+`NPM_TOKEN` secret and no `.npmrc` step: `permissions: id-token: write` on the job
+lets pnpm exchange a GitHub OIDC token for a short-lived npm credential. npm emits
+provenance attestations automatically in this mode, so `--provenance` is not passed.
+
+This replaced a granular access token that had to be recreated by hand on every
+expiry — since November 2025 npm only issues granular tokens and every one of them
+**must** carry an expiration date, so a token-based release is a recurring outage by
+construction (it caused the failed publish in run 32663442179).
+
+Two things this couples, both easy to break silently:
+
+- **The workflow filename is part of the credential.** Each package registers
+  `ttoss` / `soat` / `main.yml` as its trusted publisher on npmjs.com. Renaming or
+  splitting `main.yml` invalidates the trust and the publish fails; update the
+  publisher on npmjs.com in the same change.
+- **Trusted publishers are per package.** A new published package needs its own
+  trusted publisher configured on npmjs.com before its first CI publish, or that
+  package alone fails.
+
+The symptom of a missing/mismatched publisher is a `404` on the OIDC token exchange
+(`ERR_PNPM_AUTH_TOKEN_EXCHANGE`), followed by a `404` on the `PUT` — npm answers
+unauthorized publishes with `404`, not `401`, so read it as an auth failure rather
+than a missing package.
+
 ## Running a Release from a Claude Code Session
 
 Branch protection prevents direct pushes to `main`, so releases go through a PR.

@@ -14,7 +14,10 @@
 #                   The command is run; a zero exit is treated as an error.
 #   # → ignore      Run the command but ignore its exit code entirely.
 #   # → retry N     Re-run the command until it exits 0, up to N attempts
-#                   (1s between attempts). Fails the run if all N fail.
+#                   (1s between attempts). Fails the run if all N fail, and
+#                   prints the elapsed wall-clock so an exhausted budget can be
+#                   told apart from a broken feature — N attempts is NOT N
+#                   seconds, since each one also pays a CLI round trip.
 #                   For steps that are slow to converge, not for steps whose
 #                   outcome depends on what an LLM decides — keep those
 #                   deterministic instead (see tests/mocks/ollamaToolChoiceProxy.mjs).
@@ -342,6 +345,7 @@ for entry in "${COMMANDS[@]}"; do
 
   # Execute — retried when the command carries a "# → retry N" annotation.
   attempt=1
+  retry_started_at=$SECONDS
   while true; do
     set +e
     eval "$cmd"
@@ -357,8 +361,13 @@ for entry in "${COMMANDS[@]}"; do
   done
 
   if [[ $max_attempts -gt 1 && $exit_code -ne 0 ]]; then
+    # Report the wall-clock, not just the attempt count: an attempt is a 1s
+    # sleep *plus* a CLI round trip, so N attempts is not N seconds, and the
+    # container buffers stdout — the line timestamps in CI all collapse to the
+    # flush. Without this number there is no way to tell an exhausted budget
+    # ("it needed 12 more seconds") from a genuinely broken feature.
     echo ""
-    echo "❌ ERROR: Command failed after $max_attempts attempts at step $STEP"
+    echo "❌ ERROR: Command failed after $max_attempts attempts ($((SECONDS - retry_started_at))s elapsed) at step $STEP"
     echo "   Command: $cmd"
     exit 1
   fi

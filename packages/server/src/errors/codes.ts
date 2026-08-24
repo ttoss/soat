@@ -385,6 +385,11 @@ export const ERROR_CODES = {
     description:
       'The document is no longer awaiting this conversion attempt — it already completed, timed out, or was superseded by a re-ingest.',
   },
+  TOOL_EGRESS_BLOCKED: {
+    httpStatus: 403,
+    description:
+      "An http- or mcp-type tool's target is not publicly routable — a loopback, private, link-local (cloud metadata), CGNAT or IPv6 ULA address — and the deployment's TOOL_EGRESS_ALLOWED_HOSTS does not list it. Also returned when a hostname resolves to such an address, when a redirect leads to one, when the scheme is not http/https, or when the redirect chain is too long. The error `meta` carries `tool_url` and, when known, the offending `tool_address`.",
+  },
   TOOL_HTTP_ERROR: {
     httpStatus: 502,
     description:

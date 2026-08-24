@@ -37,6 +37,7 @@ import {
   buildContextHeaderName,
   buildContextHeaders,
 } from './toolContext';
+import { fetchWithEgressGuard } from './toolEgress';
 import {
   assertEphemeralTypeSupported,
   callTool,
@@ -620,7 +621,10 @@ export const buildHttpToolExecute = (
       // Credentials are computed last, over the final method, url, headers and
       // body — SigV4 signs a hash of exactly what goes on the wire, so nothing
       // may be added to the request after this point.
-      const response = await fetch(
+      // Egress-guarded: the target must be publicly routable or listed in
+      // TOOL_EGRESS_ALLOWED_HOSTS, checked on the resolved address and on
+      // every redirect hop (see toolEgress.ts).
+      const response = await fetchWithEgressGuard(
         resolved.fetchUrl,
         await withHttpToolAuth({
           auth: resolved.auth,

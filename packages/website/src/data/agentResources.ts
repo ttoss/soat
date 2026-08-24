@@ -168,8 +168,8 @@ ${links}
 
 ## Notes
 
-- Every documentation page has a Markdown twin: append \`.md\` to its URL
-  (\`/docs/introduction.md\`).
+- Every documentation page has a Markdown twin: send \`Accept: text/markdown\` to
+  the page URL, or append \`.md\` to it (\`/docs/introduction.md\`).
 - The docs site is static. The SOAT REST API described in \`openapi.json\` runs
   on your own deployment, not on this domain.
 `;

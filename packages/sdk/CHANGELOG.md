@@ -3,6 +3,25 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.29.3](https://github.com/ttoss/soat/compare/v0.29.2...v0.29.3) (2026-08-24)
+
+**Note:** Version bump only for package @soat/sdk
+
+## [0.29.2](https://github.com/ttoss/soat/compare/v0.29.1...v0.29.2) (2026-08-23)
+
+**Note:** Version bump only for package @soat/sdk
+
+## [0.29.1](https://github.com/ttoss/soat/compare/v0.29.0...v0.29.1) (2026-08-23)
+
+**Note:** Version bump only for package @soat/sdk
+
+# [0.29.0](https://github.com/ttoss/soat/compare/v0.28.0...v0.29.0) (2026-08-23)
+
+### Features
+
+* **brand:** describe SOAT the same way on every property it owns ([#1102](https://github.com/ttoss/soat/issues/1102)) ([2210234](https://github.com/ttoss/soat/commit/22102342f6a8129bc7e64b2d2f0f9e7d4ba41a97)), closes [#1099](https://github.com/ttoss/soat/issues/1099)
+* **oauth:** describe the OAuth 2.1 endpoints in the OpenAPI specs ([#1100](https://github.com/ttoss/soat/issues/1100)) ([28f2085](https://github.com/ttoss/soat/commit/28f20859365902aa78c79173d53a1ff530a3c59f)), closes [#1099](https://github.com/ttoss/soat/issues/1099)
+
 # [0.28.0](https://github.com/ttoss/soat/compare/v0.27.0...v0.28.0) (2026-08-21)
 
 **Note:** Version bump only for package @soat/sdk

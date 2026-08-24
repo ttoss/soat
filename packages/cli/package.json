@@ -1,6 +1,22 @@
 {
   "name": "@soat/cli",
-  "version": "0.28.0",
+  "version": "0.29.3",
+  "description": "CLI for SOAT — open-source infrastructure for production-ready AI agents.",
+  "keywords": [
+    "ai-agents",
+    "ai-infrastructure",
+    "mcp",
+    "llm",
+    "rag",
+    "self-hosted",
+    "soat"
+  ],
+  "homepage": "https://soat.ttoss.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ttoss/soat",
+    "directory": "packages/cli"
+  },
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
@@ -33,10 +49,6 @@
     "dist",
     "bin"
   ],
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/ttoss/soat"
-  },
   "bin": {
     "soat": "./bin/soat"
   },
