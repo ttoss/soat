@@ -298,7 +298,11 @@ test('the deploy config associates the function and varies on Accept', () => {
     environments: {
       Production: {
         cloudfront?: boolean;
-        responseHeaders?: { [header: string]: string };
+        responseHeaders?: {
+          header: string;
+          value: string;
+          override: boolean;
+        }[];
         viewerRequestFunctionCode?: string;
       };
     };
@@ -320,7 +324,22 @@ test('the deploy config associates the function and varies on Accept', () => {
   // Serving two representations of one URL without telling caches which header
   // decides is what breaks them, so the header ships with the function or not
   // at all.
-  assert.equal(production.responseHeaders?.vary, 'Accept');
+  //
+  // Asserted as the *array* form, which is the whole point: carlin applies
+  // environment overrides after yargs `coerce`, so the object form arrives at
+  // the template unparsed, fails its `responseHeaders.length > 0` check, and
+  // leaves the managed policy attached with no error anywhere. v0.29.2 shipped
+  // exactly that and answered `vary: Origin` (#1111). An assertion that only
+  // reads the value back — `responseHeaders.vary === 'Accept'` — passes in both
+  // cases and is why this went out; this one pins the shape carlin consumes.
+  assert.ok(
+    Array.isArray(production.responseHeaders),
+    'responseHeaders must use the array form: the object form is silently dropped from an environment block'
+  );
+
+  assert.deepEqual(production.responseHeaders, [
+    { header: 'vary', value: 'Accept', override: true },
+  ]);
 });
 
 test('every page the function rewrites has the file it rewrites to', () => {
