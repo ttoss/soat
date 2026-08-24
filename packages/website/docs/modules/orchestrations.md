@@ -87,6 +87,8 @@ Each entry in a run's `node_executions` array records a single node execution, i
 | `completed_at` | string \| null | ISO 8601 timestamp when the record was written           |
 | `created_at`   | string         | ISO 8601 creation timestamp                              |
 
+A node execution records the node's **external I/O** — the input it resolved and the artifact it returned — not the model's internal reasoning, and it carries **no generation id**. To reach what an `agent` node's model actually did, see [Reaching an agent node's generation](#reaching-an-agent-nodes-generation).
+
 ## Key Concepts
 
 ### Node Types
@@ -432,6 +434,24 @@ Records are returned by both `get-orchestration-run` and `list-orchestration-run
 Every generation an `agent` node dispatches meters against the run: its [usage](./usage.md) event carries the run's `orchestration_run_id` and the dispatching `node_id`. `get-orchestration-run` surfaces the roll-up inline as a `usage` object summed across the run's generations. For the full per-event breakdown, fetch the run receipt at [`GET /api/v1/usage/receipt?orchestration_run_id=…`](/docs/api/usage/get-usage-receipt) — see [Receipts](./usage.md#receipts-and-reconciliation). When a run is started by a [trigger](./triggers.md), the trigger id is propagated onto every in-run generation's usage event, so run spend also rolls up per trigger (`?trigger_id=`).
 
 > **Note:** usage events are metered as each generation settles, so read the roll-up from `get-orchestration-run`, not the `start-orchestration-run` response — even with `wait: true` the start response can carry `usage: null`.
+
+### Reaching an agent node's generation
+
+A `node_executions` entry records what a node received and what artifact it returned. For an `agent` node that artifact is the model's final answer — `{ content }`, or the parsed object when the node declares an `output_schema`. It is **not** the model's reasoning, its tool calls, or its token usage, and the record holds no generation id.
+
+Those live on the [generation](./generations.md), which points back at the node rather than the other way round. An agent node's generation is stamped with three attribution columns — `orchestration_run_id`, `node_id`, and `node_attempt` — so the run is traced forward by filtering the generations list:
+
+```bash
+# every generation this run's agent nodes produced
+soat list-generations --orchestration-run-id run_abc123
+
+# one node's — one row per attempt if a retry policy re-ran it
+soat list-generations --orchestration-run-id run_abc123 --node-id summarize
+```
+
+`node_attempt` matches the `attempt` on the corresponding `node_executions` entry, which is what makes the pairing exact for a [retried](#retry-policy) node.
+
+Each generation returned carries its own `trace_id`, which opens the full [trace](./traces.md) for that turn — the provider call, the tool calls, and the steps in between. Note that the run's own `trace_id` is not a per-node handle: it is whichever trace the run's first agent node produced, with later nodes hanging off it as children.
 
 ### Run Tool Context
 

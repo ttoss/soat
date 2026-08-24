@@ -45,6 +45,7 @@ Generations can be listed via [`GET /generations`](/docs/api/generations/list-ge
 | `trigger_id`                | string \| null | Trigger that initiated the generation                                                                |
 | `orchestration_run_id`      | string \| null | Orchestration run that dispatched the generation                                                     |
 | `node_id`                   | string \| null | Node within that run                                                                                 |
+| `node_attempt`              | number \| null | The node's 1-based retry attempt, so a retried node's generations are told apart (see [Finding an orchestration run's generations](#finding-an-orchestration-runs-generations)) |
 | `agent_version`             | number \| null | Agent config version that served the generation                                                      |
 | `source`                    | string \| null | `eval` when an [eval run](./evaluations.md) produced this generation; `null` for ordinary traffic     |
 | `routing`                   | object \| null | What the [model route](./model-routes.md) did for this generation                                     |
@@ -198,7 +199,7 @@ record.
 
 [`DELETE /generations/{generation_id}/content`](/docs/api/generations/purge-generation-content) clears the generation's content — `metadata`, `error`, `extraction`, the recorded input messages, and the internal recovery state of a paused run — and stamps `content_redacted_at`. It requires the `generations:PurgeGenerationContent` action.
 
-The usage and audit skeleton is preserved on purpose: ids, timestamps, status, stop reason, and every attribution field (`action_id`, `trigger_id`, `orchestration_run_id`, `node_id`, `agent_version`, `routing`). A billing ledger has to outlive a tenant's erasure of the content, so a purged generation reads back as that skeleton rather than as a 404.
+The usage and audit skeleton is preserved on purpose: ids, timestamps, status, stop reason, and every attribution field (`action_id`, `trigger_id`, `orchestration_run_id`, `node_id`, `node_attempt`, `agent_version`, `routing`). A billing ledger has to outlive a tenant's erasure of the content, so a purged generation reads back as that skeleton rather than as a 404.
 
 The operation is idempotent: a second purge succeeds and leaves the original `content_redacted_at` untouched.
 
@@ -219,6 +220,24 @@ Two project settings turn the manual purge into a policy:
 
 Multi-step reasoning is composed by the calling application, so intermediate steps appear as ordinary generations of their own rather than as `metadata` on, or child generations of, the calling generation.
 
+### Finding an orchestration run's generations
+
+An [orchestration](./orchestrations.md) run's `node_executions` record what each node received and produced, but they carry **no generation id**. The pointer runs the other way: a generation dispatched by an agent node stores `orchestration_run_id`, `node_id` and `node_attempt` as attribution columns of its own, next to `action_id` and `trigger_id`.
+
+So a run is traced to what its agents actually did by filtering this module's list endpoint:
+
+```bash
+# every generation the run produced
+soat list-generations --orchestration-run-id run_abc123
+
+# just one node's — one row per attempt if the node was retried
+soat list-generations --orchestration-run-id run_abc123 --node-id summarize
+```
+
+`node_attempt` is what distinguishes the generations of a **retried** node. A node with a retry policy produces one node execution record per attempt and one generation per attempt; matching them on `node_attempt` is exact, where matching on timestamps is a guess.
+
+From a generation reached this way, the rest of the graph is already reachable: `trace_id` opens the [trace](./traces.md) for that turn, and `initiator_generation_id` walks down into any [sub-agent invocations](#sub-agent-invocations) it made.
+
 ### Tool context
 
 The generation-creation endpoints ([`POST /agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation), and the session and conversation generate endpoints) accept an optional `tool_context` object. Its entries are forwarded as `X-Soat-Context-*` request headers on every `http`, `mcp` and `builtin` tool call the generation makes, and an invalid key is rejected with `400 INVALID_TOOL_CONTEXT_KEY` before the provider is called. It is not persisted on the Generation record. See the [Tool Context reference](../advanced/tool-context.md).
@@ -227,7 +246,7 @@ The generation-creation endpoints ([`POST /agents/{agent_id}/generate`](/docs/ap
 
 ### List generations
 
-Filter by `agent_id`, `trace_id`, `initiator_generation_id`, or `status`.
+Filter by `agent_id`, `trace_id`, `initiator_generation_id`, `orchestration_run_id`, `node_id`, or `status`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
