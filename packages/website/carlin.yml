@@ -10,16 +10,14 @@ environments:
     # injects into it after negotiating the page representation.
     viewerRequestFunctionCode: ./cloudfront/viewerRequest.js
     # The function serves two representations of the same page URL, so every
-    # cache downstream has to key on the header that decides which one.
+    # cache downstream has to key on the header that decides which one. carlin
+    # builds a policy with no `CorsConfig` for a defined `vary` — CloudFront's
+    # CORS handling owns the header otherwise — and the bucket answers CORS.
     #
-    # The array form is load-bearing here, not a style choice. carlin applies
-    # environment overrides in a middleware that assigns `argv[key] = value`
-    # after yargs has already run each option's `coerce`, so the object form
-    # (`vary: Accept`) reaches the template as a plain object: its `.length` is
-    # undefined, the `responseHeaders.length > 0` branch is not taken, and the
-    # distribution silently keeps the managed policy — which is what shipped in
-    # v0.29.2 and answered `vary: Origin` (#1111). The array form is already
-    # the shape the template maps, so it needs no coercion.
+    # The array form is load-bearing: environment overrides are assigned after
+    # yargs runs each option's `coerce`, so the object form reaches the
+    # template unparsed and is silently ignored. The array form is already the
+    # shape the template maps.
     responseHeaders:
       - header: vary
         value: Accept
