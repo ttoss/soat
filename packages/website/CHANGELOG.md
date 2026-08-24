@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.29.6](https://github.com/ttoss/soat/compare/v0.29.5...v0.29.6) (2026-08-24)
+
+### Features
+
+* **website:** show CLI commands instead of REST endpoints on homepage ([#1121](https://github.com/ttoss/soat/issues/1121)) ([7876780](https://github.com/ttoss/soat/commit/7876780d4c6d857ae756ef16480f534ce079bd69))
+
 ## [0.29.5](https://github.com/ttoss/soat/compare/v0.29.4...v0.29.5) (2026-08-24)
 
 ### Features
