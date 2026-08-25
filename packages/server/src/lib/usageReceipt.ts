@@ -23,6 +23,15 @@ export type UsageReceiptLine = {
   meter_type: string;
   provider: string;
   model: string;
+  // The orchestration node the event was produced by, on a run receipt: an
+  // `agent` node's `llm_tokens` line and the `compute_execution` line of every
+  // node execution both carry it, so grouping a run receipt's lines by
+  // `node_id` yields the per-node cost the run total alone hides. Null when no
+  // node produced the event (a standalone generation, a run-level meter).
+  //
+  // The event carries no attempt number, so a retried node's attempts share one
+  // `node_id` — the right default for spend, since a retry is real money.
+  node_id: string | null;
   cost_usd: number | null;
   components: UsageReceiptComponent[];
 };
@@ -155,6 +164,7 @@ const loadLineItems = async (
       meter_type: event.meterType,
       provider: event.provider,
       model: event.model,
+      node_id: event.nodeId ?? null,
       cost_usd: event.costUsd === null ? null : Number(event.costUsd),
       components,
     };

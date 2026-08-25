@@ -2042,6 +2042,70 @@ describe('Usage', () => {
       expect(llmRollup).toBeDefined();
     });
 
+    test('every receipt line carries the node that produced it', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/receipt?orchestration_run_id=${orchestrationRunId}`
+      );
+      expect(res.status).toBe(200);
+      // The single agent node produces both meters: the llm_tokens event for its
+      // generation and the compute_execution event for the node execution.
+      const meterTypes = res.body.line_items.map(
+        (l: { meter_type: string }) => {
+          return l.meter_type;
+        }
+      );
+      expect(meterTypes).toContain('llm_tokens');
+      expect(meterTypes).toContain('compute_execution');
+      for (const line of res.body.line_items) {
+        expect(line.node_id).toBe(nodeId);
+      }
+    });
+
+    test('a two-node run attributes each line to its own node', async () => {
+      const agentNodeId = 'two-node-agent';
+      const transformNodeId = 'two-node-transform';
+
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: `Two Node Metered ${Date.now()}`,
+          nodes: [
+            { id: agentNodeId, type: 'agent', agent_id: agentId },
+            { id: transformNodeId, type: 'transform', expression: 1 },
+          ],
+          edges: [{ from: agentNodeId, to: transformNodeId }],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: createRes.body.id, input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('succeeded');
+
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/receipt?orchestration_run_id=${runRes.body.id}`
+      );
+      expect(res.status).toBe(200);
+
+      const metersByNode: Record<string, string[]> = {};
+      for (const line of res.body.line_items as Array<{
+        node_id: string | null;
+        meter_type: string;
+      }>) {
+        const key = line.node_id ?? 'null';
+        metersByNode[key] = [...(metersByNode[key] ?? []), line.meter_type];
+      }
+
+      // The agent node pays for its generation and its own execution; the
+      // transform node only for its execution. Grouping the lines by node_id is
+      // what makes that split readable — the receipt total alone hides it.
+      expect(metersByNode[agentNodeId]).toContain('llm_tokens');
+      expect(metersByNode[agentNodeId]).toContain('compute_execution');
+      expect(metersByNode[transformNodeId]).toEqual(['compute_execution']);
+    }, 60000);
+
     test('GET /usage/receipt?orchestration_run_id for an unknown run returns 404', async () => {
       const res = await authenticatedTestClient(userToken).get(
         '/api/v1/usage/receipt?orchestration_run_id=run_doesNotExist01'

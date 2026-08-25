@@ -434,6 +434,10 @@ Records are returned by both `get-orchestration-run` and `list-orchestration-run
 
 Every generation an `agent` node dispatches meters against the run: its [usage](./usage.md) event carries the run's `orchestration_run_id` and the dispatching `node_id`. `get-orchestration-run` surfaces the roll-up inline as a `usage` object summed across the run's generations. For the full per-event breakdown, fetch the run receipt at [`GET /api/v1/usage/receipt?orchestration_run_id=…`](/docs/api/usage/get-usage-receipt) — see [Receipts](./usage.md#receipts-and-reconciliation). When a run is started by a [trigger](./triggers.md), the trigger id is propagated onto every in-run generation's usage event, so run spend also rolls up per trigger (`?trigger_id=`).
 
+**Per node.** Each receipt line carries its `node_id`, so grouping the lines by it gives what each node of the run cost — the `llm_tokens` line of an `agent` node's generation and the `compute_execution` line of every node execution alike. The run total alone hides that split.
+
+**Nested runs are attributed to the child.** A `loop` or `sub_orchestration` node starts child runs, each its own run record, so their usage events carry the *child's* `orchestration_run_id`. The parent's `usage` roll-up and receipt therefore cover the parent's own nodes only: at the node that started them you see its execution cost, not what the children spent. A child run's own receipt carries that spend, but the parent does not name the runs it started — `group_by=day` or `group_by=model` on [`GET /api/v1/usage`](/docs/api/usage/get-usage) is what still accounts for it.
+
 > **Note:** usage events are metered as each generation settles, so read the roll-up from `get-orchestration-run`, not the `start-orchestration-run` response — even with `wait: true` the start response can carry `usage: null`.
 
 ### Reaching an agent node's generation

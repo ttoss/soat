@@ -171,6 +171,13 @@ Past-effective prices are immutable — corrections ship as new future-dated row
 
 [`GET /api/v1/usage/receipt?orchestration_run_id=…`](/docs/api/usage/get-usage-receipt) returns the same shape for an entire [orchestration](./orchestrations.md) run, summed across every node. The run's roll-up is also surfaced inline as a `usage` object on [`GET /api/v1/orchestration-runs/{orchestration_run_id}`](/docs/api/orchestrations/get-orchestration-run).
 
+Every line item carries the `node_id` that produced it, so a run receipt is also the **per-node cost breakdown** — group the lines by `node_id` and each node's spend is the sum of its lines. Both meters appear under the node: an `agent` node's `llm_tokens` line and the `compute_execution` line of every node execution, so a pure node (a `transform`, a `condition`) shows up with its execution cost alone. Two things to know when reading it:
+
+- **A retried node's attempts share one `node_id`.** The event records no attempt number, which is the intended reading for spend — a retry is real money, so it belongs in the node's total.
+- **A `null` `node_id`** means no node produced the event: a standalone generation on a per-generation receipt, or a run-level meter.
+
+A run whose graph contains a `loop` or `sub_orchestration` node is only partly covered: those nodes start child runs, whose events are attributed to the child, so the parent's receipt shows the node's own execution cost and not what the children spent. See [Run usage](./orchestrations.md#run-usage).
+
 ### Aggregation
 
 [`GET /api/v1/usage?project_id=…&group_by=…`](/docs/api/usage/get-usage) rolls a project's usage up over an optional `[from, to]` window (inclusive ISO-8601 bounds on `created_at`), bucketed by one dimension — `model`, `agent`, `run`, `day`, `meter_type`, `actor`, `session`, or [`source`](#workload-source). Each group and the grand `totals` carry summed token counts and `cost_usd` (`null` when no event in the bucket was priced). An event a dimension does not apply to collapses into a `null`-keyed group, so groups always sum to the project total. Requires `usage:GetUsage` on the project.
@@ -253,7 +260,7 @@ curl "https://api.example.com/api/v1/usage/meters?generation_id=gen_V1StGXR8Z5jd
 </TabItem>
 </Tabs>
 
-Get a generation's receipt (pass `orchestration_run_id` instead for a whole run):
+Get a generation's receipt (pass `orchestration_run_id` instead for a whole run, whose lines carry `node_id`):
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
