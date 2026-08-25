@@ -100,6 +100,8 @@ Two consequences matter to a subscriber:
 
 After three failed attempts the delivery is marked `failed` and is not retried automatically. Use [redelivery](#redelivery) to send it again.
 
+**Where the guarantee starts.** Everything above holds from the moment the row exists. Getting there is a short, in-memory step: once the write that produced the event has committed, the server matches the project's subscriptions and inserts the delivery rows. A database blip during that step is retried, and a failure that outlives the retries is counted and printed to stderr rather than discarded quietly — but a process killed inside that window loses the event, and no redelivery can recover what was never recorded. The window is sub-second and unaffected by your endpoint being slow or down; closing it entirely requires the delivery row to be written in the same transaction as the change that triggered it.
+
 ### Redelivery
 
 [`POST /api/v1/webhook-deliveries/{delivery_id}/redeliver`](/docs/api/webhooks/redeliver-webhook-delivery) queues a stored payload to be sent again — useful when your endpoint was down, or when you have fixed a bug and want the original event back.

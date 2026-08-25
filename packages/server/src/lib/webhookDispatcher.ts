@@ -6,8 +6,9 @@ import { db } from 'src/db';
 import { evaluatePolicies, type PolicyDocument } from 'src/lib/iam';
 
 import type { SoatEvent } from './eventBus';
-import { onEvent } from './eventBus';
+import { onEvent, recordDroppedEvent } from './eventBus';
 import { createScheduler, createSweep } from './scheduler';
+import { retryTransient } from './transientRetry';
 import { decryptWebhookSecret } from './webhooks';
 
 const log = createDebug('soat:webhooks');
@@ -380,13 +381,26 @@ const enqueueDelivery = async (args: {
 const handleEvent = async (event: SoatEvent) => {
   let webhooks;
   try {
-    webhooks = await db.Webhook.findAll({
-      where: {
-        projectId: event.projectId,
-        active: true,
+    webhooks = await retryTransient({
+      label: 'handleEvent.findWebhooks',
+      operation: () => {
+        return db.Webhook.findAll({
+          where: {
+            projectId: event.projectId,
+            active: true,
+          },
+        });
       },
     });
-  } catch {
+  } catch (error) {
+    // Was a bare `catch { return }`: a blip on this one read silently unhooked
+    // every subscription in the project for that event (#1130).
+    recordDroppedEvent({
+      stage: 'webhook_lookup',
+      type: event.type,
+      resourceId: event.resourceId,
+      error,
+    });
     return;
   }
 
@@ -408,14 +422,31 @@ const handleEvent = async (event: SoatEvent) => {
       if (!allowed) continue;
     }
 
-    void enqueueDelivery({ webhook, event })
+    // The row write and the first attempt are separated deliberately. They used
+    // to share one `.catch()`, which read as "delivery failed" for both — but a
+    // failed *attempt* is recorded on the row and retried by the sweep, while a
+    // failed *row write* leaves the sweep nothing to find, so the event is gone
+    // (#1130). Only the second one is a lost event, and only it is counted.
+    void retryTransient({
+      label: 'handleEvent.enqueueDelivery',
+      operation: () => {
+        return enqueueDelivery({ webhook, event });
+      },
+    })
       .then((delivery) => {
-        return attemptDelivery({ delivery });
+        return attemptDelivery({ delivery }).catch((error: unknown) => {
+          // The row exists; its own attempt bookkeeping and the sweep own the
+          // retry from here.
+          log('handleEvent: first attempt failed for %s %o', event.type, error);
+        });
       })
       .catch((error: unknown) => {
-        // Recorded on the row when it exists; a failure to write the row at all
-        // is logged here rather than crashing the dispatch loop.
-        log('handleEvent: delivery failed for %s %o', event.type, error);
+        recordDroppedEvent({
+          stage: 'delivery_write',
+          type: event.type,
+          resourceId: event.resourceId,
+          error,
+        });
       });
   }
 };
