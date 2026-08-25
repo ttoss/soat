@@ -68,6 +68,7 @@ export const mapTask = (instance: TaskInstance) => {
     state: instance.state,
     status: instance.status,
     payload: instance.payload,
+    metadata: instance.metadata ?? null,
     last_result: instance.lastResult ?? null,
     assignee: instance.assignee,
     active_dispatch: instance.activeDispatch,
@@ -363,6 +364,12 @@ export const createTask = async (args: {
    * transition may replace it.
    */
   toolContext?: Record<string, string> | null;
+  /**
+   * Caller-owned annotations stored on the task and returned verbatim (#342).
+   * Never read by a guard or written by a `payload_writes`, which is what makes
+   * it the place for an attribution label rather than `payload`.
+   */
+  metadata?: Record<string, unknown>;
   principal: TaskPrincipal;
 }) => {
   log(
@@ -405,6 +412,7 @@ export const createTask = async (args: {
     state: entryState.name,
     status: closed ? 'closed' : 'open',
     payload,
+    metadata: args.metadata ?? null,
     assignee: args.assignee ?? null,
     // A task created straight into a terminal state dispatches nothing and can
     // never be moved again, so it never holds a credential at rest.

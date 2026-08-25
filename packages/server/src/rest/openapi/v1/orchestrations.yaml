@@ -413,7 +413,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/OrchestrationRun'
         '400':
-          description: Validation error
+          description: >-
+            Validation error (e.g. a `tool_context` key that cannot become a
+            header, or `metadata` that is not a JSON object). No run is created.
         '401':
           description: Unauthorized
         '403':
@@ -1173,6 +1175,18 @@ components:
             The `tool_context` supplied at run creation, forwarded as
             `X-Soat-Context-<key>` headers on every tool call the run's agent
             nodes make. Null when the run was started without one.
+        metadata:
+          type: object
+          additionalProperties: true
+          nullable: true
+          description: >-
+            The caller-owned key/value metadata supplied at run creation,
+            returned verbatim. Null when the run was started without any. The
+            server writes nothing here and no key is reserved; the bag is never
+            merged into `state`, so nothing in it reaches the graph.
+          example:
+            tenant_account_id: '42'
+            dispatch_batch: nightly-2026-08-25
         output:
           type: object
           nullable: true
@@ -1380,6 +1394,31 @@ components:
             address them from here.
           example:
             ocaToken: eyJhbGciOiJIUzI1NiJ9.abc
+        metadata:
+          type: object
+          additionalProperties: true
+          description: >-
+            Caller-supplied key/value metadata attached to the run record for
+            per-run attribution (e.g. which of your own tenants this run belongs
+            to, or the dispatch batch that started it). Round-trips verbatim on
+            every read of the run, on the list as well as the single read.
+
+
+            The bag is caller-owned and no key is reserved: server-owned state
+            (status, the pinned orchestration version, the trace, usage,
+            artifacts, the run's own `input` and accumulated `state`) lives in
+            its own top-level field and cannot be written from here.
+
+
+            It is **not** merged into run state: no graph node sees it, and an
+            `input_schema` never has to tolerate it — which is what makes it the
+            place for an infrastructural label, rather than `input`. Keys are
+            never transformed. It is not inherited by the child runs a `loop` or
+            `sub_orchestration` node starts; each child carries whatever the
+            graph gives it, which today is nothing.
+          example:
+            tenant_account_id: '42'
+            dispatch_batch: nightly-2026-08-25
         wait:
           type: boolean
           default: false

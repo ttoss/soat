@@ -15,11 +15,11 @@ import {
 } from 'src/lib/agentGeneration';
 import { mapGenerationResult } from 'src/lib/agentGenerationHelpers';
 import type { GenerationInputMessage } from 'src/lib/generationInputMessages';
-import { validateGenerationMetadata } from 'src/lib/generationMetadata';
 import {
   type ExtractionMessage,
   fireMemoryExtraction,
 } from 'src/lib/memoryExtraction';
+import { validateMetadataBag } from 'src/lib/metadataBag';
 
 import { requireAuth, requireProjectAccess } from './helpers';
 import { assertNoSystemMessage } from './systemMessageGuard';
@@ -125,7 +125,7 @@ const validateGenerateBody = (body: {
     return 'messages is required and must be a non-empty array';
   }
   if (body.metadata !== undefined) {
-    return validateGenerationMetadata(body.metadata);
+    return validateMetadataBag(body.metadata);
   }
   return null;
 };

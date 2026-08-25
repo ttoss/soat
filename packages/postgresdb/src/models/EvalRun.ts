@@ -116,6 +116,19 @@ export class EvalRun extends Model {
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare triggerId: string | null;
 
+  /**
+   * Caller-owned key/value annotations supplied when the run was started, for
+   * attributing a measurement to whatever the caller's own system knows about
+   * it — the commit or PR being scored, the release candidate, the CI job
+   * (#342). Round-trips verbatim; the platform reads nothing from it.
+   *
+   * Every other field on the start request is platform-owned
+   * (`agent_version`, `baseline_run_id`, `wait`), so before this column a CI
+   * caller had nowhere at all to record what a run was measuring.
+   */
+  @Column({ type: DataType.JSONB, allowNull: true, defaultValue: null })
+  declare metadata: Record<string, unknown> | null;
+
   @Column({ type: DataType.DATE, allowNull: true })
   declare startedAt: Date | null;
 

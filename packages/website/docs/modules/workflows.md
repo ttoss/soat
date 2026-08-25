@@ -103,6 +103,7 @@ escape hatch. Define an explicit any-state transition (listing every state in
 | `state`             | string           | Current state name. Read-only — moved only via a transition             |
 | `status`            | `open` \| `closed` | `closed` once the task enters a `terminal` state                      |
 | `payload`           | object           | Caller-owned task data; input to guards and dispatch `input_mapping`s. The engine never writes into it except declared `payload_writes` |
+| `metadata`          | object \| null   | Caller-owned annotations supplied at creation and returned verbatim; invisible to guards and to `payload_writes` (see [Task metadata](#task-metadata)) |
 | `last_result`       | any \| null      | Server-owned, read-only: the result of the current state's last completed dispatch, overwritten on every dispatch. Guards read it as `task.last_result` |
 | `assignee`          | string \| null   | Informational in v1 (a user or actor public ID; not interpreted by the engine) |
 | `active_dispatch`   | object \| null   | `{ kind, id, status }` of the current state's dispatch, if any — plus `attempt` while a `retry` policy is in effect. `kind` is `generation`, `orchestration_run` or `tool_call`; a `tool_call` always carries a null `id`, since a direct tool call leaves no addressable record |
@@ -378,6 +379,28 @@ Resolve the gate through the standard [approvals](./approvals.md) endpoints:
   (`principal_kind: approval`, `transition: null`). The task never moved.
 - **Expire** → the approvals module's expiry sweeper clears the gate and
   appends an expiry note to history.
+
+### Task metadata
+
+`create-task` accepts a `metadata` bag — caller-owned key/value annotations, stored on the task and returned verbatim by every read of it, the list included. Use it for anything that is not task data: which of your own tenants the task belongs to, the ticket that raised it, the import batch that created it.
+
+It is deliberately not `payload`, and the difference is not cosmetic:
+
+- **`payload` is part of the machine.** Every guard reads it as `task.payload`, dispatch `input_mapping`s read it, and the workflow's declared `payload_writes` can overwrite keys in it. A label parked there is visible to the state machine and not safe from it.
+- **`metadata` is inert.** No guard sees it, no mapping reads it, and the engine never writes into it. Everything the engine decides about a task — `state`, `status`, `workflow_version`, `last_result`, `active_dispatch`, the automation fields — is a field of its own, so no key here can reach it.
+
+It also differs from `tool_context` in the other direction: `tool_context` is write-only, because it carries a credential and a task is long-lived and multi-actor. A label is not a credential, so `metadata` is readable — and it survives every transition, since a transition supplies no metadata of its own.
+
+A non-object `metadata` is rejected with `400 VALIDATION_FAILED` and no task is created.
+
+```bash
+soat create-task \
+  --workflow-id "$WORKFLOW_ID" \
+  --title 'Refund request #8123' \
+  --metadata '{"tenant_account_id":"42","source":"zendesk"}'
+```
+
+Filtering tasks by a metadata key is not supported — fetch and filter client-side.
 
 ### Dispatch tool context
 
