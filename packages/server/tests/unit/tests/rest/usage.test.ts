@@ -2165,6 +2165,77 @@ describe('Usage', () => {
       expect(after.body.line_items.length).toBe(beforeCount);
     });
 
+    test('a second attempt of the same node meters as its own event', async () => {
+      const before = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/receipt?orchestration_run_id=${orchestrationRunId}`
+      );
+      const beforeLlm = before.body.line_items.filter(
+        (l: { meter_type: string; node_id: string | null }) => {
+          return l.meter_type === 'llm_tokens' && l.node_id === nodeId;
+        }
+      ).length;
+
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+      // A *retry*, not a replay: the executor stamps each attempt's generation
+      // with its own `nodeAttempt` (orchestrationNodeRecorder), and this is a
+      // second generation that really reached the provider. It must be metered,
+      // where a redelivery of the same attempt (the test above) must not.
+      await createGeneration({
+        agentId,
+        projectIds: [project?.id as number],
+        messages: [{ role: 'user', content: 'retried node' }],
+        stream: false,
+        authHeader: `Bearer ${userToken}`,
+        orchestrationRunId,
+        nodeId,
+        nodeAttempt: 2,
+      });
+
+      const after = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/receipt?orchestration_run_id=${orchestrationRunId}`
+      );
+      const afterLines = after.body.line_items.filter(
+        (l: { meter_type: string; node_id: string | null }) => {
+          return l.meter_type === 'llm_tokens' && l.node_id === nodeId;
+        }
+      );
+      expect(afterLines.length).toBe(beforeLlm + 1);
+
+      // Both attempts group under one node_id, so the node's cost is their sum
+      // — the reading `node_id` on a receipt line is meant to support (#1134).
+      expect(afterLines.length).toBeGreaterThanOrEqual(2);
+    });
+
+    test('a replayed second attempt is still a no-op', async () => {
+      const before = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/receipt?orchestration_run_id=${orchestrationRunId}`
+      );
+      const beforeCount = before.body.line_items.length;
+
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+      // Attempt 2 again: same (run, node, attempt), so the at-least-once
+      // redelivery guarantee still holds one attempt down.
+      await createGeneration({
+        agentId,
+        projectIds: [project?.id as number],
+        messages: [{ role: 'user', content: 'redelivered retry' }],
+        stream: false,
+        authHeader: `Bearer ${userToken}`,
+        orchestrationRunId,
+        nodeId,
+        nodeAttempt: 2,
+      });
+
+      const after = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/receipt?orchestration_run_id=${orchestrationRunId}`
+      );
+      expect(after.body.line_items.length).toBe(beforeCount);
+    });
+
     test('a trigger-started run attributes its in-run generations to the trigger', async () => {
       const triggerPublicId = generatePublicId(PUBLIC_ID_PREFIXES.trigger);
       const project = await db.Project.findOne({
