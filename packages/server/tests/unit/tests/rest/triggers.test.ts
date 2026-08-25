@@ -270,6 +270,136 @@ describe('Triggers', () => {
       expect(res.body.error.code).toBe('INVALID_CRON_EXPRESSION');
     });
 
+    test('creates an event trigger with an event_pattern', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/triggers')
+        .send({
+          project_id: projectId,
+          name: 'event-ingested',
+          type: 'event',
+          target_type: 'orchestration',
+          target_id: orchestrationId,
+          event_pattern: 'documents.ingested',
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.type).toBe('event');
+      expect(res.body.event_pattern).toBe('documents.ingested');
+      expect(res.body.cron).toBeNull();
+      // Only webhook triggers carry a signing secret; an event trigger's
+      // authenticity comes from the bus, not an HMAC.
+      expect(res.body.secret).toBeUndefined();
+    });
+
+    test('accepts a namespace wildcard and a bare wildcard pattern', async () => {
+      const prefix = await authenticatedTestClient(userToken)
+        .post('/api/v1/triggers')
+        .send({
+          project_id: projectId,
+          name: 'event-documents-any',
+          type: 'event',
+          target_type: 'orchestration',
+          target_id: orchestrationId,
+          event_pattern: 'documents.*',
+        });
+      expect(prefix.status).toBe(201);
+      expect(prefix.body.event_pattern).toBe('documents.*');
+
+      const all = await authenticatedTestClient(userToken)
+        .post('/api/v1/triggers')
+        .send({
+          project_id: projectId,
+          name: 'event-any',
+          type: 'event',
+          target_type: 'orchestration',
+          target_id: orchestrationId,
+          event_pattern: '*',
+        });
+      expect(all.status).toBe(201);
+      expect(all.body.event_pattern).toBe('*');
+    });
+
+    test('accepts an author-authored name outside every platform namespace', async () => {
+      // An orchestration `emit_event` node emits names SOAT does not own;
+      // subscribing to one is the point of the type, so it is not registry-checked.
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/triggers')
+        .send({
+          project_id: projectId,
+          name: 'event-custom',
+          type: 'event',
+          target_type: 'orchestration',
+          target_id: orchestrationId,
+          event_pattern: 'orders.shipped',
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.event_pattern).toBe('orders.shipped');
+    });
+
+    test('rejects a typo inside a platform namespace (400)', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/triggers')
+        .send({
+          project_id: projectId,
+          name: 'event-typo',
+          type: 'event',
+          target_type: 'orchestration',
+          target_id: orchestrationId,
+          event_pattern: 'documents.ingsted',
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_EVENT_PATTERN');
+    });
+
+    test('rejects a malformed pattern (400)', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/triggers')
+        .send({
+          project_id: projectId,
+          name: 'event-malformed',
+          type: 'event',
+          target_type: 'orchestration',
+          target_id: orchestrationId,
+          event_pattern: 'documents.*.created',
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_EVENT_PATTERN');
+    });
+
+    test('rejects an event trigger without an event_pattern (400)', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/triggers')
+        .send({
+          project_id: projectId,
+          name: 'event-nopattern',
+          type: 'event',
+          target_type: 'orchestration',
+          target_id: orchestrationId,
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('TRIGGER_ACTION_NOT_ALLOWED');
+    });
+
+    test('rejects event_pattern on a non-event trigger (400)', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/triggers')
+        .send({
+          project_id: projectId,
+          name: 'manual-with-pattern',
+          type: 'manual',
+          target_type: 'orchestration',
+          target_id: orchestrationId,
+          event_pattern: 'documents.ingested',
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('TRIGGER_ACTION_NOT_ALLOWED');
+    });
+
     test('rejects action on a non-tool target (400)', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')

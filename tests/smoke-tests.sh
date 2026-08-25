@@ -4567,8 +4567,89 @@ echo "--- Verifying a manual trigger has no secret ---"
 expect_cli_error_status 400 get-trigger-secret --trigger-id "$TRIGGER_ID"
 echo "Manual trigger secret correctly rejected."
 
+# Event trigger: an internal event starts work with no HTTP loopback in the path.
+# The emitting graph publishes onto the bus; the trigger subscribes to that name
+# and runs the transform orchestration. Nothing signs or verifies anything.
+echo "--- Creating event emitter orchestration ---"
+EVENT_EMITTER_RESP=$($SOAT_CLI create-orchestration \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-event-emitter" \
+  --nodes '[{"id":"tick","type":"emit_event","event_type":"smoke.tick","input_mapping":{"origin":"smoke"}}]' \
+  --edges '[]')
+EVENT_EMITTER_ID=$(printf '%s\n' "$EVENT_EMITTER_RESP" | jq -r '.id')
+if [ -z "$EVENT_EMITTER_ID" ] || [ "$EVENT_EMITTER_ID" = "null" ]; then
+  echo "ERROR: Failed to create event emitter orchestration" >&2
+  printf '%s\n' "$EVENT_EMITTER_RESP" >&2
+  exit 1
+fi
+
+echo "--- Creating event trigger ---"
+EVENT_TRIGGER_RESP=$($SOAT_CLI create-trigger \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-event-trigger" \
+  --type event \
+  --event-pattern "smoke.tick" \
+  --target-type orchestration \
+  --target-id "$TRIGGER_ORCH_ID" \
+  --input '{"cycle":"reactive"}')
+EVENT_TRIGGER_ID=$(printf '%s\n' "$EVENT_TRIGGER_RESP" | jq -r '.id')
+if [ -z "$EVENT_TRIGGER_ID" ] || [ "$EVENT_TRIGGER_ID" = "null" ]; then
+  echo "ERROR: Failed to create event trigger" >&2
+  printf '%s\n' "$EVENT_TRIGGER_RESP" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$EVENT_TRIGGER_RESP" | jq -e '.event_pattern == "smoke.tick"' >/dev/null 2>&1; then
+  echo "ERROR: event trigger did not persist its event_pattern" >&2
+  printf '%s\n' "$EVENT_TRIGGER_RESP" >&2
+  exit 1
+fi
+echo "Event trigger created: $EVENT_TRIGGER_ID"
+
+echo "--- Emitting the event ---"
+$SOAT_CLI start-orchestration-run \
+  --orchestration-id "$EVENT_EMITTER_ID" \
+  --input '{}' \
+  --wait true >/dev/null
+
+# Dispatch is fire-and-forget off the bus, so poll the firing record.
+echo "--- Waiting for the event-driven firing ---"
+EVENT_FIRING_STATUS=""
+i=0
+while [ "$i" -lt 40 ]; do
+  EVENT_FIRINGS_RESP=$($SOAT_CLI list-trigger-firings --trigger-id "$EVENT_TRIGGER_ID")
+  EVENT_FIRING_STATUS=$(printf '%s\n' "$EVENT_FIRINGS_RESP" | jq -r '.data[0].status // ""')
+  if [ "$EVENT_FIRING_STATUS" = "succeeded" ] || [ "$EVENT_FIRING_STATUS" = "failed" ]; then
+    break
+  fi
+  i=$((i + 1))
+  sleep 1
+done
+if [ "$EVENT_FIRING_STATUS" != "succeeded" ]; then
+  echo "ERROR: event trigger did not produce a succeeded firing (status='$EVENT_FIRING_STATUS')" >&2
+  printf '%s\n' "$EVENT_FIRINGS_RESP" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$EVENT_FIRINGS_RESP" | jq -e '.data[0].source == "event" and .data[0].input.event == "smoke.tick"' >/dev/null 2>&1; then
+  echo "ERROR: event firing did not carry the event as its input" >&2
+  printf '%s\n' "$EVENT_FIRINGS_RESP" >&2
+  exit 1
+fi
+echo "Event trigger fired from the bus: OK"
+
+# Guard: a pattern in a platform namespace must name a registered event.
+echo "--- Verifying a typo'd event pattern is rejected ---"
+expect_cli_error_status 400 create-trigger \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-event-typo" \
+  --type event \
+  --event-pattern "documents.ingsted" \
+  --target-type orchestration \
+  --target-id "$TRIGGER_ORCH_ID"
+echo "Typo'd event pattern correctly rejected."
+
 # Delete triggers
 echo "--- Deleting triggers ---"
+$SOAT_CLI delete-trigger --trigger-id "$EVENT_TRIGGER_ID"
 $SOAT_CLI delete-trigger --trigger-id "$WEBHOOK_TRIGGER_ID"
 $SOAT_CLI delete-trigger --trigger-id "$TRIGGER_ID"
 echo "Triggers deleted."

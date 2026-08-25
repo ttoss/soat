@@ -31,6 +31,7 @@ export type ExceptionKind =
   | 'guardrail_tripwire'
   | 'approval_expired'
   | 'quota_unpriced'
+  | 'event_trigger_loop'
   | 'manual';
 
 /**
@@ -40,13 +41,16 @@ export type ExceptionKind =
  * is the guard working as designed and also feeds learned rules (`warning`); a
  * lapsed approval is a fail-safe missed SLA (`warning`); a cost cap that cannot
  * be evaluated is a control silently protecting nothing — it needs a config fix,
- * not an incident response (`warning`).
+ * not an incident response (`warning`); an event trigger that refused to extend
+ * a causal chain is a loop running unattended — the guard worked, and the wiring
+ * still needs a human (`warning`).
  */
 const DEFAULT_SEVERITY_BY_KIND: Record<ExceptionKind, ExceptionSeverity> = {
   run_failed: 'critical',
   guardrail_tripwire: 'warning',
   approval_expired: 'warning',
   quota_unpriced: 'warning',
+  event_trigger_loop: 'warning',
   manual: 'warning',
 };
 

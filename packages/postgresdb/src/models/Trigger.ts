@@ -86,7 +86,7 @@ export class Trigger extends Model {
   @Column({ type: DataType.TEXT, allowNull: true })
   declare description: string | null;
 
-  // manual | webhook | schedule — immutable after creation.
+  // manual | webhook | schedule | event — immutable after creation.
   @Column({ type: DataType.STRING, allowNull: false })
   declare type: string;
 
@@ -109,6 +109,11 @@ export class Trigger extends Model {
   // 5-field cron expression (UTC); present only for schedule triggers.
   @Column({ type: DataType.STRING, allowNull: true })
   declare cron: string | null;
+
+  // Bus subscription pattern ('*', 'prefix.*', or an exact event name); present
+  // only for event triggers.
+  @Column({ type: DataType.STRING, allowNull: true })
+  declare eventPattern: string | null;
 
   @Column({
     type: DataType.BOOLEAN,

@@ -15,6 +15,8 @@ A webhook is scoped to a project. When you create a webhook you specify a URL an
 
 Webhooks are **outbound** — SOAT calls your endpoint when events occur. For the **inbound** direction — an external system calling SOAT to activate an orchestration, agent, or tool — see [Triggers](./triggers.md), whose `webhook` starter verifies an incoming HMAC signature the same way.
 
+To start work **inside** SOAT when an event fires, do not wire a webhook subscription back to your own deployment's inbound hook — bind an [`event` trigger](./triggers.md#event-triggers) to the same event pattern instead. It subscribes to the bus directly, so there is no public URL, no signature to verify against your own event, and no second retry policy for one logical hop.
+
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
 ## Related Tutorials

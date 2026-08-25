@@ -1224,9 +1224,9 @@ components:
 
     TriggerResourceProperties:
       description: >-
-        Binds a starter (manual, webhook, or schedule) to an executable target
-        (orchestration, agent, tool, or eval). Firings run under the project owner's
-        confined run-as identity.
+        Binds a starter (manual, webhook, schedule, or event) to an executable
+        target (orchestration, agent, tool, or eval). Firings run under the
+        project owner's confined run-as identity.
       type: object
       additionalProperties: false
       required:
@@ -1248,6 +1248,7 @@ components:
             - manual
             - webhook
             - schedule
+            - event
           description: Starter type. Immutable after creation
         target_type:
           type: string
@@ -1275,6 +1276,12 @@ components:
           type: string
           nullable: true
           description: 5-field cron expression (UTC). Required when type is schedule
+        event_pattern:
+          type: string
+          nullable: true
+          description: >-
+            Internal-event subscription pattern (`*`, `prefix.*`, or an exact
+            event name). Required when type is event, rejected otherwise
         active:
           type: boolean
           description: Whether the trigger fires (default true)
