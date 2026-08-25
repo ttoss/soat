@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.31.0](https://github.com/ttoss/soat/compare/v0.30.1...v0.31.0) (2026-08-25)
+
+### Features
+
+* **server:** let a caller label a run, an eval run and a task with metadata ([#1129](https://github.com/ttoss/soat/issues/1129)) ([3fa7b88](https://github.com/ttoss/soat/commit/3fa7b88e9a2e9548de476c486b042227057ac18f)), closes [TriangulosTecnologia/naturali.ai#342](https://github.com/TriangulosTecnologia/naturali.ai/issues/342) [#342](https://github.com/ttoss/soat/issues/342)
+* **triggers:** add an event trigger type ([#1133](https://github.com/ttoss/soat/issues/1133)) ([5abf1ab](https://github.com/ttoss/soat/commit/5abf1abaf192953cea3e98705dceb8af8b372096))
+
 ## [0.30.1](https://github.com/ttoss/soat/compare/v0.30.0...v0.30.1) (2026-08-25)
 
 **Note:** Version bump only for package @soat/postgresdb

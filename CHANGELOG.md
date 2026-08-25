@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.31.0](https://github.com/ttoss/soat/compare/v0.30.1...v0.31.0) (2026-08-25)
+
+### Bug Fixes
+
+* **server:** retry the writes that get an event into the delivery outbox ([#1132](https://github.com/ttoss/soat/issues/1132)) ([4be8c96](https://github.com/ttoss/soat/commit/4be8c96c69f9ece8603c62749ed16cf62395f617)), closes [#1052](https://github.com/ttoss/soat/issues/1052) [#1130](https://github.com/ttoss/soat/issues/1130)
+
+### Features
+
+* **server:** let a caller label a run, an eval run and a task with metadata ([#1129](https://github.com/ttoss/soat/issues/1129)) ([3fa7b88](https://github.com/ttoss/soat/commit/3fa7b88e9a2e9548de476c486b042227057ac18f)), closes [TriangulosTecnologia/naturali.ai#342](https://github.com/TriangulosTecnologia/naturali.ai/issues/342) [#342](https://github.com/ttoss/soat/issues/342)
+* **server:** let a deployment register custom formation resource types ([#1137](https://github.com/ttoss/soat/issues/1137)) ([197d5fd](https://github.com/ttoss/soat/commit/197d5fd3e3b72a7cd458d38d8d969fcbd9136fc5)), closes [#1078](https://github.com/ttoss/soat/issues/1078) [#1130](https://github.com/ttoss/soat/issues/1130)
+* **server:** name the node behind every usage receipt line ([#1136](https://github.com/ttoss/soat/issues/1136)) ([9ec58d4](https://github.com/ttoss/soat/commit/9ec58d4e7efc94a9f8ffc9693b0e43e0282cba48)), closes [#1134](https://github.com/ttoss/soat/issues/1134)
+* **triggers:** add an event trigger type ([#1133](https://github.com/ttoss/soat/issues/1133)) ([5abf1ab](https://github.com/ttoss/soat/commit/5abf1abaf192953cea3e98705dceb8af8b372096))
+
 ## [0.30.1](https://github.com/ttoss/soat/compare/v0.30.0...v0.30.1) (2026-08-25)
 
 ### Bug Fixes
