@@ -220,7 +220,7 @@ pattern this replaces cost.
 | `*`                  | every event in the project                           |
 
 A pattern whose first segment names a **platform namespace** must resolve to a
-[registered event](./webhooks.md#events) — `documents.ingsted` is rejected at
+[registered event](../webhook-events.md) — `documents.ingsted` is rejected at
 write time with `400 INVALID_EVENT_PATTERN` rather than silently never matching.
 A name outside every platform namespace (`orders.shipped`) is accepted as
 written, because an orchestration [`emit_event` node](./orchestrations.md) emits
