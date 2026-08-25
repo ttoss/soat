@@ -1,3 +1,4 @@
+import type { LanguageModelUsage } from 'ai';
 import { APICallError, NoObjectGeneratedError, RetryError } from 'ai';
 
 import { DomainError } from '../errors';
@@ -77,6 +78,33 @@ const apiCallDomainError = (error: APICallError): DomainError => {
 };
 
 /**
+ * The token usage a failed turn already spent, or `undefined` when the failure
+ * carries none.
+ *
+ * A turn can fail *after* the provider answered — the model returns text that
+ * does not satisfy the agent's `output_schema`, so nothing usable comes back
+ * even though the tokens were generated and billed. The AI SDK hands those
+ * counts over on `NoObjectGeneratedError`, and they are the only usage a
+ * failure path can know: a request that never reached the model
+ * (`APICallError`, a fetch fault) burned nothing to meter.
+ *
+ * Read from the raw error, before `toProviderDomainError` maps it — the
+ * `DomainError` it returns deliberately carries no counts, since `meta` is a
+ * wire surface.
+ */
+export const usageFromFailure = (
+  error: unknown
+): LanguageModelUsage | undefined => {
+  const unwrapped = unwrapProviderError(error);
+  if (NoObjectGeneratedError.isInstance(unwrapped)) return unwrapped.usage;
+  // The failure is usually recorded a frame or two above the mapping, so what
+  // arrives is the mapped `DomainError`. It keeps the provider error as its
+  // `cause` precisely so the counts survive the mapping.
+  const cause = unwrapped instanceof Error ? unwrapped.cause : undefined;
+  return NoObjectGeneratedError.isInstance(cause) ? cause.usage : undefined;
+};
+
+/**
  * Maps an upstream AI provider failure — an `APICallError` thrown by the AI
  * SDK (possibly wrapped in a `RetryError`), a network fault, or an error frame
  * a provider streamed mid-run — to a `AI_PROVIDER_ERROR` `DomainError`
@@ -93,7 +121,7 @@ export const toProviderDomainError = (error: unknown): DomainError | null => {
   // initial turn and the tool-outputs continuation at once, since both funnel
   // their failures through this function.
   if (NoObjectGeneratedError.isInstance(unwrapped)) {
-    return new DomainError(
+    const mapped = new DomainError(
       'OUTPUT_SCHEMA_VALIDATION_FAILED',
       `Model output did not satisfy output_schema: ${unwrapped.cause instanceof Error ? unwrapped.cause.message : unwrapped.message}`,
       {
@@ -102,6 +130,11 @@ export const toProviderDomainError = (error: unknown): DomainError | null => {
         }),
       }
     );
+    // The provider error is kept as the cause, so the token counts it carries
+    // reach whoever records the failure (`usageFromFailure`). `meta` cannot hold
+    // them: it is a wire surface, and these are internal accounting figures.
+    mapped.cause = unwrapped;
+    return mapped;
   }
 
   if (APICallError.isInstance(unwrapped)) {

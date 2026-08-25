@@ -9,11 +9,20 @@ import type {
 import { emitResourceEvent, resolveProjectPublicId } from './eventBus';
 import { updateGenerationRecord } from './generations';
 import { saveRoutingMetadata } from './modelRouteMetadata';
-import { buildGenerationErrorPayload } from './providerError';
+import { buildGenerationErrorPayload, usageFromFailure } from './providerError';
 import { recordTraceError, saveTrace, serializeSteps } from './traces';
 import { recordGenerationUsage } from './usage';
 
 const log = createDebug('soat:generation');
+
+// The model's id as the usage event names it. `LanguageModel` is either the id
+// itself or a routed model instance carrying one; an absent model meters as the
+// empty string, exactly as the completion path does when the response carries no
+// `modelId`.
+const modelIdOf = (model: LanguageModel | undefined): string => {
+  if (model === undefined) return '';
+  return typeof model === 'string' ? model : model.modelId;
+};
 
 /**
  * Persists a generation failure (status 'failed' + structured error payload
@@ -35,8 +44,20 @@ export const recordGenerationFailure = async (args: {
    */
   projectId?: number;
   projectPublicId?: string;
+  /**
+   * Token usage the turn spent before it failed, from `usageFromFailure`. A
+   * failure that never reached the model has none; one that failed *on* the
+   * model's answer (output_schema) has counts the provider already billed for,
+   * and dropping them would under-report real spend. Metering is keyed, so a
+   * caller that records the same failure twice still writes one event.
+   */
+  usage?: LanguageModelUsage;
 }): Promise<unknown> => {
   const errorPayload = buildGenerationErrorPayload(args.error);
+  // Derived here so no failure path has to remember to pass it: `usage` is only
+  // supplied explicitly by a caller that mapped the error before handing it over
+  // (the mapped `DomainError` carries no counts).
+  const usage = args.usage ?? usageFromFailure(args.error);
 
   log(
     'recordGenerationFailure: generationId=%s traceId=%s error=%o',
@@ -62,6 +83,19 @@ export const recordGenerationFailure = async (args: {
     // ultimately failed — that is what makes the unmetered-failed-attempt gap
     // visible rather than silent.
     saveRoutingMetadata({ generationId: args.generationId, model: args.model }),
+    // A failed turn is metered exactly when it spent something: the provider
+    // billed for the tokens whether or not the answer could be used, so leaving
+    // them out understates every roll-up that reads them (project usage, a run's
+    // total, a spend guardrail, a threshold).
+    ...(usage
+      ? [
+          recordGenerationUsage({
+            generationId: args.generationId,
+            model: modelIdOf(args.model),
+            usage,
+          }),
+        ]
+      : []),
   ]);
 
   // A completed turn announces itself; a failed one has to as well, or the only
@@ -151,6 +185,9 @@ export const recordContinuationFailure = async (args: {
     traceId: args.pending.traceId,
     error: args.error,
     model: args.pending.resolvedModel,
+    // The continuation fails on the model's answer the same way the initial
+    // turn does, and its tokens were billed the same way.
+    usage: usageFromFailure(args.error),
   });
 };
 

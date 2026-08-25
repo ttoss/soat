@@ -40,7 +40,7 @@ import {
 } from './modelMessages';
 import { routedMaxRetries } from './modelRouteExecutor';
 import { buildStructuredOutput } from './outputSchema';
-import { toProviderDomainError } from './providerError';
+import { toProviderDomainError, usageFromFailure } from './providerError';
 import {
   findTextEncodedToolCall,
   textEncodedToolCallError,
@@ -427,6 +427,8 @@ export const runToolOutputsGeneration = async (args: {
       model: args.pending.resolvedModel,
       projectId: args.pending.projectId,
       projectPublicId: args.pending.projectPublicId,
+      // Read off the *raw* error: the mapped DomainError carries no counts.
+      usage: usageFromFailure(error),
     });
   }
 };
