@@ -15,6 +15,8 @@ The Docs module exposes two MCP tools — `get-docs` and `get-doc-page` — that
 
 These tools are registered directly in the MCP server and are not backed by REST API endpoints. The documentation base URL defaults to `https://soat.ttoss.dev` and can be overridden via the `SOAT_DOCS_BASE_URL` environment variable for self-hosted deployments.
 
+`SOAT_DOCS_BASE_URL` also rebases the error envelope's `docs_url` field and the `errors.json` link inside the default `hint` (see [Error Codes](../error-codes.md)) — a deployment that fronts SOAT and relays its errors verbatim can point both at its own documentation instead of soat.ttoss.dev.
+
 ## Access
 
 The Docs tools are **not project-scoped and carry no IAM action** — they read only public documentation, never project data. Any authenticated MCP client can call them; there is no `resource:Action` permission to grant and no entry in the [Permissions Reference](../permissions.md).
@@ -23,7 +25,7 @@ The Docs tools are **not project-scoped and carry no IAM action** — they read 
 
 | Environment Variable | Required | Description |
 | --- | --- | --- |
-| `SOAT_DOCS_BASE_URL` | No | Base URL of the SOAT documentation site. Defaults to `https://soat.ttoss.dev`. |
+| `SOAT_DOCS_BASE_URL` | No | Base URL of the SOAT documentation site. Defaults to `https://soat.ttoss.dev`. Also rebases the `hint` and `docs_url` fields on every error response — see [Error Codes](../error-codes.md). |
 
 ## Data Model
 

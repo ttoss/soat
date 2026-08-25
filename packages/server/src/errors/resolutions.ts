@@ -1,4 +1,5 @@
 import { ERROR_CODES } from './codes';
+import { docsBaseUrl } from './docsBaseUrl';
 
 /**
  * The resolution hint carried by every error response, alongside `code` and
@@ -16,9 +17,15 @@ import { ERROR_CODES } from './codes';
  * an empty string, and `resolutions.test.ts` pins that for every code.
  */
 
-/** Where the generated per-code reference page is published. */
-export const ERROR_CODES_DOCS_URL =
-  'https://soat.ttoss.dev/docs/error-codes' as const;
+/**
+ * Where the generated per-code reference page is published, resolved at call
+ * time from `docsBaseUrl()` — never a constant, so a deployment that sets
+ * `SOAT_DOCS_BASE_URL` (or a test that sets it per-case) is not stuck with
+ * whatever value existed at import time.
+ */
+export const errorCodesDocsUrl = (): string => {
+  return `${docsBaseUrl()}/docs/error-codes`;
+};
 
 /**
  * What to do about a specific code, where the status class alone is too vague
@@ -38,7 +45,7 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   QUOTA_EXCEEDED:
     'Wait until the window resets — `Retry-After` (seconds) and `meta.resets_at` both carry the time — or raise the quota with `PATCH /api/v1/quotas/{quota_id}`.',
   AI_PROVIDER_ERROR:
-    'The upstream model provider failed, not SOAT. Check the provider credential and the account behind it (credits, rate limits, model access), then retry with backoff.',
+    'The upstream model provider failed, not this server. Check the provider credential and the account behind it (credits, rate limits, model access), then retry with backoff.',
   AI_PROVIDER_MISCONFIGURED:
     'The provider record is missing something it needs to make a call — usually the API key secret or the base URL. Update the AI provider and retry.',
   EMBEDDING_NOT_CONFIGURED:
@@ -92,7 +99,7 @@ export const STATUS_RESOLUTIONS: Record<number, string> = {
   429: 'Back off and retry after the window named by `Retry-After`.',
   500: 'Retry with backoff. If it persists, the server log carries the detail the response deliberately omits.',
   501: 'Not implemented on this deployment. Retrying will not change the outcome.',
-  502: 'An upstream dependency failed rather than SOAT itself. Retry with backoff and check that dependency.',
+  502: 'An upstream dependency failed rather than this server itself. Retry with backoff and check that dependency.',
   503: 'A capability this operation needs is not configured on this deployment. Configure it — the message names which — rather than retrying.',
 };
 
@@ -101,8 +108,9 @@ export const STATUS_RESOLUTIONS: Record<number, string> = {
  * takes a plain string so the docs generators and log lines can call it, which
  * means "not a registered code" is a reachable input, not a defensive branch.
  */
-export const DEFAULT_RESOLUTION =
-  'Read `code` against the catalog at https://soat.ttoss.dev/errors.json to decide how to proceed.';
+export const DEFAULT_RESOLUTION = (): string => {
+  return `Read \`code\` against the catalog at ${docsBaseUrl()}/errors.json to decide how to proceed.`;
+};
 
 /**
  * Built once from the registry. Keyed by plain string so a caller that only has
@@ -126,11 +134,11 @@ export const resolutionFor = (args: { code: string }): string => {
   const status = STATUS_BY_CODE.get(args.code);
   return (
     (status !== undefined ? STATUS_RESOLUTIONS[status] : undefined) ??
-    DEFAULT_RESOLUTION
+    DEFAULT_RESOLUTION()
   );
 };
 
 /** The reference-page anchor for `code`, as an absolute URL. */
 export const docsUrlFor = (args: { code: string }): string => {
-  return `${ERROR_CODES_DOCS_URL}#${args.code.toLowerCase()}`;
+  return `${errorCodesDocsUrl()}#${args.code.toLowerCase()}`;
 };

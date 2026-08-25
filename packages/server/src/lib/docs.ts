@@ -1,12 +1,8 @@
 import createDebug from 'debug';
 
-import { DomainError } from '../errors';
+import { docsBaseUrl as getDocsBaseUrl, DomainError } from '../errors';
 
 const log = createDebug('soat:docs');
-
-const getDocsBaseUrl = () => {
-  return process.env.SOAT_DOCS_BASE_URL ?? 'https://soat.ttoss.dev';
-};
 
 export const getDocsIndex = async (): Promise<string> => {
   const url = `${getDocsBaseUrl()}/llms.txt`;
