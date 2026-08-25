@@ -1,7 +1,5 @@
 import { EventEmitter } from 'node:events';
 
-import createDebug from 'debug';
-
 import { db } from '../db';
 import { currentCausationChain } from './eventCausation';
 import type {
@@ -11,6 +9,7 @@ import type {
   SoatResourceType,
 } from './soatEvents';
 import { asCustomEventName } from './soatEvents';
+import { retryTransient } from './transientRetry';
 
 /**
  * The envelope's own vocabulary, re-exported so an emit site imports the names
@@ -24,7 +23,51 @@ export type {
   SoatResourceType,
 } from './soatEvents';
 
-const log = createDebug('soat:eventBus');
+/**
+ * The points between a committed domain write and a durable delivery row where
+ * an event can still be lost, and where a failure is therefore never silent.
+ *
+ * Each stage is a database read or write that the pipeline retries (see
+ * {@link retryTransient}); this counter records the events that did not survive
+ * even that. It exists because the alternative — the `catch {}` and the
+ * swallowed rejection this replaced — made a lost event indistinguishable from
+ * an event nobody subscribed to.
+ */
+export type EventDropStage =
+  | 'project_lookup'
+  | 'webhook_lookup'
+  | 'delivery_write'
+  | 'activity_write'
+  | 'trigger_lookup';
+
+const droppedEvents = new Map<EventDropStage, number>();
+
+/**
+ * Records an event the pipeline could not recover, on the one path where the
+ * operation that produced it has already committed and cannot be failed.
+ *
+ * Logged through `console.error` rather than `log`: `debug` output is disabled
+ * in production, so a `debug`-only line would leave silent loss silent, which is
+ * the bug (`db.ts` makes the same call for the same reason).
+ */
+export const recordDroppedEvent = (args: {
+  stage: EventDropStage;
+  type: string;
+  resourceId: string;
+  error: unknown;
+}): void => {
+  droppedEvents.set(args.stage, (droppedEvents.get(args.stage) ?? 0) + 1);
+  // eslint-disable-next-line no-console
+  console.error(
+    `event dropped at ${args.stage}: ${args.type} (${args.resourceId})`,
+    args.error
+  );
+};
+
+/** How many events this process has dropped at a stage. */
+export const droppedEventCount = (args: { stage: EventDropStage }): number => {
+  return droppedEvents.get(args.stage) ?? 0;
+};
 
 export interface SoatEvent {
   /**
@@ -115,8 +158,13 @@ export const onEvent = (args: {
  * rejection handler (#903). `resolveProjectPublicId` performs a real DB read, so
  * a transient failure there became an unhandled rejection, which by default
  * terminates the process — long after the write it belonged to had committed.
- * An event is best-effort by design: a failed lookup is logged and dropped, and
- * the operation that produced it still succeeds.
+ * The `.catch()` fixed the crash but answered it with a drop, which made a
+ * single connection blip enough to lose an event outright (#1130).
+ *
+ * So the lookup is retried, and only a failure that outlives the retries drops
+ * the event — through {@link recordDroppedEvent}, which counts and prints it.
+ * The emit stays best-effort in the sense that matters: it never fails the
+ * operation that produced it.
  *
  * `data` is taken and forwarded as an opaque value; nothing here inspects a key
  * of it, so this introduces no key-walking surface (`case-convention.md`).
@@ -157,15 +205,24 @@ const emitEnvelope = (args: {
     return;
   }
 
-  void resolveProjectPublicId({ projectId: args.projectId })
+  void retryTransient({
+    label: 'emitEnvelope.resolveProjectPublicId',
+    operation: () => {
+      return resolveProjectPublicId({ projectId: args.projectId });
+    },
+  })
     .then(emit)
     .catch((error: unknown) => {
-      log(
-        'emitEnvelope: dropping %s for %s — project lookup failed: %o',
-        args.type,
-        args.resourceId,
-        error
-      );
+      // Only reachable once the retries are spent. The event is lost — there is
+      // no envelope to emit without the public id, since it is what builds the
+      // SRN a webhook policy is evaluated against — but it is now counted and
+      // printed rather than dropped on a `debug` line nobody sees in production.
+      recordDroppedEvent({
+        stage: 'project_lookup',
+        type: args.type,
+        resourceId: args.resourceId,
+        error,
+      });
     });
 };
 

@@ -151,6 +151,19 @@ export class Task extends Model {
   @Column({ type: DataType.JSONB, allowNull: true, defaultValue: null })
   declare toolContext: Record<string, string> | null;
 
+  // Caller-owned key/value annotations supplied at creation, for attributing a
+  // task to whatever the caller's own system knows about it — the tenant it
+  // belongs to, the ticket that raised it, the import batch (#342).
+  //
+  // Distinct from `payload` on both sides: the engine may write into a payload
+  // (a state's declared `payload_writes`) and every guard reads it, so a label
+  // parked there is neither inert nor safe from the machine. Nothing in the
+  // engine reads or writes this bag, and unlike `toolContext` it is readable —
+  // a label is not a credential, so there is nothing here to leak to the other
+  // principals on the board.
+  @Column({ type: DataType.JSONB, allowNull: true, defaultValue: null })
+  declare metadata: Record<string, unknown> | null;
+
   // Informational in v1: a user or actor public ID, not interpreted by the engine.
   @Column({ type: DataType.STRING, allowNull: true })
   declare assignee: string | null;

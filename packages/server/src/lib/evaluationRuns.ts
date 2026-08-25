@@ -317,6 +317,12 @@ export const startEvalRun = async (args: {
    * schedule origin to record.
    */
   triggerId?: string;
+  /**
+   * Caller-owned annotations stored on the run and returned verbatim (#342).
+   * Read by nothing in the scoring path — it exists so a caller (typically CI)
+   * can say what this measurement was of.
+   */
+  metadata?: Record<string, unknown>;
 }): Promise<ReturnType<typeof mapEvalRun>> => {
   const wait = parseWait(args.wait);
   log('startEvalRun: evalId=%s wait=%s', args.evalId, wait);
@@ -331,6 +337,7 @@ export const startEvalRun = async (args: {
     status: wait ? 'running' : 'queued',
     baselineRunId: plan.baselineRunDbId,
     triggerId: args.triggerId ?? null,
+    metadata: args.metadata ?? null,
     itemCount: plan.items.length,
     startedAt: wait ? new Date() : null,
   });

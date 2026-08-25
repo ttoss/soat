@@ -32,6 +32,7 @@ const fakeRun: MappedOrchestrationRun = {
   trace_id: null,
   input: null,
   tool_context: null,
+  metadata: null,
   output: null,
   node_executions: [],
   started_at: null,

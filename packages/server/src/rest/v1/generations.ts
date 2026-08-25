@@ -2,13 +2,13 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { purgeGenerationContent } from 'src/lib/contentPurge';
-import { validateGenerationMetadata } from 'src/lib/generationMetadata';
 import {
   getGeneration,
   listGenerations,
   updateGenerationMetadata,
 } from 'src/lib/generations';
 import { getGenerationTranscript } from 'src/lib/generationTranscript';
+import { validateMetadataBag } from 'src/lib/metadataBag';
 
 import {
   requestPrincipalFromCtx,
@@ -155,7 +155,7 @@ generationsRouter.patch('/generations/:generation_id', async (ctx: Context) => {
 
   const { metadata } = ctx.request.body as { metadata?: unknown };
 
-  const metadataError = validateGenerationMetadata(metadata);
+  const metadataError = validateMetadataBag(metadata);
   if (metadataError) {
     throw new DomainError('VALIDATION_FAILED', metadataError);
   }

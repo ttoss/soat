@@ -182,6 +182,20 @@ export class OrchestrationRun extends Model {
   })
   declare toolContext: Record<string, string> | null;
 
+  // Caller-owned key/value annotations supplied when the run was started, for
+  // attributing a run to whatever the caller's own system calls a tenant, a
+  // batch or a ticket (#342). Round-trips verbatim and is never read by the
+  // engine: it is deliberately *not* merged into `state`, which is why it is a
+  // column of its own rather than something a caller has to smuggle through
+  // `input` — the run's business payload, which every node sees and an
+  // `input_schema` may legitimately reject unknown keys from.
+  //
+  // Persisted on the row for the same reason as `toolContext`: a run outlives
+  // the request that started it, so a background drive, a wake and a redrive
+  // all read the label from here.
+  @Column({ type: DataType.JSONB, allowNull: true, defaultValue: null })
+  declare metadata: Record<string, unknown> | null;
+
   @Column({ type: DataType.JSONB, allowNull: true })
   declare output: object | null;
 

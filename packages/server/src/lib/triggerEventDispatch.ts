@@ -3,7 +3,7 @@ import { db } from 'src/db';
 
 import { DomainError } from '../errors';
 import type { SoatEvent } from './eventBus';
-import { onEvent } from './eventBus';
+import { onEvent, recordDroppedEvent } from './eventBus';
 import {
   currentCausationChain,
   MAX_EVENT_CAUSATION_DEPTH,
@@ -12,6 +12,7 @@ import {
 import { evaluateEventPolicy, matchesEvent } from './eventMatching';
 import { fileException } from './exceptions';
 import { evaluateRequestQuotas, quotaBreachError } from './quotaEnforcement';
+import { retryTransient } from './transientRetry';
 import { createFiringRecord, finalizeFiringFailed } from './triggerFirings';
 
 const log = createDebug('soat:triggers');
@@ -235,15 +236,30 @@ const dispatchTrigger = async (args: {
 const handleEvent = async (event: SoatEvent): Promise<void> => {
   let triggers;
   try {
-    triggers = await db.Trigger.findAll({
-      where: { projectId: event.projectId, type: 'event', active: true },
+    triggers = await retryTransient({
+      label: 'handleEvent.triggerLookup',
+      operation: () => {
+        return db.Trigger.findAll({
+          where: { projectId: event.projectId, type: 'event', active: true },
+        });
+      },
     });
   } catch (error) {
-    // The lookup is the one step outside the per-trigger guard below, so it is
-    // caught here rather than by the subscriber: this function must never
-    // reject, or a transient DB error becomes an unhandled rejection that takes
-    // the process down long after the write that emitted the event committed.
-    log('handleEvent: trigger lookup failed for %s %o', event.type, error);
+    // The one step outside the per-trigger guard below, so it is caught here
+    // rather than by the subscriber: this function must never reject, or a
+    // transient DB error becomes an unhandled rejection long after the write
+    // that emitted the event committed.
+    //
+    // Never a silent `catch { return }`, for the reason #1130 established on
+    // the webhook side: a blip on this one read would unhook every event
+    // trigger in the project for that event, and a lost firing would be
+    // indistinguishable from an event nothing subscribed to.
+    recordDroppedEvent({
+      stage: 'trigger_lookup',
+      type: event.type,
+      resourceId: event.resourceId,
+      error,
+    });
     return;
   }
   if (triggers.length === 0) return;

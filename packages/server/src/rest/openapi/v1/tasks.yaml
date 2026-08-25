@@ -340,6 +340,19 @@ components:
             Caller-owned task data; input to guards (as `task.payload`) and
             dispatch mappings. The engine never writes into it except the
             workflow's declared `payload_writes`.
+        metadata:
+          type: object
+          additionalProperties: true
+          nullable: true
+          description: >-
+            The caller-owned key/value metadata supplied when the task was
+            created, returned verbatim. Null when the task was created without
+            any. Unlike `payload` it is invisible to guards and to
+            `payload_writes`, so it is the place for an attribution label rather
+            than task data.
+          example:
+            tenant_account_id: '42'
+            source: zendesk
         last_result:
           nullable: true
           description: >-
@@ -506,6 +519,33 @@ components:
 
             Write-only: the stored bag is never returned by any task read, and it
             is cleared when the task reaches a terminal state.
+        metadata:
+          type: object
+          additionalProperties: true
+          description: >-
+            Caller-supplied key/value metadata attached to the task record for
+            attribution — which of your own tenants the task belongs to, the
+            ticket that raised it, the import batch that created it.
+            Round-trips verbatim on every read of the task, the list included,
+            and survives every transition (a transition supplies no metadata of
+            its own).
+
+
+            The bag is caller-owned and no key is reserved: everything the
+            engine decides about a task (`state`, `status`, `workflow_version`,
+            `last_result`, `active_dispatch`, the automation fields) is a field
+            of its own and cannot be written from here.
+
+
+            Prefer this over `payload` for anything that is not task data:
+            `payload` is read by every guard as `task.payload` and may be
+            written by the workflow's declared `payload_writes`, so a label
+            parked there is neither invisible to the state machine nor safe from
+            it. A non-object is rejected with `400 VALIDATION_FAILED` and no
+            task is created.
+          example:
+            tenant_account_id: '42'
+            source: zendesk
     UpdateTaskRequest:
       type: object
       properties:

@@ -888,6 +888,52 @@ describe('Evaluations', () => {
       expect(res.body.error.message).toContain('agent_version 99');
     });
 
+    // #342 (same gap, second module): an eval run is caller-started, durable and
+    // queued by default, and until now had no caller-settable field at all —
+    // every field on the request was platform-owned. A CI system scoring one run
+    // per commit had nowhere to record which commit.
+    describe('metadata', () => {
+      test('round-trips verbatim on create, single read and list', async () => {
+        const metadata = { commit_sha: 'abc123', pr_number: 1129 };
+
+        const res = await asUser()
+          .post(`/api/v1/evals/${evalId}/runs`)
+          .send({ metadata });
+        expect(res.status).toBe(201);
+        expect(res.body.metadata).toEqual(metadata);
+
+        const getRes = await asUser().get(
+          `/api/v1/evals/${evalId}/runs/${res.body.id}`
+        );
+        expect(getRes.status).toBe(200);
+        expect(getRes.body.metadata).toEqual(metadata);
+
+        const listRes = await asUser().get(`/api/v1/evals/${evalId}/runs`);
+        expect(listRes.status).toBe(200);
+        const listed = listRes.body.data.find(
+          (run: { id: string }) => {
+            return run.id === res.body.id;
+          }
+        );
+        expect(listed.metadata).toEqual(metadata);
+      });
+
+      test('a run started without metadata reports null', async () => {
+        const res = await asUser().post(`/api/v1/evals/${evalId}/runs`).send({});
+        expect(res.status).toBe(201);
+        expect(res.body.metadata).toBeNull();
+      });
+
+      test('a non-object metadata is rejected with 400', async () => {
+        const res = await asUser()
+          .post(`/api/v1/evals/${evalId}/runs`)
+          .send({ metadata: 'nightly' });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      });
+    });
+
     test('a baseline that is not a run of this eval is rejected with 400', async () => {
       const res = await asUser()
         .post(`/api/v1/evals/${evalId}/runs`)

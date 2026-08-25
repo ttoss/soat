@@ -388,6 +388,7 @@ const createRunRecord = async (args: {
   artifacts: Record<string, unknown>;
   input?: Record<string, unknown>;
   toolContext?: Record<string, string>;
+  metadata?: Record<string, unknown>;
   triggerId?: string;
   principal?: RequestPrincipal;
   authHeader?: string;
@@ -409,6 +410,9 @@ const createRunRecord = async (args: {
     artifacts: args.artifacts,
     input: args.input ?? null,
     toolContext: args.toolContext ?? null,
+    // Written alongside `input`, never into `state`: the label is the caller's,
+    // the state is the graph's.
+    metadata: args.metadata ?? null,
     triggerId: args.triggerId ?? null,
     ...resolveRunPrincipal({
       principal: args.principal,
@@ -433,6 +437,10 @@ export const startOrchestrationRun = async (args: {
   // long before its first node executes, so a key that could not become a header
   // has to be rejected while the caller is still listening.
   toolContext?: Record<string, string>;
+  // Caller-owned annotations stored on the run and returned verbatim (#342).
+  // Never merged into run state, so a graph's `input_schema` stays free to
+  // reject anything that is not part of the run's business payload.
+  metadata?: Record<string, unknown>;
   authHeader?: string;
   wait?: boolean;
   // Public id of the trigger firing that started this run, when launched by a
@@ -484,6 +492,7 @@ export const startOrchestrationRun = async (args: {
     artifacts,
     input: args.input,
     toolContext: args.toolContext,
+    metadata: args.metadata,
     triggerId: args.triggerId,
     principal: args.principal,
     authHeader: args.authHeader,

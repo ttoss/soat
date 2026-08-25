@@ -190,6 +190,81 @@ describe('Tasks', () => {
       expect(history.body[0].actor_id).toBeUndefined();
     });
 
+    // #342 (same gap, third module): a task is long-lived, durable and moves
+    // through states for days. Its only caller-settable bag was `payload` —
+    // read by every guard and writable by the workflow's own `payload_writes`,
+    // so an infrastructural label put there is neither inert nor safe from the
+    // engine. `metadata` is caller-owned and untouched by both.
+    describe('metadata', () => {
+      test('round-trips verbatim on create, single read and list', async () => {
+        const metadata = { tenant_account_id: '42', source: 'zendesk' };
+
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/tasks')
+          .send({
+            project_id: projectId,
+            workflow_id: workflowId,
+            title: 'A labelled card',
+            payload: { topic: 'spring' },
+            metadata,
+          });
+        expect(res.status).toBe(201);
+        expect(res.body.metadata).toEqual(metadata);
+        // The label stays out of the guard-visible payload.
+        expect(res.body.payload).toEqual({ topic: 'spring' });
+
+        const getRes = await authenticatedTestClient(userToken).get(
+          `/api/v1/tasks/${res.body.id}`
+        );
+        expect(getRes.status).toBe(200);
+        expect(getRes.body.metadata).toEqual(metadata);
+
+        const listRes = await authenticatedTestClient(userToken).get(
+          `/api/v1/tasks?workflow_id=${workflowId}`
+        );
+        expect(listRes.status).toBe(200);
+        const listed = listRes.body.data.find((task: { id: string }) => {
+          return task.id === res.body.id;
+        });
+        expect(listed.metadata).toEqual(metadata);
+      });
+
+      test('survives a transition, which supplies no metadata of its own', async () => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/tasks')
+          .send({
+            project_id: projectId,
+            workflow_id: workflowId,
+            title: 'A card that moves',
+            metadata: { tenant_account_id: '42' },
+          });
+        expect(res.status).toBe(201);
+
+        const moved = await transition(res.body.id, 'to_draft');
+        expect(moved.status).toBe(200);
+        expect(moved.body.metadata).toEqual({ tenant_account_id: '42' });
+      });
+
+      test('a task created without metadata reports null', async () => {
+        const res = await createTask({ topic: 'spring' });
+        expect(res.status).toBe(201);
+        expect(res.body.metadata).toBeNull();
+      });
+
+      test('a non-object metadata is rejected with 400 and creates no task', async () => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/tasks')
+          .send({
+            project_id: projectId,
+            workflow_id: workflowId,
+            title: 'A rejected card',
+            metadata: ['not', 'an', 'object'],
+          });
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      });
+    });
+
     test('rejects a payload that violates payload_schema', async () => {
       const res = await createTask({ topic: 123 });
       expect(res.status).toBe(400);
