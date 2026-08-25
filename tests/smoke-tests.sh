@@ -1598,12 +1598,20 @@ echo "--- Async run drained by the standalone worker fleet ---"
 # `--tool-context` rides along here rather than in its own run: the worker path
 # is the one that proves the bag lives on the run row, since the process that
 # drives it has no request to read it from.
+# `--metadata` rides along for the same reason: the caller's attribution label
+# has to come back off the run row, not out of the request that started it.
 ORCH_ASYNC_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
   --orchestration-id "$ORCH_ID" \
   --tool-context '{"ocaToken":"smoke-run-token"}' \
+  --metadata '{"tenant_account_id":"smoke-tenant-42"}' \
   --input '{"theme":"worker-fleet"}')
 if [ "$(printf '%s\n' "$ORCH_ASYNC_RESP" | jq -r '.tool_context.ocaToken')" != "smoke-run-token" ]; then
   echo "ERROR: start-orchestration-run did not persist tool_context" >&2
+  printf '%s\n' "$ORCH_ASYNC_RESP" >&2
+  exit 1
+fi
+if [ "$(printf '%s\n' "$ORCH_ASYNC_RESP" | jq -r '.metadata.tenant_account_id')" != "smoke-tenant-42" ]; then
+  echo "ERROR: start-orchestration-run did not persist metadata" >&2
   printf '%s\n' "$ORCH_ASYNC_RESP" >&2
   exit 1
 fi
@@ -1644,6 +1652,18 @@ fi
 # The bag survived the enqueue → claim → drive → settle round trip.
 if [ "$(printf '%s\n' "$ORCH_ASYNC_GET" | jq -r '.tool_context.ocaToken')" != "smoke-run-token" ]; then
   echo "ERROR: worker-drained run lost its tool_context" >&2
+  printf '%s\n' "$ORCH_ASYNC_GET" >&2
+  exit 1
+fi
+if [ "$(printf '%s\n' "$ORCH_ASYNC_GET" | jq -r '.metadata.tenant_account_id')" != "smoke-tenant-42" ]; then
+  echo "ERROR: worker-drained run lost its metadata" >&2
+  printf '%s\n' "$ORCH_ASYNC_GET" >&2
+  exit 1
+fi
+# The label never leaks into the run's business payload — a graph node sees the
+# `input` namespace only, so an `input_schema` stays free to reject stray keys.
+if printf '%s\n' "$ORCH_ASYNC_GET" | jq -e '.state | tostring | test("tenant_account_id")' >/dev/null; then
+  echo "ERROR: run metadata leaked into run state" >&2
   printf '%s\n' "$ORCH_ASYNC_GET" >&2
   exit 1
 fi

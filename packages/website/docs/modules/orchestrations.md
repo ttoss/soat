@@ -64,6 +64,7 @@ An orchestration is a pipeline that _ends_; a [workflow](./workflows.md) is a st
 | `trace_id`         | string \| null | Linked observability trace, if any                                |
 | `input`            | object \| null | Initial input provided at run creation                            |
 | `tool_context`     | object \| null | Caller context forwarded as `X-Soat-Context-*` headers on the tool calls of every agent node in the run (see [Run Tool Context](#run-tool-context)) |
+| `metadata`         | object \| null | Caller-owned annotations supplied at run creation and returned verbatim; never merged into `state` (see [Run Metadata](#run-metadata)) |
 | `output`           | object \| null | Terminal node artifact(s) when the run has `succeeded`            |
 | `started_at`       | string \| null | ISO 8601 execution start timestamp                                |
 | `completed_at`     | string \| null | ISO 8601 terminal timestamp (`succeeded`/`failed`/`cancelled`/`expired`) |
@@ -465,6 +466,27 @@ soat start-orchestration-run \
   --tool-context '{"ocaToken":"eyJhbGciOiJIUzI1NiJ9.abc"}' \
   --input '{"question":"what is my balance?"}'
 ```
+
+### Run Metadata
+
+`start-orchestration-run` accepts a `metadata` bag — caller-owned key/value annotations, stored on the run and returned verbatim by every read of it, the list included. It is the run's equivalent of the same field on an agent generation, and it exists for the same reason: attributing a run to something only the caller knows about — which of *its* tenants the run belongs to, the dispatch batch that started it, the ticket that asked for it.
+
+Two properties make it the right place for such a label, and `input` the wrong one:
+
+- **Nothing merges it into run state.** No graph node sees it, no `{ "var": … }` reads it, and a strict `input_schema` never has to tolerate it. `input` is the run's *initial state* — a label put there is business payload every node and every schema has to accommodate.
+- **The server writes nothing here, and no key is reserved.** Every piece of state the platform owns — `status`, the pinned `orchestration_version`, `trace_id`, `usage`, `artifacts`, `input`, `state` — is a field of its own, so no key a caller writes can reach platform state.
+
+The bag lives **on the run**, so it survives every way a run is driven: a queued start whose 201 lands long before the first node executes, a scheduler wake, a human or approval resume, a crash redrive. A non-object `metadata` is rejected with `400 VALIDATION_FAILED` at start time and no run is created.
+
+Unlike `tool_context`, it is **not** inherited by the child runs a `loop` or `sub_orchestration` node starts: a context header has to reach a nested tool call to work at all, whereas a label is a statement about the run the caller actually started. Pass one per child through the graph if a child needs its own.
+
+```bash
+soat start-orchestration-run \
+  --orchestration-id "$ORCH_ID" \
+  --metadata '{"tenant_account_id":"42","dispatch_batch":"nightly-2026-08-25"}'
+```
+
+Filtering runs by a metadata key is not supported — fetch and filter client-side.
 
 ### Human Nodes
 

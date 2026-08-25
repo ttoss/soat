@@ -1655,6 +1655,120 @@ describe('Orchestrations', () => {
       });
     });
 
+    // #342: a run is the platform's one long-lived, resumable object, and it
+    // had nowhere for the caller to record *whose* run it is — while a single
+    // generation did. `metadata` is that label: caller-owned, no reserved keys,
+    // round-tripping verbatim, and never merged into run state (which is what
+    // made `input` the wrong place for it).
+    describe('metadata', () => {
+      const createRun = async (name: string, body: object) => {
+        const createRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestrations')
+          .send({
+            name,
+            nodes: [{ id: 'noop', type: 'transform', expression: 1 }],
+            edges: [],
+            project_id: projectId,
+          });
+        expect(createRes.status).toBe(201);
+
+        return authenticatedTestClient(userToken)
+          .post('/api/v1/orchestration-runs')
+          .send({ orchestration_id: createRes.body.id, ...body });
+      };
+
+      test('round-trips verbatim on create, single read and list', async () => {
+        const metadata = {
+          tenant_account_id: '42',
+          dispatch_batch: 'nightly-2026-08-25',
+          nested: { keys_are: 'not re-cased' },
+        };
+
+        const runRes = await createRun('Run Metadata Attribution', {
+          wait: true,
+          metadata,
+        });
+        expect(runRes.status).toBe(201);
+        expect(runRes.body.metadata).toEqual(metadata);
+
+        const getRunRes = await authenticatedTestClient(userToken).get(
+          `/api/v1/orchestration-runs/${runRes.body.id}`
+        );
+        expect(getRunRes.status).toBe(200);
+        expect(getRunRes.body.metadata).toEqual(metadata);
+
+        const listRes = await authenticatedTestClient(userToken).get(
+          `/api/v1/orchestration-runs?orchestration_id=${runRes.body.orchestration_id}`
+        );
+        expect(listRes.status).toBe(200);
+        expect(listRes.body.data[0].metadata).toEqual(metadata);
+      });
+
+      test('is not merged into run state or input', async () => {
+        const runRes = await createRun('Run Metadata Not State', {
+          wait: true,
+          input: { question: 'hello' },
+          metadata: { tenant_account_id: '42' },
+        });
+        expect(runRes.status).toBe(201);
+        expect(runRes.body.metadata).toEqual({ tenant_account_id: '42' });
+        expect(runRes.body.input).toEqual({ question: 'hello' });
+        expect(runRes.body.state['input']).toEqual({ question: 'hello' });
+        expect(JSON.stringify(runRes.body.state)).not.toContain(
+          'tenant_account_id'
+        );
+      });
+
+      test('survives a background drive, where no request body is available', async () => {
+        const runRes = await createRun('Run Metadata Background', {
+          metadata: { tenant_account_id: '42' },
+        });
+        expect(runRes.status).toBe(201);
+        expect(runRes.body.status).toBe('queued');
+        expect(runRes.body.metadata).toEqual({ tenant_account_id: '42' });
+
+        const getRunRes = await authenticatedTestClient(userToken).get(
+          `/api/v1/orchestration-runs/${runRes.body.id}`
+        );
+        expect(getRunRes.status).toBe(200);
+        expect(getRunRes.body.metadata).toEqual({ tenant_account_id: '42' });
+      });
+
+      test('a run started without metadata reports null', async () => {
+        const runRes = await createRun('Run Metadata Absent', { wait: true });
+        expect(runRes.status).toBe(201);
+        expect(runRes.body.metadata).toBeNull();
+      });
+
+      test('a non-object metadata returns 400 and creates no run', async () => {
+        const createRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestrations')
+          .send({
+            name: 'Run Metadata Invalid',
+            nodes: [{ id: 'noop', type: 'transform', expression: 1 }],
+            edges: [],
+            project_id: projectId,
+          });
+        expect(createRes.status).toBe(201);
+
+        const response = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestration-runs')
+          .send({
+            wait: true,
+            orchestration_id: createRes.body.id,
+            metadata: ['not', 'an', 'object'],
+          });
+        expect(response.status).toBe(400);
+        expect(response.body.error.code).toBe('VALIDATION_FAILED');
+
+        const list = await authenticatedTestClient(userToken).get(
+          `/api/v1/orchestration-runs?orchestration_id=${createRes.body.id}`
+        );
+        expect(list.status).toBe(200);
+        expect(list.body.total).toBe(0);
+      });
+    });
+
     // #747: an agent node's output_schema silently reverted to `{ content }`
     // when the model wrapped its JSON in a markdown code fence — the standard
     // shape a model returns structured JSON in, even when told to return it

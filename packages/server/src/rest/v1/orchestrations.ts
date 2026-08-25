@@ -31,6 +31,7 @@ import {
 } from './orchestrationAuth';
 import {
   parseRunInput,
+  parseRunMetadata,
   parseRunToolContext,
   parseUpdateBody,
   parseVersionLabel,
@@ -246,6 +247,7 @@ orchestrationsRouter.post('/orchestration-runs', async (ctx: Context) => {
     orchestration_id?: unknown;
     input?: unknown;
     tool_context?: unknown;
+    metadata?: unknown;
     wait?: unknown;
   };
   const orchestrationId =
@@ -261,6 +263,10 @@ orchestrationsRouter.post('/orchestration-runs', async (ctx: Context) => {
 
   const input = parseRunInput(body.input);
   const toolContext = parseRunToolContext(body.tool_context);
+  // Rejected before the run row is written: an async run answers 201 long
+  // before it executes, so a bag the caller cannot be told about later has to
+  // fail while the caller is still listening.
+  const metadata = parseRunMetadata(body.metadata);
   const authHeader = ctx.headers['authorization'] as string | undefined;
 
   const result = await startOrchestrationRun({
@@ -271,6 +277,9 @@ orchestrationsRouter.post('/orchestration-runs', async (ctx: Context) => {
     // Persisted on the run, not borrowed from this request: the run's later
     // drives (a worker, a wake, a resume) have no request to read it from.
     toolContext,
+    // The caller's own label for this run. Stored beside `input`, never merged
+    // into run state.
+    metadata,
     authHeader,
     // Persisted on the run so a worker driving it later can act as the same
     // principal; the request's own header only reaches `wait` mode.
