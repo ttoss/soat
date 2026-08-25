@@ -3,10 +3,10 @@ import crypto from 'node:crypto';
 import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 import { db } from 'src/db';
-import { evaluatePolicies, type PolicyDocument } from 'src/lib/iam';
 
 import type { SoatEvent } from './eventBus';
 import { onEvent, recordDroppedEvent } from './eventBus';
+import { evaluateEventPolicy, matchesEvent } from './eventMatching';
 import { createScheduler, createSweep } from './scheduler';
 import { retryTransient } from './transientRetry';
 import { decryptWebhookSecret } from './webhooks';
@@ -73,37 +73,6 @@ const backoffMs = (args: { attempts: number }) => {
     MAX_BACKOFF_MS
   );
   return exponential + Math.floor(Math.random() * exponential * 0.25);
-};
-
-const matchesEvent = (args: {
-  patterns: string[];
-  eventType: string;
-}): boolean => {
-  return args.patterns.some((pattern) => {
-    if (pattern === '*') return true;
-    if (pattern === args.eventType) return true;
-    if (pattern.endsWith('.*')) {
-      const prefix = pattern.slice(0, -2);
-      return args.eventType.startsWith(prefix + '.');
-    }
-    return false;
-  });
-};
-
-const evaluateWebhookPolicy = async (args: {
-  policyId: number;
-  event: SoatEvent;
-}): Promise<boolean> => {
-  const policy = await db.Policy.findOne({
-    where: { id: args.policyId },
-  });
-  if (!policy) return false;
-
-  return evaluatePolicies({
-    policies: [policy.document as PolicyDocument],
-    action: args.event.type,
-    resource: `srn:${args.event.projectPublicId}:${args.event.resourceType}:${args.event.resourceId}`,
-  });
 };
 
 /**
@@ -415,7 +384,7 @@ const handleEvent = async (event: SoatEvent) => {
     }
 
     if (webhook.policyId) {
-      const allowed = await evaluateWebhookPolicy({
+      const allowed = await evaluateEventPolicy({
         policyId: webhook.policyId,
         event,
       });

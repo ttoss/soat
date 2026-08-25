@@ -41,6 +41,7 @@ paths:
               - manual
               - webhook
               - schedule
+              - event
         - name: target_type
           in: query
           required: false
@@ -390,6 +391,7 @@ components:
             - manual
             - webhook
             - schedule
+            - event
         target_type:
           type: string
           enum:
@@ -415,6 +417,12 @@ components:
           type: string
           nullable: true
           description: 5-field cron expression (UTC). Present only for schedule triggers
+        event_pattern:
+          type: string
+          nullable: true
+          description: >-
+            Internal-event subscription pattern. Present only for event
+            triggers: `*`, `prefix.*`, or an exact event name
         active:
           type: boolean
         policy_id:
@@ -465,6 +473,7 @@ components:
             - manual
             - webhook
             - schedule
+            - event
         target_type:
           type: string
           enum:
@@ -482,6 +491,12 @@ components:
         cron:
           type: string
           description: 5-field cron expression (UTC). Required when type is schedule
+        event_pattern:
+          type: string
+          description: >-
+            Internal-event subscription pattern. Required when type is event,
+            rejected otherwise. `*` matches every event, `prefix.*` a namespace,
+            or give an exact event name such as `documents.ingested`
         active:
           type: boolean
           default: true
@@ -513,6 +528,9 @@ components:
           type: object
           nullable: true
         cron:
+          type: string
+          nullable: true
+        event_pattern:
           type: string
           nullable: true
         active:
@@ -555,6 +573,7 @@ components:
             - manual
             - webhook
             - schedule
+            - event
         status:
           type: string
           enum:

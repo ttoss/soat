@@ -20,6 +20,7 @@ export {
   TRIGGER_TARGET_TYPES,
   TRIGGER_TYPES,
   validateCronExpression,
+  validateEventPattern,
   validateTriggerShape,
 } from './triggerValidation';
 
@@ -52,6 +53,7 @@ const mapTrigger = (
     action: instance.action,
     input: instance.input,
     cron: instance.cron,
+    event_pattern: instance.eventPattern,
     active: instance.active,
     policy_id: instance.policy?.publicId ?? null,
     next_fire_at: instance.nextFireAt,
@@ -203,6 +205,7 @@ type CreateTriggerArgs = {
   action?: string | null;
   input?: Record<string, unknown> | null;
   cron?: string | null;
+  eventPattern?: string | null;
   active?: boolean;
 };
 
@@ -230,6 +233,7 @@ const buildCreateAttributes = (args: CreateTriggerArgs) => {
     action: args.action ?? null,
     input: args.input ?? null,
     cron: args.cron ?? null,
+    eventPattern: args.eventPattern ?? null,
     active: args.active ?? true,
     ...deriveTypeFields({ type: args.type, cron: args.cron }),
   };
@@ -251,6 +255,7 @@ export const createTrigger = async (args: CreateTriggerArgs) => {
     projectId: args.projectId,
     action: args.action,
     cron: args.cron,
+    eventPattern: args.eventPattern,
   });
   await assertNameAvailable({ projectId: args.projectId, name: args.name });
 
@@ -272,6 +277,7 @@ type UpdateTriggerArgs = {
   action?: string | null;
   input?: Record<string, unknown> | null;
   cron?: string | null;
+  eventPattern?: string | null;
   active?: boolean;
 };
 
@@ -284,19 +290,39 @@ const applyCronUpdate = (
     trigger.type === 'schedule' && cron ? computeNextFireAt(cron) : null;
 };
 
+/**
+ * The update fields that are copied straight onto the column of the same name,
+ * paired one to one. `cron` is deliberately absent: it also derives
+ * `nextFireAt`, so it goes through {@link applyCronUpdate}.
+ *
+ * A pair list rather than a chain of `if`s because the chain grew past the
+ * complexity ceiling as fields were added — and every name still appears
+ * literally on both sides, so nothing here rewrites a key.
+ */
+const DIRECT_UPDATE_FIELDS = [
+  ['name', 'name'],
+  ['description', 'description'],
+  ['policyId', 'policyId'],
+  ['targetType', 'targetType'],
+  ['targetId', 'targetId'],
+  ['action', 'action'],
+  ['input', 'input'],
+  ['eventPattern', 'eventPattern'],
+  ['active', 'active'],
+] as const satisfies readonly (readonly [
+  keyof UpdateTriggerArgs,
+  keyof InstanceType<(typeof db)['Trigger']>,
+])[];
+
 /** Applies the provided update fields onto the trigger instance in place. */
 const applyUpdateFields = (
   trigger: InstanceType<(typeof db)['Trigger']>,
   args: UpdateTriggerArgs
 ): void => {
-  if (args.name !== undefined) trigger.name = args.name;
-  if (args.description !== undefined) trigger.description = args.description;
-  if (args.policyId !== undefined) trigger.policyId = args.policyId;
-  if (args.targetType !== undefined) trigger.targetType = args.targetType;
-  if (args.targetId !== undefined) trigger.targetId = args.targetId;
-  if (args.action !== undefined) trigger.action = args.action;
-  if (args.input !== undefined) trigger.input = args.input;
-  if (args.active !== undefined) trigger.active = args.active;
+  for (const [argKey, column] of DIRECT_UPDATE_FIELDS) {
+    const value = args[argKey];
+    if (value !== undefined) trigger.set(column, value);
+  }
   if (args.cron !== undefined) applyCronUpdate(trigger, args.cron);
 };
 
@@ -317,6 +343,10 @@ export const updateTrigger = async (args: UpdateTriggerArgs) => {
     projectId: trigger.projectId as number,
     action: args.action !== undefined ? args.action : trigger.action,
     cron: args.cron !== undefined ? args.cron : trigger.cron,
+    eventPattern:
+      args.eventPattern !== undefined
+        ? args.eventPattern
+        : trigger.eventPattern,
     validateTarget: targetChanged,
   });
 

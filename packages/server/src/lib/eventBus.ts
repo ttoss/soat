@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 
 import { db } from '../db';
+import { currentCausationChain } from './eventCausation';
 import type {
   SoatEventName,
   SoatEventType,
@@ -33,7 +34,11 @@ export type {
  * an event nobody subscribed to.
  */
 export type EventDropStage =
-  'project_lookup' | 'webhook_lookup' | 'delivery_write' | 'activity_write';
+  | 'project_lookup'
+  | 'webhook_lookup'
+  | 'delivery_write'
+  | 'activity_write'
+  | 'trigger_lookup';
 
 const droppedEvents = new Map<EventDropStage, number>();
 
@@ -80,6 +85,16 @@ export interface SoatEvent {
    */
   data: Record<string, unknown>;
   timestamp: string;
+  /**
+   * The trigger public ids whose firings led to this event, oldest first —
+   * stamped from the ambient causation scope (`eventCausation.ts`). Absent (or
+   * empty) for an event a caller caused directly.
+   *
+   * It exists so a subscriber that *starts work* can see whether it is already
+   * inside a chain it began: an event trigger refuses to extend a chain that
+   * already names it, or one that has run too deep. Nothing else reads it.
+   */
+  causationChain?: readonly string[];
 }
 
 /**
@@ -162,6 +177,11 @@ const emitEnvelope = (args: {
   resourceId: string;
   data: object;
 }): void => {
+  // Captured here rather than inside `emit`, so the deferred branch below
+  // stamps the chain in scope at the emit *site* even if the store were ever
+  // to differ by the time the project lookup resolves.
+  const causationChain = currentCausationChain();
+
   const emit = (projectPublicId: string) => {
     emitEvent({
       type: args.type,
@@ -176,6 +196,7 @@ const emitEnvelope = (args: {
       // (forbidden by the repo's type-safety rule). Nothing reads a key of it.
       data: args.data as Record<string, unknown>,
       timestamp: new Date().toISOString(),
+      causationChain,
     });
   };
 

@@ -27,6 +27,26 @@ Neither module is a subset of the other. A workflow adds primitives a DAG cannot
 an orchestration carries almost all of the execution machinery. The two sections below say
 exactly which.
 
+## What starts them
+
+Both are started the same way — by a client, or by a
+[trigger](/docs/modules/triggers) that binds a starter to the target. Two of
+those starters answer the same question differently, and the choice is worth
+making deliberately:
+
+- An **`event` trigger** subscribes to an internal platform event
+  (`documents.ingested`, `agents.generation.completed`, an orchestration's own
+  `emit_event`) and starts work the moment it happens. Use it when the work is a
+  *reaction* to something the platform already knows about and promptness is the
+  point. Delivery is best-effort and unordered, and the reactive edge is capped
+  by a [causation depth guard](/docs/modules/triggers#loops-and-cost) so a cycle
+  cannot run away.
+- A **`schedule` trigger** runs on a cron cadence and is recovered from the
+  database, so a firing missed while the server was down is coalesced into one
+  catch-up rather than lost. Use it when the work is periodic, when it must not
+  be dropped, or as the backstop under an event trigger whose target is
+  idempotent.
+
 ## What only workflows have
 
 | Capability                                                                                     | Why a DAG cannot do it                                                    |

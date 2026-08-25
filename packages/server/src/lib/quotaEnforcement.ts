@@ -165,10 +165,17 @@ const evaluateRequestQuota = async (args: {
  * Matching (`requests` metric): a `project`-scope quota applies to every key in
  * the project; an `api_key`-scope quota applies to all keys (null ref) or the
  * one named key.
+ *
+ * `apiKeyPublicId: null` admits work that arrived on no API key at all — an
+ * event trigger firing, which the bus starts in-process. Only `project`-scope
+ * quotas match then: an `api_key`-scope quota, even the all-keys form, is a cap
+ * on *a credential*, and counting a keyless admission against it would charge
+ * every key in the project for traffic none of them sent. Project-wide cost
+ * control is what a `project`-scope quota is for, and it still applies.
  */
 export const evaluateRequestQuotas = async (args: {
   projectId: number;
-  apiKeyPublicId: string;
+  apiKeyPublicId: string | null;
 }): Promise<QuotaBreach | null> => {
   const now = new Date();
 
@@ -179,6 +186,7 @@ export const evaluateRequestQuotas = async (args: {
   const matching = quotas.filter((quota) => {
     if (quota.scope === 'project') return quota.scopeRef == null;
     if (quota.scope === 'api_key') {
+      if (args.apiKeyPublicId === null) return false;
       return quota.scopeRef == null || quota.scopeRef === args.apiKeyPublicId;
     }
     return false; // agent scope never matches the requests metric

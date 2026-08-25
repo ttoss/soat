@@ -7,6 +7,7 @@ import { addHealthCheck, App, bodyParser, cors } from '@ttoss/http-server';
 import type { Context } from './Context';
 import { initializeActivityListener } from './lib/activity';
 import { initializeExceptionsListener } from './lib/exceptions';
+import { initializeTriggerEventListener } from './lib/triggerEventDispatch';
 import { initializeDispatcher } from './lib/webhookDispatcher';
 import { setupMcpMiddleware } from './mcp/server';
 import { auditMiddleware } from './middleware/audit';
@@ -26,6 +27,7 @@ addHealthCheck({ app });
 initializeDispatcher();
 initializeExceptionsListener();
 initializeActivityListener();
+initializeTriggerEventListener();
 
 app.use(errorLoggerMiddleware);
 app.use(cors());
