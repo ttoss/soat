@@ -126,6 +126,8 @@ export const performResourceDeletions = async (
         await applyDeleteResource({
           resourceType: resource.resourceType,
           physicalResourceId: resource.physicalResourceId,
+          logicalId: resource.logicalId,
+          resourceKey: resource.publicId,
         });
       }
       await markResourceDeleted({ resource, events });

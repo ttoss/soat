@@ -273,7 +273,7 @@ Rules:
 }
 ```
 
-- **`type`** — one of: `ai_provider`, `tool`, `agent`, `actor`, `api_key`, `chat`, `conversation`, `dataset`, `dataset_item`, `document`, `file`, `guardrail`, `ingestion_rule`, `memory`, `memory_entry`, `model_route`, `eval`, `orchestration`, `policy`, `project_price`, `quota`, `secret`, `session`, `webhook`, `trigger`, `workflow`. See [Formations Types](/docs/formations-types) for the full properties reference.
+- **`type`** — a built-in type (`ai_provider`, `tool`, `agent`, `actor`, `api_key`, `chat`, `conversation`, `dataset`, `dataset_item`, `document`, `file`, `guardrail`, `ingestion_rule`, `memory`, `memory_entry`, `model_route`, `eval`, `orchestration`, `policy`, `project_price`, `quota`, `secret`, `session`, `webhook`, `trigger`, `workflow`) or a [custom resource type](#custom-resource-types) the deployment registered. See [Formations Types](/docs/formations-types) for the full properties reference of the built-in ones.
 - **`properties`** — resource-specific properties (snake_case, matching the REST API body fields)
 - **`depends_on`** — explicit dependency list in addition to implicit `ref` dependencies
 - **`deletion_policy`** — controls what happens to the physical resource when it is removed from the stack. `delete` (default) deletes the physical resource. `retain` keeps the physical resource alive and only removes the formation record.
@@ -363,6 +363,12 @@ Each resource in a formation goes through these statuses:
 | `updated` | Successfully updated by a subsequent deploy |
 | `deleted` | Deleted when removed from the template, or rolled back after a failed deploy |
 | `failed`  | Last operation failed                       |
+
+A resource that a deploy **replaced** — see
+[Custom Resource Types](#custom-resource-types) — stays `updated`, with its
+`physical_resource_id` re-pointed at the replacement. The deploy records a
+`replace` event, followed by a `replace-cleanup` event for the disposal of the
+old resource (or `replace-retained` when `deletion_policy` is `retain`).
 
 Once a resource reaches `deleted`, it is a tombstone kept for audit history —
 `get-formation` continues to list it, but `plan-formation` and
@@ -505,6 +511,175 @@ apply it previews:
   nested value bag is not a change.
 - A property resolving to `undefined` (a kept `use_previous_value` parameter)
   reuses the previous value, or is dropped entirely when there is none.
+
+### Custom Resource Types
+
+A deployment that builds its own product on top of SOAT usually has resources
+SOAT knows nothing about — a messaging channel, a routing rule. Those can be
+declared in a formation template like any built-in type, by **registering** them
+with the deployment. The engine stays here: dependency ordering, `ref`/`sub`
+resolution, apply, rollback, the resource ledger and drift detection are
+identical for a custom type. Only the create/update/delete of the resource
+itself is delegated, to an HTTP handler the operator runs.
+
+A template author cannot tell the two apart:
+
+```json
+{
+  "resources": {
+    "SupportAgent": { "type": "agent", "properties": { "name": "Support" } },
+    "SupportChannel": {
+      "type": "channel",
+      "properties": {
+        "name": "Support WhatsApp",
+        "kind": "whatsapp",
+        "agent_id": { "ref": "SupportAgent" }
+      }
+    }
+  }
+}
+```
+
+`SupportChannel` depends on `SupportAgent` through its `ref`, so the agent is
+created first and its public id is substituted — exactly as between two built-in
+resources.
+
+#### Registering a type
+
+Registration is **deployment configuration, not an API**. There is no route that
+adds, changes or redirects a resource type: the handler URL and its signing
+secret sit at the same trust level as the database URL, and a registered type
+exists uniformly in every project. See [Configuration](#configuration) for the
+file's shape and the boot-time checks.
+
+A registration declares:
+
+- **`name`** — the type a template writes. It must be spelled like a built-in
+  (`^[a-z][a-z0-9_]*$`) and must not collide with one.
+- **`handler`** — where to call, which environment variable holds the signing
+  secret, and how long to wait.
+- **`capabilities`** — the **optional** operations the handler implements (see
+  below). `create`, `update` and `delete` are the lifecycle itself and are always
+  required, so they are never listed.
+- **`schema`** — a JSON Schema for the resource's `properties`. It is the sole
+  allowlist: an undeclared field is rejected with `VALIDATION_FAILED`, naming the
+  field, and a missing `required` field fails a create — the same treatment a
+  built-in type's schema gets.
+
+#### The handler protocol
+
+One signed `POST` to the registration's URL per operation, with a JSON body:
+
+```json
+{
+  "request_type": "create",
+  "resource_type": "channel",
+  "logical_id": "SupportChannel",
+  "project_id": "proj_01ARZ3NDEKTSV4RRFFQ69G5FAV",
+  "properties": { "name": "Support WhatsApp", "kind": "whatsapp" }
+}
+```
+
+`physical_resource_id` replaces `properties` on `delete`, and accompanies it on
+`update` and `read`. Two headers travel with every call:
+
+| Header | Meaning |
+| --- | --- |
+| `X-Soat-Signature` | `t=<unix>,v1=<hex hmac-sha256 of "{t}.{body}">`, keyed with the registration's secret — the same scheme [webhooks](./webhooks.md) are signed with. Verify over the **raw** body bytes, and reject a stale `t`. |
+| `X-Soat-Idempotency-Key` | Stable per (resource, operation) across re-applies, distinct between resources. A handler that has already completed this key can answer with the same result instead of acting twice. |
+
+What a 2xx must answer with, per operation:
+
+| `request_type` | Response body |
+| --- | --- |
+| `create` | `{ "physical_resource_id": "…", "outputs": { … } }` — the id is required |
+| `update` | the same shape; a **different** `physical_resource_id` means the resource was replaced |
+| `delete` | `{}` — and it must be idempotent: deleting an already-gone resource is a 2xx |
+| `validate` | `{ "errors": [{ "path": "properties.kind", "message": "…" }] }` — an empty list means valid |
+| `read` | `{ "exists": true, "physical_resource_id": "…", "properties": { … }, "outputs": { … } }`, or `{ "exists": false }` |
+
+To refuse deliberately, answer 4xx/5xx with `{ "message": "…" }`; the message is
+relayed verbatim on the deploy event, which is the only thing that can explain
+*why* the resource was refused. Any non-2xx, unreachable host, timeout, or body
+the protocol does not allow fails the deploy with `FORMATION_HANDLER_FAILED` and
+enters the ordinary [rollback](#rollback-on-a-failed-deploy) path.
+
+**The engine never retries.** A create that timed out may well have created the
+resource, and a blind retry would provision a second one nothing has the id for.
+The idempotency key covers the repetition that *is* safe — an operator
+re-running a failed deploy.
+
+#### What each optional capability buys
+
+- **`validate`** — a plan-time round trip for the checks a JSON Schema cannot
+  express (does this `kind` exist, is this number verified). Without it,
+  plan-time validation is the schema alone; everything else is still caught at
+  apply time, as a deploy failure rather than a plan error. It runs only on a
+  template that already validates locally.
+- **`read`** — the live-state read [drift detection](#plan-diff) is built on.
+  Without it the type is **exempt from drift detection**: a plan compares
+  nothing and reports no changes for it. That is stated in the type's
+  registration rather than inferred, so an exempt type is a decision, not a
+  silent gap. `read`'s `outputs` are also what a `ref_attr` in the template's
+  `outputs` block resolves against; only string-valued entries are addressable.
+
+#### Replacement
+
+Some properties cannot be changed in place. When an `update` answers with a
+`physical_resource_id` different from the one it was given, the engine treats it
+as a replacement: the resource record is re-pointed at the new resource, every
+`ref` to it resolves to the new id, and the old resource is then disposed of
+under the resource's own `deletion_policy` (`retain` leaves it alive). Cleanup
+runs *after* the replacement has succeeded and never fails the deploy — the
+desired state is already realised, so a leaked old resource is recorded as a
+failed `replace-cleanup` event rather than rolled back.
+
+## Configuration
+
+| Environment Variable | Required | Description |
+| --- | --- | --- |
+| `FORMATION_RESOURCE_TYPES_CONFIG` | No | Path to a JSON file registering [custom resource types](#custom-resource-types). Unset (the default) means the built-in types are the whole set. |
+
+```json
+{
+  "resource_types": [
+    {
+      "name": "channel",
+      "description": "A messaging channel connecting an agent to a transport.",
+      "handler": {
+        "url": "https://platform.internal/v1/formation-resources",
+        "secret_env": "CHANNEL_HANDLER_SECRET",
+        "timeout_seconds": 30
+      },
+      "capabilities": ["validate", "read"],
+      "schema": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "kind": { "type": "string" },
+          "agent_id": { "type": "string" }
+        },
+        "required": ["name", "kind"]
+      }
+    }
+  ]
+}
+```
+
+The secret is referenced by variable **name**, never inlined, so the file itself
+carries nothing confidential and can be baked into an image or a config map.
+
+The file is read **once, at boot**. Changing it takes effect on the next
+restart; a deploy uses the set that was loaded when the process started, so a
+single apply can never straddle two registration sets.
+
+Every problem with the file is a **hard boot failure**, naming the file and the
+offending entry — a name that collides with a built-in or repeats within the
+file, a handler URL that is not `http(s)`, a `secret_env` naming a variable that
+is unset or empty, a non-positive timeout, an unknown capability, or a `schema`
+that is not an object schema. A half-valid registration would otherwise publish
+a resource type whose every apply fails, or — for the missing secret — sign
+every request with an empty key.
 
 ## Examples
 

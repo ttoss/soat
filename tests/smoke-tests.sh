@@ -4756,6 +4756,73 @@ $SOAT_CLI delete-formation --formation_id "$QUOTA_FORMATION_ID"
 expect_cli_error_status 404 get-quota --quota-id "$QUOTA_PHYS_ID"
 echo "Formation quota resource verified."
 
+# Custom (operator-registered) resource type — the smoke stack registers
+# `smoke_channel` via FORMATION_RESOURCE_TYPES_CONFIG, whose lifecycle is
+# delegated to the `formation-handler` service. The handler verifies the request
+# signature, so a passing step proves the signing half too; nothing else about
+# the template distinguishes it from a built-in resource.
+echo "--- Validating a formation with a custom resource type ---"
+CUSTOM_VALIDATE_RESP=$($SOAT_CLI validate-formation \
+  --template '{"resources":{"chan":{"type":"smoke_channel","properties":{"name":"Smoke Channel","kind":"whatsapp"}}}}')
+if [ "$(printf '%s\n' "$CUSTOM_VALIDATE_RESP" | jq -r '.valid')" != "true" ]; then
+  echo "ERROR: validate-formation rejected a valid custom resource type" >&2
+  echo "$CUSTOM_VALIDATE_RESP" >&2
+  exit 1
+fi
+
+# The handler's `validate` capability.
+echo "--- Custom resource type: handler validate rejects an unsupported kind ---"
+# `validate-formation` reports rather than throws, so the assertion is on the
+# verdict. `kind` is a string either way, so only the handler can reject this.
+CUSTOM_BAD_KIND_RESP=$($SOAT_CLI validate-formation \
+  --template '{"resources":{"chan":{"type":"smoke_channel","properties":{"name":"Smoke Channel","kind":"carrier-pigeon"}}}}')
+if [ "$(printf '%s\n' "$CUSTOM_BAD_KIND_RESP" | jq -r '.valid')" != "false" ]; then
+  echo "ERROR: the handler's validate verdict was not applied" >&2
+  echo "$CUSTOM_BAD_KIND_RESP" >&2
+  exit 1
+fi
+
+echo "--- Custom resource type: unknown property is rejected by the registered schema ---"
+expect_cli_error_status 400 create-formation \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-custom-invalid" \
+  --template '{"resources":{"chan":{"type":"smoke_channel","properties":{"name":"X","kind":"whatsapp","nope":"x"}}}}'
+
+echo "--- Creating a formation with a custom resource type ---"
+CUSTOM_FORMATION_RESP=$($SOAT_CLI create-formation \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-custom-formation" \
+  --template '{"resources":{"chan":{"type":"smoke_channel","properties":{"name":"Smoke Channel","kind":"whatsapp","agent_id":{"ref":"agentRes"}}},"agentRes":{"type":"agent","properties":{"name":"smoke-custom-agent","ai_provider_id":"'"$AI_PROVIDER_ID"'"}}},"outputs":{"handlerUrl":{"ref_attr":"chan.handler_url"}}}')
+CUSTOM_FORMATION_ID=$(printf '%s\n' "$CUSTOM_FORMATION_RESP" | jq -r '.id')
+CUSTOM_PHYS_ID=$(printf '%s\n' "$CUSTOM_FORMATION_RESP" | jq -r '.resources[] | select(.resource_type == "smoke_channel") | .physical_resource_id')
+if ! printf '%s\n' "$CUSTOM_PHYS_ID" | grep -q '^chan_smoke_'; then
+  echo "ERROR: the custom resource handler did not provide a physical resource id" >&2
+  echo "$CUSTOM_FORMATION_RESP" >&2
+  exit 1
+fi
+# The handler's `read` outputs resolved a ref_attr, which is the whole
+# getAttributes path end to end.
+if [ "$(printf '%s\n' "$CUSTOM_FORMATION_RESP" | jq -r '.outputs.handlerUrl')" = "null" ]; then
+  echo "ERROR: ref_attr against a custom resource type did not resolve" >&2
+  echo "$CUSTOM_FORMATION_RESP" >&2
+  exit 1
+fi
+echo "Custom resource type created: $CUSTOM_PHYS_ID"
+
+echo "--- Updating a formation with a custom resource type ---"
+CUSTOM_UPDATE_RESP=$($SOAT_CLI update-formation \
+  --formation_id "$CUSTOM_FORMATION_ID" \
+  --template '{"resources":{"chan":{"type":"smoke_channel","properties":{"name":"Smoke Channel Renamed","kind":"whatsapp","agent_id":{"ref":"agentRes"}}},"agentRes":{"type":"agent","properties":{"name":"smoke-custom-agent","ai_provider_id":"'"$AI_PROVIDER_ID"'"}}}}')
+if [ "$(printf '%s\n' "$CUSTOM_UPDATE_RESP" | jq -r '.status')" != "active" ]; then
+  echo "ERROR: update-formation with a custom resource type did not settle active" >&2
+  echo "$CUSTOM_UPDATE_RESP" >&2
+  exit 1
+fi
+
+echo "--- Deleting the custom resource type formation ---"
+$SOAT_CLI delete-formation --formation_id "$CUSTOM_FORMATION_ID"
+echo "Custom formation resource type verified."
+
 # Evaluation resources (Evaluations Phase 3) — a formation declares a dataset,
 # a test case inside it, and the eval binding both to the agent under test; the
 # refs must resolve to the created dataset and every row must go on teardown.

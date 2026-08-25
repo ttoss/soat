@@ -1766,34 +1766,22 @@ components:
       properties:
         type:
           type: string
-          enum:
-            - ai_provider
-            - tool
-            - agent
-            - actor
-            - api_key
-            - chat
-            - conversation
-            - dataset
-            - dataset_item
-            - document
-            - file
-            - guardrail
-            - ingestion_rule
-            - memory
-            - memory_entry
-            - model_route
-            - eval
-            - orchestration
-            - policy
-            - project_price
-            - quota
-            - secret
-            - session
-            - webhook
-            - trigger
-            - workflow
-          description: Resource type
+          pattern: '^[a-z][a-z0-9_]*$'
+          description: >
+            Resource type. The built-in types are `ai_provider`, `tool`,
+            `agent`, `actor`, `api_key`, `chat`, `conversation`, `dataset`,
+            `dataset_item`, `document`, `file`, `guardrail`, `ingestion_rule`,
+            `memory`, `memory_entry`, `model_route`, `eval`, `orchestration`,
+            `policy`, `project_price`, `quota`, `secret`, `session`, `webhook`,
+            `trigger` and `workflow`.
+
+
+            This is deliberately not an enum: a deployment operator can
+            register additional resource types backed by their own handler, and
+            those are declared here exactly like a built-in one. The set a given
+            deployment accepts is authoritative in the server, which rejects an
+            unregistered type with `VALIDATION_FAILED` and lists what it does
+            support.
         properties:
           type: object
           additionalProperties: true

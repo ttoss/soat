@@ -1,5 +1,9 @@
 import { normalizeDeclaredProperties } from './formationsProperties';
 import { getFormationModule } from './formationsRegistry';
+import type {
+  FormationResourceContext,
+  UpdateOutcome,
+} from './formationsTypes';
 
 // The write half of the module-dispatch seam (the read half is
 // `runFormationModuleHooks` in `formationsValidation.ts`). The apply and plan
@@ -13,7 +17,7 @@ export type ApplyArgs = {
   resourceType: string;
   resolvedProperties: Record<string, unknown>;
   projectId: number;
-};
+} & FormationResourceContext;
 
 export const applyCreateResource = async (args: ApplyArgs): Promise<string> => {
   const formationModule = getFormationModule({
@@ -24,14 +28,18 @@ export const applyCreateResource = async (args: ApplyArgs): Promise<string> => {
   return formationModule.create({
     properties: normalizeDeclaredProperties(args.resolvedProperties),
     projectId: args.projectId,
+    logicalId: args.logicalId,
+    resourceKey: args.resourceKey,
   });
 };
 
-export const applyUpdateResource = async (args: {
-  resourceType: string;
-  physicalResourceId: string;
-  resolvedProperties: Record<string, unknown>;
-}): Promise<void> => {
+export const applyUpdateResource = async (
+  args: {
+    resourceType: string;
+    physicalResourceId: string;
+    resolvedProperties: Record<string, unknown>;
+  } & FormationResourceContext
+): Promise<UpdateOutcome | void> => {
   const formationModule = getFormationModule({
     resourceType: args.resourceType,
   });
@@ -42,6 +50,8 @@ export const applyUpdateResource = async (args: {
   return formationModule.update({
     physicalResourceId: args.physicalResourceId,
     properties: normalizeDeclaredProperties(args.resolvedProperties),
+    logicalId: args.logicalId,
+    resourceKey: args.resourceKey,
   });
 };
 
@@ -75,10 +85,12 @@ export const findResourceDeletionBlocker = async (args: {
   }
 };
 
-export const applyDeleteResource = async (args: {
-  resourceType: string;
-  physicalResourceId: string;
-}): Promise<void> => {
+export const applyDeleteResource = async (
+  args: {
+    resourceType: string;
+    physicalResourceId: string;
+  } & FormationResourceContext
+): Promise<void> => {
   const formationModule = getFormationModule({
     resourceType: args.resourceType,
   });
@@ -88,5 +100,7 @@ export const applyDeleteResource = async (args: {
     );
   return formationModule.delete({
     physicalResourceId: args.physicalResourceId,
+    logicalId: args.logicalId,
+    resourceKey: args.resourceKey,
   });
 };

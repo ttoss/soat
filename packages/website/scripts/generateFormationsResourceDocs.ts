@@ -50,6 +50,13 @@ const toPascalCase = (snake: string): string =>
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join('');
 
+/**
+ * `ModelRoute` → `model_route`. The inverse of `toPascalCase`, and the same
+ * naming rule `schemaNameForResourceType` applies on the server side.
+ */
+const pascalToSnakeCase = (pascal: string): string =>
+  pascal.replace(/(?<!^)([A-Z])/g, '_$1').toLowerCase();
+
 /** Convert a snake_case string to a kebab-case filename slug. */
 const toSlug = (snake: string): string => snake.replace(/_/g, '-');
 
@@ -448,10 +455,21 @@ const main = () => {
   const spec = load(raw) as OpenApiSpec;
   const schemas = spec.components?.schemas ?? {};
 
-  // Canonical order from the ResourceDeclaration enum
-  const resourceTypeOrder: string[] =
-    (schemas['ResourceDeclaration']?.properties?.['type']?.enum as string[]) ??
-    [];
+  // Derived from the `*ResourceProperties` schemas themselves.
+  //
+  // This used to read the `ResourceDeclaration.type` enum, which stopped being
+  // the list of built-in types when custom resource types arrived: a
+  // deployment operator can register their own, so the declared type is an open
+  // string and the enum is gone. The schemas are the better source anyway —
+  // they are what each page is rendered *from*, so a type can no longer appear
+  // in the index with no page behind it (the mirror image of #900, where the
+  // second copy of the list was the one that fell behind).
+  const resourceTypeOrder: string[] = Object.keys(schemas)
+    .flatMap((schemaName) => {
+      const match = /^(.+)ResourceProperties$/.exec(schemaName);
+      return match ? [pascalToSnakeCase(match[1])] : [];
+    })
+    .sort();
 
   // Clean up old locations if they still exist
   const legacyPaths = [

@@ -60,6 +60,32 @@ const getProjectOrThrow = async (id: string) => {
   return project;
 };
 
+/**
+ * The public id of a project held by its internal row id.
+ *
+ * The one direction the rest of the codebase never needs — everything else
+ * resolves the other way, from the id a caller sent. A formation apply is the
+ * exception: it carries the internal id through the pipeline, and an
+ * operator-registered resource type has to name the project to its handler in
+ * the id that handler's own callers use (`.claude/rules/server.md` — the
+ * internal id must never leave the process).
+ */
+export const findProjectPublicId = async (args: {
+  id: number;
+}): Promise<string> => {
+  const project = await db.Project.findOne({
+    where: { id: args.id },
+    attributes: ['publicId'],
+  });
+  if (!project) {
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Project '${args.id}' not found.`
+    );
+  }
+  return project.publicId;
+};
+
 export const listProjects = async (args: {
   authUser: AuthUser;
   limit?: number;

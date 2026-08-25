@@ -1,5 +1,3 @@
-import crypto from 'node:crypto';
-
 import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 import { db } from 'src/db';
@@ -7,6 +5,7 @@ import { evaluatePolicies, type PolicyDocument } from 'src/lib/iam';
 
 import type { SoatEvent } from './eventBus';
 import { onEvent } from './eventBus';
+import { hmacHex, timestampedSignature } from './hmacSignature';
 import { createScheduler, createSweep } from './scheduler';
 import { decryptWebhookSecret } from './webhooks';
 
@@ -31,33 +30,18 @@ const LEGACY_SIGNATURE_HEADER = 'X-Soat-Signature';
 
 type DeliveryRow = InstanceType<(typeof db)['WebhookDelivery']>;
 
-const hmacHex = (args: { secret: string; value: string }) => {
-  return crypto
-    .createHmac('sha256', args.secret)
-    .update(args.value)
-    .digest('hex');
-};
-
 /**
  * Both signature headers for one attempt.
  *
- * The v2 header signs `<timestamp>.<body>` and ships the timestamp alongside
- * the digest, so a subscriber can reject a replayed body by age. The legacy
- * header signs the bare body, which carries no such bound — it is still sent
- * during the deprecation window and is documented as deprecated.
- *
- * Signing happens per attempt rather than per delivery: a retry that reused the
- * first attempt's timestamp would fall outside a subscriber's tolerance window
- * and be rejected as a replay of itself.
+ * The v2 header is the shared `timestampedSignature` scheme (`hmacSignature.ts`)
+ * — it signs `<timestamp>.<body>` and ships the timestamp alongside the digest,
+ * so a subscriber can reject a replayed body by age. The legacy header signs the
+ * bare body, which carries no such bound; it is still sent during the
+ * deprecation window and is documented as deprecated.
  */
 const signatureHeaders = (args: { payload: string; secret: string }) => {
-  const timestamp = Math.floor(Date.now() / 1000);
-
   return {
-    [SIGNATURE_HEADER]: `t=${timestamp},v1=${hmacHex({
-      secret: args.secret,
-      value: `${timestamp}.${args.payload}`,
-    })}`,
+    [SIGNATURE_HEADER]: timestampedSignature(args),
     [LEGACY_SIGNATURE_HEADER]: `sha256=${hmacHex({
       secret: args.secret,
       value: args.payload,
