@@ -1810,6 +1810,19 @@ if ! printf '%s\n' "$ORCH_RUN_RECEIPT" | jq -e '(.by_meter_type | map(.meter_typ
 fi
 echo "Compute metering (P4): OK"
 
+# Per-node attribution: every line of a run receipt names the node that produced
+# it, so grouping the lines by node_id is the per-node cost breakdown. Asserted
+# against the run's own node_executions rather than a hardcoded id, so the check
+# still holds if the smoke orchestration's graph changes.
+ORCH_RUN_NODE_IDS=$(printf '%s\n' "$ORCH_RUN_GET_RESP" | jq -c '[.node_executions[].node_id] | unique')
+if ! printf '%s\n' "$ORCH_RUN_RECEIPT" | jq -e --argjson nodes "$ORCH_RUN_NODE_IDS" '(.line_items | length) >= 1 and (.line_items | all(.node_id != null and (.node_id | IN($nodes[]))))' >/dev/null 2>&1; then
+  echo "run receipt line items did not carry the node_id that produced them"
+  printf '%s\n' "$ORCH_RUN_NODE_IDS"
+  printf '%s\n' "$ORCH_RUN_RECEIPT"
+  exit 1
+fi
+echo "Per-node receipt attribution: OK"
+
 echo "--- Listing runs ---"
 ORCH_RUN_LIST_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestration-runs --orchestration-id "$ORCH_ID")
 if ! printf '%s\n' "$ORCH_RUN_LIST_RESP" | jq -e --arg id "$ORCH_RUN_ID" '.data | map(.id) | index($id) != null' >/dev/null 2>&1; then
