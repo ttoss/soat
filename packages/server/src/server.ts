@@ -13,6 +13,7 @@ import { startApprovalScheduler } from './lib/approvalScheduler';
 import { startAuditRetentionScheduler } from './lib/auditScheduler';
 import { startContentRetentionScheduler } from './lib/contentRetentionScheduler';
 import { startEvalWorker } from './lib/evaluationWorker';
+import { initFormationResourceTypes } from './lib/formationsRegistry';
 import { backfillKnowledgeConfigCasing } from './lib/knowledgeConfigBackfill';
 import { startOrchestrationScheduler } from './lib/orchestrationScheduler';
 import { startOrchestrationWorker } from './lib/orchestrationWorker';
@@ -31,6 +32,22 @@ const log = createDebug('soat:server');
 const SOAT_PORT = process.env.PORT || 5047;
 
 const startServer = async () => {
+  // Register the custom formation resource types this deployment declares, if
+  // any (FORMATION_RESOURCE_TYPES_CONFIG). Before the database on purpose: it
+  // is pure config parsing, and a deployment whose registration file is wrong
+  // should say so immediately rather than after a schema sync. Any problem is
+  // fatal — see `formationResourceTypeConfig.ts` for why a half-valid
+  // registration must never start.
+  try {
+    initFormationResourceTypes();
+  } catch (error) {
+    // Fatal and process-terminating, so it goes to stderr unconditionally
+    // rather than through the opt-in `debug` logger.
+    // eslint-disable-next-line no-console
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
+
   try {
     const database = await initializeDatabase(app);
     // Serialize boot-time schema DDL across concurrently-starting tasks so

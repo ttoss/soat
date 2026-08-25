@@ -217,6 +217,11 @@ export const ERROR_CODES = {
     description:
       "One or more of the formation's resources could not be deleted, so the stack is left in `delete_failed`. `meta.failures` names each blocking resource (its logical id, type, and the underlying error) — the common case is a resource the platform refuses to delete on its own, such as an agent that has generation or trace history. Resolve those, then delete the formation again.",
   },
+  FORMATION_HANDLER_FAILED: {
+    httpStatus: 502,
+    description:
+      "A resource type registered by the deployment operator delegates its lifecycle to an external HTTP handler, and that handler did not answer successfully — it returned a non-2xx status, timed out, was unreachable, or replied with a body the protocol does not allow (a create with no `physical_resource_id`, for instance). `meta.resource_type` and `meta.request_type` name the type and the operation, and the handler's own message is relayed when it sent one. This is an operator-side failure: the template is not at fault and re-deploying it unchanged will fail the same way until the handler is fixed.",
+  },
   FORMATION_INVALID_METADATA: {
     httpStatus: 400,
     description:

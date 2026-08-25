@@ -82,6 +82,8 @@ export const applyCreateChange = async (args: {
     resourceType,
     resolvedProperties,
     projectId,
+    logicalId,
+    resourceKey: resourceRow.publicId,
   });
   resolvedIds.set(logicalId, physicalId);
   await resourceRow.update({
@@ -97,6 +99,80 @@ export const applyCreateChange = async (args: {
     status: 'succeeded',
     physicalResourceId: physicalId,
   });
+};
+
+/**
+ * Removes the resource a replacement superseded.
+ *
+ * The replacement already succeeded and the row already points at the new
+ * resource, so this is cleanup, not part of the update: a failure here is
+ * recorded as a failed event and the deploy carries on. Throwing instead would
+ * fail a deploy whose desired state is fully realised, and roll back a
+ * replacement that worked — leaving the caller worse off than the leaked
+ * resource does.
+ *
+ * `deletion_policy: retain` is honoured exactly as it is on a teardown: the
+ * author asked for the old resource to outlive the formation's control of it.
+ */
+const disposeReplacedResource = async (args: {
+  resourceType: string;
+  logicalId: string;
+  replacedPhysicalResourceId: string;
+  resourceKey: string;
+  deletionPolicy: string;
+  events: FormationEvent[];
+}): Promise<void> => {
+  const { events } = args;
+  const timestamp = () => {
+    return new Date().toISOString();
+  };
+
+  if (args.deletionPolicy === 'retain') {
+    events.push({
+      timestamp: timestamp(),
+      logicalId: args.logicalId,
+      resourceType: args.resourceType,
+      action: 'replace-retained',
+      status: 'succeeded',
+      physicalResourceId: args.replacedPhysicalResourceId,
+    });
+    return;
+  }
+
+  try {
+    await applyDeleteResource({
+      resourceType: args.resourceType,
+      physicalResourceId: args.replacedPhysicalResourceId,
+      logicalId: args.logicalId,
+      resourceKey: args.resourceKey,
+    });
+    events.push({
+      timestamp: timestamp(),
+      logicalId: args.logicalId,
+      resourceType: args.resourceType,
+      action: 'replace-cleanup',
+      status: 'succeeded',
+      physicalResourceId: args.replacedPhysicalResourceId,
+    });
+  } catch (error) {
+    if (isResourceAlreadyGone(error)) return;
+    const message = error instanceof Error ? error.message : String(error);
+    log(
+      'disposeReplacedResource: leaked %s id=%s error=%s',
+      args.resourceType,
+      args.replacedPhysicalResourceId,
+      message
+    );
+    events.push({
+      timestamp: timestamp(),
+      logicalId: args.logicalId,
+      resourceType: args.resourceType,
+      action: 'replace-cleanup',
+      status: 'failed',
+      physicalResourceId: args.replacedPhysicalResourceId,
+      error: message,
+    });
+  }
 };
 
 export const applyUpdateChange = async (args: {
@@ -125,25 +201,56 @@ export const applyUpdateChange = async (args: {
   // no longer disagree about whether a resource changed (#902).
   const { merged: mergedProperties, changed: propertiesChanged } =
     mergeWithPrevious({ resolved: resolvedProperties, previous: lastProps });
-  resolvedIds.set(logicalId, existing.physicalResourceId);
+  // Captured before the row is written: on this path `resourceRow` *is*
+  // `existing`, so `resourceRow.update` below mutates the instance — reading
+  // the previous id off it afterwards would hand the replacement's own id to
+  // the disposal that is meant to remove the resource it superseded.
+  const previousPhysicalResourceId = existing.physicalResourceId;
+
+  resolvedIds.set(logicalId, previousPhysicalResourceId);
   if (propertiesChanged) {
-    await applyUpdateResource({
+    const outcome = await applyUpdateResource({
       resourceType,
-      physicalResourceId: existing.physicalResourceId,
+      physicalResourceId: previousPhysicalResourceId,
       resolvedProperties: mergedProperties,
+      logicalId,
+      resourceKey: resourceRow.publicId,
     });
+
+    const physicalResourceId =
+      outcome?.replacedWithPhysicalResourceId ?? previousPhysicalResourceId;
+    const replaced = physicalResourceId !== previousPhysicalResourceId;
+
+    if (replaced) {
+      // Every `{ref}` to this resource, and the output resolution that follows,
+      // must see the replacement — the old id is about to stop existing.
+      resolvedIds.set(logicalId, physicalResourceId);
+    }
+
     await resourceRow.update({
       status: 'updated',
+      ...(replaced ? { physicalResourceId } : {}),
       lastAppliedProperties: sanitize(resourceType, mergedProperties),
     });
     events.push({
       timestamp: new Date().toISOString(),
       logicalId,
       resourceType,
-      action: 'update',
+      action: replaced ? 'replace' : 'update',
       status: 'succeeded',
-      physicalResourceId: existing.physicalResourceId,
+      physicalResourceId,
     });
+
+    if (replaced) {
+      await disposeReplacedResource({
+        resourceType,
+        logicalId,
+        replacedPhysicalResourceId: previousPhysicalResourceId,
+        resourceKey: resourceRow.publicId,
+        deletionPolicy: resourceRow.deletionPolicy ?? 'delete',
+        events,
+      });
+    }
   } else {
     events.push({
       timestamp: new Date().toISOString(),
@@ -151,7 +258,7 @@ export const applyUpdateChange = async (args: {
       resourceType,
       action: 'no-op',
       status: 'succeeded',
-      physicalResourceId: existing.physicalResourceId,
+      physicalResourceId: previousPhysicalResourceId,
     });
   }
 };
@@ -196,6 +303,8 @@ export const rollbackCreatedResources = async (args: {
       await applyDeleteResource({
         resourceType: resource.resourceType,
         physicalResourceId: resource.physicalResourceId,
+        logicalId: resource.logicalId,
+        resourceKey: resource.publicId,
       });
     } catch (error) {
       if (!isResourceAlreadyGone(error)) {

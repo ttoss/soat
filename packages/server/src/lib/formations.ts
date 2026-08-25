@@ -55,6 +55,7 @@ export {
   parseFormationTemplateInput,
   validateFormationTemplate,
 } from './formationsValidation';
+export { validateFormationTemplateAsync } from './formationsValidationAsync';
 
 // ── Mapping ───────────────────────────────────────────────────────────────
 

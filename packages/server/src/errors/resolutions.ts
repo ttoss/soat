@@ -42,6 +42,8 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'Check the id, and check that the credential can see the project that owns the resource — a resource in another project is indistinguishable from one that does not exist. List the collection to confirm.',
   VALIDATION_FAILED:
     'Fix the request and retry. Unknown fields are rejected outright, so compare the payload against the operation in `/openapi.json`; `meta` names the offending field when the check can identify one.',
+  FORMATION_HANDLER_FAILED:
+    'A resource type this deployment registered delegates to an external handler, and that handler did not answer. The template is not at fault, so re-deploying it unchanged will fail identically — the deployment operator has to fix the handler (`meta.resource_type` names the type, `meta.request_type` the operation it failed on).',
   QUOTA_EXCEEDED:
     'Wait until the window resets — `Retry-After` (seconds) and `meta.resets_at` both carry the time — or raise the quota with `PATCH /api/v1/quotas/{quota_id}`.',
   AI_PROVIDER_ERROR:

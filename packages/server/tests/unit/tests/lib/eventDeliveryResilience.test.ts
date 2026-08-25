@@ -199,6 +199,50 @@ describe('event delivery resilience', () => {
     });
   });
 
+  describe('the first delivery attempt', () => {
+    test('a crashed attempt leaves the row for the sweep, and is not a lost event', async () => {
+      const webhook = await createWebhook({
+        name: 'Attempt crash',
+        url: 'https://example.com/attempt-crash',
+      });
+
+      // `attemptDelivery` handles a failing *request* itself — it records the
+      // failed attempt on the row. What it cannot handle is its own bookkeeping
+      // failing, and the only way in is a rejecting read before the request:
+      // `prepareAttempt` loads the webhook. One rejection drives the branch that
+      // exists solely to keep that throw off the fire-and-forget path.
+      jest
+        .spyOn(db.Webhook, 'findByPk')
+        .mockRejectedValueOnce(new Error('connection terminated'));
+
+      const before = droppedEventCount({ stage: 'delivery_write' });
+
+      emitFileCreated('fil_attempt_crash');
+
+      await waitFor(async () => {
+        const count = await db.WebhookDelivery.count({
+          where: { webhookId: webhook!.id },
+        });
+        return count === 1;
+      });
+
+      const [delivery] = await db.WebhookDelivery.findAll({
+        where: { webhookId: webhook!.id },
+      });
+
+      // The row survived the crash, so the delivery is owned by the database
+      // and the sweep can retry it — the whole point of separating the row
+      // write from the first attempt (#1130). Its status is deliberately not
+      // asserted: the sweep may already have reclaimed and delivered it.
+      expect(delivery.eventType).toBe('files.created');
+
+      // And it is not counted as dropped: the event is on disk, not lost. A
+      // failed attempt and a failed row write are different failures, which is
+      // exactly the distinction the two separate `.catch()`es exist to draw.
+      expect(droppedEventCount({ stage: 'delivery_write' })).toBe(before);
+    });
+  });
+
   describe('the project public-id lookup', () => {
     const withSubscriber = async (
       run: (seen: SoatEvent[]) => Promise<void>

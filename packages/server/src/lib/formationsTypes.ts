@@ -51,12 +51,51 @@ export type ValidationResult = {
   warnings: ValidationError[];
 };
 
+/**
+ * Where a resource sits in the formation being applied.
+ *
+ * Every built-in module ignores it — it provisions through a lib call that
+ * needs nothing beyond the properties. An operator-registered type (#1078)
+ * forwards it to its handler: `logicalId` is the name the template author gave
+ * the resource, and `resourceKey` is the `formation_resources` row's public id,
+ * which is unique per (formation, logical id) and therefore stable across
+ * re-applies — the anchor the handler's idempotency key is derived from.
+ *
+ * Optional because the module contract does not require a caller to be inside
+ * an apply; the apply pipeline always supplies it.
+ */
+export type FormationResourceContext = {
+  logicalId?: string;
+  resourceKey?: string;
+};
+
+/**
+ * What an `update` did, when it did more than mutate in place.
+ *
+ * A resource type whose backing system cannot change some property without
+ * re-creating the resource answers with the id of the replacement. The engine
+ * then re-points the row at it and disposes of the old one under the
+ * resource's `deletion_policy` — the same treatment CloudFormation gives a
+ * replacement. `undefined` is the ordinary in-place update.
+ */
+export type UpdateOutcome = { replacedWithPhysicalResourceId: string };
+
 export type FormationModule = {
   resourceType: string;
   validateProperties?: (args: {
     properties: unknown;
     basePath: string;
   }) => ValidationError[];
+  /**
+   * Validation that has to leave the process — today only an
+   * operator-registered type's optional `validate` handler call. Run by the
+   * plan and deploy paths, which are already async; `validateProperties` stays
+   * synchronous so every other caller of `validateFormationTemplate` does too.
+   */
+  validatePropertiesAsync?: (args: {
+    properties: unknown;
+    basePath: string;
+  }) => Promise<ValidationError[]>;
   // Non-fatal checks — e.g. a declared input that no part of the resource
   // config ever reads. Surfaced in `ValidationResult.warnings`, never fails
   // validation.
@@ -64,15 +103,21 @@ export type FormationModule = {
     properties: unknown;
     basePath: string;
   }) => ValidationError[];
-  create: (args: {
-    properties: Record<string, unknown>;
-    projectId: number;
-  }) => Promise<string>;
-  update: (args: {
-    properties: Record<string, unknown>;
-    physicalResourceId: string;
-  }) => Promise<void>;
-  delete: (args: { physicalResourceId: string }) => Promise<void>;
+  create: (
+    args: {
+      properties: Record<string, unknown>;
+      projectId: number;
+    } & FormationResourceContext
+  ) => Promise<string>;
+  update: (
+    args: {
+      properties: Record<string, unknown>;
+      physicalResourceId: string;
+    } & FormationResourceContext
+  ) => Promise<UpdateOutcome | void>;
+  delete: (
+    args: { physicalResourceId: string } & FormationResourceContext
+  ) => Promise<void>;
   /**
    * Why `delete` would refuse for this resource, or `null` when it would
    * succeed. Declared only by resource types that have a *predictable* refusal

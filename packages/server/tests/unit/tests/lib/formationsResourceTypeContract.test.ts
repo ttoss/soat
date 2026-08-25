@@ -3,8 +3,8 @@ import * as path from 'node:path';
 
 import { load } from 'js-yaml';
 import {
+  builtInResourceTypes,
   getFormationModule,
-  supportedResourceTypes,
 } from 'src/lib/formationsRegistry';
 import { validateFormationTemplate } from 'src/lib/formationsValidation';
 import { camelToSnakeKey } from 'src/lib/resource-inputs/normalizers';
@@ -57,7 +57,11 @@ const schemaNameFor = (resourceType: string): string => {
   return `${pascal}ResourceProperties`;
 };
 
-const RESOURCE_TYPES = [...supportedResourceTypes()].sort();
+// Built-ins only. A deployment may also register custom resource types
+// (#1078), and neither rule below holds for those: their schema comes from the
+// operator's registration file rather than `formations.yaml`, and they are not
+// registered in this process at all.
+const RESOURCE_TYPES = [...builtInResourceTypes()].sort();
 
 // ── #900 — the type allowlist is the registry ───────────────────────────────
 

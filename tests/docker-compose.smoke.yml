@@ -84,6 +84,34 @@ services:
       timeout: 5s
       retries: 10
 
+  # A stand-in for the service a deployment operator runs behind a registered
+  # formation resource type (`FORMATION_RESOURCE_TYPES_CONFIG`). It owns the
+  # lifecycle of a resource SOAT knows nothing about — `smoke_channel` — while
+  # SOAT keeps the deploy engine, and it verifies the request signature so the
+  # smoke step proves the signing half too.
+  # See tests/mocks/formationResourceHandler.mjs.
+  formation-handler:
+    image: node:22-alpine
+    volumes:
+      - ./mocks/formationResourceHandler.mjs:/formationResourceHandler.mjs:ro
+    command: ['node', '/formationResourceHandler.mjs']
+    stop_grace_period: 2s
+    environment:
+      PORT: '50480'
+      FORMATION_HANDLER_SECRET: smoke-formation-handler-secret
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - '-e'
+        - >-
+          require('http').get('http://localhost:50480/health',
+          (r) => { process.exit(r.statusCode === 200 ? 0 : 1); }
+          ).on('error', () => process.exit(1))
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   server:
     # Named so `worker` can reuse this exact image instead of declaring its own
     # identical `build:`. Two build blocks with the same context and target
@@ -101,12 +129,16 @@ services:
     # period, so teardown waited the full timeout for it (and for both Ollama
     # services below). This is a throwaway stack — nothing here needs to drain.
     stop_grace_period: 2s
+    volumes:
+      - ./mocks/formationResourceTypes.json:/formation-resource-types.json:ro
     depends_on:
       database:
         condition: service_healthy
       ollama:
         condition: service_healthy
       ollama-tool-choice:
+        condition: service_healthy
+      formation-handler:
         condition: service_healthy
     environment:
       PORT: 50477
@@ -132,6 +164,11 @@ services:
       # Worker-fleet topology: the API tier stays request-only and the
       # standalone `worker` service below owns draining the orchestration queue.
       ORCHESTRATION_WORKER_DISABLED: 'true'
+      # Registers the `smoke_channel` resource type, whose lifecycle is
+      # delegated to the `formation-handler` service above. Read once at boot;
+      # a malformed file would fail this container's start, which is the point.
+      FORMATION_RESOURCE_TYPES_CONFIG: /formation-resource-types.json
+      FORMATION_HANDLER_SECRET: smoke-formation-handler-secret
     healthcheck:
       test:
         - CMD
