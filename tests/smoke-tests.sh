@@ -5332,7 +5332,20 @@ TASK_RESP=$($SOAT_CLI create-task \
   --project-id "$PROJECT_PUBLIC_ID" \
   --workflow-id "$WORKFLOW_ID" \
   --title "smoke card" \
+  --metadata '{"tenant_account_id":"smoke-tenant-42"}' \
   --payload '{"theme":"the sea"}')
+# The label is readable (unlike tool_context) and stays out of the
+# guard-visible payload.
+if [ "$(printf '%s\n' "$TASK_RESP" | jq -r '.metadata.tenant_account_id')" != "smoke-tenant-42" ]; then
+  echo "ERROR: create-task did not persist metadata" >&2
+  printf '%s\n' "$TASK_RESP" >&2
+  exit 1
+fi
+if printf '%s\n' "$TASK_RESP" | jq -e '.payload | tostring | test("tenant_account_id")' >/dev/null; then
+  echo "ERROR: task metadata leaked into the payload" >&2
+  printf '%s\n' "$TASK_RESP" >&2
+  exit 1
+fi
 TASK_ID=$(printf '%s\n' "$TASK_RESP" | jq -r '.id')
 TASK_STATE=$(printf '%s\n' "$TASK_RESP" | jq -r '.state')
 if [ "$TASK_ID" = "null" ] || [ "$TASK_STATE" != "triage" ]; then
@@ -5374,6 +5387,13 @@ $SOAT_CLI transition-task --task-id "$TASK_ID" --transition revise >/dev/null
 BACK_STATE=$($SOAT_CLI get-task --task-id "$TASK_ID" | jq -r '.state')
 if [ "$BACK_STATE" != "drafting" ]; then
   echo "ERROR: backward move expected 'drafting', got '$BACK_STATE'" >&2
+  exit 1
+fi
+# Three moves later the label is still there: a transition supplies no metadata
+# of its own and must not clear the task's.
+if [ "$($SOAT_CLI get-task --task-id "$TASK_ID" | jq -r '.metadata.tenant_account_id')" != "smoke-tenant-42" ]; then
+  echo "ERROR: task lost its metadata across transitions" >&2
+  $SOAT_CLI get-task --task-id "$TASK_ID" >&2
   exit 1
 fi
 $SOAT_CLI transition-task --task-id "$TASK_ID" --transition to_review >/dev/null
@@ -6211,8 +6231,16 @@ fi
 echo "Eval id: $EVAL_ID"
 
 echo "--- Queuing an asynchronous run and polling to terminal ---"
-EVAL_ASYNC_RESP=$($SOAT_CLI start-eval-run --eval_id "$EVAL_ID" --wait false)
+# `--metadata` rides along on the queued run: the worker that settles it reads
+# the label off the row, never from the request that started it.
+EVAL_ASYNC_RESP=$($SOAT_CLI start-eval-run --eval_id "$EVAL_ID" --wait false \
+  --metadata '{"commit_sha":"smoke-9f2c1ab"}')
 EVAL_ASYNC_RUN_ID=$(printf '%s\n' "$EVAL_ASYNC_RESP" | jq -r '.id')
+if [ "$(printf '%s\n' "$EVAL_ASYNC_RESP" | jq -r '.metadata.commit_sha')" != "smoke-9f2c1ab" ]; then
+  echo "ERROR: start-eval-run did not persist metadata" >&2
+  printf '%s\n' "$EVAL_ASYNC_RESP" >&2
+  exit 1
+fi
 if ! printf '%s\n' "$EVAL_ASYNC_RESP" | jq -e '.status == "queued"' >/dev/null 2>&1; then
   echo "ERROR: expected wait=false to answer with a queued run" >&2
   printf '%s\n' "$EVAL_ASYNC_RESP" >&2
@@ -6235,6 +6263,11 @@ while [ "$i" -lt 60 ]; do
 done
 if [ "$EVAL_ASYNC_STATUS" != "completed" ]; then
   echo "ERROR: queued eval run did not complete (status '$EVAL_ASYNC_STATUS')" >&2
+  printf '%s\n' "$EVAL_ASYNC_GET" >&2
+  exit 1
+fi
+if [ "$(printf '%s\n' "$EVAL_ASYNC_GET" | jq -r '.metadata.commit_sha')" != "smoke-9f2c1ab" ]; then
+  echo "ERROR: settled eval run lost its metadata" >&2
   printf '%s\n' "$EVAL_ASYNC_GET" >&2
   exit 1
 fi

@@ -1,6 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import { parseMetadataBag } from 'src/lib/metadataBag';
 import { parseOrchestrationGraph } from 'src/lib/orchestrationGraphWire';
 import {
   cancelOrchestrationRun,
@@ -31,7 +32,6 @@ import {
 } from './orchestrationAuth';
 import {
   parseRunInput,
-  parseRunMetadata,
   parseRunToolContext,
   parseUpdateBody,
   parseVersionLabel,
@@ -266,7 +266,7 @@ orchestrationsRouter.post('/orchestration-runs', async (ctx: Context) => {
   // Rejected before the run row is written: an async run answers 201 long
   // before it executes, so a bag the caller cannot be told about later has to
   // fail while the caller is still listening.
-  const metadata = parseRunMetadata(body.metadata);
+  const metadata = parseMetadataBag(body.metadata);
   const authHeader = ctx.headers['authorization'] as string | undefined;
 
   const result = await startOrchestrationRun({

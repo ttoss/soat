@@ -1,5 +1,3 @@
-import { DomainError } from 'src/errors';
-import { validateMetadataBag } from 'src/lib/metadataBag';
 import {
   parseOrchestrationEdges,
   parseOrchestrationNodes,
@@ -103,23 +101,4 @@ export const parseRunToolContext = (
       return [key, String(value)];
     })
   );
-};
-
-/**
- * The run's caller-owned `metadata` bag (#342). Unlike `tool_context`, values
- * are not stringified — the bag round-trips verbatim, so a nested object or a
- * number stays what the caller wrote. A non-object is rejected rather than
- * coerced, with the same message every other `metadata` entry point uses.
- */
-export const parseRunMetadata = (
-  raw: unknown
-): Record<string, unknown> | undefined => {
-  if (raw === undefined) return undefined;
-
-  const error = validateMetadataBag(raw);
-  if (error) {
-    throw new DomainError('VALIDATION_FAILED', error);
-  }
-
-  return raw as Record<string, unknown>;
 };
