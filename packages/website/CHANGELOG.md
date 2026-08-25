@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.30.1](https://github.com/ttoss/soat/compare/v0.30.0...v0.30.1) (2026-08-25)
+
+### Bug Fixes
+
+* **server:** make the error envelope's hint and docs_url relayable ([#1127](https://github.com/ttoss/soat/issues/1127)) ([f043991](https://github.com/ttoss/soat/commit/f04399114e2b190569cbab35afd2c1e368b24896)), closes [ttoss/soat#1126](https://github.com/ttoss/soat/issues/1126) [#1126](https://github.com/ttoss/soat/issues/1126)
+
 # [0.30.0](https://github.com/ttoss/soat/compare/v0.29.5...v0.30.0) (2026-08-24)
 
 ### Features
