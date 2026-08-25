@@ -3,9 +3,11 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
-## [0.29.6](https://github.com/ttoss/soat/compare/v0.29.5...v0.29.6) (2026-08-24)
+# [0.30.0](https://github.com/ttoss/soat/compare/v0.29.5...v0.30.0) (2026-08-24)
 
-**Note:** Version bump only for package @soat/server
+### Features
+
+* **server:** reach an agent node's generation from an orchestration run ([#1123](https://github.com/ttoss/soat/issues/1123)) ([a4121a2](https://github.com/ttoss/soat/commit/a4121a25f02e21776c493ceab25daa9d0f95c50f))
 
 ## [0.29.5](https://github.com/ttoss/soat/compare/v0.29.4...v0.29.5) (2026-08-24)
 
