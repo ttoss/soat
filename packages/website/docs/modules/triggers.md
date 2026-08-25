@@ -1,5 +1,5 @@
 ---
-description: "Bind a starter — manual, webhook, or schedule — to an executable target in SOAT."
+description: "Bind a starter — manual, webhook, schedule, or event — to an executable target in SOAT."
 ---
 
 import Tabs from '@theme/Tabs';
@@ -7,20 +7,20 @@ import TabItem from '@theme/TabItem';
 
 # Triggers
 
-Bind a **starter** (manual, webhook, or schedule) to an **executable target**
-(an orchestration, an agent, or a tool) so work runs without a client making an
-API call at the moment it should happen.
+Bind a **starter** (manual, webhook, schedule, or event) to an **executable
+target** (an orchestration, an agent, or a tool) so work runs without a client
+making an API call at the moment it should happen.
 
 ## Overview
 
 A trigger is a first-class, project-scoped resource. It connects one _starter
-type_ (manual, webhook, or schedule) to one _target_ (orchestration, agent,
-tool, or eval) — any starter can activate any target — and records every
+type_ (manual, webhook, schedule, or event) to one _target_ (orchestration,
+agent, tool, or eval) — any starter can activate any target — and records every
 activation as an auditable **trigger firing**.
 
 Firings execute in-process: a manual fire is **synchronous** and returns the
-terminal firing; webhook and schedule fires are **fire-and-forget** and the
-firing record is the source of truth for the outcome.
+terminal firing; webhook, schedule, and event fires are **fire-and-forget** and
+the firing record is the source of truth for the outcome.
 
 > See the [Permissions Reference](../permissions.md#triggers) for the IAM action
 > strings for this module.
@@ -39,12 +39,13 @@ firing record is the source of truth for the outcome.
 | `project_id`   | string                                  | ID of the owning project (hard security boundary)                                 |
 | `name`         | string                                  | Human-readable name, unique per project                                           |
 | `description`  | string \| null                          | Optional description                                                              |
-| `type`         | `manual` \| `webhook` \| `schedule`     | Starter type. **Immutable after creation**                                        |
+| `type`         | `manual` \| `webhook` \| `schedule` \| `event` | Starter type. **Immutable after creation**                                   |
 | `target_type`  | `orchestration` \| `agent` \| `tool` \| `eval` | Kind of resource activated                                                   |
 | `target_id`    | string                                  | Public ID of the target; must exist in the same project at create/update time     |
 | `action`       | string \| null                          | Tool targets only: the action for `builtin`/`mcp` tools (required for those, rejected otherwise) |
 | `input`        | object \| null                          | Static input, shallow-merged under fire-time input (fire-time keys win)           |
 | `cron`         | string \| null                          | 5-field cron expression (UTC). Required iff `type=schedule`, rejected otherwise   |
+| `event_pattern`| string \| null                          | Internal-event subscription pattern. Required iff `type=event`, rejected otherwise |
 | `active`       | boolean                                 | Inactive triggers never fire                                                      |
 | `policy_id`    | string \| null                          | Optional boundary policy that further restricts firings (see [Run-as Identity](#run-as-identity)) |
 | `secret`       | string                                  | Webhook type only. Returned **only** on create, rotate, and `GET …/secret`        |
@@ -59,7 +60,7 @@ firing record is the source of truth for the outcome.
 | `id`           | string                                              | Public identifier (`trg_fire_…`)                                      |
 | `trigger_id`   | string                                              | Public ID of the trigger that fired                                   |
 | `project_id`   | string                                              | ID of the owning project                                              |
-| `source`       | `manual` \| `webhook` \| `schedule`                 | How _this_ firing started (manually firing a webhook trigger records `manual`) |
+| `source`       | `manual` \| `webhook` \| `schedule` \| `event`      | How _this_ firing started (manually firing a webhook trigger records `manual`) |
 | `status`       | `pending` \| `running` \| `succeeded` \| `failed`   | Firing lifecycle status                                               |
 | `input`        | object \| null                                      | Effective (post-merge) input snapshot                                 |
 | `result`       | object \| null                                      | `{ target_type, result_id, status, output }` — `result_id` is the run/generation public ID; `output` truncated |
@@ -76,6 +77,7 @@ firing record is the source of truth for the outcome.
 | `manual`   | [`POST /api/v1/triggers/{id}/fire`](/docs/api/triggers/fire-trigger)             | Synchronous; the response is the terminal firing          |
 | `webhook`  | Signed `POST /hooks/triggers/{trigger_id}` (see below) | Has a `secret`; verified with HMAC-SHA256                 |
 | `schedule` | The built-in scheduler on a cron cadence      | Requires `cron`; `next_fire_at` is server-computed in UTC |
+| `event`    | An internal platform event, in-process        | Requires `event_pattern`; no HTTP hop, no secret (see below) |
 
 The `type` is fixed at creation.
 
@@ -188,6 +190,104 @@ signed deliveries on your local machine.
 Signature verification on the receiving side mirrors the outbound
 [webhooks](./webhooks.md) convention.
 
+### Event Triggers
+
+An `event` trigger subscribes directly to SOAT's internal event bus — the same
+bus [webhooks](./webhooks.md) deliver from — so "when a document finishes
+ingesting, run the summarizer agent" is a subscription rather than a loopback:
+
+```json
+{
+  "name": "summarize-ingested",
+  "type": "event",
+  "event_pattern": "documents.ingested",
+  "target_type": "agent",
+  "target_id": "agent_ABC"
+}
+```
+
+Nothing leaves the process. There is no publicly reachable URL to expose, no
+HMAC to verify against your own event, and no second secret and retry policy for
+what is one logical hop — which is what the webhook-subscription-to-inbound-hook
+pattern this replaces cost.
+
+**The pattern grammar** is the one webhook subscriptions already match:
+
+| Pattern              | Matches                                              |
+| -------------------- | ---------------------------------------------------- |
+| `documents.ingested` | that event only                                      |
+| `documents.*`        | every event in the `documents` namespace             |
+| `*`                  | every event in the project                           |
+
+A pattern whose first segment names a **platform namespace** must resolve to a
+[registered event](../webhook-events.md) — `documents.ingsted` is rejected at
+write time with `400 INVALID_EVENT_PATTERN` rather than silently never matching.
+A name outside every platform namespace (`orders.shipped`) is accepted as
+written, because an orchestration [`emit_event` node](./orchestrations.md) emits
+names SOAT does not own and subscribing to one is a first-class use of this type.
+
+**The event payload is the firing input**, carried opaquely — the same envelope a
+webhook subscriber receives:
+
+```json
+{
+  "event": "documents.ingested",
+  "project_id": "proj_ABC",
+  "resource_type": "document",
+  "resource_id": "doc_XYZ",
+  "data": { "...": "..." },
+  "timestamp": "2026-08-25T12:00:00.000Z"
+}
+```
+
+For an agent target that object is JSON-encoded into a user message; for an
+orchestration target it is the run input, so an `input_schema` sees these keys.
+Set the trigger's static `input` to add fields; fire-time keys win as always.
+
+**Scope and gating** work exactly as they do for webhook subscriptions: only
+events from the trigger's own project are matched, and an attached `policy_id`
+is evaluated against the event (event name as the action, the event's resource as
+the SRN) before anything is dispatched.
+
+#### Loops and Cost
+
+Two guards apply to event triggers specifically, because a reactive edge can feed
+itself in a way a schedule cannot.
+
+**Causation depth.** Every event carries the chain of trigger firings that led to
+it. A trigger refuses to extend a chain that already names it — an agent that
+emits an event that runs that agent is stopped on the *first* recurrence — and
+refuses any chain that has already run `5` hops deep. Either refusal records a
+`failed` firing with `error.code = TRIGGER_CAUSATION_LIMIT`, and files an
+[`event_trigger_loop` exception](./exceptions.md) (severity `warning`, deduped on
+the trigger) so the loop is triaged rather than merely stopped. This is the same
+posture as the workflow [automation chain budget](./workflows.md): a backstop,
+not a design — bound the cycle in the wiring you write.
+
+**Quota admission.** A firing is admitted against the project's `requests`
+[quotas](./quotas.md) *before* dispatch, which is the only place a cap can act:
+an event trigger never passes through the HTTP middleware that admits every other
+request, so a `*` pattern on an agent target would otherwise be an uncapped spend
+path. A breach records a `failed` firing with `error.code = QUOTA_EXCEEDED` and
+starts nothing. Only `project`-scope quotas apply — the firing arrived on the bus,
+on no API key, and an `api_key`-scope cap is a cap on a credential.
+
+#### Delivery Guarantees
+
+An event trigger inherits the bus's guarantees, which are deliberately modest:
+
+- **Best-effort, in-process.** An event is not persisted before dispatch. A
+  process that dies between the emit and the firing record loses that firing —
+  unlike a schedule, which is recovered from the database on the next tick.
+- **Unordered.** Two events emitted in sequence may fire in either order, and two
+  triggers on the same event fire independently.
+- **At-most-once**, per emitting process.
+
+Use an event trigger for reactive automation whose value is promptness. When the
+work must not be lost, keep a `schedule` trigger over the same condition as the
+backstop — the two compose, and a target that is idempotent per resource makes
+the overlap harmless.
+
 ### Schedules and Misfire Coalescing
 
 A `schedule` trigger is evaluated by a DB-driven poller. Cron expressions are
@@ -206,8 +306,10 @@ unbounded catch-up storm.
 | Code                          | Status | Cause                                                                                                        | What to do                                                                                          |
 | ------------------------------ | ------ | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | `INVALID_CRON_EXPRESSION`      | `400`  | `cron` is missing a field or otherwise not a valid 5-field expression                                          | Fix the expression; it is always evaluated in **UTC**                                                |
+| `INVALID_EVENT_PATTERN`        | `400`  | `event_pattern` is malformed, or names a platform namespace with no registered event matching it (a typo)     | Use `*`, `prefix.*`, or an exact registered event name — see [Event Triggers](#event-triggers)       |
+| `TRIGGER_CAUSATION_LIMIT`      | `409`  | An event trigger refused to extend the causal chain that reached it — it is already in the chain, or the chain ran past the depth cap | Recorded on the firing, never returned to a caller. Break the cycle in the wiring; see [Loops and Cost](#loops-and-cost) |
 | `TRIGGER_TARGET_NOT_FOUND`     | `400`  | `target_id` does not exist in the trigger's project                                                            | Verify the target ID and that it belongs to the same project as the trigger                          |
-| `TRIGGER_ACTION_NOT_ALLOWED`   | `400`  | An invalid field combination for `type`/`target_type` — e.g. `cron` on a non-`schedule` trigger, `action` on a non-tool target, or a `client`-type tool as the target | Check the [Trigger Types](#trigger-types) and [Targets and Input](#targets-and-input) rules          |
+| `TRIGGER_ACTION_NOT_ALLOWED`   | `400`  | An invalid field combination for `type`/`target_type` — e.g. `cron` on a non-`schedule` trigger, `event_pattern` on a non-`event` trigger (or a missing one on an `event` trigger), `action` on a non-tool target, or a `client`-type tool as the target | Check the [Trigger Types](#trigger-types) and [Targets and Input](#targets-and-input) rules          |
 | `TRIGGER_INPUT_INVALID`        | `400`  | Fire-time input doesn't satisfy the target — empty agent input, or a field missing/mismatched against an orchestration's `input_schema` | Supply the required input fields for the target type                                                 |
 | `TRIGGER_NOT_ACTIVE`           | `409`  | The trigger's `active` field is `false`                                                                        | `PATCH` the trigger with `active: true` before firing                                                |
 | `TRIGGER_CREATOR_UNAVAILABLE`  | `409`  | The user who created the trigger no longer exists                                                              | The trigger cannot fire under a deleted user's identity — recreate it under a live user              |
@@ -228,7 +330,8 @@ For the inbound webhook endpoint's error responses (bad signature, oversized bod
 Triggers can be declared in a [Formation](./formations.md) template as the
 `trigger` resource type, so an Agent Squad ships with its schedule. Template
 properties are `name`, `description`, `type`, `target_type`, `target_id`,
-`action`, `input`, `cron`, `active`, and `policy_id`. Use `{ "ref": "LogicalId" }`
+`action`, `input`, `cron`, `event_pattern`, `active`, and `policy_id`. Use
+`{ "ref": "LogicalId" }`
 for `target_id`/`policy_id` to wire a trigger to another resource in the same
 template, and capture a webhook trigger's server-generated secret as an output
 with `ref_attr`:
@@ -312,6 +415,58 @@ curl -X POST https://api.example.com/api/v1/triggers \
     "target_type": "orchestration",
     "target_id": "orch_XYZ",
     "cron": "0 8 * * *"
+  }'
+```
+
+</TabItem>
+</Tabs>
+
+### Create an event trigger
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat create-trigger \
+  --project-id proj_ABC \
+  --name "Summarize Ingested" \
+  --type event \
+  --event-pattern documents.ingested \
+  --target-type agent \
+  --target-id agent_ABC
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.triggers.createTrigger({
+  body: {
+    project_id: 'proj_ABC',
+    name: 'Summarize Ingested',
+    type: 'event',
+    event_pattern: 'documents.ingested',
+    target_type: 'agent',
+    target_id: 'agent_ABC',
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/triggers \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "proj_ABC",
+    "name": "Summarize Ingested",
+    "type": "event",
+    "event_pattern": "documents.ingested",
+    "target_type": "agent",
+    "target_id": "agent_ABC"
   }'
 ```
 

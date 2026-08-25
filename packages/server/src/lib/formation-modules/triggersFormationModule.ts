@@ -14,6 +14,7 @@ import {
   findTriggerSecret,
   updateTrigger,
   validateCronExpression,
+  validateEventPattern,
   validateTriggerShape,
 } from '../triggers';
 import { defineFormationModule } from './defineFormationModule';
@@ -48,7 +49,7 @@ const shapeFieldValue = (value: unknown): string | null => {
 /**
  * Reuses the transport-independent business rules from the lib so formation
  * templates enforce the same invariants as the REST API (cron iff schedule,
- * action iff tool, and a parseable 5-field UTC cron). Only meaningful once the
+ * event_pattern iff event, action iff tool, and a parseable 5-field UTC cron). Only meaningful once the
  * type-dependent fields are present, well-typed, and schema-valid — so it is a
  * no-op when `errors` already has entries.
  */
@@ -71,11 +72,18 @@ const pushShapeRuleErrors = (args: {
       targetType: properties.target_type,
       action: shapeFieldValue(properties.action),
       cron: shapeFieldValue(properties.cron),
+      eventPattern: shapeFieldValue(properties.event_pattern),
     });
     // Only a literal cron can be parsed here; an expression's real value is
     // validated at apply time once the parameter/ref is resolved.
     if (properties.type === 'schedule' && typeof properties.cron === 'string') {
       validateCronExpression(properties.cron);
+    }
+    if (
+      properties.type === 'event' &&
+      typeof properties.event_pattern === 'string'
+    ) {
+      validateEventPattern(properties.event_pattern);
     }
   } catch (error) {
     errors.push({
@@ -111,6 +119,7 @@ export const triggersFormationModule = defineFormationModule({
       action: toOptionalString(properties.action) ?? undefined,
       input: toInputObject(properties.input),
       cron: toOptionalString(properties.cron) ?? undefined,
+      eventPattern: toOptionalString(properties.event_pattern) ?? undefined,
       active: toOptionalBoolean(properties.active),
     });
   },
@@ -131,6 +140,7 @@ export const triggersFormationModule = defineFormationModule({
       action: toNullableString(properties.action),
       input: toInputObject(properties.input),
       cron: toNullableString(properties.cron),
+      eventPattern: toNullableString(properties.event_pattern),
       active: toOptionalBoolean(properties.active),
     });
   },

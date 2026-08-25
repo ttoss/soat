@@ -2,8 +2,14 @@ import { Cron } from 'croner';
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
+import { SOAT_EVENT_TYPES } from './soatEvents';
 
-export const TRIGGER_TYPES = ['manual', 'webhook', 'schedule'] as const;
+export const TRIGGER_TYPES = [
+  'manual',
+  'webhook',
+  'schedule',
+  'event',
+] as const;
 export const TRIGGER_TARGET_TYPES = [
   'orchestration',
   'agent',
@@ -41,6 +47,7 @@ export const targetStartAction = (targetType: string): string => {
 /**
  * Validates the transport-independent shape invariants of a trigger:
  * - `cron` is required for schedule triggers and rejected for all other types.
+ * - `event_pattern` is required for event triggers and rejected for all others.
  * - `action` is only valid for tool targets.
  *
  * Deeper, DB-backed rules (target existence, tool subtype requiring/forbidding
@@ -52,6 +59,7 @@ export const validateTriggerShape = (args: {
   targetType: string;
   action?: string | null;
   cron?: string | null;
+  eventPattern?: string | null;
 }): void => {
   if (args.type === 'schedule') {
     if (!args.cron) {
@@ -64,6 +72,20 @@ export const validateTriggerShape = (args: {
     throw new DomainError(
       'TRIGGER_ACTION_NOT_ALLOWED',
       'cron is only valid for schedule triggers.'
+    );
+  }
+
+  if (args.type === 'event') {
+    if (!args.eventPattern) {
+      throw new DomainError(
+        'TRIGGER_ACTION_NOT_ALLOWED',
+        'event_pattern is required for event triggers.'
+      );
+    }
+  } else if (args.eventPattern) {
+    throw new DomainError(
+      'TRIGGER_ACTION_NOT_ALLOWED',
+      'event_pattern is only valid for event triggers.'
     );
   }
 
@@ -97,6 +119,79 @@ export const validateCronExpression = (cron: string): void => {
       'INVALID_CRON_EXPRESSION',
       `Invalid cron expression: '${cron}'.`,
       { cron }
+    );
+  }
+};
+
+/**
+ * The first segment of every registered platform event name (`documents`,
+ * `agents`, `quota`, …). A pattern whose namespace is one of these is claiming
+ * to subscribe to a platform event, and is therefore checkable.
+ */
+const REGISTERED_NAMESPACES = new Set(
+  SOAT_EVENT_TYPES.map((type) => {
+    return type.split('.')[0];
+  })
+);
+
+const REGISTERED_EVENTS = new Set<string>(SOAT_EVENT_TYPES);
+
+/** `a`, `a.b`, `a.b.c` — dot-separated non-empty segments, no wildcard. */
+const EVENT_NAME = /^[a-z0-9_]+(\.[a-z0-9_]+)*$/i;
+
+const invalidPattern = (pattern: string, why: string): DomainError => {
+  return new DomainError(
+    'INVALID_EVENT_PATTERN',
+    `Invalid event_pattern '${pattern}': ${why}`,
+    { event_pattern: pattern }
+  );
+};
+
+/**
+ * Validates an event trigger's subscription pattern. Three forms are accepted,
+ * the same grammar the webhook dispatcher already matches with
+ * ({@link matchesEvent} in `eventMatching.ts`): `*`, `prefix.*`, or an exact
+ * event name.
+ *
+ * Where it goes beyond syntax is the **namespace rule**: a pattern whose first
+ * segment names a registered platform namespace (`documents`, `agents`, …) must
+ * resolve to at least one registered event. `documents.ingsted` is a typo and is
+ * rejected at write time; `documents.*` and `documents.ingested` are accepted.
+ *
+ * A pattern in an *unknown* namespace (`orders.shipped`) is accepted as-is,
+ * because an orchestration `emit_event` node emits names SOAT does not own and
+ * subscribing to one is the whole point of this trigger type. Rejecting those
+ * would close the shortest path the feature exists to open. The cost is that a
+ * typo in a custom name is still only visible as a subscription that never
+ * matches — the same position webhook subscriptions are in, and unimprovable
+ * without a registry of author-authored names.
+ */
+export const validateEventPattern = (pattern: string): void => {
+  if (pattern === '*') return;
+
+  const isPrefix = pattern.endsWith('.*');
+  const name = isPrefix ? pattern.slice(0, -2) : pattern;
+
+  if (!EVENT_NAME.test(name)) {
+    throw invalidPattern(
+      pattern,
+      "expected '*', 'prefix.*', or an event name like 'documents.ingested'."
+    );
+  }
+
+  const namespace = name.split('.')[0];
+  if (!REGISTERED_NAMESPACES.has(namespace)) return;
+
+  const matches = isPrefix
+    ? SOAT_EVENT_TYPES.some((type) => {
+        return type.startsWith(name + '.');
+      })
+    : REGISTERED_EVENTS.has(name);
+
+  if (!matches) {
+    throw invalidPattern(
+      pattern,
+      `'${namespace}' is a platform event namespace and no registered event matches.`
     );
   }
 };
@@ -203,6 +298,7 @@ export const assertTriggerConfigValid = async (args: {
   projectId: number;
   action?: string | null;
   cron?: string | null;
+  eventPattern?: string | null;
   validateTarget?: boolean;
 }): Promise<void> => {
   validateTriggerShape({
@@ -210,9 +306,13 @@ export const assertTriggerConfigValid = async (args: {
     targetType: args.targetType,
     action: args.action,
     cron: args.cron,
+    eventPattern: args.eventPattern,
   });
   if (args.type === 'schedule' && args.cron) {
     validateCronExpression(args.cron);
+  }
+  if (args.type === 'event' && args.eventPattern) {
+    validateEventPattern(args.eventPattern);
   }
   if (args.validateTarget !== false) {
     await resolveAndValidateTarget({

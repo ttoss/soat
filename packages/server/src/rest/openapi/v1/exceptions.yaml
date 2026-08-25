@@ -57,7 +57,7 @@ paths:
           description: Filter by how the exception was filed
           schema:
             type: string
-            enum: [run_failed, guardrail_tripwire, approval_expired, quota_unpriced, manual]
+            enum: [run_failed, guardrail_tripwire, approval_expired, quota_unpriced, event_trigger_loop, manual]
         - name: limit
           in: query
           required: false
@@ -218,7 +218,7 @@ components:
           enum: [info, warning, critical]
         kind:
           type: string
-          enum: [run_failed, guardrail_tripwire, approval_expired, quota_unpriced, manual]
+          enum: [run_failed, guardrail_tripwire, approval_expired, quota_unpriced, event_trigger_loop, manual]
           description: How the exception was filed
         title:
           type: string

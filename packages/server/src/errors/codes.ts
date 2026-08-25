@@ -410,6 +410,16 @@ export const ERROR_CODES = {
     description:
       'The cron expression is invalid. Triggers require a strict 5-field cron expression evaluated in UTC.',
   },
+  TRIGGER_CAUSATION_LIMIT: {
+    httpStatus: 409,
+    description:
+      'An event trigger refused to extend the causal chain that reached it — it is already in the chain, or the chain has run too deep.',
+  },
+  INVALID_EVENT_PATTERN: {
+    httpStatus: 400,
+    description:
+      "The event pattern is invalid. An event trigger subscribes with '*', 'prefix.*', or an exact event name, and a pattern in a platform namespace must match a registered event.",
+  },
   TRIGGER_TYPE_IMMUTABLE: {
     httpStatus: 400,
     description: 'A trigger’s type cannot be changed after creation.',

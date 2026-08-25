@@ -91,6 +91,7 @@ export class ExceptionItem extends Model {
       'guardrail_tripwire',
       'approval_expired',
       'quota_unpriced',
+      'event_trigger_loop',
       'manual'
     ),
     allowNull: false,
@@ -100,6 +101,7 @@ export class ExceptionItem extends Model {
     | 'guardrail_tripwire'
     | 'approval_expired'
     | 'quota_unpriced'
+    | 'event_trigger_loop'
     | 'manual';
 
   @Column({ type: DataType.TEXT, allowNull: false })

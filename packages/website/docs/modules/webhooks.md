@@ -15,6 +15,8 @@ A webhook is scoped to a project. When you create a webhook you specify a URL an
 
 Webhooks are **outbound** — SOAT calls your endpoint when events occur. For the **inbound** direction — an external system calling SOAT to activate an orchestration, agent, or tool — see [Triggers](./triggers.md), whose `webhook` starter verifies an incoming HMAC signature the same way.
 
+To start work **inside** SOAT when an event fires, do not wire a webhook subscription back to your own deployment's inbound hook — bind an [`event` trigger](./triggers.md#event-triggers) to the same event pattern instead. It subscribes to the bus directly, so there is no public URL, no signature to verify against your own event, and no second retry policy for one logical hop.
+
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
 ## Related Tutorials
@@ -99,6 +101,8 @@ Two consequences matter to a subscriber:
 - **Retries are spaced, not immediate.** A failed attempt schedules the next one behind an exponential backoff with jitter (roughly 1s, then 2s), rather than firing three times back to back. `next_attempt_at` on the delivery tells you when the next one is due.
 
 After three failed attempts the delivery is marked `failed` and is not retried automatically. Use [redelivery](#redelivery) to send it again.
+
+**Where the guarantee starts.** Everything above holds from the moment the row exists. Getting there is a short, in-memory step: once the write that produced the event has committed, the server matches the project's subscriptions and inserts the delivery rows. A database blip during that step is retried, and a failure that outlives the retries is counted and printed to stderr rather than discarded quietly — but a process killed inside that window loses the event, and no redelivery can recover what was never recorded. The window is sub-second and unaffected by your endpoint being slow or down; closing it entirely requires the delivery row to be written in the same transaction as the change that triggered it.
 
 ### Redelivery
 
