@@ -22,6 +22,7 @@ import { buildDepthGuardResult } from 'src/lib/agentGenerationRecovery';
 import type { TypedAgent } from 'src/lib/agentGenerationTypes';
 import { runStreamGeneration } from 'src/lib/agentStreamGeneration';
 import * as generationsModule from 'src/lib/generations';
+import { CLIENT_TOOL_PRESETS } from 'src/lib/toolPresetParameters';
 import * as tracesModule from 'src/lib/traces';
 
 describe('buildAllMessages', () => {
@@ -132,6 +133,50 @@ describe('findPendingClientTools', () => {
     expect(result).toHaveLength(1);
     expect(result[0].toolCallId).toBe('tc1');
     expect(result[0].toolName).toBe('clientTool');
+  });
+
+  // A client tool has no server-side `execute` to merge a preset into, so the
+  // resolver attaches the presets to the tool and the pin is applied here, on
+  // the arguments handed to the client at the `requires_action` boundary.
+  test('pins the tool preset_parameters over the model arguments', () => {
+    const steps = [
+      {
+        toolCalls: [
+          {
+            toolCallId: 'tc1',
+            toolName: 'clientTool',
+            input: { device_id: 'dev_modelchose', message: 'hi' },
+          },
+        ],
+      },
+    ];
+    const resolvedTools = {
+      clientTool: {
+        inputSchema: {},
+        [CLIENT_TOOL_PRESETS]: { device_id: 'dev_pinned' },
+      },
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = findPendingClientTools(steps, resolvedTools as any);
+    expect(result).toHaveLength(1);
+    expect(result[0].input).toEqual({
+      device_id: 'dev_pinned',
+      message: 'hi',
+    });
+  });
+
+  test('leaves the model arguments alone when the tool pins nothing', () => {
+    const steps = [
+      {
+        toolCalls: [
+          { toolCallId: 'tc1', toolName: 'clientTool', input: { x: 1 } },
+        ],
+      },
+    ];
+    const resolvedTools = { clientTool: { inputSchema: {} } };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = findPendingClientTools(steps, resolvedTools as any);
+    expect(result[0].input).toEqual({ x: 1 });
   });
 
   test('handles multiple steps with mixed tool calls', () => {

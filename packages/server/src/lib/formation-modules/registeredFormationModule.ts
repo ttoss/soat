@@ -267,10 +267,29 @@ const buildCapabilityMembers = (args: {
         }
       : {};
 
-  if (!registration.capabilities.has('read')) return validateMember;
+  const writeOnlyMember: Partial<FormationModule> =
+    registration.writeOnlyProperties.size > 0
+      ? {
+          // The engine's own hook for this, and the same one every built-in
+          // secret-bearing type uses. It runs on the way to storage only —
+          // the handler has already been sent the full bag.
+          sanitizeLastAppliedProperties: (properties) => {
+            const kept: Record<string, unknown> = {};
+            for (const [key, value] of Object.entries(properties)) {
+              if (!registration.writeOnlyProperties.has(key)) kept[key] = value;
+            }
+            return kept;
+          },
+        }
+      : {};
+
+  if (!registration.capabilities.has('read')) {
+    return { ...validateMember, ...writeOnlyMember };
+  }
 
   return {
     ...validateMember,
+    ...writeOnlyMember,
 
     read: async ({ physicalResourceId }) => {
       try {

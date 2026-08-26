@@ -120,6 +120,18 @@ describe('parseFormationResourceTypeConfig', () => {
       expect(declared.handler.timeoutMs).toBe(5_000);
     });
 
+    test('write_only_properties are collected, and default to none', () => {
+      const [none] = parse({ resource_types: [VALID_ENTRY] });
+      expect(none.writeOnlyProperties.size).toBe(0);
+
+      const [declared] = parse({
+        resource_types: [
+          { ...VALID_ENTRY, write_only_properties: ['agent_id'] },
+        ],
+      });
+      expect([...declared.writeOnlyProperties]).toEqual(['agent_id']);
+    });
+
     test('an http handler URL is accepted, for a handler on a private network', () => {
       const [registration] = parse({
         resource_types: [
@@ -289,6 +301,30 @@ describe('parseFormationResourceTypeConfig', () => {
       rejects(
         { resource_types: [{ ...VALID_ENTRY, capabilities: 'validate' }] },
         /`capabilities` must be an array/
+      );
+    });
+
+    test('rejects write_only_properties that is not an array of strings', () => {
+      rejects(
+        { resource_types: [{ ...VALID_ENTRY, write_only_properties: 'kind' }] },
+        /`write_only_properties` must be an array of strings/
+      );
+      rejects(
+        { resource_types: [{ ...VALID_ENTRY, write_only_properties: [1] }] },
+        /`write_only_properties` must be an array of strings/
+      );
+    });
+
+    test('rejects a write-only property the schema does not declare', () => {
+      // A typo here would silently protect nothing — the credential it was
+      // meant to strip would be stored in full.
+      rejects(
+        {
+          resource_types: [
+            { ...VALID_ENTRY, write_only_properties: ['acces_token'] },
+          ],
+        },
+        /`write_only_properties` names 'acces_token', which the schema does not declare/
       );
     });
 

@@ -50,7 +50,7 @@ To invoke a tool automatically, bind it to a [Trigger](./triggers.md) with `targ
 | `actions`           | `string[] \| null`                              | Allowlist of actions to expose. `builtin`: SOAT platform action names, e.g. `["search-knowledge"]` (required). `mcp`: optional allowlist of MCP tool names to scope the server surface — `null` exposes every tool. See [mcp action scoping](#scoping-an-mcp-tool-to-a-subset-of-actions). |
 | `denied_actions`    | `string[] \| null`                              | `mcp` only: optional denylist of MCP tool names to hide, applied after `actions` and taking precedence over it. `null` denies nothing. See [mcp action scoping](#scoping-an-mcp-tool-to-a-subset-of-actions). |
 | `context_keys`      | `string[] \| null`                              | Allowlist of [`tool_context`](../advanced/tool-context.md) keys forwarded to this tool as context headers. `null` forwards every key (the default); `[]` forwards none. See [Scoping which context keys reach a tool](#scoping-which-context-keys-reach-a-tool). |
-| `preset_parameters` | `object \| null`                                | Fixed parameter values merged into every call. Keys are hidden from the model and injected automatically.         |
+| `preset_parameters` | `object \| null`                                | Fixed parameter values pinned on every call. Keys are hidden from the model, and a pinned value wins over one the caller sends. |
 | `pipeline`          | `object \| null`                                | Pipeline definition (`steps`, optional `output`). Required for `pipeline` type. See [pipeline](#pipeline).         |
 | `output_mapping`    | `object \| null`                                | JSON Logic mapping applied to the tool's raw result, for every tool type. See [output mapping](#output-mapping).   |
 | `guardrail_ids`     | `array \| null`                                 | Guardrails attached at the tool scope, governing this tool wherever it is used — see [Guardrails — Attachment](./guardrails.md#attachment) |
@@ -316,7 +316,7 @@ For LLM-decided (rather than fixed) multi-step flows, see [Orchestrations](./orc
 { "transcript": { "var": "output.text" }, "language": { "var": "output.language" } }
 ```
 
-`input` is the tool's merged input for this call — `preset_parameters` merged with the caller-supplied `input`.
+`input` is the tool's merged input for this call — the caller-supplied `input` with `preset_parameters` pinned over it.
 
 - **Ordering for `pipeline` tools.** The tool's top-level `output_mapping` runs *after* the pipeline's own `output` mapping, over the pipeline's final result.
 - **`client` tools.** The mapping is applied when the submitted tool output is materialized back into the generation, keyed by tool name.
@@ -328,6 +328,31 @@ When no `output_mapping` is configured, the raw result is returned unchanged.
 ### Preset Parameters
 
 `preset_parameters` bakes fixed values into a tool definition. When a key matches a field in the action's input schema, that field is **removed from the schema shown to the model** and the preset value is **merged into every call** before dispatch. This eliminates the risk of the model choosing a wrong value for parameters that should always be fixed, and enables multiple tool instances targeting different resources from the same action — e.g. two `builtin` tools both binding `update-document`, one with `"preset_parameters": { "id": "doc_abc123" }` and one with `{ "id": "doc_xyz789" }`. See it end to end in [Agent SOAT Tools and Preset Parameters - Step 6 (Create builtin tools)](/docs/tutorials/agent-soat-tools#step-6--create-builtin-tools).
+
+**A preset is a pin, not a default: it wins.** If a call supplies a value for a
+key the tool pins — a model that names the hidden field anyway, or an `input`
+sent to [`POST /tools/{id}/call`](/docs/api/tools/call-tool) — the preset value
+is what dispatches. Keys the presets do not name are taken from the call as
+usual. Hiding the field from the schema is ergonomics, not the guarantee: no
+tool schema sets `additionalProperties: false`, so a model that emits a hidden
+key is not rejected, and the merge order is what makes a pinned parameter
+actually fixed.
+
+This holds on **every** tool type — `builtin`, `http`, `mcp`, `client`,
+`pipeline` — and at every dispatch surface: an agent's tool loop, a direct call,
+a pipeline step, an orchestration tool node, a converter invocation. A guardrail
+evaluates the pinned arguments too (`args.*` in a guard condition, and the
+`arguments` recorded on an approval item), since those are the arguments the
+call will carry.
+
+For a `client` tool the server never dispatches the call, so the presets are
+applied to the arguments handed over at the `requires_action` boundary — what
+your client receives is already pinned.
+
+On an `mcp` binding, presets apply to **every** tool the MCP server exposes
+through that binding, the same reach they have over every action a `builtin`
+binding lists. Pin a key on a binding only when it is meant for all of them; use
+a separate binding otherwise.
 
 Presets and model-supplied arguments reach the action wherever the OpenAPI operation declares the parameter — path, query string, or request body. A `list-*` action's `project_id`, filters, and pagination arguments are query parameters, so a preset like `{ "project_id": "proj_abc123" }` is the way to lock a `builtin` tool to one project. An argument the caller omits is left out of the request entirely rather than sent as an empty value.
 

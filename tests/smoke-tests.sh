@@ -4080,6 +4080,20 @@ if ! printf '%s\n' "$SOAT_PRESET_CALL_RESP" | jq -e '.limit == 1 and (.data | le
 fi
 echo "Preset query parameter: OK"
 
+# 37b-ii. A preset is a pin, not a default: a caller that supplies the same key
+# does not get to override it. `limit` is echoed back, so the losing value is
+# directly observable — the tool pins 1, the call asks for 50, the answer is 1.
+SOAT_PRESET_OVERRIDE_RESP=$($SOAT_CLI call-tool \
+  --tool-id "$SOAT_PRESET_TOOL_ID" \
+  --action list-agents \
+  --input '{"limit":50}')
+if ! printf '%s\n' "$SOAT_PRESET_OVERRIDE_RESP" | jq -e '.limit == 1' >/dev/null 2>&1; then
+  echo "ERROR: caller input overrode a preset_parameters value" >&2
+  echo "$SOAT_PRESET_OVERRIDE_RESP" >&2
+  exit 1
+fi
+echo "Preset wins over caller input: OK"
+
 # 37c. `preset_parameters` must also satisfy a *path* parameter, not just a
 # query one: the action's URL is built from them, so a pinned `agent_id` makes
 # an item-scoped action callable with an empty input.
@@ -4919,10 +4933,12 @@ expect_cli_error_status 400 create-formation \
   --template '{"resources":{"chan":{"type":"smoke_channel","properties":{"name":"X","kind":"whatsapp","nope":"x"}}}}'
 
 echo "--- Creating a formation with a custom resource type ---"
+# `access_token` is declared write-only in the registration, so the engine must
+# send it to the handler and then drop it before storing the resource snapshot.
 CUSTOM_FORMATION_RESP=$($SOAT_CLI create-formation \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-custom-formation" \
-  --template '{"resources":{"chan":{"type":"smoke_channel","properties":{"name":"Smoke Channel","kind":"whatsapp","agent_id":{"ref":"agentRes"}}},"agentRes":{"type":"agent","properties":{"name":"smoke-custom-agent","ai_provider_id":"'"$AI_PROVIDER_ID"'"}}},"outputs":{"handlerUrl":{"ref_attr":"chan.handler_url"}}}')
+  --template '{"resources":{"chan":{"type":"smoke_channel","properties":{"name":"Smoke Channel","kind":"whatsapp","access_token":"shh-not-a-real-token","agent_id":{"ref":"agentRes"}}},"agentRes":{"type":"agent","properties":{"name":"smoke-custom-agent","ai_provider_id":"'"$AI_PROVIDER_ID"'"}}},"outputs":{"handlerUrl":{"ref_attr":"chan.handler_url"}}}')
 CUSTOM_FORMATION_ID=$(printf '%s\n' "$CUSTOM_FORMATION_RESP" | jq -r '.id')
 CUSTOM_PHYS_ID=$(printf '%s\n' "$CUSTOM_FORMATION_RESP" | jq -r '.resources[] | select(.resource_type == "smoke_channel") | .physical_resource_id')
 if ! printf '%s\n' "$CUSTOM_PHYS_ID" | grep -q '^chan_smoke_'; then
@@ -4937,6 +4953,19 @@ if [ "$(printf '%s\n' "$CUSTOM_FORMATION_RESP" | jq -r '.outputs.handlerUrl')" =
   echo "$CUSTOM_FORMATION_RESP" >&2
   exit 1
 fi
+# The write-only property must not survive into the stored plan/diff. A plan
+# against the same template is the surface that would expose it.
+CUSTOM_PLAN_RESP=$($SOAT_CLI plan-formation \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --formation_id "$CUSTOM_FORMATION_ID" \
+  --template '{"resources":{"chan":{"type":"smoke_channel","properties":{"name":"Smoke Channel","kind":"whatsapp","access_token":"shh-not-a-real-token","agent_id":{"ref":"agentRes"}}},"agentRes":{"type":"agent","properties":{"name":"smoke-custom-agent","ai_provider_id":"'"$AI_PROVIDER_ID"'"}}}}')
+if printf '%s\n' "$CUSTOM_PLAN_RESP" | jq -e '[.changes[].diff.current // empty | tostring] | join(" ") | contains("shh-not-a-real-token")' >/dev/null 2>&1; then
+  echo "ERROR: a write-only property was stored in the formation ledger" >&2
+  echo "$CUSTOM_PLAN_RESP" >&2
+  exit 1
+fi
+echo "Write-only property withheld from the stored snapshot."
+
 echo "Custom resource type created: $CUSTOM_PHYS_ID"
 
 echo "--- Updating a formation with a custom resource type ---"
