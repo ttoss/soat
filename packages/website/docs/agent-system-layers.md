@@ -1,5 +1,5 @@
 ---
-description: "The layers an agent system decomposes into — harness, loop, graph, ratchet — which SOAT module owns each one, why the graph should be the last thing you build, and why the ratchet — the layer that evaluates every change and keeps it from sliding backward — keeps the other three honest."
+description: "The layers an agent system decomposes into — harness, loop, graph, ratchet — which SOAT module owns each one, why the graph should be the last thing you build, and how the layers map onto autonomy maturity grades."
 sidebar_position: 2
 sidebar_label: Layers of an Agent System
 title: The Layers of an Agent System
@@ -293,6 +293,25 @@ the *verdict*, and a human owns the judgment — rewording an instruction, encod
 guardrail `deny`, and promoting a canary all stay human-gated decisions made against
 evidence the platform assembled.
 
+The pieces to assemble a self-modifying loop nonetheless exist: a
+[`builtin` tool](/docs/modules/tools#builtin) can expose the platform's own definition
+actions — `update-agent`, `update-guardrail`, `set-agent-release`, `start-eval-run`,
+`promote-agent-release` — so an agent given those actions and a credential that permits
+them can propose changes to the very definitions it runs on, with
+[eval-gated promotion](/docs/modules/agents#eval-gated-promotion) as the deterministic
+brake. If you wire that loop, two boundaries mark where the platform's enforcement ends
+and your design begins:
+
+- **The promotion gate verifies evidence; it does not produce it.** `promote` fails
+  closed (`409 PROMOTION_GATE_UNMET`) until a passing run pinned to the canary exists,
+  but running the eval is an explicit call — the automation that produces the evidence
+  sits *outside* the gate it clears, and is only as trustworthy as its scorers and
+  dataset.
+- **`boundary_policy` ceilings only `builtin` actions.** An agent that reaches the
+  platform — or anything else — through an `http` or `mcp` tool is outside the
+  permission model that boundary enforces; only a [guardrail](/docs/modules/guardrails)
+  attached at the tool, agent, or project scope reaches those calls.
+
 This is also where the layers stop being a purely technical progression. A bad objective
 looks like flawless execution in every trace, so the reading habit that works below —
 "read the trace" — is not sufficient here. Deciding *what the system should be optimizing*
@@ -312,6 +331,28 @@ surface is not built yet.
 | [Evaluations](/docs/modules/evaluations) — datasets, scorers, runs, baselines | Shipped                                                                                  |
 | [Eval-gated promotion](/docs/modules/agents#eval-gated-promotion) of a canary release | Shipped                                                                         |
 | [Memories](/docs/modules/memories) forgetting — importance scoring, recency blending, compaction | Coming soon                                                                    |
+
+## Layers are concerns, not autonomy levels
+
+The four layers are **concerns**: every agent system has all four, however little it
+automates. A different axis — often numbered 0–4 in maturity ladders — is **delegation**:
+how much runs without a human in the step. Keep the two apart. Moving up the delegation
+ladder never adds a layer; it changes which primitives carry each one.
+
+| Delegation grade | What runs without a human | SOAT primitives |
+| --- | --- | --- |
+| **0 — Deterministic tooling** | Everything — no model in the path | [`pipeline`](/docs/modules/tools#pipeline) and [`http`](/docs/modules/tools#http) tools, tool-only [orchestrations](/docs/modules/orchestrations), [workflow](/docs/modules/workflows) guards, [triggers](/docs/modules/triggers) — all JSON Logic, no LLM |
+| **1 — Assistant** | Nothing — the model reads and proposes, the application executes | [Agents](/docs/modules/agents) with [`client` tools](/docs/modules/tools#client) (the run pauses on `requires_action`), `knowledge_config`, [sessions](/docs/modules/sessions) |
+| **2 — Supervised autonomy** | Each action a policy clears, per call | [Guardrail action classes](/docs/modules/guardrails#action-classes) A/B/C/D, [approvals](/docs/modules/approvals), [quotas](/docs/modules/quotas) |
+| **3 — End-to-end automation** | Whole flows, agents invoking agents | [Orchestrations](/docs/modules/orchestrations), [workflows](/docs/modules/workflows), [nested agent calls](/docs/modules/agents#nested-agent-calls), [triggers](/docs/modules/triggers) |
+| **4 — Self-modification** | The system changes its own definitions | A composition, not a shipped mode — see [What the ratchet must never do](#what-the-ratchet-must-never-do) |
+
+Grades 0–2 collapse into one mechanism: a guardrail's
+[action classes](/docs/modules/guardrails#action-classes) are this dial applied per tool
+call — class A is grade 0/1 behavior, class B is grade 2 with a deterministic guard,
+class C hands the call to a human — and `default_class` falling back to **C** means an
+unclassified call never gains autonomy by accident. Grade 4 is deliberately an assembly
+you build and own, not a mode you switch on.
 
 ## Diagnose before you build
 
