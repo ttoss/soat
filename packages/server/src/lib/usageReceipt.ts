@@ -252,6 +252,77 @@ export const getRunReceipt = async (args: {
   });
 };
 
+// The wire receipt projected down to the token/cost totals the run response
+// carries. Shared by the self-only and nested roll-ups so the two can never
+// disagree on how a total is derived.
+const toTotals = (receipt: UsageReceipt): UsageTotals => {
+  return {
+    totalInputTokens: receipt.total_input_tokens,
+    totalOutputTokens: receipt.total_output_tokens,
+    totalCachedTokens: receipt.total_cached_tokens,
+    totalReasoningTokens: receipt.total_reasoning_tokens,
+    totalCostUsd: receipt.total_cost_usd,
+  };
+};
+
+// Every run descended from `runPublicId` through `loop` / `sub_orchestration`
+// nodes, plus the run itself, as internal ids.
+//
+// Breadth-first one level at a time (the `parent_run_id` column is indexed), rather than a
+// recursive CTE, so the walk stays in the query builder the rest of this module
+// uses. `seen` is a genuine guard, not decoration: the parent link is written by
+// the engine and a cycle should be impossible, but a walk that trusted that
+// would loop forever on one bad row instead of returning a slightly wrong
+// number.
+const descendantRunIds = async (args: {
+  runPublicId: string;
+}): Promise<number[]> => {
+  const seen = new Set<string>([args.runPublicId]);
+  const ids: number[] = [];
+  let frontier = [args.runPublicId];
+
+  while (frontier.length > 0) {
+    const children = await db.OrchestrationRun.findAll({
+      where: { parentRunId: frontier },
+      attributes: ['id', 'publicId'],
+    });
+    const next: string[] = [];
+    for (const child of children) {
+      const publicId = child.publicId as string;
+      if (seen.has(publicId)) continue;
+      seen.add(publicId);
+      ids.push(child.id as number);
+      next.push(publicId);
+    }
+    frontier = next;
+  }
+
+  return ids;
+};
+
+/**
+ * Rolls a run's usage up to its token/cost totals **including every nested run**
+ * it started, which is the figure to read for a graph that delegates: a `loop` /
+ * `sub_orchestration` child is its own run record, so its events are attributed
+ * to the child and the parent's own roll-up covers the parent's nodes only.
+ *
+ * Takes both ids of a run the caller has already loaded: the internal one keys
+ * its own events, the public one walks the parent link (denormalized to public
+ * ids, so the walk needs no join). Re-reading the row to derive one from the
+ * other would only add a query and a can't-happen branch.
+ */
+export const getRunUsageTotalsIncludingNested = async (args: {
+  runInternalId: number;
+  runPublicId: string;
+}): Promise<UsageTotals> => {
+  const runIds = [
+    args.runInternalId,
+    ...(await descendantRunIds({ runPublicId: args.runPublicId })),
+  ];
+  const lineItems = await loadLineItems({ orchestrationRunId: runIds });
+  return toTotals(assembleReceipt(lineItems, {}));
+};
+
 /**
  * Rolls a run's usage up to its token/cost totals (no line items) for the
  * orchestration-run response. Takes the internal run id — the caller has
@@ -263,12 +334,5 @@ export const getRunUsageTotals = async (args: {
   const lineItems = await loadLineItems({
     orchestrationRunId: args.runInternalId,
   });
-  const receipt = assembleReceipt(lineItems, {});
-  return {
-    totalInputTokens: receipt.total_input_tokens,
-    totalOutputTokens: receipt.total_output_tokens,
-    totalCachedTokens: receipt.total_cached_tokens,
-    totalReasoningTokens: receipt.total_reasoning_tokens,
-    totalCostUsd: receipt.total_cost_usd,
-  };
+  return toTotals(assembleReceipt(lineItems, {}));
 };

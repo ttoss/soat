@@ -427,13 +427,25 @@ paths:
       tags:
         - Orchestrations
       summary: List orchestration runs
-      description: Returns orchestration runs the caller can access, optionally filtered by orchestration.
+      description: >-
+        Returns orchestration runs the caller can access, optionally filtered by
+        orchestration or by parent run.
       operationId: listOrchestrationRuns
       parameters:
         - name: orchestration_id
           in: query
           required: false
           description: Filter by orchestration public ID (orch_...)
+          schema:
+            type: string
+        - name: parent_orchestration_run_id
+          in: query
+          required: false
+          description: >-
+            Filter to the runs a parent run's `loop` / `sub_orchestration` nodes
+            started (run_...). This is how a caller holding a parent reaches the
+            children whose spend the parent's own `usage` excludes — see
+            `usage_including_nested` on the run.
           schema:
             type: string
         - name: limit
@@ -1187,6 +1199,21 @@ components:
           example:
             tenant_account_id: '42'
             dispatch_batch: nightly-2026-08-25
+        parent_orchestration_run_id:
+          x-soat-ref: orchestration-runs
+          type: string
+          nullable: true
+          description: >-
+            The run whose node started this one — set only on a child a `loop` or
+            `sub_orchestration` node spawned, null for a run a caller started. A
+            child is its own run with its own usage events, so this is what makes
+            a delegated run's spend attributable to the run that ordered it.
+        parent_node_id:
+          type: string
+          nullable: true
+          description: >-
+            The node within `parent_orchestration_run_id` that started this run.
+            Null when `parent_orchestration_run_id` is null.
         output:
           type: object
           nullable: true
@@ -1205,7 +1232,18 @@ components:
           description: >-
             Usage roll-up (token counts and cost_usd) summed across every
             metered generation the run produced. Present on the single-run read;
-            omitted from run list responses.
+            omitted from run list responses. Covers **this run's own nodes**: a
+            `loop` / `sub_orchestration` child is a run of its own, so what it
+            spends is on the child, not here — read `usage_including_nested` for
+            the delegated total.
+        usage_including_nested:
+          allOf:
+            - $ref: '#/components/schemas/RunUsageTotals'
+          description: >-
+            The same roll-up summed over this run **and every run descended from
+            it** through `loop` / `sub_orchestration` nodes, at any depth. Equal
+            to `usage` for a run with no children. Present on the single-run
+            read; omitted from run list responses.
         required_action:
           allOf:
             - $ref: '#/components/schemas/RequiredAction'

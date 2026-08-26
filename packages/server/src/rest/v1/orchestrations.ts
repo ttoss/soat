@@ -300,6 +300,8 @@ orchestrationsRouter.get('/orchestration-runs', async (ctx: Context) => {
   requireAuth(ctx);
 
   const orchestrationId = ctx.query['orchestration_id'] as string | undefined;
+  const parentRunId = ctx.query['parent_orchestration_run_id'] as
+    string | undefined;
 
   const projectIds = await requireProjectAccess({
     ctx,
@@ -309,6 +311,7 @@ orchestrationsRouter.get('/orchestration-runs', async (ctx: Context) => {
 
   const result = await listOrchestrationRuns({
     orchestrationPublicId: orchestrationId,
+    parentRunId,
     projectIds: projectIds ?? undefined,
     ...parsePagination(ctx),
   });

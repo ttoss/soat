@@ -26,7 +26,11 @@ import {
   type PaginatedResult,
   resolvePagination,
 } from './pagination';
-import { getRunUsageTotals, type UsageTotals } from './usageReceipt';
+import {
+  getRunUsageTotals,
+  getRunUsageTotalsIncludingNested,
+  type UsageTotals,
+} from './usageReceipt';
 
 const log = createDebug('soat:orchestrations');
 
@@ -211,11 +215,30 @@ export type MappedOrchestrationRun = {
   // re-cased, and no key reserved — the engine reads nothing from here.
   metadata: Record<string, unknown> | null;
   output: Record<string, unknown> | null;
+  // The run and node that started this one, set only on a `loop` /
+  // `sub_orchestration` child. Both null for a run a caller started.
+  // Qualified by its resource, like every other run id on the wire: SOAT has
+  // three unrelated run concepts, so a bare `parent_run_id` would be one more
+  // spelling to paste into the wrong flag (`rest/runParamNamingContract.test.ts`).
+  parent_orchestration_run_id: string | null;
+  parent_node_id: string | null;
   node_executions: MappedNodeExecution[];
   // Usage roll-up (tokens + cost_usd) summed across every metered generation the
   // run produced. Populated on the single-run read; omitted from list responses.
   // `UsageTotals` is the internal camelCase shape; this is its wire projection.
   usage?: {
+    total_input_tokens: number;
+    total_output_tokens: number;
+    total_cached_tokens: number;
+    total_reasoning_tokens: number;
+    total_cost_usd: number | null;
+  };
+  // The same roll-up summed over this run *and every run descended from it*
+  // through `loop` / `sub_orchestration` nodes. Equal to `usage` for a run with
+  // no children; strictly the figure to read for a graph that delegates, since
+  // a child's events are attributed to the child. Populated on the single-run
+  // read alongside `usage`, which keeps meaning "this run's own nodes".
+  usage_including_nested?: {
     total_input_tokens: number;
     total_output_tokens: number;
     total_cached_tokens: number;
@@ -311,7 +334,8 @@ export const mapOrchestrationRun = (
     project: InstanceType<typeof db.Project>;
     nodeExecutions?: InstanceType<typeof db.OrchestrationNodeExecution>[];
   },
-  usage?: UsageTotals
+  usage?: UsageTotals,
+  nestedUsage?: UsageTotals
 ): MappedOrchestrationRun => {
   return {
     id: run.publicId,
@@ -329,6 +353,8 @@ export const mapOrchestrationRun = (
     tool_context: run.toolContext ?? null,
     metadata: run.metadata ?? null,
     output: run.output as Record<string, unknown> | null,
+    parent_orchestration_run_id: run.parentRunId,
+    parent_node_id: run.parentNodeId,
     node_executions: (run.nodeExecutions ?? []).map(mapNodeExecution),
     ...(usage
       ? {
@@ -338,6 +364,17 @@ export const mapOrchestrationRun = (
             total_cached_tokens: usage.totalCachedTokens,
             total_reasoning_tokens: usage.totalReasoningTokens,
             total_cost_usd: usage.totalCostUsd,
+          },
+        }
+      : {}),
+    ...(nestedUsage
+      ? {
+          usage_including_nested: {
+            total_input_tokens: nestedUsage.totalInputTokens,
+            total_output_tokens: nestedUsage.totalOutputTokens,
+            total_cached_tokens: nestedUsage.totalCachedTokens,
+            total_reasoning_tokens: nestedUsage.totalReasoningTokens,
+            total_cost_usd: nestedUsage.totalCostUsd,
           },
         }
       : {}),
@@ -620,13 +657,28 @@ export const findOrchestrationRun = async (args: {
   })) as OrchestrationRunRow | null;
   if (!run) return null;
 
-  const usage = await getRunUsageTotals({ runInternalId: run.id as number });
+  const [usage, nestedUsage] = await Promise.all([
+    getRunUsageTotals({ runInternalId: run.id as number }),
+    // The transitive figure is computed alongside the run's own rather than
+    // instead of it: a caller reconciling one node against a provider invoice
+    // needs the self figure, and a caller pricing the whole delegation needs
+    // this one (#1135).
+    getRunUsageTotalsIncludingNested({
+      runInternalId: run.id as number,
+      runPublicId: run.publicId as string,
+    }),
+  ]);
 
-  return mapOrchestrationRun(run, usage);
+  return mapOrchestrationRun(run, usage, nestedUsage);
 };
 
 export const listOrchestrationRuns = async (args: {
   orchestrationPublicId?: string;
+  // Public id of a parent run: returns the runs its `loop` /
+  // `sub_orchestration` nodes started. Without it a caller holding a parent has
+  // no way to name its children, which is what let a parent's total read as
+  // complete when it was not (#1135).
+  parentRunId?: string;
   projectIds?: number[];
   limit?: number;
   offset?: number;
@@ -637,6 +689,7 @@ export const listOrchestrationRuns = async (args: {
 
   const where: Record<string, unknown> = {};
   if (args.projectIds) where['projectId'] = args.projectIds;
+  if (args.parentRunId !== undefined) where['parentRunId'] = args.parentRunId;
 
   // Optional orchestration filter: resolve the orchestration id when provided,
   // returning an empty list if it does not exist within the caller's scope.

@@ -105,6 +105,7 @@ describe('Usage', () => {
         'orchestrations:CreateOrchestration',
         'orchestrations:StartRun',
         'orchestrations:GetRun',
+        'orchestrations:ListRuns',
       ],
     });
     adminToken = setup.adminToken;
@@ -2005,6 +2006,101 @@ describe('Usage', () => {
       // response could be parsed into the schema.
       expect(Number(components.input_tokens.quantity)).toBe(6);
       expect(Number(components.output_tokens.quantity)).toBe(20);
+    });
+  });
+
+  describe('nested run cost attribution', () => {
+    // A parent whose only node is a `sub_orchestration`: the parent itself
+    // meters no tokens, every one of them is spent by the child run. The
+    // parent's own `usage` therefore reads zero tokens while the work it
+    // ordered cost real money — which is exactly the reading that made a
+    // loop-bearing run's total wrong.
+    let parentRunId: string;
+    let childRunId: string;
+
+    beforeAll(async () => {
+      const childOrch = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: `Nested Cost Child ${Date.now()}`,
+          nodes: [{ id: 'child-agent', type: 'agent', agent_id: agentId }],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(childOrch.status).toBe(201);
+
+      const parentOrch = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: `Nested Cost Parent ${Date.now()}`,
+          nodes: [
+            {
+              id: 'delegate',
+              type: 'sub_orchestration',
+              orchestration_id: childOrch.body.id,
+            },
+          ],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(parentOrch.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: parentOrch.body.id, input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('succeeded');
+      parentRunId = runRes.body.id;
+
+      const children = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs?parent_orchestration_run_id=${parentRunId}`
+      );
+      expect(children.status).toBe(200);
+      expect(children.body.data).toHaveLength(1);
+      childRunId = children.body.data[0].id;
+    }, 60000);
+
+    test('the child run meters the tokens it spent', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs/${childRunId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.usage.total_output_tokens).toBe(20);
+    });
+
+    test("the parent's own usage covers its own nodes only", async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs/${parentRunId}`
+      );
+      expect(res.status).toBe(200);
+      // The `sub_orchestration` node metered compute, not tokens: the tokens
+      // belong to the child. `usage` keeps meaning what it says.
+      expect(res.body.usage.total_output_tokens).toBe(0);
+    });
+
+    test("the parent's nested roll-up includes what its children spent", async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs/${parentRunId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.usage_including_nested).toBeDefined();
+      expect(res.body.usage_including_nested.total_output_tokens).toBe(20);
+      expect(res.body.usage_including_nested.total_input_tokens).toBe(10);
+      // The roll-up is a superset of the run's own usage, never a replacement.
+      expect(
+        res.body.usage_including_nested.total_output_tokens
+      ).toBeGreaterThanOrEqual(res.body.usage.total_output_tokens);
+      expect('total_cost_usd' in res.body.usage_including_nested).toBe(true);
+    });
+
+    test('a run with no children rolls up to its own usage', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs/${childRunId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.usage_including_nested.total_output_tokens).toBe(
+        res.body.usage.total_output_tokens
+      );
     });
   });
 

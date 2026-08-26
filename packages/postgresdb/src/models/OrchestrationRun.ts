@@ -22,6 +22,12 @@ import { Project } from './Project';
       unique: true,
       fields: ['public_id'],
     },
+    // The descendant walk behind a nested cost roll-up reads children by parent,
+    // once per level, so the lookup is indexed rather than a scan per run read.
+    {
+      name: 'orchestration_runs_parent_run_id',
+      fields: ['parent_run_id'],
+    },
   ],
   hooks: {
     beforeValidate: (instance: OrchestrationRun) => {
@@ -119,6 +125,22 @@ export class OrchestrationRun extends Model {
 
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare traceId: string | null;
+
+  // The run that started this one, and the node within it — set only on a child
+  // run a `loop` or `sub_orchestration` node spawned. A child is its own run
+  // record with its own usage events, so without this link a parent's cost
+  // roll-up silently excluded the work it ordered, and nothing on the wire could
+  // even name the runs it started (#1135).
+  //
+  // Denormalized public ids rather than a self-referential foreign key, for the
+  // same reason as `triggerId` below: the value is what the run response exposes
+  // and what a descendant walk queries by, so it needs no join and survives a
+  // parent row that is gone. Both null for a run a caller started directly.
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare parentRunId: string | null;
+
+  @Column({ type: DataType.STRING(128), allowNull: true })
+  declare parentNodeId: string | null;
 
   // Public id of the trigger firing that started this run, when it was launched
   // by an agent-target/orchestration-target trigger. Denormalized (not an FK) so
