@@ -90,6 +90,7 @@ const startHandler = async (): Promise<void> => {
 const buildRegistration = (args: {
   capabilities?: Array<'validate' | 'read'>;
   timeoutMs?: number;
+  writeOnlyProperties?: string[];
 }): FormationResourceTypeRegistration => {
   const schema = {
     type: 'object',
@@ -111,6 +112,7 @@ const buildRegistration = (args: {
       timeoutMs: args.timeoutMs ?? 5_000,
     },
     capabilities: new Set(args.capabilities ?? []),
+    writeOnlyProperties: new Set(args.writeOnlyProperties ?? []),
     schema,
     schemaFields: {
       allowedFields: new Set(['name', 'kind', 'agent_id', 'config']),
@@ -515,6 +517,50 @@ describe('handler failures fail the deploy', () => {
     replies.create = { status: 200, body: 'not-an-object' };
 
     await expect(create()).rejects.toThrow(/test_channel/);
+  });
+});
+
+// ── Write-only properties ───────────────────────────────────────────────────
+
+describe('write-only properties', () => {
+  test('a registration that declares none exposes no sanitizer', () => {
+    // Absent rather than a no-op: the apply pipeline branches on the key, and
+    // a type with nothing to hide should store its properties verbatim.
+    expect(
+      buildRegisteredFormationModule({ registration: buildRegistration({}) })
+        .sanitizeLastAppliedProperties
+    ).toBeUndefined();
+  });
+
+  test('declared properties are stripped from the stored snapshot', () => {
+    const sanitize = buildRegisteredFormationModule({
+      registration: buildRegistration({ writeOnlyProperties: ['config'] }),
+    }).sanitizeLastAppliedProperties;
+
+    expect(
+      sanitize?.({ name: 'A', kind: 'whatsapp', config: { token: 'sk_live' } })
+    ).toEqual({ name: 'A', kind: 'whatsapp' });
+  });
+
+  test('the handler still receives the write-only value on the wire', async () => {
+    // Stripping is about what is stored, never about what is sent — a create
+    // that withheld the credential would provision nothing.
+    replies.create = { status: 200, body: { physical_resource_id: 'chn_1' } };
+
+    await buildRegisteredFormationModule({
+      registration: buildRegistration({ writeOnlyProperties: ['config'] }),
+    }).create({
+      properties: { name: 'A', kind: 'whatsapp', config: { token: 'sk_live' } },
+      projectId,
+      logicalId: 'C',
+      resourceKey: 'fres_01',
+    });
+
+    expect(recorded[0].body.properties).toEqual({
+      name: 'A',
+      kind: 'whatsapp',
+      config: { token: 'sk_live' },
+    });
   });
 });
 

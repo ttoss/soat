@@ -58,6 +58,12 @@ const verifySignature = (header, rawBody) => {
   return given.length === want.length && crypto.timingSafeEqual(given, want);
 };
 
+/** Drops the write-only property the registration declares. */
+const withoutCredential = (properties) => {
+  const { access_token: _dropped, ...rest } = properties;
+  return rest;
+};
+
 const handle = (body) => {
   const { request_type: requestType, properties } = body;
   const physicalResourceId = body.physical_resource_id;
@@ -81,7 +87,10 @@ const handle = (body) => {
     case 'create': {
       counter += 1;
       const id = `chan_smoke_${counter}`;
-      resources.set(id, properties ?? {});
+      // The credential is used and dropped, never echoed back on `read` — a
+      // handler that returned it would put it straight back into the drift
+      // comparison the engine strips it from.
+      resources.set(id, withoutCredential(properties ?? {}));
       return {
         status: 200,
         body: { physical_resource_id: id, outputs: { handler_url: HANDLER_URL } },
@@ -92,7 +101,7 @@ const handle = (body) => {
       if (!resources.has(physicalResourceId)) {
         return { status: 404, body: { message: `no such channel: ${physicalResourceId}` } };
       }
-      resources.set(physicalResourceId, properties ?? {});
+      resources.set(physicalResourceId, withoutCredential(properties ?? {}));
       return { status: 200, body: { physical_resource_id: physicalResourceId } };
     }
 
