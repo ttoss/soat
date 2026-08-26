@@ -9,7 +9,7 @@ import {
   classifyGuardrailCall,
   governingGuardrailVersion,
 } from './agentToolGuardrail';
-import { emitGuardrailTripwireEvent } from './exceptions';
+import { emitGuardrailTripwireEvent } from './exceptionAutoFile';
 import type { CollectedGuardrail } from './guardrailCollection';
 import { collectApplicableGuardrails } from './guardrailCollection';
 import type { GuardrailEvaluationRecord } from './guardrailEvaluationRecord';
