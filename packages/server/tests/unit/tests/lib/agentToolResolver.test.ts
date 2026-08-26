@@ -2480,6 +2480,245 @@ describe('resolveAgentTools - mcp and soat types', () => {
       expect.anything()
     );
   });
+
+  // #345: `{{context:<key>}}` inside `preset_parameters`. A pin is already
+  // un-overridable by the model; resolving context in it is what lets the pinned
+  // value be the *run's* value — the ad account this run may act on — instead of
+  // one frozen at tool-creation time.
+  describe('{{context:...}} in preset_parameters', () => {
+    const startBodyCaptureServer = async () => {
+      const bodies: unknown[] = [];
+      const server = createServer((req, res) => {
+        const chunks: Buffer[] = [];
+        req.on('data', (chunk: Buffer) => {
+          chunks.push(chunk);
+        });
+        req.on('end', () => {
+          const raw = Buffer.concat(chunks).toString('utf8');
+          bodies.push(raw ? JSON.parse(raw) : null);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true }));
+        });
+      });
+      await new Promise<void>((resolve) => {
+        server.listen(0, '127.0.0.1', resolve);
+      });
+      const address = server.address();
+      const port =
+        address && typeof address === 'object' ? address.port : undefined;
+      return {
+        bodies,
+        port,
+        close: async () => {
+          await new Promise<void>((resolve) => {
+            server.close(() => {
+              return resolve();
+            });
+          });
+        },
+      };
+    };
+
+    const createPresetTool = async (args: {
+      name: string;
+      port: number | undefined;
+      presetParameters: Record<string, unknown>;
+    }) => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: args.name,
+          type: 'http',
+          parameters: {
+            type: 'object',
+            properties: {
+              adAccountId: { type: 'string' },
+              metaAdAccountId: { type: 'integer' },
+              note: { type: 'string' },
+            },
+          },
+          execute: {
+            url: `http://127.0.0.1:${args.port}/v1/do`,
+            method: 'POST',
+          },
+          preset_parameters: args.presetParameters,
+        });
+      expect(res.status).toBe(201);
+      return res.body.id as string;
+    };
+
+    const runTool = async (args: {
+      toolId: string;
+      toolName: string;
+      input?: Record<string, unknown>;
+      toolContext?: Record<string, string>;
+    }) => {
+      const tools = await resolveAgentTools({
+        toolIds: [args.toolId],
+        toolContext: args.toolContext,
+      });
+      const resolved = tools[args.toolName];
+      if (!('execute' in resolved) || typeof resolved.execute !== 'function') {
+        throw new Error(`tool ${args.toolName} resolved without an execute`);
+      }
+      return resolved.execute(args.input ?? {}, {} as never);
+    };
+
+    test("sends the run's context value, retyped to the schema's type", async () => {
+      const srv = await startBodyCaptureServer();
+      try {
+        const toolId = await createPresetTool({
+          name: 'presetCtxTool',
+          port: srv.port,
+          presetParameters: {
+            adAccountId: '{{context:ocaAdAccountId}}',
+            metaAdAccountId: '{{context:ocaMetaAccountId}}',
+          },
+        });
+
+        await runTool({
+          toolId,
+          toolName: 'presetCtxTool',
+          input: { note: 'hello' },
+          toolContext: {
+            ocaAdAccountId: 'act_1330065197707199',
+            ocaMetaAccountId: '1330065197707199',
+          },
+        });
+
+        expect(srv.bodies).toHaveLength(1);
+        expect(srv.bodies[0]).toEqual({
+          note: 'hello',
+          adAccountId: 'act_1330065197707199',
+          // `integer` in the schema, a string in the bag: the same account is
+          // `act_…` on most actions and a number on others.
+          metaAdAccountId: 1330065197707199,
+        });
+      } finally {
+        await srv.close();
+      }
+    });
+
+    test('the pin still wins over the value the model supplies', async () => {
+      const srv = await startBodyCaptureServer();
+      try {
+        const toolId = await createPresetTool({
+          name: 'presetCtxWinsTool',
+          port: srv.port,
+          presetParameters: { adAccountId: '{{context:ocaAdAccountId}}' },
+        });
+
+        await runTool({
+          toolId,
+          toolName: 'presetCtxWinsTool',
+          input: { adAccountId: 'act_someone_elses' },
+          toolContext: { ocaAdAccountId: 'act_ours' },
+        });
+
+        expect(srv.bodies[0]).toEqual({ adAccountId: 'act_ours' });
+      } finally {
+        await srv.close();
+      }
+    });
+
+    test('fails the call, sending nothing, when the key is missing', async () => {
+      const srv = await startBodyCaptureServer();
+      try {
+        const toolId = await createPresetTool({
+          name: 'presetCtxMissingTool',
+          port: srv.port,
+          presetParameters: { adAccountId: '{{context:ocaAdAccountId}}' },
+        });
+
+        await expect(
+          runTool({
+            toolId,
+            toolName: 'presetCtxMissingTool',
+            toolContext: { ocaToken: 'tok' },
+          })
+        ).rejects.toThrow(/ocaAdAccountId/);
+
+        // The literal placeholder reaching the target as a resource id comes
+        // back as an opaque "not found", which is the failure this replaces.
+        expect(srv.bodies).toHaveLength(0);
+      } finally {
+        await srv.close();
+      }
+    });
+
+    test('resolves the token on an mcp tool, against the listed schema', async () => {
+      const calls: Array<{ arguments?: Record<string, unknown> }> = [];
+      jest
+        .spyOn(global, 'fetch')
+        .mockImplementation((_input: unknown, init?: RequestInit) => {
+          const body = JSON.parse(String(init?.body)) as {
+            method: string;
+            params?: { arguments?: Record<string, unknown> };
+          };
+          if (body.method === 'tools/list') {
+            return Promise.resolve(
+              new Response(
+                JSON.stringify({
+                  result: {
+                    tools: [
+                      {
+                        name: 'get_account',
+                        inputSchema: {
+                          type: 'object',
+                          properties: {
+                            adAccountId: { type: 'string' },
+                            limit: { type: 'integer' },
+                          },
+                        },
+                      },
+                    ],
+                  },
+                }),
+                { status: 200 }
+              )
+            );
+          }
+          calls.push(body.params ?? {});
+          return Promise.resolve(
+            new Response(JSON.stringify({ result: { content: [] } }), {
+              status: 200,
+            })
+          );
+        });
+
+      try {
+        const result = await resolveMcpTools({
+          typedTool: {
+            mcp: { url: 'http://localhost:19999/mcp' },
+            presetParameters: {
+              adAccountId: '{{context:ocaAdAccountId}}',
+              limit: '{{context:ocaLimit}}',
+            },
+          },
+          toolContext: { ocaAdAccountId: 'act_9', ocaLimit: '25' },
+          buildContextHeaders: () => {
+            return {};
+          },
+          logToolCallingError: jest.fn(),
+        });
+
+        const mcpTool = result.get_account;
+        if (!('execute' in mcpTool) || typeof mcpTool.execute !== 'function') {
+          throw new Error('mcp tool resolved without an execute');
+        }
+        await mcpTool.execute({}, {} as never);
+
+        expect(calls).toHaveLength(1);
+        expect(calls[0]!.arguments).toEqual({
+          adAccountId: 'act_9',
+          limit: 25,
+        });
+      } finally {
+        jest.restoreAllMocks();
+      }
+    });
+  });
 });
 
 describe('buildMcpToolExecute', () => {

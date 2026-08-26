@@ -165,6 +165,7 @@ const dispatchNodeExecution = async (
         authHeader,
         idempotencyKey,
         orchestrationRunId: runPublicId,
+        toolContext,
       });
     case 'poll':
       return executePollNode({
@@ -173,6 +174,7 @@ const dispatchNodeExecution = async (
         projectIds,
         authHeader,
         attempt: pollAttempt,
+        toolContext,
       });
     case 'knowledge':
       return executeKnowledgeNode({ node: nodeDefn, state, projectIds });

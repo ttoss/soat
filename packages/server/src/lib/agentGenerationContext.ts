@@ -170,16 +170,15 @@ export const buildGenerationContext = async (args: {
     pinnedVersion: args.pinnedAgentVersion,
   });
 
-  const boundToolIds = splitToolBindings(
-    readAgentToolBindings(typedAgent)
-  ).toolIds;
   const resolvedMessages = await resolveGenerationInputMessages({
     projectIds: args.projectIds,
     messages: args.messages,
     authHeader: args.authHeader,
     authUser: args.authUser,
-    allowedToolIds: boundToolIds,
+    allowedToolIds: splitToolBindings(readAgentToolBindings(typedAgent))
+      .toolIds,
     agentBoundaryPolicy: typedAgent.boundaryPolicy,
+    toolContext, // identity-pinned, not the raw caller bag (#345)
   });
   const { model } = await resolveGenerationModel({
     agentId: args.agentId,

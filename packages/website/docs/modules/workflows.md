@@ -407,10 +407,12 @@ Filtering tasks by a metadata key is not supported — fetch and filter client-s
 A task's automations are a generation entry point like any other, so they can
 carry a [`tool_context`](../advanced/tool-context.md) — a flat
 `Record<string, string>` forwarded as context headers on every `http`, `mcp`
-and `builtin` tool call the task's dispatches make. It reaches both dispatch
-kinds: an `agent` dispatch's generation, and an `orchestration` dispatch's run
-(which carries it to every node and child run — see
-[Run Tool Context](./orchestrations.md#run-tool-context)).
+and `builtin` tool call the task's dispatches make. It reaches all three
+dispatch kinds: an `agent` dispatch's generation, a `tool` dispatch's call
+(where it also resolves the tool's own `{{context:}}`
+[headers and pinned parameters](../advanced/tool-context.md#pinning-a-parameter-to-the-runs-value)),
+and an `orchestration` dispatch's run — which carries it to every node and
+child run, see [Run Tool Context](./orchestrations.md#run-tool-context).
 
 **It attaches per move** — creation is the first move:
 

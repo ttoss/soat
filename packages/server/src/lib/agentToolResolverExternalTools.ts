@@ -12,6 +12,7 @@ import {
   mergePresetParameters,
   stripPresetKeysFromSchema,
 } from './toolPresetParameters';
+import { resolvePresetParametersForCall } from './toolTemplates';
 
 const SOAT_TOOL_CALL_TIMEOUT_MS = process.env.SOAT_TOOL_CALL_TIMEOUT_MS
   ? parseInt(process.env.SOAT_TOOL_CALL_TIMEOUT_MS, 10)
@@ -32,14 +33,23 @@ export const buildMcpToolExecute = (args: {
   mcpHeaders: Record<string, string>;
   mcpToolName: string;
   presetParameters?: object | null;
+  // This call's `tool_context` and the listed tool's own schema — a
+  // `{{context:}}` token in a preset resolves against the first and is retyped
+  // by the second, at call time so a missing key fails this call rather than
+  // the resolution of every tool the agent has (#345).
+  toolContext?: Record<string, string>;
+  presetSchema?: unknown;
   logToolCallingError: LogToolCallingError;
 }) => {
   return async (toolArgs: unknown) => {
-    const callArgs = args.presetParameters
-      ? mergePresetParameters({
-          presetParameters: args.presetParameters,
-          input: toolArgs,
-        })
+    const presetParameters = resolvePresetParametersForCall({
+      presetParameters: args.presetParameters,
+      toolContext: args.toolContext,
+      toolName: args.mcpToolName,
+      schema: args.presetSchema,
+    });
+    const callArgs = presetParameters
+      ? mergePresetParameters({ presetParameters, input: toolArgs })
       : toolArgs;
     try {
       const callResponse = await fetchWithEgressGuard(args.mcpUrl, {
@@ -86,6 +96,7 @@ const buildMcpToolEntry = (args: {
   mcpUrl: string;
   mcpHeaders: Record<string, string>;
   presetParameters?: object | null;
+  toolContext?: Record<string, string>;
   logToolCallingError: LogToolCallingError;
 }): Tool => {
   return tool({
@@ -104,6 +115,8 @@ const buildMcpToolEntry = (args: {
       mcpHeaders: args.mcpHeaders,
       mcpToolName: args.mcpTool.name,
       presetParameters: args.presetParameters,
+      toolContext: args.toolContext,
+      presetSchema: args.mcpTool.inputSchema,
       logToolCallingError: args.logToolCallingError,
     }),
   });
@@ -188,6 +201,7 @@ export const resolveMcpTools = async (args: {
         mcpUrl,
         mcpHeaders,
         presetParameters: args.typedTool.presetParameters,
+        toolContext: args.toolContext,
         logToolCallingError: args.logToolCallingError,
       });
     }
@@ -338,7 +352,12 @@ const buildSoatActionTool = (args: {
         return { error: `Forbidden: boundary policy denies ${iamAction}` };
       }
       const rawArgs = mergePresetParameters({
-        presetParameters: args.presetParameters,
+        presetParameters: resolvePresetParametersForCall({
+          presetParameters: args.presetParameters,
+          toolContext: args.toolContext,
+          toolName: args.toolName,
+          schema: args.def.inputSchema,
+        }),
         input: toolArgs,
       });
       return executeSoatTool({

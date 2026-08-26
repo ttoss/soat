@@ -1404,6 +1404,43 @@ describe('Tools', () => {
   });
 
   describe('Invalid template tokens ({{...}}) in tool configs', () => {
+    // #345: `preset_parameters` is now a place `{{context:...}}` is resolved, so
+    // it is also a place a malformed token must be caught at write time rather
+    // than shipped verbatim to the target as a parameter value.
+    test('creating a tool with a {{context:...}} preset parameter is accepted', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'context-preset-tool',
+          type: 'http',
+          execute: { url: 'https://api.example.com/ads', method: 'POST' },
+          context_keys: ['ocaToken', 'ocaAdAccountId'],
+          preset_parameters: { adAccountId: '{{context:ocaAdAccountId}}' },
+        });
+
+      expect(res.status).toBe(201);
+      // The stored config keeps the token; resolution happens per call.
+      expect(res.body.preset_parameters).toEqual({
+        adAccountId: '{{context:ocaAdAccountId}}',
+      });
+    });
+
+    test('creating a tool with a malformed {{...}} token in preset_parameters returns 400', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'bad-preset-token-tool',
+          type: 'http',
+          execute: { url: 'https://api.example.com/ads', method: 'POST' },
+          preset_parameters: { adAccountId: '{{ocaAdAccountId}}' },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_TEMPLATE_TOKEN');
+    });
+
     test('creating an http tool with a non-secret {{...}} token in execute.url returns 400', async () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')
