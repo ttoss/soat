@@ -4044,6 +4044,20 @@ if ! printf '%s\n' "$SOAT_PRESET_CALL_RESP" | jq -e '.limit == 1 and (.data | le
 fi
 echo "Preset query parameter: OK"
 
+# 37b-ii. A preset is a pin, not a default: a caller that supplies the same key
+# does not get to override it. `limit` is echoed back, so the losing value is
+# directly observable — the tool pins 1, the call asks for 50, the answer is 1.
+SOAT_PRESET_OVERRIDE_RESP=$($SOAT_CLI call-tool \
+  --tool-id "$SOAT_PRESET_TOOL_ID" \
+  --action list-agents \
+  --input '{"limit":50}')
+if ! printf '%s\n' "$SOAT_PRESET_OVERRIDE_RESP" | jq -e '.limit == 1' >/dev/null 2>&1; then
+  echo "ERROR: caller input overrode a preset_parameters value" >&2
+  echo "$SOAT_PRESET_OVERRIDE_RESP" >&2
+  exit 1
+fi
+echo "Preset wins over caller input: OK"
+
 # 37c. `preset_parameters` must also satisfy a *path* parameter, not just a
 # query one: the action's URL is built from them, so a pinned `agent_id` makes
 # an item-scoped action callable with an empty input.

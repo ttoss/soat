@@ -12,6 +12,10 @@ import { emitResourceEvent } from './eventBus';
 import { updateGenerationRecord } from './generations';
 import { saveRoutingMetadata } from './modelRouteMetadata';
 import { assertNoTextEncodedToolCall } from './textEncodedToolCall';
+import {
+  mergePresetParameters,
+  readClientToolPresets,
+} from './toolPresetParameters';
 import { saveTrace, serializeSteps } from './traces';
 import { recordGenerationUsage } from './usage';
 
@@ -83,6 +87,16 @@ export const buildAllMessages = (
   return [{ role: 'system', content: instructions }, ...messages];
 };
 
+/**
+ * The client tool calls a turn proposed, with each tool's `preset_parameters`
+ * pinned over the model's arguments.
+ *
+ * This is where a client tool's presets are applied: it has no server-side
+ * `execute` to merge into, so the resolver hangs them off the tool (under
+ * `CLIENT_TOOL_PRESETS`, see `toolPresetParameters.ts`) and the pin lands here —
+ * on the arguments that go to the guardrail gate, the stored pending state, and
+ * the client at the `requires_action` boundary.
+ */
 export const findPendingClientTools = (
   steps: Array<{ toolCalls?: ClientToolCall[] }>,
   resolvedTools: Record<string, Tool>
@@ -94,6 +108,16 @@ export const findPendingClientTools = (
     .filter((tc) => {
       const resolvedTool = resolvedTools[tc.toolName];
       return resolvedTool && !('execute' in resolvedTool);
+    })
+    .map((tc) => {
+      const presetParameters = readClientToolPresets(
+        resolvedTools[tc.toolName]
+      );
+      if (!presetParameters) return tc;
+      return {
+        ...tc,
+        input: mergePresetParameters({ presetParameters, input: tc.input }),
+      };
     });
 };
 

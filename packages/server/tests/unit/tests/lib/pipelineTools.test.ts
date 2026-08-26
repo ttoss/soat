@@ -303,7 +303,7 @@ describe('runPipeline', () => {
     expect(result).toBe('Hi!');
   });
 
-  test('merges presetParameters into the input context (caller wins on conflict)', async () => {
+  test('merges presetParameters into the input context (preset wins on conflict)', async () => {
     let received: Record<string, unknown> | undefined;
     await runPipeline({
       pipeline: {
@@ -325,7 +325,11 @@ describe('runPipeline', () => {
         return {};
       },
     });
-    expect(received).toEqual({ fromPreset: 'P', overridden: 'caller-value' });
+    // A preset is a pin, not a default — the caller's value for the same key
+    // loses. Every dispatch surface merges the same way (see
+    // `mergePresetParameters`), so a pipeline step cannot be the one place a
+    // pinned parameter is negotiable.
+    expect(received).toEqual({ fromPreset: 'P', overridden: 'preset-value' });
   });
 
   test('wraps a failing step as PIPELINE_STEP_FAILED and stops the sequence', async () => {

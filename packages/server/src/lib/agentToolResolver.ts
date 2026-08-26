@@ -1,5 +1,5 @@
 /* eslint-disable max-lines */
-import type { Tool } from 'ai';
+import type { JSONSchema7, Tool } from 'ai';
 import { jsonSchema, tool } from 'ai';
 import createDebug from 'debug';
 import {
@@ -38,6 +38,11 @@ import {
   buildContextHeaders,
 } from './toolContext';
 import { fetchWithEgressGuard } from './toolEgress';
+import {
+  CLIENT_TOOL_PRESETS,
+  mergePresetParameters,
+  stripPresetKeysFromSchema,
+} from './toolPresetParameters';
 import {
   assertEphemeralTypeSupported,
   callTool,
@@ -147,6 +152,7 @@ type TypedHttpTool = {
   description: string | null;
   parameters: Record<string, unknown> | null;
   contextKeys?: string[] | null;
+  presetParameters?: object | null;
   execute:
     | {
         url: string;
@@ -571,6 +577,7 @@ export const buildHttpToolExecute = (
     execute: HttpExecuteConfig;
     projectId: number;
     contextKeys?: string[] | null;
+    presetParameters?: object | null;
     // Verbatim request headers (e.g. `Idempotency-Key`) merged last, after
     // execute headers and context headers.
     extraHeaders?: Record<string, string>;
@@ -581,10 +588,10 @@ export const buildHttpToolExecute = (
     const rawMethod = (args.execute.method ?? 'POST').toUpperCase();
     const method = ALLOWED_METHODS.includes(rawMethod) ? rawMethod : 'POST';
     const hasBody = !['GET', 'HEAD'].includes(method);
-    const rawArgs =
-      toolArgs && typeof toolArgs === 'object'
-        ? (toolArgs as Record<string, unknown>)
-        : {};
+    const rawArgs = mergePresetParameters({
+      presetParameters: args.presetParameters,
+      input: toolArgs,
+    });
     let url = args.execute.url;
     try {
       const {
@@ -647,6 +654,24 @@ export const buildHttpToolExecute = (
   };
 };
 
+/**
+ * The schema a model sees for a tool whose parameters it owns locally (`http`,
+ * `client`, `pipeline`): the stored `parameters`, minus every key
+ * `preset_parameters` pins. Offering a pinned field would only invite the model
+ * to spend a guess on a value the merge discards.
+ */
+const modelVisibleSchema = (
+  parameters: Record<string, unknown> | null | undefined,
+  presetParameters: object | null | undefined
+): Record<string, unknown> => {
+  return {
+    ...stripPresetKeysFromSchema(
+      (parameters ?? { type: 'object', properties: {} }) as JSONSchema7,
+      presetParameters
+    ),
+  };
+};
+
 const resolveHttpTool = (
   typedTool: TypedHttpTool,
   toolContext?: Record<string, string>
@@ -664,7 +689,9 @@ const resolveHttpTool = (
 
   return tool({
     description: typedTool.description ?? undefined,
-    inputSchema: jsonSchema(parameters ?? { type: 'object', properties: {} }),
+    inputSchema: jsonSchema(
+      modelVisibleSchema(parameters, typedTool.presetParameters)
+    ),
     execute: execute
       ? buildHttpToolExecute(
           {
@@ -672,6 +699,7 @@ const resolveHttpTool = (
             execute,
             projectId: typedTool.projectId,
             contextKeys: typedTool.contextKeys,
+            presetParameters: typedTool.presetParameters,
           },
           toolContext
         )
@@ -685,14 +713,26 @@ const resolveHttpTool = (
 const resolveClientTool = (typedTool: {
   description: string | null;
   parameters: Record<string, unknown> | null;
+  presetParameters?: object | null;
 }): Tool => {
   const parameters =
     typeof typedTool.parameters === 'string'
       ? (JSON.parse(typedTool.parameters) as Record<string, unknown>)
       : typedTool.parameters;
-  return tool({
+  const resolved = tool({
     description: typedTool.description ?? undefined,
-    inputSchema: jsonSchema(parameters ?? { type: 'object', properties: {} }),
+    inputSchema: jsonSchema(
+      modelVisibleSchema(parameters, typedTool.presetParameters)
+    ),
+  });
+  if (!typedTool.presetParameters) return resolved;
+  // No `execute` to merge into — the call is dispatched by the client, so the
+  // presets ride along to the `requires_action` handoff, where
+  // `findPendingClientTools` pins them onto the arguments the client receives.
+  // Adding a symbol-keyed property keeps the tool execute-less, which is what
+  // marks it a client tool downstream.
+  return Object.assign(resolved, {
+    [CLIENT_TOOL_PRESETS]: typedTool.presetParameters,
   });
 };
 
@@ -721,6 +761,7 @@ const resolveMcpToolEntry = async (
         actions: typedTool.actions,
         deniedActions: typedTool.deniedActions,
         contextKeys: typedTool.contextKeys,
+        presetParameters: typedTool.presetParameters,
       },
       toolContext,
       buildContextHeaders,
@@ -802,7 +843,11 @@ const localInjectableSchema = (
     typedTool.type === 'pipeline' ||
     typedTool.type === 'client'
   ) {
-    return typedTool.parameters ?? {};
+    // Injection *replaces* the model-visible schema, so it has to start from
+    // the pinned-key-stripped shape — handing over the raw `parameters` would
+    // put every preset key back in front of the model the moment a class-C
+    // guardrail applies.
+    return modelVisibleSchema(typedTool.parameters, typedTool.presetParameters);
   }
   return undefined;
 };
@@ -841,8 +886,13 @@ const resolvePipelineTool = (
       : typedTool.parameters;
   return tool({
     description: typedTool.description ?? undefined,
-    inputSchema: jsonSchema(parameters ?? { type: 'object', properties: {} }),
+    inputSchema: jsonSchema(
+      modelVisibleSchema(parameters, typedTool.presetParameters)
+    ),
     execute: async (toolArgs: unknown) => {
+      // The presets themselves are merged one layer down, by `callTool` — the
+      // same path `POST /tools/{id}/call` takes — so they are applied exactly
+      // once, whichever way the pipeline is reached.
       const input =
         toolArgs && typeof toolArgs === 'object' && !Array.isArray(toolArgs)
           ? (toolArgs as Record<string, unknown>)

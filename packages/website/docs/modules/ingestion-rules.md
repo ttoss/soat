@@ -35,7 +35,7 @@ Rules are per-project. SOAT does not perform OCR or transcription itself — the
 | `tool_id` | string \| null | Converter tool (`tool_…`). Must be a server-callable type: `http`, `mcp`, `builtin`, or `pipeline`. `client` tools are rejected. Mutually exclusive with `agent_id`. |
 | `agent_id` | string \| null | Converter agent (`agent_…`). The file is sent to the agent as multimodal input and its text output becomes the document content. Mutually exclusive with `tool_id`. |
 | `action` | string \| null | Operation id, required for `builtin`/`mcp` tool converters |
-| `preset_parameters` | object \| null | Merged into the tool input before invocation (tool converters only). Cannot contain the reserved keys `file` or `callback`, which ingestion injects. |
+| `preset_parameters` | object \| null | Merged into the tool input before invocation (tool converters only). Cannot contain the reserved keys `file` or `callback`, which ingestion injects. A key the converter tool itself pins in its own [`preset_parameters`](./tools.md#preset-parameters) stays pinned — the tool's value wins over the rule's. |
 | `native_extraction` | string | For PDFs: `first` (default) converts only when native extraction yields no text; `skip` bypasses native extraction and converts every matching PDF. Ignored for non-native types. |
 | `file_delivery` | string | How the file reaches a tool converter: `base64` (default) or `download_url` |
 | `chunk_strategy` | string \| null | Optional default chunk strategy (`page`/`whole`/`size`), overridable per ingest request |
