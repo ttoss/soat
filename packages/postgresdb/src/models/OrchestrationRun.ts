@@ -24,8 +24,11 @@ import { Project } from './Project';
     },
     // The descendant walk behind a nested cost roll-up reads children by parent,
     // once per level, so the lookup is indexed rather than a scan per run read.
+    // `_idx` suffix per this package's naming rule — a name that equals the one
+    // Sequelize would derive turns a later field change into a silent rename
+    // `sync({ alter: true })` never cleans up (`tests/modelIndexes.test.ts`).
     {
-      name: 'orchestration_runs_parent_run_id',
+      name: 'orchestration_runs_parent_run_id_idx',
       fields: ['parent_run_id'],
     },
   ],
