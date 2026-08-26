@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.32.0](https://github.com/ttoss/soat/compare/v0.31.0...v0.32.0) (2026-08-26)
+
+### Bug Fixes
+
+* **server:** make preset_parameters a pin the caller cannot override ([#1141](https://github.com/ttoss/soat/issues/1141)) ([e345c77](https://github.com/ttoss/soat/commit/e345c7771a492b649ddff577ed248b57d0a41698)), closes [#965](https://github.com/ttoss/soat/issues/965)
+* **server:** meter a run's tokens per attempt, and meter the tokens a failed turn already spent ([#1140](https://github.com/ttoss/soat/issues/1140)) ([15a699a](https://github.com/ttoss/soat/commit/15a699a6e3ef21f4e1a2f2edfcf04c42bb6bf083)), closes [#1138](https://github.com/ttoss/soat/issues/1138)
+
+### Features
+
+* **server:** let a registered resource type declare write-only properties ([#1142](https://github.com/ttoss/soat/issues/1142)) ([feb3956](https://github.com/ttoss/soat/commit/feb3956c5b8019a847c6f45153f43addb33273eb)), closes [#1078](https://github.com/ttoss/soat/issues/1078) [#1078](https://github.com/ttoss/soat/issues/1078)
+
 # [0.31.0](https://github.com/ttoss/soat/compare/v0.30.1...v0.31.0) (2026-08-25)
 
 ### Bug Fixes
