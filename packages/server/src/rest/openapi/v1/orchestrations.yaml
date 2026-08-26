@@ -429,7 +429,13 @@ paths:
       summary: List orchestration runs
       description: >-
         Returns orchestration runs the caller can access, optionally filtered by
-        orchestration or by parent run.
+        orchestration, by parent run, or by whether the run has a parent at all.
+
+
+        Note when aggregating: a run's `usage` covers its whole subtree, so
+        summing it over a list that contains both a parent and its children
+        counts the children more than once. Pass `nested=false` to sum over
+        runs a caller started.
       operationId: listOrchestrationRuns
       parameters:
         - name: orchestration_id
@@ -442,12 +448,26 @@ paths:
           in: query
           required: false
           description: >-
-            Filter to the runs a parent run's `loop` / `sub_orchestration` nodes
-            started (run_...). This is how a caller holding a parent reaches the
-            children whose spend the parent's own `usage` excludes — see
-            `usage_including_nested` on the run.
+            Filter to the runs one specific parent run's `loop` /
+            `sub_orchestration` nodes started (run_...). This is how a caller
+            holding a parent names the individual children behind its `usage`.
           schema:
             type: string
+        - name: nested
+          in: query
+          required: false
+          description: >-
+            Filter by whether the run was started by another run. `false`
+            returns only the runs a caller started (no parent), which is the
+            set to sum `usage` over; `true` returns only the runs a `loop` /
+            `sub_orchestration` node started, across every parent. Omit to
+            return both.
+
+
+            Contradicting `parent_orchestration_run_id` with `nested=false`
+            is a `400`; any value other than `true` or `false` is a `400`.
+          schema:
+            type: boolean
         - name: limit
           in: query
           required: false
@@ -1230,20 +1250,30 @@ components:
           allOf:
             - $ref: '#/components/schemas/RunUsageTotals'
           description: >-
-            Usage roll-up (token counts and cost_usd) summed across every
-            metered generation the run produced. Present on the single-run read;
-            omitted from run list responses. Covers **this run's own nodes**: a
-            `loop` / `sub_orchestration` child is a run of its own, so what it
-            spends is on the child, not here — read `usage_including_nested` for
-            the delegated total.
-        usage_including_nested:
+            What the run cost: token counts and `cost_usd` summed across every
+            metered generation it produced **and every run it started** through
+            `loop` / `sub_orchestration` nodes, at any depth. Present on the
+            single-run read; omitted from run list responses.
+
+
+            A nested child is a run record of its own, so this figure spans
+            several of them. Two consequences: summing `usage` across a list
+            that mixes parents and children double-counts (filter with
+            `nested=false`), and the per-event receipt at
+            `/api/v1/usage/receipt` stays scoped to one run — its line items
+            carry a `node_id` from one graph only.
+        usage_own:
           allOf:
             - $ref: '#/components/schemas/RunUsageTotals'
           description: >-
-            The same roll-up summed over this run **and every run descended from
-            it** through `loop` / `sub_orchestration` nodes, at any depth. Equal
-            to `usage` for a run with no children. Present on the single-run
-            read; omitted from run list responses.
+            The same roll-up restricted to **this run's own nodes**, excluding
+            every nested run it started. Equal to `usage` for a run with no
+            children; below it for a run that delegates. Present on the
+            single-run read; omitted from run list responses.
+
+
+            This is the field to read to see where cost sits in a run tree —
+            own versus subtree — without walking the children.
         required_action:
           allOf:
             - $ref: '#/components/schemas/RequiredAction'

@@ -1824,10 +1824,10 @@ fi
 echo "Per-node receipt attribution: OK"
 
 # Nested run attribution: a `sub_orchestration` child is its own run, so the
-# parent's `usage` covers the parent's nodes and `usage_including_nested` covers
-# the delegation. Transform-only on both sides — this asserts the wiring (the
-# link, the filter, the second roll-up), not the arithmetic, which the unit
-# suite pins numerically.
+# parent's `usage` spans the subtree and `usage_own` covers the parent's own
+# nodes. Transform-only on both sides — this asserts the wiring (the link, the
+# two filters, both roll-ups), not the arithmetic, which the unit suite pins
+# numerically.
 NESTED_CHILD_ORCH=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name "smoke-orchestration-nested-child" \
@@ -1852,9 +1852,24 @@ fi
 
 NESTED_PARENT_GET=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI get-orchestration-run \
   --orchestration-run-id "$NESTED_PARENT_RUN")
-if ! printf '%s\n' "$NESTED_PARENT_GET" | jq -e '(.usage | type) == "object" and (.usage_including_nested | type) == "object" and (.usage_including_nested.total_input_tokens | type) == "number" and .parent_orchestration_run_id == null' >/dev/null 2>&1; then
-  echo "the parent run did not carry both its own and its nested usage roll-up"
+if ! printf '%s\n' "$NESTED_PARENT_GET" | jq -e '(.usage | type) == "object" and (.usage_own | type) == "object" and (.usage.total_input_tokens | type) == "number" and (.usage_own.total_input_tokens | type) == "number" and .parent_orchestration_run_id == null' >/dev/null 2>&1; then
+  echo "the parent run did not carry both the subtree and own-nodes roll-up"
   printf '%s\n' "$NESTED_PARENT_GET"
+  exit 1
+fi
+
+# The filter that keeps an aggregate over runs from double-counting: `usage` is
+# transitive, so a child must not appear in the top-level list.
+NESTED_ROOTS=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestration-runs --nested false --limit 100)
+if ! printf '%s\n' "$NESTED_ROOTS" | jq -e 'all(.data[]; .parent_orchestration_run_id == null)' >/dev/null 2>&1; then
+  echo "nested=false returned a run that was started by another run"
+  printf '%s\n' "$NESTED_ROOTS"
+  exit 1
+fi
+NESTED_CHILDREN_ALL=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestration-runs --nested true --limit 100)
+if ! printf '%s\n' "$NESTED_CHILDREN_ALL" | jq -e '(.data | length) > 0 and all(.data[]; .parent_orchestration_run_id != null)' >/dev/null 2>&1; then
+  echo "nested=true did not return exactly the runs started by another run"
+  printf '%s\n' "$NESTED_CHILDREN_ALL"
   exit 1
 fi
 echo "Nested run attribution: OK"

@@ -2068,38 +2068,43 @@ describe('Usage', () => {
       expect(res.body.usage.total_output_tokens).toBe(20);
     });
 
-    test("the parent's own usage covers its own nodes only", async () => {
+    test("the parent's usage covers what it delegated", async () => {
       const res = await authenticatedTestClient(userToken).get(
         `/api/v1/orchestration-runs/${parentRunId}`
       );
       expect(res.status).toBe(200);
-      // The `sub_orchestration` node metered compute, not tokens: the tokens
-      // belong to the child. `usage` keeps meaning what it says.
-      expect(res.body.usage.total_output_tokens).toBe(0);
+      // The parent's only node is a `sub_orchestration`: it metered compute,
+      // not tokens, so every token on this figure was spent by the child run.
+      // `usage` answers "what did this run cost", which for a delegating graph
+      // is the subtree — not the fraction that happens to sit on this record.
+      expect(res.body.usage.total_output_tokens).toBe(20);
+      expect(res.body.usage.total_input_tokens).toBe(10);
+      expect('total_cost_usd' in res.body.usage).toBe(true);
     });
 
-    test("the parent's nested roll-up includes what its children spent", async () => {
+    test("the parent's own-nodes figure excludes its children", async () => {
       const res = await authenticatedTestClient(userToken).get(
         `/api/v1/orchestration-runs/${parentRunId}`
       );
       expect(res.status).toBe(200);
-      expect(res.body.usage_including_nested).toBeDefined();
-      expect(res.body.usage_including_nested.total_output_tokens).toBe(20);
-      expect(res.body.usage_including_nested.total_input_tokens).toBe(10);
-      // The roll-up is a superset of the run's own usage, never a replacement.
-      expect(
-        res.body.usage_including_nested.total_output_tokens
-      ).toBeGreaterThanOrEqual(res.body.usage.total_output_tokens);
-      expect('total_cost_usd' in res.body.usage_including_nested).toBe(true);
+      // The split a run-tree reader needs: own vs subtree, without an N+1 walk.
+      expect(res.body.usage_own.total_output_tokens).toBe(0);
+      // `usage` is never below the own figure — it contains it.
+      expect(res.body.usage.total_output_tokens).toBeGreaterThanOrEqual(
+        res.body.usage_own.total_output_tokens
+      );
     });
 
-    test('a run with no children rolls up to its own usage', async () => {
+    test('a run with no children reports the same figure twice', async () => {
       const res = await authenticatedTestClient(userToken).get(
         `/api/v1/orchestration-runs/${childRunId}`
       );
       expect(res.status).toBe(200);
-      expect(res.body.usage_including_nested.total_output_tokens).toBe(
+      expect(res.body.usage_own.total_output_tokens).toBe(
         res.body.usage.total_output_tokens
+      );
+      expect(res.body.usage_own.total_cost_usd).toBe(
+        res.body.usage.total_cost_usd
       );
     });
   });

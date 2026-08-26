@@ -303,6 +303,36 @@ orchestrationsRouter.get('/orchestration-runs', async (ctx: Context) => {
   const parentRunId = ctx.query['parent_orchestration_run_id'] as
     string | undefined;
 
+  // Parsed rather than coerced: `nested=maybe` silently becoming `true` would
+  // hand back a list the caller did not ask for, and an aggregate over it is
+  // wrong by exactly the double-count this filter exists to prevent.
+  const nestedRaw = ctx.query['nested'] as string | undefined;
+  if (
+    nestedRaw !== undefined &&
+    nestedRaw !== 'true' &&
+    nestedRaw !== 'false'
+  ) {
+    ctx.status = 400;
+    ctx.body = {
+      code: 'VALIDATION_FAILED',
+      message: "`nested` must be 'true' or 'false'",
+    };
+    return;
+  }
+  const nested = nestedRaw === undefined ? undefined : nestedRaw === 'true';
+
+  // A parent id already asserts the run has a parent, so pairing it with
+  // `nested=false` asks for two contradictory things at once.
+  if (parentRunId !== undefined && nested === false) {
+    ctx.status = 400;
+    ctx.body = {
+      code: 'VALIDATION_FAILED',
+      message:
+        '`nested=false` contradicts `parent_orchestration_run_id`, which selects runs that have a parent',
+    };
+    return;
+  }
+
   const projectIds = await requireProjectAccess({
     ctx,
     action: 'orchestrations:ListRuns',
@@ -312,6 +342,7 @@ orchestrationsRouter.get('/orchestration-runs', async (ctx: Context) => {
   const result = await listOrchestrationRuns({
     orchestrationPublicId: orchestrationId,
     parentRunId,
+    nested,
     projectIds: projectIds ?? undefined,
     ...parsePagination(ctx),
   });

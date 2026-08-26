@@ -3114,6 +3114,57 @@ describe('Orchestrations', () => {
       ).toBe(true);
     }, 60000);
 
+    // `usage` on a run is transitive, so summing it across a list double-counts
+    // any run that is also somebody's child. This filter is how a caller
+    // aggregating over runs avoids that, which is why it ships with the
+    // transitive figure rather than after it.
+    test('nested=false returns only runs a caller started', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        '/api/v1/orchestration-runs?nested=false&limit=100'
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.data.length).toBeGreaterThan(0);
+      expect(
+        res.body.data.every(
+          (r: { parent_orchestration_run_id: string | null }) => {
+            return r.parent_orchestration_run_id === null;
+          }
+        )
+      ).toBe(true);
+    });
+
+    test('nested=true returns only runs another run started', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        '/api/v1/orchestration-runs?nested=true&limit=100'
+      );
+      expect(res.status).toBe(200);
+      // The loop above fanned out three children, so this cannot be empty.
+      expect(res.body.data.length).toBeGreaterThan(0);
+      expect(
+        res.body.data.every(
+          (r: { parent_orchestration_run_id: string | null }) => {
+            return r.parent_orchestration_run_id !== null;
+          }
+        )
+      ).toBe(true);
+    });
+
+    test('an unparseable nested value is rejected', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        '/api/v1/orchestration-runs?nested=perhaps'
+      );
+      expect(res.status).toBe(400);
+    });
+
+    test('nested=false contradicting a parent id is rejected', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        '/api/v1/orchestration-runs?nested=false&parent_orchestration_run_id=run_x'
+      );
+      // Naming a parent already asserts the run has one. Serving an
+      // always-empty list instead would read as "this parent has no children".
+      expect(res.status).toBe(400);
+    });
+
     test('poll node missing required fields is rejected at create', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations')

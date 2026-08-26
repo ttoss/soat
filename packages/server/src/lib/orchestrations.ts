@@ -1,4 +1,5 @@
 /* eslint-disable max-lines */
+import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
@@ -26,11 +27,7 @@ import {
   type PaginatedResult,
   resolvePagination,
 } from './pagination';
-import {
-  getRunUsageTotals,
-  getRunUsageTotalsIncludingNested,
-  type UsageTotals,
-} from './usageReceipt';
+import { getRunUsageRollups, type UsageTotals } from './usageReceipt';
 
 const log = createDebug('soat:orchestrations');
 
@@ -235,10 +232,9 @@ export type MappedOrchestrationRun = {
   };
   // The same roll-up summed over this run *and every run descended from it*
   // through `loop` / `sub_orchestration` nodes. Equal to `usage` for a run with
-  // no children; strictly the figure to read for a graph that delegates, since
-  // a child's events are attributed to the child. Populated on the single-run
-  // read alongside `usage`, which keeps meaning "this run's own nodes".
-  usage_including_nested?: {
+  // no children. Populated on the single-run read alongside `usage`, which is
+  // the subtree total.
+  usage_own?: {
     total_input_tokens: number;
     total_output_tokens: number;
     total_cached_tokens: number;
@@ -334,8 +330,9 @@ export const mapOrchestrationRun = (
     project: InstanceType<typeof db.Project>;
     nodeExecutions?: InstanceType<typeof db.OrchestrationNodeExecution>[];
   },
+  // The subtree total (what the run cost) and this run's own nodes.
   usage?: UsageTotals,
-  nestedUsage?: UsageTotals
+  ownUsage?: UsageTotals
 ): MappedOrchestrationRun => {
   return {
     id: run.publicId,
@@ -367,14 +364,14 @@ export const mapOrchestrationRun = (
           },
         }
       : {}),
-    ...(nestedUsage
+    ...(ownUsage
       ? {
-          usage_including_nested: {
-            total_input_tokens: nestedUsage.totalInputTokens,
-            total_output_tokens: nestedUsage.totalOutputTokens,
-            total_cached_tokens: nestedUsage.totalCachedTokens,
-            total_reasoning_tokens: nestedUsage.totalReasoningTokens,
-            total_cost_usd: nestedUsage.totalCostUsd,
+          usage_own: {
+            total_input_tokens: ownUsage.totalInputTokens,
+            total_output_tokens: ownUsage.totalOutputTokens,
+            total_cached_tokens: ownUsage.totalCachedTokens,
+            total_reasoning_tokens: ownUsage.totalReasoningTokens,
+            total_cost_usd: ownUsage.totalCostUsd,
           },
         }
       : {}),
@@ -657,19 +654,14 @@ export const findOrchestrationRun = async (args: {
   })) as OrchestrationRunRow | null;
   if (!run) return null;
 
-  const [usage, nestedUsage] = await Promise.all([
-    getRunUsageTotals({ runInternalId: run.id as number }),
-    // The transitive figure is computed alongside the run's own rather than
-    // instead of it: a caller reconciling one node against a provider invoice
-    // needs the self figure, and a caller pricing the whole delegation needs
-    // this one (#1135).
-    getRunUsageTotalsIncludingNested({
-      runInternalId: run.id as number,
-      runPublicId: run.publicId as string,
-    }),
-  ]);
+  // `usage` is the subtree figure and `usage_own` the run's own nodes — both
+  // from one pass, so the split costs no extra query (#1135).
+  const rollups = await getRunUsageRollups({
+    runInternalId: run.id as number,
+    runPublicId: run.publicId as string,
+  });
 
-  return mapOrchestrationRun(run, usage, nestedUsage);
+  return mapOrchestrationRun(run, rollups.includingNested, rollups.own);
 };
 
 export const listOrchestrationRuns = async (args: {
@@ -679,6 +671,12 @@ export const listOrchestrationRuns = async (args: {
   // no way to name its children, which is what let a parent's total read as
   // complete when it was not (#1135).
   parentRunId?: string;
+  // Whether the run was started by another run. `false` selects the runs a
+  // caller started (no parent), `true` the runs a `loop` /
+  // `sub_orchestration` node started; omitted returns both. This is what makes
+  // an aggregate over runs safe: `usage` is transitive, so summing it across a
+  // list that mixes parents and their children counts the children twice.
+  nested?: boolean;
   projectIds?: number[];
   limit?: number;
   offset?: number;
@@ -689,7 +687,11 @@ export const listOrchestrationRuns = async (args: {
 
   const where: Record<string, unknown> = {};
   if (args.projectIds) where['projectId'] = args.projectIds;
-  if (args.parentRunId !== undefined) where['parentRunId'] = args.parentRunId;
+  if (args.parentRunId !== undefined) {
+    where['parentRunId'] = args.parentRunId;
+  } else if (args.nested !== undefined) {
+    where['parentRunId'] = args.nested ? { [Op.ne]: null } : null;
+  }
 
   // Optional orchestration filter: resolve the orchestration id when provided,
   // returning an empty list if it does not exist within the caller's scope.
