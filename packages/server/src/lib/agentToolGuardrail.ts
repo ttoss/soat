@@ -11,7 +11,7 @@ import {
   stripApprovalJustification,
 } from './agentToolApproval';
 import { emitApproval } from './approvals';
-import { emitGuardrailTripwireEvent } from './exceptions';
+import { emitGuardrailTripwireEvent } from './exceptionAutoFile';
 import type { CollectedGuardrail } from './guardrailCollection';
 import { collectApplicableGuardrails } from './guardrailCollection';
 import {

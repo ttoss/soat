@@ -38,7 +38,8 @@ export type EventDropStage =
   | 'webhook_lookup'
   | 'delivery_write'
   | 'activity_write'
-  | 'trigger_lookup';
+  | 'trigger_lookup'
+  | 'exception_file';
 
 const droppedEvents = new Map<EventDropStage, number>();
 
@@ -67,6 +68,31 @@ export const recordDroppedEvent = (args: {
 /** How many events this process has dropped at a stage. */
 export const droppedEventCount = (args: { stage: EventDropStage }): number => {
   return droppedEvents.get(args.stage) ?? 0;
+};
+
+/**
+ * Runs a fire-and-forget subscriber write with {@link retryTransient}, and
+ * counts the event as dropped via {@link recordDroppedEvent} only once the
+ * retries are spent. Every bus subscriber's dispatch handler needs this exact
+ * pairing around the write that happens after its own commit, so it is
+ * written once here rather than once per subscriber (#1130).
+ */
+export const retryOrRecordDrop = (args: {
+  stage: EventDropStage;
+  label: string;
+  event: Pick<SoatEvent, 'type' | 'resourceId'>;
+  operation: () => Promise<unknown>;
+}): void => {
+  void retryTransient({ label: args.label, operation: args.operation }).catch(
+    (error: unknown) => {
+      recordDroppedEvent({
+        stage: args.stage,
+        type: args.event.type,
+        resourceId: args.event.resourceId,
+        error,
+      });
+    }
+  );
 };
 
 export interface SoatEvent {

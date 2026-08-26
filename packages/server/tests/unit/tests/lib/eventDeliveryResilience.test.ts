@@ -385,4 +385,54 @@ describe('event delivery resilience', () => {
       expect(droppedEventCount({ stage: 'activity_write' })).toBe(before + 1);
     });
   });
+
+  describe('the exception file write', () => {
+    const emitRunFailed = (resourceId: string) => {
+      emitEvent({
+        type: 'orchestration_runs.failed',
+        projectId: projectInternalId,
+        projectPublicId: projectId,
+        resourceType: 'orchestration_run',
+        resourceId,
+        data: {},
+        timestamp: new Date().toISOString(),
+      });
+    };
+
+    test('a transient failure does not lose the exception', async () => {
+      jest
+        .spyOn(db.ExceptionItem, 'create')
+        .mockRejectedValueOnce(new Error('deadlock detected'));
+
+      emitRunFailed('run_exception_blip');
+
+      await waitFor(async () => {
+        const count = await db.ExceptionItem.count({
+          where: { orchestrationRunId: 'run_exception_blip' },
+        });
+        return count === 1;
+      });
+
+      const item = await db.ExceptionItem.findOne({
+        where: { orchestrationRunId: 'run_exception_blip' },
+      });
+      expect(item!.kind).toBe('run_failed');
+    });
+
+    test('an unrecoverable failure is counted, not swallowed', async () => {
+      jest
+        .spyOn(db.ExceptionItem, 'create')
+        .mockRejectedValue(new Error('database is down'));
+
+      const before = droppedEventCount({ stage: 'exception_file' });
+
+      emitRunFailed('run_exception_down');
+
+      await waitFor(() => {
+        return droppedEventCount({ stage: 'exception_file' }) === before + 1;
+      });
+
+      expect(droppedEventCount({ stage: 'exception_file' })).toBe(before + 1);
+    });
+  });
 });
