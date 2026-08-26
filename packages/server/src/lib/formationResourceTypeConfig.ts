@@ -85,6 +85,10 @@ export type FormationResourceTypeRegistration = {
   description?: string;
   handler: FormationHandlerConfig;
   capabilities: ReadonlySet<HandlerCapability>;
+  /**
+   * Properties the engine must never persist. See {@link parseWriteOnlyProperties}.
+   */
+  writeOnlyProperties: ReadonlySet<string>;
   /** The declared property schema, kept for the docs/plan surfaces. */
   schema: SchemaWithProperties;
   /** The field sets template validation is driven from. */
@@ -196,6 +200,60 @@ const parseCapabilities = (args: {
   return parsed;
 };
 
+/**
+ * The properties whose values must not survive the apply.
+ *
+ * A registered type is often the one that carries a credential — a channel's
+ * bot token, an API key for the system behind the handler. Those have to be
+ * *sent*, or nothing gets provisioned, but they must not be *stored*: the
+ * engine keeps a `lastAppliedProperties` snapshot of every resource to diff
+ * against on the next deploy, and a token left in it sits at rest in the
+ * formation ledger long after the deploy that used it.
+ *
+ * Every built-in type that carries a secret already solves this with
+ * `sanitizeLastAppliedProperties` (`secretsFormationModule` drops `value`).
+ * This is the same guarantee, declared rather than coded, because a registered
+ * type has no module file to put it in.
+ *
+ * Each name must be a property the schema declares. A typo would otherwise
+ * silently protect nothing — and the failure mode of *that* is a credential in
+ * the database, discovered by nobody.
+ */
+const parseWriteOnlyProperties = (args: {
+  writeOnly: unknown;
+  schemaFields: SchemaFields;
+  source: string;
+  at: string;
+}): Set<string> => {
+  const { writeOnly, schemaFields, source, at } = args;
+  if (writeOnly === undefined) return new Set();
+
+  if (!Array.isArray(writeOnly)) {
+    return fail({
+      source,
+      message: `${at}\`write_only_properties\` must be an array of strings`,
+    });
+  }
+
+  const parsed = new Set<string>();
+  for (const name of writeOnly) {
+    if (typeof name !== 'string') {
+      return fail({
+        source,
+        message: `${at}\`write_only_properties\` must be an array of strings`,
+      });
+    }
+    if (!schemaFields.allowedFields.has(name)) {
+      return fail({
+        source,
+        message: `${at}\`write_only_properties\` names '${name}', which the schema does not declare`,
+      });
+    }
+    parsed.add(name);
+  }
+  return parsed;
+};
+
 const parseEntry = (args: {
   entry: unknown;
   index: number;
@@ -245,6 +303,7 @@ const parseEntry = (args: {
   }
 
   const description = entry.description;
+  const schemaFields = deriveSchemaFields({ schema });
 
   return {
     name,
@@ -255,8 +314,14 @@ const parseEntry = (args: {
       source,
       at,
     }),
+    writeOnlyProperties: parseWriteOnlyProperties({
+      writeOnly: entry.write_only_properties,
+      schemaFields,
+      source,
+      at,
+    }),
     schema,
-    schemaFields: deriveSchemaFields({ schema }),
+    schemaFields,
   };
 };
 

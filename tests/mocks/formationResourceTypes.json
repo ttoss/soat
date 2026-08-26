@@ -8,15 +8,33 @@
         "secret_env": "FORMATION_HANDLER_SECRET",
         "timeout_seconds": 10
       },
-      "capabilities": ["validate", "read"],
+      "capabilities": [
+        "validate",
+        "read"
+      ],
+      "write_only_properties": [
+        "access_token"
+      ],
       "schema": {
         "type": "object",
         "properties": {
-          "name": { "type": "string" },
-          "kind": { "type": "string" },
-          "agent_id": { "type": "string" }
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "agent_id": {
+            "type": "string"
+          },
+          "access_token": {
+            "type": "string"
+          }
         },
-        "required": ["name", "kind"]
+        "required": [
+          "name",
+          "kind"
+        ]
       }
     }
   ]

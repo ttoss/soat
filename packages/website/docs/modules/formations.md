@@ -565,6 +565,8 @@ A registration declares:
   allowlist: an undeclared field is rejected with `VALIDATION_FAILED`, naming the
   field, and a missing `required` field fails a create — the same treatment a
   built-in type's schema gets.
+- **`write_only_properties`** — the properties whose values must never be stored.
+  See [Credentials](#credentials-and-write-only-properties).
 
 #### The handler protocol
 
@@ -623,6 +625,42 @@ re-running a failed deploy.
   silent gap. `read`'s `outputs` are also what a `ref_attr` in the template's
   `outputs` block resolves against; only string-valued entries are addressable.
 
+#### Credentials and write-only properties
+
+A custom type is often the one that carries a credential — a channel's bot token,
+an API key for the system behind the handler. It has to be **sent**, or nothing
+gets provisioned, but it must not be **stored**: every resource keeps a
+`lastAppliedProperties` snapshot so the next deploy can diff against it, and a
+token left in there sits at rest in the formation ledger long after the deploy
+that used it.
+
+Name those properties in `write_only_properties` and the engine strips them on
+the way to storage:
+
+```json
+"write_only_properties": ["access_token"]
+```
+
+The handler still receives the value in full — stripping is about what is kept,
+never about what is sent. Each name must be a property the `schema` declares; a
+name it does not know is a boot failure, because a typo would otherwise protect
+nothing and the failure mode of that is a credential in the database that nobody
+goes looking for.
+
+This is the same guarantee the built-in secret-bearing types have always had (a
+`secret` resource drops its `value` the same way) — declared in the registration
+rather than coded in a module, because a registered type has no module file to
+put it in.
+
+Two consequences worth knowing:
+
+- **A write-only property always looks changed.** With nothing stored to compare
+  against, the next deploy sends it again — which is the safe direction for a
+  credential (the handler is expected to be idempotent), but it means such a
+  resource never reports "no changes".
+- **`read` should not return it either.** A handler that echoes a credential back
+  in `read.properties` puts it straight back into the drift comparison.
+
 #### Replacement
 
 Some properties cannot be changed in place. When an `update` answers with a
@@ -652,12 +690,14 @@ failed `replace-cleanup` event rather than rolled back.
         "timeout_seconds": 30
       },
       "capabilities": ["validate", "read"],
+      "write_only_properties": ["access_token"],
       "schema": {
         "type": "object",
         "properties": {
           "name": { "type": "string" },
           "kind": { "type": "string" },
-          "agent_id": { "type": "string" }
+          "agent_id": { "type": "string" },
+          "access_token": { "type": "string" }
         },
         "required": ["name", "kind"]
       }
@@ -676,7 +716,8 @@ single apply can never straddle two registration sets.
 Every problem with the file is a **hard boot failure**, naming the file and the
 offending entry — a name that collides with a built-in or repeats within the
 file, a handler URL that is not `http(s)`, a `secret_env` naming a variable that
-is unset or empty, a non-positive timeout, an unknown capability, or a `schema`
+is unset or empty, a non-positive timeout, an unknown capability, a
+`write_only_properties` entry the schema does not declare, or a `schema`
 that is not an object schema. A half-valid registration would otherwise publish
 a resource type whose every apply fails, or — for the missing secret — sign
 every request with an empty key.
