@@ -20,7 +20,10 @@ workflow is a state graph a task _lives_ in — statuses, guarded transitions, a
 kanban board, backward moves. The two compose: a state may **dispatch** an
 orchestration, an agent, or a single tool call to do its work. See
 [Choosing an Automation Model](/docs/advanced/choosing-an-automation-model)
-for the full comparison and composition patterns.
+for the full comparison and composition patterns — starting with
+[whether the work needs a graph at all](/docs/advanced/choosing-an-automation-model#step-0--you-may-need-neither),
+since a workflow is the [graph layer](/docs/agent-system-layers) and the graph is
+the layer to build last.
 
 A workflow's two lists are the whole model:
 
