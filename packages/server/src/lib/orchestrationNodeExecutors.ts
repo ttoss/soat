@@ -9,7 +9,7 @@ import { searchKnowledge } from './knowledge';
 import { writeMemoryEntry } from './memoryEntries';
 import { parseDuration } from './orchestrationDuration';
 import { parseMemoryWriteInputs } from './orchestrationMemoryWrite';
-import { startNestedRun } from './orchestrationNestedRun';
+import { type NestedRunParent, startNestedRun } from './orchestrationNestedRun';
 import { requireNodeField } from './orchestrationNodeFields';
 import type { NodeExecutionResult } from './orchestrationNodeTypes';
 import type { OrchestrationNode } from './orchestrations';
@@ -412,6 +412,7 @@ const runLoopBatches = async (args: {
   projectIds: number[];
   authHeader?: string;
   toolContext?: Record<string, string>;
+  parent: NestedRunParent;
 }): Promise<unknown[]> => {
   const {
     items,
@@ -421,6 +422,7 @@ const runLoopBatches = async (args: {
     projectIds,
     authHeader,
     toolContext,
+    parent,
   } = args;
   const results: unknown[] = [];
   for (let i = 0; i < items.length; i += parallelism) {
@@ -437,6 +439,9 @@ const runLoopBatches = async (args: {
           // A child run is still this run's work, so it inherits the parent's
           // context rather than starting with none (#945).
           toolContext,
+          // Every item's run is attributable to the node that fanned it out, so
+          // the loop's real cost is the sum of its children (#1135).
+          parent,
           // Nested runs must complete synchronously so their output can be
           // aggregated into this loop node's artifact.
           wait: true,
@@ -459,8 +464,10 @@ export const executeLoopNode = async (args: {
   traceId: string | null;
   authHeader?: string;
   toolContext?: Record<string, string>;
+  runPublicId?: string;
 }): Promise<NodeExecutionResult> => {
-  const { node, state, projectIds, authHeader, toolContext } = args;
+  const { node, state, projectIds, authHeader, toolContext, runPublicId } =
+    args;
   const orchestrationId = requireNodeField(node, 'orchestrationId');
 
   const collectionPath = node.collection ?? 'state.items';
@@ -475,6 +482,7 @@ export const executeLoopNode = async (args: {
     projectIds,
     authHeader,
     toolContext,
+    parent: { runId: runPublicId, nodeId: node.id },
   });
 
   return { kind: 'artifact', artifact: { results } };
@@ -487,8 +495,10 @@ export const executeSubOrchestrationNode = async (args: {
   traceId: string | null;
   authHeader?: string;
   toolContext?: Record<string, string>;
+  runPublicId?: string;
 }): Promise<NodeExecutionResult> => {
-  const { node, state, projectIds, authHeader, toolContext } = args;
+  const { node, state, projectIds, authHeader, toolContext, runPublicId } =
+    args;
   const orchestrationId = requireNodeField(node, 'orchestrationId');
 
   const input = applyInputMapping(node.inputMapping, state);
@@ -501,6 +511,8 @@ export const executeSubOrchestrationNode = async (args: {
     // A child run is still this run's work, so it inherits the parent's context
     // rather than starting with none (#945).
     toolContext,
+    // The child is this node's work: its spend rolls up to this run (#1135).
+    parent: { runId: runPublicId, nodeId: node.id },
     // A sub-orchestration is a synchronous child: its terminal output feeds this
     // node's artifact, so it must run to completion before continuing.
     wait: true,

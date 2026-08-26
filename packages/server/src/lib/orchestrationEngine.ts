@@ -13,6 +13,7 @@ import {
 } from './orchestrationEvents';
 import { findStartNodes, resolveNextNodes } from './orchestrationGraph';
 import { newLeaseExpiry } from './orchestrationLease';
+import type { NestedRunParent } from './orchestrationNestedRun';
 import {
   applyStateMapping,
   executeToolNode,
@@ -380,6 +381,36 @@ const resolveRunPrincipal = (args: {
   };
 };
 
+/**
+ * The state a run starts from. Run input is seeded under the `input` namespace
+ * only, matching the pipeline/formation convention
+ * (`{ "var": "input.<name>" }`) so a graph reads run input the same way
+ * everywhere in the platform. Earlier releases also spread the input flat
+ * across top-level state keys; that alias is removed.
+ */
+const seedRunState = (
+  input?: Record<string, unknown>
+): {
+  state: Record<string, unknown>;
+  artifacts: Record<string, unknown>;
+} => {
+  return { state: { input: input ?? {} }, artifacts: {} };
+};
+
+/**
+ * The parent columns a new run carries: the run and node that started it when
+ * it is a `loop` / `sub_orchestration` child, and nulls when a caller started
+ * it. Written as a pair, the way `resolveRunPrincipal` writes its own.
+ */
+const resolveRunParent = (
+  parent?: NestedRunParent
+): { parentRunId: string | null; parentNodeId: string | null } => {
+  return {
+    parentRunId: parent?.runId ?? null,
+    parentNodeId: parent?.nodeId ?? null,
+  };
+};
+
 /** Writes the run row a `start-orchestration-run` produces. */
 const createRunRecord = async (args: {
   orchestration: InstanceType<typeof db.Orchestration>;
@@ -393,6 +424,7 @@ const createRunRecord = async (args: {
   principal?: RequestPrincipal;
   authHeader?: string;
   wait?: boolean;
+  parent?: NestedRunParent;
 }): Promise<InstanceType<typeof db.OrchestrationRun>> => {
   return db.OrchestrationRun.create({
     orchestrationId: args.orchestration.id as number,
@@ -414,6 +446,10 @@ const createRunRecord = async (args: {
     // the state is the graph's.
     metadata: args.metadata ?? null,
     triggerId: args.triggerId ?? null,
+    // The run and node that spawned this one, when it is a `loop` /
+    // `sub_orchestration` child. What makes a parent's spend reachable from the
+    // parent instead of only from the project's aggregate (#1135).
+    ...resolveRunParent(args.parent),
     ...resolveRunPrincipal({
       principal: args.principal,
       authHeader: args.authHeader,
@@ -457,6 +493,8 @@ export const startOrchestrationRun = async (args: {
   // run id immediately — e.g. a workflow task recording `active_dispatch.id` so
   // cancellation-on-exit can reach a still-running run (#606).
   onRunCreated?: (args: { orchestrationRunId: string }) => Promise<void> | void;
+  // Set by `startNestedRun` only — see the starter's own type for why.
+  parent?: NestedRunParent;
 }): Promise<MappedOrchestrationRun> => {
   log('startOrchestrationRun %o', {
     orchestrationPublicId: args.orchestrationPublicId,
@@ -476,14 +514,7 @@ export const startOrchestrationRun = async (args: {
       orchestrationProjectId: orch.projectId as number,
     });
 
-  // Seed the run input under the `input` namespace only, matching the
-  // pipeline/formation convention (`{ "var": "input.<name>" }`) so a graph
-  // reads run input the same way everywhere in the platform. Earlier releases
-  // also spread the input flat across top-level state keys; that alias is
-  // removed — read run input via `{ "var": "input.<name>" }`.
-  const runInput = (args.input ?? {}) as Record<string, unknown>;
-  const state: Record<string, unknown> = { input: runInput };
-  const artifacts: Record<string, unknown> = {};
+  const { state, artifacts } = seedRunState(args.input);
 
   const runRecord = await createRunRecord({
     orchestration: orch,
@@ -497,6 +528,7 @@ export const startOrchestrationRun = async (args: {
     principal: args.principal,
     authHeader: args.authHeader,
     wait: args.wait,
+    parent: args.parent,
   });
 
   const startMapped = await mapRunWithIncludes(runRecord.id as number);

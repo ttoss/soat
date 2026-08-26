@@ -34,6 +34,8 @@ const fakeRun: MappedOrchestrationRun = {
   tool_context: null,
   metadata: null,
   output: null,
+  parent_orchestration_run_id: null,
+  parent_node_id: null,
   node_executions: [],
   started_at: null,
   completed_at: null,

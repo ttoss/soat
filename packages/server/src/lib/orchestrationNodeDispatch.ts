@@ -88,8 +88,15 @@ const dispatchSimpleNode = (args: DispatchArgs): NodeExecutionResult | null => {
 const dispatchNestedRunNode = (
   args: DispatchArgs
 ): Promise<NodeExecutionResult> | null => {
-  const { nodeDefn, state, projectIds, traceId, authHeader, toolContext } =
-    args;
+  const {
+    nodeDefn,
+    state,
+    projectIds,
+    traceId,
+    authHeader,
+    toolContext,
+    runPublicId,
+  } = args;
   if (nodeDefn.type !== 'loop' && nodeDefn.type !== 'sub_orchestration') {
     return null;
   }
@@ -100,6 +107,8 @@ const dispatchNestedRunNode = (
     traceId,
     authHeader,
     toolContext,
+    // The parent run, so each child it starts records where it came from.
+    runPublicId,
   };
   return nodeDefn.type === 'loop'
     ? executeLoopNode(nested)

@@ -105,6 +105,7 @@ describe('Usage', () => {
         'orchestrations:CreateOrchestration',
         'orchestrations:StartRun',
         'orchestrations:GetRun',
+        'orchestrations:ListRuns',
       ],
     });
     adminToken = setup.adminToken;
@@ -2005,6 +2006,106 @@ describe('Usage', () => {
       // response could be parsed into the schema.
       expect(Number(components.input_tokens.quantity)).toBe(6);
       expect(Number(components.output_tokens.quantity)).toBe(20);
+    });
+  });
+
+  describe('nested run cost attribution', () => {
+    // A parent whose only node is a `sub_orchestration`: the parent itself
+    // meters no tokens, every one of them is spent by the child run. The
+    // parent's own `usage` therefore reads zero tokens while the work it
+    // ordered cost real money — which is exactly the reading that made a
+    // loop-bearing run's total wrong.
+    let parentRunId: string;
+    let childRunId: string;
+
+    beforeAll(async () => {
+      const childOrch = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: `Nested Cost Child ${Date.now()}`,
+          nodes: [{ id: 'child-agent', type: 'agent', agent_id: agentId }],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(childOrch.status).toBe(201);
+
+      const parentOrch = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: `Nested Cost Parent ${Date.now()}`,
+          nodes: [
+            {
+              id: 'delegate',
+              type: 'sub_orchestration',
+              orchestration_id: childOrch.body.id,
+            },
+          ],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(parentOrch.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: parentOrch.body.id, input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('succeeded');
+      parentRunId = runRes.body.id;
+
+      const children = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs?parent_orchestration_run_id=${parentRunId}`
+      );
+      expect(children.status).toBe(200);
+      expect(children.body.data).toHaveLength(1);
+      childRunId = children.body.data[0].id;
+    }, 60000);
+
+    test('the child run meters the tokens it spent', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs/${childRunId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.usage.total_output_tokens).toBe(20);
+    });
+
+    test("the parent's usage covers what it delegated", async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs/${parentRunId}`
+      );
+      expect(res.status).toBe(200);
+      // The parent's only node is a `sub_orchestration`: it metered compute,
+      // not tokens, so every token on this figure was spent by the child run.
+      // `usage` answers "what did this run cost", which for a delegating graph
+      // is the subtree — not the fraction that happens to sit on this record.
+      expect(res.body.usage.total_output_tokens).toBe(20);
+      expect(res.body.usage.total_input_tokens).toBe(10);
+      expect('total_cost_usd' in res.body.usage).toBe(true);
+    });
+
+    test("the parent's own-nodes figure excludes its children", async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs/${parentRunId}`
+      );
+      expect(res.status).toBe(200);
+      // The split a run-tree reader needs: own vs subtree, without an N+1 walk.
+      expect(res.body.usage_own.total_output_tokens).toBe(0);
+      // `usage` is never below the own figure — it contains it.
+      expect(res.body.usage.total_output_tokens).toBeGreaterThanOrEqual(
+        res.body.usage_own.total_output_tokens
+      );
+    });
+
+    test('a run with no children reports the same figure twice', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs/${childRunId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.usage_own.total_output_tokens).toBe(
+        res.body.usage.total_output_tokens
+      );
+      expect(res.body.usage_own.total_cost_usd).toBe(
+        res.body.usage.total_cost_usd
+      );
     });
   });
 

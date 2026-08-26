@@ -252,23 +252,95 @@ export const getRunReceipt = async (args: {
   });
 };
 
-/**
- * Rolls a run's usage up to its token/cost totals (no line items) for the
- * orchestration-run response. Takes the internal run id — the caller has
- * already loaded the run — so it never re-resolves the public id.
- */
-export const getRunUsageTotals = async (args: {
-  runInternalId: number;
-}): Promise<UsageTotals> => {
-  const lineItems = await loadLineItems({
-    orchestrationRunId: args.runInternalId,
-  });
-  const receipt = assembleReceipt(lineItems, {});
+// The wire receipt projected down to the token/cost totals the run response
+// carries. Shared by the self-only and nested roll-ups so the two can never
+// disagree on how a total is derived.
+const toTotals = (receipt: UsageReceipt): UsageTotals => {
   return {
     totalInputTokens: receipt.total_input_tokens,
     totalOutputTokens: receipt.total_output_tokens,
     totalCachedTokens: receipt.total_cached_tokens,
     totalReasoningTokens: receipt.total_reasoning_tokens,
     totalCostUsd: receipt.total_cost_usd,
+  };
+};
+
+// Every run descended from `runPublicId` through `loop` / `sub_orchestration`
+// nodes, as internal ids. The run itself is not included — the caller already
+// holds its id and its line items.
+//
+// Breadth-first one level at a time (the `parent_run_id` column is indexed), rather than a
+// recursive CTE, so the walk stays in the query builder the rest of this module
+// uses. `seen` is a genuine guard, not decoration: the parent link is written by
+// the engine and a cycle should be impossible, but a walk that trusted that
+// would loop forever on one bad row instead of returning a slightly wrong
+// number.
+const descendantRunIds = async (args: {
+  runPublicId: string;
+}): Promise<number[]> => {
+  const seen = new Set<string>([args.runPublicId]);
+  const ids: number[] = [];
+  let frontier = [args.runPublicId];
+
+  while (frontier.length > 0) {
+    const children = await db.OrchestrationRun.findAll({
+      where: { parentRunId: frontier },
+      attributes: ['id', 'publicId'],
+    });
+    const next: string[] = [];
+    for (const child of children) {
+      const publicId = child.publicId as string;
+      if (seen.has(publicId)) continue;
+      seen.add(publicId);
+      ids.push(child.id as number);
+      next.push(publicId);
+    }
+    frontier = next;
+  }
+
+  return ids;
+};
+
+/**
+ * Rolls a run's usage up twice for the orchestration-run response:
+ *
+ * - `own` — the run's own nodes, which is what `usage` has always meant;
+ * - `includingNested` — that plus every run its `loop` / `sub_orchestration`
+ *   nodes started, at any depth, which is the figure to read for a graph that
+ *   delegates (a child's events are attributed to the child).
+ *
+ * Both come from **one** read of the run's own events. The descendant walk runs
+ * alongside that read rather than after it, and a run with no children reuses
+ * the line items already in hand instead of re-reading them — so the two
+ * figures are equal by construction rather than by a second query that happens
+ * to agree. That case is both the common one and the hot one: this endpoint is
+ * polled until a background run settles, and the event/component/price join is
+ * the heaviest query in the read.
+ *
+ * Takes both ids because the caller has already loaded the run: the internal id
+ * keys the events, the public id keys the parent link.
+ */
+export const getRunUsageRollups = async (args: {
+  runInternalId: number;
+  runPublicId: string;
+}): Promise<{ own: UsageTotals; includingNested: UsageTotals }> => {
+  const [ownLineItems, descendantIds] = await Promise.all([
+    loadLineItems({ orchestrationRunId: args.runInternalId }),
+    descendantRunIds({ runPublicId: args.runPublicId }),
+  ]);
+
+  const own = toTotals(assembleReceipt(ownLineItems, {}));
+  if (descendantIds.length === 0) return { own, includingNested: own };
+
+  const descendantLineItems = await loadLineItems({
+    orchestrationRunId: descendantIds,
+  });
+  return {
+    own,
+    // Order-independent: every total is a sum over the components of every
+    // line, so concatenating two ordered reads needs no re-sort.
+    includingNested: toTotals(
+      assembleReceipt([...ownLineItems, ...descendantLineItems], {})
+    ),
   };
 };

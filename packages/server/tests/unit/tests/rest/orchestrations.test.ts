@@ -3026,6 +3026,145 @@ describe('Orchestrations', () => {
       expect(runRes.body.state.subResult).toBe('test');
     });
 
+    test('a sub_orchestration child names the run and node that started it', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'SubOrch Parent Link',
+          nodes: [
+            {
+              id: 'sub',
+              type: 'sub_orchestration',
+              orchestration_id: subOrchId,
+              input_mapping: { item: { var: 'input.value' } },
+            },
+          ],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({
+          wait: true,
+          orchestration_id: createRes.body.id,
+          input: { value: 'linked' },
+        });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('succeeded');
+      const parentRunId = runRes.body.id as string;
+
+      // The parent itself was started by a caller, not by another run.
+      expect(runRes.body.parent_orchestration_run_id).toBeNull();
+      expect(runRes.body.parent_node_id).toBeNull();
+
+      // The child is reachable *from* the parent: without this filter a caller
+      // holding the parent has no way to name the runs it spawned, which is
+      // what makes the parent's own total look complete when it is not.
+      const children = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs?parent_orchestration_run_id=${parentRunId}`
+      );
+      expect(children.status).toBe(200);
+      expect(children.body.data).toHaveLength(1);
+      expect(children.body.data[0].parent_orchestration_run_id).toBe(
+        parentRunId
+      );
+      expect(children.body.data[0].parent_node_id).toBe('sub');
+    }, 60000);
+
+    test('every child of a loop node names the loop node', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Loop Parent Link',
+          nodes: [
+            {
+              id: 'fan',
+              type: 'loop',
+              orchestration_id: subOrchId,
+              collection: 'state.input.items',
+            },
+          ],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({
+          wait: true,
+          orchestration_id: createRes.body.id,
+          input: { items: ['a', 'b', 'c'] },
+        });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('succeeded');
+
+      const children = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs?parent_orchestration_run_id=${runRes.body.id}`
+      );
+      expect(children.status).toBe(200);
+      // One child run per item, each attributable to the node that fanned out.
+      expect(children.body.data).toHaveLength(3);
+      expect(
+        children.body.data.every((r: { parent_node_id: string | null }) => {
+          return r.parent_node_id === 'fan';
+        })
+      ).toBe(true);
+    }, 60000);
+
+    // `usage` on a run is transitive, so summing it across a list double-counts
+    // any run that is also somebody's child. This filter is how a caller
+    // aggregating over runs avoids that, which is why it ships with the
+    // transitive figure rather than after it.
+    test('nested=false returns only runs a caller started', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        '/api/v1/orchestration-runs?nested=false&limit=100'
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.data.length).toBeGreaterThan(0);
+      expect(
+        res.body.data.every(
+          (r: { parent_orchestration_run_id: string | null }) => {
+            return r.parent_orchestration_run_id === null;
+          }
+        )
+      ).toBe(true);
+    });
+
+    test('nested=true returns only runs another run started', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        '/api/v1/orchestration-runs?nested=true&limit=100'
+      );
+      expect(res.status).toBe(200);
+      // The loop above fanned out three children, so this cannot be empty.
+      expect(res.body.data.length).toBeGreaterThan(0);
+      expect(
+        res.body.data.every(
+          (r: { parent_orchestration_run_id: string | null }) => {
+            return r.parent_orchestration_run_id !== null;
+          }
+        )
+      ).toBe(true);
+    });
+
+    test('an unparseable nested value is rejected', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        '/api/v1/orchestration-runs?nested=perhaps'
+      );
+      expect(res.status).toBe(400);
+    });
+
+    test('nested=false contradicting a parent id is rejected', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        '/api/v1/orchestration-runs?nested=false&parent_orchestration_run_id=run_x'
+      );
+      // Naming a parent already asserts the run has one. Serving an
+      // always-empty list instead would read as "this parent has no children".
+      expect(res.status).toBe(400);
+    });
+
     test('poll node missing required fields is rejected at create', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations')
