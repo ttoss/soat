@@ -871,11 +871,11 @@ components:
                   every line carries it — an `agent` node's `llm_tokens` line and
                   the `compute_execution` line of each node execution alike — so
                   grouping the lines by `node_id` gives the per-node cost the
-                  receipt total alone hides. The event records no attempt number,
-                  so a retried node's attempts share one `node_id`, which is the
-                  intended reading for spend: a retry is real money. Null when no
-                  node produced the event (a standalone generation, a run-level
-                  meter).
+                  receipt total alone hides. A retried node contributes one line
+                  per attempt, all under the same `node_id` — the event records no
+                  attempt number — which is the intended reading for spend: a
+                  retry is real money. Null when no node produced the event (a
+                  standalone generation, a run-level meter).
               cost_usd:
                 type: number
                 nullable: true

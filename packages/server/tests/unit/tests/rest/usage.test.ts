@@ -1952,6 +1952,62 @@ describe('Usage', () => {
     });
   });
 
+  describe('a generation that fails after the provider answered', () => {
+    // The model answers (tokens billed) but the text does not satisfy the
+    // agent's `output_schema`, so the turn fails with
+    // OUTPUT_SCHEMA_VALIDATION_FAILED. The provider was paid either way, and
+    // the AI SDK hands the counts back on the error — so the spend must be
+    // metered, not dropped because the turn ended `failed`.
+    let failedGenerationId: string;
+
+    beforeAll(async () => {
+      const agentRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          name: 'Usage Structured Agent',
+          output_schema: {
+            type: 'object',
+            properties: { answer: { type: 'string' } },
+            required: ['answer'],
+          },
+        });
+      expect(agentRes.status).toBe(201);
+
+      const genRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentRes.body.id}/generate?wait=true`)
+        .send({ messages: [{ role: 'user', content: 'structured please' }] });
+      expect(genRes.status).toBe(502);
+      expect(genRes.body.error.meta.generation_id).toBeDefined();
+      failedGenerationId = genRes.body.error.meta.generation_id as string;
+    }, 60000);
+
+    test('the failed generation is recorded as failed', async () => {
+      const res = await authenticatedTestClient(adminToken).get(
+        `/api/v1/generations/${failedGenerationId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('failed');
+    });
+
+    test('its tokens are metered', async () => {
+      const res = await authenticatedTestClient(adminToken).get(
+        `/api/v1/usage/meters?generation_id=${failedGenerationId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveLength(1);
+
+      const event = res.body.data[0];
+      expect(event.meter_type).toBe('llm_tokens');
+      const components = componentsByName(event);
+      // The stub's own counts: the provider billed for them whether or not the
+      // response could be parsed into the schema.
+      expect(Number(components.input_tokens.quantity)).toBe(6);
+      expect(Number(components.output_tokens.quantity)).toBe(20);
+    });
+  });
+
   describe('orchestration run attribution and receipt', () => {
     let orchestrationRunId: string;
     const nodeId = 'metered-agent';
@@ -2157,6 +2213,77 @@ describe('Usage', () => {
         authHeader: `Bearer ${userToken}`,
         orchestrationRunId,
         nodeId,
+      });
+
+      const after = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/receipt?orchestration_run_id=${orchestrationRunId}`
+      );
+      expect(after.body.line_items.length).toBe(beforeCount);
+    });
+
+    test('a second attempt of the same node meters as its own event', async () => {
+      const before = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/receipt?orchestration_run_id=${orchestrationRunId}`
+      );
+      const beforeLlm = before.body.line_items.filter(
+        (l: { meter_type: string; node_id: string | null }) => {
+          return l.meter_type === 'llm_tokens' && l.node_id === nodeId;
+        }
+      ).length;
+
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+      // A *retry*, not a replay: the executor stamps each attempt's generation
+      // with its own `nodeAttempt` (orchestrationNodeRecorder), and this is a
+      // second generation that really reached the provider. It must be metered,
+      // where a redelivery of the same attempt (the test above) must not.
+      await createGeneration({
+        agentId,
+        projectIds: [project?.id as number],
+        messages: [{ role: 'user', content: 'retried node' }],
+        stream: false,
+        authHeader: `Bearer ${userToken}`,
+        orchestrationRunId,
+        nodeId,
+        nodeAttempt: 2,
+      });
+
+      const after = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/receipt?orchestration_run_id=${orchestrationRunId}`
+      );
+      const afterLines = after.body.line_items.filter(
+        (l: { meter_type: string; node_id: string | null }) => {
+          return l.meter_type === 'llm_tokens' && l.node_id === nodeId;
+        }
+      );
+      expect(afterLines.length).toBe(beforeLlm + 1);
+
+      // Both attempts group under one node_id, so the node's cost is their sum
+      // — the reading `node_id` on a receipt line is meant to support (#1134).
+      expect(afterLines.length).toBeGreaterThanOrEqual(2);
+    });
+
+    test('a replayed second attempt is still a no-op', async () => {
+      const before = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/receipt?orchestration_run_id=${orchestrationRunId}`
+      );
+      const beforeCount = before.body.line_items.length;
+
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+      // Attempt 2 again: same (run, node, attempt), so the at-least-once
+      // redelivery guarantee still holds one attempt down.
+      await createGeneration({
+        agentId,
+        projectIds: [project?.id as number],
+        messages: [{ role: 'user', content: 'redelivered retry' }],
+        stream: false,
+        authHeader: `Bearer ${userToken}`,
+        orchestrationRunId,
+        nodeId,
+        nodeAttempt: 2,
       });
 
       const after = await authenticatedTestClient(userToken).get(
