@@ -182,6 +182,12 @@ const runToolDispatch = async (args: {
   projectId: number;
   taskPublicId: string;
   principal?: RequestPrincipal;
+  // The task's stored caller context. A `tool` dispatch is the task calling a
+  // tool on its own behalf, so it carries the bag its `agent` and
+  // `orchestration` siblings already carry — without it a tool naming a
+  // `{{context:}}` header or preset cannot be dispatched from a workflow at
+  // all (#345).
+  toolContext?: Record<string, string>;
 }): Promise<DispatchResult> => {
   const authHeader = await buildRunAuthHeader({
     principalKind: args.principal?.principalType ?? null,
@@ -204,6 +210,7 @@ const runToolDispatch = async (args: {
     projectIds: [args.projectId],
     projectId: args.projectId,
     authHeader,
+    toolContext: args.toolContext,
   });
 
   if (outcome.kind !== 'artifact') {
@@ -276,6 +283,7 @@ export const runDispatch = async (args: {
       projectId: args.projectId,
       taskPublicId: args.taskPublicId,
       principal: args.principal,
+      toolContext: args.toolContext,
     });
   }
 

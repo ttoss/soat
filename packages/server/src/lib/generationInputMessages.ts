@@ -28,6 +28,10 @@ export const resolveGenerationInputMessages = async (args: {
   authUser?: AuthUser;
   allowedToolIds?: string[];
   agentBoundaryPolicy?: unknown;
+  // The generation's identity-pinned `tool_context`, so a `tool_output` block
+  // resolves its tool's `{{context:}}` headers and presets from the same bag
+  // the model's own tool calls use (#345).
+  toolContext?: Record<string, string>;
 }): Promise<Array<{ role: string; content: unknown }>> => {
   const resolved = await Promise.all(
     args.messages.map(async (message) => {
@@ -43,6 +47,7 @@ export const resolveGenerationInputMessages = async (args: {
         authUser: args.authUser,
         allowedToolIds: args.allowedToolIds,
         agentBoundaryPolicy: args.agentBoundaryPolicy,
+        toolContext: args.toolContext,
       });
 
       return {

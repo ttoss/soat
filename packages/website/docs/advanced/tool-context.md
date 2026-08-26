@@ -17,7 +17,7 @@ This page is the canonical contract. `tool_context` is **not** general templatin
 | [`POST /api/v1/sessions/{session_id}/messages`](/docs/api/sessions/add-session-message) and `.../generate` | `tool_context` — per-request, this generation only |
 | [`POST /api/v1/conversations/{conversation_id}/generate`](/docs/api/conversations/generate-conversation-message) | `tool_context` in the body |
 | [`POST /api/v1/orchestration-runs`](/docs/api/orchestrations/start-orchestration-run) | `tool_context` — persisted on the run, applied to the generation of every `agent` node it executes, to the tool call of every `tool` and `poll` node, and inherited by `loop`/`sub_orchestration` child runs (see [Run Tool Context](../modules/orchestrations.md#run-tool-context)) |
-| [`POST /api/v1/tasks`](/docs/api/tasks/create-task) | `tool_context` — persisted on the task, applied to the dispatches of the entry state's `on_enter` |
+| [`POST /api/v1/tasks`](/docs/api/tasks/create-task) | `tool_context` — persisted on the task, applied to the dispatches of the entry state's `on_enter` (all three kinds: `agent`, `tool`, `orchestration`) |
 | [`POST /api/v1/tasks/{task_id}/transitions`](/docs/api/tasks/transition-task) | `tool_context` — **replaces** the task's stored bag; omitting it keeps it (see [Dispatch tool context](../modules/workflows.md#dispatch-tool-context)) |
 | Formation templates | `tool_context` on a `Session` resource |
 
@@ -32,6 +32,8 @@ This page is the canonical contract. `tool_context` is **not** general templatin
 | `pipeline` | Yes | Each step inherits the context the pipeline was called with |
 
 Context headers are applied **after** any headers configured on the tool's `execute.headers` / `mcp.headers`, so a context header wins over a tool-defined header with the same name.
+
+A generation's bag also reaches the tool calls it makes **before the model runs**: a `tool_output` message content block asks the server to call a tool and inline its result into the prompt, and that call carries the same identity-pinned bag the model's own tool calls do.
 
 By default a tool receives **every** key in the bag. A tool can narrow that to an allowlist with [`context_keys`](../modules/tools.md#scoping-which-context-keys-reach-a-tool) — the containment half of carrying a credential in `tool_context`, and the answer to "mind what egresses" below:
 

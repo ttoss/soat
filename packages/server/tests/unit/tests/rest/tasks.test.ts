@@ -2788,7 +2788,10 @@ describe('Tasks', () => {
     let calls: Array<{ body: unknown; path: string }>;
     let failNext: boolean;
 
-    const createHttpTool = async (name: string): Promise<string> => {
+    const createHttpTool = async (
+      name: string,
+      presetParameters?: object
+    ): Promise<string> => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')
         .send({
@@ -2796,6 +2799,7 @@ describe('Tasks', () => {
           name: `${name}-${Math.random().toString(36).slice(2)}`,
           type: 'http',
           execute: { url: `${toolServerUrl}/do`, method: 'POST' },
+          ...(presetParameters ? { preset_parameters: presetParameters } : {}),
         });
       expect(res.status).toBe(201);
       return res.body.id as string;
@@ -2834,7 +2838,11 @@ describe('Tasks', () => {
       return res.body.id as string;
     };
 
-    const startToolTask = async (workflowId: string, payload: object) => {
+    const startToolTask = async (
+      workflowId: string,
+      payload: object,
+      toolContext?: Record<string, string>
+    ) => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/tasks')
         .send({
@@ -2842,6 +2850,7 @@ describe('Tasks', () => {
           workflow_id: workflowId,
           title: 'tool card',
           payload,
+          ...(toolContext ? { tool_context: toolContext } : {}),
         });
       expect(res.status).toBe(201);
       return res.body.id as string;
@@ -2938,6 +2947,46 @@ describe('Tasks', () => {
       expect(routed.tool_id).toBe(toolId);
       expect(routed.generation_id).toBeNull();
       expect(routed.orchestration_run_id).toBeNull();
+    });
+
+    // #345: a task's stored `tool_context` reaches its `agent` and
+    // `orchestration` dispatches; the `tool` kind dropped it, so a tool pinning
+    // a `{{context:}}` parameter (or naming one in a header) could not be
+    // dispatched from a workflow at all.
+    test("forwards the task's tool_context, resolving the tool's {{context:}} preset", async () => {
+      const toolId = await createHttpTool('ctx-preset', {
+        adAccountId: '{{context:ocaAdAccountId}}',
+      });
+      const wf = await toolWorkflow({
+        name: 'tool-context',
+        dispatch: {
+          kind: 'tool',
+          tool_id: toolId,
+          input_mapping: { topic: { var: 'task.payload.topic' } },
+        },
+        onComplete: [{ when: true, transition: 'to_done' }],
+      });
+
+      const taskId = await startToolTask(
+        wf,
+        { topic: 'winter' },
+        { ocaAdAccountId: 'act_1330065197707199' }
+      );
+
+      const settled = await pollTask({
+        token: userToken,
+        taskId,
+        predicate: (t) => {
+          return t.state === 'done';
+        },
+      });
+      expect(settled.status).toBe('closed');
+
+      expect(calls).toHaveLength(1);
+      expect(calls[0].body).toEqual({
+        topic: 'winter',
+        adAccountId: 'act_1330065197707199',
+      });
     });
 
     test('exposes the tool result to on_complete rules, and records a tool_call dispatch with no id', async () => {

@@ -48,6 +48,8 @@ let audioToolId: string;
 let counterToolId: string;
 let listToolId: string;
 let soatToolId: string;
+let contextPresetToolId: string;
+const echoedBodies: unknown[] = [];
 
 describe('resolveMessageContent', () => {
   beforeAll(async () => {
@@ -67,6 +69,16 @@ describe('resolveMessageContent', () => {
             data: { transcription: { text: 'hello from audio' } },
           })
         );
+      } else if (req.url?.startsWith('/echo')) {
+        let raw = '';
+        req.on('data', (chunk) => {
+          raw += String(chunk);
+        });
+        req.on('end', () => {
+          echoedBodies.push(raw ? JSON.parse(raw) : null);
+          res.end(JSON.stringify({ data: { ok: true } }));
+        });
+        return;
       } else if (req.url?.startsWith('/counter')) {
         res.end(JSON.stringify({ data: { count: 42 } }));
       } else if (req.url?.startsWith('/list')) {
@@ -93,6 +105,20 @@ describe('resolveMessageContent', () => {
       execute: { url: `${baseUrl}/audio`, method: 'POST' },
     });
     audioToolId = audio.id;
+
+    const contextPreset = await createTool({
+      projectId,
+      name: 'context-preset',
+      type: 'http',
+      description: 'Pins a parameter from tool_context',
+      parameters: {
+        type: 'object',
+        properties: { adAccountId: { type: 'string' } },
+      },
+      execute: { url: `${baseUrl}/echo`, method: 'POST' },
+      presetParameters: { adAccountId: '{{context:ocaAdAccountId}}' },
+    });
+    contextPresetToolId = contextPreset.id;
 
     const counter = await createTool({
       projectId,
@@ -203,6 +229,50 @@ describe('resolveMessageContent', () => {
       projectPublicId,
       action: 'tools:CallTool',
     });
+  });
+
+  // #345: a `tool_output` block is the generation calling a tool on its own
+  // behalf, before the model runs, so it carries the generation's
+  // `tool_context` like every other tool call the generation makes.
+  test('resolves a {{context:}} preset from the generation tool_context', async () => {
+    echoedBodies.length = 0;
+
+    const result = await resolveMessageContent({
+      projectIds: [projectId],
+      authHeader: 'Bearer token',
+      authUser: createAuthUser(),
+      allowedToolIds: [contextPresetToolId],
+      toolContext: { ocaAdAccountId: 'act_1330065197707199' },
+      content: {
+        type: 'tool_output',
+        tool_id: contextPresetToolId,
+        input: {},
+        output_path: 'data.ok',
+      },
+    });
+
+    expect(result).toEqual({ content: 'true' });
+    expect(echoedBodies).toEqual([{ adAccountId: 'act_1330065197707199' }]);
+  });
+
+  test('fails the tool_output block when the context key is absent', async () => {
+    echoedBodies.length = 0;
+
+    await expect(
+      resolveMessageContent({
+        projectIds: [projectId],
+        authHeader: 'Bearer token',
+        authUser: createAuthUser(),
+        allowedToolIds: [contextPresetToolId],
+        content: {
+          type: 'tool_output',
+          tool_id: contextPresetToolId,
+          input: {},
+        },
+      })
+    ).rejects.toThrow(/ocaAdAccountId/);
+
+    expect(echoedBodies).toEqual([]);
   });
 
   test('stringifies a non-string outputPath result via JSON.stringify', async () => {
