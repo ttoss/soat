@@ -3,6 +3,21 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.33.0](https://github.com/ttoss/soat/compare/v0.32.0...v0.33.0) (2026-08-26)
+
+### Features
+
+* **server:** make a run's usage cover what it delegated, and attribute nested runs ([#1144](https://github.com/ttoss/soat/issues/1144)) ([9266a0c](https://github.com/ttoss/soat/commit/9266a0c865df6ad63b4ee3b158911960097981b7)), closes [#1135](https://github.com/ttoss/soat/issues/1135) [#1135](https://github.com/ttoss/soat/issues/1135)
+* **server:** resolve {{context:}} in preset_parameters and carry a run's context to its tool nodes ([#1148](https://github.com/ttoss/soat/issues/1148)) ([1e920ab](https://github.com/ttoss/soat/commit/1e920abd3a9e015c4bd4361755dea38d0f23d641)), closes [TriangulosTecnologia/naturali.ai#345](https://github.com/TriangulosTecnologia/naturali.ai/issues/345) [TriangulosTecnologia/naturali.ai#345](https://github.com/TriangulosTecnologia/naturali.ai/issues/345)
+
+### BREAKING CHANGES
+
+* **server:** `usage` on an orchestration run now includes every nested run
+  it started, at any depth; it previously covered the run's own nodes only. The
+  previous meaning is available as `usage_own`, which is equal to `usage` for a
+  run with no children. Callers summing `usage` over a list of runs must pass
+  `nested=false` to avoid counting a child twice.
+
 # [0.32.0](https://github.com/ttoss/soat/compare/v0.31.0...v0.32.0) (2026-08-26)
 
 ### Bug Fixes
