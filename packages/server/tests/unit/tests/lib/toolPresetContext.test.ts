@@ -1,6 +1,9 @@
 import { DomainError } from 'src/errors';
 import { coercePresetParametersToSchema } from 'src/lib/toolPresetParameters';
-import { resolvePresetParameterTemplates } from 'src/lib/toolTemplates';
+import {
+  resolvePresetParametersForGate,
+  resolvePresetParameterTemplates,
+} from 'src/lib/toolTemplates';
 
 /**
  * `{{context:<key>}}` inside `preset_parameters` (#345). A pin is the operator's
@@ -188,6 +191,64 @@ describe('coercePresetParametersToSchema', () => {
     ).toEqual({ metaAdAccountId: 'act_9', dryRun: 'yes' });
   });
 
+  test('reads the nullable spelling, `type: [T, "null"]`', () => {
+    expect(
+      coercePresetParametersToSchema({
+        presetParameters: { nullableId: '7' },
+        contextResolvedKeys: ['nullableId'],
+        schema: {
+          type: 'object',
+          properties: { nullableId: { type: ['integer', 'null'] } },
+        },
+      })
+    ).toEqual({ nullableId: 7 });
+  });
+
+  test('leaves a blank string alone rather than making it zero', () => {
+    // `Number('')` and `Number(' ')` are both 0 — a number no caller wrote.
+    expect(
+      coercePresetParametersToSchema({
+        presetParameters: { metaAdAccountId: '', ratio: '  ' },
+        contextResolvedKeys: ['metaAdAccountId', 'ratio'],
+        schema,
+      })
+    ).toEqual({ metaAdAccountId: '', ratio: '  ' });
+  });
+
+  test('leaves a decimal alone when the schema says integer', () => {
+    expect(
+      coercePresetParametersToSchema({
+        presetParameters: { metaAdAccountId: '1.5', ratio: '1.5' },
+        contextResolvedKeys: ['metaAdAccountId', 'ratio'],
+        schema,
+      })
+    ).toEqual({ metaAdAccountId: '1.5', ratio: 1.5 });
+  });
+
+  test('coerces the false half of a boolean', () => {
+    expect(
+      coercePresetParametersToSchema({
+        presetParameters: { dryRun: 'false' },
+        contextResolvedKeys: ['dryRun'],
+        schema,
+      })
+    ).toEqual({ dryRun: false });
+  });
+
+  test('touches only the resolved keys of a mixed record', () => {
+    expect(
+      coercePresetParametersToSchema({
+        presetParameters: {
+          metaAdAccountId: '123',
+          ratio: '9.5',
+          dryRun: true,
+        },
+        contextResolvedKeys: ['metaAdAccountId'],
+        schema,
+      })
+    ).toEqual({ metaAdAccountId: 123, ratio: '9.5', dryRun: true });
+  });
+
   test('is a no-op when the schema declares nothing about the key', () => {
     expect(
       coercePresetParametersToSchema({
@@ -205,5 +266,43 @@ describe('coercePresetParametersToSchema', () => {
         contextResolvedKeys: ['metaAdAccountId'],
       })
     ).toEqual({ metaAdAccountId: '123' });
+  });
+});
+
+/**
+ * The gate's tolerant variant. A guardrail classifies the call *before* it is
+ * dispatched, and the dispatch resolves the same presets a moment later — so
+ * the gate must never be the thing that fails a generation.
+ */
+describe('resolvePresetParametersForGate', () => {
+  test('resolves like the dispatch path when the key is present', () => {
+    expect(
+      resolvePresetParametersForGate({
+        presetParameters: { adAccountId: '{{context:ocaAdAccountId}}' },
+        toolContext: { ocaAdAccountId: 'act_9' },
+        toolName: 'oca',
+      })
+    ).toEqual({ adAccountId: 'act_9' });
+  });
+
+  test('falls back to the unresolved presets when the key is missing', () => {
+    // The guard then classifies the literal token, and the dispatch fails the
+    // call with `MISSING_TOOL_CONTEXT_KEY` — so nothing runs on a wrong value.
+    expect(
+      resolvePresetParametersForGate({
+        presetParameters: { adAccountId: '{{context:ocaAdAccountId}}' },
+        toolContext: { ocaToken: 'tok' },
+        toolName: 'oca',
+      })
+    ).toEqual({ adAccountId: '{{context:ocaAdAccountId}}' });
+  });
+
+  test('falls back to null when the tool pins nothing', () => {
+    expect(
+      resolvePresetParametersForGate({
+        presetParameters: null,
+        toolName: 'oca',
+      })
+    ).toBeNull();
   });
 });

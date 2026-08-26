@@ -494,13 +494,20 @@ export const resolvePresetParametersForCall = (args: {
  * missing key falls back to the unresolved presets instead of throwing.
  *
  * The gate classifies a call that has not been dispatched yet, and the dispatch
- * site resolves the same presets a moment later — so a missing key still fails
- * the call there, with the same error, before any request goes out. Throwing
- * here as well would move that failure from the tool call to *tool resolution*,
- * taking down the whole generation (every other tool included) over one tool's
- * missing key. What matters at the gate is that a guardrail reading the pinned
- * value sees the run's real value whenever there is one, rather than the literal
- * `{{context:...}}` text.
+ * site resolves the same presets a moment later — so a resolution failure still
+ * fails the call there, with the same error, before any request goes out.
+ * Throwing here as well would move that failure from the tool call to *tool
+ * resolution*, taking down the whole generation (every other tool included) over
+ * one tool's missing key. What matters at the gate is that a guardrail reading
+ * the pinned value sees the run's real value whenever there is one, rather than
+ * the literal `{{context:...}}` text.
+ *
+ * The swallow is deliberately total rather than narrowed to
+ * `MISSING_TOOL_CONTEXT_KEY`: the gate must never be the thing that fails a
+ * generation, and nothing can proceed on unresolved presets anyway, since the
+ * dispatch re-resolves and reports whatever went wrong. A narrower catch would
+ * also carry a rethrow branch no input can reach — substitution raises that one
+ * code and the coercion is pure — which is dead code, not defence.
  */
 export const resolvePresetParametersForGate = (args: {
   presetParameters?: Record<string, unknown> | null;
@@ -510,13 +517,7 @@ export const resolvePresetParametersForGate = (args: {
 }): Record<string, unknown> | null => {
   try {
     return resolvePresetParametersForCall(args);
-  } catch (error) {
-    if (
-      error instanceof DomainError &&
-      error.code === 'MISSING_TOOL_CONTEXT_KEY'
-    ) {
-      return args.presetParameters ?? null;
-    }
-    throw error;
+  } catch {
+    return args.presetParameters ?? null;
   }
 };
