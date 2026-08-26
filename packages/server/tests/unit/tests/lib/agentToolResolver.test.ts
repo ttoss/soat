@@ -1170,6 +1170,127 @@ describe('resolveAgentTools', () => {
       await expect(pipelineTool.execute({}, {} as never)).rejects.toThrow();
     }
   });
+
+  // A preset is a pin, not a default: it wins over whatever the model supplies
+  // for the same key, and the key is not offered to the model at all. `http`
+  // and `client` tools used to ignore `preset_parameters` outright — only
+  // `builtin` applied them — so an operator-fixed value was in fact chosen by
+  // the model on every call.
+  describe('preset_parameters', () => {
+    const startBodyCaptureServer = async () => {
+      const bodies: unknown[] = [];
+      const server = createServer((req, res) => {
+        const chunks: Buffer[] = [];
+        req.on('data', (chunk: Buffer) => {
+          chunks.push(chunk);
+        });
+        req.on('end', () => {
+          const raw = Buffer.concat(chunks).toString('utf8');
+          bodies.push(raw ? JSON.parse(raw) : {});
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true }));
+        });
+      });
+      await new Promise<void>((resolve) => {
+        server.listen(0, '127.0.0.1', resolve);
+      });
+      const address = server.address();
+      const port =
+        address && typeof address === 'object' ? address.port : undefined;
+      return {
+        bodies,
+        port,
+        close: async () => {
+          await new Promise<void>((resolve) => {
+            server.close(() => {
+              return resolve();
+            });
+          });
+        },
+      };
+    };
+
+    test('an http tool hides preset keys and pins them over the model value', async () => {
+      const srv = await startBodyCaptureServer();
+      try {
+        const toolRes = await authenticatedTestClient(adminToken)
+          .post('/api/v1/tools')
+          .send({
+            project_id: projectId,
+            name: 'myPresetHttpTool',
+            type: 'http',
+            parameters: {
+              type: 'object',
+              properties: {
+                account_id: { type: 'string' },
+                note: { type: 'string' },
+              },
+              required: ['account_id', 'note'],
+            },
+            execute: {
+              url: `http://127.0.0.1:${srv.port}/v1/charge`,
+              method: 'POST',
+            },
+            preset_parameters: { account_id: 'acct_pinned' },
+          });
+        expect(toolRes.status).toBe(201);
+
+        const tools = await resolveAgentTools({ toolIds: [toolRes.body.id] });
+        const resolved = tools.myPresetHttpTool;
+
+        const schema = resolved.inputSchema as {
+          jsonSchema?: {
+            properties?: Record<string, unknown>;
+            required?: string[];
+          };
+        };
+        expect(schema.jsonSchema?.properties).not.toHaveProperty('account_id');
+        expect(schema.jsonSchema?.properties).toHaveProperty('note');
+        expect(schema.jsonSchema?.required).toEqual(['note']);
+
+        await resolved.execute!(
+          { account_id: 'acct_modelchose', note: 'hi' },
+          {} as never
+        );
+        expect(srv.bodies).toEqual([{ account_id: 'acct_pinned', note: 'hi' }]);
+      } finally {
+        await srv.close();
+      }
+    });
+
+    test('a client tool hides preset keys from the model', async () => {
+      const toolRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'myPresetClientTool',
+          type: 'client',
+          parameters: {
+            type: 'object',
+            properties: {
+              device_id: { type: 'string' },
+              message: { type: 'string' },
+            },
+            required: ['device_id', 'message'],
+          },
+          preset_parameters: { device_id: 'dev_pinned' },
+        });
+      expect(toolRes.status).toBe(201);
+
+      const tools = await resolveAgentTools({ toolIds: [toolRes.body.id] });
+      const schema = tools.myPresetClientTool.inputSchema as {
+        jsonSchema?: {
+          properties?: Record<string, unknown>;
+          required?: string[];
+        };
+      };
+      expect(schema.jsonSchema?.properties).not.toHaveProperty('device_id');
+      expect(schema.jsonSchema?.properties).toHaveProperty('message');
+      expect(schema.jsonSchema?.required).toEqual(['message']);
+      // Client tools stay execute-less — the call is dispatched by the caller.
+      expect('execute' in tools.myPresetClientTool).toBe(false);
+    });
+  });
 });
 
 describe('resolveAgentTools - ephemeral tools', () => {
@@ -2205,6 +2326,53 @@ describe('resolveAgentTools - mcp and soat types', () => {
     expect((result as { name?: string }).name).toBe('myPresetTargetTool');
   });
 
+  test('soat tool preset_parameters win over a model-supplied value', async () => {
+    // The pin the tutorials rely on: two tools binding one action, each aimed
+    // at a fixed resource. A model that names the key anyway must not be able
+    // to re-aim the call — the preset key is hidden from its schema, but
+    // nothing sets `additionalProperties: false`, so hiding alone is not a
+    // guarantee and the merge order is.
+    const targetRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name: 'myPinnedTargetTool',
+        type: 'builtin',
+        actions: ['list-files'],
+      });
+    const decoyRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name: 'myDecoyTargetTool',
+        type: 'builtin',
+        actions: ['list-files'],
+      });
+    expect(decoyRes.status).toBe(201);
+
+    const soatToolRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name: 'myPinnedExecTool',
+        type: 'builtin',
+        actions: ['get-tool'],
+        preset_parameters: { tool_id: targetRes.body.id },
+      });
+    expect(soatToolRes.status).toBe(201);
+
+    const tools = await resolveAgentTools({
+      toolIds: [soatToolRes.body.id],
+      authHeader: `Bearer ${adminToken}`,
+    });
+
+    const result = await tools['myPinnedExecTool_get-tool'].execute!(
+      { tool_id: decoyRes.body.id },
+      {} as never
+    );
+    expect((result as { id?: string }).id).toBe(targetRes.body.id);
+    expect((result as { name?: string }).name).toBe('myPinnedTargetTool');
+  });
   test('soat tool without preset_parameters works as before', async () => {
     const soatToolRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/tools')
@@ -2464,6 +2632,71 @@ describe('resolveMcpTools - direct', () => {
     });
     expect(Object.keys(result)).toEqual(['read_item']);
     expect(result).not.toHaveProperty('delete_item');
+  });
+
+  // `preset_parameters` are a pin, on every tool type — an `mcp` binding used
+  // to ignore them entirely, so a key the operator fixed was chosen by the
+  // model on every call.
+  test('pins preset_parameters over the model value and hides the key', async () => {
+    const fetchSpy = jest.spyOn(global, 'fetch');
+    fetchSpy.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          result: {
+            tools: [
+              {
+                name: 'read_item',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    tenant: { type: 'string' },
+                    query: { type: 'string' },
+                  },
+                  required: ['tenant', 'query'],
+                },
+              },
+            ],
+          },
+        }),
+        { status: 200 }
+      )
+    );
+    const result = await resolveMcpTools({
+      typedTool: {
+        mcp: { url: 'http://localhost:19999/mcp' },
+        presetParameters: { tenant: 'acme' },
+      },
+      buildContextHeaders: () => {
+        return {};
+      },
+      logToolCallingError: jest.fn(),
+    });
+
+    const schema = result.read_item.inputSchema as {
+      jsonSchema?: {
+        properties?: Record<string, unknown>;
+        required?: string[];
+      };
+    };
+    expect(schema.jsonSchema?.properties).not.toHaveProperty('tenant');
+    expect(schema.jsonSchema?.properties).toHaveProperty('query');
+    expect(schema.jsonSchema?.required).toEqual(['query']);
+
+    fetchSpy.mockResolvedValueOnce(
+      new Response(JSON.stringify({ result: { content: [] } }), { status: 200 })
+    );
+    await result.read_item.execute!(
+      { tenant: 'other-tenant', query: 'q' },
+      {} as never
+    );
+
+    const callBody = JSON.parse(String(fetchSpy.mock.calls[1][1]?.body)) as {
+      params?: { arguments?: Record<string, unknown> };
+    };
+    expect(callBody.params?.arguments).toEqual({
+      tenant: 'acme',
+      query: 'q',
+    });
   });
 });
 

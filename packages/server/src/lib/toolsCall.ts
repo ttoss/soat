@@ -13,6 +13,7 @@ import type { PipelineStepCaller } from './pipelineTools';
 import { runPipeline } from './pipelineTools';
 import { resolveSecretRefsInString } from './secrets';
 import { soatTools } from './soatTools';
+import { mergePresetParameters } from './toolPresetParameters';
 import { callTool } from './tools';
 import { resolveToolHeaderTemplates } from './toolTemplates';
 
@@ -297,10 +298,10 @@ export const callResolvedTool = async (args: {
 }): Promise<unknown> => {
   const type = args.tool.type ?? 'http';
 
-  const mergedInput = {
-    ...(args.tool.presetParameters ?? {}),
-    ...(args.input ?? {}),
-  };
+  const mergedInput = mergePresetParameters({
+    presetParameters: args.tool.presetParameters,
+    input: args.input,
+  });
 
   if (type === 'pipeline') {
     const rawResult = await runPipeline({

@@ -2,6 +2,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { applyInputMapping, applyOutputMapping } from './jsonLogicMapping';
 import { scopedWhere } from './resourceAccessor';
+import { mergePresetParameters } from './toolPresetParameters';
 import {
   assertEphemeralTypeSupported,
   type InlineToolDefinition,
@@ -421,7 +422,10 @@ export const runPipeline = async (args: {
 
   const stepOutputs: Record<string, unknown> = {};
   const context: Record<string, unknown> = {
-    input: { ...(args.presetParameters ?? {}), ...(args.input ?? {}) },
+    input: mergePresetParameters({
+      presetParameters: args.presetParameters,
+      input: args.input,
+    }),
     steps: stepOutputs,
   };
 

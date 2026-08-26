@@ -330,6 +330,91 @@ describe('agentToolGuardrail gate (resolver dispatch path)', () => {
     expect(toolRequests).toHaveLength(0);
   });
 
+  // Justification-field injection rebuilds the model-visible schema from the
+  // tool's stored `parameters`, so it has to start from the pinned-key-stripped
+  // shape — otherwise attaching a class-C guardrail silently hands a pinned
+  // field back to the model.
+  test('justification injection keeps pinned keys out of the schema', async () => {
+    await db.Tool.update(
+      { presetParameters: { amount: 10 } },
+      { where: { publicId: httpToolId } }
+    );
+    try {
+      const id = await makeGuardrail({ class: 'C' });
+      const refund = await resolveGuarded({ toolGuardrailIds: [id] });
+
+      const schema = refund.inputSchema as {
+        jsonSchema?: { properties?: Record<string, unknown> };
+      };
+      expect(schema.jsonSchema?.properties).not.toHaveProperty('amount');
+      expect(schema.jsonSchema?.properties).toHaveProperty(
+        'approval_reasoning'
+      );
+    } finally {
+      await db.Tool.update(
+        { presetParameters: null },
+        { where: { publicId: httpToolId } }
+      );
+    }
+  });
+
+  // The gate must classify the arguments the call will actually carry. A
+  // pinned parameter is the operator's, so it is what the guard sees and what
+  // the request sends — classifying the model's discarded value would gate a
+  // call that never happens.
+  test('a guard evaluates the pinned preset value, not the model value', async () => {
+    await db.Tool.update(
+      { presetParameters: { amount: 10 } },
+      { where: { publicId: httpToolId } }
+    );
+    try {
+      const id = await makeGuardrail({
+        class: 'B',
+        guard: { '<': [{ var: 'args.amount' }, 100] },
+      });
+      const refund = await resolveGuarded({ toolGuardrailIds: [id] });
+      const result = await invokeExecute(refund, { amount: 999 });
+
+      expect(result).toEqual({ ok: true });
+      expect(toolRequests).toEqual([{ amount: 10 }]);
+    } finally {
+      await db.Tool.update(
+        { presetParameters: null },
+        { where: { publicId: httpToolId } }
+      );
+    }
+  });
+
+  test('an approval item records the pinned arguments the call would carry', async () => {
+    await db.Tool.update(
+      { presetParameters: { amount: 500 } },
+      { where: { publicId: httpToolId } }
+    );
+    try {
+      const id = await makeGuardrail({ class: 'C' });
+      const refund = await resolveGuarded({ toolGuardrailIds: [id] });
+      const result = (await invokeExecute(refund, { amount: 1 })) as {
+        status: string;
+        approval_id: string;
+      };
+
+      expect(result.status).toBe('pending_approval');
+      const item = await db.ApprovalItem.findOne({
+        where: { publicId: result.approval_id },
+      });
+      expect(item!.proposedAction).toEqual({
+        toolId: httpToolId,
+        action: 'refund',
+        arguments: { amount: 500 },
+      });
+    } finally {
+      await db.Tool.update(
+        { presetParameters: null },
+        { where: { publicId: httpToolId } }
+      );
+    }
+  });
+
   test('class B routes to approval when the guard fails and escalate is on', async () => {
     const before = await pendingCount();
     const id = await makeGuardrail({
