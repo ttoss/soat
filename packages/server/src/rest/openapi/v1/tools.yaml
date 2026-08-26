@@ -652,6 +652,16 @@ components:
             type. Keys matching fields in the input schema are removed from the
             schema shown to the model, and a pinned value wins over one the
             model or a direct caller supplies for the same key.
+
+
+            Values accept `{{context:<key>}}` references, resolved per call from
+            the caller's `tool_context`, so a pin can be the run's own value —
+            the one account this run may act on — rather than one fixed when the
+            tool was created. A resolved value is retyped to the parameter's
+            declared schema type; a key missing from the call's `tool_context`
+            fails the call with `MISSING_TOOL_CONTEXT_KEY` rather than sending
+            the literal placeholder. `{{secret:...}}` is not resolved here. See
+            the Tool Context reference.
         pipeline:
           type: object
           nullable: true
@@ -819,6 +829,16 @@ components:
             type. Keys matching fields in the input schema are removed from the
             schema shown to the model, and a pinned value wins over one the
             model or a direct caller supplies for the same key.
+
+
+            Values accept `{{context:<key>}}` references, resolved per call from
+            the caller's `tool_context`, so a pin can be the run's own value —
+            the one account this run may act on — rather than one fixed when the
+            tool was created. A resolved value is retyped to the parameter's
+            declared schema type; a key missing from the call's `tool_context`
+            fails the call with `MISSING_TOOL_CONTEXT_KEY` rather than sending
+            the literal placeholder. `{{secret:...}}` is not resolved here. See
+            the Tool Context reference.
         pipeline:
           type: object
           description: >-
@@ -959,6 +979,16 @@ components:
             type. Keys matching fields in the input schema are removed from the
             schema shown to the model, and a pinned value wins over one the
             model or a direct caller supplies for the same key.
+
+
+            Values accept `{{context:<key>}}` references, resolved per call from
+            the caller's `tool_context`, so a pin can be the run's own value —
+            the one account this run may act on — rather than one fixed when the
+            tool was created. A resolved value is retyped to the parameter's
+            declared schema type; a key missing from the call's `tool_context`
+            fails the call with `MISSING_TOOL_CONTEXT_KEY` rather than sending
+            the literal placeholder. `{{secret:...}}` is not resolved here. See
+            the Tool Context reference.
         pipeline:
           type: object
           nullable: true

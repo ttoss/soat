@@ -50,7 +50,7 @@ To invoke a tool automatically, bind it to a [Trigger](./triggers.md) with `targ
 | `actions`           | `string[] \| null`                              | Allowlist of actions to expose. `builtin`: SOAT platform action names, e.g. `["search-knowledge"]` (required). `mcp`: optional allowlist of MCP tool names to scope the server surface — `null` exposes every tool. See [mcp action scoping](#scoping-an-mcp-tool-to-a-subset-of-actions). |
 | `denied_actions`    | `string[] \| null`                              | `mcp` only: optional denylist of MCP tool names to hide, applied after `actions` and taking precedence over it. `null` denies nothing. See [mcp action scoping](#scoping-an-mcp-tool-to-a-subset-of-actions). |
 | `context_keys`      | `string[] \| null`                              | Allowlist of [`tool_context`](../advanced/tool-context.md) keys forwarded to this tool as context headers. `null` forwards every key (the default); `[]` forwards none. See [Scoping which context keys reach a tool](#scoping-which-context-keys-reach-a-tool). |
-| `preset_parameters` | `object \| null`                                | Fixed parameter values pinned on every call. Keys are hidden from the model, and a pinned value wins over one the caller sends. |
+| `preset_parameters` | `object \| null`                                | Fixed parameter values pinned on every call. Keys are hidden from the model, and a pinned value wins over one the caller sends. Values accept [`{{context:<key>}}`](../advanced/tool-context.md#pinning-a-parameter-to-the-runs-value) so a pin can be the *run's* value. |
 | `pipeline`          | `object \| null`                                | Pipeline definition (`steps`, optional `output`). Required for `pipeline` type. See [pipeline](#pipeline).         |
 | `output_mapping`    | `object \| null`                                | JSON Logic mapping applied to the tool's raw result, for every tool type. See [output mapping](#output-mapping).   |
 | `guardrail_ids`     | `array \| null`                                 | Guardrails attached at the tool scope, governing this tool wherever it is used — see [Guardrails — Attachment](./guardrails.md#attachment) |
@@ -353,6 +353,21 @@ On an `mcp` binding, presets apply to **every** tool the MCP server exposes
 through that binding, the same reach they have over every action a `builtin`
 binding lists. Pin a key on a binding only when it is meant for all of them; use
 a separate binding otherwise.
+
+#### Pinning to a per-run value (`{{context:}}`)
+
+A preset value may be a [`{{context:<key>}}`](../advanced/tool-context.md#pinning-a-parameter-to-the-runs-value) token, resolved per call from the caller's `tool_context`:
+
+```json
+{
+  "type": "mcp",
+  "mcp": { "headers": { "Authorization": "Bearer {{context:ocaToken}}" } },
+  "context_keys": ["ocaToken", "ocaAdAccountId"],
+  "preset_parameters": { "adAccountId": "{{context:ocaAdAccountId}}" }
+}
+```
+
+That is what lets one tool serve many tenants: the credential and the scope it must be confined to both come from the run, and neither is in the model's hands. A key missing from this call's `tool_context` fails the call with `400 MISSING_TOOL_CONTEXT_KEY` rather than sending the literal placeholder; a resolved value is retyped to the parameter's declared schema type, since context values are strings. `{{secret:...}}` is **not** resolved in a preset — it stays literal, so secrets remain a headers-only mechanism.
 
 Presets and model-supplied arguments reach the action wherever the OpenAPI operation declares the parameter — path, query string, or request body. A `list-*` action's `project_id`, filters, and pagination arguments are query parameters, so a preset like `{ "project_id": "proj_abc123" }` is the way to lock a `builtin` tool to one project. An argument the caller omits is left out of the request entirely rather than sent as an empty value.
 

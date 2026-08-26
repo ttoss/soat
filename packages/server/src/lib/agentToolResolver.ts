@@ -48,7 +48,11 @@ import {
   callTool,
   type InlineToolDefinition,
 } from './tools';
-import { resolveToolHeaderTemplates } from './toolTemplates';
+import {
+  resolvePresetParametersForCall,
+  resolvePresetParametersForGate,
+  resolveToolHeaderTemplates,
+} from './toolTemplates';
 // Re-exported from its own module (both http and soat tool paths throw it).
 export { HttpToolError } from './httpToolError';
 
@@ -578,6 +582,9 @@ export const buildHttpToolExecute = (
     projectId: number;
     contextKeys?: string[] | null;
     presetParameters?: object | null;
+    // The tool's own `parameters` schema, so a `{{context:}}`-resolved preset is
+    // retyped to the field's declared type before it is merged (#345).
+    parameterSchema?: unknown;
     // Verbatim request headers (e.g. `Idempotency-Key`) merged last, after
     // execute headers and context headers.
     extraHeaders?: Record<string, string>;
@@ -588,12 +595,21 @@ export const buildHttpToolExecute = (
     const rawMethod = (args.execute.method ?? 'POST').toUpperCase();
     const method = ALLOWED_METHODS.includes(rawMethod) ? rawMethod : 'POST';
     const hasBody = !['GET', 'HEAD'].includes(method);
-    const rawArgs = mergePresetParameters({
-      presetParameters: args.presetParameters,
-      input: toolArgs,
-    });
     let url = args.execute.url;
     try {
+      // Presets resolve here, not at tool-resolution time: a missing
+      // `{{context:}}` key must fail *this call* (with nothing sent), the way a
+      // missing key in a header does, rather than aborting resolution of every
+      // other tool the agent has.
+      const rawArgs = mergePresetParameters({
+        presetParameters: resolvePresetParametersForCall({
+          presetParameters: args.presetParameters,
+          toolContext,
+          toolName: args.toolName,
+          schema: args.parameterSchema,
+        }),
+        input: toolArgs,
+      });
       const {
         resolvedUrl: afterPathParams,
         remainingArgs: afterPathParamsArgs,
@@ -700,6 +716,7 @@ const resolveHttpTool = (
             projectId: typedTool.projectId,
             contextKeys: typedTool.contextKeys,
             presetParameters: typedTool.presetParameters,
+            parameterSchema: parameters,
           },
           toolContext
         )
@@ -710,11 +727,15 @@ const resolveHttpTool = (
   });
 };
 
-const resolveClientTool = (typedTool: {
-  description: string | null;
-  parameters: Record<string, unknown> | null;
-  presetParameters?: object | null;
-}): Tool => {
+const resolveClientTool = (
+  typedTool: {
+    name: string;
+    description: string | null;
+    parameters: Record<string, unknown> | null;
+    presetParameters?: object | null;
+  },
+  toolContext?: Record<string, string>
+): Tool => {
   const parameters =
     typeof typedTool.parameters === 'string'
       ? (JSON.parse(typedTool.parameters) as Record<string, unknown>)
@@ -726,13 +747,23 @@ const resolveClientTool = (typedTool: {
     ),
   });
   if (!typedTool.presetParameters) return resolved;
+  // A client tool has no server-side `execute`, so its presets must already be
+  // resolved when they are attached — there is no later step that still holds
+  // this call's `tool_context`. A missing key therefore fails resolution here,
+  // which is the only place left to fail closed.
+  const presetParameters = resolvePresetParametersForCall({
+    presetParameters: typedTool.presetParameters,
+    toolContext,
+    toolName: typedTool.name,
+    schema: parameters,
+  });
   // No `execute` to merge into — the call is dispatched by the client, so the
   // presets ride along to the `requires_action` handoff, where
   // `findPendingClientTools` pins them onto the arguments the client receives.
   // Adding a symbol-keyed property keeps the tool execute-less, which is what
   // marks it a client tool downstream.
   return Object.assign(resolved, {
-    [CLIENT_TOOL_PRESETS]: typedTool.presetParameters,
+    [CLIENT_TOOL_PRESETS]: presetParameters,
   });
 };
 
@@ -965,7 +996,9 @@ const resolveToolByType = async (
     case 'http':
       return { [typedTool.name]: resolveHttpTool(typedTool, args.toolContext) };
     case 'client':
-      return { [typedTool.name]: resolveClientTool(typedTool) };
+      return {
+        [typedTool.name]: resolveClientTool(typedTool, args.toolContext),
+      };
     case 'pipeline':
       return {
         [typedTool.name]: resolvePipelineTool(typedTool, {
@@ -1092,7 +1125,12 @@ export const resolveEphemeralAgentTool = async (args: {
     toolType: typedTool.type,
     toolName: typedTool.name,
     toolGuardrailIds: null,
-    presetParameters: typedTool.presetParameters,
+    presetParameters: resolvePresetParametersForGate({
+      presetParameters: typedTool.presetParameters,
+      toolContext: args.toolContext,
+      toolName: typedTool.name,
+      schema: typedTool.parameters,
+    }),
     rawParameters,
     context: args.guardrail,
   });
@@ -1154,7 +1192,15 @@ const resolveReferenceBinding = async (args: {
     toolType: typedTool.type,
     toolName: typedTool.name,
     toolGuardrailIds: typedTool.guardrailIds,
-    presetParameters: typedTool.presetParameters,
+    // The gate classifies the *effective* arguments, so it must see the values
+    // the dispatch will actually send — a guardrail comparing a pinned account
+    // against `{{context:ocaAdAccountId}}` gates nothing (#345).
+    presetParameters: resolvePresetParametersForGate({
+      presetParameters: typedTool.presetParameters,
+      toolContext: args.resolveArgs.toolContext,
+      toolName: typedTool.name,
+      schema: typedTool.parameters,
+    }),
     rawParameters: localInjectableSchema(typedTool),
     context: args.guardrail,
   });

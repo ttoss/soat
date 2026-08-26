@@ -226,8 +226,13 @@ export const executeToolNode = async (args: {
   // approved args ARE the tool input. Re-evaluating here would re-route to
   // approval and loop forever (Q4: skip re-eval on resume).
   approvedArguments?: Record<string, unknown> | null;
+  // The run's `tool_context`, forwarded to the tool call so a `{{context:}}`
+  // header or preset on the tool resolves from the run's own bag — the same
+  // reach an `agent` node's generation already has (#345).
+  toolContext?: Record<string, string>;
 }): Promise<NodeExecutionResult> => {
-  const { node, state, projectIds, authHeader, idempotencyKey } = args;
+  const { node, state, projectIds, authHeader, idempotencyKey, toolContext } =
+    args;
   const toolId = requireNodeField(node, 'toolId');
 
   const inputs =
@@ -257,6 +262,7 @@ export const executeToolNode = async (args: {
     input: gated.input,
     authHeader,
     idempotencyKey,
+    toolContext,
   });
 
   const artifact: Record<string, unknown> =

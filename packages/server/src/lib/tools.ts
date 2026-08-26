@@ -234,6 +234,7 @@ export const validateToolDefinition = async (args: {
   assertValidToolTemplateTokens({
     execute: definition.execute,
     mcp: definition.mcp,
+    presetParameters: definition.presetParameters,
   });
 
   // Fail fast on {{secret:...}} tokens referencing nonexistent or
@@ -347,6 +348,38 @@ type ToolUpdateArgs = {
   guardrailIds?: string[] | null;
 };
 
+/**
+ * The template-token and credential checks for an update, over whichever of the
+ * three token-bearing fields the PATCH actually touches.
+ *
+ * `preset_parameters` is checked on its own, not only alongside an `execute` /
+ * `mcp` change: a PATCH that touches nothing but the presets is exactly the
+ * write that introduces a malformed token there (#345).
+ */
+const validateToolUpdateTemplates = async (params: {
+  args: ToolUpdateArgs;
+  projectId: number;
+}): Promise<void> => {
+  const { args } = params;
+  const touchesConfig = args.execute !== undefined || args.mcp !== undefined;
+  if (!touchesConfig && args.presetParameters === undefined) return;
+
+  if (touchesConfig) {
+    validateExecuteAuth({ execute: args.execute });
+  }
+  assertValidToolTemplateTokens({
+    execute: args.execute,
+    mcp: args.mcp,
+    presetParameters: args.presetParameters,
+  });
+  if (touchesConfig) {
+    await assertSecretRefsExist({
+      value: { execute: args.execute, mcp: args.mcp },
+      projectId: params.projectId,
+    });
+  }
+};
+
 /** Runs the per-type validation for an update against the existing tool row. */
 const validateToolUpdate = async (params: {
   args: ToolUpdateArgs;
@@ -370,14 +403,7 @@ const validateToolUpdate = async (params: {
   if (args.contextKeys !== undefined) {
     assertValidToolContextAllowlist(args.contextKeys);
   }
-  if (args.execute !== undefined || args.mcp !== undefined) {
-    validateExecuteAuth({ execute: args.execute });
-    assertValidToolTemplateTokens({ execute: args.execute, mcp: args.mcp });
-    await assertSecretRefsExist({
-      value: { execute: args.execute, mcp: args.mcp },
-      projectId: tool.projectId,
-    });
-  }
+  await validateToolUpdateTemplates({ args, projectId: tool.projectId });
 };
 
 export const updateTool = async (args: ToolUpdateArgs): Promise<MappedTool> => {
@@ -438,6 +464,11 @@ export const callTool = async (args: {
   // Forwarded to an HTTP tool as the `Idempotency-Key` request header (D7),
   // so a redelivered orchestration node call can be deduped downstream.
   idempotencyKey?: string;
+  // The caller's `tool_context`. An orchestration `tool`/`poll` node passes the
+  // run's bag, so a tool reached without an agent in between still resolves its
+  // `{{context:}}` headers and presets and still receives its context headers
+  // (#345). A direct `POST /tools/{id}/call` passes none.
+  toolContext?: Record<string, string>;
 }): Promise<unknown> => {
   const toolInstance = await tools.getByPublicId({
     projectIds: args.projectIds,
@@ -454,5 +485,6 @@ export const callTool = async (args: {
     remainingDepth: args.remainingDepth,
     projectIds: args.projectIds,
     idempotencyKey: args.idempotencyKey,
+    toolContext: args.toolContext,
   });
 };

@@ -14,7 +14,7 @@ Every place SOAT lets you map, transform, or interpolate values uses one of six 
 | [Dotted paths](#dotted-paths) | `state.a.b`, `text`, `MySecret.value` | Orchestration `state_mapping` keys, loop `collection`, and the `nodes.<id>` namespace; `output_path` on `tool_output` message content; formation `ref_attr` | Run / call / apply time |
 | [`{param}`](#single-curly-param) | `/users/{user_id}` | `execute.url` of `http` tools | Call time |
 | [`{{secret:...}}`](#secret-references-secret) | `{{secret:sec_01HXYZ}}` | `execute.url`, `execute.headers`, `mcp.url`, `mcp.headers` | Call time |
-| [`{{context:...}}`](#context-references-context) | `{{context:ocaToken}}` | `execute.headers`, `mcp.headers` | Call time |
+| [`{{context:...}}`](#context-references-context) | `{{context:ocaToken}}` | `execute.headers`, `mcp.headers`, `preset_parameters` | Call time |
 | [`${...}`](#dollar-curly-formations-and-body-params) | `${ParamName}`, `${LogicalId}`, `${body.field}` | Formation `sub` expressions; `execute.url` | Apply time (`${Name}`) / call time (`${body.x}`) |
 | [Formation objects](#formation-object-expressions) | `{"ref": ...}`, `{"param": ...}`, `{"sub": ...}` | Formation template resource properties | Apply time |
 
@@ -103,17 +103,23 @@ The referenced secret must exist in the same project (validated at tool create/u
 
 ## Context references (`{{context:...}}`)
 
-The other valid double-curly form. A `{{context:<key>}}` token reads one key of the caller's [`tool_context`](./tool-context.md) for **this call** and substitutes it into a tool header:
+The other valid double-curly form. A `{{context:<key>}}` token reads one key of the caller's [`tool_context`](./tool-context.md) for **this call** and substitutes it into a tool header, or into a pinned parameter:
 
 ```json
 { "mcp": { "headers": { "Authorization": "Bearer {{context:ocaToken}}" } } }
 ```
 
+```json
+{ "preset_parameters": { "adAccountId": "{{context:ocaAdAccountId}}" } }
+```
+
 It exists because `tool_context` on its own can only produce headers under the deployment's context prefix (`X-Soat-Context-` by default) — a security invariant, since a caller-named header could otherwise overwrite the tool's own credential. The token moves the header naming to the party that knows the header shape: the tool declares where the value goes, the caller supplies the value.
 
-Unlike `{{secret:...}}`, it is valid in **`execute.headers` and `mcp.headers` only** — never `execute.url`, `mcp.url`, `execute.auth`, or a body. A context value is caller-supplied, and a URL it could steer is a request to a host the tool's author never configured. A token anywhere else is rejected at write time with `400 INVALID_TEMPLATE_TOKEN`.
+Unlike `{{secret:...}}`, it is valid in **`execute.headers`, `mcp.headers` and `preset_parameters` only** — never `execute.url`, `mcp.url`, `execute.auth`, or a model-supplied argument. A context value is caller-supplied, and a URL it could steer is a request to a host the tool's author never configured. A token anywhere else is rejected at write time with `400 INVALID_TEMPLATE_TOKEN`.
 
-A key that is not present in the `tool_context` at call time **fails the tool call** with `400 MISSING_TOOL_CONTEXT_KEY`, naming the key and the header. Sending `Authorization: Bearer ` instead would surface as an opaque upstream `401`, far from the real mistake. An empty-string value is a value, not a missing key.
+A preset is the one place the token reaches a *value* rather than a header, and it is safe for the same reason a header is: the tool's author chose the parameter, and the pin wins over anything the model supplies. Since context values are strings, a resolved preset is retyped to the parameter's declared schema type. `{{secret:...}}` is deliberately **not** resolved in a preset — it stays literal, keeping secrets to headers.
+
+A key that is not present in the `tool_context` at call time **fails the tool call** with `400 MISSING_TOOL_CONTEXT_KEY`, naming the key and the header (or the preset parameter). Sending `Authorization: Bearer ` instead would surface as an opaque upstream `401`, far from the real mistake. An empty-string value is a value, not a missing key.
 
 Both forms may appear in one header value and are substituted in a single pass, so no substituted value is re-read as template source. Full rules, including which calling paths carry no context at all, are in the [Tool Context reference](./tool-context.md#placing-a-value-in-a-real-header).
 
@@ -166,12 +172,12 @@ The same phase rule explains `${body.x}`: `sub` leaves it alone at apply time so
 
 Session and actor context is **not** a general expression family: no `tool_context` value is ever interpolated into a URL, a body, or a JSON Logic expression. The server injects the generation's `tool_context` as `X-Soat-Context-*` **request headers** on every `http` and `mcp` tool call, alongside the tool's own `execute.headers`. That is the mechanism for getting the actor, session or caller identity into an outbound call — see the [Tool Context reference](./tool-context.md).
 
-The single exception is [`{{context:<key>}}`](#context-references-context) in a tool's own `headers`, which reads one context value by name so a credential can land in the header the target actually expects.
+The exceptions are both declared by the tool itself: [`{{context:<key>}}`](#context-references-context) in its own `headers`, so a credential lands in the header the target expects, and in its `preset_parameters`, so the scope that credential is confined to can vary per run.
 
 ## Common mistakes
 
 - **`{{param}}` in a tool URL** — double braces are secrets-only; use `{param}`. Rejected at write time with `400 INVALID_TEMPLATE_TOKEN`.
-- **A `{{context:...}}` token outside `headers`** — it is a headers-only affordance; in a URL or body it is rejected with `400 INVALID_TEMPLATE_TOKEN`. Context also always arrives as `X-Soat-Context-*` headers regardless. See [Tool Context](./tool-context.md).
+- **A `{{context:...}}` token outside `headers` or `preset_parameters`** — in a URL or an `execute.auth` block it is rejected with `400 INVALID_TEMPLATE_TOKEN`. Context also always arrives as `X-Soat-Context-*` headers regardless. See [Tool Context](./tool-context.md).
 - **camelCase `var` paths for run input** — orchestration run-input keys round-trip verbatim: an input sent as `cycle_task` is read as `{"var": "input.cycle_task"}`, not `cycleTask`.
 - **Bare string as a state read** — in an `input_mapping`, a bare string is a literal. `"state.key"` does not read state; use `{"var": "key"}`.
 - **Forward references** — a pipeline step may only read `steps.<id>` of an *earlier* step; formations reject circular `ref`/`sub` dependencies.

@@ -1,3 +1,5 @@
+import { createServer } from 'node:http';
+
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 import * as agentGenerationModule from 'src/lib/agentGeneration';
@@ -1416,6 +1418,93 @@ describe('Orchestrations', () => {
           });
         } finally {
           generationSpy.mockRestore();
+        }
+      });
+
+      // #345 / #945: a `tool` node is the run acting directly, so it must carry
+      // the run's context the way an `agent` node's generation does — and a
+      // `{{context:}}` pin on the tool is how the run's own boundary (the ad
+      // account it may touch) reaches the call without the model in between.
+      test("is forwarded to a tool node, resolving the tool's {{context:}} preset", async () => {
+        const bodies: unknown[] = [];
+        const server = createServer((req, res) => {
+          const chunks: Buffer[] = [];
+          req.on('data', (chunk: Buffer) => {
+            chunks.push(chunk);
+          });
+          req.on('end', () => {
+            const raw = Buffer.concat(chunks).toString('utf8');
+            bodies.push(raw ? JSON.parse(raw) : null);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true }));
+          });
+        });
+        await new Promise<void>((resolve) => {
+          server.listen(0, '127.0.0.1', resolve);
+        });
+        const address = server.address();
+        const port =
+          address && typeof address === 'object' ? address.port : undefined;
+
+        try {
+          const toolRes = await authenticatedTestClient(adminToken)
+            .post('/api/v1/tools')
+            .send({
+              project_id: projectId,
+              name: 'runContextPresetTool',
+              type: 'http',
+              parameters: {
+                type: 'object',
+                properties: {
+                  adAccountId: { type: 'string' },
+                  name: { type: 'string' },
+                },
+              },
+              execute: {
+                url: `http://127.0.0.1:${port}/v1/do`,
+                method: 'POST',
+              },
+              preset_parameters: { adAccountId: '{{context:ocaAdAccountId}}' },
+            });
+          expect(toolRes.status).toBe(201);
+
+          const createRes = await authenticatedTestClient(userToken)
+            .post('/api/v1/orchestrations')
+            .send({
+              name: 'Run Tool Context Tool Node',
+              nodes: [
+                {
+                  id: 'act',
+                  type: 'tool',
+                  tool_id: toolRes.body.id,
+                  input_mapping: { name: { var: 'input.name' } },
+                },
+              ],
+              edges: [],
+              project_id: projectId,
+            });
+          expect(createRes.status).toBe(201);
+
+          const runRes = await authenticatedTestClient(userToken)
+            .post('/api/v1/orchestration-runs')
+            .send({
+              wait: true,
+              orchestration_id: createRes.body.id,
+              input: { name: 'widget' },
+              tool_context: { ocaAdAccountId: 'act_1330065197707199' },
+            });
+          expect(runRes.status).toBe(201);
+          expect(runRes.body.status).toBe('succeeded');
+
+          expect(bodies).toEqual([
+            { name: 'widget', adAccountId: 'act_1330065197707199' },
+          ]);
+        } finally {
+          await new Promise<void>((resolve) => {
+            server.close(() => {
+              return resolve();
+            });
+          });
         }
       });
 

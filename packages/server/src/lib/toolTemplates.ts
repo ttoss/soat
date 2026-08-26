@@ -3,6 +3,7 @@ import createDebug from 'debug';
 import { DomainError } from '../errors';
 import { loadSecretValues } from './secrets';
 import { TOOL_CONTEXT_KEY_CHARS } from './toolContext';
+import { coercePresetParametersToSchema } from './toolPresetParameters';
 
 const log = createDebug('soat:toolTemplates');
 
@@ -16,7 +17,7 @@ const log = createDebug('soat:toolTemplates');
  * | Token | Value comes from | Valid in |
  * |---|---|---|
  * | `{{secret:sec_...}}` | a project secret, decrypted server-side | anywhere in `execute` / `mcp` |
- * | `{{context:<key>}}` | the caller's `tool_context` for this call | `execute.headers` / `mcp.headers` only |
+ * | `{{context:<key>}}` | the caller's `tool_context` for this call | `execute.headers`, `mcp.headers`, `preset_parameters` |
  *
  * `{{context:}}` exists because `tool_context` alone can only ever produce
  * headers under the deployment's context prefix (`X-Soat-Context-` by default,
@@ -27,9 +28,13 @@ const log = createDebug('soat:toolTemplates');
  * in (it is the party that knows the header shape), and the caller only supplies
  * the value.
  *
- * Headers-only is deliberate. A context value is caller-controlled data, so
- * letting it reach `execute.url` would let a caller steer the outbound request
- * to a host the tool's author never configured.
+ * The two places it is allowed are the two the tool's author controls the shape
+ * of. A header is one the tool declares; a preset parameter is a value the tool
+ * pins **over** whatever the model supplies (#345), which is what lets a
+ * per-run boundary — the one account this run may act on — be expressed at all.
+ * `execute.url` stays off-limits: a context value is caller-controlled data, and
+ * letting it reach the URL would let a caller steer the outbound request to a
+ * host the tool's author never configured.
  */
 
 // The inner alternation lets a `${...}` sub placeholder's own closing brace
@@ -111,7 +116,7 @@ export const findInvalidTemplateTokens = (value: unknown): string[] => {
  * and the formation validator cannot describe the same rule differently.
  */
 export const MISPLACED_CONTEXT_HINT =
-  'a {{context:<key>}} token may appear only in execute.headers or mcp.headers — a context value is caller-supplied, so it may not steer a URL or a request body';
+  'a {{context:<key>}} token may appear only in execute.headers, mcp.headers or preset_parameters — a context value is caller-supplied, so it may not steer a URL or a request body';
 
 export const INVALID_TOKEN_HINT =
   'double curly braces are reserved for {{secret:sec_...}} and {{context:<key>}} references; use single braces ({param}) for URL path parameters';
@@ -204,6 +209,7 @@ export const describeToolTemplateTokenProblems = (
 export const assertValidToolTemplateTokens = (args: {
   execute?: unknown;
   mcp?: unknown;
+  presetParameters?: unknown;
 }): void => {
   const problems = [args.execute, args.mcp].reduce<ToolTemplateTokenProblems>(
     (acc, value) => {
@@ -213,7 +219,14 @@ export const assertValidToolTemplateTokens = (args: {
         misplacedContext: [...acc.misplacedContext, ...found.misplacedContext],
       };
     },
-    { invalid: [], misplacedContext: [] }
+    {
+      // A preset is a context *sink*, so only the shape rule applies to it —
+      // there is no "misplaced" here. Checking it at write time is what keeps a
+      // typo'd `{{ocaAdAccountId}}` from reaching the target as the literal
+      // parameter value, which comes back as an opaque `not found`.
+      invalid: findInvalidTemplateTokens(args.presetParameters),
+      misplacedContext: [],
+    }
   );
 
   const message = describeToolTemplateTokenProblems(problems);
@@ -252,40 +265,52 @@ const substituteTokens = (args: {
   value: string;
   secretValues: Map<string, string>;
   toolContext?: Record<string, string>;
-  headerName: string;
-}): string => {
-  return args.value.replace(RESOLVABLE_TOKEN_RE, (original, inner: string) => {
-    if (inner.startsWith(SECRET_PREFIX)) {
-      // A referenced-but-valueless secret leaves the token in place, matching
-      // `resolveSecretRefsInString`.
-      return (
-        args.secretValues.get(inner.slice(SECRET_PREFIX.length)) ?? original
-      );
-    }
+  /**
+   * What the value is, for the error a missing key produces — `Tool header
+   * 'Authorization'`, `Preset parameter 'adAccountId' on tool 'oca'`. Passed in
+   * rather than derived here so one substitution routine serves every field
+   * that may carry a token, and each names itself the way its author would.
+   */
+  location: { description: string; meta: Record<string, unknown> };
+}): { value: string; resolvedContext: boolean } => {
+  let resolvedContext = false;
+  const value = args.value.replace(
+    RESOLVABLE_TOKEN_RE,
+    (original, inner: string) => {
+      if (inner.startsWith(SECRET_PREFIX)) {
+        // A referenced-but-valueless secret leaves the token in place, matching
+        // `resolveSecretRefsInString`.
+        return (
+          args.secretValues.get(inner.slice(SECRET_PREFIX.length)) ?? original
+        );
+      }
 
-    const key = inner.slice(CONTEXT_PREFIX.length);
-    // `Object.hasOwn`, not a truthiness check: an empty-string context value is
-    // a value the caller chose, while an inherited `Object.prototype` member is
-    // not a key at all.
-    const resolved =
-      args.toolContext && Object.hasOwn(args.toolContext, key)
-        ? args.toolContext[key]
-        : undefined;
-    if (resolved === undefined) {
-      // The two messages are worth distinguishing: "no tool_context at all"
-      // usually means the tool was reached through a path that carries none
-      // (`/tools/{id}/call`, an orchestration `tool` node), which is a different
-      // fix from adding one key.
-      throw new DomainError(
-        'MISSING_TOOL_CONTEXT_KEY',
-        args.toolContext
-          ? `Tool header '${args.headerName}' references '${original}', but the key '${key}' is not present in the tool_context for this call.`
-          : `Tool header '${args.headerName}' references '${original}', but this call carries no tool_context. Supply one, or call the tool through an entry point that forwards it.`,
-        { key, header: args.headerName }
-      );
+      const key = inner.slice(CONTEXT_PREFIX.length);
+      // `Object.hasOwn`, not a truthiness check: an empty-string context value is
+      // a value the caller chose, while an inherited `Object.prototype` member is
+      // not a key at all.
+      const resolved =
+        args.toolContext && Object.hasOwn(args.toolContext, key)
+          ? args.toolContext[key]
+          : undefined;
+      if (resolved === undefined) {
+        // The two messages are worth distinguishing: "no tool_context at all"
+        // usually means the tool was reached through a path that carries none
+        // (`/tools/{id}/call`, an orchestration `tool` node), which is a different
+        // fix from adding one key.
+        throw new DomainError(
+          'MISSING_TOOL_CONTEXT_KEY',
+          args.toolContext
+            ? `${args.location.description} references '${original}', but the key '${key}' is not present in the tool_context for this call.`
+            : `${args.location.description} references '${original}', but this call carries no tool_context. Supply one, or call the tool through an entry point that forwards it.`,
+          { key, ...args.location.meta }
+        );
+      }
+      resolvedContext = true;
+      return resolved;
     }
-    return resolved;
-  });
+  );
+  return { value, resolvedContext };
 };
 
 /**
@@ -326,9 +351,172 @@ export const resolveToolHeaderTemplates = async (args: {
           value,
           secretValues,
           toolContext: args.toolContext,
-          headerName,
-        }),
+          location: {
+            description: `Tool header '${headerName}'`,
+            meta: { header: headerName },
+          },
+        }).value,
       ];
     })
   );
+};
+
+/**
+ * A tool's `preset_parameters` with every `{{context:<key>}}` token resolved
+ * from this call's `tool_context` (#345), plus the top-level keys that carried
+ * at least one — the input {@link coercePresetParametersToSchema} needs to know
+ * which values came from a caller-supplied string rather than from the
+ * operator's own literal.
+ */
+export type ResolvedPresetParameters = {
+  values: Record<string, unknown> | null;
+  contextResolvedKeys: string[];
+};
+
+/**
+ * Resolves `{{context:<key>}}` inside `preset_parameters`, deep-walking strings,
+ * arrays and objects, at the point of use — the stored config keeps the tokens.
+ *
+ * This is what makes a pin express a **per-run** boundary. A pin already wins
+ * over whatever the model supplies for the same key (see
+ * {@link mergePresetParameters}), so it is the one place a value can be put
+ * genuinely out of the model's hands; without token resolution that value had to
+ * be fixed when the tool was created, which forced one tool per tenant for the
+ * exact scope — an ad account, a workspace — that the run already knows.
+ *
+ * Two rules are inherited from headers rather than re-decided here:
+ *
+ * - **A missing key fails the call** with `MISSING_TOOL_CONTEXT_KEY`, never a
+ *   literal `{{context:...}}` on the wire. The literal reaches the target as a
+ *   resource id and comes back as an opaque `Not found`, several steps from the
+ *   mistake.
+ * - **`context_keys` does not gate it.** That allowlist governs which keys are
+ *   *forwarded* as `X-Soat-Context-*` headers to a tool that never asked for
+ *   them; a token is the tool naming the key it consumes, which is the opposite
+ *   direction. `resolveToolHeaderTemplates` already works this way and
+ *   `agentToolResolver.test.ts` pins it.
+ *
+ * `{{secret:...}}` is deliberately **not** resolved here: a preset value travels
+ * into the tool's request body, into guardrail evaluation input and into the
+ * activity record, so putting secret plaintext there is a decision of its own
+ * rather than a side effect of this one. The token stays literal, exactly as it
+ * does today. Passing an empty secret map (rather than skipping secrets) keeps
+ * the single-pass guarantee `substituteTokens` documents: a substituted context
+ * value is never rescanned, so a caller cannot read a project secret back out by
+ * putting a secret token in `tool_context`.
+ */
+export const resolvePresetParameterTemplates = (args: {
+  presetParameters?: object | null;
+  toolContext?: Record<string, string>;
+  toolName: string;
+}): ResolvedPresetParameters => {
+  if (!args.presetParameters || !isPlainObject(args.presetParameters)) {
+    return { values: null, contextResolvedKeys: [] };
+  }
+
+  const noSecrets = new Map<string, string>();
+  const contextResolvedKeys: string[] = [];
+
+  const walk = (value: unknown, parameter: string): unknown => {
+    if (typeof value === 'string') {
+      const substituted = substituteTokens({
+        value,
+        secretValues: noSecrets,
+        toolContext: args.toolContext,
+        location: {
+          description: `Preset parameter '${parameter}' on tool '${args.toolName}'`,
+          meta: { parameter, tool: args.toolName },
+        },
+      });
+      if (
+        substituted.resolvedContext &&
+        !contextResolvedKeys.includes(parameter)
+      ) {
+        contextResolvedKeys.push(parameter);
+      }
+      return substituted.value;
+    }
+    if (Array.isArray(value)) {
+      return value.map((entry) => {
+        return walk(entry, parameter);
+      });
+    }
+    if (isPlainObject(value)) {
+      return Object.fromEntries(
+        Object.entries(value).map(([key, entry]) => {
+          return [key, walk(entry, parameter)];
+        })
+      );
+    }
+    return value;
+  };
+
+  const values = Object.fromEntries(
+    Object.entries(args.presetParameters).map(([parameter, value]) => {
+      return [parameter, walk(value, parameter)];
+    })
+  );
+
+  return { values, contextResolvedKeys };
+};
+
+/**
+ * The one call every dispatch site makes: `preset_parameters` with its context
+ * tokens resolved and the resolved values retyped to what `schema` declares.
+ * Throws `MISSING_TOOL_CONTEXT_KEY` (400) when a token names a key this call
+ * does not carry.
+ *
+ * `schema` is the parameter schema of whatever is about to be called — the
+ * tool's own `parameters` for `http`/`client`/`pipeline`, the listed tool's
+ * `inputSchema` for `mcp`, the action's for `builtin`. Omitting it resolves
+ * tokens without retyping, which is the right answer when no schema is known.
+ */
+export const resolvePresetParametersForCall = (args: {
+  presetParameters?: object | null;
+  toolContext?: Record<string, string>;
+  toolName: string;
+  schema?: unknown;
+}): Record<string, unknown> | null => {
+  const resolved = resolvePresetParameterTemplates({
+    presetParameters: args.presetParameters,
+    toolContext: args.toolContext,
+    toolName: args.toolName,
+  });
+  return coercePresetParametersToSchema({
+    presetParameters: resolved.values,
+    contextResolvedKeys: resolved.contextResolvedKeys,
+    schema: args.schema,
+  });
+};
+
+/**
+ * {@link resolvePresetParametersForCall} for the **guardrail gate only**, where a
+ * missing key falls back to the unresolved presets instead of throwing.
+ *
+ * The gate classifies a call that has not been dispatched yet, and the dispatch
+ * site resolves the same presets a moment later — so a missing key still fails
+ * the call there, with the same error, before any request goes out. Throwing
+ * here as well would move that failure from the tool call to *tool resolution*,
+ * taking down the whole generation (every other tool included) over one tool's
+ * missing key. What matters at the gate is that a guardrail reading the pinned
+ * value sees the run's real value whenever there is one, rather than the literal
+ * `{{context:...}}` text.
+ */
+export const resolvePresetParametersForGate = (args: {
+  presetParameters?: Record<string, unknown> | null;
+  toolContext?: Record<string, string>;
+  toolName: string;
+  schema?: unknown;
+}): Record<string, unknown> | null => {
+  try {
+    return resolvePresetParametersForCall(args);
+  } catch (error) {
+    if (
+      error instanceof DomainError &&
+      error.code === 'MISSING_TOOL_CONTEXT_KEY'
+    ) {
+      return args.presetParameters ?? null;
+    }
+    throw error;
+  }
 };

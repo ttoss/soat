@@ -6,7 +6,7 @@ description: 'How session and actor context reaches a tool endpoint as X-Soat-Co
 
 `tool_context` is a flat `Record<string, string>` a caller attaches to a generation. Every entry is forwarded as an HTTP **request header** on each tool call the generation makes, so a server-side tool can authorize against the caller's identity instead of trusting data embedded in the prompt.
 
-This page is the canonical contract. `tool_context` is **not** general templating: a value is never interpolated into a URL or a request body. The one place a value is read by name is a tool's own `headers`, via a `{{context:<key>}}` token the **tool** declares — see [Placing a value in a real header](#placing-a-value-in-a-real-header) below and [Expressions & Templating](./expressions-and-templating.md).
+This page is the canonical contract. `tool_context` is **not** general templating: a value is never interpolated into a URL, and never into arguments the model chooses. The two places a value is read by name are both declared by the **tool** — its own `headers`, and its `preset_parameters` — via a `{{context:<key>}}` token. See [Placing a value in a real header](#placing-a-value-in-a-real-header) and [Pinning a parameter to the run's value](#pinning-a-parameter-to-the-runs-value) below, and [Expressions & Templating](./expressions-and-templating.md).
 
 ## Where it is accepted
 
@@ -16,7 +16,7 @@ This page is the canonical contract. `tool_context` is **not** general templatin
 | [`POST /api/v1/sessions`](/docs/api/sessions/create-session) / [`PATCH /api/v1/sessions/{session_id}`](/docs/api/sessions/update-session) | `tool_context` — persisted on the session, applied to every generation in it |
 | [`POST /api/v1/sessions/{session_id}/messages`](/docs/api/sessions/add-session-message) and `.../generate` | `tool_context` — per-request, this generation only |
 | [`POST /api/v1/conversations/{conversation_id}/generate`](/docs/api/conversations/generate-conversation-message) | `tool_context` in the body |
-| [`POST /api/v1/orchestration-runs`](/docs/api/orchestrations/start-orchestration-run) | `tool_context` — persisted on the run, applied to the generation of every `agent` node it executes, and inherited by `loop`/`sub_orchestration` child runs (see [Run Tool Context](../modules/orchestrations.md#run-tool-context)) |
+| [`POST /api/v1/orchestration-runs`](/docs/api/orchestrations/start-orchestration-run) | `tool_context` — persisted on the run, applied to the generation of every `agent` node it executes, to the tool call of every `tool` and `poll` node, and inherited by `loop`/`sub_orchestration` child runs (see [Run Tool Context](../modules/orchestrations.md#run-tool-context)) |
 | [`POST /api/v1/tasks`](/docs/api/tasks/create-task) | `tool_context` — persisted on the task, applied to the dispatches of the entry state's `on_enter` |
 | [`POST /api/v1/tasks/{task_id}/transitions`](/docs/api/tasks/transition-task) | `tool_context` — **replaces** the task's stored bag; omitting it keeps it (see [Dispatch tool context](../modules/workflows.md#dispatch-tool-context)) |
 | Formation templates | `tool_context` on a `Session` resource |
@@ -28,7 +28,8 @@ This page is the canonical contract. `tool_context` is **not** general templatin
 | `http` | Yes | Injected as request headers on the outbound call |
 | `mcp` | Yes | Injected on the MCP `tools/call` fetch |
 | `builtin` | Yes | Propagated into nested agent generations |
-| `client` | **No** | Executes on the caller's side; nothing is sent |
+| `client` | **No** | Executes on the caller's side; nothing is sent. A `{{context:}}` preset is still resolved before the arguments are handed over |
+| `pipeline` | Yes | Each step inherits the context the pipeline was called with |
 
 Context headers are applied **after** any headers configured on the tool's `execute.headers` / `mcp.headers`, so a context header wins over a tool-defined header with the same name.
 
@@ -38,7 +39,7 @@ By default a tool receives **every** key in the bag. A tool can narrow that to a
 { "name": "list-orders", "type": "http", "context_keys": ["tenant"] }
 ```
 
-The [auto-populated identity keys](#auto-populated-keys-sessions) are always forwarded regardless of the allowlist, and a key consumed by a `{{context:<key>}}` token in the tool's own headers is substituted regardless of it too.
+The [auto-populated identity keys](#auto-populated-keys-sessions) are always forwarded regardless of the allowlist, and a key consumed by a `{{context:<key>}}` token in the tool's own headers or `preset_parameters` is substituted regardless of it too — the allowlist governs what is *handed* to a tool that never asked for it, while a token is the tool naming the key it consumes.
 
 When a generation pauses with `status: "requires_action"`, the `tool_context` from the original request is preserved and reapplied on resume. An orchestration run gets the same guarantee from its own row rather than from the paused generation: it survives an `awaiting_input` pause, a `sleeping` wait, a background worker drive and a crash redrive, none of which carry a request a bag could travel in. A [task](../modules/workflows.md#dispatch-tool-context) stores its bag the same way, which is what carries it across an approval gate, a retry and an automated hop — its pauses are measured in days, not seconds.
 
@@ -68,14 +69,40 @@ The authority is split on purpose: the tool knows the header shape its endpoint 
 
 | Rule | Behavior |
 | --- | --- |
-| Where the token is allowed | `execute.headers` and `mcp.headers` only. Anywhere else — `execute.url`, `mcp.url`, `execute.auth`, a body — is rejected at write time with `400 INVALID_TEMPLATE_TOKEN`. A context value is caller-supplied, so it must not be able to steer the outbound URL. |
+| Where the token is allowed | `execute.headers`, `mcp.headers` and [`preset_parameters`](#pinning-a-parameter-to-the-runs-value). Anywhere else — `execute.url`, `mcp.url`, `execute.auth`, a body — is rejected at write time with `400 INVALID_TEMPLATE_TOKEN`. A context value is caller-supplied, so it must not be able to steer the outbound URL. |
 | Key grammar | Identical to a `tool_context` key's — one grammar, so the two cannot disagree about which keys exist. An invalid key is rejected at write time, not at first call. |
 | Missing key at call time | The tool call **fails** with `400 MISSING_TOOL_CONTEXT_KEY`, naming the key and header. An `Authorization: Bearer ` with no value would reach the endpoint and come back as an opaque upstream `401`, several steps from the actual mistake. |
 | Empty-string value | A value, not a missing key — the header is sent empty, because that is what the caller asked for. |
 | With `{{secret:...}}` | Both kinds may appear in the same header value and are substituted in a **single pass**, so a substituted value is never re-scanned as template source: a `tool_context` value containing `{{secret:sec_...}}` stays literal text, and so does a secret whose plaintext contains `{{context:...}}`. |
-| Calling paths with no context | [`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool) and an orchestration `tool` node carry no `tool_context`, so a tool declaring `{{context:...}}` cannot be invoked through them — the call fails with `MISSING_TOOL_CONTEXT_KEY`. Bind such a tool to an agent and call it through a generation, session or orchestration `agent` node. |
+| Calling paths with no context | [`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool) carries no `tool_context`, so a tool declaring `{{context:...}}` cannot be invoked through it — the call fails with `MISSING_TOOL_CONTEXT_KEY`. Orchestration `tool` and `poll` nodes **do** carry the run's bag; so does every step of a `pipeline` tool. |
 
 The token is resolved at the point of use. [`GET /tools`](/docs/api/tools/list-tools) echoes back the token, never the resolved value — the same as `{{secret:...}}`.
+
+## Pinning a parameter to the run's value
+
+A header carries the credential; it cannot carry the **scope** the credential must be confined to. A token that reaches dozens of ad accounts is still one token, and which account this run may act on is a decision the caller makes per run — not one the model should make, and not one that can be frozen into the tool when it is created.
+
+`preset_parameters` accepts the same `{{context:<key>}}` token, which closes that gap:
+
+```json
+{
+  "type": "mcp",
+  "mcp": { "headers": { "Authorization": "Bearer {{context:ocaToken}}" } },
+  "context_keys": ["ocaToken", "ocaAdAccountId"],
+  "preset_parameters": { "adAccountId": "{{context:ocaAdAccountId}}" }
+}
+```
+
+A preset is a **pin**: it wins over whatever the model (or a direct caller) supplies for the same key, and the key is hidden from the schema the model sees. Resolving the token from `tool_context` therefore makes the pin a genuine per-run boundary — one tool serving many tenants, instead of one tool per tenant.
+
+| Rule | Behavior |
+| --- | --- |
+| Where it resolves from | This call's `tool_context`, the same bag the headers read. The [allowlist](#which-tools-receive-the-headers) does not gate it. |
+| Missing key at call time | The tool call **fails** with `400 MISSING_TOOL_CONTEXT_KEY`, naming the parameter and the key. The literal `{{context:...}}` text reaching the target as a resource id comes back as an opaque `not found`, several steps from the mistake. |
+| Type | Context values are strings; a resolved value is retyped to what the target's schema declares for that parameter (`integer`, `number`, `boolean`), so the same account can be `adAccountId: "act_…"` on one action and `metaAdAccountId: 123` on another. A value the declared type cannot accept is left as the string it is, for the target to reject. |
+| Nesting | Tokens are resolved at any depth — inside a nested object or an array element, not only at the top level. |
+| `{{secret:...}}` | **Not** resolved in a preset, and not an error: the token stays literal. A preset value travels into the request body, into guardrail evaluation and into the activity record, so secrets stay in headers. |
+| Guardrails | A guard sees the resolved value in `args.*`, and an approval item records it — the arguments the call will actually carry. |
 
 ## Key → header name
 
