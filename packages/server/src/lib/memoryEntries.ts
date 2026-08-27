@@ -164,21 +164,16 @@ const findTopSimilarEntry = async (args: {
 
 /**
  * Consolidates a merge-band write into the existing entry, or returns `null`
- * when there is nothing to consolidate *with* and the caller must create a new
- * entry instead.
+ * when there is nothing to consolidate with and the caller must create one.
  *
- * There is deliberately no concatenation path. Appending the incoming fact to
- * the existing one is self-eroding: every merge turns a one-fact entry into a
- * multi-fact paragraph whose embedding drifts away from each fact it contains,
- * degrading the very similarity decision the thresholds depend on. Removed in
- * #1062 — a merge now happens only when a model actually rewrites the two facts
- * into one.
+ * There is deliberately no concatenation path: appending turns a one-fact entry
+ * into a paragraph whose embedding drifts from each fact it contains, degrading
+ * the similarity decision the thresholds depend on. Removed in #1062 — a merge
+ * now happens only when a model rewrites the two facts into one.
  *
- * `null` therefore means "create", on both of its paths: a write with no agent
- * context (manual REST, the orchestration `memory_write` node) has no model to
- * call, and a write whose consolidation completion fails must still not lose
- * the fact. Creating never loses content and keeps entries atomic; the cost is
- * a possible near-duplicate pair until arbitration merges it properly.
+ * `null` means "create" on both its paths — a write with no agent context has
+ * no model to call, and a failed consolidation must still not lose the fact.
+ * The cost is a possible near-duplicate until arbitration merges it.
  */
 const mergeAndUpdateEntry = async (args: {
   match: Awaited<ReturnType<typeof findTopSimilarEntry>>;

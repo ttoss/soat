@@ -56,18 +56,15 @@ const parseBedrockSecret = (secretValue: string | null): BedrockSecret => {
 };
 
 /**
- * Resolves the Bedrock credential precedence: a secret-linked apiKey wins
- * over `config.apiKey`, which wins over a complete access-key/secret-key
- * pair. Pulled out of `buildBedrockModel` so the precedence rules can be
- * asserted directly instead of only through the opaque model object they
- * configure.
+ * Resolves the Bedrock credential precedence: a secret-linked apiKey wins over
+ * `config.apiKey`, which wins over a complete access-key/secret-key pair.
+ * Pulled out of `buildBedrockModel` so the rules can be asserted directly
+ * rather than through the opaque model object they configure.
  *
- * When no bearer token and no complete static key pair is available, this
- * falls back to the AWS default credential chain (`fromNodeProviderChain`)
- * so role-based auth works (ECS task role, EC2 instance profile, SSO, env
- * vars). `@ai-sdk/amazon-bedrock` does NOT walk that chain on its own
- * (vercel/ai#2216) — passing no credentials at all makes it throw a SigV4
- * error instead of resolving role credentials itself.
+ * With no bearer token and no complete static pair it falls back to the AWS
+ * default credential chain (`fromNodeProviderChain`) so role-based auth works.
+ * `@ai-sdk/amazon-bedrock` does NOT walk that chain on its own (vercel/ai#2216)
+ * — passing no credentials makes it throw a SigV4 error instead.
  */
 export const resolveBedrockCredentials = (args: {
   secretValue: string | null;
@@ -155,19 +152,16 @@ const readServiceAccountAuth = (
 };
 
 /**
- * Resolves which of Vertex's three authentication modes a provider record
- * asks for. Pulled out of `buildVertexModel` for the same reason as
+ * Resolves which of Vertex's three authentication modes a provider record asks
+ * for. Pulled out of `buildVertexModel` for the same reason as
  * `resolveBedrockCredentials`: the model object the AI SDK returns does not
- * reveal which credential branch it took, so the precedence rules can only be
- * asserted here.
+ * reveal which credential branch it took.
  *
  * An API key selects Vertex "express mode", which talks to a project-less
- * global endpoint — `project` and `location` are meaningless there and are
- * deliberately left out of the returned settings. Otherwise the request is
- * signed with either the linked service account or, when no credentials are
- * linked at all, Application Default Credentials (`GOOGLE_APPLICATION_CREDENTIALS`,
- * the GCE/GKE metadata server, Workload Identity, or a `gcloud` login), which
- * `google-auth-library` resolves on its own.
+ * global endpoint, so `project` and `location` are meaningless there and are
+ * left out of the returned settings. Otherwise the request is signed with the
+ * linked service account, or with Application Default Credentials when none is
+ * linked, which `google-auth-library` resolves on its own.
  */
 export const resolveVertexSettings = (args: {
   secretValue: string | null;
@@ -206,13 +200,12 @@ export const resolveVertexSettings = (args: {
  * are in play and the configured ADC file federates an AWS identity.
  *
  * Kept out of `resolveVertexSettings` so that stays a pure function of the
- * provider record: this branch depends on the process environment and the
- * file it names, neither of which the provider row knows about.
+ * provider record: this branch depends on the process environment and the file
+ * it names.
  *
- * Only the ADC case is touched. Express mode carries no `project`, and a
- * linked service-account key already produced its own `googleAuthOptions` —
- * both are explicit choices the provider record made, and neither should be
- * overridden by what happens to be on disk.
+ * Only the ADC case is touched. Express mode carries no `project`, and a linked
+ * service-account key already produced its own `googleAuthOptions` — both
+ * explicit choices the provider record made.
  */
 const withAwsWorkloadIdentity = (settings: VertexSettings): VertexSettings => {
   if (!('project' in settings) || settings.googleAuthOptions) {

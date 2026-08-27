@@ -149,23 +149,19 @@ const evaluateRequestQuota = async (args: {
 };
 
 /**
- * Every request that reaches the middleware increments the counter of every
- * matching quota — including requests that will be rejected. Both `enforce` and
- * `monitor` quotas are evaluated: a breach fires the `quota.exceeded` webhook
- * once per window regardless of mode, but only `enforce` breaches are returned
- * (and thus block with 429); `monitor` breaches fire and let the request
- * through. Returns the most specific `enforce` breach, or `null`.
+ * Every request reaching the middleware increments the counter of every
+ * matching quota, including requests that will be rejected. Both modes are
+ * evaluated: a breach fires the `quota.exceeded` webhook once per window
+ * either way, but only `enforce` breaches are returned (and block with 429).
+ * Returns the most specific `enforce` breach, or `null`.
  *
  * Matching (`requests` metric): a `project`-scope quota applies to every key in
- * the project; an `api_key`-scope quota applies to all keys (null ref) or the
- * one named key.
+ * the project; an `api_key`-scope quota to all keys (null ref) or the one named.
  *
- * `apiKeyPublicId: null` admits work that arrived on no API key at all — an
- * event trigger firing, which the bus starts in-process. Only `project`-scope
- * quotas match then: an `api_key`-scope quota, even the all-keys form, is a cap
- * on *a credential*, and counting a keyless admission against it would charge
- * every key in the project for traffic none of them sent. Project-wide cost
- * control is what a `project`-scope quota is for, and it still applies.
+ * `apiKeyPublicId: null` admits work that arrived on no API key — an event
+ * trigger the bus starts in-process. Only `project`-scope quotas match then: an
+ * `api_key`-scope quota is a cap on *a credential*, and counting a keyless
+ * admission against it would charge every key for traffic none of them sent.
  */
 export const evaluateRequestQuotas = async (args: {
   projectId: number;
@@ -360,36 +356,27 @@ const evaluateGenerationQuota = async (args: {
 };
 
 /**
- * The pre-generation token/cost check. Before a generation starts, the current
- * window aggregate for every matching `tokens`/`cost_usd` quota is compared to
- * its limit. A breach (aggregate at or over the limit) fires the
+ * The pre-generation token/cost check: the current window aggregate for every
+ * matching `tokens`/`cost_usd` quota against its limit. A breach fires the
  * `quota.exceeded` webhook once per window regardless of mode, but only
- * `enforce` breaches are returned (blocking the *new* generation with
- * `QUOTA_EXCEEDED`); `monitor` breaches fire and let it proceed. In-flight
+ * `enforce` breaches block the new generation with `QUOTA_EXCEEDED`. In-flight
  * generations are never inspected — their tokens are already spent — so a
  * budget may overshoot by at most one generation.
  *
- * Matching: a `project`-scope quota (null ref) aggregates the whole project; an
- * `agent`-scope quota with this agent's ref aggregates only that agent, and
- * with a null ref aggregates the whole project. An `actor`-scope quota
- * aggregates only the end user behind this generation — see below.
- * `api_key`-scope token/cost quotas are never aggregated (usage events carry no
- * api-key attribution, and the create-time validation rejects the combination)
- * — skipped defensively.
+ * Matching: a `project`-scope quota aggregates the whole project; an `agent`
+ * scope aggregates that agent, or the whole project with a null ref.
+ * `api_key`-scope token/cost quotas are rejected at create time and skipped
+ * defensively here, since usage events carry no api-key attribution.
  *
- * **Actor scope.** The end user is derived from `sessionId` (never accepted
- * directly), the same rule usage attribution follows, so a caller cannot spend
- * one actor's budget under another's session. A generation with no session — a
- * direct API call, a trigger, an orchestration node — has no end user behind
- * it and matches no actor quota; cap that traffic with a `project` quota.
+ * **Actor scope.** The end user is derived from `sessionId`, never accepted
+ * directly, so a caller cannot spend one actor's budget under another's
+ * session. A generation with no session matches no actor quota; cap that
+ * traffic with a `project` quota.
  *
- * A null `scope_ref` here means **one budget per actor**, evaluated against
- * this generation's actor, rather than "the whole project" as it does for
- * `agent` scope. That divergence is deliberate: a project-wide aggregate is
- * already exactly what a `project` quota expresses, so reading null-ref as
- * "all actors pooled" would make the combination a duplicate with a misleading
- * name. "Every end user gets N" is the cap a per-user product actually needs,
- * and it is the only reading that cannot be spelled another way.
+ * A null `scope_ref` here means **one budget per actor**, not "the whole
+ * project" as it does for `agent` scope: a project-wide aggregate is already
+ * what a `project` quota expresses, so pooling all actors would make the
+ * combination a duplicate with a misleading name.
  */
 export const evaluateGenerationQuotas = async (args: {
   agentId: string;

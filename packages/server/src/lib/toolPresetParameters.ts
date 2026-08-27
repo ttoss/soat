@@ -3,22 +3,18 @@ import type { JSONSchema7, Tool } from 'ai';
 /**
  * `preset_parameters` precedence, defined once.
  *
- * A preset is a **pin**, not a default: it is the operator's fixed value for a
- * parameter, and it wins over whatever the model (or a `POST /tools/{id}/call`
- * caller) supplies for the same key. Every surface that dispatches a tool call
- * merges through {@link mergePresetParameters}, so the rule cannot drift between
- * the agent loop, the direct call route, pipeline steps and the guardrail gate —
- * a guardrail that classified the model's value while execution used the pinned
- * one would be gating a call that never happens.
+ * A preset is a **pin**, not a default: the operator's fixed value, which wins
+ * over whatever the model or a direct caller supplies for the same key. Every
+ * dispatch surface merges through {@link mergePresetParameters}, so the rule
+ * cannot drift between the agent loop, the call route, pipeline steps and the
+ * guardrail gate — a guardrail classifying the model's value while execution
+ * used the pinned one would be gating a call that never happens.
  *
- * The complement is {@link stripPresetKeysFromSchema}: a pinned parameter is
- * removed from the schema the model sees, so it is never offered a field its
- * answer cannot affect. That strip is ergonomics; the merge is the guarantee.
- * The strip alone is not one — none of these schemas set
- * `additionalProperties: false`, so a model that emits a hidden key anyway is
- * not rejected, and before the merge order was fixed its value silently
- * overrode the pin (which is what the boundary-policy and multi-agent tutorials
- * relied on not happening).
+ * {@link stripPresetKeysFromSchema} is the ergonomic complement, removing a
+ * pinned parameter from the schema the model sees. It is not a guarantee: none
+ * of these schemas set `additionalProperties: false`, so a model emitting a
+ * hidden key is not rejected, and before the merge order was fixed its value
+ * silently overrode the pin.
  */
 export const mergePresetParameters = (args: {
   presetParameters?: object | null;
@@ -112,24 +108,21 @@ const coerceScalar = (args: { value: string; type: string }): unknown => {
 };
 
 /**
- * Retypes the preset values that came from a `{{context:<key>}}` token to what
- * the target's schema declares (#345).
+ * Retypes preset values that came from a `{{context:<key>}}` token to what the
+ * target's schema declares (#345).
  *
- * A `tool_context` value is a string — the bag is `Record<string, string>`,
- * because every entry must also survive the trip to an HTTP header — while the
- * same identity is often a string on one action and a number on another (the ad
- * account that is `adAccountId: "act_…"` here and `metaAdAccountId: 123` there).
- * Without this step the numeric half of a tool surface cannot be pinned from
- * context at all: the target sees `"123"` where its schema says `integer`.
+ * A `tool_context` value is a string — every entry must survive the trip to an
+ * HTTP header — while the same identity is a string on one action and a number
+ * on another (`adAccountId: "act_…"` here, `metaAdAccountId: 123` there).
+ * Without this the numeric half of a tool surface cannot be pinned from context
+ * at all.
  *
- * Only keys named in `contextResolvedKeys` are touched. An operator who pinned
- * the literal string `"123"` on a numeric field wrote a string deliberately (or
- * wrote a bug they can see in the stored config); a context-resolved value had
- * no other shape available to it. Narrowing by provenance is what keeps this
- * from being the key-blind rewrite `.claude/rules/case-convention.md` prohibits.
- *
- * A value the declared type cannot accept is left as the string it is, so the
- * target's own validation reports it rather than this function guessing.
+ * Only keys named in `contextResolvedKeys` are touched: an operator who pinned
+ * the literal `"123"` on a numeric field wrote a string deliberately, while a
+ * context-resolved value had no other shape available. Narrowing by provenance
+ * is what keeps this from being the key-blind rewrite
+ * `.claude/rules/case-convention.md` prohibits. A value the declared type
+ * cannot accept is left as-is so the target's validation reports it.
  */
 export const coercePresetParametersToSchema = (args: {
   presetParameters: Record<string, unknown> | null;

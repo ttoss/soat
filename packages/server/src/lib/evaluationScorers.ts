@@ -1,19 +1,12 @@
 /**
- * Scorers: the pure half of the evaluations module (the evaluations module doc).
+ * Scorers: the pure half of the evaluations module.
  *
- * Everything here is a function of its arguments — no DB, no I/O — which is
- * what lets `tests/unit/tests/lib/evaluationScorers.test.ts` drive the whole
- * input space directly rather than constructing a project, agent, dataset and
- * run per branch (`.claude/rules/tests.md` — keep-list rule 1).
- *
- * Two shapes are load-bearing:
- *
- * - **Every scorer returns `{ score: 0–1, passed: boolean }`.** Binary scorers
- *   emit 0/1. One shape keeps aggregation, thresholds and (Phase 2) baseline
- *   deltas scorer-agnostic, so a new scorer type needs no aggregation change.
- * - **A scorer reads the generation's two output channels explicitly.** Text
- *   scorers read `output.content`; `output_schema` validates `output.object`
- *   and never re-parses the text. `json_logic` sees both.
+ * No DB, no I/O, so `lib/evaluationScorers.test.ts` drives the whole input
+ * space directly (`.claude/rules/tests.md` — keep-list rule 1). Two shapes are
+ * load-bearing: every scorer returns `{ score: 0–1, passed: boolean }`, which
+ * keeps aggregation and thresholds scorer-agnostic; and a scorer reads the
+ * generation's output channels explicitly — text scorers `output.content`,
+ * `output_schema` only `output.object`, `json_logic` both.
  */
 import { DomainError } from '../errors';
 import {

@@ -2,20 +2,14 @@
  * The orchestration cluster's two loaded-row shapes and the scoped accessors
  * between them.
  *
- * A leaf module by design: it imports `db` and `resourceAccessor` and nothing
- * else, so `orchestrations.ts`, `orchestrationRunActions.ts`,
- * `orchestrationStartRun.ts` and `orchestrationVersions.ts` can all reach the
- * same scoped lookup without any of them importing another — the cluster
- * already has enough import cycles (#910).
+ * A leaf module by design — it imports `db` and `resourceAccessor` and nothing
+ * else — so the four orchestration modules can share a scoped lookup without
+ * importing one another; the cluster already has enough cycles (#910).
  *
- * ## Why one place matters here specifically
- *
- * These four modules spelled the *same* scope rule three different ways:
- * `!== undefined`, a truthy `if (args.projectIds)`, and
- * `args.projectIds && args.projectIds.length > 0`. The third is not a stylistic
- * variant — it drops the `projectId` filter entirely for an empty scope, so an
- * empty credential scope would have read across every project instead of
- * matching nothing. `scopedWhere` gives all four the one answer.
+ * Those four spelled the same scope rule three ways: `!== undefined`, a truthy
+ * `if`, and `projectIds && projectIds.length > 0`. The third is not a stylistic
+ * variant — it drops the filter for an empty scope, so an empty credential
+ * scope would read across every project instead of matching nothing.
  */
 import { db } from '../db';
 import { makeResourceAccessor } from './resourceAccessor';

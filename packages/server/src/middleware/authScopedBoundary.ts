@@ -27,19 +27,16 @@ const resolveRunTokenBoundaryDocs = async (args: {
 /**
  * Resolves the boundary PolicyDocuments for a project-scoped JWT credential:
  * - OAuth: the consented scope, rebuilt from the `scope` claim.
- * - Trigger run-as: the trigger's attached policy (if any); with none, the token
- *   inherits the creator's full policies (ceiling only), so no boundary is set.
- * - Orchestration run-as: when an API key started the run, that key's own
- *   policies, so a run can never reach further than the credential that started
- *   it; when a user started it (or the key carries no policies), no boundary —
- *   the owner's policies confined to the project, matching how each of those
- *   credentials evaluates on its own.
+ * - Trigger run-as: the trigger's attached policy; with none, no boundary (the
+ *   token inherits the creator's policies as a ceiling only).
+ * - Orchestration run-as: the starting API key's own policies, so a run can
+ *   never reach further than the credential that started it; when a user
+ *   started it, no boundary.
  * Returns `undefined` for an unscoped (plain user) JWT.
  *
- * Order matters: the OAuth branch is the fallback, so every other kind of
- * project-scoped token must be identified by its own marker claim first.
- * Falling through to it builds a consent policy from an absent `scope` claim,
- * which allows nothing at all.
+ * Order matters: the OAuth branch is the fallback, so every other kind must be
+ * identified by its own marker claim first. Falling through to it builds a
+ * consent policy from an absent `scope` claim, which allows nothing at all.
  */
 export const resolveScopedBoundaryDocs = async (args: {
   scopedProjectPublicId?: string;

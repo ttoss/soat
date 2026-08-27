@@ -19,19 +19,17 @@ const log = createDebug('soat:orchestrations');
 
 /**
  * Reuses a paused node's existing `requires_action` row when its pause is
- * re-entered, so a pause stays exactly one record per attempt. Returns whether
- * a row was reused (the caller writes a fresh record when not).
+ * re-entered, so a pause stays one record per attempt. Returns whether a row
+ * was reused (the caller writes a fresh one when not).
  *
- * A pause can be re-executed without being satisfied: `resume-orchestration-run`
- * re-drives the frontier, and so does a reaper redrive or a queue redelivery.
- * The frontier is the still-parked node, which re-parks and returns
- * `requires_action` again. Pause nodes are pure and therefore unkeyed (see
- * `SIDE_EFFECTING_NODE_TYPES` in `orchestrationIdempotency`), so nothing else
- * dedupes the replay — without this, every resume appends another identical row
- * and `recordHumanInputResumption` later flips the whole pile to `completed`.
+ * A pause can be re-executed without being satisfied — `resume`, a reaper
+ * redrive and a queue redelivery all re-drive the frontier, which is the parked
+ * node. Pause nodes are pure and therefore unkeyed
+ * (`SIDE_EFFECTING_NODE_TYPES`), so nothing else dedupes the replay and every
+ * resume would append another row for `recordHumanInputResumption` to flip.
  *
- * The original `startedAt`/`completedAt` are deliberately preserved: re-entering
- * a pause is not new work, so it must not be metered again.
+ * `startedAt`/`completedAt` are preserved: re-entering a pause is not new work,
+ * so it must not be metered again.
  */
 export const reuseRequiresActionRow = async (args: {
   orchestrationRunId: number;

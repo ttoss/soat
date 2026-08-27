@@ -152,21 +152,15 @@ const runAgentDispatch = async (args: {
  *
  * Delegates to the orchestration engine's `tool` node executor rather than
  * calling `callTool` directly, so a workflow-dispatched call is adjudicated by
- * exactly the same guardrail gate (class B/C/D) and recorded in the same
- * activity feed as the identical call made from an orchestration graph. Calling
- * `callTool` here instead would have quietly created a second, ungoverned path
- * to every tool in the project.
- *
- * The executor is node-shaped, so the dispatch is expressed as the one-node
- * graph it is. `state` is the task context and `inputMapping` the dispatch's
- * own, mapped by the executor exactly as a graph node's would be.
+ * the same guardrail gate and recorded in the same activity feed as the
+ * identical call from an orchestration graph; calling `callTool` here would
+ * have created a second, ungoverned path to every tool in the project.
  *
  * Only an `artifact` outcome is a completed dispatch. A guardrail that blocks
- * the call (class D / tripwire) or routes it to human approval (class C)
- * produces a result a task dispatch has nowhere to put — there is no run to
- * park and resume — so it fails the dispatch, which `on_failure` can route. An
- * approval-gated tool belongs behind an orchestration dispatch, whose engine
- * can park on it.
+ * the call or routes it to human approval produces a result a task dispatch has
+ * nowhere to put — there is no run to park and resume — so it fails the
+ * dispatch, which `on_failure` can route. An approval-gated tool belongs behind
+ * an orchestration dispatch, whose engine can park on it.
  */
 const runToolDispatch = async (args: {
   toolId: string;

@@ -109,16 +109,14 @@ export const supportedResourceTypes = (): ReadonlySet<string> => {
 /**
  * Adds the resource types a deployment operator declared (#1078).
  *
- * Called once, from `initFormationResourceTypes` at boot, with the contents of
- * the file `FORMATION_RESOURCE_TYPES_CONFIG` names. It is deliberately not
- * reachable from any route: the handler URL and its signing secret are
- * deployment configuration at the same trust level as the database URL, so no
- * request may add, change or redirect a type.
+ * Called once from `initFormationResourceTypes` at boot with the contents of the
+ * file `FORMATION_RESOURCE_TYPES_CONFIG` names, and deliberately not reachable
+ * from any route: the handler URL and its signing secret are deployment config
+ * at the same trust level as the database URL.
  *
- * A name that collides with a built-in throws, so a registration can never
- * shadow `agent` and quietly redirect it to an external handler. The parser
- * rejects the same case earlier with a message that names the file; this is the
- * backstop for any other caller.
+ * A name colliding with a built-in throws, so a registration can never shadow
+ * `agent` and quietly redirect it. The parser rejects that earlier with a
+ * message naming the file; this is the backstop for any other caller.
  */
 export const registerFormationResourceTypes = (args: {
   registrations: FormationResourceTypeRegistration[];

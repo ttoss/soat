@@ -114,23 +114,20 @@ const isMissing = (
 
 /**
  * Validates a request body against the route's OpenAPI request schema — the
- * single source of truth for the REST contract, SDK, CLI, and MCP surface.
+ * single source of truth for the REST contract, SDK, CLI and MCP surface.
  *
  * - **Unknown fields** are rejected at every nesting level (objects, arrays of
- *   objects, `$ref`s), using dotted paths. Open/ambiguous levels are skipped.
- * - **Required fields** are enforced at the **top level only** — replacing the
- *   per-handler `"X is required"` checks. Nested required-field enforcement is
- *   intentionally out of scope (nested schemas are less rigorously specified).
+ *   objects, `$ref`s) with dotted paths; open/ambiguous levels are skipped.
+ * - **Required fields** are enforced at the top level only, replacing the
+ *   per-handler `"X is required"` checks; nested schemas are less rigorously
+ *   specified, so nested enforcement is out of scope.
  *
- * `path` is the route as registered on the router (e.g. `/agents/:agent_id`);
- * it is normalized to the OpenAPI path key internally. Field names are compared
- * against the spec's own snake_case names, matching the body as the client sent
- * it — nothing rewrites keys in between.
+ * `path` is the route as registered (`/agents/:agent_id`), normalized to the
+ * OpenAPI path key internally. Field names are compared against the spec's own
+ * snake_case names — nothing rewrites keys in between. No-ops when the route
+ * has no property-based JSON body schema.
  *
- * No-ops when the route has no property-based JSON body schema.
- *
- * @throws {DomainError} `VALIDATION_FAILED` (400) when any unknown field is
- * present or a top-level required field is missing.
+ * @throws {DomainError} `VALIDATION_FAILED` (400).
  */
 export const validateRequestBody = (args: {
   method: string;

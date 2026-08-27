@@ -10,25 +10,14 @@
 import { db } from '../db';
 
 /**
- * The bound tool ids a generation may actually resolve, after applying the
- * agent's `active_tool_ids` restriction (`modules/agents.md` — Active Tools).
+ * The bound tool ids a generation may resolve after applying the agent's
+ * `active_tool_ids` restriction (`modules/agents.md` — Active Tools). Shared by
+ * the generation and recovery paths so a resumed run is restricted identically.
  *
- * Shared by the generation and recovery paths so a resumed run is restricted
- * exactly like the run it resumes.
- *
- * Two deliberate fail-open cases, both about not disarming a live agent for a
- * value that cannot express real intent:
- *
- * - **absent / empty** — an empty active set would leave the agent with no
- *   tools at all, which is never a deliberate configuration, and agents stored
- *   `[]` while this field was inert (#811), so honouring it literally would
- *   silently strip their tools on upgrade.
- * - **not an array** — the column is untyped JSON, so a legacy or hand-written
- *   row can hold anything.
- *
- * Inline (ephemeral) tool definitions carry no id, so they can never be named
- * here and are always left active; they are authored on the agent itself
- * alongside this field rather than referenced from the project.
+ * Fails open on absent/empty (agents stored `[]` while the field was inert
+ * (#811), so honouring it would strip their tools on upgrade) and on a
+ * non-array (the column is untyped JSON). Inline tool definitions carry no id,
+ * so they can never be named here and stay active.
  */
 export const narrowToActiveTools = (args: {
   toolIds: string[];

@@ -24,21 +24,18 @@ const collectIds = (rows: { id?: number }[]): number[] => {
 };
 
 /**
- * Every model the force delete destroys by `projectId`, ordered children
- * first: each entry runs only once the rows whose RESTRICT / NO ACTION
- * foreign keys point at it are already gone.
+ * Every model the force delete destroys by `projectId`, children first: each
+ * entry runs only once the rows whose RESTRICT / NO ACTION foreign keys point
+ * at it are gone.
  *
- * The list is the cascade's single source of truth: every counted model draws
- * from it, and `lib/projectDependentsContract.test.ts` checks both lists against
- * the live schema — so a module landing a new project-scoped table cannot
- * silently repeat #1079, where eight models added after the cascade was written
- * appeared in neither list and every delete of a project holding one answered
- * `500`.
+ * The single source of truth for the cascade — every counted model draws from
+ * it, and `lib/projectDependentsContract.test.ts` checks both lists against the
+ * live schema, so a new project-scoped table cannot silently repeat #1079,
+ * where eight models appeared in neither list and every delete of a project
+ * holding one answered `500`.
  *
- * A model reached only through its parent (FormationOperation, MemoryEntry,
- * DatasetItem, EvalRun, TaskTransition, QuotaWindowCounter, GuardrailVersion,
- * WebhookDelivery, …) is absent because the DB cascades it; the few whose
- * parent FK is RESTRICT instead are destroyed by parent id in
+ * A model reached only through its parent is absent because the DB cascades it;
+ * the few whose parent FK is RESTRICT are destroyed by parent id in
  * `PROJECT_CASCADE_PRE_STEPS`.
  */
 export const PROJECT_CASCADE_ORDER = [

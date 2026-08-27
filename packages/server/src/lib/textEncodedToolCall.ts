@@ -54,27 +54,18 @@ const readToolName = (
 };
 
 /**
- * Detects an assistant message whose entire text is a tool invocation the
- * model wrote out instead of making — the shape that reached us as
- *
- * ```json
- * {"name": "get-fundamental-truth", "arguments": {}}
- * ```
- *
- * with `finishReason: "stop"`, `step_count: 1`, no `tool-call` part, and the
- * tool never executed. Nothing distinguished that generation from a real
- * answer, so the blob became the agent's `content` and every consumer
- * downstream ran on it.
+ * Detects an assistant message whose entire text is a tool invocation the model
+ * wrote out instead of making — a bare `{"name": ..., "arguments": {}}` with
+ * `finishReason: "stop"`, no `tool-call` part, and the tool never executed.
+ * Nothing distinguished that from a real answer, so the blob became the agent's
+ * `content` and every consumer downstream ran on it.
  *
  * Deliberately narrow, because a false positive fails a generation that was
- * fine. All three must hold: the text (after a markdown fence is stripped) is
- * *entirely* one JSON object — or an array of them — every key of that object
- * belongs to tool-call vocabulary, and the name it carries is a tool actually
- * bound to this agent. A model naming a tool it does not have, or wrapping the
- * call in prose, is left alone; so is any text from an agent with no tools.
+ * fine. All three must hold: the text (after stripping a markdown fence) is
+ * *entirely* one JSON object or an array of them, every key belongs to
+ * tool-call vocabulary, and the name is a tool actually bound to this agent.
  *
- * Returns the invoked tool's name, or `null` when the text is an ordinary
- * answer.
+ * Returns the invoked tool's name, or `null` for an ordinary answer.
  */
 export const findTextEncodedToolCall = (args: {
   text: string;

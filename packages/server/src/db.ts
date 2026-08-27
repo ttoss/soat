@@ -41,22 +41,10 @@ export const getSchemaSyncLockTimeoutMs = (): number => {
 };
 
 /**
- * Run boot-time `sync({ alter: true })` behind a Postgres session-level
- * advisory lock so concurrently-starting tasks serialize instead of racing.
- *
- * `sync({ alter })` emits ALTER TABLE; if two tasks run it at once (rolling
- * deploy batch >= 2 at scale, auto-scale-out, instance refresh) they can
- * deadlock or leave the schema inconsistent. The advisory lock makes
- * all-but-one boot wait, so the DDL runs exactly once and the rest see a no-op.
- *
- * The wait is **bounded** by `lockTimeoutMs`: a session-level advisory lock held
- * by a peer that was SIGKILLed mid-boot (grace-period expiry, OOM) stays held
- * until its Postgres backend is reaped, which behind a pooler / Aurora can take
- * minutes. Without a bound every later boot would block forever and the whole
- * deploy would deadlock. The bound turns that into a fast, logged failure
- * (which propagates to `startServer`'s catch → `process.exit(1)`) instead of a
- * silent multi-minute hang. See `getSchemaSyncLockTimeoutMs` for why the bound
- * must exceed a real migration's duration.
+ * Serializes boot-time `sync({ alter: true })` behind a Postgres advisory lock
+ * so concurrent boots don't race the DDL. Bounded by `lockTimeoutMs`: a lock
+ * held by a SIGKILLed peer can outlive it by minutes, and an unbounded wait
+ * would deadlock the whole deploy instead of failing fast.
  */
 export const syncSchemaWithAdvisoryLock = async (args: {
   sequelize: Sequelize;

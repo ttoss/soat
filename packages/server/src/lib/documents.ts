@@ -196,23 +196,16 @@ const computeIngestionProgress = (args: {
 };
 
 /**
- * Lightweight ingestion status for polling (issues #5, #6). Returns only the
- * lifecycle fields — never the (potentially multi-megabyte) chunk content that
- * `getDocument` assembles. Self-recovers a stalled document to `failed` so a
- * poller eventually sees a terminal state (issue #4).
+ * Lightweight ingestion status for polling (#5, #6) — the lifecycle fields
+ * only, never the multi-megabyte chunk content `getDocument` assembles.
+ * Self-recovers a stalled document to `failed` so a poller reaches a terminal
+ * state (#4).
  *
- * Field semantics, by lifecycle state:
- * - `chunk_count` — the number of chunks **currently indexed** (a live count of
- *   persisted chunks). It grows during `processing` and equals the final total
- *   once `ready`. `0` while `pending` / early `processing`.
- * - `total_chunks` — the planned number of chunks, known once chunking starts.
- *   `null` until then (e.g. early `pending`).
- * - `total_pages` — the number of source pages extracted. Only known once
- *   extraction has run, so it is `null` until the document is `ready` (or
- *   `failed`). `null` does not mean "zero pages".
- * - `progress` — `chunk_count / total_chunks` as a percentage (0–100). `0` while
- *   `pending`, climbs while `processing` (capped at 99), `100` when `ready`,
- *   `null` when `failed` or not yet computable.
+ * - `chunk_count` — chunks currently indexed; grows during `processing`.
+ * - `total_chunks` — planned total, `null` until chunking starts.
+ * - `total_pages` — source pages, `null` until extraction has run (not zero).
+ * - `progress` — percentage, capped at 99 while `processing`, `null` when
+ *   `failed` or not yet computable.
  */
 export const getDocumentStatus = async (args: { id: string }) => {
   const doc = await fetchDocumentWithContext(args.id);

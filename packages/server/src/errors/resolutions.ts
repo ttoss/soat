@@ -5,16 +5,11 @@ import { docsBaseUrl } from './docsBaseUrl';
  * The resolution hint carried by every error response, alongside `code` and
  * `message`.
  *
- * A code and a message say *what* went wrong. An agent handling the response
- * has to decide *what to do next*, and until now that knowledge lived only in
- * prose docs a caller had to already know to read. `hint` puts it in the
- * response, so a client — human or agent — can act on a failure it has never
- * seen before without leaving the response body.
- *
- * Hints are resolved per code, falling back to the HTTP status class. The
- * fallback is what makes the guarantee total: a code added to the registry
- * without an explicit entry still answers with an actionable hint rather than
- * an empty string, and `resolutions.test.ts` pins that for every code.
+ * A code and a message say *what* went wrong; a client has to decide *what to
+ * do next*, and that knowledge lived only in prose docs it had to already know
+ * to read. Hints resolve per code, falling back to the HTTP status class, so a
+ * code with no explicit entry still answers with something actionable —
+ * `resolutions.test.ts` pins that for every code.
  */
 
 /**

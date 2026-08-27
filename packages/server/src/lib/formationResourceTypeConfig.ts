@@ -1,29 +1,18 @@
 /**
- * Operator-registered formation resource types.
+ * Operator-registered formation resource types (#1078).
  *
- * A deployment that fronts SOAT with its own product resources — a channel, a
- * routing rule — needs those to be declarable in a formation template without
- * either forking `formationsRegistry.ts` or rebuilding the deploy engine
- * downstream. A registration names such a type and points its lifecycle at an
- * external HTTP handler; ordering, `{ref}` resolution, rollback, recording and
- * drift stay here (#1078).
+ * A deployment fronting SOAT with its own product resources needs them
+ * declarable in a template without forking `formationsRegistry.ts` or
+ * rebuilding the deploy engine. A registration names such a type and points its
+ * lifecycle at an external HTTP handler; ordering, `{ref}` resolution,
+ * rollback, recording and drift stay here.
  *
- * ## Why this is deployment config and not an API
- *
- * The registration set is loaded from a JSON file named by
- * `FORMATION_RESOURCE_TYPES_CONFIG` at boot, and is not writable through any
- * route. Two properties follow, and both are the point:
- *
- * - **The operator owns it, not the tenant.** The handler URL and its signing
- *   secret sit at the same trust level as the database URL. No tenant input
- *   influences where the engine calls or how the call is signed.
- * - **A type exists uniformly in every project.** A per-project registration
- *   would make the same template valid in one project and invalid in the next,
- *   and would need a provisioning sweep for every project that already exists.
- *
- * The secret is referenced by variable *name* (`secret_env`), never inlined, so
- * the config file itself carries nothing confidential and can be baked into an
- * image or a config map.
+ * Loaded from the JSON file named by `FORMATION_RESOURCE_TYPES_CONFIG` at boot
+ * and writable through no route, because the handler URL and its signing secret
+ * sit at the same trust level as the database URL, and because a per-project
+ * registration would make the same template valid in one project and invalid in
+ * the next. The secret is referenced by variable name (`secret_env`), never
+ * inlined, so the file itself carries nothing confidential.
  */
 
 import * as fs from 'node:fs';
@@ -203,21 +192,16 @@ const parseCapabilities = (args: {
 /**
  * The properties whose values must not survive the apply.
  *
- * A registered type is often the one that carries a credential — a channel's
- * bot token, an API key for the system behind the handler. Those have to be
- * *sent*, or nothing gets provisioned, but they must not be *stored*: the
- * engine keeps a `lastAppliedProperties` snapshot of every resource to diff
- * against on the next deploy, and a token left in it sits at rest in the
- * formation ledger long after the deploy that used it.
+ * A registered type often carries a credential — a bot token, an API key for
+ * the system behind the handler. It has to be *sent* or nothing is provisioned,
+ * but the engine keeps a `lastAppliedProperties` snapshot to diff against, and a
+ * token left in it sits at rest in the formation ledger indefinitely. Built-in
+ * types solve this in `sanitizeLastAppliedProperties`; a registered type has no
+ * module file, so it declares it here.
  *
- * Every built-in type that carries a secret already solves this with
- * `sanitizeLastAppliedProperties` (`secretsFormationModule` drops `value`).
- * This is the same guarantee, declared rather than coded, because a registered
- * type has no module file to put it in.
- *
- * Each name must be a property the schema declares. A typo would otherwise
- * silently protect nothing — and the failure mode of *that* is a credential in
- * the database, discovered by nobody.
+ * Each name must be a property the schema declares — a typo would silently
+ * protect nothing, and the failure mode of that is a credential in the
+ * database, discovered by nobody.
  */
 const parseWriteOnlyProperties = (args: {
   writeOnly: unknown;

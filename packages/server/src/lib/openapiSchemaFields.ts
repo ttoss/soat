@@ -1,18 +1,14 @@
 /**
- * Shared kernel for deriving field metadata from an OpenAPI object schema.
+ * Shared kernel for deriving field metadata from an OpenAPI object schema —
+ * turning a `{ properties, required }` schema into
+ * `{ allowedFields, requiredFields, fieldSpecs }`.
  *
- * Both runtime validators are built on this:
- * - REST strict-field validation (`openapiSpec.ts` → `requestValidation.ts`)
- *   reads request-body schemas.
- * - Formation template validation (`formation-modules/formationSpecLoader.ts`)
- *   reads `*ResourceProperties` schemas.
- *
- * Both compare against the spec's own snake_case property names: the wire
- * contract is snake_case end to end, so there is no casing to reconcile here.
- * Each layer keeps its own policy (throw-vs-accumulate, depth, type checking);
- * this module only owns the one thing they had duplicated — turning a
- * `{ properties, required }` schema into `{ allowedFields, requiredFields,
- * fieldSpecs }`.
+ * Both runtime validators build on it: REST strict-field validation
+ * (`openapiSpec.ts` → `requestValidation.ts`) over request bodies, and
+ * formation template validation (`formationSpecLoader.ts`) over
+ * `*ResourceProperties`. Both compare against the spec's own snake_case names,
+ * so there is no casing to reconcile; each keeps its own throw-vs-accumulate
+ * policy.
  */
 
 export type FieldSpec = {

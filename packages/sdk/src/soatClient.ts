@@ -88,9 +88,7 @@ export interface SoatClientOptions {
 }
 
 /**
- * Stripe-style SOAT client.
- *
- * Create an instance once and reuse it throughout your application:
+ * Stripe-style SOAT client. Create an instance once and reuse it:
  *
  * ```ts
  * import { SoatClient } from '@soat/sdk';
@@ -103,14 +101,13 @@ export interface SoatClientOptions {
  * });
  * ```
  *
- * The instance exposes one property per API resource. Each property mirrors
- * the corresponding static class from the generated SDK, so all method
- * signatures, types, and return values are identical — the only difference
- * is that you never need to supply `client` yourself.
+ * One property per API resource, each mirroring the corresponding static class
+ * from the generated SDK — identical signatures, types and return values, only
+ * without having to supply `client`.
  *
- * The list is exhaustive by construction: `NoUnregisteredResource` at the
- * bottom of this file fails `pnpm typecheck` when a spec adds a resource this
- * class does not expose.
+ * The list is exhaustive by construction: `NoUnregisteredResource` at the bottom
+ * of this file fails `pnpm typecheck` when a spec adds a resource this class
+ * does not expose.
  */
 export class SoatClient {
   readonly activity: typeof ActivitySdk;
@@ -227,14 +224,10 @@ type GeneratedResourceKey = Uncapitalize<
  * `SoatClient`, naming the missing keys in the error.
  *
  * The property list above is written out by hand so the class reads clearly and
- * its `.d.ts` stays stable; this constraint is what keeps that list honest.
- * Fifteen resources had drifted off it — `evaluations`, `agentVersions` and
- * `generations` among them — and nothing failed, because a missing property is
- * only ever discovered by a caller reaching for it. Tutorials referenced all
- * three.
- *
- * When this errors, add the named resource to the imports, the property list,
- * and the constructor.
+ * its `.d.ts` stays stable; this keeps that list honest. Fifteen resources had
+ * drifted off it — `evaluations`, `agentVersions` and `generations` among them,
+ * all referenced by tutorials — and nothing failed, because a missing property
+ * is only ever discovered by a caller reaching for it.
  */
 export type NoUnregisteredResource<
   T extends never = Exclude<GeneratedResourceKey, keyof SoatClient>,

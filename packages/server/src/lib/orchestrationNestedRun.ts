@@ -1,18 +1,15 @@
 /**
  * The seam a `loop` or `sub_orchestration` node uses to start a child run.
  *
- * Those two nodes are the only reason the node executors ever needed the
- * engine, and the engine needs the executors back to dispatch a node — a real
- * runtime import cycle (#910). Importing the engine dynamically breaks it: a
- * dynamic import is resolved when the call is made, not when the module graph
- * is built, so nothing here appears in the engine's load-time dependencies.
+ * Those two nodes are the only reason the executors need the engine, and the
+ * engine needs the executors back — a real runtime cycle (#910). A dynamic
+ * import is resolved at call time, not when the module graph is built, so
+ * nothing here appears in the engine's load-time dependencies.
  *
- * Deliberately branch-free. An earlier version registered the starter up front
- * (the shape `registerApprovalResumeHandler` uses) and fell back to this import
- * when nothing had registered — but every path that reaches a loop node runs
- * *through* the engine, so the unregistered branch was unreachable by
- * construction. Per `.claude/rules/tests.md`, a branch no entry point can reach
- * is dead code to delete, not a case to test.
+ * Deliberately branch-free: an earlier version fell back to this import when
+ * nothing had registered a starter, but every path reaching a loop node runs
+ * *through* the engine, so that branch was unreachable — dead code to delete,
+ * not a case to test (`.claude/rules/tests.md`).
  */
 
 /**

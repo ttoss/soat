@@ -14,23 +14,19 @@ const APPEND_ONLY_MESSAGE =
   'AuditEntry is append-only; rows cannot be updated.';
 
 /**
- * One immutable audit record per authorized (or denied) mutating administrative
- * or resource action, attributed to the principal that made the request. The
- * `action` string is the permission-action that authorized the request and the
- * `resourceSrn` is the SRN it targeted, so the log reuses the permission
- * registry as its vocabulary rather than inventing a parallel one.
+ * One immutable audit record per authorized (or denied) mutating action,
+ * attributed to the principal that made the request. `action` is the
+ * permission-action that authorized it and `resourceSrn` the SRN it targeted,
+ * so the log reuses the permission registry as its vocabulary.
  *
- * A few entries describe platform-originated events that no principal
- * authorized (e.g. a monitor-mode quota breach). Those leave `principalType`/
- * `principalId` null and are identified by their `action` (e.g.
- * `quotas:MonitorBreach`) — the principal columns never hold a synthetic value.
- * (The columns are named `principal*`, not `actor*`, to avoid confusion with
+ * A few entries describe platform-originated events no principal authorized
+ * (a monitor-mode quota breach). Those leave `principalType`/`principalId`
+ * null and are identified by their `action` — the principal columns never hold
+ * a synthetic value. (Named `principal*`, not `actor*`, to avoid confusion with
  * the unrelated Actor resource.)
  *
- * Append-only: written once, never updated. The model-layer hooks reject every
- * UPDATE and every single-row DELETE; the sole deletion path is the retention
- * sweep's bulk `destroy({ where })`, which prunes rows past
- * `AUDIT_RETENTION_DAYS` and is never exposed through a route.
+ * Append-only: the model hooks reject every UPDATE and single-row DELETE; the
+ * sole deletion path is the retention sweep's bulk `destroy({ where })`.
  */
 @Table({
   tableName: 'audit_entries',

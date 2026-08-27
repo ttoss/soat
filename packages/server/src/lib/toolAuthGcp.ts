@@ -59,18 +59,15 @@ const parseServiceAccount = (credentials: string) => {
 
 /**
  * The RFC 7523 JWT-bearer assertion the token endpoint exchanges for an access
- * token. `jsonwebtoken` — already this package's JWT signer — builds and signs
- * it; the base64url encoding, the `{alg, typ}` header and the `crypto.sign`
- * call used to be written out by hand here for a result byte-for-byte the
- * same.
+ * token, built with `jsonwebtoken` — already this package's JWT signer — rather
+ * than by hand for a byte-identical result.
  *
- * `iat` and `exp` are passed explicitly rather than left to the library's
- * `expiresIn`, because the caller injects `now`: the token cache is asserted
- * across a simulated hour, which a wall-clock timestamp could not express.
+ * `iat`/`exp` are explicit rather than `expiresIn` because the caller injects
+ * `now`: the token cache is asserted across a simulated hour, which a
+ * wall-clock timestamp could not express.
  *
- * Note this is deliberately *not* `google-auth-library`'s `JWT` client, even
- * though that dependency is present. Its token URL is a module constant used
- * as both the POST target and the assertion's `aud`, with no override, so it
+ * Deliberately not `google-auth-library`'s `JWT` client: its token URL is a
+ * module constant used as both the POST target and the assertion's `aud`, so it
  * cannot honour the `token_uri` a service-account key file names.
  */
 const buildAssertion = (args: {

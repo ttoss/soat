@@ -218,18 +218,11 @@ export const resolveMcpTools = async (args: {
 /**
  * Invokes a SOAT platform action on behalf of a `soat` tool.
  *
- * The action is served **in this process** (`dispatchApiRequest`), not fetched
- * from `http://localhost:$PORT` (#888). Everything the loopback was there to
- * reuse — the route's permission check, strict-field validation, the audit
- * record, request metering, the snake_case response contract — still runs,
- * because the dispatch runs the app's real middleware chain; what is gone is the
- * socket, the JSON round trip, and the requirement that the process be listening
- * on a port at all.
- *
- * `authHeader` therefore keeps its exact former meaning: the credential the
- * action is performed with. A call without one is unauthenticated and is refused
- * by the same middleware that refused it over the wire — sharing a process never
- * implies sharing authority.
+ * Served in-process via `dispatchApiRequest` rather than over loopback (#888):
+ * the app's real middleware chain still runs, so permission checks, validation,
+ * audit, metering and the response contract are unchanged — only the socket is
+ * gone. `authHeader` keeps its meaning; a call without one is refused by the
+ * same middleware, since sharing a process never implies sharing authority.
  */
 export const executeSoatTool = async (args: {
   toolName: string;

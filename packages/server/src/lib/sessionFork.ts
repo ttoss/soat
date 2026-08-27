@@ -1,21 +1,17 @@
 /**
  * Session forking — branching a new session from a point in another session's
- * history.
+ * history. Two decisions shape everything here.
  *
- * Two decisions shape everything here:
+ * **Fork by reference, not by copy.** The fork's conversation gets its own
+ * `ConversationMessage` rows pointing at the *same* `Document` rows, which the
+ * conversation-scoped uniqueness constraints already permit. One stored copy
+ * means a retention purge erases parent and fork together, and a fork cannot
+ * drift from what actually happened.
  *
- * - **Fork by reference, not by copy.** The fork's conversation gets its own
- *   `ConversationMessage` rows — cheap integer ordering — pointing at the
- *   *same* `Document` rows as the parent. The message uniqueness constraints
- *   are conversation-scoped, so this is what the schema already permits. One
- *   stored copy means a retention purge erases the content from parent and
- *   fork together, and a fork cannot silently drift from what actually
- *   happened.
- * - **Replay, never re-invoke.** Nothing here runs a tool or a generation. The
- *   recorded tool-call chain rides along on each message's `responseMessages`,
- *   which is what `conversationGeneration` expands into model input on the next
- *   turn, so a forked turn sees the results the parent's tools returned then —
- *   `send_email` is not sent twice by exploring a "what if".
+ * **Replay, never re-invoke.** Nothing here runs a tool or a generation; the
+ * recorded chain rides along on each message's `responseMessages`, which
+ * `conversationGeneration` expands into model input, so `send_email` is not
+ * sent twice by exploring a "what if".
  */
 import createDebug from 'debug';
 

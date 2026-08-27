@@ -43,23 +43,19 @@ const suggestionFor = (args: { flag: string; known: Set<string> }): string => {
 };
 
 /**
- * Reject an unrecognized flag **only where the server cannot catch it** — a flag
- * the CLI would otherwise append to the query string.
+ * Reject an unrecognized flag **only where the server cannot catch it** — a
+ * flag the CLI would otherwise append to the query string.
  *
  * An undeclared query param never reaches a check: the server ignores what it
- * does not know, so `list-agents --limitt 1` returned every row instead of one.
- * The filter failed **open**, with exit 0 and no warning, and the caller acted on
- * a superset it never asked for. The name does not survive the request, so only
+ * does not know, so `list-agents --limitt 1` returned every row instead of one,
+ * with exit 0 and no warning. The name does not survive the request, so only
  * the client can catch it.
  *
- * An unrecognized flag on a **write** is deliberately still forwarded. The server
- * already answers `400 VALIDATION_FAILED` naming the field (`strictFields`), and
- * that check is the authority on what a body may contain — rejecting locally
- * would front-run it, hide the real error, and make an older CLI refuse a field a
- * newer server accepts. It would also make the behavior untestable through the
- * CLI: `tests/smoke-tests.sh` asserts precisely that the server rejects
- * `update-agent --reasoning` with a 400, which a client-side refusal turns into a
- * usage error the assertion cannot read.
+ * An unrecognized flag on a **write** is deliberately still forwarded. The
+ * server already answers `400 VALIDATION_FAILED` naming the field, and that
+ * check is the authority on what a body may contain — rejecting locally would
+ * hide the real error and make an older CLI refuse a field a newer server
+ * accepts. `tests/smoke-tests.sh` asserts precisely that server-side 400.
  *
  * Returns the error lines to print; empty when every flag is recognized.
  */

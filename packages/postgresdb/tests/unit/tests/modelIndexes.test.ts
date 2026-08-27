@@ -9,20 +9,16 @@ import { models } from '../../../dist/index.cjs';
  * Every unique constraint in this package must be declared as an explicitly
  * named entry in the model's `indexes` array.
  *
- * Column-level `unique: true` (and the `@Unique` decorator) emits a bare
- * `UNIQUE` in the column DDL rather than an index Sequelize can recognize
- * later. Postgres names the resulting constraint itself, so on the next
- * `sync({ alter: true })` Sequelize sees a column it believes is not unique yet
- * and re-issues the constraint — every boot adds another one until the name
- * collision crashes startup with `42P07`. An entry in `indexes` is compared
- * against the catalog by name, so an explicitly named index is recognized as
- * already present and left alone.
+ * Column-level `unique: true` emits a bare `UNIQUE` in the column DDL rather
+ * than an index Sequelize can recognize later. Postgres names the constraint
+ * itself, so on the next `sync({ alter: true })` Sequelize believes the column
+ * is not unique yet and re-issues it — every boot adding another until the name
+ * collision crashes startup with `42P07`.
  *
  * The name has to be explicit, not merely present: Sequelize derives one from
- * the table and field list when it is omitted, and that derived name silently
- * exceeds Postgres's 63-character identifier limit on wider indexes. Postgres
- * truncates what it stores, the derived name stops matching, and the same
- * re-add loop starts over.
+ * the table and field list, and that derived name silently exceeds Postgres's
+ * 63-character identifier limit on wider indexes, so it stops matching what
+ * Postgres stored and the same re-add loop starts over.
  */
 const modelList = Object.values(models);
 
@@ -99,12 +95,10 @@ describe('every index name is written, not derived', () => {
    *
    * A derived name is a function of the field list, so *editing the fields
    * renames the index* — and `sync({ alter: true })` responds to a rename by
-   * creating the new name and keeping the old one forever. The dangerous part
-   * is that the diff shows no rename at all: only a changed `fields:` array.
-   * #508 and #561 both landed exactly that way.
+   * creating the new name and keeping the old one forever, while the diff shows
+   * only a changed `fields:` array. #508 and #561 both landed that way.
    *
-   * With an explicit name, changing the fields is still a change that needs a
-   * retired-name entry, but it is now *visible* — and `schemaDrift.test.ts`
+   * With an explicit name the change is visible, and `schemaDrift.test.ts`
    * catches it against a real catalog if it is missed.
    */
   test('no index name equals the one Sequelize would derive', () => {

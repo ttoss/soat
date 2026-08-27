@@ -1053,17 +1053,14 @@ const ephemeralDefinitionToRow = (
 
 /**
  * Resolves an ephemeral (inline, unpersisted) tool definition into an AI-SDK
- * tool — reusing the same `resolveToolByType` dispatch as a persisted Tool
- * row, adapted to a synthetic `AgentToolRow`. `projectId` scopes
- * `{{secret:...}}` resolution for `http`/`mcp` definitions. `pipeline`-type
- * definitions are rejected by `assertEphemeralTypeSupported` before
- * resolution — they have no persisted steps to resolve.
+ * tool, reusing the same `resolveToolByType` dispatch as a persisted row
+ * adapted to a synthetic `AgentToolRow`. `projectId` scopes `{{secret:...}}`
+ * resolution. `pipeline` definitions are rejected by
+ * `assertEphemeralTypeSupported` first — they have no persisted steps.
  *
- * That assertion lives in `toolsCall.ts` and is imported statically, via the
- * `tools.ts` re-export. There **is** an import cycle here
- * (`tools` → `toolsCall` → `agentToolResolver` → `tools`), but nothing in this
- * module mitigates it; breaking it is tracked on the orchestration/agent
- * import-cycle work, not worked around locally.
+ * There **is** an import cycle here (`tools` → `toolsCall` →
+ * `agentToolResolver` → `tools`); nothing here mitigates it, and breaking it is
+ * tracked on the import-cycle work rather than worked around locally.
  */
 export const resolveEphemeralAgentTool = async (args: {
   definition: InlineToolDefinition;

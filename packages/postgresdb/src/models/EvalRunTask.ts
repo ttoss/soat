@@ -13,26 +13,21 @@ import { EvalRun } from './EvalRun';
 
 /**
  * One unit of work in the eval queue: run **this dataset item** of **this eval
- * run** (the evaluations module doc). An async run enqueues one task per
- * item at start; the eval worker claims them in batches, executes the item's
- * generation, writes its `EvalResult`, and acks by deleting the row. The run
- * finalizes when its last task is acked.
+ * run**. An async run enqueues one task per item; the worker claims them in
+ * batches, executes the generation, writes its `EvalResult`, and acks by
+ * deleting the row. The run finalizes when its last task is acked.
  *
- * Tasks are claimed with `SELECT … FOR UPDATE SKIP LOCKED`; the claimer sets
- * `leaseExpiresAt` and, if it fails to ack before the lease expires, the task
- * becomes claimable again — the at-least-once redelivery mechanism. Redelivery
- * is safe because writing a result is idempotent: `EvalResult` carries a unique
- * `(eval_run_id, dataset_item_id)` index, so a re-executed item upserts into
- * one row rather than double-counting.
+ * Claimed with `SELECT … FOR UPDATE SKIP LOCKED`; the claimer sets
+ * `leaseExpiresAt` and a task unacked past its lease becomes claimable again.
+ * Redelivery is safe because `EvalResult` carries a unique
+ * `(eval_run_id, dataset_item_id)` index, so a re-executed item upserts.
  *
- * Why not the orchestration queue: `orchestration_run_tasks` carries a NOT NULL
- * FK to `orchestration_runs`, and its claim is a SQL join over
- * tasks → runs → projects that reads each project's `max_concurrent_runs`. An
- * eval item has no orchestration run to join through, so sharing that table
- * would mean nullable FKs on a shipped hot path plus a `ClaimedTask` shape that
- * no longer names what it points at. The mechanics that actually matter —
+ * Not the orchestration queue: `orchestration_run_tasks` carries a NOT NULL FK
+ * to `orchestration_runs` and claims through a join that reads each project's
+ * `max_concurrent_runs`. An eval item has no run to join through, so sharing
+ * that table would mean nullable FKs on a hot path. The mechanics that matter —
  * claim, lease, redelivery, batching — are shared through `createSweep` /
- * `createScheduler` instead, the same seam the other seven pollers use.
+ * `createScheduler` instead.
  */
 @Table({
   tableName: 'eval_run_tasks',

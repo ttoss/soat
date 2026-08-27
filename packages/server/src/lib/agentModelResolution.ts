@@ -1,17 +1,14 @@
 /**
- * The `LanguageModel` an agent's generation runs on.
+ * The `LanguageModel` an agent's generation runs on: its own model route → its
+ * pinned provider → the project default route.
  *
- * The chain — the agent's own model route → its pinned provider → the project
- * default route — was implemented twice: `resolveGenerationModel`
- * (`agentGenerationContext`) for a fresh turn and `resolveResumptionModel`
- * (`agentGenerationRecovery`) for a resumed one. They differed only in how they
- * report failure, so the chain lives here once and each caller keeps its own
- * failure mode: the fresh path throws `AI_PROVIDER_NOT_FOUND`, the resumed path
- * reports the pending generation as unrecoverable.
+ * Implemented twice before, for a fresh turn and a resumed one, differing only
+ * in how they report failure — so the chain lives here once and each caller
+ * keeps its own failure mode (the fresh path throws `AI_PROVIDER_NOT_FOUND`,
+ * the resumed path reports the generation unrecoverable).
  *
- * It is a separate module from `agentModel.ts` on purpose: `modelRoutes`
- * reaches `buildModel` through `modelRouteResolution`, so hosting the chain in
- * `agentModel` would close a cycle between them.
+ * Separate from `agentModel.ts` because `modelRoutes` reaches `buildModel`
+ * through `modelRouteResolution`, so hosting the chain there would close a cycle.
  */
 import type { LanguageModel } from 'ai';
 import { resolveAiProviderSecret } from 'src/lib/aiProviders';

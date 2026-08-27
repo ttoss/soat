@@ -1,25 +1,19 @@
 /**
- * The one implementation of a formation module's mechanical half.
+ * The one implementation of a formation module's mechanical half — the
+ * `isObjectRecord` guard, the spec load, the three `push*Errors` calls, the
+ * re-validate + `throw errors[0].message` preamble, the `read` try/catch, and
+ * the log lines.
  *
- * Twenty-four modules used to restate the same skeleton — the `isObjectRecord`
- * guard, the spec load, the three `push*Errors` calls, the re-validate +
- * `throw errors[0].message` preamble inside both `create` and `update`, the
- * `try { … } catch { return null }` around `read`, and the three log lines.
- * Restating it is what let the four camelCase-normalization misses (#901) and
- * the missing `model_route` allowlist entry (#900) happen at all: a rule
- * written twenty-four times is a rule twenty-four places can skip.
+ * Twenty-four modules used to restate it, which is what let the camelCase
+ * normalization misses (#901) and the missing `model_route` allowlist entry
+ * (#900) happen: a rule written twenty-four times is a rule twenty-four places
+ * can skip. Each module now declares only the property→lib-arg mapping, its own
+ * checks, and the read view.
  *
- * Stated once here, each module declares only its genuine content — the
- * property→lib-arg mapping, the resource-specific checks, and the read view.
- *
- * ## Nothing here rewrites a key
- *
- * Per `.claude/rules/case-convention.md` no function may walk a value rewriting
- * its keys. This factory does not: `normalizeDeclaredProperties` is the shared
- * *shallow* declaration normalizer every pipeline already applies, and
- * `pickSpecFields` **selects** declared keys out of an already-snake_case
- * source without inspecting or emitting a name of its own. A module's field
- * mapping stays explicit, in the module.
+ * Nothing here rewrites a key (`.claude/rules/case-convention.md`):
+ * `normalizeDeclaredProperties` is the shared shallow declaration normalizer,
+ * and `pickSpecFields` selects declared keys out of an already-snake_case
+ * source without emitting a name of its own.
  */
 
 import createDebug from 'debug';
