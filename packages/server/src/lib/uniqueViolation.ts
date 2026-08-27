@@ -20,19 +20,10 @@ export const isUniqueViolation = (error: unknown): boolean => {
  * Rethrows a unique-constraint violation as a `NAME_CONFLICT` `DomainError`
  * carrying `message`, and rethrows anything else untouched.
  *
- * Use it as the whole body of a `catch`, so a write that races a duplicate
- * answers `409` instead of `500`. Prefix the call with `throw` — it always
- * throws, and the keyword is what tells control-flow analysis the `catch`
- * never completes, so a `let` assigned in the `try` stays narrowed after it:
- *
- * ```ts
- * let file;
- * try {
- *   file = await db.File.create({ … });
- * } catch (error) {
- *   throw rethrowAsConflict(error, 'A file already exists at that path.');
- * }
- * ```
+ * Use it as the whole body of a `catch`, so a write racing a duplicate answers
+ * `409` instead of `500`. Prefix the call with `throw`: it always throws, and
+ * the keyword is what tells control-flow analysis the `catch` never completes,
+ * so a `let` assigned in the `try` stays narrowed after it.
  */
 export const rethrowAsConflict = (error: unknown, message: string): never => {
   if (isUniqueViolation(error)) {

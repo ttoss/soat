@@ -65,19 +65,18 @@ export const buildDeleteOrder = (
 };
 
 /**
- * Asks every resource due for deletion whether it would refuse, deleting nothing.
+ * Asks every resource due for deletion whether it would refuse, deleting
+ * nothing.
  *
- * Teardown is ordered and not transactional, so a refusal found by attempting a
- * delete leaves everything ordered ahead of it already destroyed — the
- * unrecoverable partial teardown #985 reported, where an eval's dataset, its
- * items and the eval were gone and only the agent that blocked survived. Asking
- * first turns that into a teardown that fails having changed nothing.
+ * Teardown is ordered and not transactional, so a refusal discovered by
+ * attempting a delete leaves everything ordered ahead of it destroyed — the
+ * unrecoverable partial teardown #985 reported. Asking first turns that into a
+ * teardown that fails having changed nothing.
  *
- * Only refusals a module can predict are reported: a `retain` resource is never
- * deleted, a resource with no physical id has nothing to delete, and a type that
- * declares no blocker contributes nothing. The pre-flight therefore never
- * invents a failure the delete would not have hit — it can only miss one, which
- * falls through to `performResourceDeletions` exactly as before.
+ * Only predictable refusals are reported: a `retain` resource is never deleted,
+ * one with no physical id has nothing to delete, and a type declaring no
+ * blocker contributes nothing. So this never invents a failure the delete would
+ * not have hit — it can only miss one, which falls through as before.
  */
 export const collectDeletionBlockers = async (
   orderedResources: ResourceRow[]

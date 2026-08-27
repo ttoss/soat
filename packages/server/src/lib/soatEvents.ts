@@ -1,33 +1,24 @@
 /**
  * The registry of platform events, keyed by the resource type each belongs to.
  *
- * This is the single source of truth for three things that used to drift apart:
- * the union `emitResourceEvent` accepts, the set a subscriber may declare
- * interest in, and the event table in the webhooks documentation (generated
- * from here by `packages/website/scripts/generateWebhookEventsPage.ts`).
+ * The single source of truth for three things that used to drift: the union
+ * `emitResourceEvent` accepts, the set a subscriber may declare interest in,
+ * and the webhooks documentation table (generated from here by
+ * `packages/website/scripts/generateWebhookEventsPage.ts`).
  *
- * Before this existed, `type` and `resourceType` were both bare `string`s. A
- * renamed or misspelled event name compiled fine and simply never matched, so a
- * webhook subscription stopped delivering with nothing failing anywhere. Pairing
- * the name with its resource type here is what turns that into a type error at
- * the emit site: `emitResourceEvent` draws the names it accepts from the entry
- * for the `resourceType` it was given.
+ * `type` and `resourceType` were both bare `string`s, so a renamed or
+ * misspelled event compiled fine and simply never matched — a webhook
+ * subscription stopped delivering with nothing failing. Pairing the name with
+ * its resource type makes that a type error at the emit site. The description
+ * lives in the entry because the generated reference reads it: a new event is
+ * documented by the same edit that registers it.
  *
- * The description is part of the entry rather than a parallel table because the
- * generated reference reads it — a new event is documented by the same edit that
- * registers it, or it is not registered at all.
+ * **This file deliberately imports nothing** — the website's docs generator
+ * loads it, so a runtime import would drag the DB layer into a docs build.
  *
- * **This file deliberately imports nothing.** It is loaded by the website's docs
- * generator as well as the server, so a runtime import here would drag the DB
- * layer into a docs build.
- *
- * ### What is *not* here
- *
- * The event `data` payload stays an opaque value and is not described by this
- * registry. Typing it per event would tie the bus to each module's mapper return
- * type, which is exactly the coupling `.claude/rules/case-convention.md` removed:
- * nothing on the bus reads a key of the payload, so nothing on the bus needs to
- * know its shape. Type the envelope; keep the payload a value.
+ * The event `data` payload stays an opaque value and is not described here.
+ * Nothing on the bus reads a key of it, so nothing on the bus needs its shape:
+ * type the envelope, keep the payload a value.
  */
 export const SOAT_EVENTS = {
   agent: {

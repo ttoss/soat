@@ -82,20 +82,17 @@ export const mapTask = (instance: TaskInstance) => {
 };
 
 /**
- * Turns a caller-supplied `tool_context` into the bag to persist on the task:
- * validated against the header-name grammar every other entry point uses, with
- * the reserved identity keys stripped in any casing.
+ * Turns a caller-supplied `tool_context` into the bag to persist: validated
+ * against the header-name grammar every other entry point uses, with the
+ * reserved identity keys stripped in any casing.
  *
  * The strip is belt-and-braces — `buildGenerationContext` re-pins identity at
- * the generation chokepoint (#850), so a forged `sessionId` could never reach a
- * tool header either way — but a task row is long-lived and read by operators,
- * and storing a key the server will overwrite would make the record lie about
- * what the dispatch will send.
+ * the generation chokepoint (#850) — but a task row is long-lived and read by
+ * operators, so storing a key the server will overwrite would make the record
+ * lie about what the dispatch sends.
  *
- * An empty bag (all-reserved, or a literal `{}`) persists as `null` rather than
- * `{}`: "no context" has one representation, and a caller can therefore drop a
- * credential from an open task by sending `tool_context: {}` without having to
- * close it.
+ * An empty bag persists as `null`, so "no context" has one representation and a
+ * caller can drop a credential from an open task with `tool_context: {}`.
  */
 export const sanitizeTaskToolContext = (
   toolContext: Record<string, string> | null | undefined

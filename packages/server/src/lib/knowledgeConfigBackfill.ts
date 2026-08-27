@@ -8,18 +8,13 @@ const log = createDebug('soat:knowledge');
 /**
  * One-time normalization of stored `knowledge_config` bags to snake_case.
  *
- * Agent rows persisted before single-casing hold the bag in camelCase: request
- * middleware camelCased it on the way in, and the read path un-camelCased it on
- * the way out. That read path is gone — `readKnowledgeConfig` maps the wire
- * casing field by field and nothing else — so those rows would resolve
- * `write_memory_id`, `memory_ids` and `extraction` as `undefined`, silently
+ * Rows persisted before single-casing hold the bag in camelCase, and the read
+ * path that un-camelCased it is gone, so those rows would resolve
+ * `write_memory_id`, `memory_ids` and `extraction` as `undefined` — silently
  * disabling memory-scoped injection, the `write_memory` tool and extraction.
- * This rewrites them once, at boot, so the stored value matches the wire value
- * everywhere.
  *
- * It is idempotent (an already-snake_case bag is left untouched) and bounded (a
- * SQL prefilter means a converged database reads no rows at all), so it is safe
- * to leave wired into every boot.
+ * Idempotent and bounded (a SQL prefilter means a converged database reads no
+ * rows), so it is safe to leave wired into every boot.
  */
 
 /**

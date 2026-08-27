@@ -14,33 +14,29 @@ import { claimLatencySnapshot } from '../src/lib/orchestrationQueueMetrics';
 /**
  * Load / soak harness for the orchestration queue (orchestration-queue P3).
  *
- * It exercises the **queue** — enqueue → claim → ack under a sustained backlog —
- * rather than node execution, so what it measures is the driver's throughput and
- * stability: how many tasks a fleet of simulated workers moves per second, how
- * far claim latency drifts, and whether the backlog and the leased-but-unacked
- * set stay bounded over the run instead of growing without limit.
- *
- * It talks to whatever `ORCHESTRATION_QUEUE_DRIVER` selects, so both drivers can
- * be compared on the same workload.
+ * It exercises the **queue** — enqueue → claim → ack under a sustained backlog
+ * — rather than node execution, so it measures the driver's throughput and
+ * stability: tasks/second, claim-latency drift, and whether the backlog and the
+ * leased-but-unacked set stay bounded. It talks to whatever
+ * `ORCHESTRATION_QUEUE_DRIVER` selects, so both drivers can be compared.
  *
  * ```bash
- * # 8 simulated workers draining a 5k backlog kept topped up for 60s
  * SOAK_BACKLOG=5000 SOAK_WORKERS=8 SOAK_DURATION_MS=60000 \
  *   pnpm --filter @soat/server queue-soak
  * ```
  *
- * | Variable            | Default | Meaning                                       |
- * | ------------------- | ------- | --------------------------------------------- |
- * | `SOAK_BACKLOG`      | `2000`  | Tasks seeded before the drain starts          |
+ * | Variable            | Default | Meaning                                        |
+ * | ------------------- | ------- | ---------------------------------------------- |
+ * | `SOAK_BACKLOG`      | `2000`  | Tasks seeded before the drain starts           |
  * | `SOAK_WORKERS`      | `4`     | Concurrent claim/ack loops                     |
  * | `SOAK_BATCH`        | `10`    | Tasks claimed per loop iteration               |
  * | `SOAK_DURATION_MS`  | `30000` | How long to sustain the workload               |
  * | `SOAK_PRODUCE_RATE` | `200`   | Tasks/second enqueued during the run (0 = off) |
  * | `SOAK_RUNS`         | `50`    | Distinct runs the tasks are spread across      |
  *
- * Exit code is non-zero when the queue fails the stability check (the backlog
- * at the end exceeds the backlog at the start while producers were slower than
- * the drain), so it can gate a release if a deployment chooses to run it.
+ * Exit code is non-zero when the queue fails the stability check (final backlog
+ * exceeds the starting one while producers were slower than the drain), so it
+ * can gate a release.
  */
 
 const num = (name: string, fallback: number): number => {

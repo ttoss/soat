@@ -6,18 +6,17 @@ import { DomainError } from '../errors';
 const log = createDebug('soat:agents');
 
 /**
- * The eval gate on a staged rollout (the agents module doc — Versioning and Staged Rollout).
+ * The eval gate on a staged rollout (the agents module doc — Versioning and
+ * Staged Rollout).
  *
  * A release may name an eval that has to be green *against the canary version*
- * before the canary can be promoted. This module owns both halves of that rule
- * — what a gate may reference when it is set, and whether it is satisfied when
- * `promote` is called — so the agent release layer never queries evaluation
- * tables itself and the two checks cannot drift apart.
+ * before promotion. This module owns both halves — what a gate may reference
+ * when set, and whether it is satisfied when `promote` is called — so the agent
+ * release layer never queries evaluation tables and the two cannot drift.
  *
- * The gate is enforced at exactly one moment: promotion. It does not constrain
- * assignment (a gated rollout serves traffic like any other), and it does not
- * make a run happen — a caller starts the run, with `agent_version` pinned to
- * the canary, through the evaluations API.
+ * Enforced at exactly one moment: promotion. It does not constrain assignment,
+ * and it does not make a run happen — a caller starts the run with
+ * `agent_version` pinned to the canary.
  */
 
 type AgentRef = {
@@ -161,18 +160,16 @@ export const requirePromotionGate = async (args: {
 };
 
 /**
- * Records the run that cleared the gate on the version that promotion made
- * live.
+ * Records the run that cleared the gate on the version promotion made live.
  *
  * Written after the config apply rather than threaded through it, because the
- * version being stamped is only known then: an apply archives a new version,
+ * version being stamped is only known then: an apply archives a new version
  * unless the live row already held the canary config, in which case the canary
- * version itself is what went live. Reading the agent's resulting `version`
- * covers both without the release layer having to predict which happened.
+ * version is what went live. Reading the agent's resulting `version` covers
+ * both without predicting which happened.
  *
- * This annotates provenance; it never touches an archived `config`, so the
- * archive stays immutable in the sense that matters — the configuration a
- * version describes can still never change.
+ * This annotates provenance and never touches an archived `config`, so the
+ * configuration a version describes can still never change.
  */
 export const recordPromotionEvalRun = async (args: {
   agentDbId: number;

@@ -37,25 +37,17 @@ export type QueueStats = {
 
 /**
  * The orchestration queue abstraction: the four operations the durable runtime
- * needs from a queue, plus a stats snapshot for the operator endpoint.
+ * needs, plus a stats snapshot for the operator endpoint.
  *
- * Both drivers are behaviourally interchangeable for the runtime's purposes and
- * are held to that by the shared conformance suite
- * (`tests/unit/tests/lib/orchestrationQueueDriverConformance.test.ts`):
+ * Both drivers are interchangeable for the runtime's purposes and held to it by
+ * `lib/orchestrationQueueDriverConformance.test.ts`: at-least-once delivery
+ * (a claimed task holds an `ORCHESTRATION_TASK_LEASE_TTL_MS` lease and is
+ * redelivered if not acked, `attempts` counting deliveries), delayed
+ * availability, and exclusive claim.
  *
- * - **At-least-once delivery.** A claimed task holds a lease
- *   (`ORCHESTRATION_TASK_LEASE_TTL_MS`); if the worker does not `ack` before it
- *   expires, the task is delivered again. `attempts` counts deliveries.
- * - **Delayed availability.** `enqueue({ availableAt })` and `retry` park a task
- *   until a wall-clock time.
- * - **Exclusive claim.** Two concurrent claimers never receive the same task
- *   while its lease is valid.
- *
- * What is **not** uniform, and is documented per driver:
- * `enforcesProjectConcurrency` — only the Postgres driver can evaluate a
- * project's `max_concurrent_runs` at claim time (it claims with a SQL join); on
- * SQS, per-project limits are not enforced and only the per-worker
- * `ORCHESTRATION_WORKER_CONCURRENCY` cap applies.
+ * `enforcesProjectConcurrency` is the one thing not uniform: only the Postgres
+ * driver can evaluate a project's `max_concurrent_runs` at claim time; on SQS
+ * only the per-worker `ORCHESTRATION_WORKER_CONCURRENCY` cap applies.
  */
 export type OrchestrationQueueDriver = {
   readonly name: QueueDriverName;

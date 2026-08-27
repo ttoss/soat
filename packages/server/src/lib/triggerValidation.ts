@@ -148,23 +148,18 @@ const invalidPattern = (pattern: string, why: string): DomainError => {
 };
 
 /**
- * Validates an event trigger's subscription pattern. Three forms are accepted,
- * the same grammar the webhook dispatcher already matches with
- * ({@link matchesEvent} in `eventMatching.ts`): `*`, `prefix.*`, or an exact
- * event name.
+ * Validates an event trigger's subscription pattern: `*`, `prefix.*`, or an
+ * exact event name — the grammar {@link matchesEvent} already matches.
  *
- * Where it goes beyond syntax is the **namespace rule**: a pattern whose first
- * segment names a registered platform namespace (`documents`, `agents`, …) must
- * resolve to at least one registered event. `documents.ingsted` is a typo and is
- * rejected at write time; `documents.*` and `documents.ingested` are accepted.
+ * Beyond syntax it enforces the **namespace rule**: a pattern whose first
+ * segment names a registered platform namespace must resolve to at least one
+ * registered event, so `documents.ingsted` is rejected at write time.
  *
- * A pattern in an *unknown* namespace (`orders.shipped`) is accepted as-is,
- * because an orchestration `emit_event` node emits names SOAT does not own and
- * subscribing to one is the whole point of this trigger type. Rejecting those
- * would close the shortest path the feature exists to open. The cost is that a
- * typo in a custom name is still only visible as a subscription that never
- * matches — the same position webhook subscriptions are in, and unimprovable
- * without a registry of author-authored names.
+ * A pattern in an *unknown* namespace (`orders.shipped`) is accepted, because
+ * an orchestration `emit_event` node emits names SOAT does not own and
+ * subscribing to one is the point of this trigger type. The cost is that a typo
+ * in a custom name is only visible as a subscription that never matches — the
+ * same position webhook subscriptions are in.
  */
 export const validateEventPattern = (pattern: string): void => {
   if (pattern === '*') return;

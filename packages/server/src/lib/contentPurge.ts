@@ -76,17 +76,13 @@ const emitPurgeEvent = <R extends SoatResourceType>(args: {
 
 /**
  * Clears a single generation's content in place, leaving the auditable
- * skeleton.
- *
- * Idempotent: an already-redacted generation keeps its original
- * `contentRedactedAt`, so a retry neither fails nor rewrites when the erasure
- * happened.
+ * skeleton. Idempotent — an already-redacted generation keeps its original
+ * `contentRedactedAt`.
  *
  * This does not reach the trace's steps file, which holds this generation's
- * content alongside its siblings'. Purging one generation is therefore not a
- * complete erasure of the run — purge the trace for that.
- *
- * Returns null when the generation does not exist in the caller's scope.
+ * content alongside its siblings', so purging one generation is not a complete
+ * erasure of the run; purge the trace for that. Returns null when the
+ * generation is out of the caller's scope.
  */
 export const purgeGenerationContent = async (args: {
   publicId: string;
@@ -254,22 +250,13 @@ const commitTracePurge = async (args: {
 };
 
 /**
- * Purges a trace's content: deletes the steps object from storage and clears
- * the content columns, cascading to every descendant trace and to all of their
- * generations.
+ * Purges a trace's content — deletes the steps object from storage, clears the
+ * content columns, and cascades to descendant traces and their generations.
  *
- * Ordering follows the storage-aware delete path established in #835/#841:
- * collect the storage locations first, commit the DB changes in a transaction,
- * then delete the bytes. `deleteStorageObjects` is best-effort by design — a
- * failed object delete is logged for reconciliation rather than rolled back,
- * because the row must be gone before the bytes are so a concurrent read never
- * references content mid-delete.
- *
- * Idempotent: already-redacted traces keep their original timestamps, and a
- * retry re-attempts the storage delete (whose File rows are already gone, so it
- * is a no-op).
- *
- * Returns null when the trace does not exist in the caller's scope.
+ * Storage-aware delete order per #835/#841: collect locations, commit the DB
+ * changes in a transaction, then delete the bytes best-effort, so a concurrent
+ * read never references content mid-delete. Idempotent — already-redacted
+ * traces keep their timestamps. Null when the trace is out of scope.
  */
 export const purgeTraceContent = async (args: {
   traceId: string;

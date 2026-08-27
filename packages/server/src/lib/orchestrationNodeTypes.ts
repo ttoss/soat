@@ -4,16 +4,14 @@ import type { GuardrailEvaluationRecord } from './guardrailEvaluationRecord';
  * The shared vocabulary of node execution: what a node hands back, and what the
  * engine persists when a node parks the run.
  *
- * These types live in their own module on purpose. They used to sit next to the
- * eight implementations in `orchestrationNodeExecutors.ts`, which forced every
+ * Their own module on purpose. They used to sit next to the eight
+ * implementations in `orchestrationNodeExecutors.ts`, which forced every
  * per-node-type file to import that module for a type while the module imported
- * them back for the implementation — five of the six import cycles #910 found
- * existed only for that reason. A module that declares types and imports
- * nothing but types cannot participate in a cycle.
+ * them back — five of the six import cycles #910 found existed only for that.
+ * A module that declares types and imports nothing but types cannot be in a
+ * cycle.
  *
- * Nothing here executes anything; see `orchestrationNodeDispatch.ts` for the
- * type → executor dispatch and `orchestrationBatchResults.ts` for what the run
- * loop does with a batch of results.
+ * Nothing here executes anything; see `orchestrationNodeDispatch.ts`.
  */
 
 /**

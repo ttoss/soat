@@ -36,12 +36,10 @@ services:
       retries: 60
       start_period: 60s
 
-  # Ollama's OpenAI-compatible endpoint does not implement `tool_choice` — it
-  # silently drops the field — so an agent that forces a specific tool gets no
-  # forcing at all and the run pauses only when the 0.5b model happens to
-  # volunteer a tool call. This shim implements that one missing field
-  # deterministically and forwards everything else (including embeddings) to the
-  # real Ollama, so every other step still runs against the real model.
+  # Ollama's OpenAI-compatible endpoint silently drops `tool_choice`, so a forced
+  # tool call is not actually forced and the run pauses only when the 0.5b model
+  # volunteers one. This shim implements that field deterministically and forwards
+  # everything else (embeddings included) to the real Ollama.
   # See tests/mocks/ollamaToolChoiceProxy.mjs.
   ollama-tool-choice:
     image: node:22-alpine
@@ -54,33 +52,21 @@ services:
     environment:
       PORT: '11434'
       OLLAMA_UPSTREAM_URL: 'http://ollama:11434'
-      # Only these tools have their forcing honored deterministically — the
-      # client-tools tutorial (get_order_status), the tool-context tutorial
-      # (record_order), and the boundary-policy tutorial
-      # (docs_update-document). Every other forced tool still goes to the real
-      # model.
+      # Only these tools have their forcing honored deterministically:
+      # get_order_status (client-tools), record_order (tool-context),
+      # docs_update-document (boundary-policy) and read_local_file
+      # (build-an-agent-harness). Every other forced tool goes to the real model.
       #
-      # docs_update-document qualifies on the allowlist's own criterion: the
-      # assertion is about dispatch — that `boundary_policy` refuses the action
-      # before it runs — and not about argument quality. Its `document_id` is
-      # pinned by `preset_parameters`, and the boundary check returns
-      # `Forbidden` ahead of `executeSoatTool`, so no synthesized argument ever
-      # reaches the action. Left off the list, the tutorial's assertion would
-      # pass *vacuously* whenever qwen2.5:0.5b declines to call the tool — green
-      # CI proving nothing, which is the failure mode the shim exists to remove.
-      # read_local_file (build-an-agent-harness) also qualifies: the tutorial
-      # asserts the client-tool pause/resume wiring — requires_action, then
-      # completed after tool-outputs — and synthesizes the output itself, so
-      # argument quality never matters. Without forcing, qwen2.5:0.5b answering
-      # directly would fail the requires_action assertion at random.
+      # The last two qualify on the allowlist's own criterion — their assertions are
+      # about dispatch, not argument quality: boundary_policy refuses the action
+      # before it runs, and the client-tool tutorial synthesizes the output itself.
+      # Left off the list, both would pass *vacuously* whenever qwen2.5:0.5b declines
+      # to call the tool — green CI proving nothing.
       TOOL_CHOICE_TOOLS: 'get_order_status,record_order,docs_update-document,read_local_file'
-      # Nothing bounds how many tokens qwen2.5:0.5b emits per completion (agents
-      # have no max_tokens field), and no tutorial asserts generated content —
-      # only structure and forward progress. Uncapped output is what makes a
-      # multi-generation tutorial's wall-clock swing by minutes between
-      # identical runs, which is what pushes its poll loops past their budget.
-      # Same value and rationale as the smoke stack; 256 leaves ample room for a
-      # volunteered tool call's JSON.
+      # Nothing bounds how many tokens qwen2.5:0.5b emits (agents have no max_tokens
+      # field) and no tutorial asserts generated content, so uncapped output is what
+      # makes a multi-generation tutorial's wall-clock swing by minutes and push its
+      # poll loops past their budget. Same value and rationale as the smoke stack.
       MAX_COMPLETION_TOKENS: '256'
     healthcheck:
       test:
@@ -95,14 +81,11 @@ services:
       timeout: 5s
       retries: 10
 
-  # Deterministic stand-ins for the external provider APIs the converter tutorial
-  # calls: the OpenAI Responses API for the image *agent* converter (image → OCR
-  # text) and an xAI-shaped speech-to-text REST endpoint for the audio *tool*
-  # converter (audio → transcript). Both handlers validate the bytes the
-  # tutorial actually sent against the checked-in fixtures before returning
-  # canned text, so a broken tutorial fails loudly instead of passing on
-  # unrelated input. Lets the flow run without real keys. See
-  # tests/mocks/mock-providers.mjs.
+  # Deterministic stand-ins for the provider APIs the converter tutorial calls:
+  # the OpenAI Responses API for the image agent converter and an xAI-shaped
+  # speech-to-text endpoint for the audio tool converter. Both validate the bytes
+  # the tutorial sent against the checked-in fixtures before returning canned
+  # text, so a broken tutorial fails loudly. See tests/mocks/mock-providers.mjs.
   mock-providers:
     image: node:22-alpine
     volumes:
@@ -148,13 +131,11 @@ services:
       DATABASE_USER: soat_user
       DATABASE_PASSWORD: soat_password
       # Tool egress is default-deny for non-public destinations (see
-      # packages/server/src/lib/toolEgress.ts). These tutorials point http tools
-      # at sibling containers, which is exactly the case an operator has to
-      # declare: `server` for soat self-call tools, `tutorials` for the echo
-      # listener, and `mock-providers` for the xAI-shaped speech-to-text tool
-      # that ingest-images-and-audio drives through an ingestion *converter* —
-      # a converter invokes a tool (`converterInvocation.ts` → `callTool`), so
-      # it is egress-checked like any other tool call.
+      # packages/server/src/lib/toolEgress.ts), so these sibling containers are
+      # exactly the case an operator has to declare: `server` for soat self-call
+      # tools, `tutorials` for the echo listener, and `mock-providers` for the
+      # speech-to-text tool an ingestion converter drives (a converter invokes a
+      # tool, so it is egress-checked like any other tool call).
       TOOL_EGRESS_ALLOWED_HOSTS: server:5047,tutorials:8788,mock-providers:8090
       SECRETS_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       JWT_SECRET: tutorials-test-jwt-secret

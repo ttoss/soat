@@ -2,36 +2,27 @@ import type { OrchestrationNode } from './orchestrations';
 
 /**
  * Reserved top-level state key: every node's artifact is recorded here (see
- * {@link writeNodeArtifact}), giving orchestrations the same
- * read-any-upstream-result ergonomics as a pipeline's `steps.<id>` — without
- * requiring an explicit `state_mapping` write. Static
- * validation (`checkReservedNodeNamespace`) rejects a `state_mapping`
- * write that targets this namespace, since the engine owns it exclusively.
- * (Run input cannot collide: it is seeded under `state.input` only, so even
- * an input property named `nodes` lands at `state.input.nodes`.)
+ * {@link writeNodeArtifact}), giving the read-any-upstream-result ergonomics of
+ * a pipeline's `steps.<id>` with no explicit `state_mapping` write.
+ * `checkReservedNodeNamespace` rejects a `state_mapping` write targeting it.
+ * Run input cannot collide: it is seeded under `state.input` only.
  *
- * Deliberately a standalone leaf module (only a type-only import from
- * `orchestrations.ts`): both `orchestrationNodeExecutors.ts` and
- * `orchestrationValidation.ts` need this constant and neither may import the
- * other's module graph without creating a cycle
- * (`orchestrationNodeExecutors.ts` -> `orchestrationEngine.ts` ->
- * `orchestrations.ts` -> `orchestrationValidation.ts`).
+ * A standalone leaf module because both `orchestrationNodeExecutors.ts` and
+ * `orchestrationValidation.ts` need the constant and neither may import the
+ * other's module graph without creating a cycle.
  */
 export const NODE_ARTIFACTS_STATE_KEY = 'nodes';
 
 /**
- * Records a completed node's full artifact at `state.nodes.<nodeId>`, in
- * addition to whatever `state_mapping` projects into other
- * state paths. A downstream node reads it with
+ * Records a completed node's full artifact at `state.nodes.<nodeId>`, alongside
+ * whatever `state_mapping` projects elsewhere. A downstream node reads it with
  * `{ "var": "nodes.<nodeId>.<field>" }`.
  *
- * The artifact is deep-cloned before storage. A `transform`/`condition`
- * node's expression may reflect the whole state back as its result (e.g.
- * `{ "var": "" }`), which makes `artifact` alias `state` itself; nesting that
- * live reference into `state.nodes.<nodeId>` would make `state` contain
- * itself, a cycle that crashes JSON serialization (the run's HTTP response
- * and its JSONB checkpoint alike). Cloning snapshots the artifact as it stood
- * at completion time, matching how it is independently persisted anyway.
+ * Deep-cloned before storage: a `transform`/`condition` expression may reflect
+ * the whole state back as its result (`{ "var": "" }`), which makes `artifact`
+ * alias `state`, and nesting that live reference would make `state` contain
+ * itself — a cycle that crashes JSON serialization of both the HTTP response
+ * and the JSONB checkpoint.
  */
 export const writeNodeArtifact = (args: {
   nodeId: string;

@@ -1,25 +1,18 @@
 /**
  * The system/non-system split every provider call performs.
  *
- * The AI SDK takes system content as its own `instructions` argument rather than
- * as a message, so every call site has to lift system content out and pass the
- * rest as `messages`. That is not a style preference — `standardizePrompt`
- * refuses a system message left in `messages`:
+ * The AI SDK takes system content as its own `instructions` argument, and
+ * `standardizePrompt` refuses a system message left in `messages`
+ * (`allowSystemInMessages` defaults to false), so every call site has to lift
+ * it out. The split was written out nine times across `agentGeneration`,
+ * `agentNonStreamGeneration`, `agentGenerationHelpers` and `chats` — two of
+ * them reading the system message from a *different* array than the one they
+ * filter, which is why this is composable functions rather than one returning
+ * both.
  *
- *   allowSystemInMessages = false            // the default
- *   → InvalidPromptError: 'System messages are not allowed in the prompt or
- *     messages fields. Use the instructions option instead.'
- *
- * The split was written out nine times across `agentGeneration`,
- * `agentNonStreamGeneration`, `agentGenerationHelpers` and `chats` — and two of
- * those sites read the system message from a *different* array than the one they
- * filter (a resumed turn takes its instructions from the persisted history but
- * sends the history plus the new tool results), which is why this is composable
- * functions rather than one that returns both.
- *
- * All of them are key-blind: they read `role` and, for system content, `content`.
- * Nothing else is inspected or rewritten, so a message's provider-specific
- * payload travels through untouched (`.claude/rules/case-convention.md`).
+ * All of them are key-blind: they read `role` and, for system content,
+ * `content`, so a message's provider-specific payload travels through
+ * untouched (`.claude/rules/case-convention.md`).
  */
 
 /** Mirrors the AI SDK's `SystemModelMessage`: system content is a string. */
@@ -40,19 +33,14 @@ const isSystem = (message: unknown): boolean => {
 
 /**
  * Every system message in the history, in order, as the SDK's `instructions`
- * value: `undefined` when there is none, the bare string when there is one, and
- * an ordered array when there are several.
+ * value: `undefined` for none, the bare string for one, an ordered array for
+ * several.
  *
- * The previous helper read `.find` — the *first* system message — while the
- * filter beside it removed *all* of them, so every system message after the
- * first was silently destroyed. Whether a caller's system message reached the
- * model therefore depended on whether an earlier one already occupied the slot.
- *
- * Content that is not a plain string cannot be an instruction (providers accept
- * only a string there, and `SystemModelMessage` types it that way), so it is
- * skipped here rather than coerced. It is not lost silently: the surfaces that
- * must not receive system content at all use {@link hasSystemMessage} to reject
- * the request outright.
+ * The previous helper read the *first* system message while the filter beside
+ * it removed *all* of them, so every one after the first was silently
+ * destroyed. Non-string content cannot be an instruction (providers accept only
+ * a string), so it is skipped rather than coerced; surfaces that must reject
+ * system content outright use {@link hasSystemMessage}.
  */
 export const collectSystemInstructions = (
   messages: readonly unknown[]

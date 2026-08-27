@@ -289,20 +289,17 @@ const descendantRunIds = async (args: {
 };
 
 /**
- * Rolls a run's usage up twice for the orchestration-run response:
+ * Rolls a run's usage up twice for the orchestration-run response: `own` (the
+ * run's own nodes) and `includingNested` (plus every run its `loop` /
+ * `sub_orchestration` nodes started, at any depth — the figure to read for a
+ * graph that delegates, since a child's events are attributed to the child).
  *
- * - `own` — the run's own nodes, which is what `usage` has always meant;
- * - `includingNested` — that plus every run its `loop` / `sub_orchestration`
- *   nodes started, at any depth, which is the figure to read for a graph that
- *   delegates (a child's events are attributed to the child).
- *
- * Both come from **one** read of the run's own events. The descendant walk runs
- * alongside that read rather than after it, and a run with no children reuses
- * the line items already in hand instead of re-reading them — so the two
- * figures are equal by construction rather than by a second query that happens
- * to agree. That case is both the common one and the hot one: this endpoint is
- * polled until a background run settles, and the event/component/price join is
- * the heaviest query in the read.
+ * Both come from **one** read of the run's own events: the descendant walk runs
+ * alongside that read, and a run with no children reuses the line items already
+ * in hand, so the two figures are equal by construction rather than by a second
+ * query that happens to agree. That case is both the common and the hot one —
+ * this endpoint is polled until a background run settles, and the
+ * event/component/price join is the heaviest query in the read.
  *
  * Takes both ids because the caller has already loaded the run: the internal id
  * keys the events, the public id keys the parent link.

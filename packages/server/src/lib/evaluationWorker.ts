@@ -1,17 +1,14 @@
 /**
- * The eval worker (the evaluations module doc).
+ * The eval worker (the evaluations module doc). Two sweeps on one timer,
+ * mirroring `orchestrationWorker.ts`: **drain** claims a batch of due item
+ * tasks, executes and acks each, and settles the run once its last task is
+ * gone; **reap** recovers runs left mid-flight — the debt Phase 1 knowingly
+ * took on, where a client disconnecting during a `wait: true` run left its row
+ * `running` forever.
  *
- * Two sweeps on one timer, mirroring `orchestrationWorker.ts`:
- *
- * 1. **Drain** — claim a batch of due item tasks, execute each item, ack it, and
- *    settle the run once its last task is gone.
- * 2. **Reap** — recover runs that were left mid-flight, which is the debt Phase 1
- *    knowingly took on (a client that disconnected during a `wait: true` run left
- *    its row `running` forever, with nothing to clean it).
- *
- * Runs inside the API process by default, so a single-process deployment needs no
- * separate worker; `EVAL_WORKER_DISABLED=true` keeps the API tier request-only
- * for deployments running a dedicated fleet.
+ * Runs inside the API process by default, so a single-process deployment needs
+ * no separate worker; `EVAL_WORKER_DISABLED=true` keeps the API tier
+ * request-only for deployments running a dedicated fleet.
  */
 import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
@@ -273,18 +270,15 @@ export const drainEvalQueueOnce = async (args?: {
 };
 
 /**
- * Recovers non-terminal runs that have no outstanding work and have gone quiet
- * past the grace period.
+ * Recovers non-terminal runs with no outstanding work that have gone quiet past
+ * the grace period. Two shapes land here and need opposite treatment:
  *
- * Two shapes land here, and they need opposite treatment:
- *
- * - Every item has a result, but the run never settled — a finalize that crashed
- *   between the last ack and the update. The measurements are all there, so the
- *   run is **finalized** rather than thrown away.
- * - Items are missing — an abandoned `wait: true` run whose client disconnected
- *   (the Phase 1 debt), or work that was dropped. Nothing will ever complete it,
- *   so it is settled `failed` and its lifecycle event fires, because a gate
- *   waiting on a verdict must not wait forever.
+ * - Every item has a result but the run never settled — a finalize that crashed
+ *   between the last ack and the update. The measurements are there, so the run
+ *   is **finalized**.
+ * - Items are missing — an abandoned `wait: true` run, or dropped work. Nothing
+ *   will complete it, so it is settled `failed` and its lifecycle event fires,
+ *   because a gate waiting on a verdict must not wait forever.
  */
 export const reapAbandonedEvalRuns = async (args?: {
   now?: Date;

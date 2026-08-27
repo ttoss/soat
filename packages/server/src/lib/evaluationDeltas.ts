@@ -1,20 +1,12 @@
 /**
  * Baseline comparison for eval runs (the evaluations module doc).
  *
- * A delta only means something when both sides answered the *same* question, so
- * every number here is computed over the **item intersection**: the dataset
- * items that are present and scorable in both runs. Anything else is reported as
- * divergence rather than folded into the comparison.
- *
- * That is the whole point of the module. Items have full CRUD and a run may
- * error on an item the baseline scored, so comparing the two runs' stored
- * aggregates would quietly attribute dataset drift to the agent — the fabricated
- * regression signal the evaluations module exists to prevent. Recomputing both
- * means over the intersection makes the comparison honest, and the
- * compared/added/removed counts make any drift visible instead of silent.
- *
- * Pure — no DB, no I/O — so the whole space of set differences is driven
- * directly in `tests/unit/tests/lib/evaluationDeltas.test.ts`.
+ * Every number is computed over the **item intersection** — items present and
+ * scorable in both runs — because items have full CRUD and a run may error on
+ * an item the baseline scored, so comparing stored aggregates would attribute
+ * dataset drift to the agent. The compared/added/removed counts make drift
+ * visible. Pure, so the set-difference space is driven directly in
+ * `tests/unit/tests/lib/evaluationDeltas.test.ts`.
  */
 import createDebug from 'debug';
 

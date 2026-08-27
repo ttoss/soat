@@ -60,22 +60,12 @@ export const emptyPage = <T = never>(args: {
 
 /**
  * The single place the paginated list envelope is produced. `query` performs
- * the `findAndCountAll` (or equivalent) call with the bounded `limit`/`offset`
- * this helper resolves, so the concrete, fully-typed model call stays at the
- * call site; `map` turns each row into a plain response object.
+ * the `findAndCountAll` with the bounded `limit`/`offset` resolved here, so the
+ * fully-typed model call stays at the call site; `map` turns each row into a
+ * plain response object.
  *
- * Call sites that `include` associations should pass `distinct: true` to the
- * underlying `findAndCountAll` so `count` reflects top-level rows rather than
- * the inflated join cardinality.
- *
- * @example
- * return paginatedList({
- *   limit: args.limit,
- *   offset: args.offset,
- *   query: ({ limit, offset }) =>
- *     db.Agent.findAndCountAll({ where, include, distinct: true, limit, offset }),
- *   map: mapAgent,
- * });
+ * Call sites that `include` associations should pass `distinct: true` so `count`
+ * reflects top-level rows rather than the inflated join cardinality.
  */
 export const paginatedList = async <M, T>(args: {
   limit?: number;

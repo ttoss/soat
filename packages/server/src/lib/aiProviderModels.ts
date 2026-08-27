@@ -330,32 +330,17 @@ const readBedrockLifecycle = (
 /**
  * The host `publisherModels.list` is served from for a location.
  *
- * A region prefixes the host with its own name, but three of Vertex's location
- * values are not regions and take a different host shape each:
+ * | `location`    | host                                     |
+ * | ------------- | ---------------------------------------- |
+ * | `global`      | `aiplatform.googleapis.com`              |
+ * | `eu` / `us`   | `aiplatform.<eu\|us>.rep.googleapis.com` |
+ * | anything else | `<location>-aiplatform.googleapis.com`   |
  *
- * | `location`    | host                                      |
- * | ------------- | ----------------------------------------- |
- * | `global`      | `aiplatform.googleapis.com`               |
- * | `eu` / `us`   | `aiplatform.<eu\|us>.rep.googleapis.com`   |
- * | anything else | `<location>-aiplatform.googleapis.com`    |
- *
- * Interpolating those three into the regional shape builds a host that does
- * not exist, and Google answers a non-host with the same generic HTML 404 that
- * #1080 chased — so listing failed with `MODEL_LISTING_FAILED` for every
- * provider configured that way (#1087). Confirmed with #1080's unauthenticated
- * probe, which separates the two: a real endpoint answers `401 UNAUTHENTICATED`,
- * a non-endpoint answers the HTML 404.
- *
- * ```
- * aiplatform.googleapis.com          401   global-aiplatform.googleapis.com  404
- * aiplatform.eu.rep.googleapis.com   401   eu-aiplatform.googleapis.com      404
- * ```
- *
- * `global` is not a corner case: several current Gemini models are served
- * there and 404 in a region, so it is the location those providers have to be
- * configured with. This mirrors the mapping the AI SDK applies when it builds
- * generation's `baseURL`, which is why the same record could generate and yet
- * fail to list — keep the two in step if Google adds a fourth host shape.
+ * Three of Vertex's locations are not regions; interpolating them into the
+ * regional shape builds a host that does not exist, and Google answers it with
+ * a generic HTML 404, so listing failed for every provider configured that way
+ * (#1087). `global` is not a corner case — several Gemini models are served
+ * only there. Mirrors the mapping the AI SDK uses for generation's `baseURL`.
  */
 const vertexListingHost = (location: string): string => {
   if (location === 'global') return 'https://aiplatform.googleapis.com';

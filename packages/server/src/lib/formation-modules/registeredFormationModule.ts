@@ -2,27 +2,18 @@
  * Builds a `FormationModule` for an operator-registered resource type (#1078).
  *
  * The counterpart to `defineFormationModule`: that factory backs a type with an
- * in-process lib call, this one backs it with a signed HTTP round trip to the
- * handler the registration names. Everything either kind of module plugs into is
- * identical — the same validation seam, the same create/update/delete contract,
- * the same drift `read` — which is the whole point. A template author cannot
- * tell a registered type from a built-in one, and the engine does not branch on
- * it either.
+ * in-process lib call, this one with a signed HTTP round trip to the registered
+ * handler. Everything either plugs into is identical — same validation seam,
+ * same create/update/delete contract, same drift `read` — so a template author
+ * cannot tell a registered type from a built-in one and the engine never
+ * branches on it.
  *
- * ## Validation is the registration's schema, plus whatever the handler adds
+ * Validation is the registration's JSON Schema fed through the same three
+ * `push*Errors` helpers, plus a plan-time round trip when the registration
+ * declares the `validate` capability.
  *
- * The schema-derived unknown/required/type checks are the same three
- * `push*Errors` helpers every built-in runs; they are just fed from the
- * registration's JSON Schema instead of `formations.yaml`. A registration that
- * declares the `validate` capability additionally gets a plan-time round trip
- * for the checks a JSON Schema cannot express.
- *
- * ## Nothing here rewrites a key
- *
- * The properties bag travels to the handler as a **value** and comes back the
- * same way. `normalizeDeclaredProperties` is the shared shallow *declaration*
- * normalizer every formation pipeline already applies, and nothing below
- * derives one field name from another (`.claude/rules/case-convention.md`).
+ * Nothing here rewrites a key: the properties bag travels to the handler as a
+ * value and returns the same way (`.claude/rules/case-convention.md`).
  */
 
 import createDebug from 'debug';

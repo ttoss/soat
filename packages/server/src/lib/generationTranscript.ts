@@ -1,18 +1,16 @@
 /**
- * Reading a generation back as a **transcript** — what it was asked, each model
+ * Reading a generation back as a transcript — what it was asked, each model
  * step and tool call, each tool result, and how it ended.
  *
- * Assembled at read time from records that already exist. There is no
- * transcript table, column, or write on the generation path, and that inversion
- * against the dataset-item slice (#1012, which copies) is deliberate: a dataset
- * item must outlive its source, whereas a transcript must **die with it**.
- * Storing one would create a second, unpoliced copy of exactly the content
- * `traceContentPolicy` and `contentRetention` exist to erase, reviving the
- * "deleted but still reachable" gap #835/#836 closed.
+ * Assembled at read time; there is no transcript table, column or write. The
+ * inversion against the dataset-item slice (#1012, which copies) is deliberate:
+ * an item must outlive its source, a transcript must die with it. Storing one
+ * would create a second unpoliced copy of the content `traceContentPolicy` and
+ * `contentRetention` erase, reviving the gap #835/#836 closed.
  *
- * The three halves live in three places, which is why this module exists:
- * the input is a generation column (`inputMessages`), the steps are a File
- * hanging off the trace, and the outcome is the generation row.
+ * The three halves live in three places, which is why this module exists: the
+ * input is a generation column, the steps a File on the trace, the outcome the
+ * generation row.
  */
 import createDebug from 'debug';
 
@@ -237,15 +235,13 @@ const deriveOutput = (
  * The two content halves of a transcript, or their absence.
  *
  * The generation's redaction marker governs **both**, and the steps object is
- * not even read when it is set. A generation purge clears the generation's own
- * columns and the copies on any eval result that scored it, but it does not
- * delete the trace's steps file — that belongs to
- * `DELETE /traces/{id}/content`. The turn's answer and its tool payloads live
- * in both places, so projecting the file after the generation was purged would
- * hand back the very content the purge erased, in a response whose own
- * `content_redacted_at` says it is gone. That is the "deleted but still
- * reachable" gap #835/#836 closed, and it is why this slice references rather
- * than copies in the first place.
+ * not read when it is set. A generation purge clears the generation's own
+ * columns and the copies on any eval result, but not the trace's steps file —
+ * that belongs to `DELETE /traces/{id}/content`. The turn's answer and its tool
+ * payloads live in both places, so projecting the file after the generation was
+ * purged would hand back the content the purge erased, in a response whose own
+ * `content_redacted_at` says it is gone — the gap #835/#836 closed, and why
+ * this slice references rather than copies.
  */
 const resolveTranscriptContent = async (
   generation: GenerationWithTrace
@@ -268,21 +264,17 @@ const resolveTranscriptContent = async (
 /**
  * Reads one generation's turn as a transcript.
  *
- * Unlike `getGenerationTurn`, this **never refuses** for missing content. Two
- * states that would make a dataset item worthless are ordinary here, and both
+ * Unlike `getGenerationTurn` this never refuses for missing content; two states
  * answer `200` with the skeleton:
  *
- * - **Content unavailable** — zero-retention never wrote it, or a purge cleared
- *   it. The redaction marker says which, and `content_redacted_by_principal_id`
- *   distinguishes never-stored (`zero_retention`) from erased-later (a user or
- *   key id). This matches what the traces module already guarantees: a purged
- *   trace reads back as a skeleton rather than a 404, so the erasure is
- *   *provable* instead of indistinguishable from a resource that never existed.
+ * - **Content unavailable** — zero-retention never wrote it or a purge cleared
+ *   it; `content_redacted_by_principal_id` distinguishes the two. Matches the
+ *   traces module, where a purged trace reads back as a skeleton so the erasure
+ *   is provable rather than indistinguishable from a 404.
  * - **Still running** — the steps object is not written until the run finishes,
- *   so `steps` is empty and `status` disambiguates. It stays a plain array with
- *   no null-vs-empty ambiguity.
+ *   so `steps` is an empty array and `status` disambiguates.
  *
- * `step_count` survives both, because it is a counter rather than content.
+ * `step_count` survives both, being a counter rather than content.
  */
 export const getGenerationTranscript = async (args: {
   generationId: string;

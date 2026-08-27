@@ -43,40 +43,28 @@ export const scopedWhere = (args: {
 };
 
 /**
- * Builds the four queries every resource module in `src/lib` was writing out
- * by hand: the scoped `where`, the scoped lookup, its throwing counterpart,
- * and the reload-after-write.
+ * Builds the four queries every resource module in `src/lib` was writing by
+ * hand: the scoped `where`, the scoped lookup, its throwing counterpart, and
+ * the reload-after-write.
  *
- * ## Rows in, rows out
+ * The accessor never receives, inspects or emits a **field name** — it moves
+ * whole rows and builds a `where` out of column names. Each module keeps its own
+ * explicit `mapX` and calls `mapActor(await actors.reload(row))`. That is the
+ * hard constraint from #912: no key-rewriting surface is added here
+ * (`.claude/rules/case-convention.md`), confirmable from this signature alone.
  *
- * The accessor never receives, inspects, or emits a **field name** — it moves
- * whole rows and builds a `where` out of column names (`publicId`, `projectId`,
- * `id`). Each module keeps its own explicit field-by-field `mapX` and calls
- * `mapActor(await actors.reload(row))`. That is the hard constraint from #912:
- * no key-rewriting surface is added here, so
- * `.claude/rules/case-convention.md`'s prohibition is untouched, and a reviewer
- * can confirm it from this signature alone.
- *
- * ## `TRow` is the module's loaded-row type
- *
- * A Sequelize `findOne` result is typed as the bare model instance, with no
- * association properties — which is why twenty call sites double-cast the
- * result to their mapper's parameter type. Declare the loaded-row type once
- * per module, pass it as `TRow`, and the cast happens once, here, instead of
- * at every call site.
+ * `TRow` is the module's loaded-row type. A Sequelize `findOne` result is typed
+ * as the bare model instance with no association properties, which is why
+ * twenty call sites double-cast; declaring the row type once per module moves
+ * the cast here.
  *
  * @example
  * ```ts
- * type ActorRow = InstanceType<(typeof db)['Actor']> & {
- *   project?: InstanceType<(typeof db)['Project']>;
- * };
- *
  * const actors = makeResourceAccessor<ActorRow>({
  *   model: () => db.Actor,
  *   includes: actorIncludes,
  *   label: 'Actor',
  * });
- *
  * const actor = await actors.getByPublicId({ id, projectIds });
  * return mapActor(await actors.reload(actor));
  * ```

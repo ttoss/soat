@@ -95,19 +95,16 @@ export type StructuredOutputValidation =
 /**
  * Validates a model-produced object against an agent's `output_schema`.
  *
- * This exists because declaring a schema used to guarantee nothing: the schema
- * was handed to the provider as a `response_format` hint and never checked on
- * the way back (`jsonSchema()` with no `validate` makes the AI SDK's
- * `safeValidateTypes` a pass-through). A model could return
- * `{"text": "get-fundamental-truth", "approved": true}` — every required key
- * present, every type correct, the value semantically garbage — and the
- * generation completed, the object reached the caller, and a workflow's
- * `payload_writes` propagated it as if it were an answer.
+ * Declaring a schema used to guarantee nothing: it was handed to the provider as
+ * a `response_format` hint and never checked on the way back (`jsonSchema()`
+ * with no `validate` makes the SDK's `safeValidateTypes` a pass-through), so a
+ * model could return every required key with correct types and garbage values,
+ * and a workflow's `payload_writes` propagated it as an answer.
  *
- * Constraints beyond `required`/`type` are the whole point: `minLength`,
- * `enum`, `pattern`, `minItems` are what separate a real answer from filler,
- * which is why this delegates to a full JSON Schema implementation instead of
- * hand-checking a subset that would silently ignore them.
+ * Constraints beyond `required`/`type` are the point — `minLength`, `enum`,
+ * `pattern`, `minItems` separate a real answer from filler — which is why this
+ * delegates to a full JSON Schema implementation rather than hand-checking a
+ * subset that would silently ignore them.
  */
 export const validateStructuredOutput = (schema: unknown) => {
   return (value: unknown): StructuredOutputValidation => {

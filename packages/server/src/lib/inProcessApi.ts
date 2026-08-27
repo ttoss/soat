@@ -116,18 +116,13 @@ const isReadableStream = (
  * Projects the handler's `ctx.body` onto the JSON value a client would have
  * received.
  *
- * This is deliberate work, not a leftover of the network hop it replaces.
- * Handing back the live `ctx.body` would hand back a different value than the
- * REST contract describes — a `Date` instead of its ISO string, a key whose
- * value is `undefined` instead of an absent key — and would alias an object the
- * handler still holds. One in-memory round trip keeps the seam's output
- * identical to the wire's, which is the property that makes replacing the
- * transport a transport-only change.
+ * Handing back the live `ctx.body` would return a different value than the REST
+ * contract describes — a `Date` instead of its ISO string, an `undefined` value
+ * instead of an absent key — and would alias an object the handler still holds.
+ * One in-memory round trip keeps the seam's output identical to the wire's.
  *
  * A stream body (a file download) has no JSON projection and would leak its
- * file descriptor if simply dropped, so it is destroyed and refused. Over the
- * loopback that case already failed — as an opaque JSON parse error, after the
- * bytes had been read.
+ * file descriptor if dropped, so it is destroyed and refused.
  */
 const toWireBody = (args: {
   body: unknown;
@@ -152,33 +147,24 @@ const toWireBody = (args: {
 };
 
 /**
- * Serves one API request against this process's own app, with no network.
+ * Serves one API request against this process's own app, with no network — the
+ * seam a `soat` tool calls instead of fetching `http://localhost:$PORT` (#888).
  *
- * This is the seam a `soat` tool calls instead of `fetch`-ing
- * `http://localhost:$PORT` (#888). It runs **the app's real middleware stack** —
- * the same `authMiddleware`, `auditMiddleware`, `requestAttributionMiddleware`,
- * `strictFields`, `responseContract`, and route handler a client request runs —
- * against a synthetic request, and reads the response off the resulting Koa
- * context instead of a socket.
+ * It runs **the app's real middleware stack** against a synthetic request and
+ * reads the response off the resulting Koa context. Running the stack, rather
+ * than reaching past it to a lib function with an explicit principal, is the
+ * point: permission enforcement, strict-field validation, audit, metering,
+ * quota and the response contract are all owned by that chain, so there is no
+ * second copy to keep in step.
  *
- * Running the stack, rather than reaching past it to a lib function with an
- * explicit principal, is the whole point. Permission enforcement, strict-field
- * validation, audit records, request metering and quota, and the snake_case
- * response contract are all owned by that chain; a seam that re-implemented any
- * of them would be a second copy to keep in step. Here there is nothing to keep
- * in step — the same code runs.
+ * Identity still arrives as a credential in the `Authorization` header, because
+ * the auth middleware is where a token's markers become `authUser` fields —
+ * `isRunToken` bounds a composed dispatch→transition cycle (#885) and
+ * `apiKeyPublicId` attributes a key-started chain (#887). Passing a principal
+ * object would strip both silently while HTTP-path tests kept passing.
  *
- * Identity still arrives as a **credential**, in the `Authorization` header,
- * exactly as it did over the wire. That is not a leftover either: the auth
- * middleware is where a token's markers become `authUser` fields, and two of
- * them are load-bearing beyond authorization — `isRunToken` is what lets the
- * task engine bound a composed dispatch→transition cycle (#885), and
- * `apiKeyPublicId` is what attributes a key-started chain (#887). Passing a
- * principal object instead would strip both, silently, while every test that
- * drives the HTTP path kept passing.
- *
- * Each call gets a fresh context, so a self-call is metered, audited, and
- * authorized as its own request — as it was when it was one.
+ * Each call gets a fresh context, so a self-call is metered, audited and
+ * authorized as its own request.
  */
 export const dispatchApiRequest = async (args: {
   method: string;
@@ -218,18 +204,14 @@ export const dispatchApiRequest = async (args: {
  * Dispatches an API request and resolves with its body **only** when the status
  * says the action succeeded.
  *
- * A non-2xx self-call is a failed call, not a result. Returning the error body
- * as though it were data is what made an unauthorized or rejected action
- * indistinguishable from a successful one: an orchestration tool node stored the
- * error object as its artifact and the run carried on as though the action had
- * happened, and the MCP surface rendered a `401` as a tool result for years
- * (#888).
+ * Returning an error body as data made an unauthorized action
+ * indistinguishable from a successful one: an orchestration tool node stored
+ * the error as its artifact and carried on, and the MCP surface rendered a `401`
+ * as a tool result for years (#888).
  *
- * The rule lives here, once, because both callers reach the platform the same
- * way and would otherwise each own a copy of it. What differs between them is
- * only *how a failure is spelled* — an `HttpToolError` carrying the status for
- * the agent's retry logic, a plain `Error` carrying the extracted message for
- * MCP — so that, and only that, is what `wrapError` supplies.
+ * Both callers reach the platform the same way; all that differs is how a
+ * failure is spelled — an `HttpToolError` carrying the status for the agent's
+ * retry logic, a plain `Error` for MCP — which is what `wrapError` supplies.
  */
 export const dispatchApiRequestOrThrow = async (args: {
   method: string;

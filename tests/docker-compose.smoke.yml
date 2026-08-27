@@ -21,13 +21,10 @@ services:
     # draining.
     stop_grace_period: 2s
     environment:
-      # NOTE: Ollama does not read `OLLAMA_NUM_CTX` — the variable it honours is
-      # `OLLAMA_CONTEXT_LENGTH`. This setting has therefore never taken effect:
-      # the 2026-08-05 run logged `OLLAMA_CONTEXT_LENGTH:0` and a runner
-      # `n_ctx = 4096` (the default). Left in place deliberately rather than
-      # "fixed" — raising the real context to 16384 would slow every generation
-      # on a CPU-only runner, and no smoke assertion is known to need it. Decide
-      # what context the suite actually wants before renaming this.
+      # NOTE: Ollama honours `OLLAMA_CONTEXT_LENGTH`, not `OLLAMA_NUM_CTX`, so this
+      # setting has never taken effect (the 2026-08-05 run logged `n_ctx = 4096`).
+      # Left in place deliberately: raising the real context to 16384 would slow
+      # every generation on a CPU-only runner, and no smoke assertion needs it.
       OLLAMA_NUM_CTX: '16384'
     entrypoint:
       - /bin/sh
@@ -44,11 +41,10 @@ services:
       retries: 60
       start_period: 60s
 
-  # Ollama's OpenAI-compatible endpoint does not implement `tool_choice` — it
-  # silently drops the field — so the client-tool step's forced tool call is not
-  # actually forced and the pause depends on what the 0.5b model decides. This
-  # shim implements that one missing field deterministically and forwards
-  # everything else (including embeddings) to the real Ollama.
+  # Ollama's OpenAI-compatible endpoint silently drops `tool_choice`, so a forced
+  # tool call is not actually forced and the pause depends on what the 0.5b model
+  # decides. This shim implements that one field deterministically and forwards
+  # everything else (embeddings included) to the real Ollama.
   # See tests/mocks/ollamaToolChoiceProxy.mjs.
   ollama-tool-choice:
     image: node:22-alpine
@@ -65,11 +61,10 @@ services:
       # Only these tools have their forcing honored deterministically — the client-tool smoke step.
       # Every other forced tool still goes to the real model.
       TOOL_CHOICE_TOOLS: 'get_weather'
-      # Nothing bounds how many tokens qwen2.5:0.5b emits per completion (agents
-      # have no max_tokens field), and the smoke assertions are structural, never
-      # about content — so cap the output here. 256 leaves ample room for a
-      # volunteered tool call's JSON while bounding the runaway generations that
-      # made the job swing by minutes between identical runs.
+      # Nothing bounds how many tokens qwen2.5:0.5b emits (agents have no max_tokens
+      # field) and the smoke assertions are structural, so cap the output here. 256
+      # leaves room for a volunteered tool call's JSON while bounding the runaway
+      # generations that made the job swing by minutes between identical runs.
       MAX_COMPLETION_TOKENS: '256'
     healthcheck:
       test:

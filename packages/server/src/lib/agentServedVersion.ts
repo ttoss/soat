@@ -19,25 +19,13 @@ import {
 const log = createDebug('soat:generation');
 
 /**
- * Resolves which agent configuration a generation runs against
- * (the agents module doc — Versioning and Staged Rollout).
+ * Resolves which agent config a generation runs against (`modules/agents.md` —
+ * Versioning and Staged Rollout).
  *
- * While an agent carries an `active_release`, the served config is always read
- * from an archived `AgentVersion` — never from the live row. That makes the live
- * columns a **draft**: edits during a rollout create new versions but do not
- * disturb either side of the running split, which is what lets an operator keep
- * iterating while a canary is being observed.
- *
- * ## Scope
- *
- * The overlay governs the generation-time config surface (`TypedAgent`):
- * instructions, model, tool bindings, tool choice, step rules, boundary policy,
- * temperature, knowledge config, output schema, guardrails, and the loop limits.
- * Two agent fields are consumed outside this seam and therefore always read the
- * live row: `single_session_per_actor` (evaluated once, when a session is
- * created) and `max_context_messages` (applied by the conversation path before
- * it dispatches). Neither changes what the model is told to be, which is what a
- * canary is for.
+ * While an `active_release` is set the config comes from an archived
+ * `AgentVersion`, never the live row, so edits during a rollout are drafts that
+ * do not disturb a running split. `single_session_per_actor` and
+ * `max_context_messages` are consumed outside this seam and always read live.
  */
 
 /** Builds the `{ publicId }` shape `TypedAgent` uses for a provider/route join. */

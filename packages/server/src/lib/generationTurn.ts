@@ -198,17 +198,15 @@ export const generationStepCount = (
 /**
  * Loads a completed generation as a replayable turn.
  *
- * Refuses two states rather than degrading, because both would otherwise
- * produce a silently useless fixture:
+ * Refuses two states rather than degrading, because both would produce a
+ * silently useless fixture:
  *
  * - **Not completed** — a paused or failed turn has no finished answer, so an
- *   item built from it would score whatever the agent happens to do next.
+ *   item built from it would score whatever the agent does next.
  * - **Content unavailable** — zero-retention never wrote the input, or a purge
- *   cleared it. Replay needs exactly the content those policies exist to
- *   withhold, so availability is scoped by the retention policy rather than
- *   assumed (#1003). Note this is checked on `inputMessages`, not on
- *   `contentRedactedAt`: a generation that predates the column reads the same
- *   way, which is the honest answer for it too.
+ *   cleared it; replay needs exactly the content those policies withhold
+ *   (#1003). Checked on `inputMessages`, not `contentRedactedAt`, so a
+ *   generation predating the column reads the same way.
  */
 export const getGenerationTurn = async (args: {
   generationId: string;

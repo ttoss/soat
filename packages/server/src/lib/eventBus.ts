@@ -175,25 +175,18 @@ export const onEvent = (args: {
 
 /**
  * The shared dispatch behind {@link emitResourceEvent} and
- * {@link emitCustomEvent}: it owns the three parts of the envelope that
- * every emit site used to re-derive: the `timestamp`, the project public-id
- * lookup when the caller does not already hold one, and — the part that
- * mattered — the `.catch()` on that lookup.
+ * {@link emitCustomEvent}: the `timestamp`, the project public-id lookup, and
+ * the `.catch()` on it.
  *
- * Seventeen sites resolved the public id through a floating promise with no
- * rejection handler (#903). `resolveProjectPublicId` performs a real DB read, so
- * a transient failure there became an unhandled rejection, which by default
- * terminates the process — long after the write it belonged to had committed.
- * The `.catch()` fixed the crash but answered it with a drop, which made a
- * single connection blip enough to lose an event outright (#1130).
+ * Seventeen sites resolved the public id through a floating promise (#903), so
+ * a transient DB failure became an unhandled rejection that killed the process
+ * after the write had committed. A bare `.catch()` fixed the crash by dropping
+ * the event, which lost events on a single blip (#1130) — so the lookup is
+ * retried and only a failure outliving the retries drops, through
+ * {@link recordDroppedEvent}. An emit never fails the operation behind it.
  *
- * So the lookup is retried, and only a failure that outlives the retries drops
- * the event — through {@link recordDroppedEvent}, which counts and prints it.
- * The emit stays best-effort in the sense that matters: it never fails the
- * operation that produced it.
- *
- * `data` is taken and forwarded as an opaque value; nothing here inspects a key
- * of it, so this introduces no key-walking surface (`case-convention.md`).
+ * `data` is forwarded as an opaque value, so no key-walking surface is added
+ * (`case-convention.md`).
  */
 const emitEnvelope = (args: {
   type: SoatEventName;

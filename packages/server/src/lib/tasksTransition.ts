@@ -166,21 +166,15 @@ const chainLimit = (): number => {
 
 /**
  * Whether this move continues a machine-driven chain rather than starting one.
- *
- * Two shapes qualify, and both are needed because the loop #885 bounds can close
- * through either:
- *
- * - an `automation` principal — the engine routing a dispatch outcome through
- *   `on_complete` / `on_failure`;
- * - a run-as token — the dispatched run or agent calling `transition-task` with
- *   the credential it was minted, which authenticates as the *user* who started
- *   the chain and is otherwise indistinguishable from a person clicking a
- *   button.
+ * Two shapes qualify, because the loop #885 bounds can close through either:
+ * an `automation` principal (the engine routing a dispatch outcome), and a
+ * run-as token (the dispatched run calling `transition-task` with the
+ * credential it was minted, which authenticates as the user who started the
+ * chain and is otherwise indistinguishable from a person clicking a button).
  *
  * Everything else — a human, a plain API key, an approval resolution — is an
- * outside intervention and resets the chain. `approval` in particular is not a
- * hop: a person deciding a gate is the clearest evidence there is that the task
- * is not spinning unattended.
+ * outside intervention and resets the chain. `approval` in particular is the
+ * clearest evidence there is that the task is not spinning unattended.
  */
 const isChainHop = (args: TransitionArgs): boolean => {
   return args.principal.kind === 'automation' || args.viaRunToken === true;
@@ -361,10 +355,9 @@ const performTransitionTxn = async (args: {
  *
  * A human or API-key move names itself. An `automation` move names nobody — its
  * cause is the generation or run recorded alongside it — so the identity is
- * inherited from the orchestration run that routed the task here. That is what
- * keeps a chain alive across states: a user fires the first transition, and
- * every automated hop after it continues to act as that user rather than
- * decaying to no principal at the second state.
+ * inherited from the run that routed the task here, which is what keeps a chain
+ * acting as the user who fired the first transition rather than decaying to no
+ * principal at the second state.
  *
  * `approval` is deliberately not mapped: an approver resolving a gate is not
  * lending their credential to the work the next state does.

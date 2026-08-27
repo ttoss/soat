@@ -2,12 +2,9 @@
  * OAuth consent — turns a user's selection on the consent screen into the
  * scopes and project-scoped IAM policy carried by the issued access token.
  *
- * The consent screen offers three tiers of granularity (see the permission
- * catalog):
- *
- * - `all`     → every action (`*`)
- * - `modules` → every action of one or more modules (`<module>:*`)
- * - `actions` → individually selected actions (`<module>:<Action>`)
+ * Three tiers of granularity (see the permission catalog): `all` → every action
+ * (`*`), `modules` → every action of one or more modules (`<module>:*`), and
+ * `actions` → individually selected actions (`<module>:<Action>`).
  *
  * Whatever the tier, the resulting policy is always scoped to a single project
  * via the SRN `srn:<project>:*:*`.

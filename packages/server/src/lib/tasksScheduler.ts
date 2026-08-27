@@ -71,20 +71,16 @@ export const sweepStalledTasks = createSweep<TaskInstance>({
 });
 
 /**
- * Recovers tasks whose dispatch outcome nobody was left to hear. A task's
- * dispatch is awaited in-process — `waitForOrchestrationRunSettlement`, reached
- * from `dispatchOnEnter`'s detached promise — while the run it waits on is
- * durable and scheduler-owned (#855). A restart while the run is `sleeping`
- * (the state a `delay`/`poll` node parks in, for as long as its interval says)
- * therefore loses the awaiter but not the run: the run finishes, and without
- * this sweep nothing routes `on_complete`, stranding the task at
- * `automation_status: 'running'` for good.
+ * Recovers tasks whose dispatch outcome nobody was left to hear.
  *
- * Claiming is the same atomic, guarded write `commitCompletion` uses, so a live
- * awaiter racing the sweep for the same task loses cleanly instead of routing
- * it twice.
+ * A dispatch is awaited in-process while the run it waits on is durable and
+ * scheduler-owned (#855). A restart while the run is `sleeping` loses the
+ * awaiter but not the run: the run finishes, and without this sweep nothing
+ * routes `on_complete`, stranding the task at `automation_status: 'running'`.
  *
- * Returns the number of tasks whose outcome was claimed this tick.
+ * Claiming uses the same atomic guarded write as `commitCompletion`, so a live
+ * awaiter racing the sweep loses cleanly instead of routing twice. Returns the
+ * number of outcomes claimed this tick.
  */
 export const reconcileOrphanedDispatches = createSweep<TaskWithWorkflow>({
   log,

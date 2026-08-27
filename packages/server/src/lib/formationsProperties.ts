@@ -1,16 +1,15 @@
 /**
  * The rules that govern a formation resource declaration's `properties` bag.
  *
- * Both rules here used to be restated per pipeline, and both had drifted: the
- * key normalization was written out by 20 of 24 modules and skipped by four
- * (#901), and the merge/changed predicate was implemented twice with different
+ * Both used to be restated per pipeline and both had drifted: the key
+ * normalization was written out by 20 of 24 modules and skipped by four (#901),
+ * and the merge/changed predicate was implemented twice with different
  * semantics, so `plan-formation` could disagree with the apply it previewed
- * (#902). Stated once, in the one module every pipeline imports.
+ * (#902).
  *
- * Neither function takes, returns, or inspects a field *name*: one rewrites
- * only an object's own keys via the shared shallow normalizer, the other moves
- * whole values. Per `.claude/rules/case-convention.md`, nothing here walks a
- * value rewriting keys at depth.
+ * Neither function takes, returns or inspects a field *name*: one rewrites only
+ * an object's own keys via the shared shallow normalizer, the other moves whole
+ * values (`.claude/rules/case-convention.md`).
  */
 
 import { isDeepStrictEqual } from 'node:util';
@@ -42,16 +41,15 @@ export const normalizeDeclaredProperties = (
  * Applies the "an undefined property reuses the previous value" rule and
  * reports whether the result differs from `previous`.
  *
- * A property resolving to `undefined` means its parameter was kept
- * ("use previous value"): reuse the previous value where there is one,
- * otherwise drop the field entirely so the underlying resource preserves what
- * it already has (a secret's encrypted value is never re-applied).
+ * A property resolving to `undefined` means its parameter was kept: reuse the
+ * previous value where there is one, otherwise drop the field so the underlying
+ * resource preserves what it has (a secret's encrypted value is never
+ * re-applied).
  *
- * `plan-formation` and apply both need this verdict, and both used to compute
- * it — differently (#902). Apply compared `JSON.stringify` of the whole object,
- * which also reported a change when key order differed or when `previous` held
- * a key the template omits. The per-declared-key deep comparison here is the
- * definition: only keys the template declares can be changed by an apply.
+ * `plan-formation` and apply both need this verdict and both used to compute it,
+ * differently (#902): apply compared `JSON.stringify` of the whole object, which
+ * also reported a change on differing key order. The per-declared-key deep
+ * comparison here is the definition — only declared keys can change.
  */
 export const mergeWithPrevious = (args: {
   resolved: Record<string, unknown>;

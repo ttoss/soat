@@ -283,17 +283,14 @@ export const createDatasetItem = async (args: {
 /**
  * Curates a real, completed generation into a dataset item (#1003).
  *
- * The platform already stored everything a fixture needs — what the turn was
- * asked and what it answered — but only as observability records. This is the
- * one operation that makes them addressable as a replayable unit, so an
- * evaluation set can be built from production traffic instead of from
- * imagination.
+ * The platform already stored what a fixture needs, but only as observability
+ * records; this is the one operation that makes them addressable as a
+ * replayable unit, so an evaluation set can be built from production traffic.
  *
- * The item is a **copy**, not a view: it keeps working after the generation's
- * content is purged, exactly as an `EvalResult` keeps its own frozen copy of the
- * item. `source_generation_id` records the provenance and goes null if the
- * generation is deleted, so a purge can never quietly stop a suite from running
- * — the same guarantee the datasets half already made.
+ * The item is a **copy**, not a view, so it keeps working after the
+ * generation's content is purged. `source_generation_id` records provenance and
+ * goes null if the generation is deleted, so a purge can never quietly stop a
+ * suite from running.
  */
 export const createDatasetItemFromGeneration = async (args: {
   projectIds?: number[];
