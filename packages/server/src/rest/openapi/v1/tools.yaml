@@ -410,8 +410,10 @@ paths:
         allowlist, an action outside it is rejected with `400 VALIDATION_FAILED`
         ("not available on this tool") before any outbound request is made.
 
-        `preset_parameters` stored on the tool are merged with the caller-supplied
-        `input` before execution; preset keys take lower precedence.
+        `preset_parameters` stored on the tool are pinned over the caller-supplied
+        `input` before execution: a key the tool presets keeps its preset value
+        even when `input` sets it. Keys the presets do not name are taken from
+        `input` as sent.
       operationId: callTool
       parameters:
         - name: tool_id
@@ -646,9 +648,20 @@ components:
           type: object
           nullable: true
           description: >-
-            Fixed parameters merged into every builtin tool call. Keys matching
-            fields in the action's input schema are removed from the schema
-            shown to the model and injected automatically at execution time.
+            Fixed parameters pinned on every call this tool makes, whatever its
+            type. Keys matching fields in the input schema are removed from the
+            schema shown to the model, and a pinned value wins over one the
+            model or a direct caller supplies for the same key.
+
+
+            Values accept `{{context:<key>}}` references, resolved per call from
+            the caller's `tool_context`, so a pin can be the run's own value —
+            the one account this run may act on — rather than one fixed when the
+            tool was created. A resolved value is retyped to the parameter's
+            declared schema type; a key missing from the call's `tool_context`
+            fails the call with `MISSING_TOOL_CONTEXT_KEY` rather than sending
+            the literal placeholder. `{{secret:...}}` is not resolved here. See
+            the Tool Context reference.
         pipeline:
           type: object
           nullable: true
@@ -812,9 +825,20 @@ components:
         preset_parameters:
           type: object
           description: >-
-            Fixed parameters merged into every builtin tool call. Keys matching
-            fields in the action's input schema are removed from the schema
-            shown to the model and injected automatically at execution time.
+            Fixed parameters pinned on every call this tool makes, whatever its
+            type. Keys matching fields in the input schema are removed from the
+            schema shown to the model, and a pinned value wins over one the
+            model or a direct caller supplies for the same key.
+
+
+            Values accept `{{context:<key>}}` references, resolved per call from
+            the caller's `tool_context`, so a pin can be the run's own value —
+            the one account this run may act on — rather than one fixed when the
+            tool was created. A resolved value is retyped to the parameter's
+            declared schema type; a key missing from the call's `tool_context`
+            fails the call with `MISSING_TOOL_CONTEXT_KEY` rather than sending
+            the literal placeholder. `{{secret:...}}` is not resolved here. See
+            the Tool Context reference.
         pipeline:
           type: object
           description: >-
@@ -951,9 +975,20 @@ components:
           type: object
           nullable: true
           description: >-
-            Fixed parameters merged into every builtin tool call. Keys matching
-            fields in the action's input schema are removed from the schema
-            shown to the model and injected automatically at execution time.
+            Fixed parameters pinned on every call this tool makes, whatever its
+            type. Keys matching fields in the input schema are removed from the
+            schema shown to the model, and a pinned value wins over one the
+            model or a direct caller supplies for the same key.
+
+
+            Values accept `{{context:<key>}}` references, resolved per call from
+            the caller's `tool_context`, so a pin can be the run's own value —
+            the one account this run may act on — rather than one fixed when the
+            tool was created. A resolved value is retyped to the parameter's
+            declared schema type; a key missing from the call's `tool_context`
+            fails the call with `MISSING_TOOL_CONTEXT_KEY` rather than sending
+            the literal placeholder. `{{secret:...}}` is not resolved here. See
+            the Tool Context reference.
         pipeline:
           type: object
           nullable: true
@@ -988,8 +1023,8 @@ components:
           type: object
           description: >
             Input parameters for the tool call. These are merged with the
-            tool's `preset_parameters` before execution (caller-supplied values
-            take precedence).
+            tool's `preset_parameters` before execution; a preset value wins
+            over the same key sent here.
           additionalProperties: true
 
     ErrorResponse:

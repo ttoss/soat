@@ -8,6 +8,11 @@ import { dispatchApiRequestOrThrow, withCallTimeout } from './inProcessApi';
 import { soatTools } from './soatTools';
 import { buildSoatActionTarget } from './soatToolsHelpers';
 import { fetchWithEgressGuard } from './toolEgress';
+import {
+  mergePresetParameters,
+  stripPresetKeysFromSchema,
+} from './toolPresetParameters';
+import { resolvePresetParametersForCall } from './toolTemplates';
 
 const SOAT_TOOL_CALL_TIMEOUT_MS = process.env.SOAT_TOOL_CALL_TIMEOUT_MS
   ? parseInt(process.env.SOAT_TOOL_CALL_TIMEOUT_MS, 10)
@@ -27,9 +32,25 @@ export const buildMcpToolExecute = (args: {
   mcpUrl: string;
   mcpHeaders: Record<string, string>;
   mcpToolName: string;
+  presetParameters?: object | null;
+  // This call's `tool_context` and the listed tool's own schema — a
+  // `{{context:}}` token in a preset resolves against the first and is retyped
+  // by the second, at call time so a missing key fails this call rather than
+  // the resolution of every tool the agent has (#345).
+  toolContext?: Record<string, string>;
+  presetSchema?: unknown;
   logToolCallingError: LogToolCallingError;
 }) => {
   return async (toolArgs: unknown) => {
+    const presetParameters = resolvePresetParametersForCall({
+      presetParameters: args.presetParameters,
+      toolContext: args.toolContext,
+      toolName: args.mcpToolName,
+      schema: args.presetSchema,
+    });
+    const callArgs = presetParameters
+      ? mergePresetParameters({ presetParameters, input: toolArgs })
+      : toolArgs;
     try {
       const callResponse = await fetchWithEgressGuard(args.mcpUrl, {
         method: 'POST',
@@ -39,7 +60,7 @@ export const buildMcpToolExecute = (args: {
           jsonrpc: '2.0',
           id: 2,
           method: 'tools/call',
-          params: { name: args.mcpToolName, arguments: toolArgs },
+          params: { name: args.mcpToolName, arguments: callArgs },
         }),
       });
       const callBody = (await callResponse.json()) as {
@@ -65,6 +86,42 @@ export const buildMcpToolExecute = (args: {
   };
 };
 
+/** One listed MCP tool, as the model sees it and as it dispatches. */
+const buildMcpToolEntry = (args: {
+  mcpTool: {
+    name: string;
+    description?: string;
+    inputSchema?: Record<string, unknown>;
+  };
+  mcpUrl: string;
+  mcpHeaders: Record<string, string>;
+  presetParameters?: object | null;
+  toolContext?: Record<string, string>;
+  logToolCallingError: LogToolCallingError;
+}): Tool => {
+  return tool({
+    description: args.mcpTool.description ?? undefined,
+    inputSchema: jsonSchema(
+      stripPresetKeysFromSchema(
+        (args.mcpTool.inputSchema ?? {
+          type: 'object',
+          properties: {},
+        }) as JSONSchema7,
+        args.presetParameters
+      )
+    ),
+    execute: buildMcpToolExecute({
+      mcpUrl: args.mcpUrl,
+      mcpHeaders: args.mcpHeaders,
+      mcpToolName: args.mcpTool.name,
+      presetParameters: args.presetParameters,
+      toolContext: args.toolContext,
+      presetSchema: args.mcpTool.inputSchema,
+      logToolCallingError: args.logToolCallingError,
+    }),
+  });
+};
+
 export const resolveMcpTools = async (args: {
   typedTool: {
     mcp: { url: string; headers?: Record<string, string> };
@@ -82,6 +139,10 @@ export const resolveMcpTools = async (args: {
     // Per-tool allowlist of `tool_context` keys that may be forwarded as
     // prefixed context headers. `null`/`undefined` forwards all (#945).
     contextKeys?: string[] | null;
+    // Fixed values the operator pinned on the binding. They apply to every tool
+    // the MCP server exposes through it — the same reach `builtin` presets have
+    // over every action a binding lists.
+    presetParameters?: object | null;
   };
   toolContext?: Record<string, string>;
   buildContextHeaders: (args: {
@@ -135,18 +196,13 @@ export const resolveMcpTools = async (args: {
     });
 
     for (const mcpTool of listedTools) {
-      const mcpToolName = mcpTool.name;
-      result[mcpToolName] = tool({
-        description: mcpTool.description ?? undefined,
-        inputSchema: jsonSchema(
-          mcpTool.inputSchema ?? { type: 'object', properties: {} }
-        ),
-        execute: buildMcpToolExecute({
-          mcpUrl,
-          mcpHeaders,
-          mcpToolName,
-          logToolCallingError: args.logToolCallingError,
-        }),
+      result[mcpTool.name] = buildMcpToolEntry({
+        mcpTool,
+        mcpUrl,
+        mcpHeaders,
+        presetParameters: args.typedTool.presetParameters,
+        toolContext: args.toolContext,
+        logToolCallingError: args.logToolCallingError,
       });
     }
 
@@ -161,31 +217,6 @@ export const resolveMcpTools = async (args: {
     });
     return result;
   }
-};
-
-const buildInputSchemaWithoutPresets = (
-  schema: JSONSchema7,
-  presetParameters?: Record<string, unknown>
-): JSONSchema7 => {
-  if (!presetParameters || Object.keys(presetParameters).length === 0) {
-    return schema;
-  }
-  const presetKeys = new Set(Object.keys(presetParameters));
-  const props = schema.properties
-    ? Object.fromEntries(
-        Object.entries(schema.properties).filter(([k]) => {
-          return !presetKeys.has(k);
-        })
-      )
-    : {};
-  const required = (schema.required ?? []).filter((k) => {
-    return !presetKeys.has(k);
-  });
-  return {
-    ...schema,
-    properties: props,
-    ...(required.length > 0 ? { required } : { required: undefined }),
-  };
 };
 
 /**
@@ -303,7 +334,7 @@ const buildSoatActionTool = (args: {
   }) => boolean;
   logToolCallingError: LogToolCallingError;
 }): Tool => {
-  const effectiveInputSchema = buildInputSchemaWithoutPresets(
+  const effectiveInputSchema = stripPresetKeysFromSchema(
     args.def.inputSchema as JSONSchema7,
     args.presetParameters
   );
@@ -320,10 +351,15 @@ const buildSoatActionTool = (args: {
       ) {
         return { error: `Forbidden: boundary policy denies ${iamAction}` };
       }
-      const rawArgs = {
-        ...(args.presetParameters ?? {}),
-        ...(toolArgs as Record<string, unknown>),
-      };
+      const rawArgs = mergePresetParameters({
+        presetParameters: resolvePresetParametersForCall({
+          presetParameters: args.presetParameters,
+          toolContext: args.toolContext,
+          toolName: args.toolName,
+          schema: args.def.inputSchema,
+        }),
+        input: toolArgs,
+      });
       return executeSoatTool({
         toolName: args.toolName,
         def: args.def,

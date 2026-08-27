@@ -14,7 +14,7 @@ import {
   planFormation,
   planResultToWire,
   updateFormation,
-  validateFormationTemplate,
+  validateFormationTemplateAsync,
 } from 'src/lib/formations';
 import { buildSrn } from 'src/lib/iam';
 
@@ -80,7 +80,7 @@ formationsRouter.post('/formations/validate', async (ctx: Context) => {
     parameters?: Record<string, string>;
   };
   const parsedTemplate = parseFormationTemplateInput(body.template);
-  const validation = validateFormationTemplate(parsedTemplate);
+  const validation = await validateFormationTemplateAsync(parsedTemplate);
 
   if (validation.valid && body.parameters !== undefined) {
     const missing = getMissingParams(
@@ -112,7 +112,7 @@ formationsRouter.post('/formations/plan', async (ctx: Context) => {
     resourceType: 'formation',
   });
   const parsedTemplate = parseFormationTemplateInput(body.template);
-  const validation = validateFormationTemplate(parsedTemplate);
+  const validation = await validateFormationTemplateAsync(parsedTemplate);
   if (!validation.valid) {
     throw new DomainError('VALIDATION_FAILED', 'Invalid template', {
       details: validation.errors,
@@ -145,7 +145,7 @@ formationsRouter.post('/formations', async (ctx: Context) => {
     resourceType: 'formation',
   });
   const parsedTemplate = parseFormationTemplateInput(body.template);
-  const validation = validateFormationTemplate(parsedTemplate);
+  const validation = await validateFormationTemplateAsync(parsedTemplate);
   if (!validation.valid) {
     throw new DomainError('VALIDATION_FAILED', 'Invalid template', {
       details: validation.errors,
@@ -235,7 +235,7 @@ formationsRouter.put('/formations/:formation_id', async (ctx: Context) => {
   let parsedTemplate: unknown = undefined;
   if (body.template !== undefined) {
     parsedTemplate = parseFormationTemplateInput(body.template);
-    const validation = validateFormationTemplate(parsedTemplate);
+    const validation = await validateFormationTemplateAsync(parsedTemplate);
     if (!validation.valid) {
       throw new DomainError('VALIDATION_FAILED', 'Invalid template', {
         details: validation.errors,

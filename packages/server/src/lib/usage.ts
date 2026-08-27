@@ -23,7 +23,7 @@ export type {
   UsageReceiptMeterTypeTotal,
   UsageTotals,
 } from './usageReceipt';
-export { getReceipt, getRunReceipt, getRunUsageTotals } from './usageReceipt';
+export { getReceipt, getRunReceipt, getRunUsageRollups } from './usageReceipt';
 export type { CompletionUsageSource } from './usageRecording';
 export { recordCompletionUsage, recordGenerationUsage } from './usageRecording';
 export type { PersistedUsageThreshold } from './usageThresholds';

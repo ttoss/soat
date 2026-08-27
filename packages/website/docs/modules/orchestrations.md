@@ -13,7 +13,7 @@ DAG-based pipeline definitions for chaining agents, tools, and knowledge lookups
 
 Orchestrations describe a directed acyclic graph (DAG) of nodes where each node performs a discrete operation. Nodes in the same execution round run in parallel; edges with activation groups control fan-in convergence. Use an orchestration when you know the exact steps in advance and want deterministic, auditable execution — an `agent` node can still use LLM reasoning internally, but the graph itself is deterministic. See it end to end in [Orchestrate a Sonnet - Step 6 (Create the orchestration graph)](/docs/tutorials/orchestrate-a-sonnet#step-6--create-the-orchestration-graph).
 
-An orchestration is a pipeline that _ends_; a [workflow](./workflows.md) is a state graph a task _lives_ in. See [Choosing an Automation Model](/docs/advanced/choosing-an-automation-model) for the comparison and composition patterns. An orchestration can also be declared as a [Formation](./formations.md) resource — see [Create an Agent Squad](/docs/tutorials/create-an-agent-squad) — and can be run automatically by binding it to a [Trigger](./triggers.md) with `target_type: orchestration`.
+An orchestration is a pipeline that _ends_; a [workflow](./workflows.md) is a state graph a task _lives_ in. See [Choosing an Automation Model](/docs/advanced/choosing-an-automation-model) for the comparison and composition patterns — starting with [whether the work needs a graph at all](/docs/advanced/choosing-an-automation-model#step-0--you-may-need-neither), since an orchestration is the [graph layer](/docs/agent-system-layers) and the graph is the layer to build last. An orchestration can also be declared as a [Formation](./formations.md) resource — see [Create an Agent Squad](/docs/tutorials/create-an-agent-squad) — and can be run automatically by binding it to a [Trigger](./triggers.md) with `target_type: orchestration`.
 
 > See the [Permissions Reference](../permissions.md#orchestrations) for the IAM action strings for this module.
 
@@ -59,12 +59,16 @@ An orchestration is a pipeline that _ends_; a [workflow](./workflows.md) is a st
 | `artifacts`        | object         | Outputs keyed by node ID                                          |
 | `error`            | object \| null | Error details if failed                                           |
 | `node_executions`  | array          | Per-node execution records (see [Node Executions](#node-executions)) |
-| `usage`            | object         | Token/cost roll-up (`total_input_tokens`, `total_output_tokens`, `total_cached_tokens`, `total_reasoning_tokens`, `total_cost_usd`) summed across every metered generation the run produced (see [Run usage](#run-usage)). Present on the single-run read; omitted from run list responses |
+| `usage`            | object         | What the run cost: token/cost roll-up (`total_input_tokens`, `total_output_tokens`, `total_cached_tokens`, `total_reasoning_tokens`, `total_cost_usd`) summed across this run's generations **and every run it started** through `loop` / `sub_orchestration` nodes, at any depth (see [Run usage](#run-usage)). Present on the single-run read; omitted from run list responses |
+| `usage_own`        | object         | The same roll-up restricted to **this run's own nodes**, excluding nested runs. Equal to `usage` for a run with no children. Present on the single-run read; omitted from run list responses |
 | `required_action`  | object \| null | Present when status is `awaiting_input` (see [Human Nodes](#human-nodes)) |
 | `trace_id`         | string \| null | Linked observability trace, if any                                |
 | `input`            | object \| null | Initial input provided at run creation                            |
-| `tool_context`     | object \| null | Caller context forwarded as `X-Soat-Context-*` headers on the tool calls of every agent node in the run (see [Run Tool Context](#run-tool-context)) |
+| `tool_context`     | object \| null | Caller context forwarded as `X-Soat-Context-*` headers on the tool calls of the run — every `agent` node's generation, and every `tool` / `poll` node's call (see [Run Tool Context](#run-tool-context)) |
+| `metadata`         | object \| null | Caller-owned annotations supplied at run creation and returned verbatim; never merged into `state` (see [Run Metadata](#run-metadata)) |
 | `output`           | object \| null | Terminal node artifact(s) when the run has `succeeded`            |
+| `parent_orchestration_run_id` | string \| null | The run whose node started this one — set only on a `loop` / `sub_orchestration` child, null for a run a caller started |
+| `parent_node_id`   | string \| null | The node within `parent_orchestration_run_id` that started this run |
 | `started_at`       | string \| null | ISO 8601 execution start timestamp                                |
 | `completed_at`     | string \| null | ISO 8601 terminal timestamp (`succeeded`/`failed`/`cancelled`/`expired`) |
 | `created_at`       | string         | ISO 8601 creation timestamp                                       |
@@ -86,6 +90,8 @@ Each entry in a run's `node_executions` array records a single node execution, i
 | `started_at`   | string \| null | ISO 8601 timestamp when the node began executing         |
 | `completed_at` | string \| null | ISO 8601 timestamp when the record was written           |
 | `created_at`   | string         | ISO 8601 creation timestamp                              |
+
+A node execution records the node's **external I/O** — the input it resolved and the artifact it returned — not the model's internal reasoning, and it carries **no generation id**. To reach what an `agent` node's model actually did, see [Reaching an agent node's generation](#reaching-an-agent-nodes-generation).
 
 ## Key Concepts
 
@@ -431,13 +437,52 @@ Records are returned by both `get-orchestration-run` and `list-orchestration-run
 
 Every generation an `agent` node dispatches meters against the run: its [usage](./usage.md) event carries the run's `orchestration_run_id` and the dispatching `node_id`. `get-orchestration-run` surfaces the roll-up inline as a `usage` object summed across the run's generations. For the full per-event breakdown, fetch the run receipt at [`GET /api/v1/usage/receipt?orchestration_run_id=…`](/docs/api/usage/get-usage-receipt) — see [Receipts](./usage.md#receipts-and-reconciliation). When a run is started by a [trigger](./triggers.md), the trigger id is propagated onto every in-run generation's usage event, so run spend also rolls up per trigger (`?trigger_id=`).
 
+**Per node.** Each receipt line carries its `node_id`, so grouping the lines by it gives what each node of the run cost — the `llm_tokens` line of an `agent` node's generation and the `compute_execution` line of every node execution alike. The run total alone hides that split.
+
+**Nested runs are metered on the child and roll up to the parent.** A `loop` or `sub_orchestration` node starts child runs, each its own run record, so their usage events carry the *child's* `orchestration_run_id`. Two figures follow from that, both on the single-run read:
+
+- **`usage`** — what the run cost, subtree included. A `loop` over 100 items reports all 100 children here.
+- **`usage_own`** — this run's own nodes only. At the node that started children you see its execution cost, not what they spent. Read it against `usage` to see where cost sits in the tree.
+
+The children themselves are reachable with [`GET /api/v1/orchestration-runs?parent_orchestration_run_id=…`](/docs/api/orchestrations/list-orchestration-runs), and each child names the run and node that started it (`parent_orchestration_run_id`, `parent_node_id`) — so a per-child or per-node breakdown of a delegated run is a read away rather than a guess from timestamps.
+
+:::caution Summing `usage` over a list double-counts
+Because `usage` spans a subtree, a child run's spend appears twice in a list containing both it and its parent. When totalling across runs, restrict the list to the runs a caller started:
+
+```
+GET /api/v1/orchestration-runs?nested=false
+```
+
+`nested=true` gives the complement — every run started by another run, across all parents.
+:::
+
+The [receipt](./usage.md#receipts-and-reconciliation) stays self-only, deliberately: its line items carry a `node_id`, and merging a child's nodes into the parent's receipt would put node ids from two different graphs under one list.
+
 > **Note:** usage events are metered as each generation settles, so read the roll-up from `get-orchestration-run`, not the `start-orchestration-run` response — even with `wait: true` the start response can carry `usage: null`.
+
+### Reaching an agent node's generation
+
+A `node_executions` entry records what a node received and what artifact it returned. For an `agent` node that artifact is the model's final answer — `{ content }`, or the parsed object when the node declares an `output_schema`. It is **not** the model's reasoning, its tool calls, or its token usage, and the record holds no generation id.
+
+Those live on the [generation](./generations.md), which points back at the node rather than the other way round. An agent node's generation is stamped with three attribution columns — `orchestration_run_id`, `node_id`, and `node_attempt` — so the run is traced forward by filtering the generations list:
+
+```bash
+# every generation this run's agent nodes produced
+soat list-generations --orchestration-run-id run_abc123
+
+# one node's — one row per attempt if a retry policy re-ran it
+soat list-generations --orchestration-run-id run_abc123 --node-id summarize
+```
+
+`node_attempt` matches the `attempt` on the corresponding `node_executions` entry, which is what makes the pairing exact for a [retried](#retry-policy) node.
+
+Each generation returned carries its own `trace_id`, which opens the full [trace](./traces.md) for that turn — the provider call, the tool calls, and the steps in between. Note that the run's own `trace_id` is not a per-node handle: it is whichever trace the run's first agent node produced, with later nodes hanging off it as children.
 
 ### Run Tool Context
 
-`start-orchestration-run` accepts a `tool_context` bag, the same contract as an [agent generation or session](../advanced/tool-context.md): each key/value pair is forwarded as one prefixed context header on every `http`, `mcp` and `builtin` tool call an `agent` node of the run makes. This is how a scheduled or orchestrated flow hands a per-user credential to the tools its agents call, without embedding it in the graph.
+`start-orchestration-run` accepts a `tool_context` bag, the same contract as an [agent generation or session](../advanced/tool-context.md): each key/value pair is forwarded as one prefixed context header on every `http`, `mcp` and `builtin` tool call the run makes. This is how a scheduled or orchestrated flow hands a per-user credential to the tools it calls, without embedding it in the graph.
 
-The bag is stored **on the run** and re-read at every step, so it survives every way a run gets driven — queued starts, scheduler wakes, human/approval resumes, crash redrives — and is inherited by `loop` / `sub_orchestration` child runs. Rules that carry over from the shared contract: the header name is the deployment's [context prefix](../advanced/tool-context.md#configuring-the-header-prefix) plus the key **verbatim**; an invalid or colliding key is rejected with `400 INVALID_TOOL_CONTEXT_KEY` at start time, before any run is created; the reserved identity keys (`sessionId`, `actorId`, `actorExternalId`) are stripped. `tool_context` reaches the tool calls of **`agent` nodes only** — a `tool` node calls its tool directly and forwards no context headers.
+The bag is stored **on the run** and re-read at every step, so it survives every way a run gets driven — queued starts, scheduler wakes, human/approval resumes, crash redrives — and is inherited by `loop` / `sub_orchestration` child runs. Rules that carry over from the shared contract: the header name is the deployment's [context prefix](../advanced/tool-context.md#configuring-the-header-prefix) plus the key **verbatim**; an invalid or colliding key is rejected with `400 INVALID_TOOL_CONTEXT_KEY` at start time, before any run is created; the reserved identity keys (`sessionId`, `actorId`, `actorExternalId`) are stripped. `tool_context` reaches every node that calls a tool: an `agent` node's generation, and a `tool` or `poll` node's direct call — the latter being the run acting on its own behalf, which is as much the run's work as a generation is. A tool reached that way resolves its `{{context:}}` headers and [`preset_parameters`](../advanced/tool-context.md#pinning-a-parameter-to-the-runs-value) from the run's bag, which is how a run's own boundary — the one account it may act on — reaches the call with no model in between.
 
 ```bash
 soat start-orchestration-run \
@@ -445,6 +490,27 @@ soat start-orchestration-run \
   --tool-context '{"ocaToken":"eyJhbGciOiJIUzI1NiJ9.abc"}' \
   --input '{"question":"what is my balance?"}'
 ```
+
+### Run Metadata
+
+`start-orchestration-run` accepts a `metadata` bag — caller-owned key/value annotations, stored on the run and returned verbatim by every read of it, the list included. It is the run's equivalent of the same field on an agent generation, and it exists for the same reason: attributing a run to something only the caller knows about — which of *its* tenants the run belongs to, the dispatch batch that started it, the ticket that asked for it.
+
+Two properties make it the right place for such a label, and `input` the wrong one:
+
+- **Nothing merges it into run state.** No graph node sees it, no `{ "var": … }` reads it, and a strict `input_schema` never has to tolerate it. `input` is the run's *initial state* — a label put there is business payload every node and every schema has to accommodate.
+- **The server writes nothing here, and no key is reserved.** Every piece of state the platform owns — `status`, the pinned `orchestration_version`, `trace_id`, `usage`, `artifacts`, `input`, `state` — is a field of its own, so no key a caller writes can reach platform state.
+
+The bag lives **on the run**, so it survives every way a run is driven: a queued start whose 201 lands long before the first node executes, a scheduler wake, a human or approval resume, a crash redrive. A non-object `metadata` is rejected with `400 VALIDATION_FAILED` at start time and no run is created.
+
+Unlike `tool_context`, it is **not** inherited by the child runs a `loop` or `sub_orchestration` node starts: a context header has to reach a nested tool call to work at all, whereas a label is a statement about the run the caller actually started. Pass one per child through the graph if a child needs its own.
+
+```bash
+soat start-orchestration-run \
+  --orchestration-id "$ORCH_ID" \
+  --metadata '{"tenant_account_id":"42","dispatch_batch":"nightly-2026-08-25"}'
+```
+
+Filtering runs by a metadata key is not supported — fetch and filter client-side.
 
 ### Human Nodes
 

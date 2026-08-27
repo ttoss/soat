@@ -5,9 +5,14 @@ import {
   DISCOVERY_PATHS,
   hasHeadingInMain,
   mainTextLength,
+  MIN_TRUST_PAGE_TEXT,
+  openGraphTypeProblems,
   publishedPathProblems,
   REQUIRED_SURFACES,
+  TRUST_PAGES,
+  trustPageProblems,
 } from './checkAgentSurfaces';
+import { markdownPageNames, twinFileName } from './generatePageTwins';
 
 const page = (main: string, extra = '') => {
   return `<!doctype html><html><head><title>t</title></head><body><nav>Docs Tutorials</nav>${extra}<main>${main}</main><footer>©</footer></body></html>`;
@@ -42,13 +47,16 @@ test('text length counts prose, not markup, scripts or styles', () => {
 test('the required surfaces include every machine-readable entry point', () => {
   assert.deepEqual([...REQUIRED_SURFACES].sort(), [
     '404.md',
+    'about.md',
     'agents.md',
     'api/openapi.yaml',
+    'contact.md',
     'errors.json',
     'llms-full.txt',
     'llms.txt',
     'openapi.json',
     'openapi.yaml',
+    'privacy.md',
     'robots.txt',
     'sitemap.xml',
   ]);
@@ -77,4 +85,67 @@ test('the published bundle must declare the standard discovery endpoints', () =>
 
   // Nothing to check when the file was not built; `missingSurfaces` reports that.
   assert.deepEqual(publishedPathProblems(null), []);
+});
+
+test('the homepage must declare an og:type', () => {
+  // Three of the four entity-resolution signals were already emitted; og:type
+  // was the one Docusaurus does not add, so it went missing silently (#1113).
+  assert.deepEqual(
+    openGraphTypeProblems(
+      '<head><meta property="og:type" content="website"/></head>'
+    ),
+    []
+  );
+  assert.deepEqual(
+    openGraphTypeProblems(
+      '<head><meta property=og:type content=website /></head>'
+    ),
+    []
+  );
+  assert.deepEqual(openGraphTypeProblems('<head><title>t</title></head>'), [
+    'the homepage declares no og:type',
+  ]);
+  // Nothing to check when the file is absent; the missing-surface check owns that.
+  assert.deepEqual(openGraphTypeProblems(null), []);
+});
+
+test('each trust anchor page must serve real prose, not a stub', () => {
+  const long = 'word '.repeat(MIN_TRUST_PAGE_TEXT);
+
+  assert.deepEqual(
+    trustPageProblems({
+      page: 'about',
+      raw: page(`<h1>About</h1><p>${long}</p>`),
+    }),
+    []
+  );
+
+  assert.deepEqual(trustPageProblems({ page: 'about', raw: null }), [
+    'missing /about — the page an agent checks to verify the project is real',
+  ]);
+
+  const thin = trustPageProblems({
+    page: 'privacy',
+    raw: page('<h1>Privacy</h1><p>Soon.</p>'),
+  });
+  assert.equal(thin.length, 1);
+  assert.match(String(thin[0]), /\/privacy serves \d+ characters/);
+});
+
+test('the trust anchor pages are the three an audit looks for', () => {
+  assert.deepEqual([...TRUST_PAGES], ['about', 'contact', 'privacy']);
+});
+
+test('the Markdown twin of every standalone page is a required surface', () => {
+  // Derived from the pages themselves rather than restated: adding a Markdown
+  // page to src/pages fails here until its twin is enforced, which is the only
+  // thing standing between a new page and a 404 on its own `.md` URL.
+  const required: readonly string[] = REQUIRED_SURFACES;
+
+  for (const pageName of markdownPageNames()) {
+    assert.ok(
+      required.includes(twinFileName({ pageName })),
+      `${twinFileName({ pageName })} is not enforced as a required surface`
+    );
+  }
 });

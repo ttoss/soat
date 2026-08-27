@@ -34,6 +34,10 @@ type Attribution = {
   // time. Null for standalone generations.
   runPublicId: string | null;
   nodeId: string | null;
+  // The node's 1-based retry attempt, part of the idempotency key so two
+  // attempts of one node are two events. Null on a generation written before
+  // the column existed, or by a path that dispatches without threading it.
+  nodeAttempt: number | null;
 };
 
 // Pulls the event's attribution off the loaded generation: the billed AI
@@ -51,6 +55,7 @@ const resolveEventAttribution = (
     triggerId: generation.triggerId,
     runPublicId: generation.orchestrationRunId,
     nodeId: generation.nodeId,
+    nodeAttempt: generation.nodeAttempt,
   };
 };
 
@@ -68,16 +73,26 @@ const resolveRunId = async (
 };
 
 // The idempotency key. Inside an orchestration run a generation is scoped to its
-// node execution (`run:<run>:node:<node>`), so a replayed node upserts into a
-// no-op instead of double counting. Standalone generations key on the
+// node execution *attempt* (`run:<run>:node:<node>:attempt:<n>`), so a replayed
+// node upserts into a no-op instead of double counting, while a retry — a
+// different generation that really reached the provider — is a different key and
+// meters for real. That is the same identity `compute:<run>:node:<node>:attempt:<n>`
+// (`usageComputeRecording`) and the node-execution idempotency key already use;
+// keying on `run:node` alone made the two indistinguishable, so a second metered
+// attempt would have been dropped. Standalone generations key on the
 // generation's own public id.
+//
+// A null attempt resolves to 1 rather than an empty segment: two spellings of
+// "the first attempt" must not be two keys.
 const buildIdempotencyKey = (args: {
   generationPublicId: string;
   runPublicId: string | null;
   nodeId: string | null;
+  nodeAttempt: number | null;
 }): string => {
   if (args.runPublicId && args.nodeId) {
-    return `run:${args.runPublicId}:node:${args.nodeId}`;
+    const attempt = args.nodeAttempt ?? 1;
+    return `run:${args.runPublicId}:node:${args.nodeId}:attempt:${attempt}`;
   }
   return args.generationPublicId;
 };
@@ -128,6 +143,7 @@ const writeGenerationEvent = async (args: {
     generationPublicId: generation.publicId,
     runPublicId: attribution.runPublicId,
     nodeId: attribution.nodeId,
+    nodeAttempt: attribution.nodeAttempt,
   });
 
   const created = await persistTokenEvent({

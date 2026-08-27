@@ -49,6 +49,10 @@ type DispatchArgs = {
   authHeader?: string;
   // 1-based attempt number for a resuming poll node; undefined for a first run.
   pollAttempt?: number;
+  // The node's own 1-based retry attempt (distinct from `pollAttempt`, which
+  // counts a poll node's polls). Stamped on an agent node's generation so the
+  // run → generation lookup can tell one attempt's generation from another's.
+  nodeAttempt?: number;
   // Run-scoped idempotency key for this node execution. Forwarded by the HTTP
   // tool executor as the `Idempotency-Key` request header (D7) so downstream
   // services can dedupe a redelivered call.
@@ -84,8 +88,15 @@ const dispatchSimpleNode = (args: DispatchArgs): NodeExecutionResult | null => {
 const dispatchNestedRunNode = (
   args: DispatchArgs
 ): Promise<NodeExecutionResult> | null => {
-  const { nodeDefn, state, projectIds, traceId, authHeader, toolContext } =
-    args;
+  const {
+    nodeDefn,
+    state,
+    projectIds,
+    traceId,
+    authHeader,
+    toolContext,
+    runPublicId,
+  } = args;
   if (nodeDefn.type !== 'loop' && nodeDefn.type !== 'sub_orchestration') {
     return null;
   }
@@ -96,6 +107,8 @@ const dispatchNestedRunNode = (
     traceId,
     authHeader,
     toolContext,
+    // The parent run, so each child it starts records where it came from.
+    runPublicId,
   };
   return nodeDefn.type === 'loop'
     ? executeLoopNode(nested)
@@ -116,6 +129,7 @@ const dispatchNodeExecution = async (
     traceId,
     authHeader,
     pollAttempt,
+    nodeAttempt,
     idempotencyKey,
   } = args;
   const simple = dispatchSimpleNode(args);
@@ -139,6 +153,7 @@ const dispatchNodeExecution = async (
         authHeader,
         runPublicId,
         triggerId,
+        nodeAttempt,
         toolContext,
       });
     case 'tool':
@@ -150,6 +165,7 @@ const dispatchNodeExecution = async (
         authHeader,
         idempotencyKey,
         orchestrationRunId: runPublicId,
+        toolContext,
       });
     case 'poll':
       return executePollNode({
@@ -158,6 +174,7 @@ const dispatchNodeExecution = async (
         projectIds,
         authHeader,
         attempt: pollAttempt,
+        toolContext,
       });
     case 'knowledge':
       return executeKnowledgeNode({ node: nodeDefn, state, projectIds });
@@ -183,6 +200,7 @@ export const executeNodeById = async (args: {
   traceId: string | null;
   authHeader?: string;
   pollAttempt?: number;
+  nodeAttempt?: number;
   idempotencyKey?: string;
 }): Promise<{
   nodeId: string;
@@ -201,6 +219,7 @@ export const executeNodeById = async (args: {
     traceId,
     authHeader,
     pollAttempt,
+    nodeAttempt,
     idempotencyKey,
   } = args;
   const nodeDefn = nodes.find((n) => {
@@ -223,6 +242,7 @@ export const executeNodeById = async (args: {
     traceId,
     authHeader,
     pollAttempt,
+    nodeAttempt,
     idempotencyKey,
   });
   return { nodeId, nodeDefn, execResult };

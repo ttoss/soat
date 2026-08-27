@@ -11,7 +11,7 @@ import {
   stripApprovalJustification,
 } from './agentToolApproval';
 import { emitApproval } from './approvals';
-import { emitGuardrailTripwireEvent } from './exceptions';
+import { emitGuardrailTripwireEvent } from './exceptionAutoFile';
 import type { CollectedGuardrail } from './guardrailCollection';
 import { collectApplicableGuardrails } from './guardrailCollection';
 import {
@@ -35,6 +35,7 @@ import {
   persistGuardrailEvaluations,
 } from './guardrailEvaluationRecord';
 import { isPlainObject } from './plainObject';
+import { mergePresetParameters } from './toolPresetParameters';
 
 const log = createDebug('soat:guardrails');
 
@@ -385,7 +386,13 @@ export const classifyGuardrailCall = async (args: {
   const modelArgs = isPlainObject(args.modelArgs) ? args.modelArgs : {};
   const { cleanArgs, reasoning, evidence, predictedImpact } =
     stripApprovalJustification(modelArgs);
-  const effectiveArgs = { ...(args.presetParameters ?? {}), ...cleanArgs };
+  // The arguments the call will actually carry — presets pinned over the
+  // model's, exactly as dispatch merges them. A guard that classified the
+  // model's discarded value would be gating a call that never happens.
+  const effectiveArgs = mergePresetParameters({
+    presetParameters: args.presetParameters,
+    input: cleanArgs,
+  });
 
   const identity: GuardrailCallIdentity = {
     projectId: args.context.projectId,

@@ -2,13 +2,13 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { purgeGenerationContent } from 'src/lib/contentPurge';
-import { validateGenerationMetadata } from 'src/lib/generationMetadata';
 import {
   getGeneration,
   listGenerations,
   updateGenerationMetadata,
 } from 'src/lib/generations';
 import { getGenerationTranscript } from 'src/lib/generationTranscript';
+import { validateMetadataBag } from 'src/lib/metadataBag';
 
 import {
   requestPrincipalFromCtx,
@@ -23,7 +23,8 @@ export const generationsRouter = new Router<Context>();
  * GET /api/v1/generations
  * operationId: listGenerations
  * Lists generations the caller can access, optionally filtered by agent_id,
- * trace_id, and status. Replaces the former GET /traces/{trace_id}/generations.
+ * trace_id, orchestration_run_id, node_id, and status. Replaces the former
+ * GET /traces/{trace_id}/generations.
  */
 generationsRouter.get('/generations', async (ctx: Context) => {
   requireAuth(ctx);
@@ -38,6 +39,8 @@ generationsRouter.get('/generations', async (ctx: Context) => {
     agent_id: agentId,
     trace_id: traceId,
     initiator_generation_id: initiatorGenerationId,
+    orchestration_run_id: orchestrationRunId,
+    node_id: nodeId,
     status,
     limit,
     offset,
@@ -48,6 +51,8 @@ generationsRouter.get('/generations', async (ctx: Context) => {
     agentId,
     traceId,
     initiatorGenerationId,
+    orchestrationRunId,
+    nodeId,
     status,
     limit: limit ? Number(limit) : undefined,
     offset: offset ? Number(offset) : undefined,
@@ -150,7 +155,7 @@ generationsRouter.patch('/generations/:generation_id', async (ctx: Context) => {
 
   const { metadata } = ctx.request.body as { metadata?: unknown };
 
-  const metadataError = validateGenerationMetadata(metadata);
+  const metadataError = validateMetadataBag(metadata);
   if (metadataError) {
     throw new DomainError('VALIDATION_FAILED', metadataError);
   }

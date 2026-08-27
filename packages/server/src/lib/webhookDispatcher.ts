@@ -1,13 +1,13 @@
-import crypto from 'node:crypto';
-
 import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 import { db } from 'src/db';
-import { evaluatePolicies, type PolicyDocument } from 'src/lib/iam';
 
 import type { SoatEvent } from './eventBus';
-import { onEvent } from './eventBus';
+import { onEvent, recordDroppedEvent } from './eventBus';
+import { evaluateEventPolicy, matchesEvent } from './eventMatching';
+import { hmacHex, timestampedSignature } from './hmacSignature';
 import { createScheduler, createSweep } from './scheduler';
+import { retryTransient } from './transientRetry';
 import { decryptWebhookSecret } from './webhooks';
 
 const log = createDebug('soat:webhooks');
@@ -31,33 +31,18 @@ const LEGACY_SIGNATURE_HEADER = 'X-Soat-Signature';
 
 type DeliveryRow = InstanceType<(typeof db)['WebhookDelivery']>;
 
-const hmacHex = (args: { secret: string; value: string }) => {
-  return crypto
-    .createHmac('sha256', args.secret)
-    .update(args.value)
-    .digest('hex');
-};
-
 /**
  * Both signature headers for one attempt.
  *
- * The v2 header signs `<timestamp>.<body>` and ships the timestamp alongside
- * the digest, so a subscriber can reject a replayed body by age. The legacy
- * header signs the bare body, which carries no such bound — it is still sent
- * during the deprecation window and is documented as deprecated.
- *
- * Signing happens per attempt rather than per delivery: a retry that reused the
- * first attempt's timestamp would fall outside a subscriber's tolerance window
- * and be rejected as a replay of itself.
+ * The v2 header is the shared `timestampedSignature` scheme (`hmacSignature.ts`)
+ * — it signs `<timestamp>.<body>` and ships the timestamp alongside the digest,
+ * so a subscriber can reject a replayed body by age. The legacy header signs the
+ * bare body, which carries no such bound; it is still sent during the
+ * deprecation window and is documented as deprecated.
  */
 const signatureHeaders = (args: { payload: string; secret: string }) => {
-  const timestamp = Math.floor(Date.now() / 1000);
-
   return {
-    [SIGNATURE_HEADER]: `t=${timestamp},v1=${hmacHex({
-      secret: args.secret,
-      value: `${timestamp}.${args.payload}`,
-    })}`,
+    [SIGNATURE_HEADER]: timestampedSignature(args),
     [LEGACY_SIGNATURE_HEADER]: `sha256=${hmacHex({
       secret: args.secret,
       value: args.payload,
@@ -72,37 +57,6 @@ const backoffMs = (args: { attempts: number }) => {
     MAX_BACKOFF_MS
   );
   return exponential + Math.floor(Math.random() * exponential * 0.25);
-};
-
-const matchesEvent = (args: {
-  patterns: string[];
-  eventType: string;
-}): boolean => {
-  return args.patterns.some((pattern) => {
-    if (pattern === '*') return true;
-    if (pattern === args.eventType) return true;
-    if (pattern.endsWith('.*')) {
-      const prefix = pattern.slice(0, -2);
-      return args.eventType.startsWith(prefix + '.');
-    }
-    return false;
-  });
-};
-
-const evaluateWebhookPolicy = async (args: {
-  policyId: number;
-  event: SoatEvent;
-}): Promise<boolean> => {
-  const policy = await db.Policy.findOne({
-    where: { id: args.policyId },
-  });
-  if (!policy) return false;
-
-  return evaluatePolicies({
-    policies: [policy.document as PolicyDocument],
-    action: args.event.type,
-    resource: `srn:${args.event.projectPublicId}:${args.event.resourceType}:${args.event.resourceId}`,
-  });
 };
 
 /**
@@ -380,13 +334,26 @@ const enqueueDelivery = async (args: {
 const handleEvent = async (event: SoatEvent) => {
   let webhooks;
   try {
-    webhooks = await db.Webhook.findAll({
-      where: {
-        projectId: event.projectId,
-        active: true,
+    webhooks = await retryTransient({
+      label: 'handleEvent.findWebhooks',
+      operation: () => {
+        return db.Webhook.findAll({
+          where: {
+            projectId: event.projectId,
+            active: true,
+          },
+        });
       },
     });
-  } catch {
+  } catch (error) {
+    // Was a bare `catch { return }`: a blip on this one read silently unhooked
+    // every subscription in the project for that event (#1130).
+    recordDroppedEvent({
+      stage: 'webhook_lookup',
+      type: event.type,
+      resourceId: event.resourceId,
+      error,
+    });
     return;
   }
 
@@ -401,21 +368,38 @@ const handleEvent = async (event: SoatEvent) => {
     }
 
     if (webhook.policyId) {
-      const allowed = await evaluateWebhookPolicy({
+      const allowed = await evaluateEventPolicy({
         policyId: webhook.policyId,
         event,
       });
       if (!allowed) continue;
     }
 
-    void enqueueDelivery({ webhook, event })
+    // The row write and the first attempt are separated deliberately. They used
+    // to share one `.catch()`, which read as "delivery failed" for both — but a
+    // failed *attempt* is recorded on the row and retried by the sweep, while a
+    // failed *row write* leaves the sweep nothing to find, so the event is gone
+    // (#1130). Only the second one is a lost event, and only it is counted.
+    void retryTransient({
+      label: 'handleEvent.enqueueDelivery',
+      operation: () => {
+        return enqueueDelivery({ webhook, event });
+      },
+    })
       .then((delivery) => {
-        return attemptDelivery({ delivery });
+        return attemptDelivery({ delivery }).catch((error: unknown) => {
+          // The row exists; its own attempt bookkeeping and the sweep own the
+          // retry from here.
+          log('handleEvent: first attempt failed for %s %o', event.type, error);
+        });
       })
       .catch((error: unknown) => {
-        // Recorded on the row when it exists; a failure to write the row at all
-        // is logged here rather than crashing the dispatch loop.
-        log('handleEvent: delivery failed for %s %o', event.type, error);
+        recordDroppedEvent({
+          stage: 'delivery_write',
+          type: event.type,
+          resourceId: event.resourceId,
+          error,
+        });
       });
   }
 };

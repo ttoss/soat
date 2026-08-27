@@ -3,6 +3,45 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.33.0](https://github.com/ttoss/soat/compare/v0.32.0...v0.33.0) (2026-08-26)
+
+### Features
+
+* **server:** make a run's usage cover what it delegated, and attribute nested runs ([#1144](https://github.com/ttoss/soat/issues/1144)) ([9266a0c](https://github.com/ttoss/soat/commit/9266a0c865df6ad63b4ee3b158911960097981b7)), closes [#1135](https://github.com/ttoss/soat/issues/1135) [#1135](https://github.com/ttoss/soat/issues/1135)
+
+### BREAKING CHANGES
+
+* **server:** `usage` on an orchestration run now includes every nested run
+  it started, at any depth; it previously covered the run's own nodes only. The
+  previous meaning is available as `usage_own`, which is equal to `usage` for a
+  run with no children. Callers summing `usage` over a list of runs must pass
+  `nested=false` to avoid counting a child twice.
+
+# [0.32.0](https://github.com/ttoss/soat/compare/v0.31.0...v0.32.0) (2026-08-26)
+
+**Note:** Version bump only for package @soat/postgresdb
+
+# [0.31.0](https://github.com/ttoss/soat/compare/v0.30.1...v0.31.0) (2026-08-25)
+
+### Features
+
+* **server:** let a caller label a run, an eval run and a task with metadata ([#1129](https://github.com/ttoss/soat/issues/1129)) ([3fa7b88](https://github.com/ttoss/soat/commit/3fa7b88e9a2e9548de476c486b042227057ac18f)), closes [TriangulosTecnologia/naturali.ai#342](https://github.com/TriangulosTecnologia/naturali.ai/issues/342) [#342](https://github.com/ttoss/soat/issues/342)
+* **triggers:** add an event trigger type ([#1133](https://github.com/ttoss/soat/issues/1133)) ([5abf1ab](https://github.com/ttoss/soat/commit/5abf1abaf192953cea3e98705dceb8af8b372096))
+
+## [0.30.1](https://github.com/ttoss/soat/compare/v0.30.0...v0.30.1) (2026-08-25)
+
+**Note:** Version bump only for package @soat/postgresdb
+
+# [0.30.0](https://github.com/ttoss/soat/compare/v0.29.5...v0.30.0) (2026-08-24)
+
+### Features
+
+* **server:** reach an agent node's generation from an orchestration run ([#1123](https://github.com/ttoss/soat/issues/1123)) ([a4121a2](https://github.com/ttoss/soat/commit/a4121a25f02e21776c493ceab25daa9d0f95c50f))
+
+## [0.29.5](https://github.com/ttoss/soat/compare/v0.29.4...v0.29.5) (2026-08-24)
+
+**Note:** Version bump only for package @soat/postgresdb
+
 ## [0.29.4](https://github.com/ttoss/soat/compare/v0.29.3...v0.29.4) (2026-08-24)
 
 **Note:** Version bump only for package @soat/postgresdb

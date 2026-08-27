@@ -891,6 +891,26 @@ paths:
                     deltas over the item intersection. A run of a different eval
                     is rejected with 400.
                   example: evrun_V1StGXR8Z5jdHi6B
+                metadata:
+                  type: object
+                  additionalProperties: true
+                  description: >-
+                    Caller-supplied key/value metadata attached to the run
+                    record for attribution — what this measurement was of (the
+                    commit or release candidate being scored, the CI job that
+                    asked for it). Round-trips verbatim on every read of the
+                    run, the list included.
+
+
+                    The bag is caller-owned and no key is reserved: everything
+                    the platform decides about a run (`status`, `agent_version`,
+                    `baseline_run_id`, `aggregate_scores`, `passed`, the counts)
+                    is a field of its own and cannot be written from here.
+                    Nothing in the scoring path reads it. A non-object is
+                    rejected with `400 VALIDATION_FAILED` and no run is created.
+                  example:
+                    commit_sha: 9f2c1ab
+                    ci_job: nightly-evals
       responses:
         '201':
           description: >-
@@ -1515,6 +1535,18 @@ components:
           type: integer
         errored_count:
           type: integer
+        metadata:
+          type: object
+          additionalProperties: true
+          nullable: true
+          description: >-
+            The caller-owned key/value metadata supplied when the run was
+            started, returned verbatim. Null when the run was started without
+            any (a trigger-started run included — see `trigger_id` for that
+            provenance). The server writes nothing here.
+          example:
+            commit_sha: 9f2c1ab
+            ci_job: nightly-evals
         started_at:
           type: string
           format: date-time

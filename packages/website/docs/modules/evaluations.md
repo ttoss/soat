@@ -88,6 +88,7 @@ An `agent_id` or `dataset_id` naming a resource in another project is rejected w
 | `aggregate_scores` | object | Per-scorer `mean` / `pass_rate`, the run `pass_rate`, `scored_item_count`, and — when the run named a baseline — a `baseline` [comparison](#baseline-deltas). `null` until the run is terminal, and on a canceled run |
 | `passed` | boolean | The verdict; `null` when the eval declares no `pass_threshold`, and on a canceled run |
 | `item_count` / `completed_count` / `errored_count` | integer | Items attempted, scored, and errored. On a [canceled](#canceling-a-run) run the last two count what actually ran |
+| `metadata` | object \| null | Caller-owned annotations supplied when the run was started and returned verbatim (see [Run metadata](#run-metadata)) |
 | `started_at` / `finished_at` | string | ISO 8601 timestamps, `null` until set |
 | `created_at` | string | ISO 8601 creation timestamp |
 
@@ -385,6 +386,22 @@ A background reaper settles non-terminal runs that have gone quiet past a grace 
 (30 minutes by default): a run whose items all have results is finalized; a run with items
 missing and no outstanding work is settled `failed` and `eval_run.failed` fires. A run
 that still has queued tasks is left alone.
+
+### Run metadata
+
+`start-eval-run` accepts a `metadata` bag — caller-owned key/value annotations, stored on the run and returned verbatim by every read of it, the list included. It answers "what was this measurement of": the commit or release candidate being scored, the CI job that asked for it, the experiment it belongs to.
+
+Every other field on the start request is platform-owned (`wait`, `agent_version`, `baseline_run_id`), so before this bag a CI caller running one eval per commit had nowhere to record which commit — the run was a score with no subject. `trigger_id` records a *scheduled* origin, which is provenance the platform knows; `metadata` records the caller's own, which it cannot.
+
+Nothing in the scoring path reads it, and no key is reserved: `status`, `agent_version`, `aggregate_scores`, `passed` and the counts are all fields of their own and cannot be written from here. A non-object `metadata` is rejected with `400 VALIDATION_FAILED` and no run is created.
+
+```bash
+soat start-eval-run \
+  --eval-id "$EVAL_ID" \
+  --metadata '{"commit_sha":"9f2c1ab","ci_job":"nightly-evals"}'
+```
+
+Filtering runs by a metadata key is not supported — fetch and filter client-side.
 
 ### Canceling a run
 

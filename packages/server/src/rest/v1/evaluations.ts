@@ -26,6 +26,7 @@ import {
   updateEval,
 } from 'src/lib/evaluations';
 import { buildSrn } from 'src/lib/iam';
+import { parseMetadataBag } from 'src/lib/metadataBag';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
 import {
@@ -425,6 +426,9 @@ evaluationsRouter.post('/evals/:eval_id/runs', async (ctx: Context) => {
     wait: body.wait,
     agentVersion: body.agent_version,
     baselineRunId: body.baseline_run_id,
+    // Rejected here, before the run row exists: a queued run answers 201 long
+    // before it scores anything.
+    metadata: parseMetadataBag(body.metadata),
   });
 });
 

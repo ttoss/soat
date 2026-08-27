@@ -9,6 +9,7 @@ import {
   prepareKeyedExecution,
 } from './orchestrationIdempotency';
 import { executeNodeById } from './orchestrationNodeDispatch';
+import { meterNodeCompute } from './orchestrationNodeMetering';
 import type { NodeExecutionResult } from './orchestrationNodeTypes';
 import { reuseRequiresActionRow } from './orchestrationPauseRecords';
 import {
@@ -17,36 +18,8 @@ import {
   resolveRetryPolicy,
 } from './orchestrationRetry';
 import type { OrchestrationNode } from './orchestrations';
-import { recordComputeUsage } from './usageComputeRecording';
 
 const log = createDebug('soat:orchestrations');
-
-/**
- * Meters the wall-clock compute of a finished node execution as one
- * `compute_execution` usage event (usage-metering P4). Called at every terminal
- * recording point — pure and side-effecting nodes alike — so a node execution is
- * metered exactly once (the two paths are mutually exclusive per execution). A
- * skipped node (no `startedAt`) did no work and is not metered. Awaited so the
- * event is durable before the run advances; `recordComputeUsage` never throws.
- */
-const meterNodeCompute = async (args: {
-  runRecord: InstanceType<typeof db.OrchestrationRun>;
-  nodeId: string;
-  attempt: number;
-  startedAt: Date | null;
-  completedAt: Date | null;
-}): Promise<void> => {
-  if (!args.startedAt || !args.completedAt) return;
-  await recordComputeUsage({
-    projectId: args.runRecord.projectId as number,
-    orchestrationRunId: args.runRecord.id as number,
-    runPublicId: args.runRecord.publicId as string,
-    nodeId: args.nodeId,
-    attempt: args.attempt,
-    startedAt: args.startedAt,
-    completedAt: args.completedAt,
-  });
-};
 
 /**
  * Normalizes any thrown value into the structured error shape persisted on a
@@ -329,6 +302,9 @@ const runNodeAndRecord = async (
     traceId: ctx.traceId,
     authHeader: ctx.authHeader,
     pollAttempt: ctx.pollAttempt,
+    // The attempt this execution is recorded under, so an agent node's
+    // generation carries the run + node + attempt triple that identifies it.
+    nodeAttempt: ctx.attempt,
     idempotencyKey: ctx.idempotencyKey ?? undefined,
   });
   // A `wait` result means the node has not finished — it will be resumed by the

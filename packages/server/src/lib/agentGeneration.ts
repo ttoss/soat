@@ -98,6 +98,7 @@ const resolveContextAndRecord = async (args: {
   triggerId?: string;
   orchestrationRunId?: string;
   nodeId?: string;
+  nodeAttempt?: number;
   sessionId?: string;
   metadata?: Record<string, unknown> | null;
   guardrailContext?: Record<string, unknown> | null;
@@ -154,6 +155,10 @@ const resolveContextAndRecord = async (args: {
     triggerId: args.triggerId ?? null,
     orchestrationRunId: args.orchestrationRunId ?? null,
     nodeId: args.nodeId ?? null,
+    // Unlike its siblings above, this needs no `?? null`: `attributionColumns`
+    // already normalizes an absent attribution field to null. Adding one back
+    // would also push this function past its complexity ceiling.
+    nodeAttempt: args.nodeAttempt,
     agentVersion: ctx.agentVersion ?? null,
     source: args.source ?? null,
     metadata: args.metadata ?? null,
@@ -224,6 +229,9 @@ export type CreateGenerationArgs = {
   triggerId?: string;
   orchestrationRunId?: string;
   nodeId?: string;
+  // The orchestration node's 1-based retry attempt, completing the
+  // run + node + attempt replay identity. Absent outside an orchestration node.
+  nodeAttempt?: number;
   // End-user attribution: the session this generation runs in, from which the
   // actor is derived. Set by the session path; absent for direct API
   // generations, triggers, and orchestration nodes — no end user behind them.
@@ -308,6 +316,7 @@ const prepareGeneration = async (
     triggerId: args.triggerId,
     orchestrationRunId: args.orchestrationRunId,
     nodeId: args.nodeId,
+    nodeAttempt: args.nodeAttempt,
     sessionId: args.sessionId,
     metadata: args.metadata,
     guardrailContext: args.guardrailContext,

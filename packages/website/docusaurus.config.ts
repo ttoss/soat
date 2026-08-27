@@ -6,6 +6,7 @@ import type { Config } from '@docusaurus/types';
 import { themes as prismThemes } from 'prism-react-renderer';
 
 import { buildLlmsRootContent } from './src/data/agentInstructions';
+import { HEAD_TAGS } from './src/data/structuredData';
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
@@ -61,92 +62,8 @@ const config: Config = {
   onBrokenLinks: 'throw',
   onBrokenAnchors: 'throw',
 
-  // JSON-LD structured data for richer search results.
-  headTags: [
-    {
-      // Lift Google's default snippet cap so full passages are eligible to
-      // ground AI Overviews / AI Mode answers (and regular rich snippets).
-      tagName: 'meta',
-      attributes: {
-        name: 'robots',
-        content: 'max-snippet:-1, max-image-preview:large',
-      },
-    },
-    {
-      // Brand identity, so a search for "SOAT" can be tied to this domain
-      // rather than to one of the many unrelated things spelled the same way.
-      // `alternateName` carries the qualified forms people actually type, and
-      // `sameAs` the profiles that corroborate the name.
-      tagName: 'script',
-      attributes: { type: 'application/ld+json' },
-      innerHTML: JSON.stringify({
-        '@context': 'https://schema.org',
-        '@type': 'WebSite',
-        '@id': 'https://soat.ttoss.dev/#website',
-        name: 'SOAT',
-        alternateName: [
-          'SOAT by ttoss',
-          'ttoss SOAT',
-          'SOAT AI agent infrastructure',
-        ],
-        url: 'https://soat.ttoss.dev',
-        description:
-          'Documentation for SOAT — open-source infrastructure for production-ready AI agents.',
-        inLanguage: 'en',
-        publisher: { '@id': 'https://ttoss.dev/#organization' },
-      }),
-    },
-    {
-      tagName: 'script',
-      attributes: { type: 'application/ld+json' },
-      innerHTML: JSON.stringify({
-        '@context': 'https://schema.org',
-        '@type': 'Organization',
-        '@id': 'https://ttoss.dev/#organization',
-        name: 'Terezinha Tech Operations',
-        alternateName: 'ttoss',
-        url: 'https://ttoss.dev',
-        logo: 'https://soat.ttoss.dev/img/soat-logo.png',
-        sameAs: [
-          'https://github.com/ttoss',
-          'https://github.com/ttoss/soat',
-          'https://www.npmjs.com/org/soat',
-        ],
-      }),
-    },
-    {
-      tagName: 'script',
-      attributes: { type: 'application/ld+json' },
-      innerHTML: JSON.stringify({
-        '@context': 'https://schema.org',
-        '@type': 'SoftwareApplication',
-        name: 'SOAT',
-        applicationCategory: 'DeveloperApplication',
-        operatingSystem: 'Linux, macOS, Windows',
-        description:
-          'Open-source infrastructure for production-ready AI agents: IAM, storage, vector search, memory, orchestration, RAG, and a full MCP server.',
-        url: 'https://soat.ttoss.dev',
-        sameAs: [
-          'https://github.com/ttoss/soat',
-          'https://www.npmjs.com/package/@soat/cli',
-          'https://hub.docker.com/r/ttoss/soat',
-        ],
-        isPartOf: { '@id': 'https://soat.ttoss.dev/#website' },
-        license: 'https://github.com/ttoss/soat/blob/main/LICENSE',
-        offers: {
-          '@type': 'Offer',
-          price: '0',
-          priceCurrency: 'USD',
-        },
-        author: {
-          '@type': 'Organization',
-          name: 'Terezinha Tech Operations (ttoss)',
-          url: 'https://ttoss.dev',
-        },
-      }),
-    },
-  ],
-
+  // Entity metadata and JSON-LD, declared in src/data/structuredData.ts.
+  headTags: HEAD_TAGS,
   // Even if you don't use internationalization, you can use this field to set
   // useful metadata like html lang. For example, if your site is Chinese, you
   // may want to replace "en" with "zh-Hans".
@@ -206,6 +123,15 @@ const config: Config = {
       '@docusaurus/plugin-client-redirects',
       {
         redirects: [
+          {
+            // /developers was a portal collecting the entry points the docs
+            // tree already is. It shipped in v0.29.5, so the URL is live and
+            // gets a redirect rather than a 404. `advertiseMarkdownTwins`
+            // writes the `.md` twin of this stub, so /developers.md resolves
+            // too.
+            from: '/developers',
+            to: '/docs/introduction',
+          },
           {
             from: '/docs/getting-started/advanced-config',
             to: '/docs/self-hosting/configuration',
@@ -381,6 +307,23 @@ const config: Config = {
             {
               label: 'TypeScript SDK',
               to: '/docs/sdk',
+            },
+          ],
+        },
+        {
+          title: 'Project',
+          items: [
+            {
+              label: 'About',
+              to: '/about',
+            },
+            {
+              label: 'Contact',
+              to: '/contact',
+            },
+            {
+              label: 'Privacy',
+              to: '/privacy',
             },
           ],
         },

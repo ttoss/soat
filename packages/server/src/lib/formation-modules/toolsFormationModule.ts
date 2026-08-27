@@ -16,6 +16,7 @@ import { assertValidToolContextAllowlist } from '../toolContext';
 import { createTool, deleteTool, getTool, updateTool } from '../tools';
 import {
   describeToolTemplateTokenProblems,
+  findInvalidTemplateTokens,
   findToolTemplateTokenProblems,
 } from '../toolTemplates';
 import { defineFormationModule } from './defineFormationModule';
@@ -116,6 +117,20 @@ export const toolsFormationModule = defineFormationModule({
       if (message) {
         errors.push({ path: `${basePath}.${field}`, message });
       }
+    }
+
+    // `preset_parameters` takes the shape rule only: a `{{context:...}}` token
+    // is legitimate there (#345), so it is not run through the headers/elsewhere
+    // split that decides "misplaced".
+    const presetMessage = describeToolTemplateTokenProblems({
+      invalid: findInvalidTemplateTokens(properties.preset_parameters),
+      misplacedContext: [],
+    });
+    if (presetMessage) {
+      errors.push({
+        path: `${basePath}.preset_parameters`,
+        message: presetMessage,
+      });
     }
   },
 

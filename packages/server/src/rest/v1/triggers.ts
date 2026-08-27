@@ -95,6 +95,7 @@ triggersRouter.post('/triggers', async (ctx: Context) => {
     action?: string;
     input?: Record<string, unknown>;
     cron?: string;
+    event_pattern?: string;
     active?: boolean;
     policy_id?: string;
   };
@@ -135,6 +136,7 @@ triggersRouter.post('/triggers', async (ctx: Context) => {
     action: body.action,
     input: body.input,
     cron: body.cron,
+    eventPattern: body.event_pattern,
     active: body.active,
   });
 
@@ -168,6 +170,7 @@ triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
     action?: string | null;
     input?: Record<string, unknown> | null;
     cron?: string | null;
+    event_pattern?: string | null;
     active?: boolean;
     policy_id?: string | null;
   };
@@ -205,6 +208,7 @@ triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
     action: body.action,
     input: body.input,
     cron: body.cron,
+    eventPattern: body.event_pattern,
     active: body.active,
     policyId: body.policy_id === null ? null : policyId,
   });

@@ -34,8 +34,14 @@ paths:
       summary: List generations
       description: >
         Returns generations the caller can access, optionally filtered by agent,
-        trace, and status. Replaces the former per-trace generations endpoint
-        (use the trace_id query filter).
+        trace, orchestration run, node, and status. Replaces the former
+        per-trace generations endpoint (use the trace_id query filter).
+
+
+        Filtering by `orchestration_run_id` is the supported way to get from an
+        orchestration run to the generations its agent nodes produced: a node
+        execution record carries no generation id, so the pointer lives here,
+        alongside the run's other attribution columns.
       operationId: listGenerations
       parameters:
         - name: agent_id
@@ -57,6 +63,24 @@ paths:
             Filter by the public ID of the parent generation. Returns all
             generations triggered by that generation — sub-agent invocations.
             Null-initiated (top-level) generations are not returned.
+          schema:
+            type: string
+        - name: orchestration_run_id
+          in: query
+          required: false
+          description: >
+            Filter by the orchestration run that dispatched the generation.
+            This is how a run is traced back to what its agent nodes did — a
+            node execution record stores no generation id.
+          schema:
+            type: string
+        - name: node_id
+          in: query
+          required: false
+          description: >
+            Filter by the orchestration node that dispatched the generation.
+            Combine with `orchestration_run_id` to narrow to one node of one
+            run; a retried node returns one generation per `node_attempt`.
           schema:
             type: string
         - name: status
@@ -230,7 +254,8 @@ paths:
 
         The usage and audit skeleton is preserved: ids, timestamps, status, stop
         reason, and the attribution fields (`action_id`, `trigger_id`,
-        `orchestration_run_id`, `node_id`, `agent_version`, `routing`) the billing
+        `orchestration_run_id`, `node_id`, `node_attempt`, `agent_version`,
+        `routing`) the billing
         ledger reads. A purged generation reads back as that skeleton, not a 404.
 
 
@@ -440,6 +465,14 @@ components:
           description: >
             Node within `orchestration_run_id` that dispatched the generation.
             Together with the run it forms the usage event's replay identity.
+        node_attempt:
+          type: integer
+          nullable: true
+          description: >
+            The node's 1-based retry attempt, completing the
+            run + node + attempt replay identity. A retried node produces one
+            generation per attempt; this is what tells them apart. Null for a
+            generation no orchestration node dispatched.
         agent_version:
           type: integer
           nullable: true

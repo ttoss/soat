@@ -26,6 +26,14 @@ export const REQUIRED_SURFACES = [
   'robots.txt',
   '404.md',
   'agents.md',
+  // Markdown twins of the standalone pages, from `generatePageTwins.ts`. A page
+  // whose twin is missing is worse than one that never had it: the viewer
+  // request function rewrites `Accept: text/markdown` onto `<page>.md` without
+  // being able to check that the file is there, so the twin's absence shows up
+  // as a 404 on a page that plainly exists.
+  'about.md',
+  'contact.md',
+  'privacy.md',
 ] as const;
 
 /**
@@ -46,6 +54,16 @@ export const MIN_HOMEPAGE_TEXT = 4000;
  * contract, not a nicety.
  */
 export const LLMS_WHEN_TO_USE_HEADING = '## When to use SOAT';
+
+/**
+ * The pages an agent-readiness audit looks for before it will treat a project
+ * as a real one, and the prose floor each has to clear. 500 characters is the
+ * bar those audits set; a page thin enough to trip it is a stub, which is worse
+ * than no page at all — it answers the question with nothing.
+ */
+export const TRUST_PAGES = ['about', 'contact', 'privacy'] as const;
+
+export const MIN_TRUST_PAGE_TEXT = 500;
 
 /**
  * Endpoints the published description must declare, because they are the ones a
@@ -96,6 +114,39 @@ export const hasHeadingInMain = (args: { html: string }): boolean => {
 export const mainTextLength = (args: { html: string }): number => {
   const main = mainOf(args.html);
   return main === null ? 0 : stripped(main).length;
+};
+
+/**
+ * Whether the homepage declares `og:type`. Docusaurus emits `og:title`,
+ * `og:description`, `og:image` and the canonical link on its own but not this
+ * one, so it is the single entity-resolution signal that can go missing while
+ * the other three stay right.
+ */
+export const openGraphTypeProblems = (raw: string | null): string[] => {
+  if (!raw) return [];
+  return /property=["']?og:type["']?/.test(raw)
+    ? []
+    : ['the homepage declares no og:type'];
+};
+
+/** Whether one trust anchor page exists and carries more than a stub. */
+export const trustPageProblems = (args: {
+  page: string;
+  raw: string | null;
+}): string[] => {
+  if (!args.raw) {
+    return [
+      `missing /${args.page} — the page an agent checks to verify the project is real`,
+    ];
+  }
+
+  const length = mainTextLength({ html: args.raw });
+
+  return length < MIN_TRUST_PAGE_TEXT
+    ? [
+        `/${args.page} serves ${length} characters of prose, below the ${MIN_TRUST_PAGE_TEXT} minimum`,
+      ]
+    : [];
 };
 
 const readIfExists = (file: string): string | null => {
@@ -242,6 +293,10 @@ export const checkBuild = (args: { outDir: string }): string[] => {
     ...publishedPathProblems(at('openapi.json')),
     ...catalogProblems(at('errors.json')),
     ...homepageProblems(at('index.html')),
+    ...openGraphTypeProblems(at('index.html')),
+    ...TRUST_PAGES.flatMap((page) => {
+      return trustPageProblems({ page, raw: at(`${page}/index.html`) });
+    }),
     ...notFoundProblems(at('404.html')),
     ...llmsProblems(at('llms.txt')),
     ...agentInstructionProblems(at('agents.md')),

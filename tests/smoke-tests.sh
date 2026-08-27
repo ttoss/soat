@@ -1598,12 +1598,20 @@ echo "--- Async run drained by the standalone worker fleet ---"
 # `--tool-context` rides along here rather than in its own run: the worker path
 # is the one that proves the bag lives on the run row, since the process that
 # drives it has no request to read it from.
+# `--metadata` rides along for the same reason: the caller's attribution label
+# has to come back off the run row, not out of the request that started it.
 ORCH_ASYNC_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
   --orchestration-id "$ORCH_ID" \
   --tool-context '{"ocaToken":"smoke-run-token"}' \
+  --metadata '{"tenant_account_id":"smoke-tenant-42"}' \
   --input '{"theme":"worker-fleet"}')
 if [ "$(printf '%s\n' "$ORCH_ASYNC_RESP" | jq -r '.tool_context.ocaToken')" != "smoke-run-token" ]; then
   echo "ERROR: start-orchestration-run did not persist tool_context" >&2
+  printf '%s\n' "$ORCH_ASYNC_RESP" >&2
+  exit 1
+fi
+if [ "$(printf '%s\n' "$ORCH_ASYNC_RESP" | jq -r '.metadata.tenant_account_id')" != "smoke-tenant-42" ]; then
+  echo "ERROR: start-orchestration-run did not persist metadata" >&2
   printf '%s\n' "$ORCH_ASYNC_RESP" >&2
   exit 1
 fi
@@ -1644,6 +1652,18 @@ fi
 # The bag survived the enqueue → claim → drive → settle round trip.
 if [ "$(printf '%s\n' "$ORCH_ASYNC_GET" | jq -r '.tool_context.ocaToken')" != "smoke-run-token" ]; then
   echo "ERROR: worker-drained run lost its tool_context" >&2
+  printf '%s\n' "$ORCH_ASYNC_GET" >&2
+  exit 1
+fi
+if [ "$(printf '%s\n' "$ORCH_ASYNC_GET" | jq -r '.metadata.tenant_account_id')" != "smoke-tenant-42" ]; then
+  echo "ERROR: worker-drained run lost its metadata" >&2
+  printf '%s\n' "$ORCH_ASYNC_GET" >&2
+  exit 1
+fi
+# The label never leaks into the run's business payload — a graph node sees the
+# `input` namespace only, so an `input_schema` stays free to reject stray keys.
+if printf '%s\n' "$ORCH_ASYNC_GET" | jq -e '.state | tostring | test("tenant_account_id")' >/dev/null; then
+  echo "ERROR: run metadata leaked into run state" >&2
   printf '%s\n' "$ORCH_ASYNC_GET" >&2
   exit 1
 fi
@@ -1789,6 +1809,70 @@ if ! printf '%s\n' "$ORCH_RUN_RECEIPT" | jq -e '(.by_meter_type | map(.meter_typ
   exit 1
 fi
 echo "Compute metering (P4): OK"
+
+# Per-node attribution: every line of a run receipt names the node that produced
+# it, so grouping the lines by node_id is the per-node cost breakdown. Asserted
+# against the run's own node_executions rather than a hardcoded id, so the check
+# still holds if the smoke orchestration's graph changes.
+ORCH_RUN_NODE_IDS=$(printf '%s\n' "$ORCH_RUN_GET_RESP" | jq -c '[.node_executions[].node_id] | unique')
+if ! printf '%s\n' "$ORCH_RUN_RECEIPT" | jq -e --argjson nodes "$ORCH_RUN_NODE_IDS" '(.line_items | length) >= 1 and (.line_items | all(.node_id != null and (.node_id | IN($nodes[]))))' >/dev/null 2>&1; then
+  echo "run receipt line items did not carry the node_id that produced them"
+  printf '%s\n' "$ORCH_RUN_NODE_IDS"
+  printf '%s\n' "$ORCH_RUN_RECEIPT"
+  exit 1
+fi
+echo "Per-node receipt attribution: OK"
+
+# Nested run attribution: a `sub_orchestration` child is its own run, so the
+# parent's `usage` spans the subtree and `usage_own` covers the parent's own
+# nodes. Transform-only on both sides — this asserts the wiring (the link, the
+# two filters, both roll-ups), not the arithmetic, which the unit suite pins
+# numerically.
+NESTED_CHILD_ORCH=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-orchestration-nested-child" \
+  --nodes '[{"id":"echo","type":"transform","expression":1}]' \
+  --edges '[]' | jq -r '.id')
+NESTED_PARENT_ORCH=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-orchestration-nested-parent" \
+  --nodes "[{\"id\":\"delegate\",\"type\":\"sub_orchestration\",\"orchestration_id\":\"$NESTED_CHILD_ORCH\"}]" \
+  --edges '[]' | jq -r '.id')
+NESTED_PARENT_RUN=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
+  --orchestration-id "$NESTED_PARENT_ORCH" \
+  --wait true | jq -r '.id')
+
+NESTED_CHILDREN=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestration-runs \
+  --parent-orchestration-run-id "$NESTED_PARENT_RUN")
+if ! printf '%s\n' "$NESTED_CHILDREN" | jq -e --arg parent "$NESTED_PARENT_RUN" '(.data | length) == 1 and .data[0].parent_orchestration_run_id == $parent and .data[0].parent_node_id == "delegate"' >/dev/null 2>&1; then
+  echo "a sub_orchestration child did not name the run and node that started it"
+  printf '%s\n' "$NESTED_CHILDREN"
+  exit 1
+fi
+
+NESTED_PARENT_GET=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI get-orchestration-run \
+  --orchestration-run-id "$NESTED_PARENT_RUN")
+if ! printf '%s\n' "$NESTED_PARENT_GET" | jq -e '(.usage | type) == "object" and (.usage_own | type) == "object" and (.usage.total_input_tokens | type) == "number" and (.usage_own.total_input_tokens | type) == "number" and .parent_orchestration_run_id == null' >/dev/null 2>&1; then
+  echo "the parent run did not carry both the subtree and own-nodes roll-up"
+  printf '%s\n' "$NESTED_PARENT_GET"
+  exit 1
+fi
+
+# The filter that keeps an aggregate over runs from double-counting: `usage` is
+# transitive, so a child must not appear in the top-level list.
+NESTED_ROOTS=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestration-runs --nested false --limit 100)
+if ! printf '%s\n' "$NESTED_ROOTS" | jq -e 'all(.data[]; .parent_orchestration_run_id == null)' >/dev/null 2>&1; then
+  echo "nested=false returned a run that was started by another run"
+  printf '%s\n' "$NESTED_ROOTS"
+  exit 1
+fi
+NESTED_CHILDREN_ALL=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestration-runs --nested true --limit 100)
+if ! printf '%s\n' "$NESTED_CHILDREN_ALL" | jq -e '(.data | length) > 0 and all(.data[]; .parent_orchestration_run_id != null)' >/dev/null 2>&1; then
+  echo "nested=true did not return exactly the runs started by another run"
+  printf '%s\n' "$NESTED_CHILDREN_ALL"
+  exit 1
+fi
+echo "Nested run attribution: OK"
 
 echo "--- Listing runs ---"
 ORCH_RUN_LIST_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestration-runs --orchestration-id "$ORCH_ID")
@@ -4011,6 +4095,20 @@ if ! printf '%s\n' "$SOAT_PRESET_CALL_RESP" | jq -e '.limit == 1 and (.data | le
 fi
 echo "Preset query parameter: OK"
 
+# 37b-ii. A preset is a pin, not a default: a caller that supplies the same key
+# does not get to override it. `limit` is echoed back, so the losing value is
+# directly observable — the tool pins 1, the call asks for 50, the answer is 1.
+SOAT_PRESET_OVERRIDE_RESP=$($SOAT_CLI call-tool \
+  --tool-id "$SOAT_PRESET_TOOL_ID" \
+  --action list-agents \
+  --input '{"limit":50}')
+if ! printf '%s\n' "$SOAT_PRESET_OVERRIDE_RESP" | jq -e '.limit == 1' >/dev/null 2>&1; then
+  echo "ERROR: caller input overrode a preset_parameters value" >&2
+  echo "$SOAT_PRESET_OVERRIDE_RESP" >&2
+  exit 1
+fi
+echo "Preset wins over caller input: OK"
+
 # 37c. `preset_parameters` must also satisfy a *path* parameter, not just a
 # query one: the action's URL is built from them, so a pinned `agent_id` makes
 # an item-scoped action callable with an empty input.
@@ -4567,8 +4665,89 @@ echo "--- Verifying a manual trigger has no secret ---"
 expect_cli_error_status 400 get-trigger-secret --trigger-id "$TRIGGER_ID"
 echo "Manual trigger secret correctly rejected."
 
+# Event trigger: an internal event starts work with no HTTP loopback in the path.
+# The emitting graph publishes onto the bus; the trigger subscribes to that name
+# and runs the transform orchestration. Nothing signs or verifies anything.
+echo "--- Creating event emitter orchestration ---"
+EVENT_EMITTER_RESP=$($SOAT_CLI create-orchestration \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-event-emitter" \
+  --nodes '[{"id":"tick","type":"emit_event","event_type":"smoke.tick","input_mapping":{"origin":"smoke"}}]' \
+  --edges '[]')
+EVENT_EMITTER_ID=$(printf '%s\n' "$EVENT_EMITTER_RESP" | jq -r '.id')
+if [ -z "$EVENT_EMITTER_ID" ] || [ "$EVENT_EMITTER_ID" = "null" ]; then
+  echo "ERROR: Failed to create event emitter orchestration" >&2
+  printf '%s\n' "$EVENT_EMITTER_RESP" >&2
+  exit 1
+fi
+
+echo "--- Creating event trigger ---"
+EVENT_TRIGGER_RESP=$($SOAT_CLI create-trigger \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-event-trigger" \
+  --type event \
+  --event-pattern "smoke.tick" \
+  --target-type orchestration \
+  --target-id "$TRIGGER_ORCH_ID" \
+  --input '{"cycle":"reactive"}')
+EVENT_TRIGGER_ID=$(printf '%s\n' "$EVENT_TRIGGER_RESP" | jq -r '.id')
+if [ -z "$EVENT_TRIGGER_ID" ] || [ "$EVENT_TRIGGER_ID" = "null" ]; then
+  echo "ERROR: Failed to create event trigger" >&2
+  printf '%s\n' "$EVENT_TRIGGER_RESP" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$EVENT_TRIGGER_RESP" | jq -e '.event_pattern == "smoke.tick"' >/dev/null 2>&1; then
+  echo "ERROR: event trigger did not persist its event_pattern" >&2
+  printf '%s\n' "$EVENT_TRIGGER_RESP" >&2
+  exit 1
+fi
+echo "Event trigger created: $EVENT_TRIGGER_ID"
+
+echo "--- Emitting the event ---"
+$SOAT_CLI start-orchestration-run \
+  --orchestration-id "$EVENT_EMITTER_ID" \
+  --input '{}' \
+  --wait true >/dev/null
+
+# Dispatch is fire-and-forget off the bus, so poll the firing record.
+echo "--- Waiting for the event-driven firing ---"
+EVENT_FIRING_STATUS=""
+i=0
+while [ "$i" -lt 40 ]; do
+  EVENT_FIRINGS_RESP=$($SOAT_CLI list-trigger-firings --trigger-id "$EVENT_TRIGGER_ID")
+  EVENT_FIRING_STATUS=$(printf '%s\n' "$EVENT_FIRINGS_RESP" | jq -r '.data[0].status // ""')
+  if [ "$EVENT_FIRING_STATUS" = "succeeded" ] || [ "$EVENT_FIRING_STATUS" = "failed" ]; then
+    break
+  fi
+  i=$((i + 1))
+  sleep 1
+done
+if [ "$EVENT_FIRING_STATUS" != "succeeded" ]; then
+  echo "ERROR: event trigger did not produce a succeeded firing (status='$EVENT_FIRING_STATUS')" >&2
+  printf '%s\n' "$EVENT_FIRINGS_RESP" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$EVENT_FIRINGS_RESP" | jq -e '.data[0].source == "event" and .data[0].input.event == "smoke.tick"' >/dev/null 2>&1; then
+  echo "ERROR: event firing did not carry the event as its input" >&2
+  printf '%s\n' "$EVENT_FIRINGS_RESP" >&2
+  exit 1
+fi
+echo "Event trigger fired from the bus: OK"
+
+# Guard: a pattern in a platform namespace must name a registered event.
+echo "--- Verifying a typo'd event pattern is rejected ---"
+expect_cli_error_status 400 create-trigger \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-event-typo" \
+  --type event \
+  --event-pattern "documents.ingsted" \
+  --target-type orchestration \
+  --target-id "$TRIGGER_ORCH_ID"
+echo "Typo'd event pattern correctly rejected."
+
 # Delete triggers
 echo "--- Deleting triggers ---"
+$SOAT_CLI delete-trigger --trigger-id "$EVENT_TRIGGER_ID"
 $SOAT_CLI delete-trigger --trigger-id "$WEBHOOK_TRIGGER_ID"
 $SOAT_CLI delete-trigger --trigger-id "$TRIGGER_ID"
 echo "Triggers deleted."
@@ -4735,6 +4914,88 @@ fi
 $SOAT_CLI delete-formation --formation_id "$QUOTA_FORMATION_ID"
 expect_cli_error_status 404 get-quota --quota-id "$QUOTA_PHYS_ID"
 echo "Formation quota resource verified."
+
+# Custom (operator-registered) resource type — the smoke stack registers
+# `smoke_channel` via FORMATION_RESOURCE_TYPES_CONFIG, whose lifecycle is
+# delegated to the `formation-handler` service. The handler verifies the request
+# signature, so a passing step proves the signing half too; nothing else about
+# the template distinguishes it from a built-in resource.
+echo "--- Validating a formation with a custom resource type ---"
+CUSTOM_VALIDATE_RESP=$($SOAT_CLI validate-formation \
+  --template '{"resources":{"chan":{"type":"smoke_channel","properties":{"name":"Smoke Channel","kind":"whatsapp"}}}}')
+if [ "$(printf '%s\n' "$CUSTOM_VALIDATE_RESP" | jq -r '.valid')" != "true" ]; then
+  echo "ERROR: validate-formation rejected a valid custom resource type" >&2
+  echo "$CUSTOM_VALIDATE_RESP" >&2
+  exit 1
+fi
+
+# The handler's `validate` capability.
+echo "--- Custom resource type: handler validate rejects an unsupported kind ---"
+# `validate-formation` reports rather than throws, so the assertion is on the
+# verdict. `kind` is a string either way, so only the handler can reject this.
+CUSTOM_BAD_KIND_RESP=$($SOAT_CLI validate-formation \
+  --template '{"resources":{"chan":{"type":"smoke_channel","properties":{"name":"Smoke Channel","kind":"carrier-pigeon"}}}}')
+if [ "$(printf '%s\n' "$CUSTOM_BAD_KIND_RESP" | jq -r '.valid')" != "false" ]; then
+  echo "ERROR: the handler's validate verdict was not applied" >&2
+  echo "$CUSTOM_BAD_KIND_RESP" >&2
+  exit 1
+fi
+
+echo "--- Custom resource type: unknown property is rejected by the registered schema ---"
+expect_cli_error_status 400 create-formation \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-custom-invalid" \
+  --template '{"resources":{"chan":{"type":"smoke_channel","properties":{"name":"X","kind":"whatsapp","nope":"x"}}}}'
+
+echo "--- Creating a formation with a custom resource type ---"
+# `access_token` is declared write-only in the registration, so the engine must
+# send it to the handler and then drop it before storing the resource snapshot.
+CUSTOM_FORMATION_RESP=$($SOAT_CLI create-formation \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-custom-formation" \
+  --template '{"resources":{"chan":{"type":"smoke_channel","properties":{"name":"Smoke Channel","kind":"whatsapp","access_token":"shh-not-a-real-token","agent_id":{"ref":"agentRes"}}},"agentRes":{"type":"agent","properties":{"name":"smoke-custom-agent","ai_provider_id":"'"$AI_PROVIDER_ID"'"}}},"outputs":{"handlerUrl":{"ref_attr":"chan.handler_url"}}}')
+CUSTOM_FORMATION_ID=$(printf '%s\n' "$CUSTOM_FORMATION_RESP" | jq -r '.id')
+CUSTOM_PHYS_ID=$(printf '%s\n' "$CUSTOM_FORMATION_RESP" | jq -r '.resources[] | select(.resource_type == "smoke_channel") | .physical_resource_id')
+if ! printf '%s\n' "$CUSTOM_PHYS_ID" | grep -q '^chan_smoke_'; then
+  echo "ERROR: the custom resource handler did not provide a physical resource id" >&2
+  echo "$CUSTOM_FORMATION_RESP" >&2
+  exit 1
+fi
+# The handler's `read` outputs resolved a ref_attr, which is the whole
+# getAttributes path end to end.
+if [ "$(printf '%s\n' "$CUSTOM_FORMATION_RESP" | jq -r '.outputs.handlerUrl')" = "null" ]; then
+  echo "ERROR: ref_attr against a custom resource type did not resolve" >&2
+  echo "$CUSTOM_FORMATION_RESP" >&2
+  exit 1
+fi
+# The write-only property must not survive into the stored plan/diff. A plan
+# against the same template is the surface that would expose it.
+CUSTOM_PLAN_RESP=$($SOAT_CLI plan-formation \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --formation_id "$CUSTOM_FORMATION_ID" \
+  --template '{"resources":{"chan":{"type":"smoke_channel","properties":{"name":"Smoke Channel","kind":"whatsapp","access_token":"shh-not-a-real-token","agent_id":{"ref":"agentRes"}}},"agentRes":{"type":"agent","properties":{"name":"smoke-custom-agent","ai_provider_id":"'"$AI_PROVIDER_ID"'"}}}}')
+if printf '%s\n' "$CUSTOM_PLAN_RESP" | jq -e '[.changes[].diff.current // empty | tostring] | join(" ") | contains("shh-not-a-real-token")' >/dev/null 2>&1; then
+  echo "ERROR: a write-only property was stored in the formation ledger" >&2
+  echo "$CUSTOM_PLAN_RESP" >&2
+  exit 1
+fi
+echo "Write-only property withheld from the stored snapshot."
+
+echo "Custom resource type created: $CUSTOM_PHYS_ID"
+
+echo "--- Updating a formation with a custom resource type ---"
+CUSTOM_UPDATE_RESP=$($SOAT_CLI update-formation \
+  --formation_id "$CUSTOM_FORMATION_ID" \
+  --template '{"resources":{"chan":{"type":"smoke_channel","properties":{"name":"Smoke Channel Renamed","kind":"whatsapp","agent_id":{"ref":"agentRes"}}},"agentRes":{"type":"agent","properties":{"name":"smoke-custom-agent","ai_provider_id":"'"$AI_PROVIDER_ID"'"}}}}')
+if [ "$(printf '%s\n' "$CUSTOM_UPDATE_RESP" | jq -r '.status')" != "active" ]; then
+  echo "ERROR: update-formation with a custom resource type did not settle active" >&2
+  echo "$CUSTOM_UPDATE_RESP" >&2
+  exit 1
+fi
+
+echo "--- Deleting the custom resource type formation ---"
+$SOAT_CLI delete-formation --formation_id "$CUSTOM_FORMATION_ID"
+echo "Custom formation resource type verified."
 
 # Evaluation resources (Evaluations Phase 3) — a formation declares a dataset,
 # a test case inside it, and the eval binding both to the agent under test; the
@@ -5312,7 +5573,20 @@ TASK_RESP=$($SOAT_CLI create-task \
   --project-id "$PROJECT_PUBLIC_ID" \
   --workflow-id "$WORKFLOW_ID" \
   --title "smoke card" \
+  --metadata '{"tenant_account_id":"smoke-tenant-42"}' \
   --payload '{"theme":"the sea"}')
+# The label is readable (unlike tool_context) and stays out of the
+# guard-visible payload.
+if [ "$(printf '%s\n' "$TASK_RESP" | jq -r '.metadata.tenant_account_id')" != "smoke-tenant-42" ]; then
+  echo "ERROR: create-task did not persist metadata" >&2
+  printf '%s\n' "$TASK_RESP" >&2
+  exit 1
+fi
+if printf '%s\n' "$TASK_RESP" | jq -e '.payload | tostring | test("tenant_account_id")' >/dev/null; then
+  echo "ERROR: task metadata leaked into the payload" >&2
+  printf '%s\n' "$TASK_RESP" >&2
+  exit 1
+fi
 TASK_ID=$(printf '%s\n' "$TASK_RESP" | jq -r '.id')
 TASK_STATE=$(printf '%s\n' "$TASK_RESP" | jq -r '.state')
 if [ "$TASK_ID" = "null" ] || [ "$TASK_STATE" != "triage" ]; then
@@ -5354,6 +5628,13 @@ $SOAT_CLI transition-task --task-id "$TASK_ID" --transition revise >/dev/null
 BACK_STATE=$($SOAT_CLI get-task --task-id "$TASK_ID" | jq -r '.state')
 if [ "$BACK_STATE" != "drafting" ]; then
   echo "ERROR: backward move expected 'drafting', got '$BACK_STATE'" >&2
+  exit 1
+fi
+# Three moves later the label is still there: a transition supplies no metadata
+# of its own and must not clear the task's.
+if [ "$($SOAT_CLI get-task --task-id "$TASK_ID" | jq -r '.metadata.tenant_account_id')" != "smoke-tenant-42" ]; then
+  echo "ERROR: task lost its metadata across transitions" >&2
+  $SOAT_CLI get-task --task-id "$TASK_ID" >&2
   exit 1
 fi
 $SOAT_CLI transition-task --task-id "$TASK_ID" --transition to_review >/dev/null
@@ -6191,8 +6472,16 @@ fi
 echo "Eval id: $EVAL_ID"
 
 echo "--- Queuing an asynchronous run and polling to terminal ---"
-EVAL_ASYNC_RESP=$($SOAT_CLI start-eval-run --eval_id "$EVAL_ID" --wait false)
+# `--metadata` rides along on the queued run: the worker that settles it reads
+# the label off the row, never from the request that started it.
+EVAL_ASYNC_RESP=$($SOAT_CLI start-eval-run --eval_id "$EVAL_ID" --wait false \
+  --metadata '{"commit_sha":"smoke-9f2c1ab"}')
 EVAL_ASYNC_RUN_ID=$(printf '%s\n' "$EVAL_ASYNC_RESP" | jq -r '.id')
+if [ "$(printf '%s\n' "$EVAL_ASYNC_RESP" | jq -r '.metadata.commit_sha')" != "smoke-9f2c1ab" ]; then
+  echo "ERROR: start-eval-run did not persist metadata" >&2
+  printf '%s\n' "$EVAL_ASYNC_RESP" >&2
+  exit 1
+fi
 if ! printf '%s\n' "$EVAL_ASYNC_RESP" | jq -e '.status == "queued"' >/dev/null 2>&1; then
   echo "ERROR: expected wait=false to answer with a queued run" >&2
   printf '%s\n' "$EVAL_ASYNC_RESP" >&2
@@ -6215,6 +6504,11 @@ while [ "$i" -lt 60 ]; do
 done
 if [ "$EVAL_ASYNC_STATUS" != "completed" ]; then
   echo "ERROR: queued eval run did not complete (status '$EVAL_ASYNC_STATUS')" >&2
+  printf '%s\n' "$EVAL_ASYNC_GET" >&2
+  exit 1
+fi
+if [ "$(printf '%s\n' "$EVAL_ASYNC_GET" | jq -r '.metadata.commit_sha')" != "smoke-9f2c1ab" ]; then
+  echo "ERROR: settled eval run lost its metadata" >&2
   printf '%s\n' "$EVAL_ASYNC_GET" >&2
   exit 1
 fi

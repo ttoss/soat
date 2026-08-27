@@ -1,4 +1,5 @@
 /* eslint-disable max-lines */
+import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
@@ -26,7 +27,7 @@ import {
   type PaginatedResult,
   resolvePagination,
 } from './pagination';
-import { getRunUsageTotals, type UsageTotals } from './usageReceipt';
+import { getRunUsageRollups, type UsageTotals } from './usageReceipt';
 
 const log = createDebug('soat:orchestrations');
 
@@ -206,12 +207,34 @@ export type MappedOrchestrationRun = {
   // `X-Soat-Context-*` headers on the tool calls of every agent generation the
   // run spawns. An opaque bag: copied as a value, its keys never re-cased.
   tool_context: Record<string, string> | null;
+  // Caller-owned annotations supplied at run creation, returned verbatim and
+  // never merged into `state`. An opaque bag: copied as a value, its keys never
+  // re-cased, and no key reserved — the engine reads nothing from here.
+  metadata: Record<string, unknown> | null;
   output: Record<string, unknown> | null;
+  // The run and node that started this one, set only on a `loop` /
+  // `sub_orchestration` child. Both null for a run a caller started.
+  // Qualified by its resource, like every other run id on the wire: SOAT has
+  // three unrelated run concepts, so a bare `parent_run_id` would be one more
+  // spelling to paste into the wrong flag (`rest/runParamNamingContract.test.ts`).
+  parent_orchestration_run_id: string | null;
+  parent_node_id: string | null;
   node_executions: MappedNodeExecution[];
   // Usage roll-up (tokens + cost_usd) summed across every metered generation the
   // run produced. Populated on the single-run read; omitted from list responses.
   // `UsageTotals` is the internal camelCase shape; this is its wire projection.
   usage?: {
+    total_input_tokens: number;
+    total_output_tokens: number;
+    total_cached_tokens: number;
+    total_reasoning_tokens: number;
+    total_cost_usd: number | null;
+  };
+  // The same roll-up summed over this run *and every run descended from it*
+  // through `loop` / `sub_orchestration` nodes. Equal to `usage` for a run with
+  // no children. Populated on the single-run read alongside `usage`, which is
+  // the subtree total.
+  usage_own?: {
     total_input_tokens: number;
     total_output_tokens: number;
     total_cached_tokens: number;
@@ -307,7 +330,9 @@ export const mapOrchestrationRun = (
     project: InstanceType<typeof db.Project>;
     nodeExecutions?: InstanceType<typeof db.OrchestrationNodeExecution>[];
   },
-  usage?: UsageTotals
+  // The subtree total (what the run cost) and this run's own nodes.
+  usage?: UsageTotals,
+  ownUsage?: UsageTotals
 ): MappedOrchestrationRun => {
   return {
     id: run.publicId,
@@ -323,7 +348,10 @@ export const mapOrchestrationRun = (
     trace_id: run.traceId,
     input: run.input as Record<string, unknown> | null,
     tool_context: run.toolContext ?? null,
+    metadata: run.metadata ?? null,
     output: run.output as Record<string, unknown> | null,
+    parent_orchestration_run_id: run.parentRunId,
+    parent_node_id: run.parentNodeId,
     node_executions: (run.nodeExecutions ?? []).map(mapNodeExecution),
     ...(usage
       ? {
@@ -333,6 +361,17 @@ export const mapOrchestrationRun = (
             total_cached_tokens: usage.totalCachedTokens,
             total_reasoning_tokens: usage.totalReasoningTokens,
             total_cost_usd: usage.totalCostUsd,
+          },
+        }
+      : {}),
+    ...(ownUsage
+      ? {
+          usage_own: {
+            total_input_tokens: ownUsage.totalInputTokens,
+            total_output_tokens: ownUsage.totalOutputTokens,
+            total_cached_tokens: ownUsage.totalCachedTokens,
+            total_reasoning_tokens: ownUsage.totalReasoningTokens,
+            total_cost_usd: ownUsage.totalCostUsd,
           },
         }
       : {}),
@@ -615,13 +654,29 @@ export const findOrchestrationRun = async (args: {
   })) as OrchestrationRunRow | null;
   if (!run) return null;
 
-  const usage = await getRunUsageTotals({ runInternalId: run.id as number });
+  // `usage` is the subtree figure and `usage_own` the run's own nodes — both
+  // from one pass, so the split costs no extra query (#1135).
+  const rollups = await getRunUsageRollups({
+    runInternalId: run.id as number,
+    runPublicId: run.publicId as string,
+  });
 
-  return mapOrchestrationRun(run, usage);
+  return mapOrchestrationRun(run, rollups.includingNested, rollups.own);
 };
 
 export const listOrchestrationRuns = async (args: {
   orchestrationPublicId?: string;
+  // Public id of a parent run: returns the runs its `loop` /
+  // `sub_orchestration` nodes started. Without it a caller holding a parent has
+  // no way to name its children, which is what let a parent's total read as
+  // complete when it was not (#1135).
+  parentRunId?: string;
+  // Whether the run was started by another run. `false` selects the runs a
+  // caller started (no parent), `true` the runs a `loop` /
+  // `sub_orchestration` node started; omitted returns both. This is what makes
+  // an aggregate over runs safe: `usage` is transitive, so summing it across a
+  // list that mixes parents and their children counts the children twice.
+  nested?: boolean;
   projectIds?: number[];
   limit?: number;
   offset?: number;
@@ -632,6 +687,11 @@ export const listOrchestrationRuns = async (args: {
 
   const where: Record<string, unknown> = {};
   if (args.projectIds) where['projectId'] = args.projectIds;
+  if (args.parentRunId !== undefined) {
+    where['parentRunId'] = args.parentRunId;
+  } else if (args.nested !== undefined) {
+    where['parentRunId'] = args.nested ? { [Op.ne]: null } : null;
+  }
 
   // Optional orchestration filter: resolve the orchestration id when provided,
   // returning an empty list if it does not exist within the caller's scope.

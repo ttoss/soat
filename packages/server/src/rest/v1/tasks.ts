@@ -2,6 +2,7 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { buildSrn } from 'src/lib/iam';
+import { parseMetadataBag } from 'src/lib/metadataBag';
 import { principalFromAuthUser } from 'src/lib/principals';
 import {
   createTask,
@@ -111,6 +112,7 @@ tasksRouter.post('/tasks', async (ctx: Context) => {
     assignee?: string | null;
     state?: string | null;
     tool_context?: Record<string, string> | null;
+    metadata?: unknown;
   };
 
   const projectId = await resolveWriteProjectId({
@@ -127,6 +129,8 @@ tasksRouter.post('/tasks', async (ctx: Context) => {
     assignee: body.assignee,
     state: body.state,
     toolContext: body.tool_context,
+    // Rejected before the task row exists, like every other metadata bag.
+    metadata: parseMetadataBag(body.metadata),
     principal: principalFromCtx(ctx),
   });
 

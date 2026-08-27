@@ -1,6 +1,7 @@
 import { db } from 'src/db';
 import { emitActivityEntry } from 'src/lib/activity';
 import { emitApproval as emitApprovalLib } from 'src/lib/approvals';
+import { droppedEventCount } from 'src/lib/eventBus';
 import { fileException } from 'src/lib/exceptions';
 import { fireDueTriggers } from 'src/lib/triggerScheduler';
 
@@ -244,10 +245,16 @@ describe('Activity', () => {
     // is fire-and-forget and must never throw even if the DB insert itself
     // fails, so the failure has to be injected — no real DB write fails
     // deterministically (sanctioned in tests.md for exactly this shape).
-    test('emitActivityEntry swallows a write failure and returns null', async () => {
+    test('emitActivityEntry returns null once a write failure outlives its retries', async () => {
+      // `mockRejectedValue`, not `…Once`: a single rejection is now retried and
+      // the entry is written after all (#1130), so only a failure that persists
+      // across every attempt reaches the null-returning branch. The caller is a
+      // fire-and-forget bus handler, so `null` stays the contract — but the
+      // entry that was lost is counted.
       const spy = jest
         .spyOn(db.ActivityEntry, 'create')
-        .mockRejectedValueOnce(new Error('simulated write failure'));
+        .mockRejectedValue(new Error('simulated write failure'));
+      const before = droppedEventCount({ stage: 'activity_write' });
       try {
         const result = await emitActivityEntry({
           projectId: projectInternalId,
@@ -255,6 +262,24 @@ describe('Activity', () => {
           summary: 'should not persist',
         });
         expect(result).toBeNull();
+        expect(droppedEventCount({ stage: 'activity_write' })).toBe(before + 1);
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    test('emitActivityEntry survives a transient write failure', async () => {
+      const spy = jest
+        .spyOn(db.ActivityEntry, 'create')
+        .mockRejectedValueOnce(new Error('connection terminated'));
+      try {
+        const result = await emitActivityEntry({
+          projectId: projectInternalId,
+          kind: 'action_executed',
+          summary: 'written on the retry',
+        });
+        expect(result).not.toBeNull();
+        expect(result!.summary).toBe('written on the retry');
       } finally {
         spy.mockRestore();
       }

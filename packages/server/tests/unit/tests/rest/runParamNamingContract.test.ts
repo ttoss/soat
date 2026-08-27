@@ -132,11 +132,21 @@ describe('run parameter naming contract', () => {
   });
 
   test('every run parameter is qualified by its own resource', () => {
-    const QUALIFIED = new Set(['eval_run_id', 'orchestration_run_id']);
+    // Matched as a *suffix*, not an exact name: a parameter may narrow a
+    // qualified id further (`parent_orchestration_run_id` filters runs by the
+    // run that started them) and still say which kind of run it means, which is
+    // the whole point of the rule. A bare `run_id` — or a `parent_run_id` that
+    // qualifies nothing — still fails.
+    const QUALIFIED = ['eval_run_id', 'orchestration_run_id'];
 
     const offenders = allParameters()
       .filter(({ name }) => {
-        return name.endsWith('run_id') && !QUALIFIED.has(name);
+        return (
+          name.endsWith('run_id') &&
+          !QUALIFIED.some((qualified) => {
+            return name.endsWith(qualified);
+          })
+        );
       })
       .map(({ label, name }) => {
         return `${name} — ${label}`;

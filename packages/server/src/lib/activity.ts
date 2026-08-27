@@ -5,12 +5,13 @@ import { db } from 'src/db';
 import { DomainError } from '../errors';
 import { APPROVAL_EVENT_TYPES } from './approvals';
 import type { SoatEvent } from './eventBus';
-import { onEvent } from './eventBus';
+import { onEvent, recordDroppedEvent } from './eventBus';
 import { EXCEPTION_EVENT_TYPES } from './exceptions';
 import { DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT } from './pagination';
 import { isPlainObject } from './plainObject';
 import { camelToSnakeKey, convertKeys } from './resource-inputs/normalizers';
 import { isSoatEventType, type SoatEventType } from './soatEvents';
+import { retryTransient } from './transientRetry';
 
 const log = createDebug('soat:activity');
 
@@ -97,21 +98,36 @@ export const emitActivityEntry = async (
 ): Promise<MappedActivityEntry | null> => {
   log('emitActivityEntry: projectId=%d kind=%s', args.projectId, args.kind);
   try {
-    const instance = await db.ActivityEntry.create({
-      projectId: args.projectId,
-      kind: args.kind,
-      severity: args.severity ?? DEFAULT_SEVERITY_BY_KIND[args.kind],
-      summary: args.summary,
-      detail: args.detail,
-      orchestrationRunId: args.orchestrationRunId,
-      agentId: args.agentId,
-      refId: args.refId,
+    const instance = await retryTransient({
+      label: 'emitActivityEntry.create',
+      operation: () => {
+        return db.ActivityEntry.create({
+          projectId: args.projectId,
+          kind: args.kind,
+          severity: args.severity ?? DEFAULT_SEVERITY_BY_KIND[args.kind],
+          summary: args.summary,
+          detail: args.detail,
+          orchestrationRunId: args.orchestrationRunId,
+          agentId: args.agentId,
+          refId: args.refId,
+        });
+      },
     });
     const mapped = await reload(instance.id as number);
     log('emitActivityEntry: created id=%s', mapped.id);
     return mapped;
   } catch (error) {
-    log('emitActivityEntry: failed kind=%s %o', args.kind, error);
+    // A swallowed failure here is not only a missing feed row: guardrails gate
+    // on this table (`runtime.activity.actions_1h`), so an entry that is never
+    // written silently loosens the limit it was supposed to count against
+    // (#1130). Returning `null` stays the contract — the caller is a
+    // fire-and-forget bus handler — but the loss is now counted and printed.
+    recordDroppedEvent({
+      stage: 'activity_write',
+      type: args.kind,
+      resourceId: args.refId ?? '',
+      error,
+    });
     return null;
   }
 };

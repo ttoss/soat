@@ -431,7 +431,9 @@ describe('Tools', () => {
           actions: ['listAgents'],
         });
       expect(response.status).toBe(400);
-      expect(response.body.error.message).toMatch(/Unsupported tool type 'soat'/);
+      expect(response.body.error.message).toMatch(
+        /Unsupported tool type 'soat'/
+      );
     });
 
     test('calling a soat tool without action returns 400 with operationId in error message', async () => {
@@ -1402,6 +1404,43 @@ describe('Tools', () => {
   });
 
   describe('Invalid template tokens ({{...}}) in tool configs', () => {
+    // #345: `preset_parameters` is now a place `{{context:...}}` is resolved, so
+    // it is also a place a malformed token must be caught at write time rather
+    // than shipped verbatim to the target as a parameter value.
+    test('creating a tool with a {{context:...}} preset parameter is accepted', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'context-preset-tool',
+          type: 'http',
+          execute: { url: 'https://api.example.com/ads', method: 'POST' },
+          context_keys: ['ocaToken', 'ocaAdAccountId'],
+          preset_parameters: { adAccountId: '{{context:ocaAdAccountId}}' },
+        });
+
+      expect(res.status).toBe(201);
+      // The stored config keeps the token; resolution happens per call.
+      expect(res.body.preset_parameters).toEqual({
+        adAccountId: '{{context:ocaAdAccountId}}',
+      });
+    });
+
+    test('creating a tool with a malformed {{...}} token in preset_parameters returns 400', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'bad-preset-token-tool',
+          type: 'http',
+          execute: { url: 'https://api.example.com/ads', method: 'POST' },
+          preset_parameters: { adAccountId: '{{ocaAdAccountId}}' },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_TEMPLATE_TOKEN');
+    });
+
     test('creating an http tool with a non-secret {{...}} token in execute.url returns 400', async () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')
@@ -2523,6 +2562,92 @@ describe('Tools', () => {
       expect(lastBody).toEqual({
         topic: 'clarity',
         fundamental_truth: 'authored in snake_case',
+      });
+    });
+
+    // `preset_parameters` is a pin the tool's operator sets, so it outranks the
+    // caller's `input` for the same key — on this route as in an agent's tool
+    // loop. Before the precedence was fixed, `input` silently won here.
+    describe('preset_parameters precedence', () => {
+      let presetServer: http.Server;
+      let presetServerUrl: string;
+      let lastPresetBody: Record<string, unknown> | undefined;
+
+      beforeAll(async () => {
+        presetServer = http.createServer((req, res) => {
+          let raw = '';
+          req.on('data', (chunk) => {
+            raw += chunk;
+          });
+          req.on('end', () => {
+            lastPresetBody = raw
+              ? (JSON.parse(raw) as Record<string, unknown>)
+              : {};
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ ok: true }));
+          });
+        });
+        await new Promise<void>((resolve) => {
+          presetServer.listen(0, '127.0.0.1', resolve);
+        });
+        const { port } = presetServer.address() as AddressInfo;
+        presetServerUrl = `http://127.0.0.1:${port}`;
+      });
+
+      afterAll(async () => {
+        await new Promise<void>((resolve) => {
+          presetServer.close(() => {
+            resolve();
+          });
+        });
+      });
+
+      test('a preset value wins over the same key in the caller input', async () => {
+        const createRes = await authenticatedTestClient(adminToken)
+          .post('/api/v1/tools')
+          .send({
+            project_id: projectId,
+            name: 'preset-precedence-tool',
+            type: 'http',
+            execute: { url: `${presetServerUrl}/charge`, method: 'POST' },
+            preset_parameters: { account_id: 'acct_pinned' },
+          });
+        expect(createRes.status).toBe(201);
+
+        lastPresetBody = undefined;
+        const callRes = await authenticatedTestClient(adminToken)
+          .post(`/api/v1/tools/${createRes.body.id}/call`)
+          .send({ input: { account_id: 'acct_caller', amount: 10 } });
+
+        expect(callRes.status).toBe(200);
+        expect(lastPresetBody).toEqual({
+          account_id: 'acct_pinned',
+          amount: 10,
+        });
+      });
+
+      test('caller input still fills keys the presets do not pin', async () => {
+        const createRes = await authenticatedTestClient(adminToken)
+          .post('/api/v1/tools')
+          .send({
+            project_id: projectId,
+            name: 'preset-passthrough-tool',
+            type: 'http',
+            execute: { url: `${presetServerUrl}/charge`, method: 'POST' },
+            preset_parameters: { account_id: 'acct_pinned' },
+          });
+        expect(createRes.status).toBe(201);
+
+        lastPresetBody = undefined;
+        const callRes = await authenticatedTestClient(adminToken)
+          .post(`/api/v1/tools/${createRes.body.id}/call`)
+          .send({ input: { amount: 42 } });
+
+        expect(callRes.status).toBe(200);
+        expect(lastPresetBody).toEqual({
+          account_id: 'acct_pinned',
+          amount: 42,
+        });
       });
     });
   });

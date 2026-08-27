@@ -190,6 +190,81 @@ describe('Tasks', () => {
       expect(history.body[0].actor_id).toBeUndefined();
     });
 
+    // #342 (same gap, third module): a task is long-lived, durable and moves
+    // through states for days. Its only caller-settable bag was `payload` —
+    // read by every guard and writable by the workflow's own `payload_writes`,
+    // so an infrastructural label put there is neither inert nor safe from the
+    // engine. `metadata` is caller-owned and untouched by both.
+    describe('metadata', () => {
+      test('round-trips verbatim on create, single read and list', async () => {
+        const metadata = { tenant_account_id: '42', source: 'zendesk' };
+
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/tasks')
+          .send({
+            project_id: projectId,
+            workflow_id: workflowId,
+            title: 'A labelled card',
+            payload: { topic: 'spring' },
+            metadata,
+          });
+        expect(res.status).toBe(201);
+        expect(res.body.metadata).toEqual(metadata);
+        // The label stays out of the guard-visible payload.
+        expect(res.body.payload).toEqual({ topic: 'spring' });
+
+        const getRes = await authenticatedTestClient(userToken).get(
+          `/api/v1/tasks/${res.body.id}`
+        );
+        expect(getRes.status).toBe(200);
+        expect(getRes.body.metadata).toEqual(metadata);
+
+        const listRes = await authenticatedTestClient(userToken).get(
+          `/api/v1/tasks?workflow_id=${workflowId}`
+        );
+        expect(listRes.status).toBe(200);
+        const listed = listRes.body.data.find((task: { id: string }) => {
+          return task.id === res.body.id;
+        });
+        expect(listed.metadata).toEqual(metadata);
+      });
+
+      test('survives a transition, which supplies no metadata of its own', async () => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/tasks')
+          .send({
+            project_id: projectId,
+            workflow_id: workflowId,
+            title: 'A card that moves',
+            metadata: { tenant_account_id: '42' },
+          });
+        expect(res.status).toBe(201);
+
+        const moved = await transition(res.body.id, 'to_draft');
+        expect(moved.status).toBe(200);
+        expect(moved.body.metadata).toEqual({ tenant_account_id: '42' });
+      });
+
+      test('a task created without metadata reports null', async () => {
+        const res = await createTask({ topic: 'spring' });
+        expect(res.status).toBe(201);
+        expect(res.body.metadata).toBeNull();
+      });
+
+      test('a non-object metadata is rejected with 400 and creates no task', async () => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/tasks')
+          .send({
+            project_id: projectId,
+            workflow_id: workflowId,
+            title: 'A rejected card',
+            metadata: ['not', 'an', 'object'],
+          });
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      });
+    });
+
     test('rejects a payload that violates payload_schema', async () => {
       const res = await createTask({ topic: 123 });
       expect(res.status).toBe(400);
@@ -2713,7 +2788,10 @@ describe('Tasks', () => {
     let calls: Array<{ body: unknown; path: string }>;
     let failNext: boolean;
 
-    const createHttpTool = async (name: string): Promise<string> => {
+    const createHttpTool = async (
+      name: string,
+      presetParameters?: object
+    ): Promise<string> => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')
         .send({
@@ -2721,6 +2799,7 @@ describe('Tasks', () => {
           name: `${name}-${Math.random().toString(36).slice(2)}`,
           type: 'http',
           execute: { url: `${toolServerUrl}/do`, method: 'POST' },
+          ...(presetParameters ? { preset_parameters: presetParameters } : {}),
         });
       expect(res.status).toBe(201);
       return res.body.id as string;
@@ -2759,7 +2838,11 @@ describe('Tasks', () => {
       return res.body.id as string;
     };
 
-    const startToolTask = async (workflowId: string, payload: object) => {
+    const startToolTask = async (
+      workflowId: string,
+      payload: object,
+      toolContext?: Record<string, string>
+    ) => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/tasks')
         .send({
@@ -2767,6 +2850,7 @@ describe('Tasks', () => {
           workflow_id: workflowId,
           title: 'tool card',
           payload,
+          ...(toolContext ? { tool_context: toolContext } : {}),
         });
       expect(res.status).toBe(201);
       return res.body.id as string;
@@ -2863,6 +2947,46 @@ describe('Tasks', () => {
       expect(routed.tool_id).toBe(toolId);
       expect(routed.generation_id).toBeNull();
       expect(routed.orchestration_run_id).toBeNull();
+    });
+
+    // #345: a task's stored `tool_context` reaches its `agent` and
+    // `orchestration` dispatches; the `tool` kind dropped it, so a tool pinning
+    // a `{{context:}}` parameter (or naming one in a header) could not be
+    // dispatched from a workflow at all.
+    test("forwards the task's tool_context, resolving the tool's {{context:}} preset", async () => {
+      const toolId = await createHttpTool('ctx-preset', {
+        adAccountId: '{{context:ocaAdAccountId}}',
+      });
+      const wf = await toolWorkflow({
+        name: 'tool-context',
+        dispatch: {
+          kind: 'tool',
+          tool_id: toolId,
+          input_mapping: { topic: { var: 'task.payload.topic' } },
+        },
+        onComplete: [{ when: true, transition: 'to_done' }],
+      });
+
+      const taskId = await startToolTask(
+        wf,
+        { topic: 'winter' },
+        { ocaAdAccountId: 'act_1330065197707199' }
+      );
+
+      const settled = await pollTask({
+        token: userToken,
+        taskId,
+        predicate: (t) => {
+          return t.state === 'done';
+        },
+      });
+      expect(settled.status).toBe('closed');
+
+      expect(calls).toHaveLength(1);
+      expect(calls[0].body).toEqual({
+        topic: 'winter',
+        adAccountId: 'act_1330065197707199',
+      });
     });
 
     test('exposes the tool result to on_complete rules, and records a tool_call dispatch with no id', async () => {

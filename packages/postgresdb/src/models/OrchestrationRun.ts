@@ -22,6 +22,15 @@ import { Project } from './Project';
       unique: true,
       fields: ['public_id'],
     },
+    // The descendant walk behind a nested cost roll-up reads children by parent,
+    // once per level, so the lookup is indexed rather than a scan per run read.
+    // `_idx` suffix per this package's naming rule — a name that equals the one
+    // Sequelize would derive turns a later field change into a silent rename
+    // `sync({ alter: true })` never cleans up (`tests/modelIndexes.test.ts`).
+    {
+      name: 'orchestration_runs_parent_run_id_idx',
+      fields: ['parent_run_id'],
+    },
   ],
   hooks: {
     beforeValidate: (instance: OrchestrationRun) => {
@@ -120,6 +129,22 @@ export class OrchestrationRun extends Model {
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare traceId: string | null;
 
+  // The run that started this one, and the node within it — set only on a child
+  // run a `loop` or `sub_orchestration` node spawned. A child is its own run
+  // record with its own usage events, so without this link a parent's cost
+  // roll-up silently excluded the work it ordered, and nothing on the wire could
+  // even name the runs it started (#1135).
+  //
+  // Denormalized public ids rather than a self-referential foreign key, for the
+  // same reason as `triggerId` below: the value is what the run response exposes
+  // and what a descendant walk queries by, so it needs no join and survives a
+  // parent row that is gone. Both null for a run a caller started directly.
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare parentRunId: string | null;
+
+  @Column({ type: DataType.STRING(128), allowNull: true })
+  declare parentNodeId: string | null;
+
   // Public id of the trigger firing that started this run, when it was launched
   // by an agent-target/orchestration-target trigger. Denormalized (not an FK) so
   // it survives trigger deletion and can be propagated onto the usage events of
@@ -181,6 +206,20 @@ export class OrchestrationRun extends Model {
     field: 'tool_context',
   })
   declare toolContext: Record<string, string> | null;
+
+  // Caller-owned key/value annotations supplied when the run was started, for
+  // attributing a run to whatever the caller's own system calls a tenant, a
+  // batch or a ticket (#342). Round-trips verbatim and is never read by the
+  // engine: it is deliberately *not* merged into `state`, which is why it is a
+  // column of its own rather than something a caller has to smuggle through
+  // `input` — the run's business payload, which every node sees and an
+  // `input_schema` may legitimately reject unknown keys from.
+  //
+  // Persisted on the row for the same reason as `toolContext`: a run outlives
+  // the request that started it, so a background drive, a wake and a redrive
+  // all read the label from here.
+  @Column({ type: DataType.JSONB, allowNull: true, defaultValue: null })
+  declare metadata: Record<string, unknown> | null;
 
   @Column({ type: DataType.JSONB, allowNull: true })
   declare output: object | null;

@@ -117,7 +117,9 @@ Token components are disjoint and additive: `input_tokens` is the **uncached** i
 | Agent generations | Agent generate (non-streaming, streaming, and the tool-outputs continuation), [conversations](./conversations.md), and [orchestration](./orchestrations.md) agent nodes | Full chain: `generation_id`, `agent_id`, `trace_id`, plus `orchestration_run_id`/`node_id` inside a run |
 | Standalone completions | [Chat](./chats.md) completions (stateless and chat-scoped) and [memory](./memories.md) fact extraction and consolidation | `generation_id` and `trace_id` are `null` — these calls create no generation. `agent_id` is set for memory passes, `null` for chats |
 
-Idempotency keys: inside a run the key is scoped to the node execution (`run:<orchestration_run_id>:node:<node_id>`), so a replayed node is a no-op; standalone completions have no replay identity, so their key is unique per call (`completion:<source>:<uuid>`). A **streamed** completion is metered when the stream finishes; a stream the client abandons mid-way is not metered.
+Idempotency keys: inside a run the key is scoped to the node execution **attempt** (`run:<orchestration_run_id>:node:<node_id>:attempt:<n>`), so a replayed node is a no-op while a **retry** meters for real — a second attempt is a second generation that reached the provider, and dropping it would under-report the node. The same identity keys the `compute_execution` meter and the node-execution record, so all three agree on what one attempt is. Standalone completions have no replay identity, so their key is unique per call (`completion:<source>:<uuid>`). A **streamed** completion is metered when the stream finishes; a stream the client abandons mid-way is not metered.
+
+A turn that ends `failed` is metered when it spent something. The case that matters is a generation the model *answered* — the text just did not satisfy the agent's [`output_schema`](./agents.md), so the turn fails with `OUTPUT_SCHEMA_VALIDATION_FAILED` — because the provider billed for those tokens either way and the counts come back on the failure. A request that never reached the model (a provider `4xx`/`5xx`, a network fault) burned nothing and writes no event, so a failed generation with no usage row means the call never landed rather than that metering was skipped.
 
 ### Compute metering
 
@@ -170,6 +172,13 @@ Past-effective prices are immutable — corrections ship as new future-dated row
 [`GET /api/v1/usage/receipt?generation_id=…`](/docs/api/usage/get-usage-receipt) returns a billing **receipt** for a completed generation: one line item per usage event, a `by_meter_type` cost split, reconstructed token totals (`total_input_tokens` is uncached input + cached), and a grand total. Because every component carries its price-book version and frozen cost, receipts are reproducible and meant to reconcile against the provider's invoice within a small tolerance (target ±2%).
 
 [`GET /api/v1/usage/receipt?orchestration_run_id=…`](/docs/api/usage/get-usage-receipt) returns the same shape for an entire [orchestration](./orchestrations.md) run, summed across every node. The run's roll-up is also surfaced inline as a `usage` object on [`GET /api/v1/orchestration-runs/{orchestration_run_id}`](/docs/api/orchestrations/get-orchestration-run).
+
+Every line item carries the `node_id` that produced it, so a run receipt is also the **per-node cost breakdown** — group the lines by `node_id` and each node's spend is the sum of its lines. Both meters appear under the node: an `agent` node's `llm_tokens` line and the `compute_execution` line of every node execution, so a pure node (a `transform`, a `condition`) shows up with its execution cost alone. Two things to know when reading it:
+
+- **A retried node's attempts share one `node_id`.** Each attempt meters as its own event, so a retried node contributes one line per attempt; the event itself records no attempt number, so the lines group under a single `node_id`. That is the intended reading for spend — a retry is real money, so it belongs in the node's total.
+- **A `null` `node_id`** means no node produced the event: a standalone generation on a per-generation receipt, or a run-level meter.
+
+A run whose graph contains a `loop` or `sub_orchestration` node is covered by the receipt only for its **own** nodes: those nodes start child runs, whose events are attributed to the child, so the parent's receipt shows the starting node's execution cost and not what the children spent. That is deliberate — the line items carry a `node_id`, and merging a child's nodes in would mix node ids from two graphs under one list. The run's own `usage` field does span the subtree, so read that for the delegated total, `usage_own` for the run's own nodes, and the `parent_orchestration_run_id` filter for the children themselves; all three are described in [Run usage](./orchestrations.md#run-usage).
 
 ### Aggregation
 
@@ -253,7 +262,7 @@ curl "https://api.example.com/api/v1/usage/meters?generation_id=gen_V1StGXR8Z5jd
 </TabItem>
 </Tabs>
 
-Get a generation's receipt (pass `orchestration_run_id` instead for a whole run):
+Get a generation's receipt (pass `orchestration_run_id` instead for a whole run, whose lines carry `node_id`):
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>

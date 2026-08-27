@@ -3,6 +3,65 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.33.0](https://github.com/ttoss/soat/compare/v0.32.0...v0.33.0) (2026-08-26)
+
+### Bug Fixes
+
+* **server:** make the exception auto-filer resilient to transient DB failures ([#1147](https://github.com/ttoss/soat/issues/1147)) ([cd001c6](https://github.com/ttoss/soat/commit/cd001c6f8dd945458a4f7dc6258d360659d8bff2)), closes [#1130](https://github.com/ttoss/soat/issues/1130)
+
+### Features
+
+* **server:** make a run's usage cover what it delegated, and attribute nested runs ([#1144](https://github.com/ttoss/soat/issues/1144)) ([9266a0c](https://github.com/ttoss/soat/commit/9266a0c865df6ad63b4ee3b158911960097981b7)), closes [#1135](https://github.com/ttoss/soat/issues/1135) [#1135](https://github.com/ttoss/soat/issues/1135)
+* **server:** resolve {{context:}} in preset_parameters and carry a run's context to its tool nodes ([#1148](https://github.com/ttoss/soat/issues/1148)) ([1e920ab](https://github.com/ttoss/soat/commit/1e920abd3a9e015c4bd4361755dea38d0f23d641)), closes [TriangulosTecnologia/naturali.ai#345](https://github.com/TriangulosTecnologia/naturali.ai/issues/345) [TriangulosTecnologia/naturali.ai#345](https://github.com/TriangulosTecnologia/naturali.ai/issues/345)
+
+### BREAKING CHANGES
+
+* **server:** `usage` on an orchestration run now includes every nested run
+  it started, at any depth; it previously covered the run's own nodes only. The
+  previous meaning is available as `usage_own`, which is equal to `usage` for a
+  run with no children. Callers summing `usage` over a list of runs must pass
+  `nested=false` to avoid counting a child twice.
+
+# [0.32.0](https://github.com/ttoss/soat/compare/v0.31.0...v0.32.0) (2026-08-26)
+
+### Bug Fixes
+
+* **server:** make preset_parameters a pin the caller cannot override ([#1141](https://github.com/ttoss/soat/issues/1141)) ([e345c77](https://github.com/ttoss/soat/commit/e345c7771a492b649ddff577ed248b57d0a41698)), closes [#965](https://github.com/ttoss/soat/issues/965)
+* **server:** meter a run's tokens per attempt, and meter the tokens a failed turn already spent ([#1140](https://github.com/ttoss/soat/issues/1140)) ([15a699a](https://github.com/ttoss/soat/commit/15a699a6e3ef21f4e1a2f2edfcf04c42bb6bf083)), closes [#1138](https://github.com/ttoss/soat/issues/1138)
+
+### Features
+
+* **server:** let a registered resource type declare write-only properties ([#1142](https://github.com/ttoss/soat/issues/1142)) ([feb3956](https://github.com/ttoss/soat/commit/feb3956c5b8019a847c6f45153f43addb33273eb)), closes [#1078](https://github.com/ttoss/soat/issues/1078) [#1078](https://github.com/ttoss/soat/issues/1078)
+
+# [0.31.0](https://github.com/ttoss/soat/compare/v0.30.1...v0.31.0) (2026-08-25)
+
+### Bug Fixes
+
+* **server:** retry the writes that get an event into the delivery outbox ([#1132](https://github.com/ttoss/soat/issues/1132)) ([4be8c96](https://github.com/ttoss/soat/commit/4be8c96c69f9ece8603c62749ed16cf62395f617)), closes [#1052](https://github.com/ttoss/soat/issues/1052) [#1130](https://github.com/ttoss/soat/issues/1130)
+
+### Features
+
+* **server:** let a caller label a run, an eval run and a task with metadata ([#1129](https://github.com/ttoss/soat/issues/1129)) ([3fa7b88](https://github.com/ttoss/soat/commit/3fa7b88e9a2e9548de476c486b042227057ac18f)), closes [TriangulosTecnologia/naturali.ai#342](https://github.com/TriangulosTecnologia/naturali.ai/issues/342) [#342](https://github.com/ttoss/soat/issues/342)
+* **server:** let a deployment register custom formation resource types ([#1137](https://github.com/ttoss/soat/issues/1137)) ([197d5fd](https://github.com/ttoss/soat/commit/197d5fd3e3b72a7cd458d38d8d969fcbd9136fc5)), closes [#1078](https://github.com/ttoss/soat/issues/1078) [#1130](https://github.com/ttoss/soat/issues/1130)
+* **server:** name the node behind every usage receipt line ([#1136](https://github.com/ttoss/soat/issues/1136)) ([9ec58d4](https://github.com/ttoss/soat/commit/9ec58d4e7efc94a9f8ffc9693b0e43e0282cba48)), closes [#1134](https://github.com/ttoss/soat/issues/1134)
+* **triggers:** add an event trigger type ([#1133](https://github.com/ttoss/soat/issues/1133)) ([5abf1ab](https://github.com/ttoss/soat/commit/5abf1abaf192953cea3e98705dceb8af8b372096))
+
+## [0.30.1](https://github.com/ttoss/soat/compare/v0.30.0...v0.30.1) (2026-08-25)
+
+### Bug Fixes
+
+* **server:** make the error envelope's hint and docs_url relayable ([#1127](https://github.com/ttoss/soat/issues/1127)) ([f043991](https://github.com/ttoss/soat/commit/f04399114e2b190569cbab35afd2c1e368b24896)), closes [ttoss/soat#1126](https://github.com/ttoss/soat/issues/1126) [#1126](https://github.com/ttoss/soat/issues/1126)
+
+# [0.30.0](https://github.com/ttoss/soat/compare/v0.29.5...v0.30.0) (2026-08-24)
+
+### Features
+
+* **server:** reach an agent node's generation from an orchestration run ([#1123](https://github.com/ttoss/soat/issues/1123)) ([a4121a2](https://github.com/ttoss/soat/commit/a4121a25f02e21776c493ceab25daa9d0f95c50f))
+
+## [0.29.5](https://github.com/ttoss/soat/compare/v0.29.4...v0.29.5) (2026-08-24)
+
+**Note:** Version bump only for package @soat/server
+
 ## [0.29.4](https://github.com/ttoss/soat/compare/v0.29.3...v0.29.4) (2026-08-24)
 
 **Note:** Version bump only for package @soat/server

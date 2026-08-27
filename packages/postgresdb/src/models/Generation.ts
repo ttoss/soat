@@ -34,6 +34,13 @@ import { Trace } from './Trace';
       name: 'generations_trace_id_idx',
       fields: ['trace_id'],
     },
+    // Backs the run → generations lookup: `list-generations` filtered by
+    // `orchestration_run_id` (optionally narrowed by `node_id`) is how a caller
+    // gets from an orchestration run to what its agent nodes actually did.
+    {
+      name: 'generations_orchestration_run_id_node_id_idx',
+      fields: ['orchestration_run_id', 'node_id'],
+    },
   ],
   hooks: {
     beforeValidate: (instance: Generation) => {
@@ -186,6 +193,13 @@ export class Generation extends Model {
 
   @Column({ type: DataType.STRING, allowNull: true })
   declare nodeId: string | null;
+
+  // The node's 1-based retry attempt, completing the replay identity the two
+  // columns above start: a retried node produces one generation per attempt, and
+  // without this they are distinguishable only by guessing from timestamps.
+  // Null for every generation not dispatched by an orchestration node.
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare nodeAttempt: number | null;
 
   // What kind of workload produced this generation, when it is not ordinary
   // production traffic: `eval` for an eval run's items. Null means production.

@@ -1,3 +1,5 @@
+import { createServer } from 'node:http';
+
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 import * as agentGenerationModule from 'src/lib/agentGeneration';
@@ -1419,6 +1421,93 @@ describe('Orchestrations', () => {
         }
       });
 
+      // #345 / #945: a `tool` node is the run acting directly, so it must carry
+      // the run's context the way an `agent` node's generation does — and a
+      // `{{context:}}` pin on the tool is how the run's own boundary (the ad
+      // account it may touch) reaches the call without the model in between.
+      test("is forwarded to a tool node, resolving the tool's {{context:}} preset", async () => {
+        const bodies: unknown[] = [];
+        const server = createServer((req, res) => {
+          const chunks: Buffer[] = [];
+          req.on('data', (chunk: Buffer) => {
+            chunks.push(chunk);
+          });
+          req.on('end', () => {
+            const raw = Buffer.concat(chunks).toString('utf8');
+            bodies.push(raw ? JSON.parse(raw) : null);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true }));
+          });
+        });
+        await new Promise<void>((resolve) => {
+          server.listen(0, '127.0.0.1', resolve);
+        });
+        const address = server.address();
+        const port =
+          address && typeof address === 'object' ? address.port : undefined;
+
+        try {
+          const toolRes = await authenticatedTestClient(adminToken)
+            .post('/api/v1/tools')
+            .send({
+              project_id: projectId,
+              name: 'runContextPresetTool',
+              type: 'http',
+              parameters: {
+                type: 'object',
+                properties: {
+                  adAccountId: { type: 'string' },
+                  name: { type: 'string' },
+                },
+              },
+              execute: {
+                url: `http://127.0.0.1:${port}/v1/do`,
+                method: 'POST',
+              },
+              preset_parameters: { adAccountId: '{{context:ocaAdAccountId}}' },
+            });
+          expect(toolRes.status).toBe(201);
+
+          const createRes = await authenticatedTestClient(userToken)
+            .post('/api/v1/orchestrations')
+            .send({
+              name: 'Run Tool Context Tool Node',
+              nodes: [
+                {
+                  id: 'act',
+                  type: 'tool',
+                  tool_id: toolRes.body.id,
+                  input_mapping: { name: { var: 'input.name' } },
+                },
+              ],
+              edges: [],
+              project_id: projectId,
+            });
+          expect(createRes.status).toBe(201);
+
+          const runRes = await authenticatedTestClient(userToken)
+            .post('/api/v1/orchestration-runs')
+            .send({
+              wait: true,
+              orchestration_id: createRes.body.id,
+              input: { name: 'widget' },
+              tool_context: { ocaAdAccountId: 'act_1330065197707199' },
+            });
+          expect(runRes.status).toBe(201);
+          expect(runRes.body.status).toBe('succeeded');
+
+          expect(bodies).toEqual([
+            { name: 'widget', adAccountId: 'act_1330065197707199' },
+          ]);
+        } finally {
+          await new Promise<void>((resolve) => {
+            server.close(() => {
+              return resolve();
+            });
+          });
+        }
+      });
+
       test('a run started without tool_context reports null and forwards nothing', async () => {
         const createRes = await authenticatedTestClient(userToken)
           .post('/api/v1/orchestrations')
@@ -1652,6 +1741,120 @@ describe('Orchestrations', () => {
         expect(response.body.error.code).toBe('INVALID_TOOL_CONTEXT_KEY');
 
         await expectNoRuns(orchId);
+      });
+    });
+
+    // #342: a run is the platform's one long-lived, resumable object, and it
+    // had nowhere for the caller to record *whose* run it is — while a single
+    // generation did. `metadata` is that label: caller-owned, no reserved keys,
+    // round-tripping verbatim, and never merged into run state (which is what
+    // made `input` the wrong place for it).
+    describe('metadata', () => {
+      const createRun = async (name: string, body: object) => {
+        const createRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestrations')
+          .send({
+            name,
+            nodes: [{ id: 'noop', type: 'transform', expression: 1 }],
+            edges: [],
+            project_id: projectId,
+          });
+        expect(createRes.status).toBe(201);
+
+        return authenticatedTestClient(userToken)
+          .post('/api/v1/orchestration-runs')
+          .send({ orchestration_id: createRes.body.id, ...body });
+      };
+
+      test('round-trips verbatim on create, single read and list', async () => {
+        const metadata = {
+          tenant_account_id: '42',
+          dispatch_batch: 'nightly-2026-08-25',
+          nested: { keys_are: 'not re-cased' },
+        };
+
+        const runRes = await createRun('Run Metadata Attribution', {
+          wait: true,
+          metadata,
+        });
+        expect(runRes.status).toBe(201);
+        expect(runRes.body.metadata).toEqual(metadata);
+
+        const getRunRes = await authenticatedTestClient(userToken).get(
+          `/api/v1/orchestration-runs/${runRes.body.id}`
+        );
+        expect(getRunRes.status).toBe(200);
+        expect(getRunRes.body.metadata).toEqual(metadata);
+
+        const listRes = await authenticatedTestClient(userToken).get(
+          `/api/v1/orchestration-runs?orchestration_id=${runRes.body.orchestration_id}`
+        );
+        expect(listRes.status).toBe(200);
+        expect(listRes.body.data[0].metadata).toEqual(metadata);
+      });
+
+      test('is not merged into run state or input', async () => {
+        const runRes = await createRun('Run Metadata Not State', {
+          wait: true,
+          input: { question: 'hello' },
+          metadata: { tenant_account_id: '42' },
+        });
+        expect(runRes.status).toBe(201);
+        expect(runRes.body.metadata).toEqual({ tenant_account_id: '42' });
+        expect(runRes.body.input).toEqual({ question: 'hello' });
+        expect(runRes.body.state['input']).toEqual({ question: 'hello' });
+        expect(JSON.stringify(runRes.body.state)).not.toContain(
+          'tenant_account_id'
+        );
+      });
+
+      test('survives a background drive, where no request body is available', async () => {
+        const runRes = await createRun('Run Metadata Background', {
+          metadata: { tenant_account_id: '42' },
+        });
+        expect(runRes.status).toBe(201);
+        expect(runRes.body.status).toBe('queued');
+        expect(runRes.body.metadata).toEqual({ tenant_account_id: '42' });
+
+        const getRunRes = await authenticatedTestClient(userToken).get(
+          `/api/v1/orchestration-runs/${runRes.body.id}`
+        );
+        expect(getRunRes.status).toBe(200);
+        expect(getRunRes.body.metadata).toEqual({ tenant_account_id: '42' });
+      });
+
+      test('a run started without metadata reports null', async () => {
+        const runRes = await createRun('Run Metadata Absent', { wait: true });
+        expect(runRes.status).toBe(201);
+        expect(runRes.body.metadata).toBeNull();
+      });
+
+      test('a non-object metadata returns 400 and creates no run', async () => {
+        const createRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestrations')
+          .send({
+            name: 'Run Metadata Invalid',
+            nodes: [{ id: 'noop', type: 'transform', expression: 1 }],
+            edges: [],
+            project_id: projectId,
+          });
+        expect(createRes.status).toBe(201);
+
+        const response = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestration-runs')
+          .send({
+            wait: true,
+            orchestration_id: createRes.body.id,
+            metadata: ['not', 'an', 'object'],
+          });
+        expect(response.status).toBe(400);
+        expect(response.body.error.code).toBe('VALIDATION_FAILED');
+
+        const list = await authenticatedTestClient(userToken).get(
+          `/api/v1/orchestration-runs?orchestration_id=${createRes.body.id}`
+        );
+        expect(list.status).toBe(200);
+        expect(list.body.total).toBe(0);
       });
     });
 
@@ -2910,6 +3113,145 @@ describe('Orchestrations', () => {
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('succeeded');
       expect(runRes.body.state.subResult).toBe('test');
+    });
+
+    test('a sub_orchestration child names the run and node that started it', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'SubOrch Parent Link',
+          nodes: [
+            {
+              id: 'sub',
+              type: 'sub_orchestration',
+              orchestration_id: subOrchId,
+              input_mapping: { item: { var: 'input.value' } },
+            },
+          ],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({
+          wait: true,
+          orchestration_id: createRes.body.id,
+          input: { value: 'linked' },
+        });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('succeeded');
+      const parentRunId = runRes.body.id as string;
+
+      // The parent itself was started by a caller, not by another run.
+      expect(runRes.body.parent_orchestration_run_id).toBeNull();
+      expect(runRes.body.parent_node_id).toBeNull();
+
+      // The child is reachable *from* the parent: without this filter a caller
+      // holding the parent has no way to name the runs it spawned, which is
+      // what makes the parent's own total look complete when it is not.
+      const children = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs?parent_orchestration_run_id=${parentRunId}`
+      );
+      expect(children.status).toBe(200);
+      expect(children.body.data).toHaveLength(1);
+      expect(children.body.data[0].parent_orchestration_run_id).toBe(
+        parentRunId
+      );
+      expect(children.body.data[0].parent_node_id).toBe('sub');
+    }, 60000);
+
+    test('every child of a loop node names the loop node', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Loop Parent Link',
+          nodes: [
+            {
+              id: 'fan',
+              type: 'loop',
+              orchestration_id: subOrchId,
+              collection: 'state.input.items',
+            },
+          ],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({
+          wait: true,
+          orchestration_id: createRes.body.id,
+          input: { items: ['a', 'b', 'c'] },
+        });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('succeeded');
+
+      const children = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs?parent_orchestration_run_id=${runRes.body.id}`
+      );
+      expect(children.status).toBe(200);
+      // One child run per item, each attributable to the node that fanned out.
+      expect(children.body.data).toHaveLength(3);
+      expect(
+        children.body.data.every((r: { parent_node_id: string | null }) => {
+          return r.parent_node_id === 'fan';
+        })
+      ).toBe(true);
+    }, 60000);
+
+    // `usage` on a run is transitive, so summing it across a list double-counts
+    // any run that is also somebody's child. This filter is how a caller
+    // aggregating over runs avoids that, which is why it ships with the
+    // transitive figure rather than after it.
+    test('nested=false returns only runs a caller started', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        '/api/v1/orchestration-runs?nested=false&limit=100'
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.data.length).toBeGreaterThan(0);
+      expect(
+        res.body.data.every(
+          (r: { parent_orchestration_run_id: string | null }) => {
+            return r.parent_orchestration_run_id === null;
+          }
+        )
+      ).toBe(true);
+    });
+
+    test('nested=true returns only runs another run started', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        '/api/v1/orchestration-runs?nested=true&limit=100'
+      );
+      expect(res.status).toBe(200);
+      // The loop above fanned out three children, so this cannot be empty.
+      expect(res.body.data.length).toBeGreaterThan(0);
+      expect(
+        res.body.data.every(
+          (r: { parent_orchestration_run_id: string | null }) => {
+            return r.parent_orchestration_run_id !== null;
+          }
+        )
+      ).toBe(true);
+    });
+
+    test('an unparseable nested value is rejected', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        '/api/v1/orchestration-runs?nested=perhaps'
+      );
+      expect(res.status).toBe(400);
+    });
+
+    test('nested=false contradicting a parent id is rejected', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        '/api/v1/orchestration-runs?nested=false&parent_orchestration_run_id=run_x'
+      );
+      // Naming a parent already asserts the run has one. Serving an
+      // always-empty list instead would read as "this parent has no children".
+      expect(res.status).toBe(400);
     });
 
     test('poll node missing required fields is rejected at create', async () => {

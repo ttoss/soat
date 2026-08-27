@@ -1,6 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import { parseMetadataBag } from 'src/lib/metadataBag';
 import { parseOrchestrationGraph } from 'src/lib/orchestrationGraphWire';
 import {
   cancelOrchestrationRun,
@@ -246,6 +247,7 @@ orchestrationsRouter.post('/orchestration-runs', async (ctx: Context) => {
     orchestration_id?: unknown;
     input?: unknown;
     tool_context?: unknown;
+    metadata?: unknown;
     wait?: unknown;
   };
   const orchestrationId =
@@ -261,6 +263,10 @@ orchestrationsRouter.post('/orchestration-runs', async (ctx: Context) => {
 
   const input = parseRunInput(body.input);
   const toolContext = parseRunToolContext(body.tool_context);
+  // Rejected before the run row is written: an async run answers 201 long
+  // before it executes, so a bag the caller cannot be told about later has to
+  // fail while the caller is still listening.
+  const metadata = parseMetadataBag(body.metadata);
   const authHeader = ctx.headers['authorization'] as string | undefined;
 
   const result = await startOrchestrationRun({
@@ -271,6 +277,9 @@ orchestrationsRouter.post('/orchestration-runs', async (ctx: Context) => {
     // Persisted on the run, not borrowed from this request: the run's later
     // drives (a worker, a wake, a resume) have no request to read it from.
     toolContext,
+    // The caller's own label for this run. Stored beside `input`, never merged
+    // into run state.
+    metadata,
     authHeader,
     // Persisted on the run so a worker driving it later can act as the same
     // principal; the request's own header only reaches `wait` mode.
@@ -291,6 +300,38 @@ orchestrationsRouter.get('/orchestration-runs', async (ctx: Context) => {
   requireAuth(ctx);
 
   const orchestrationId = ctx.query['orchestration_id'] as string | undefined;
+  const parentRunId = ctx.query['parent_orchestration_run_id'] as
+    string | undefined;
+
+  // Parsed rather than coerced: `nested=maybe` silently becoming `true` would
+  // hand back a list the caller did not ask for, and an aggregate over it is
+  // wrong by exactly the double-count this filter exists to prevent.
+  const nestedRaw = ctx.query['nested'] as string | undefined;
+  if (
+    nestedRaw !== undefined &&
+    nestedRaw !== 'true' &&
+    nestedRaw !== 'false'
+  ) {
+    ctx.status = 400;
+    ctx.body = {
+      code: 'VALIDATION_FAILED',
+      message: "`nested` must be 'true' or 'false'",
+    };
+    return;
+  }
+  const nested = nestedRaw === undefined ? undefined : nestedRaw === 'true';
+
+  // A parent id already asserts the run has a parent, so pairing it with
+  // `nested=false` asks for two contradictory things at once.
+  if (parentRunId !== undefined && nested === false) {
+    ctx.status = 400;
+    ctx.body = {
+      code: 'VALIDATION_FAILED',
+      message:
+        '`nested=false` contradicts `parent_orchestration_run_id`, which selects runs that have a parent',
+    };
+    return;
+  }
 
   const projectIds = await requireProjectAccess({
     ctx,
@@ -300,6 +341,8 @@ orchestrationsRouter.get('/orchestration-runs', async (ctx: Context) => {
 
   const result = await listOrchestrationRuns({
     orchestrationPublicId: orchestrationId,
+    parentRunId,
+    nested,
     projectIds: projectIds ?? undefined,
     ...parsePagination(ctx),
   });

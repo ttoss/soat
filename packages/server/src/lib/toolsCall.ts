@@ -13,8 +13,13 @@ import type { PipelineStepCaller } from './pipelineTools';
 import { runPipeline } from './pipelineTools';
 import { resolveSecretRefsInString } from './secrets';
 import { soatTools } from './soatTools';
+import { buildContextHeaders } from './toolContext';
+import { mergePresetParameters } from './toolPresetParameters';
 import { callTool } from './tools';
-import { resolveToolHeaderTemplates } from './toolTemplates';
+import {
+  resolvePresetParametersForCall,
+  resolveToolHeaderTemplates,
+} from './toolTemplates';
 
 const noopLogToolCallingError = () => {};
 
@@ -80,7 +85,8 @@ export const callHttpTool = (
   tool: CallableToolDefinition,
   mergedInput: Record<string, unknown>,
   projectId: number,
-  idempotencyKey?: string
+  idempotencyKey?: string,
+  toolContext?: Record<string, string>
 ): Promise<unknown> => {
   const executeConfig = parseHttpExecuteConfig(
     (tool.execute as
@@ -94,15 +100,21 @@ export const callHttpTool = (
       'HTTP tool has an invalid execute configuration.'
     );
   }
-  return buildHttpToolExecute({
-    toolName: tool.name,
-    execute: executeConfig,
-    projectId,
-    // Forwarded verbatim as the `Idempotency-Key` request header (D7).
-    extraHeaders: idempotencyKey
-      ? { 'Idempotency-Key': idempotencyKey }
-      : undefined,
-  })(mergedInput).catch((error: unknown) => {
+  return buildHttpToolExecute(
+    {
+      toolName: tool.name,
+      execute: executeConfig,
+      projectId,
+      contextKeys: tool.contextKeys,
+      // Forwarded verbatim as the `Idempotency-Key` request header (D7).
+      extraHeaders: idempotencyKey
+        ? { 'Idempotency-Key': idempotencyKey }
+        : undefined,
+    },
+    toolContext
+    // Presets were already merged into `mergedInput` by `callResolvedTool`, so
+    // none are passed here — passing them again would resolve and merge twice.
+  )(mergedInput).catch((error: unknown) => {
     throw toHttpToolDomainError(error) ?? error;
   });
 };
@@ -113,6 +125,7 @@ export const callSoatTool = (
     action?: string;
     mergedInput: Record<string, unknown>;
     authHeader?: string;
+    toolContext?: Record<string, string>;
   }
 ): Promise<unknown> => {
   const { authHeader } = args;
@@ -151,9 +164,9 @@ export const callSoatTool = (
     def,
     rawArgs: mergedInput,
     authHeader,
-    buildContextHeaders: () => {
-      return {};
-    },
+    toolContext: args.toolContext,
+    contextKeys: tool.contextKeys,
+    buildContextHeaders,
     logToolCallingError: noopLogToolCallingError,
     // Same mapping `callHttpTool` applies: the self-call's real status reaches
     // the caller as `meta.tool_status_code`, which is also what
@@ -167,7 +180,8 @@ export const callMcpTool = async (
   tool: CallableToolDefinition,
   action: string | undefined,
   mergedInput: Record<string, unknown>,
-  projectId: number
+  projectId: number,
+  toolContext?: Record<string, string>
 ): Promise<unknown> => {
   if (!action) {
     throw new DomainError(
@@ -205,8 +219,8 @@ export const callMcpTool = async (
   // Template tokens resolve at the point of use, right before the outbound MCP
   // request — the stored config keeps the reference.
   //
-  // This path carries no `tool_context` (see `callResolvedTool`), so a header
-  // holding a `{{context:...}}` token fails the call with
+  // A caller that carries no `tool_context` (a direct `POST /tools/{id}/call`)
+  // fails a header holding a `{{context:...}}` token with
   // `MISSING_TOOL_CONTEXT_KEY` naming the key. That is deliberate: the
   // alternative is putting the literal `{{context:...}}` text on the wire as a
   // credential, which fails as an opaque upstream 401 instead.
@@ -217,6 +231,7 @@ export const callMcpTool = async (
   const mcpHeaders = await resolveToolHeaderTemplates({
     record: mcpConfig.headers,
     projectId,
+    toolContext,
   });
   return buildMcpToolExecute({
     mcpUrl,
@@ -224,8 +239,10 @@ export const callMcpTool = async (
       'Content-Type': 'application/json',
       Accept: 'application/json, text/event-stream',
       ...(mcpHeaders ?? {}),
+      ...buildContextHeaders({ toolContext, contextKeys: tool.contextKeys }),
     },
     mcpToolName: action,
+    // Presets are merged by `callResolvedTool` on this path, already resolved.
     logToolCallingError: noopLogToolCallingError,
   })(mergedInput);
 };
@@ -255,13 +272,15 @@ const dispatchDirectTool = async (args: {
   authHeader?: string;
   toolProjectId: number;
   idempotencyKey?: string;
+  toolContext?: Record<string, string>;
 }): Promise<unknown> => {
   if (args.type === 'http') {
     return callHttpTool(
       args.tool,
       args.mergedInput,
       args.toolProjectId,
-      args.idempotencyKey
+      args.idempotencyKey,
+      args.toolContext
     );
   }
   if (args.type === 'builtin') {
@@ -269,6 +288,7 @@ const dispatchDirectTool = async (args: {
       action: args.action,
       mergedInput: args.mergedInput,
       authHeader: args.authHeader,
+      toolContext: args.toolContext,
     });
   }
   if (args.type === 'mcp') {
@@ -276,7 +296,8 @@ const dispatchDirectTool = async (args: {
       args.tool,
       args.action,
       args.mergedInput,
-      args.toolProjectId
+      args.toolProjectId,
+      args.toolContext
     );
   }
   throw new DomainError(
@@ -294,18 +315,32 @@ export const callResolvedTool = async (args: {
   remainingDepth?: number;
   projectIds?: number[];
   idempotencyKey?: string;
+  // The caller's `tool_context` — an orchestration run's bag on a `tool`/`poll`
+  // node, the parent call's on a pipeline step. It resolves `{{context:}}` in
+  // this tool's headers and presets, and is forwarded as context headers.
+  toolContext?: Record<string, string>;
 }): Promise<unknown> => {
   const type = args.tool.type ?? 'http';
 
-  const mergedInput = {
-    ...(args.tool.presetParameters ?? {}),
-    ...(args.input ?? {}),
-  };
+  // Resolved once, here, so every dispatch below (and the pipeline's own merge)
+  // sees the same values — the presets reach `callHttpTool`/`callMcpTool`
+  // already merged, and are not resolved a second time there.
+  const presetParameters = resolvePresetParametersForCall({
+    presetParameters: args.tool.presetParameters,
+    toolContext: args.toolContext,
+    toolName: args.tool.name,
+    schema: args.tool.parameters,
+  });
+
+  const mergedInput = mergePresetParameters({
+    presetParameters,
+    input: args.input,
+  });
 
   if (type === 'pipeline') {
     const rawResult = await runPipeline({
       pipeline: args.tool.pipeline,
-      presetParameters: args.tool.presetParameters,
+      presetParameters,
       input: args.input,
       remainingDepth: args.remainingDepth,
       callStep: (step: Parameters<PipelineStepCaller>[0]) => {
@@ -318,6 +353,10 @@ export const callResolvedTool = async (args: {
             input: step.input,
             authHeader: args.authHeader,
             remainingDepth: step.remainingDepth,
+            // A step is the pipeline's own work, so it inherits the context the
+            // pipeline was called with — the same rule a nested orchestration
+            // run follows (#945).
+            toolContext: args.toolContext,
           });
         }
         return callTool({
@@ -327,6 +366,7 @@ export const callResolvedTool = async (args: {
           input: step.input,
           authHeader: args.authHeader,
           remainingDepth: step.remainingDepth,
+          toolContext: args.toolContext,
         });
       },
     });
@@ -345,6 +385,7 @@ export const callResolvedTool = async (args: {
     authHeader: args.authHeader,
     toolProjectId: args.toolProjectId,
     idempotencyKey: args.idempotencyKey,
+    toolContext: args.toolContext,
   });
 
   return applyToolOutputMapping(
@@ -366,6 +407,7 @@ export const callEphemeralTool = async (args: {
   input?: Record<string, unknown>;
   authHeader?: string;
   remainingDepth?: number;
+  toolContext?: Record<string, string>;
 }): Promise<unknown> => {
   assertEphemeralTypeSupported(args.definition);
   return callResolvedTool({
@@ -375,5 +417,6 @@ export const callEphemeralTool = async (args: {
     input: args.input,
     authHeader: args.authHeader,
     remainingDepth: args.remainingDepth,
+    toolContext: args.toolContext,
   });
 };

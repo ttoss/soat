@@ -1,0 +1,41 @@
+{
+  "resource_types": [
+    {
+      "name": "smoke_channel",
+      "description": "A messaging channel, owned by the deployment operator rather than by SOAT. Registered for the smoke suite; served by tests/mocks/formationResourceHandler.mjs.",
+      "handler": {
+        "url": "http://formation-handler:50480/formation-resources",
+        "secret_env": "FORMATION_HANDLER_SECRET",
+        "timeout_seconds": 10
+      },
+      "capabilities": [
+        "validate",
+        "read"
+      ],
+      "write_only_properties": [
+        "access_token"
+      ],
+      "schema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "agent_id": {
+            "type": "string"
+          },
+          "access_token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "kind"
+        ]
+      }
+    }
+  ]
+}

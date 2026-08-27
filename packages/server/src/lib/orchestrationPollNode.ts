@@ -57,8 +57,11 @@ export const executePollNode = async (args: {
   projectIds: number[];
   authHeader?: string;
   attempt?: number;
+  // The run's `tool_context` — a poll node is the run calling a tool on its own
+  // behalf, so it carries the run's context like a `tool` node does (#345).
+  toolContext?: Record<string, string>;
 }): Promise<NodeExecutionResult> => {
-  const { node, state, projectIds, authHeader } = args;
+  const { node, state, projectIds, authHeader, toolContext } = args;
   const { toolId, interval } = assertPollNode(node);
 
   const { maxIterations = DEFAULT_POLL_ATTEMPTS } = node;
@@ -73,6 +76,7 @@ export const executePollNode = async (args: {
     action: node.operationId,
     input: inputs,
     authHeader,
+    toolContext,
   });
 
   const context = { ...state, response: lastResponse, attempt };

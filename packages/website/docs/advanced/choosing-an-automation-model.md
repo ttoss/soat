@@ -1,5 +1,5 @@
 ---
-description: "Workflows or orchestrations? Compare SOAT's two automation models — a cyclic state machine a task lives in, and an acyclic pipeline that runs and ends — and see how they compose."
+description: "Neither, an orchestration, or a workflow? Decide whether the work needs a graph at all, then compare SOAT's two automation models — a cyclic state machine a task lives in, and an acyclic pipeline that runs and ends — and see how they compose."
 title: Choosing an Automation Model
 ---
 
@@ -14,8 +14,11 @@ variations of each other — they have different topologies and different lifeti
   long-lived entity that moves between named states over days or weeks, and can move
   backward.
 
+There is also a third answer, and it is the most common one:
+
 | You want…                                                                          | Use                                             |
 | ---------------------------------------------------------------------------------- | ----------------------------------------------- |
+| Steps you cannot enumerate in advance, with no fan-out, no human gate, and no wait that outlives the request | **[A single agent](/docs/modules/agents)** — no graph |
 | A deterministic, forward-only sequence of steps that runs and completes             | **[Orchestrations](/docs/modules/orchestrations)** |
 | Statuses, transitions, guards, a kanban board, or an entity that revisits states    | **[Workflows & Tasks](/docs/modules/workflows)**  |
 
@@ -26,6 +29,58 @@ variations of each other — they have different topologies and different lifeti
 Neither module is a subset of the other. A workflow adds primitives a DAG cannot express;
 an orchestration carries almost all of the execution machinery. The two sections below say
 exactly which.
+
+## Step 0 — you may need neither
+
+Both models are the **graph** layer, and the graph is the layer to build last. As
+[The Layers of an Agent System](/docs/agent-system-layers) puts it: harness first, loop
+second, graph last — and last frequently means never. A pipeline drawn around a problem
+the harness or the loop was going to solve anyway costs you a definition to version, a run
+to inspect, and a state contract to keep wired, and buys nothing.
+
+Reach for a single [agent](/docs/modules/agents) first. Its loop already sequences work
+the graph layer would otherwise sequence for you, and three dials bound it:
+
+| Dial | What it does |
+| --- | --- |
+| [`max_steps`](/docs/modules/agents#generation-loop) | Caps how many reasoning steps the loop may take (default `20`) |
+| [`stop_conditions`](/docs/modules/agents#stop-conditions) | Ends the loop on a matched tool call, a text match, or a step budget |
+| [`output_schema`](/docs/modules/agents#structured-output) | Makes the result a checked object rather than prose a downstream step must parse |
+
+Escalate to a graph when — and only when — the work needs something an agent loop cannot
+express:
+
+| Signal | What only a graph gives you |
+| --- | --- |
+| **Steps run in parallel and rejoin** | [Parallel execution rounds](/docs/modules/orchestrations#parallel-execution) and [`activation_group` fan-in](/docs/modules/orchestrations#activation-groups-fan-in). An agent loop is sequential |
+| **The branch must be auditable, not inferred** | A [`condition` node](/docs/modules/orchestrations#node-types) emits a label an edge selects on, and every attempt lands in [`node_executions`](/docs/modules/orchestrations#node-executions). A model choosing its own next step leaves no such record |
+| **A human signs off mid-run** | [`human`](/docs/modules/orchestrations#human-nodes) and [`approval`](/docs/modules/orchestrations#approval-nodes) nodes park the run and resume it later |
+| **The wait outlives the request** | [Durable background execution](/docs/modules/orchestrations#durable-background-execution) — `delay`, `poll`, and the `sleeping` status let a run span hours or days holding no connection open |
+| **The entity revisits states over days** | A [workflow](/docs/modules/workflows) — see the rest of this page |
+
+None of these is a reason to throw the agent away: an agent is a
+[node type](/docs/modules/orchestrations#node-types), so a graph wraps the loop you
+already have rather than replacing it.
+
+## What starts them
+
+Both are started the same way — by a client, or by a
+[trigger](/docs/modules/triggers) that binds a starter to the target. Two of
+those starters answer the same question differently, and the choice is worth
+making deliberately:
+
+- An **`event` trigger** subscribes to an internal platform event
+  (`documents.ingested`, `agents.generation.completed`, an orchestration's own
+  `emit_event`) and starts work the moment it happens. Use it when the work is a
+  *reaction* to something the platform already knows about and promptness is the
+  point. Delivery is best-effort and unordered, and the reactive edge is capped
+  by a [causation depth guard](/docs/modules/triggers#loops-and-cost) so a cycle
+  cannot run away.
+- A **`schedule` trigger** runs on a cron cadence and is recovered from the
+  database, so a firing missed while the server was down is coalesced into one
+  catch-up rather than lost. Use it when the work is periodic, when it must not
+  be dropped, or as the backstop under an event trigger whose target is
+  idempotent.
 
 ## What only workflows have
 

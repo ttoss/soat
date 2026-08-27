@@ -105,6 +105,7 @@ describe('Usage', () => {
         'orchestrations:CreateOrchestration',
         'orchestrations:StartRun',
         'orchestrations:GetRun',
+        'orchestrations:ListRuns',
       ],
     });
     adminToken = setup.adminToken;
@@ -1952,6 +1953,162 @@ describe('Usage', () => {
     });
   });
 
+  describe('a generation that fails after the provider answered', () => {
+    // The model answers (tokens billed) but the text does not satisfy the
+    // agent's `output_schema`, so the turn fails with
+    // OUTPUT_SCHEMA_VALIDATION_FAILED. The provider was paid either way, and
+    // the AI SDK hands the counts back on the error — so the spend must be
+    // metered, not dropped because the turn ended `failed`.
+    let failedGenerationId: string;
+
+    beforeAll(async () => {
+      const agentRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          name: 'Usage Structured Agent',
+          output_schema: {
+            type: 'object',
+            properties: { answer: { type: 'string' } },
+            required: ['answer'],
+          },
+        });
+      expect(agentRes.status).toBe(201);
+
+      const genRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentRes.body.id}/generate?wait=true`)
+        .send({ messages: [{ role: 'user', content: 'structured please' }] });
+      expect(genRes.status).toBe(502);
+      expect(genRes.body.error.meta.generation_id).toBeDefined();
+      failedGenerationId = genRes.body.error.meta.generation_id as string;
+    }, 60000);
+
+    test('the failed generation is recorded as failed', async () => {
+      const res = await authenticatedTestClient(adminToken).get(
+        `/api/v1/generations/${failedGenerationId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('failed');
+    });
+
+    test('its tokens are metered', async () => {
+      const res = await authenticatedTestClient(adminToken).get(
+        `/api/v1/usage/meters?generation_id=${failedGenerationId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.data).toHaveLength(1);
+
+      const event = res.body.data[0];
+      expect(event.meter_type).toBe('llm_tokens');
+      const components = componentsByName(event);
+      // The stub's own counts: the provider billed for them whether or not the
+      // response could be parsed into the schema.
+      expect(Number(components.input_tokens.quantity)).toBe(6);
+      expect(Number(components.output_tokens.quantity)).toBe(20);
+    });
+  });
+
+  describe('nested run cost attribution', () => {
+    // A parent whose only node is a `sub_orchestration`: the parent itself
+    // meters no tokens, every one of them is spent by the child run. The
+    // parent's own `usage` therefore reads zero tokens while the work it
+    // ordered cost real money — which is exactly the reading that made a
+    // loop-bearing run's total wrong.
+    let parentRunId: string;
+    let childRunId: string;
+
+    beforeAll(async () => {
+      const childOrch = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: `Nested Cost Child ${Date.now()}`,
+          nodes: [{ id: 'child-agent', type: 'agent', agent_id: agentId }],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(childOrch.status).toBe(201);
+
+      const parentOrch = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: `Nested Cost Parent ${Date.now()}`,
+          nodes: [
+            {
+              id: 'delegate',
+              type: 'sub_orchestration',
+              orchestration_id: childOrch.body.id,
+            },
+          ],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(parentOrch.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: parentOrch.body.id, input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('succeeded');
+      parentRunId = runRes.body.id;
+
+      const children = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs?parent_orchestration_run_id=${parentRunId}`
+      );
+      expect(children.status).toBe(200);
+      expect(children.body.data).toHaveLength(1);
+      childRunId = children.body.data[0].id;
+    }, 60000);
+
+    test('the child run meters the tokens it spent', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs/${childRunId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.usage.total_output_tokens).toBe(20);
+    });
+
+    test("the parent's usage covers what it delegated", async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs/${parentRunId}`
+      );
+      expect(res.status).toBe(200);
+      // The parent's only node is a `sub_orchestration`: it metered compute,
+      // not tokens, so every token on this figure was spent by the child run.
+      // `usage` answers "what did this run cost", which for a delegating graph
+      // is the subtree — not the fraction that happens to sit on this record.
+      expect(res.body.usage.total_output_tokens).toBe(20);
+      expect(res.body.usage.total_input_tokens).toBe(10);
+      expect('total_cost_usd' in res.body.usage).toBe(true);
+    });
+
+    test("the parent's own-nodes figure excludes its children", async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs/${parentRunId}`
+      );
+      expect(res.status).toBe(200);
+      // The split a run-tree reader needs: own vs subtree, without an N+1 walk.
+      expect(res.body.usage_own.total_output_tokens).toBe(0);
+      // `usage` is never below the own figure — it contains it.
+      expect(res.body.usage.total_output_tokens).toBeGreaterThanOrEqual(
+        res.body.usage_own.total_output_tokens
+      );
+    });
+
+    test('a run with no children reports the same figure twice', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs/${childRunId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.usage_own.total_output_tokens).toBe(
+        res.body.usage.total_output_tokens
+      );
+      expect(res.body.usage_own.total_cost_usd).toBe(
+        res.body.usage.total_cost_usd
+      );
+    });
+  });
+
   describe('orchestration run attribution and receipt', () => {
     let orchestrationRunId: string;
     const nodeId = 'metered-agent';
@@ -2042,6 +2199,70 @@ describe('Usage', () => {
       expect(llmRollup).toBeDefined();
     });
 
+    test('every receipt line carries the node that produced it', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/receipt?orchestration_run_id=${orchestrationRunId}`
+      );
+      expect(res.status).toBe(200);
+      // The single agent node produces both meters: the llm_tokens event for its
+      // generation and the compute_execution event for the node execution.
+      const meterTypes = res.body.line_items.map(
+        (l: { meter_type: string }) => {
+          return l.meter_type;
+        }
+      );
+      expect(meterTypes).toContain('llm_tokens');
+      expect(meterTypes).toContain('compute_execution');
+      for (const line of res.body.line_items) {
+        expect(line.node_id).toBe(nodeId);
+      }
+    });
+
+    test('a two-node run attributes each line to its own node', async () => {
+      const agentNodeId = 'two-node-agent';
+      const transformNodeId = 'two-node-transform';
+
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: `Two Node Metered ${Date.now()}`,
+          nodes: [
+            { id: agentNodeId, type: 'agent', agent_id: agentId },
+            { id: transformNodeId, type: 'transform', expression: 1 },
+          ],
+          edges: [{ from: agentNodeId, to: transformNodeId }],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: createRes.body.id, input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('succeeded');
+
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/receipt?orchestration_run_id=${runRes.body.id}`
+      );
+      expect(res.status).toBe(200);
+
+      const metersByNode: Record<string, string[]> = {};
+      for (const line of res.body.line_items as Array<{
+        node_id: string | null;
+        meter_type: string;
+      }>) {
+        const key = line.node_id ?? 'null';
+        metersByNode[key] = [...(metersByNode[key] ?? []), line.meter_type];
+      }
+
+      // The agent node pays for its generation and its own execution; the
+      // transform node only for its execution. Grouping the lines by node_id is
+      // what makes that split readable — the receipt total alone hides it.
+      expect(metersByNode[agentNodeId]).toContain('llm_tokens');
+      expect(metersByNode[agentNodeId]).toContain('compute_execution');
+      expect(metersByNode[transformNodeId]).toEqual(['compute_execution']);
+    }, 60000);
+
     test('GET /usage/receipt?orchestration_run_id for an unknown run returns 404', async () => {
       const res = await authenticatedTestClient(userToken).get(
         '/api/v1/usage/receipt?orchestration_run_id=run_doesNotExist01'
@@ -2093,6 +2314,77 @@ describe('Usage', () => {
         authHeader: `Bearer ${userToken}`,
         orchestrationRunId,
         nodeId,
+      });
+
+      const after = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/receipt?orchestration_run_id=${orchestrationRunId}`
+      );
+      expect(after.body.line_items.length).toBe(beforeCount);
+    });
+
+    test('a second attempt of the same node meters as its own event', async () => {
+      const before = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/receipt?orchestration_run_id=${orchestrationRunId}`
+      );
+      const beforeLlm = before.body.line_items.filter(
+        (l: { meter_type: string; node_id: string | null }) => {
+          return l.meter_type === 'llm_tokens' && l.node_id === nodeId;
+        }
+      ).length;
+
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+      // A *retry*, not a replay: the executor stamps each attempt's generation
+      // with its own `nodeAttempt` (orchestrationNodeRecorder), and this is a
+      // second generation that really reached the provider. It must be metered,
+      // where a redelivery of the same attempt (the test above) must not.
+      await createGeneration({
+        agentId,
+        projectIds: [project?.id as number],
+        messages: [{ role: 'user', content: 'retried node' }],
+        stream: false,
+        authHeader: `Bearer ${userToken}`,
+        orchestrationRunId,
+        nodeId,
+        nodeAttempt: 2,
+      });
+
+      const after = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/receipt?orchestration_run_id=${orchestrationRunId}`
+      );
+      const afterLines = after.body.line_items.filter(
+        (l: { meter_type: string; node_id: string | null }) => {
+          return l.meter_type === 'llm_tokens' && l.node_id === nodeId;
+        }
+      );
+      expect(afterLines.length).toBe(beforeLlm + 1);
+
+      // Both attempts group under one node_id, so the node's cost is their sum
+      // — the reading `node_id` on a receipt line is meant to support (#1134).
+      expect(afterLines.length).toBeGreaterThanOrEqual(2);
+    });
+
+    test('a replayed second attempt is still a no-op', async () => {
+      const before = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/receipt?orchestration_run_id=${orchestrationRunId}`
+      );
+      const beforeCount = before.body.line_items.length;
+
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+      // Attempt 2 again: same (run, node, attempt), so the at-least-once
+      // redelivery guarantee still holds one attempt down.
+      await createGeneration({
+        agentId,
+        projectIds: [project?.id as number],
+        messages: [{ role: 'user', content: 'redelivered retry' }],
+        stream: false,
+        authHeader: `Bearer ${userToken}`,
+        orchestrationRunId,
+        nodeId,
+        nodeAttempt: 2,
       });
 
       const after = await authenticatedTestClient(userToken).get(
