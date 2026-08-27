@@ -224,12 +224,9 @@ export const runToolCallContinuation = async (args: {
 
     let result: object | null = null;
     if (args.decision.decision === 'approved') {
-      // A client tool cannot be executed server-side; approving one re-hands the
-      // frozen/edited call off to the client via a fresh linked generation. When
-      // that path fires, there is no server-side result and no NL continuation —
-      // the client will execute and resume the loop itself. A throw here
-      // propagates to this function's outer catch (best-effort continuation), so
-      // no inner catch is needed.
+      // A client tool cannot run server-side, so approval re-hands the call off
+      // via a fresh linked generation and there is no server-side result or NL
+      // continuation — the client resumes the loop itself.
       const reHandedOff = await emitClientToolReHandoff({
         item,
         projectInternalId,

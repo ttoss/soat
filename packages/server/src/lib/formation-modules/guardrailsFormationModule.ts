@@ -21,16 +21,10 @@ const DOCUMENT_FIELDS = [
   'escalate',
 ] as const;
 
-// ── Document assembly ────────────────────────────────────────────────────
-// The REST API nests class/default_class/guard/escalate under a single
-// `document` object; the formation resource flattens them to top-level
-// properties (matching how a template author declares a guardrail) and
-// reassembles `document` here. A formation resource declaration is always
-// the full desired state for that resource (not a partial patch), and
-// `updateGuardrail`'s `document` argument replaces the stored document
-// wholesale rather than merging it — so the document is rebuilt from
-// scratch on every create/update from whichever of the four fields are
-// currently present, rather than merged with the prior stored document.
+// The formation resource flattens the REST `document` object to top-level
+// properties. Rebuilt from scratch on every create/update rather than merged:
+// a resource declaration is always full desired state, and `updateGuardrail`
+// replaces the stored document wholesale.
 
 const hasExpressionField = (properties: Record<string, unknown>): boolean => {
   return DOCUMENT_FIELDS.some((key) => {
@@ -59,11 +53,9 @@ const buildGuardrailDocument = (
 export const guardrailsFormationModule = defineFormationModule({
   resourceType: 'guardrail',
 
-  // Validate the assembled action-class document (class literal/JSON-Logic
-  // namespace checks, escalate boolean, etc.) — skipped when a document
-  // field is still an unresolved `{ ref / param / sub }` expression, since
-  // that can't be validated in isolation; `createGuardrail`/`updateGuardrail`
-  // re-validate the resolved document at apply time regardless.
+  // Skipped when a field is still an unresolved `{ ref / param / sub }`
+  // expression, which cannot be validated in isolation; the lib re-validates
+  // the resolved document at apply time regardless.
   extraChecks: ({ properties, basePath, errors }) => {
     if (properties.class === undefined || hasExpressionField(properties)) {
       return;

@@ -25,10 +25,8 @@ const noopLogToolCallingError = () => {};
 
 // ── Shared Tool Definition Types ─────────────────────────────────────────────
 
-// An inline/ephemeral tool definition — the fields needed to describe a tool
-// without a `projectId` (always the owning resource's own project: an agent's,
-// or a pipeline tool's). `tools.ts#CreateToolArgs` extends this with
-// `projectId` for persisted Tool rows.
+// A tool described without a `projectId` — always the owning resource's own.
+// `tools.ts#CreateToolArgs` adds it back for persisted rows.
 export type InlineToolDefinition = {
   type?: string;
   name: string;
@@ -44,10 +42,9 @@ export type InlineToolDefinition = {
   outputMapping?: object;
 };
 
-// The fields `callResolvedTool` (and `callHttpTool`/`callSoatTool`/
-// `callMcpTool` below) actually read off a tool — a `MappedTool` (persisted,
-// DB-backed) and an `InlineToolDefinition` (ephemeral) both satisfy this
-// shape, which is what lets both execution paths share one implementation.
+// The fields the call paths actually read. Both `MappedTool` and
+// `InlineToolDefinition` satisfy this, which is what lets them share one
+// implementation.
 export type CallableToolDefinition = {
   name: string;
   type?: string | null;
@@ -189,11 +186,9 @@ export const callMcpTool = async (
       'action is required for mcp tools.'
     );
   }
-  // When the tool declares an `actions` allowlist and/or a `deniedActions`
-  // denylist, enforce them before the outbound MCP request — a scoped (e.g.
-  // read-only) tool must reject a denied action at the capability boundary,
-  // not merely omit it from the model's tool surface. `null`/`undefined`
-  // `actions` means the whole server surface; the denylist takes precedence.
+  // Enforced before the outbound request: a scoped tool must reject a denied
+  // action at the capability boundary, not merely omit it from the model's tool
+  // surface. Absent `actions` means the whole surface; the denylist wins.
   if (tool.actions != null && !tool.actions.includes(action)) {
     throw new DomainError(
       'VALIDATION_FAILED',
@@ -216,14 +211,10 @@ export const callMcpTool = async (
       'MCP tool has an invalid mcp configuration.'
     );
   }
-  // Template tokens resolve at the point of use, right before the outbound MCP
-  // request — the stored config keeps the reference.
-  //
-  // A caller that carries no `tool_context` (a direct `POST /tools/{id}/call`)
-  // fails a header holding a `{{context:...}}` token with
-  // `MISSING_TOOL_CONTEXT_KEY` naming the key. That is deliberate: the
-  // alternative is putting the literal `{{context:...}}` text on the wire as a
-  // credential, which fails as an opaque upstream 401 instead.
+  // Resolved at the point of use, so the stored config keeps the reference. A
+  // caller with no `tool_context` fails with `MISSING_TOOL_CONTEXT_KEY` naming
+  // the key, rather than putting the literal token on the wire as a credential
+  // and failing as an opaque upstream 401.
   const mcpUrl = await resolveSecretRefsInString({
     value: mcpConfig.url,
     projectId,

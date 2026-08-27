@@ -41,10 +41,9 @@ export const sweepStalledTasks = createSweep<TaskInstance>({
   idOf: (task) => {
     return task.id as number;
   },
-  // Atomic claim: null the deadline guarded on it still being due and the task
-  // still open, so a single stall fires per episode even across overlapping
-  // ticks, multiple workers, or a concurrent transition (which would move the
-  // task and re-arm its own deadline).
+  // Atomic claim, guarded on the deadline still being due and the task still
+  // open, so one stall fires per episode across overlapping ticks, multiple
+  // workers, or a concurrent transition.
   claim: async ({ row: task, now }) => {
     const [claimed] = await db.Task.update(
       { stallDeadlineAt: null },

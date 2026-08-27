@@ -114,11 +114,9 @@ const fireStreamEndSideEffects = (args: {
     rootTraceId: args.rootTraceId,
   }).catch(() => {});
 
-  // The blob has already gone down the wire — a stream cannot be recalled —
-  // but the record of it can still tell the truth. Recording `failed` is what
-  // makes this findable on the generation and the trace instead of only in
-  // whatever consumed the stream. (`output_schema` never reaches here:
-  // streaming rejects it upfront.)
+  // The blob has already gone down the wire, but the record of it can still
+  // tell the truth — `failed` is what makes this findable on the generation and
+  // the trace instead of only in whatever consumed the stream.
   const streamedToolCall = findTextEncodedToolCall({
     text: finalStepText(args.steps),
     toolNames: Object.keys(args.resolvedTools),
@@ -260,10 +258,8 @@ export const runStreamGeneration = async (args: {
       : 0
   );
   log('runStreamGeneration: tools=%o', Object.keys(args.resolvedTools));
-  // Captured here rather than acted on here: `onError` fires while the stream
-  // is still being read, and the failure must not overtake the chunks already
-  // on their way to the caller. `withTerminalError` raises it once the stream
-  // drains.
+  // Captured, not acted on: `onError` fires mid-read, and the failure must not
+  // overtake chunks already on their way to the caller.
   let streamError: unknown;
   const result = streamText({
     model: args.model,

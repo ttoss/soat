@@ -72,10 +72,8 @@ export class Formation extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare metadata: Record<string, unknown> | null;
 
-  // Top-level template `metadata` after parameter (`sub`/`param`) and resource
-  // (`ref`) substitution at the last deploy. The raw expressions are preserved
-  // in `template.metadata`; this column holds the resolved view (mirrors how
-  // `outputs` relates to `template.outputs`).
+  // The resolved view of `template.metadata`, which keeps the raw expressions
+  // (mirrors how `outputs` relates to `template.outputs`).
   @Column({ type: DataType.JSONB, allowNull: true })
   declare resolvedMetadata: Record<string, unknown> | null;
 
@@ -84,10 +82,9 @@ export class Formation extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare resolvedParameters: Record<string, string> | null;
 
-  // Why the last deploy (or teardown) failed, in the platform error shape
-  // `{ code, message, meta? }`. Written whenever the formation enters `failed`
-  // or `delete_failed`, cleared on the next successful apply — so a caller that
-  // reads a failed formation is told why without a second call (#1028).
+  // Written on entering `failed`/`delete_failed` and cleared on the next
+  // successful apply, so reading a failed formation tells the caller why
+  // without a second call (#1028).
   @Column({ type: DataType.JSONB, allowNull: true })
   declare error: Record<string, unknown> | null;
 

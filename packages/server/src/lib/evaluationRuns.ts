@@ -415,10 +415,9 @@ export const cancelEvalRun = async (args: {
 
   await run.update({ status: 'canceled', finishedAt: new Date() });
 
-  // Counts what has landed so far. Items already claimed by a worker are past
-  // its liveness check and keep writing results after this point; each of those
-  // late writes recounts, so the numbers converge on what really ran instead of
-  // freezing at the cancel instant.
+  // Items already claimed are past their liveness check and keep writing after
+  // this point; each late write recounts, so the numbers converge on what
+  // really ran instead of freezing at the cancel instant.
   await recountEvalRunProgress({ run });
 
   return mapEvalRun(await reloadEvalRun(run as EvalRunRow));

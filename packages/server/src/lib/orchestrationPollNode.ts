@@ -6,10 +6,9 @@ import type { NodeExecutionResult } from './orchestrationNodeTypes';
 import type { OrchestrationNode } from './orchestrations';
 import { callTool } from './tools';
 
-// Poll node safety bounds. `maxIterations` caps the number of attempts. There
-// is no longer a wall-clock ceiling: each attempt runs in its own scheduled
-// resumption rather than inside a single held-open HTTP request, so the only
-// bound that matters is the attempt cap.
+// No wall-clock ceiling: each attempt runs in its own scheduled resumption
+// rather than a single held-open request, so the attempt cap is the only bound
+// that matters.
 const DEFAULT_POLL_ATTEMPTS = 10;
 const MAX_POLL_ATTEMPTS = 1000;
 

@@ -33,10 +33,9 @@ export const NavigationProvider = ({
     return pathToView(location.pathname, spec, modules);
   }, [location.pathname, spec, modules]);
 
-  // The active project is sticky: it persists across module navigation instead
-  // of being cleared when the new view's URL carries no project_id. Whenever a
-  // visited route DOES carry one (a project detail page or a project-scoped
-  // resource), we adopt it via React's render-time state-adjustment pattern.
+  // Sticky: it persists across navigation to views whose URL carries no
+  // project_id, and is adopted from any route that does carry one via React's
+  // render-time state-adjustment pattern.
   const urlProjectId = extractProjectId(view);
   const [activeProjectId, setActiveProjectId] = React.useState<string | null>(
     urlProjectId

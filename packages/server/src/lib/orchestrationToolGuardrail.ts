@@ -225,10 +225,9 @@ export const runToolNodeGate = async (args: {
     context,
   });
 
-  // A `route_to_approval` decision doesn't persist here: the ApprovalItem
-  // doesn't exist yet (the engine emits it once the run settles), so the
-  // records are carried on the approval spec and persisted with `approvalId`
-  // once the item is created (see `startOrchestrationRun`'s settle path).
+  // A `route_to_approval` decision cannot persist here — the ApprovalItem does
+  // not exist until the run settles — so the records ride on the approval spec
+  // and are persisted with `approvalId` once it is created.
   if (classification.decision !== 'route_to_approval') {
     void persistGuardrailEvaluations({
       projectId: args.projectId,

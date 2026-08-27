@@ -217,11 +217,8 @@ export const forkSession = async (args: {
         projectId: parent.projectId,
         agentId: forkAgentId,
         conversationId: conversation.id,
-        // No actor: `single_session_per_actor` is an invariant over open
-        // sessions per (agent, actor), and inheriting the parent's actor would
-        // either break it or make forking impossible for exactly the agents
-        // that enforce it. Attach one afterwards if the branch is meant to be
-        // driven by the same end user.
+        // Inheriting the parent's actor would break `single_session_per_actor`
+        // — or make forking impossible for exactly the agents enforcing it.
         actorId: null,
         status: 'open',
         name: args.name ?? null,

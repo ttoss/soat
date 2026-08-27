@@ -17,11 +17,9 @@ export type RetryPolicy = {
   backoffMultiplier?: number;
 };
 
-// Bounds on a retry policy. The attempts run inside the detached automation
-// promise, so an unbounded `max_attempts` (or a multi-hour backoff) would hold a
-// card mid-dispatch for as long as the author asked for. Both caps are generous
-// for the transient-flake case the primitive exists for and reject the runaway
-// shapes.
+// The attempts run inside the detached automation promise, so an unbounded
+// `max_attempts` or backoff would hold a card mid-dispatch for as long as the
+// author asked. Both caps are generous for the transient-flake case.
 const MAX_RETRY_ATTEMPTS = 10;
 const MAX_BACKOFF_SECONDS = 3600;
 const MAX_BACKOFF_MULTIPLIER = 10;

@@ -97,12 +97,9 @@ const mcpRouter = createMcpRouter(mcpServer, {
   },
   auth: {
     verifyToken: async (token) => {
-      // Project-scoped `sk_` API keys are a first-class MCP credential (the
-      // headless-agent path), verified against the ApiKey table. Per-request
-      // authorization is still enforced when the tool handler dispatches with
-      // this same bearer token (see dispatchMcpApiRequest + resolveProjectKey):
-      // verifying the token here admits the caller to the MCP surface, it does
-      // not authorize the action.
+      // Verifying the token here admits the caller to the MCP surface; it does
+      // not authorize the action. The tool handler still enforces per-request
+      // authorization with this same bearer token.
       if (token.startsWith(API_KEY_RAW_PREFIX)) {
         const apiKeyPayload = await verifyApiKeyToken(token);
         if (!apiKeyPayload) throw new Error('Invalid token');
@@ -112,12 +109,10 @@ const mcpRouter = createMcpRouter(mcpServer, {
       if (!payload) throw new Error('Invalid token');
       return payload;
     },
-    // Protect every JSON-RPC method, including `initialize`. The default
-    // (`['initialize', 'tools/list']`) lets the handshake start unauthenticated,
-    // which makes OAuth-aware clients (e.g. Claude connectors) treat the server
-    // as public and never begin the OAuth flow — while `notifications/initialized`
-    // still 401s and breaks the handshake. Challenging on `initialize` with a
-    // `WWW-Authenticate` header is what triggers the client's OAuth discovery.
+    // Including `initialize`: the default leaves the handshake
+    // unauthenticated, so OAuth-aware clients treat the server as public and
+    // never start the flow, then break when `notifications/initialized` 401s.
+    // Challenging on `initialize` is what triggers OAuth discovery.
     publicMethods: [],
     resourceServerUrl: ISSUER,
     authorizationServerUrl: ISSUER,

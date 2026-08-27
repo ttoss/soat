@@ -55,14 +55,11 @@ const sendStreamResponse = async (
   try {
     await pipeStreamToResponse(result, ctx.res);
   } catch (error) {
-    // The `200` and the headers went out before the provider was called, so an
-    // upstream failure can never become a status code here — this frame is the
-    // only place to report it, and `pipeStreamToResponse` is left before its
-    // `[DONE]`, so a truncated answer is distinguishable from a complete one.
-    // The message is already the mapped provider one: `runStreamGeneration`
-    // fails the stream with what `toProviderDomainError` produced, so the frame,
-    // the generation record and the failure event all say the same thing
-    // (#1084).
+    // The `200` went out before the provider was called, so this frame is the
+    // only place left to report an upstream failure. `pipeStreamToResponse` is
+    // left before its `[DONE]`, so a truncated answer stays distinguishable
+    // from a complete one, and the message is already the mapped provider one
+    // — frame, generation record and failure event all agree (#1084).
     const message =
       error instanceof Error ? error.message : 'Internal server error';
     ctx.res.write(`data: ${JSON.stringify({ error: message })}\n\n`);

@@ -309,10 +309,9 @@ const enqueueDelivery = async (args: {
 }) => {
   const now = new Date();
 
-  // The envelope is a wire payload, so it is snake_case like every other SOAT
-  // surface (`.claude/rules/case-convention.md`). `data` stays an opaque value:
-  // it is already snake_case because it comes from a lib mapper, and nothing
-  // here reads or rewrites a key of it.
+  // A wire payload, so snake_case like every other surface. `data` stays an
+  // opaque value — it is already snake_case from a lib mapper, and nothing here
+  // reads or rewrites a key of it.
   return db.WebhookDelivery.create({
     webhookId: args.webhook.id,
     eventType: args.event.type,
@@ -375,11 +374,9 @@ const handleEvent = async (event: SoatEvent) => {
       if (!allowed) continue;
     }
 
-    // The row write and the first attempt are separated deliberately. They used
-    // to share one `.catch()`, which read as "delivery failed" for both — but a
-    // failed *attempt* is recorded on the row and retried by the sweep, while a
-    // failed *row write* leaves the sweep nothing to find, so the event is gone
-    // (#1130). Only the second one is a lost event, and only it is counted.
+    // Separated deliberately: a failed *attempt* is on the row and retried by
+    // the sweep, while a failed *row write* leaves the sweep nothing to find.
+    // Only the second is a lost event, and only it is counted (#1130).
     void retryTransient({
       label: 'handleEvent.enqueueDelivery',
       operation: () => {

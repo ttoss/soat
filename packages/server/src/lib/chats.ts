@@ -377,12 +377,10 @@ export const streamChatCompletion = async (
   const { fallbackModel, instructions, messages, resolvedModel } =
     await prepareChatCompletion(args);
 
-  // `streamText` does not throw from the stream it returns: a failure is
-  // handed to `onError` and the stream then closes cleanly. Left alone, a
-  // provider rejection reached the route as an ordinary end-of-stream, so a
-  // completion against an unavailable model answered `200` with no content and
-  // no error at all (#1081). Capturing it here and rethrowing once the stream
-  // drains is what gives the route something to turn into a terminal event.
+  // `streamText` hands a failure to `onError` and closes the stream cleanly, so
+  // an unavailable model answered `200` with no content and no error at all
+  // (#1081). Captured here and rethrown once the stream drains, giving the
+  // route something to turn into a terminal event.
   let streamError: unknown;
 
   const result = streamText({

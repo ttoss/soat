@@ -7,12 +7,9 @@ import { sumComponentCostUsd, sumQuantities } from './priceCompute';
 
 const log = createDebug('soat:usage');
 
-// The dimensions a project's usage can be rolled up by. `day` buckets on the
-// UTC calendar day of the event; the rest bucket on the matching column.
-// `actor` / `session` are the end-user dimensions: work with no end user behind
-// it (orchestration runs, triggers, direct API generations) collapses into the
-// single `null`-key bucket rather than being dropped, so the groups still sum
-// to the project total.
+// `day` buckets on the UTC calendar day; the rest on the matching column. Work
+// with no end user behind it collapses into the `null` bucket rather than being
+// dropped, so the groups still sum to the project total.
 export const USAGE_GROUP_BY = [
   'model',
   'agent',
@@ -30,10 +27,9 @@ const isGroupBy = (value: string): value is UsageGroupBy => {
   return (USAGE_GROUP_BY as readonly string[]).includes(value);
 };
 
-// One measured dimension of a bucket, summed across its events. This is what
-// makes the rollup uniform over meter types: the token fields only describe
-// `llm_tokens`, so without a quantity per component an infra meter would report
-// as an all-zero bucket even though its events carry real amounts.
+// What makes the rollup uniform over meter types: the token fields describe
+// only `llm_tokens`, so without a per-component quantity an infra meter would
+// report an all-zero bucket despite carrying real amounts.
 export type UsageAggregateComponent = {
   component: string;
   unit: string;
@@ -112,9 +108,7 @@ const eventTokens = (event: EventWithComponents): EventTokens => {
   };
 };
 
-// How each dimension reads its bucket key off an event. Keyed by dimension so
-// adding one is a single entry here rather than another branch — the map is
-// exhaustive over `UsageGroupBy`, so a new dimension without an extractor is a
+// Exhaustive over `UsageGroupBy`, so a new dimension without an extractor is a
 // type error rather than a silent `null` bucket.
 const GROUP_KEY_EXTRACTORS: {
   [K in UsageGroupBy]: (event: EventWithComponents) => string | null;
@@ -158,13 +152,9 @@ const groupKeyForEvent = (
   return GROUP_KEY_EXTRACTORS[groupBy](event);
 };
 
-// A component's running sum. Keyed by `component`+`unit` (never by name alone):
-// a quantity is only additive within one unit, so two units of the same
-// component stay two entries rather than silently summing into a wrong number.
-//
-// Quantities are collected as the DECIMAL strings they arrive as, not added into
-// a number here: `sumQuantities` adds them exactly at the end, so a fractional
-// measure does not accumulate float drift on the way to a customer's meter.
+// Keyed by `component`+`unit`, never name alone: a quantity is additive only
+// within one unit. Collected as the DECIMAL strings they arrive as and summed
+// exactly at the end, so a fractional measure accumulates no float drift.
 type ComponentAccumulator = {
   component: string;
   unit: string;
@@ -320,10 +310,9 @@ const createdAtWhere = (
   return createdAt;
 };
 
-// The event filter: always the project, plus the optional window and meter
-// type. `meterType` is not validated against a fixed set — it is a free-form
-// column and the meters listing filters it the same way, so an unknown type
-// yields an empty rollup rather than a 400.
+// `meterType` is deliberately unvalidated — a free-form column the meters
+// listing filters the same way, so an unknown type yields an empty rollup
+// rather than a 400.
 const eventsWhere = (args: {
   projectId: number;
   from: Date | null;

@@ -125,11 +125,9 @@ const resolveContextAndRecord = async (args: {
     pinnedAgentVersion: args.pinnedAgentVersion,
   });
 
-  // The identity this generation runs as, persisted rather than left to the
-  // request: work that resumes *after* the request is gone — an approved tool
-  // call's continuation, days later (#894) — re-mints its credential from this
-  // pair. Nothing is recorded for a trigger- or OAuth-bounded caller; see
-  // `resolveStartingPrincipal`.
+  // Persisted rather than left to the request: work resuming after the request
+  // is gone — an approved tool call's continuation days later — re-mints its
+  // credential from this pair (#894).
   const principal = resolveStartingPrincipal({
     authUser: args.authUser,
     authHeader: args.authHeader,
@@ -144,10 +142,8 @@ const resolveContextAndRecord = async (args: {
     traceId: args.traceId,
     initiatorGenerationId: args.initiatorGenerationId ?? null,
     ...startedByPrincipalColumns(principal),
-    // End-user attribution is stored as typed FK columns rather than metadata
-    // keys: it is identity the platform enforces (and later caps spend on), so
-    // it must not live in the caller-writable metadata bag. The actor is
-    // derived from the session, so only the session id travels.
+    // Typed FK columns, not metadata keys: this is identity the platform
+    // enforces and caps spend on, so it must not live in a caller-writable bag.
     sessionId: args.sessionId ?? null,
     // Usage attribution and the served agent version: typed columns, for the
     // same reason. `metadata` carries only what the caller sent (F-15).
@@ -244,10 +240,8 @@ export type CreateGenerationArgs = {
   // pick per generation. Set by eval runs, which must measure every item
   // against the same config (the evaluations module doc — Version pinning).
   pinnedAgentVersion?: number | null;
-  // Labels the workload behind this generation when it is not production
-  // traffic — `eval` for an eval run's items. Copied onto the usage event at
-  // the metering choke point so verification spend is separable from
-  // production spend (the evaluations module doc).
+  // Copied onto the usage event at the metering choke point, so verification
+  // spend stays separable from production spend.
   source?: string | null;
 };
 
@@ -266,10 +260,8 @@ type GenerationPrep =
 const prepareGeneration = async (
   args: CreateGenerationArgs
 ): Promise<GenerationPrep> => {
-  // Rejects a caller-supplied key that could not become a header before any
-  // provider call or usage metering happens. The session path validates its
-  // persisted keys at write time too; this covers the direct API, triggers,
-  // orchestration nodes and nested `soat` tool calls.
+  // Rejects a key that could not become a header before any provider call or
+  // metering happens, covering every path but the session's own write-time check.
   assertValidToolContextKeys(args.toolContext);
 
   const maxDepth = args.remainingDepth ?? 10;
@@ -285,11 +277,9 @@ const prepareGeneration = async (
   });
   if (depthGuard) return { kind: 'short_circuit', result: depthGuard };
 
-  // Pre-generation token/cost quota check (Quotas Phase 2). Runs before any
-  // context building or provider call, so a breached budget blocks the new
-  // generation with `QUOTA_EXCEEDED` and no usage is metered for it. Fails open
-  // on an infrastructure error — a quota is cost control, not authorization, so
-  // one window of unmetered spend beats blocking all generations on a DB blip.
+  // Before any context building or provider call, so a breached budget meters
+  // nothing. Fails open on an infrastructure error: a quota is cost control,
+  // not authorization, so one unmetered window beats blocking every generation.
   const quotaBreach = await checkGenerationQuota({
     agentId: args.agentId,
     projectIds: args.projectIds,

@@ -401,10 +401,9 @@ export const auditMiddleware = async (ctx: Context, next: Next) => {
   ctx.state.auditChecks = checks;
   instrumentAuthUser(ctx.authUser, checks, ctx.method);
 
-  // The status recorded is the final one. On a thrown error the outer error
-  // middleware sets `ctx.status` *after* this middleware unwinds, so the status
-  // is derived from the error here instead (same mapping the error middleware
-  // uses), letting failed mutations — including thrown denials — be audited.
+  // On a thrown error the outer middleware sets `ctx.status` after this one
+  // unwinds, so the status is derived from the error here instead — letting
+  // failed mutations, thrown denials included, be audited.
   let errorStatus: number | null = null;
   try {
     await next();

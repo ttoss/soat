@@ -65,11 +65,9 @@ export const fireDueTriggers = createSweep({
     );
     return claimed > 0;
   },
-  // `prepareFiring` / `runFiringDispatch` are imported lazily (not statically)
-  // so this scheduler — started from `server.ts` — stays off the
-  // orchestrations↔engine import cycle, matching the inbound `/hooks` router.
-  // A static import here front-loads triggerDispatch's orchestration graph at
-  // app init and breaks that cycle (every orchestration-run POST 500s).
+  // Lazy so this scheduler stays off the orchestrations↔engine import cycle,
+  // matching the `/hooks` router. A static import front-loads triggerDispatch's
+  // graph at app init and 500s every orchestration-run POST.
   handle: async ({ row: trigger }) => {
     const { prepareFiring, runFiringDispatch } =
       await import('./triggerDispatch');

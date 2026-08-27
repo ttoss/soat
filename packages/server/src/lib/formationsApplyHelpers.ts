@@ -201,10 +201,9 @@ export const applyUpdateChange = async (args: {
   // no longer disagree about whether a resource changed (#902).
   const { merged: mergedProperties, changed: propertiesChanged } =
     mergeWithPrevious({ resolved: resolvedProperties, previous: lastProps });
-  // Captured before the row is written: on this path `resourceRow` *is*
-  // `existing`, so `resourceRow.update` below mutates the instance — reading
-  // the previous id off it afterwards would hand the replacement's own id to
-  // the disposal that is meant to remove the resource it superseded.
+  // `resourceRow` is `existing` here, so the update below mutates it — reading
+  // the previous id afterwards would hand the replacement's own id to the
+  // disposal meant to remove what it superseded.
   const previousPhysicalResourceId = existing.physicalResourceId;
 
   resolvedIds.set(logicalId, previousPhysicalResourceId);

@@ -69,15 +69,12 @@ export class TaskTransition extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare transition: string | null;
 
-  // user | api_key | automation | approval. Named `principal*`, not `actor*`, to
-  // avoid confusion with the unrelated Actor resource — the values here are
-  // never actor public ids.
+  // Named `principal*`, not `actor*`: these are never Actor public ids.
   @Column({ type: DataType.STRING, allowNull: false })
   declare principalKind: string;
 
-  // The principal that made the move (a user or API key public ID). Null for
-  // `automation`, which has no principal — the cause is carried by
-  // `generationId` / `orchestrationRunId` instead.
+  // Null for `automation`, whose cause is carried by `generationId` /
+  // `orchestrationRunId` instead.
   @Column({ type: DataType.STRING, allowNull: true })
   declare principalId: string | null;
 
@@ -88,10 +85,8 @@ export class TaskTransition extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare orchestrationRunId: string | null;
 
-  // The third dispatch kind's cause. A `tool` dispatch produces no addressable
-  // record to point at — no generation, no run — so the tool itself is what
-  // records why the task moved, keeping every automation move traceable to
-  // something machine-readable rather than exempting one kind from the rule.
+  // A `tool` dispatch produces no generation or run to point at, so the tool
+  // itself records why the task moved — every automation move stays traceable.
   @Column({ type: DataType.STRING, allowNull: true })
   declare toolId: string | null;
 

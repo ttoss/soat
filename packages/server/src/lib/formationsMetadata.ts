@@ -1,12 +1,9 @@
 import { isParam, isRef, isRefAttr, isSub } from './formationsHelpers';
 import type { ValidationError } from './formationsTypes';
 
-// The formation-level `metadata` field (a sibling of `template`) is a static
-// annotation bag — unlike the template's top-level `metadata` block, it is NOT
-// a substitution site. A `sub`/`param`/`ref`/`ref_attr` expression placed here
-// would be stored verbatim and silently never resolved (F-16), so reject it up
-// front and point the author at `template.metadata`, which is resolved at
-// deploy time and exposed on `resolved_metadata`.
+// Unlike `template.metadata`, this is not a substitution site — an expression
+// placed here would be stored verbatim and silently never resolved, so it is
+// rejected up front with a pointer to the field that does resolve.
 const STATIC_METADATA_HINT =
   "Put deploy-time substitutions in the template's top-level `metadata` block, which is resolved into `resolved_metadata`.";
 

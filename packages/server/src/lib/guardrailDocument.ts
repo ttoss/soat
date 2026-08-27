@@ -21,9 +21,7 @@ export type GuardrailDocument = {
   default_class?: ActionClass;
   guard?: Record<string, unknown>;
   escalate?: boolean;
-  // Default approval window (seconds) for a class-C approval this guardrail
-  // files. Absent → the platform's 24h default. Lets a guardrail carry its own
-  // sign-off deadline (e.g. 72h for a budget change) without a separate
+  // Lets a guardrail carry its own sign-off deadline without a separate
   // taxonomy; the governing guardrail's value wins when several apply.
   expires_in?: number;
 };

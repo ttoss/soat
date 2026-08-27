@@ -2,10 +2,8 @@ import { db } from '../db';
 import { emitResourceEvent } from './eventBus';
 import { mergeTags } from './tags';
 
-// Both functions are only ever called by the session-tags REST routes
-// (sessionSubResources.ts), which resolve the session's existence via
-// `checkSessionAccess` — and pass back that same session's own `agentId` —
-// before calling in. The session is therefore guaranteed to exist here.
+// Only ever called by the session-tags REST routes, which resolve the session
+// via `checkSessionAccess` first — so it is guaranteed to exist here.
 
 export const getSessionTags = async (args: {
   agentId: number;

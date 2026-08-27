@@ -35,12 +35,9 @@ export type NestedRunStarter = (args: {
   // levels down still calls its tools with the caller's context (#945).
   toolContext?: Record<string, string>;
   wait: boolean;
-  // The run and node starting this child, stamped on the child's row so a
-  // parent's cost roll-up can reach the work it ordered (#1135). Deliberately
-  // not part of the public `start-orchestration-run` contract: parentage is
-  // recorded by the engine that executes the parent, never claimed by a caller.
-  // `nodeId` is always known — every nested start has a node behind it; `runId`
-  // is absent only on a direct-call path with no run above.
+  // Stamped on the child so a parent's cost roll-up reaches the work it ordered
+  // (#1135). Deliberately outside the public contract: parentage is recorded by
+  // the engine executing the parent, never claimed by a caller.
   parent: NestedRunParent;
 }) => Promise<{ output: Record<string, unknown> | null }>;
 

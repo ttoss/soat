@@ -138,13 +138,9 @@ const isSameConfig = (
   return isDeepStrictEqual(before, after);
 };
 
-// ── Reading a snapshot back ───────────────────────────────────────────────
-//
-// An archived config is untyped JSON, and its consumers — `restore` and the
-// agent served-version overlay — need every field as a definite value or `null`
-// (they replace the whole config, so "absent" must mean "cleared", never "leave
-// as is"). These readers express that once, instead of each call site pairing a
-// `toNullableX` with a `?? null`.
+// An archived config is untyped JSON, and its consumers replace the whole
+// config — so "absent" must read as "cleared", never "leave as is". Expressed
+// once here instead of each call site pairing a `toNullableX` with a `?? null`.
 
 export const configString = (value: unknown): string | null => {
   return typeof value === 'string' ? value : null;
@@ -521,10 +517,9 @@ const makeVersionReads = <TMappedVersion, TMappedResource>(
         return store.versionModel().findAndCountAll({
           where: { [store.foreignKey]: resource.dbId },
           include: store.versionInclude(),
-          // Newest first, ordered by the version counter rather than a
-          // timestamp: two versions can share a `createdAt` at timestamp
-          // resolution, and a non-deterministic page boundary in history is
-          // worse than useless.
+          // Ordered by the version counter, not a timestamp: two versions can
+          // share a `createdAt`, and a non-deterministic page boundary in
+          // history is worse than useless.
           order: [['version', 'DESC']],
           distinct: true,
           limit,

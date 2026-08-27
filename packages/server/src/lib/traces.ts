@@ -72,8 +72,7 @@ export const mapTrace = (row: TraceRow): Trace => {
     parent_trace_id: row.parentTrace?.publicId ?? null,
     root_trace_id: row.rootTrace?.publicId ?? null,
     error: row.error,
-    // Redaction marker. A purged trace still reads back as a skeleton — with
-    // `file_id` null and this timestamp set — rather than as a 404, so the
+    // A purged trace still reads back as a skeleton rather than a 404, so the
     // erasure is provable instead of indistinguishable from a resource that
     // never existed (#836).
     content_redacted_at: row.contentRedactedAt,

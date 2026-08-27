@@ -32,12 +32,9 @@ const log = createDebug('soat:server');
 const SOAT_PORT = process.env.PORT || 5047;
 
 const startServer = async () => {
-  // Register the custom formation resource types this deployment declares, if
-  // any (FORMATION_RESOURCE_TYPES_CONFIG). Before the database on purpose: it
-  // is pure config parsing, and a deployment whose registration file is wrong
-  // should say so immediately rather than after a schema sync. Any problem is
-  // fatal — see `formationResourceTypeConfig.ts` for why a half-valid
-  // registration must never start.
+  // Before the database on purpose: pure config parsing, so a wrong
+  // registration file says so immediately rather than after a schema sync. Any
+  // problem is fatal — see `formationResourceTypeConfig.ts` for why.
   try {
     initFormationResourceTypes();
   } catch (error) {
@@ -61,10 +58,9 @@ const startServer = async () => {
     // it can wake sleeping runs whose delay/poll waits are due (including runs
     // that were parked before a restart).
     startOrchestrationScheduler();
-    // Start the in-process orchestration queue worker so this API process is a
-    // valid single-process worker: it drains `continue`/`wake` tasks the
-    // scheduler and start-run enqueue. Disable with ORCHESTRATION_WORKER_DISABLED
-    // when running a dedicated worker fleet (see worker.ts).
+    // Makes this API process a valid single-process worker, draining the tasks
+    // the scheduler and start-run enqueue. `ORCHESTRATION_WORKER_DISABLED`
+    // turns it off for a dedicated worker fleet.
     startOrchestrationWorker();
     // Start the approvals expiry sweeper so pending approval items past their
     // expiry are flipped to `expired` and can never execute late.
@@ -91,10 +87,9 @@ const startServer = async () => {
     // `api_request` events per window).
     startUsageStorageScheduler();
     startUsageRequestScheduler();
-    // Start the eval worker so asynchronous eval runs (`wait: false`) execute
-    // their items, and so runs left mid-flight by a disconnected client are
-    // reaped instead of sitting `running` forever. Disable with
-    // EVAL_WORKER_DISABLED when a dedicated worker fleet owns draining.
+    // Executes async eval runs' items, and reaps runs a disconnected client
+    // left mid-flight instead of leaving them `running` forever.
+    // `EVAL_WORKER_DISABLED` turns it off for a dedicated worker fleet.
     startEvalWorker();
   } catch (error) {
     // This is a fatal, process-terminating failure, so print to stderr

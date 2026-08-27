@@ -31,11 +31,9 @@ import { User } from './User';
       name: 'exception_items_project_id_status_severity_idx',
       fields: ['project_id', 'status', 'severity'],
     },
-    // At most one OPEN exception per dedup key: repeated identical failures
-    // fold into it (occurrenceCount++) instead of filing duplicates. A resolved
-    // item leaves the key free, so a recurrence after resolution opens a fresh
-    // exception. Manual items carry a null dedupKey and never dedupe (Postgres
-    // treats nulls as distinct).
+    // At most one open exception per dedup key, so repeated identical failures
+    // fold into it. A resolved item frees the key; manual items carry a null
+    // key and never dedupe.
     {
       unique: true,
       fields: ['dedup_key'],

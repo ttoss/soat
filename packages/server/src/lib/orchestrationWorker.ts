@@ -32,10 +32,8 @@ const workerConcurrencyLimit = (): number | undefined => {
   return Number.isFinite(configured) && configured > 0 ? configured : undefined;
 };
 
-// Number of tasks this process has claimed but not yet acked. Tracked across
-// ticks so the concurrency cap holds even when a slow task spans several ticks:
-// each tick may claim at most `CONCURRENCY − inFlight`. Module-level (per
-// process), matching the per-worker semantics of D10.
+// Tracked across ticks so the concurrency cap holds when a slow task spans
+// several: each tick may claim at most `CONCURRENCY − inFlight`.
 let inFlight = 0;
 
 /** The tasks currently claimed-and-unacked by this worker process. */
@@ -43,11 +41,9 @@ export const inFlightTaskCount = (): number => {
   return inFlight;
 };
 
-// When this process last completed a claim against the queue without error.
-// A claim that throws (the database or SQS is unreachable) deliberately does
-// **not** update it, so the value ages out and the worker healthcheck reports
-// unhealthy — a worker whose timer still fires but which cannot reach the queue
-// is not doing its job.
+// A failed claim deliberately does not update this, so the value ages out and
+// the healthcheck reports unhealthy — a worker whose timer fires but cannot
+// reach the queue is not doing its job.
 let lastSuccessfulDrainAt: number | null = null;
 
 /**
@@ -137,11 +133,9 @@ export const handleRunTask = async (args: {
     await wakeRun({ run });
     return;
   }
-  // `continue` (and any future `resume`): a freshly-queued run starts from
-  // scratch; a `running` run is one the reaper reclaimed after a crash and
-  // re-drives from its last checkpoint. Request-driven resumes (human input,
-  // manual resume, approval resolution) drive inline and never enqueue a task,
-  // so a `resume` kind is not produced today.
+  // A `running` run here is one the reaper reclaimed after a crash.
+  // Request-driven resumes drive inline and never enqueue a task, so no
+  // `resume` kind is produced today.
   if (run.status === 'queued') {
     await driveQueuedRun({ run });
     return;
@@ -203,11 +197,9 @@ export const drainQueueOnce = async (args?: {
   return tasks.length;
 };
 
-// In-process worker kick. `enqueueRunTask` callers (start-run, the scheduler
-// sweeps) fire this so a single-process deployment drives the queue without a
-// separate worker — the API process is itself a valid worker. Disabled by
-// `ORCHESTRATION_WORKER_DISABLED=true` for deployments that run a dedicated
-// worker fleet and want the API tier to stay request-only.
+// Lets a single-process deployment drive the queue without a separate worker.
+// `ORCHESTRATION_WORKER_DISABLED=true` keeps the API tier request-only for
+// deployments running a dedicated worker fleet.
 export const kickWorker = (): void => {
   if (process.env.ORCHESTRATION_WORKER_DISABLED === 'true') return;
   // `drainQueueOnce` catches its own claim and per-task errors and resolves to a

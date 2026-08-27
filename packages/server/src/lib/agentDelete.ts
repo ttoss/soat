@@ -52,14 +52,10 @@ const findDependentIds = async (args: {
   };
 };
 
-// Deletes an agent's generations/traces along with it. Cross-references from
-// OTHER agents' rows into the ones being deleted (self-referencing FKs on
-// Generation.initiatorGenerationId and Trace.parentTraceId/rootTraceId) are
-// nulled out first, since those FKs are RESTRICT. Traces own a File holding
-// their serialized steps (see `saveTrace`); those File rows are destroyed
-// alongside the traces, and their storage objects are cleaned up once the
-// transaction commits (see #835 — the row must be gone before the object is,
-// otherwise a concurrent read could reference bytes mid-delete).
+// Cross-references from other agents' rows are nulled first, since those
+// self-referencing FKs are RESTRICT. Storage objects behind the traces' step
+// files are cleaned up only once the transaction commits: the row must be gone
+// before the object, or a concurrent read references bytes mid-delete (#835).
 const forceDeleteAgentWithDependents = async (args: {
   agent: InstanceType<typeof db.Agent>;
   agentId: number;

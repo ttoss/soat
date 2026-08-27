@@ -34,9 +34,7 @@ import { Trace } from './Trace';
       name: 'generations_trace_id_idx',
       fields: ['trace_id'],
     },
-    // Backs the run → generations lookup: `list-generations` filtered by
-    // `orchestration_run_id` (optionally narrowed by `node_id`) is how a caller
-    // gets from an orchestration run to what its agent nodes actually did.
+    // Backs `list-generations` filtered by `orchestration_run_id`/`node_id`.
     {
       name: 'generations_orchestration_run_id_node_id_idx',
       fields: ['orchestration_run_id', 'node_id'],
@@ -125,11 +123,9 @@ export class Generation extends Model {
   )
   declare startedByActor: Actor | null;
 
-  // Session the generation was produced for, when it was dispatched through one.
-  // Together with `startedByActorId` this is the end-user attribution chain the
-  // usage event copies at metering time, so spend can be rolled up per end user
-  // and per conversation session. SET NULL on delete so removing a session never
-  // blocks on (or rewrites) the generations it produced.
+  // With `startedByActorId`, the end-user attribution chain the usage event
+  // copies at metering time. SET NULL on delete so removing a session never
+  // blocks on the generations it produced.
   @ForeignKey(() => {
     return Session;
   })
@@ -175,13 +171,10 @@ export class Generation extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare error: Record<string, unknown> | null;
 
-  // Usage attribution. These are read back at metering time (usageRecording.ts)
-  // and copied onto the UsageEvent, which already carries them as its own
-  // columns — this mirrors that shape. They live in typed columns rather than
-  // the `metadata` bag because they are billing identity the platform enforces:
-  // a caller must not be able to attribute spend to another action, trigger or
-  // orchestration run. `orchestrationRunId` holds the run's *public* id and is
-  // resolved to the internal FK at persist time.
+  // Usage attribution, copied onto the UsageEvent at metering time. Typed
+  // columns rather than the `metadata` bag because this is billing identity the
+  // platform enforces — a caller must not be able to attribute spend to another
+  // action, trigger or run. `orchestrationRunId` holds the run's *public* id.
   @Column({ type: DataType.STRING, allowNull: true })
   declare actionId: string | null;
 
@@ -194,26 +187,20 @@ export class Generation extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare nodeId: string | null;
 
-  // The node's 1-based retry attempt, completing the replay identity the two
-  // columns above start: a retried node produces one generation per attempt, and
-  // without this they are distinguishable only by guessing from timestamps.
-  // Null for every generation not dispatched by an orchestration node.
+  // Completes the replay identity the two columns above start: a retried node
+  // produces one generation per attempt, otherwise distinguishable only by
+  // guessing from timestamps.
   @Column({ type: DataType.INTEGER, allowNull: true })
   declare nodeAttempt: number | null;
 
-  // What kind of workload produced this generation, when it is not ordinary
-  // production traffic: `eval` for an eval run's items. Null means production.
-  // Read back at metering time and copied onto the UsageEvent's own `source`
-  // column, so eval spend is separable from production spend in cost rollups
-  // (the evaluations module doc). A typed column rather than the
-  // `metadata` bag for the same reason as the four above: it is billing
-  // identity the platform sets, never a caller.
+  // `eval` for an eval run's items, null for production. Copied onto the
+  // UsageEvent's `source` at metering time so verification spend is separable
+  // from production spend. Typed, not `metadata`, for the same reason as above.
   @Column({ type: DataType.STRING, allowNull: true })
   declare source: string | null;
 
-  // The agent config version that served this generation
-  // (the agents module doc — Versioning and Staged Rollout). Forging it would misattribute a
-  // canary's behavior to the stable version in every downstream comparison.
+  // Forging this would misattribute a canary's behavior to the stable version
+  // in every downstream comparison.
   @Column({ type: DataType.INTEGER, allowNull: true })
   declare agentVersion: number | null;
 
@@ -227,38 +214,26 @@ export class Generation extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare extraction: Record<string, unknown> | null;
 
-  // Internal recovery state for a generation paused on a client tool: the full
-  // message history, tool context and agent config needed by
-  // agentGenerationRecovery.ts to resume after a restart. Never serialized to
-  // any API response — it is not in the mapper at all, which is why it gets its
-  // own column instead of an exclusion rule on `metadata`.
+  // Recovery state for a generation paused on a client tool. Its own column
+  // rather than an exclusion rule on `metadata`, so it cannot reach a response.
   @Column({ type: DataType.JSONB, allowNull: true })
   declare pendingState: Record<string, unknown> | null;
 
-  // Caller-owned annotation bag (F-15). The server writes nothing here, so
-  // there is no reserved-key list to maintain and no key a caller can set that
-  // reaches platform state.
+  // Caller-owned. The server writes nothing here, so there is no reserved-key
+  // list to maintain and no key a caller sets that reaches platform state.
   @Column({ type: DataType.JSONB, allowNull: true })
   declare metadata: Record<string, unknown> | null;
 
-  // The messages this turn was asked to answer, resolved (file and document
-  // references already inlined) but without the agent's own instructions or its
-  // knowledge injections — those are config, recoverable from `agentVersion`,
-  // and replaying them as messages would double them up.
-  //
-  // Recorded so a real turn can be promoted into an eval dataset item
-  // (`POST /datasets/{id}/items/from-generation`). Before this column the input
-  // survived only in `pendingState`, and only while a run was paused on a client
-  // tool, so a completed generation kept no record of what it was asked. Content
-  // rather than skeleton: listed in `GENERATION_CONTENT_FIELDS`, so
+  // The resolved messages this turn answered, without the agent's instructions
+  // or knowledge injections — those are config recoverable from `agentVersion`,
+  // and replaying them as messages would double them up. Recorded so a real
+  // turn can be promoted into an eval dataset item. Counts as content, so
   // zero-retention never writes it and a purge clears it.
   @Column({ type: DataType.JSONB, allowNull: true })
   declare inputMessages: unknown[] | null;
 
-  // Content-purge marker. When set, the generation's content fields (`metadata`,
-  // `error`, `extraction`, `pendingState`) have been cleared. The skeleton the
-  // billing/audit ledger depends on survives: ids, timestamps, status, counters
-  // and the usage-attribution columns above.
+  // Set once the content fields are cleared. The skeleton the billing/audit
+  // ledger depends on survives.
   @Column({ type: DataType.DATE, allowNull: true })
   declare contentRedactedAt: Date | null;
 

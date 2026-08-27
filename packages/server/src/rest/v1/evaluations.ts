@@ -194,11 +194,9 @@ evaluationsRouter.post(
       resourceType: 'dataset',
     });
 
-    // Curating copies a generation's content into a dataset item, so the caller
-    // must be allowed to read that generation as well as to write items —
-    // otherwise `evaluations:CreateDataset` alone would be a way to read turns a
-    // principal cannot fetch through `GET /generations/{id}`. Both checks resolve
-    // the same scope; only the action differs.
+    // Curating copies a generation's content into an item, so without the read
+    // check `evaluations:CreateDataset` alone would be a way to read turns a
+    // principal cannot fetch through `GET /generations/{id}`.
     await requireProjectAccess({
       ctx,
       action: 'generations:GetGeneration',

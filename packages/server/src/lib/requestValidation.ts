@@ -37,10 +37,8 @@ const isOpenOrAmbiguous = (schema: Record<string, unknown>): boolean => {
 
 type WalkFrame = { schema: unknown; value: unknown; path: string };
 
-// Builds the child frames to walk for one closed object level: each property
-// whose value is present becomes a frame (array of objects → one indexed frame
-// per element against the `items` schema; otherwise the value against its own
-// schema). `$ref`s are resolved here.
+// One frame per present property — an array of objects yields an indexed frame
+// per element against the `items` schema. `$ref`s are resolved here.
 const childFrames = (
   schema: SchemaWithProperties,
   value: Record<string, unknown>,

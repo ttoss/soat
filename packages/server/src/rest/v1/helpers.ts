@@ -321,21 +321,18 @@ export const resolveWriteProjectId = async (args: {
     throw new DomainError('VALIDATION_FAILED', 'project_id is required');
   }
 
-  // A scoped credential targeting a different project fails with an actionable
-  // error rather than the opaque `Forbidden` that resolveProjectIds would yield.
-  // `projectPublicId` here already defaulted to the credential's own project
-  // when omitted, so this only fires on an explicit, mismatching project id.
+  // An actionable error rather than the opaque `Forbidden` `resolveProjectIds`
+  // would yield. `projectPublicId` already defaulted to the credential's own
+  // project, so this only fires on an explicit, mismatching id.
   assertCredentialProjectScope({
     ctx,
     requestedProjectPublicId: projectPublicId,
     action,
   });
 
-  // resolveProjectIds runs the permission check and, for a scoped key, returns null
-  // when projectPublicId does not match the key's project (→ 403). Every
-  // resolveProjectIds implementation, given a truthy projectPublicId (guaranteed
-  // above), either returns null or a single-element array — so the resolved id is
-  // always defined here.
+  // Given the truthy `projectPublicId` guaranteed above, every
+  // `resolveProjectIds` returns either null (→ 403) or a single-element array,
+  // so the resolved id is always defined here.
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
     action,

@@ -192,11 +192,9 @@ const buildEntrySelection = async (args: {
     projectIds,
   });
 
-  // Selection is a union of two independent matches:
-  //   1. the entry belongs to a selected memory container, OR
-  //   2. the entry's own tags match the globs (entry-granularity filtering).
-  // Both are expressed against the entry table (the container match uses the
-  // native `memoryId` FK), so no cross-table reference is needed here.
+  // A union of two independent matches — the entry's container, or the entry's
+  // own tags. Both are expressed against the entry table, so no cross-table
+  // reference is needed.
   const selectionClauses: unknown[] = [];
   if (memoryInternalIds.length > 0) {
     selectionClauses.push({ memoryId: memoryInternalIds });
@@ -238,10 +236,9 @@ export const resolveMemorySearch = async (args: {
   const selection = await buildEntrySelection({ config, projectIds });
   if (!selection) return [];
 
-  // Retrieval only ever sees currently-valid facts: a superseded entry stays
-  // readable through the entries API for audit, but must never come back as
-  // knowledge and be injected into a generation as though it still held.
-  // `Op.and` composes with the selection's own `Op.or` without flattening it.
+  // A superseded entry stays readable through the entries API for audit, but
+  // must never be injected into a generation as though it still held. `Op.and`
+  // composes with the selection's own `Op.or` without flattening it.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const entryWhere: any = {
     [Op.and]: [selection, { invalidatedAt: null }],

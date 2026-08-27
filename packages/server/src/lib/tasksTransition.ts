@@ -64,11 +64,9 @@ const cancelDispatchOnExit = async (args: {
   // staleness check in tasksAutomation (task re-validated on completion).
 };
 
-// An `automation` transition always carries `principal.id === null` (#786) —
-// the cause lives in `generationId` / `orchestrationRunId` / `toolId` instead,
-// one per dispatch kind. If all of those are also null, nothing at all records
-// why the task moved: not a degraded record, a meaningless one. Reject the
-// write rather than silently persisting it (#792).
+// An `automation` transition carries no principal id (#786) — the cause lives
+// in `generationId`/`orchestrationRunId`/`toolId`. With all of those null,
+// nothing records why the task moved, so the write is rejected (#792).
 const assertAutomationHasProvenance = (args: {
   transitionArgs: TransitionArgs;
   transitionName: string;
@@ -217,10 +215,9 @@ const nextChainDepth = (args: {
   return next;
 };
 
-// Validates the just-locked task against the requested transition: not closed,
-// not fenced behind a pending approval gate (unless this is the `approval`
-// resolution), the transition is valid from the committed state, and its guard
-// passes. Returns the resolved transition or throws.
+// Checks the locked task is open, not fenced behind a pending gate (unless this
+// is the `approval` resolution), and that the transition is valid from the
+// committed state with its guard passing.
 const resolveLockedTransition = (args: {
   task: TaskInstance;
   transitionArgs: TransitionArgs;
@@ -429,11 +426,9 @@ export const transitionTask = async (args: TransitionArgs) => {
       ? undefined
       : sanitizeTaskToolContext(args.toolContext);
 
-  // Approval-gated: a `requires_approval` transition fired by anyone other than
-  // the `approval` principal (the resolution itself) parks as an ApprovalItem
-  // instead of applying. The gated move is re-fired here as the `approval`
-  // principal when the item resolves, so guards are re-evaluated against the
-  // committed state at resolution time (§6.5).
+  // A `requires_approval` transition parks as an ApprovalItem unless fired by
+  // the `approval` principal, i.e. the resolution re-firing it — so guards are
+  // re-evaluated against the state committed at resolution time.
   if (
     definition.requiresApproval === true &&
     args.principal.kind !== 'approval'
@@ -445,10 +440,9 @@ export const transitionTask = async (args: TransitionArgs) => {
       // transition was resolved from, never the live workflow row.
       transitions,
       note: args.note ?? null,
-      // The gate is a pause, not a cancellation: the requester's context is
-      // persisted now so the dispatch that runs when the gate resolves — under
-      // the `approval` principal, which supplies none of its own — still carries
-      // the credential the move was made with.
+      // A pause, not a cancellation: the requester's context is persisted so
+      // the dispatch that runs on resolution — under the `approval` principal,
+      // which supplies none — still carries the credential the move used.
       toolContext,
     });
   }

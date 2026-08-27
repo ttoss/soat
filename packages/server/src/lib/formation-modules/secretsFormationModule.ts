@@ -2,10 +2,9 @@ import { toOptionalString } from '../resource-inputs/normalizers';
 import { createSecret, deleteSecret, updateSecret } from '../secrets';
 import { defineFormationModule } from './defineFormationModule';
 
-// Secrets are write-only: the value cannot be read back, so the module declares
-// no `fetch` and `writeOnly: true` tells the planner to diff against the
-// persisted lastAppliedProperties snapshot instead of reading the null back as
-// "resource deleted externally".
+// The value cannot be read back, so `writeOnly` tells the planner to diff
+// against the last-applied snapshot instead of reading the null as "deleted
+// externally".
 export const secretsFormationModule = defineFormationModule({
   resourceType: 'secret',
 

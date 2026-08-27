@@ -1,7 +1,6 @@
-// SOAT brand imagery, served from the website's static assets
-// (packages/website/static/img). The Vector Galaxy mark is transparent and
-// dark-mode-first; per the soat-design brand rules it emits its own light, so
-// render it with clear space and no drop shadow, and never invert or stretch it.
+// Served from the website's static assets. The Vector Galaxy mark is
+// transparent and dark-mode-first: per the brand rules it emits its own light,
+// so give it clear space, no drop shadow, and never invert or stretch it.
 const WEBSITE_BASE = 'https://soat.ttoss.dev';
 
 export const BRAND_ASSETS = {

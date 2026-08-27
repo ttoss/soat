@@ -15,10 +15,8 @@ import { recordGenerationUsage } from './usage';
 
 const log = createDebug('soat:generation');
 
-// The model's id as the usage event names it. `LanguageModel` is either the id
-// itself or a routed model instance carrying one; an absent model meters as the
-// empty string, exactly as the completion path does when the response carries no
-// `modelId`.
+// `LanguageModel` is either the id itself or a routed instance carrying one. An
+// absent model meters as the empty string, as the completion path does.
 const modelIdOf = (model: LanguageModel | undefined): string => {
   if (model === undefined) return '';
   return typeof model === 'string' ? model : model.modelId;
@@ -83,10 +81,8 @@ export const recordGenerationFailure = async (args: {
     // ultimately failed — that is what makes the unmetered-failed-attempt gap
     // visible rather than silent.
     saveRoutingMetadata({ generationId: args.generationId, model: args.model }),
-    // A failed turn is metered exactly when it spent something: the provider
-    // billed for the tokens whether or not the answer could be used, so leaving
-    // them out understates every roll-up that reads them (project usage, a run's
-    // total, a spend guardrail, a threshold).
+    // The provider billed for the tokens whether or not the answer could be
+    // used, so omitting them understates every roll-up that reads them.
     ...(usage
       ? [
           recordGenerationUsage({
@@ -98,10 +94,8 @@ export const recordGenerationFailure = async (args: {
       : []),
   ]);
 
-  // A completed turn announces itself; a failed one has to as well, or the only
-  // way to learn a background generation died is to poll the record. Emitting
-  // must never mask the original error, so it is wrapped the same way the
-  // completion path wraps its own.
+  // Without this, the only way to learn a background generation died is to poll
+  // the record. Wrapped so emitting can never mask the original error.
   if (args.projectId !== undefined && args.projectPublicId !== undefined) {
     try {
       emitResourceEvent({
@@ -230,11 +224,9 @@ const runCompletionSideEffects = async (
       generationId: args.generationId,
       model: args.pending.resolvedModel,
     }),
-    // The tool-outputs continuation is a separate completion path from
-    // `buildCompletedGenerationResult`/`runStreamGeneration`'s `onEnd` — both
-    // of which already meter usage. Without this, a generation that paused
-    // for a client tool call never got a usage event, even though the
-    // provider's response carried real usage.
+    // A separate completion path from the two that already meter usage. Without
+    // this, a generation that paused for a client tool never got a usage event
+    // despite the provider's response carrying real usage.
     recordGenerationUsage({
       generationId: args.generationId,
       model: args.result.response?.modelId ?? '',

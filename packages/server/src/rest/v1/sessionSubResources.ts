@@ -177,10 +177,9 @@ sessionSubResourcesRouter.post(
 sessionSubResourcesRouter.post(
   '/sessions/:session_id/fork',
   async (ctx: Context) => {
-    // Forking reads a session's full history and creates a new session, so the
-    // caller must hold both actions. `agents:CreateSession` alone would
-    // otherwise be a way to read history a principal cannot fetch through
-    // `GET /sessions/{id}` — the same dual check curating a generation uses.
+    // Forking reads a session's full history as well as creating one, so
+    // `agents:CreateSession` alone would be a way to read history a principal
+    // cannot fetch through `GET /sessions/{id}`.
     const { agentId } = await checkSessionAccess(ctx, 'agents:GetSession');
     await requireProjectAccess({
       ctx,

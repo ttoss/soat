@@ -179,10 +179,8 @@ const runIngestionPipeline = async (args: IngestionPipelineArgs) => {
       );
     }
 
-    // Stash the effective chunk config on the document's own chunk columns
-    // now — finalizeIngestedPages will overwrite them with the same values
-    // once the callback arrives, but the callback needs to read them back in
-    // the meantime (readConversionContext in ingestionCallback.ts).
+    // Written now because the callback reads them back before
+    // `finalizeIngestedPages` rewrites them with the same values.
     const chunkConfig = resolveChunkConfig(args, resolved.rule);
     await doc.update({
       conversionAttemptId: attemptId,

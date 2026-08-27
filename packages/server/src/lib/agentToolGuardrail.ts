@@ -108,10 +108,8 @@ export const buildResolverGuardrailContext = async (args: {
   };
 };
 
-// Whether any applying guardrail can ever route to approval — the trigger for
-// injecting the model-visible justification fields. A pure A/D literal, or a B
-// literal without `escalate`, never files an item; anything else (C, a class
-// expression, or an escalating B) can.
+// Whether any applying guardrail can route to approval, which is what triggers
+// injecting the model-visible justification fields.
 const canRouteToApproval = (guardrails: CollectedGuardrail[]): boolean => {
   return guardrails.some((guardrail) => {
     const { document } = guardrail;
@@ -238,10 +236,8 @@ export type Justification = {
  * writes the audit records linked to it, and returns the `pending_approval` tool
  * result. Split out so the wrapped execute stays within its complexity budget.
  */
-// The default approval window (seconds) the governing guardrail sets via its
-// document `expires_in`, or the platform default when it sets none. The
-// governing guardrail is the one whose decision matched the composed
-// `route_to_approval` — its version already stamps the item's provenance.
+// From the governing guardrail's `expires_in`, or the platform default. The
+// governing one is whose decision matched the composed `route_to_approval`.
 export const governingApprovalExpiresIn = (args: {
   guardrails: CollectedGuardrail[];
   evaluated: EvaluatedGuardrail[];

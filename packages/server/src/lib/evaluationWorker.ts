@@ -217,11 +217,9 @@ const handleEvalItemTask = async (args: {
     item,
   });
 
-  // The run may have been canceled while this item was in flight: the claim
-  // happened before the cancel, so the liveness check above let it through and
-  // the result landed after the run had already settled. Reconcile the counters
-  // with what actually ran — a canceled run publishes no `aggregate_scores`, so
-  // these counts are its only record of the work that was really paid for.
+  // The run may have been canceled while this item was in flight. A canceled
+  // run publishes no `aggregate_scores`, so these counters are its only record
+  // of the work that was really paid for.
   await run.reload();
   if (!isLive(run.status)) {
     await recountEvalRunProgress({ run });

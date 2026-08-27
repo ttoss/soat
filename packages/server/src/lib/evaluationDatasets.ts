@@ -328,10 +328,9 @@ export const createDatasetItemFromGeneration = async (args: {
     projectIds: args.projectIds,
   });
 
-  // A dataset is project-scoped, so a fixture from another project would be
-  // invisible to everyone who can run the suite. Checked explicitly because
-  // `projectIds` is `undefined` for an unscoped principal — for whom both
-  // lookups above legitimately succeed across projects.
+  // A cross-project fixture would be invisible to everyone who can run the
+  // suite. Checked explicitly because `projectIds` is `undefined` for an
+  // unscoped principal, for whom both lookups above succeed across projects.
   if (turn.projectDbId !== dataset.projectId) {
     throw new DomainError(
       'VALIDATION_FAILED',

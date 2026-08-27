@@ -63,10 +63,10 @@ export const validateQuotaImmutableFields = (args: {
     const next = args.next[field];
     if (next === undefined) continue;
 
-    // `scope_ref` is nullable, and null ("all entities of this scope type") is a
-    // materially different cap from a specific ref — so an explicit null that
-    // disagrees with the stored value is still a change. Comparing normalized
-    // strings keeps null-vs-null equal without special-casing each direction.
+    // A null `scope_ref` ("all entities of this scope type") is a materially
+    // different cap from a specific ref, so an explicit null disagreeing with
+    // the stored value is still a change. Normalized strings keep null-vs-null
+    // equal without special-casing each direction.
     const nextValue = next === null ? '' : String(next);
     const currentValue = args.current[field] ?? '';
     if (nextValue !== currentValue) {

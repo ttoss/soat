@@ -274,13 +274,10 @@ const classifyRef = (args: {
 }): 'ok' | 'unwritten' | 'conditional' => {
   const { refPath, ctx } = args;
   const key = topSegment(refPath);
-  // The `input` namespace is the only place run input is seeded (see
-  // startOrchestrationRun), so any `{ "var": "input.<name>" }` reference is
-  // satisfiable regardless of the declared input_schema — mirroring the
-  // pipeline/formation `input.` convention. A *flat* `{ "var": "<name>" }` is
-  // never seeded from run input (even when input_schema declares `<name>`) —
-  // it can only be satisfied by an upstream node's own `state_mapping` write,
-  // handled by the general writers-map lookup below.
+  // Run input is seeded only under `input.`, so any `input.<name>` reference is
+  // satisfiable regardless of the declared schema. A flat `<name>` never is,
+  // even when the schema declares it — only an upstream `state_mapping` write
+  // can satisfy that, handled by the writers-map lookup below.
   if (key === 'input') return 'ok';
   if (key === NODE_ARTIFACTS_STATE_KEY)
     return classifyNodesRef({ refPath, ctx });
@@ -308,12 +305,9 @@ const checkNodeReachability = (args: {
       const verdict = classifyRef({ refPath, ctx });
       const key = topSegment(refPath);
       const path = `nodes[${index}].input_mapping.${mappingKey}`;
-      // `nodes.<nodeId>` is written exclusively by the referenced node
-      // completing, so an unwritten reference is always an error. A plain
-      // state key can never be satisfied by run input either (input is
-      // seeded under `state.input` only), but a parallel non-ancestor
-      // node's state_mapping may still write it before this node runs, so
-      // without a declared input_schema the graph stays permissive.
+      // `nodes.<nodeId>` is written only by that node completing, so an
+      // unwritten reference is always an error. A plain state key may still be
+      // written by a parallel non-ancestor node, so the graph stays permissive.
       if (verdict === 'unwritten' && key === NODE_ARTIFACTS_STATE_KEY) {
         const referencedNodeId = refPath.split('.')[1];
         errors.push({

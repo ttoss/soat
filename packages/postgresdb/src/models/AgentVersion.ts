@@ -30,9 +30,8 @@ import { User } from './User';
       unique: true,
       fields: ['public_id'],
     },
-    // Serves both the point lookup of one version and the newest-first
-    // paginated listing (`WHERE agent_id = ? ORDER BY version DESC`), so no
-    // separate index on `created_at` is needed.
+    // Serves the point lookup and the newest-first listing, so no separate
+    // index on `created_at` is needed.
     {
       name: 'agent_versions_agent_id_version_unique',
       unique: true,

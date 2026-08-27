@@ -79,9 +79,7 @@ export class ActivityEntry extends Model {
     | 'exception_created'
     | 'schedule_fired';
 
-  // Borrowed from ExceptionItem's severity vocabulary so the two
-  // autonomous-action surfaces stay consistent; defaults are per-kind, applied
-  // by the lib layer.
+  // ExceptionItem's vocabulary, so the two surfaces stay consistent.
   @Column({
     type: DataType.ENUM('info', 'warning', 'critical'),
     allowNull: false,
@@ -103,9 +101,8 @@ export class ActivityEntry extends Model {
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare agentId: string | null;
 
-  // Producer-specific reference (approval id, exception id, trigger firing id,
-  // tool id — whichever the `kind` implies); intentionally untyped beyond
-  // "some public id" so a new kind never needs a schema change.
+  // Whichever public id the `kind` implies. Untyped beyond "some public id" so
+  // a new kind never needs a schema change.
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare refId: string | null;
 

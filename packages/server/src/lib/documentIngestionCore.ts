@@ -223,10 +223,8 @@ export const finalizeIngestedPages = async (
       resourceId: fetched.publicId,
       data: {
         ...mapDocument(fetched),
-        // snake_case, like every other key on the wire: a webhook payload uses
-        // the same names the REST response does (`case-convention.md`). This
-        // one shipped as `chunkCount` and was the only camelCase key in the
-        // envelope.
+        // A webhook payload uses the same names the REST response does. This
+        // one shipped as `chunkCount`, the only camelCase key in the envelope.
         chunk_count: chunks.length,
       },
     });

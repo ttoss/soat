@@ -1,12 +1,8 @@
 import { db } from '../db';
 import { emptyPage, paginatedList } from './pagination';
 
-// The metering write path is split across `usageRecording.ts` (the two
-// `llm_tokens` writers), `usageTokenEvent.ts` (their shared pricing + persist
-// primitives), and `usageComputeRecording.ts` (the `compute_execution` writer);
-// all are re-exported here so the module's public surface (used by the
-// generation lifecycle, the completion paths, and tests) is one import.
-// `usage.ts` owns the read path (list + receipt re-export).
+// The write path is split across three modules and re-exported here, so the
+// module's public surface is one import. This file owns the read path.
 export type {
   UsageAggregate,
   UsageAggregateComponent,

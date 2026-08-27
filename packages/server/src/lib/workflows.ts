@@ -219,10 +219,9 @@ export const updateWorkflow = async (args: UpdateWorkflowArgs) => {
     transitions: args.transitions,
   });
 
-  // `workflow` is loaded with its project so it can be mapped directly, before
-  // and after the write: `save` mutates the instance in place, so the same
-  // reference yields the pre-write config here and the post-write one below,
-  // with no second query and no chance of the two views disagreeing.
+  // `save` mutates the instance in place, so this one reference yields both the
+  // pre- and post-write config with no second query and no chance of the two
+  // views disagreeing.
   const beforeConfig = buildWorkflowConfigSnapshot(mapWorkflow(workflow));
 
   if (args.name !== undefined && args.name !== workflow.name) {
@@ -241,12 +240,10 @@ export const updateWorkflow = async (args: UpdateWorkflowArgs) => {
 
   await workflow.save();
 
-  // A definition write bumps the version and archives the new state machine, so
-  // a task pinned to any earlier version still resolves the machine it entered
-  // on. Metadata-only edits (name / description) leave the version untouched — as
-  // does re-writing the definition the workflow already holds, which is what
-  // makes restoring the live definition a genuine no-op rather than an endless
-  // version chain.
+  // A definition write bumps the version, so a task pinned to an earlier one
+  // still resolves the machine it entered on. Metadata-only edits and
+  // re-writing the identical definition leave it untouched — restoring the live
+  // definition is a no-op, not a version chain.
   await workflowVersionStore.archiveConfigChange({
     resourceDbId: workflow.id as number,
     currentVersion: workflow.version,
@@ -285,10 +282,9 @@ export const deleteWorkflow = async (args: { id: string }) => {
     );
   }
 
-  // Archived versions are owned by the workflow; remove them before the parent
-  // so no orphan version rows are left behind. Closed tasks cascade with the
-  // workflow (the open-task guard above is the only thing that blocks deletion),
-  // so nothing is left pinned to a version that no longer exists.
+  // Removed before the parent so no orphan version rows are left behind. Closed
+  // tasks cascade with the workflow, so nothing stays pinned to a version that
+  // no longer exists.
   await db.sequelize.transaction(async (t) => {
     await workflowVersionStore.deleteVersions({
       resourceDbId: workflow.id as number,

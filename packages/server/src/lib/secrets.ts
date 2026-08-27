@@ -183,12 +183,9 @@ export const updateSecret = async (args: {
   return mapSecret(secret);
 };
 
-// ── Secret references ({{secret:sec_...}}) ────────────────────────────────
-//
-// Any string-valued input across the API may embed a `{{secret:<publicId>}}`
-// token. The token is what gets stored and echoed back by GET/LIST endpoints;
-// it is resolved to the decrypted value server-side, at the point of use only
-// (e.g. right before an outbound fetch for an http tool).
+// Any string-valued input may embed a `{{secret:<publicId>}}` token. The token
+// is what gets stored and echoed back; it resolves to the decrypted value
+// server-side at the point of use only.
 
 const SECRET_REF_RE = /\{\{secret:(sec_[A-Za-z0-9]+)\}\}/g;
 

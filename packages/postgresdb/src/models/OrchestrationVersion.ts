@@ -31,10 +31,8 @@ import { User } from './User';
       unique: true,
       fields: ['public_id'],
     },
-    // Serves both the point lookup of one version — which every background
-    // execution of a pinned run performs — and the newest-first paginated
-    // listing (`WHERE orchestration_id = ? ORDER BY version DESC`), so no
-    // separate index on `created_at` is needed.
+    // Serves the point lookup every background execution of a pinned run
+    // performs, and the newest-first listing.
     {
       name: 'orchestration_versions_orchestration_id_version_unique',
       unique: true,

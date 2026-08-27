@@ -142,12 +142,10 @@ export type PendingGeneration = {
     toolName: string;
     args: unknown;
   }>;
-  // Tool results the guardrail gate synthesized for client calls it did NOT
-  // release (class D / tripwire / pending_approval). They belong to the same
-  // assistant turn as `pendingToolCalls`, so they must be injected alongside the
-  // client-submitted outputs when the loop resumes — otherwise the provider sees
-  // a tool call with no result. Absent/empty for a generation with no gated
-  // client calls.
+  // Results the guardrail gate synthesized for client calls it did not release.
+  // They share an assistant turn with `pendingToolCalls`, so they must be
+  // injected alongside the client-submitted outputs when the loop resumes, or
+  // the provider sees a tool call with no result.
   syntheticToolResults?: ClientToolResult[];
   messages: Array<unknown>;
   steps: unknown[];

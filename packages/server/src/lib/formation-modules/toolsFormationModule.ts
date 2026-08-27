@@ -29,14 +29,10 @@ const optional = <T>(value: T | null): T | undefined => {
   return value ?? undefined;
 };
 
-// A pipeline step's `tool_id` may be a formation `{ ref: ResourceName }`
-// reference, which is resolved to the physical tool id at deploy time (by
-// `resolveRefs`, after the referenced tool is created first per the dependency
-// graph). Structural validation via `validatePipelineConfig` requires a string
-// `tool_id`, so replace any ref-shaped `tool_id` with a placeholder before
-// validating — this checks the rest of the pipeline shape without rejecting a
-// legitimate reference. The referenced resource's existence is already checked
-// by the template-wide ref validation in `formationsValidation`.
+// A step's `tool_id` may be a `{ ref }` resolved only at deploy time, but
+// `validatePipelineConfig` requires a string — so ref-shaped ids are swapped
+// for a placeholder, checking the rest of the shape without rejecting a
+// legitimate reference. The ref's target is validated template-wide elsewhere.
 const REF_TOOL_ID_PLACEHOLDER = '__formation_ref__';
 
 const normalizePipelineRefsForValidation = (pipeline: unknown): unknown => {
@@ -106,10 +102,8 @@ export const toolsFormationModule = defineFormationModule({
       });
     }
 
-    // Validate execute and mcp separately so each error points at the field
-    // that actually carries the offending token. The rule itself (and its
-    // wording) comes from `toolTemplates`, the same source the REST write path
-    // throws from.
+    // Separately, so each error points at the field carrying the offending
+    // token. The rule comes from `toolTemplates`, as on the REST write path.
     for (const field of ['execute', 'mcp'] as const) {
       const message = describeToolTemplateTokenProblems(
         findToolTemplateTokenProblems(properties[field])

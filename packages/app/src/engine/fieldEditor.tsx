@@ -135,11 +135,9 @@ const parseRefList = (value: string): string[] => {
   }
 };
 
-// Dynamic multi-select for an array of cross-references (e.g. policy_ids).
-// Selected values render as removable chips; a dropdown adds more from the
-// referenced resource. Stored as a JSON array string so buildRequestBody's
-// array handling parses it directly; an empty selection serialises to '' so an
-// optional field is omitted from the request.
+// Stored as a JSON array string so `buildRequestBody`'s array handling parses
+// it directly; an empty selection serialises to '' so an optional field is
+// omitted from the request.
 const MultiRefField = ({
   id,
   value,

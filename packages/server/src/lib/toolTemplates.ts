@@ -37,18 +37,13 @@ const log = createDebug('soat:toolTemplates');
  * host the tool's author never configured.
  */
 
-// The inner alternation lets a `${...}` sub placeholder's own closing brace
-// pass through without prematurely ending the `{{...}}` match — a plain
-// `[^}]*` body would stop at the sub's inner `}` and leave a mangled,
-// one-brace-short capture for `{{secret:${ApiSecret}}}`.
+// The inner alternation lets a `${...}` placeholder's own closing brace pass
+// through: a plain `[^}]*` body stops at it, leaving a one-brace-short capture.
 const DOUBLE_CURLY_RE = /\{\{((?:[^{}]|\$\{[^}]*\})*)\}\}/g;
 
-// A resolved reference (`secret:sec_...`) or a formation `sub` placeholder
-// still awaiting resolution (`secret:${LogicalIdOrParam}`) are both valid —
-// a formation template is statically validated *before* `${...}` tokens
-// resolve, so `{ "sub": "Bearer {{secret:${ApiSecret}}}" }` is legitimate
-// template source, not an authoring mistake (see the "Composition" section
-// of the expressions & templating reference doc).
+// An unresolved `secret:${...}` placeholder is as valid as a resolved
+// `secret:sec_...`: a formation template is statically validated before `${...}`
+// tokens resolve, so it is legitimate source, not an authoring mistake.
 const VALID_SECRET_TOKEN_RE = /^secret:(sec_[A-Za-z0-9]+|\$\{[^}]+\})$/;
 
 // A context key reaches an outbound header name via `tool_context`, so the same
@@ -220,10 +215,9 @@ export const assertValidToolTemplateTokens = (args: {
       };
     },
     {
-      // A preset is a context *sink*, so only the shape rule applies to it —
-      // there is no "misplaced" here. Checking it at write time is what keeps a
-      // typo'd `{{ocaAdAccountId}}` from reaching the target as the literal
-      // parameter value, which comes back as an opaque `not found`.
+      // A preset is a context *sink*, so only the shape rule applies. Checking
+      // at write time keeps a typo'd token from reaching the target as a
+      // literal parameter value and coming back as an opaque `not found`.
       invalid: findInvalidTemplateTokens(args.presetParameters),
       misplacedContext: [],
     }
@@ -294,10 +288,8 @@ const substituteTokens = (args: {
           ? args.toolContext[key]
           : undefined;
       if (resolved === undefined) {
-        // The two messages are worth distinguishing: "no tool_context at all"
-        // usually means the tool was reached through a path that carries none
-        // (`/tools/{id}/call`, an orchestration `tool` node), which is a different
-        // fix from adding one key.
+        // "No tool_context at all" usually means the tool was reached through
+        // a path that carries none, a different fix from adding one key.
         throw new DomainError(
           'MISSING_TOOL_CONTEXT_KEY',
           args.toolContext

@@ -70,11 +70,8 @@ export const resolveAgentModel = async (
     aiProviderId: typedAgent.aiProvider.publicId,
   });
 
-  // Defensive TOCTOU guard: the agent is loaded with its aiProvider join and
-  // the guard above proved it is set, so a consistent DB always resolves the
-  // secret here. This branch only fires if the provider row is deleted between
-  // the agent load and this lookup — unreachable through any entry point
-  // without racing a concurrent delete or mocking an owned module.
+  // TOCTOU guard: reachable only if the provider row is deleted between the
+  // agent load and this lookup.
   /* istanbul ignore next */
   if (!resolved) return { failure: 'provider_unresolvable' };
 

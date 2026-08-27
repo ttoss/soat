@@ -38,10 +38,8 @@ type Attribution = {
   nodeAttempt: number | null;
 };
 
-// Pulls the event's attribution off the loaded generation: the billed AI
-// provider (internal id + slug), the caller-supplied action / initiating
-// trigger, and the orchestration run/node — each a typed column on the
-// generation, so a caller cannot bill another action, trigger or run.
+// Read off typed generation columns, so a caller cannot bill another action,
+// trigger or run.
 const resolveEventAttribution = (
   generation: GenerationWithAgent
 ): Attribution => {
@@ -70,18 +68,11 @@ const resolveRunId = async (
   return (run?.id as number | undefined) ?? null;
 };
 
-// The idempotency key. Inside an orchestration run a generation is scoped to its
-// node execution *attempt* (`run:<run>:node:<node>:attempt:<n>`), so a replayed
-// node upserts into a no-op instead of double counting, while a retry — a
-// different generation that really reached the provider — is a different key and
-// meters for real. That is the same identity `compute:<run>:node:<node>:attempt:<n>`
-// (`usageComputeRecording`) and the node-execution idempotency key already use;
-// keying on `run:node` alone made the two indistinguishable, so a second metered
-// attempt would have been dropped. Standalone generations key on the
-// generation's own public id.
-//
-// A null attempt resolves to 1 rather than an empty segment: two spellings of
-// "the first attempt" must not be two keys.
+// Scoped to the node execution *attempt*, so a replayed node upserts into a
+// no-op while a retry — a different generation that really reached the provider
+// — meters for real. Keying on `run:node` alone made the two indistinguishable
+// and dropped the second attempt. A null attempt resolves to 1, so the first
+// attempt has only one spelling.
 const buildIdempotencyKey = (args: {
   generationPublicId: string;
   runPublicId: string | null;
@@ -189,10 +180,8 @@ export type CompletionUsageSource =
   | 'chat'
   | 'memory_consolidation'
   | 'memory_extraction'
-  // An `llm_judge` scorer grading one eval item. Separate from the `eval`
-  // source the graded item generations carry, so a rollup can price *running* a
-  // suite apart from *grading* it — judging doubles the calls, which is the
-  // evaluations module's headline cost risk.
+  // Separate from the `eval` source the graded generations carry, so a rollup
+  // prices running a suite apart from grading it — judging doubles the calls.
   | 'eval_judge';
 
 /**

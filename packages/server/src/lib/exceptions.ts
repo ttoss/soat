@@ -366,7 +366,5 @@ export const resolveException = async (args: {
   return reload(item);
 };
 
-// The event-driven auto-filing producers (a failed run, a lapsed approval, a
-// guardrail tripwire) and `initializeExceptionsListener` /
-// `emitGuardrailTripwireEvent` live in `exceptionAutoFile.ts` — split out to
-// stay under this file's `max-lines` limit (#1130).
+// The event-driven auto-filing producers live in `exceptionAutoFile.ts`, split
+// out to stay under this file's `max-lines` limit (#1130).

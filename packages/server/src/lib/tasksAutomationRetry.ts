@@ -42,10 +42,9 @@ const backoffMs = (args: { retry: RetryPolicy; attempt: number }): number => {
   return base * multiplier ** (args.attempt - 2) * 1000;
 };
 
-// Sleep the backoff in slices, re-reading the task between them, so a card that
-// leaves the state mid-backoff abandons its remaining attempts promptly instead
-// of holding the detached automation promise open for the whole delay. Returns
-// false when the task went stale — the caller stops retrying.
+// Sliced, re-reading the task between them, so a card leaving the state
+// mid-backoff abandons its attempts promptly instead of holding the detached
+// promise open for the whole delay.
 const STALENESS_POLL_MS = 500;
 
 const waitForRetry = async (args: {
@@ -84,10 +83,9 @@ const writeAttemptState = async (args: {
   });
 };
 
-// Records a failed attempt that will be retried: leaves `automation_status` at
-// `running` (the automation has not failed — only this attempt did) while
-// writing that attempt's provenance, and emits an event so the flake stays
-// visible in the activity feed even when a later attempt succeeds.
+// Leaves `automation_status` at `running` — only the attempt failed, not the
+// automation — and emits an event so the flake stays visible even when a later
+// attempt succeeds.
 const recordRetriedAttempt = async (args: {
   taskPublicId: string;
   stateName: string;

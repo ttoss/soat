@@ -54,10 +54,9 @@ export type PricedComponent = TokenComponent & {
   priceId: number | null;
 };
 
-// Prices one billable component at write time from the row effective now,
-// resolved most-specific first: provider instance → project + slug → global.
-// `cached_tokens` falls back to the `input_tokens` rate when no cached price is
-// set (i.e. no cache discount). Non-billable components are never priced.
+// Priced at write time from the row effective now, most-specific first:
+// provider instance → project + slug → global. `cached_tokens` falls back to
+// the `input_tokens` rate, i.e. no cache discount.
 const priceComponent = async (args: {
   component: TokenComponent;
   provider: string;
@@ -119,12 +118,9 @@ export const priceTokenComponents = (args: {
   );
 };
 
-// Attribution columns an `llm_tokens` event carries. Every one is nullable
-// except the project: an agent generation fills them all, while a chat,
-// or memory completion — which has no Generation row behind it —
-// leaves `generationId`/`traceId` null and still meters identically.
-// `actorId`/`sessionId` are the end-user dimensions: set only where an end user
-// is behind the call, and frozen here at write time like `cost_usd`.
+// All nullable but the project: a chat or memory completion has no Generation
+// row behind it and still meters identically. `actorId`/`sessionId` are set
+// only where an end user is behind the call, frozen at write time like `cost_usd`.
 export type TokenEventAttribution = {
   projectId: number;
   orchestrationRunId: number | null;

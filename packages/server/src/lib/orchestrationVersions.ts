@@ -141,10 +141,9 @@ export const restoreOrchestrationVersion = async (args: {
   label?: string | null;
   createdByUserId?: number | null;
 }): Promise<MappedOrchestration> => {
-  // Appends a new version rather than rewinding the counter, so a run pinned to
-  // any version in between still resolves the graph it started on. Runs already
-  // in flight are untouched: a restore is an ordinary graph edit, and pinning is
-  // what keeps it from reaching them.
+  // Appends rather than rewinding the counter, so a run pinned to any version
+  // in between still resolves the graph it started on. A restore is an ordinary
+  // graph edit; pinning is what keeps it from reaching runs in flight.
   return orchestrationVersionArchive.restoreVersion({
     projectIds: args.projectIds,
     resourceId: args.orchestrationId,

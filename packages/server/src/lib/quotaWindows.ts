@@ -1,8 +1,6 @@
-// Fixed-window math shared by every quota enforcement point (the request
-// middleware, the token/cost pre-generation check, and the CRUD current-usage
-// read). Rolling windows are implemented as fixed windows keyed by a truncated
-// timestamp; `calendar_month` keys are `YYYY-MM`, matching metering's
-// convention. Kept dependency-free so it stays trivially unit-testable.
+// Shared by every quota enforcement point. Rolling windows are fixed windows
+// keyed by a truncated timestamp, `calendar_month` as `YYYY-MM` to match
+// metering. Dependency-free so it stays trivially unit-testable.
 
 export const QUOTA_WINDOWS = [
   'rolling_1m',

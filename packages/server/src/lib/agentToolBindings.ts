@@ -139,10 +139,8 @@ type WireInlineToolDefinition = {
   output_mapping?: object;
 };
 
-// Field pairs shared by name/type between the wire (snake_case) and
-// canonical (camelCase) inline tool shapes — `name` and single-word fields
-// (`type`, `description`, `parameters`, `execute`, `mcp`, `actions`,
-// `pipeline`) are identical in both spellings and copied separately below.
+// The fields whose names differ between the wire and canonical shapes.
+// Single-word fields are identical in both and copied separately below.
 const INLINE_TOOL_FIELD_PAIRS: Array<
   [keyof InlineToolDefinition, keyof WireInlineToolDefinition]
 > = [

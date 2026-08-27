@@ -112,9 +112,8 @@ const findings = (args: {
       };
     });
 
-  // Descend exactly one level into a list envelope's `data` array — the other
-  // place a resource mapper's own keys surface. Deeper nesting is deliberately
-  // not walked: below a resource's top level the spec thins out, and a false
+  // Exactly one level, into a list envelope's `data`. Deeper is deliberately
+  // not walked: the spec thins out below a resource's top level, and a false
   // positive in a guardrail is worse than a missed key.
   const itemSchema = envelopeItemSchema(properties);
   const data = args.value.data;

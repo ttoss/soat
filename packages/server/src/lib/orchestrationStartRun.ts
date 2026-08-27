@@ -10,11 +10,9 @@ export const findOrchestrationForStartRun = async (args: {
   orchestrationPublicId: string;
   projectIds?: number[];
 }): Promise<InstanceType<typeof db.Orchestration>> => {
-  // Lean lookup: the start path reads the row's own columns only.
-  //
-  // This used to skip the `projectId` filter whenever `projectIds` was an empty
-  // array, which read as "no scope restriction" — the opposite of what every
-  // other module means by it. `scopedWhere` makes an empty scope match nothing.
+  // `scopedWhere` makes an empty scope match nothing. This used to skip the
+  // filter for an empty `projectIds`, reading it as "no restriction" — the
+  // opposite of what every other module means by it.
   const orchestration = await db.Orchestration.findOne({
     where: orchestrations.scopedWhere({
       id: args.orchestrationPublicId,

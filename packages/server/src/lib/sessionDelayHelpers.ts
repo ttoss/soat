@@ -8,11 +8,9 @@ type GenerateSessionResponseFn = (args: {
   authHeader?: string;
 }) => Promise<unknown>;
 
-// ── In-memory delay timer map ─────────────────────────────────────────────
-// Key: `${agentId}#${sessionId}` — one pending timer per session.
-// Implements debounce: each new message cancels the previous timer and
-// schedules a fresh one. The LLM is only called after the delay elapses
-// without another message arriving.
+// One pending timer per session, keyed `${agentId}#${sessionId}`. Debounce:
+// each new message cancels the previous timer, so the LLM is called only after
+// the delay elapses with no further message.
 const sessionDelayTimers = new Map<string, NodeJS.Timeout>();
 
 export const cancelDelayTimer = (sessionKey: string) => {

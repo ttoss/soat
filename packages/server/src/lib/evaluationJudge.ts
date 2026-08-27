@@ -201,10 +201,8 @@ export const runJudgeCompletion = async (args: {
     maxRetries: routedMaxRetries(model) ?? 1,
   });
 
-  // A judge call is a real provider call, so it meters like any other — against
-  // the target that actually served when it ran through a route. Attributed
-  // `eval_judge` so grading spend is separable from both production and the
-  // run's own item generations.
+  // A real provider call, so it meters like any other. Attributed `eval_judge`
+  // to keep grading spend separable from the run's own item generations.
   meterCompletion({
     model,
     fallback: attribution,

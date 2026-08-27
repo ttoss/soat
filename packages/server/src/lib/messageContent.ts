@@ -306,10 +306,8 @@ const resolveToolOutputContent = async (args: {
     action: args.content.action,
     input: args.content.input,
     authHeader: args.authHeader,
-    // This block is the generation calling a tool on its own behalf, before the
-    // model runs, so it carries the generation's context — the same bag the
-    // model's own tool calls resolve `{{context:}}` headers and presets from
-    // (#345).
+    // The generation calling a tool on its own behalf, so it carries the same
+    // bag the model's own tool calls resolve from (#345).
     toolContext: args.toolContext,
   });
 
