@@ -6,12 +6,8 @@ import { resolveAgentTools } from 'src/lib/agentToolResolver';
 import { clearGuardrailContextToolCache } from 'src/lib/guardrailContext';
 import { createGuardrail } from 'src/lib/guardrails';
 
-// The client-tool guardrail gate sits at the `requires_action` handoff, not at
-// server-side execute (client tools have no execute). It is exercised here
-// through the same entry point the runtime uses: resolve a client tool via the
-// resolver (which attaches the gate), then run `gatePendingClientTools` over a
-// proposed call. Real DB + real guardrail evaluation + real approval filing;
-// nothing mocked.
+// The gate sits at the `requires_action` handoff — client tools have no execute
+// — so it is driven through the resolver, the same entry point the runtime uses.
 
 describe('client-tool guardrail gate (requires_action handoff)', () => {
   let projectId: number;

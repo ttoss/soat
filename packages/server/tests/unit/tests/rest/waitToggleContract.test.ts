@@ -167,11 +167,9 @@ describe('wait toggle contract', () => {
   });
 
   test('a query-param `wait` endpoint declares the 202 its callers poll on', () => {
-    // The two families differ deliberately, and the difference is documented in
-    // `docs/advanced/sync-and-async.md#status-codes`: an endpoint doing work on
-    // an existing resource answers `202 Accepted`, while a run-creating
-    // endpoint answers `201 Created` in both modes and reports the mode in the
-    // run's own `status`. Query-param vs body-field is what separates them.
+    // An endpoint acting on an existing resource answers `202`, while a
+    // run-creating one answers `201` in both modes and reports the mode in the
+    // run's `status`. Query-param vs body-field is what separates them.
     for (const operation of waitOperations()) {
       const expectation =
         operation.location === 'query'

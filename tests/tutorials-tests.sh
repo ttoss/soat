@@ -1,33 +1,26 @@
 #!/bin/bash
-# Validate tutorial by extracting and running CLI commands.
-# Handles multi-line commands with backslash continuation.
+# Validate a tutorial by extracting and running its CLI commands, joining
+# multi-line commands with backslash continuation.
 #
-# Usage:
-#   ./tutorials-tests.sh <tutorial-file.md>
+# Usage: ./tutorials-tests.sh <tutorial-file.md>
 #
 # Environment:
-#   SOAT_BASE_URL   Server base URL (required), e.g. http://localhost:5047
-#   VERBOSE         Set to 1 for verbose output (default: 0)
+#   SOAT_BASE_URL   Server base URL (required)
+#   VERBOSE         Set to 1 for verbose output
 #
 # Special comment annotations in the tutorial markdown (inline after commands):
 #   # → 403         Expect a non-zero exit (the number is the HTTP status code).
 #                   The command is run; a zero exit is treated as an error.
 #   # → ignore      Run the command but ignore its exit code entirely.
-#   # → retry N     Re-run the command until it exits 0, up to N attempts
-#                   (1s between attempts). Fails the run if all N fail, and
-#                   prints the elapsed wall-clock so an exhausted budget can be
-#                   told apart from a broken feature — N attempts is NOT N
-#                   seconds, since each one also pays a CLI round trip.
-#                   For steps that are slow to converge, not for steps whose
-#                   outcome depends on what an LLM decides — keep those
-#                   deterministic instead (see tests/mocks/ollamaToolChoiceProxy.mjs).
+#   # → retry N     Re-run until it exits 0, up to N attempts, 1s apart. Prints
+#                   the elapsed wall-clock, since N attempts is not N seconds —
+#                   each also pays a CLI round trip. For steps slow to converge,
+#                   not steps whose outcome an LLM decides; make those
+#                   deterministic instead.
 #
-# Non-interactive profile handling:
-#   "soat login-user" output is captured and the returned token is used to
-#   write a profile file directly (bypassing the interactive "soat configure"
-#   prompt).  A subsequent "soat configure [--profile X]" line is therefore
-#   silently skipped.  Commands using "--profile X" are rewritten to use the
-#   SOAT_TOKEN env var loaded from the written profile.
+# Non-interactive profile handling: "soat login-user" output is captured and its
+# token written to a profile file directly, so a later "soat configure" line is
+# skipped and "--profile X" commands are rewritten to use SOAT_TOKEN.
 
 set -e
 
@@ -60,13 +53,11 @@ cleanup() {
 
 trap cleanup EXIT
 
-# Extract bash code blocks from CLI tabs with proper continuation handling.
+# Extract bash code blocks from CLI tabs, joining continuations.
 #
-# Annotations (# → NNN / # → ignore / # → retry N) are only recognized on their
-# own line, immediately BEFORE the command they apply to — see the parser below,
-# which matches a leading `#` and stores the hint for the next command to be
-# flushed. A trailing inline `# → ...` is NOT split out here; it reaches the
-# shell as an ordinary comment and the annotation is lost.
+# Annotations are recognized only on their own line, immediately BEFORE the
+# command they apply to. A trailing inline `# → ...` is not split out; it reaches
+# the shell as an ordinary comment and the annotation is lost.
 awk '
   /value="cli"/ { in_cli_tab = 1; next }
   in_cli_tab && /<\/TabItem>/ { in_cli_tab = 0; next }
@@ -88,11 +79,8 @@ if [[ "$VERBOSE" == "1" ]]; then
   echo ""
 fi
 
-# ---------------------------------------------------------------------------
-# Parse raw lines into an array of logical commands.
-# Each entry in COMMANDS[] is a two-element string: "<annotation>|<cmd>"
-# where annotation is "" (succeed), "expect-fail", or "ignore".
-# ---------------------------------------------------------------------------
+# Parse raw lines into COMMANDS[], each entry "<annotation>|<cmd>" where the
+# annotation is "" (succeed), "expect-fail", or "ignore".
 declare -a COMMANDS
 CURRENT_CMD=""
 CURRENT_ANNOTATION=""   # annotation harvested from inline # → ... comment
@@ -146,18 +134,14 @@ while IFS= read -r line; do
     continue
   fi
 
-  # Helper: does CURRENT_CMD end inside an unterminated quoted string?
+  # Prints 1 while a quote is still open, so the next line joins this command
+  # rather than dispatching as its own — which is what lets a tutorial spread a
+  # JSON argument over several lines.
   #
-  # Prints 1 while a quote is still open, so the next line is joined onto this
-  # command instead of dispatched as its own — which is what lets a tutorial
-  # spread a JSON argument over several lines.
-  #
-  # This used to count every `'` in the accumulated text and call an odd total
-  # "open". A counter cannot tell a quote from an apostrophe: one `Alice's`
-  # inside a *double*-quoted argument made the total odd, so the runner swallowed
-  # every following line and died on `unexpected EOF` at the end of the tutorial,
-  # blaming a command that had already run fine. Tracking which quote is open
-  # makes the two cases distinguishable, and covers `"` spanning lines for free.
+  # This used to count every `'` and call an odd total "open". A counter cannot
+  # tell a quote from an apostrophe: one `Alice's` in a double-quoted argument
+  # made the total odd, so the runner swallowed every later line and died on
+  # `unexpected EOF` blaming a command that had already run fine.
   _open_quote() {
     printf '%s' "$CURRENT_CMD" | awk '
       BEGIN { q = "" }
@@ -284,11 +268,8 @@ for entry in "${COMMANDS[@]}"; do
     continue
   fi
 
-  # ------------------------------------------------------------------
-  # Rewrite: "soat configure [--profile X]" → write profile file
-  # This command is interactive; we skip it and use the token captured
-  # from the most recent "soat login-user" output.
-  # ------------------------------------------------------------------
+  # "soat configure" is interactive, so it is skipped in favour of the token
+  # captured from the most recent "soat login-user".
   if [[ "$cmd" =~ ^soat[[:space:]]+configure ]]; then
     profile_name="default"
     if [[ "$cmd" =~ --profile[[:space:]]+([^[:space:]]+) ]]; then
@@ -361,11 +342,10 @@ for entry in "${COMMANDS[@]}"; do
   done
 
   if [[ $max_attempts -gt 1 && $exit_code -ne 0 ]]; then
-    # Report the wall-clock, not just the attempt count: an attempt is a 1s
-    # sleep *plus* a CLI round trip, so N attempts is not N seconds, and the
-    # container buffers stdout — the line timestamps in CI all collapse to the
-    # flush. Without this number there is no way to tell an exhausted budget
-    # ("it needed 12 more seconds") from a genuinely broken feature.
+    # An attempt is a 1s sleep plus a CLI round trip, so N attempts is not N
+    # seconds, and the container's buffered stdout collapses CI timestamps to
+    # the flush — without this number an exhausted budget and a broken feature
+    # look identical.
     echo ""
     echo "❌ ERROR: Command failed after $max_attempts attempts ($((SECONDS - retry_started_at))s elapsed) at step $STEP"
     echo "   Command: $cmd"

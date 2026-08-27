@@ -278,11 +278,9 @@ describe('buildKnowledgeMessages', () => {
     );
   });
 
-  // `knowledge_config.query` used to supply a stored query here. It appeared in
-  // no OpenAPI schema, so `strictFields` rejected it on every REST request and
-  // the formation validator rejected it in templates — unreachable from every
-  // wire surface, and now deleted (#1063). A turn with no user message and no
-  // filters injects nothing.
+  // `knowledge_config.query` was in no OpenAPI schema, so every wire surface
+  // rejected it — now deleted (#1063). A turn with no message and no filters
+  // injects nothing.
   test('injects nothing when no user message exists and no filters are set', async () => {
     const result = await buildKnowledgeMessages({
       knowledgeConfig: { limit: 5 },
@@ -432,11 +430,9 @@ describe('buildKnowledgeMessages', () => {
       knowledgeConfig: { memoryIds: ['mem_1'], limit: 50 },
       messages: [{ role: 'user', content: 'what is the CPA cap?' }],
     });
-    // A memory-scoped config must not silently widen into an all-project
-    // document search just because a chat message exists. `query` is still
-    // forwarded (it drives memory relevance ranking), but `includeDocuments`
-    // must be explicitly false so searchKnowledge's document branch never
-    // fires for this memory-only config.
+    // A memory-scoped config must not widen into an all-project document search
+    // just because a chat message exists. `query` still ranks memory relevance;
+    // `includeDocuments` must be explicitly false.
     expect(mockSearchKnowledge).toHaveBeenCalledWith(
       expect.objectContaining({
         memoryIds: ['mem_1'],
@@ -708,11 +704,8 @@ describe('buildKnowledgeTools — formation-deployed agent casing', () => {
   let memoryId: string;
 
   beforeAll(async () => {
-    // Reuses the file-wide 'admin' user bootstrapped by the
-    // `buildWriteMemoryTool` describe block above — `createFirstAdminUser`
-    // only ever creates the first admin per test-file database, so a second
-    // `/users/bootstrap` call here would 409. Logging in with the same
-    // well-known credentials works regardless of declaration order.
+    // A second `/users/bootstrap` would 409 — only the first admin is ever
+    // created per test database — so this logs in as the one above instead.
     await testClient
       .post('/api/v1/users/bootstrap')
       .send({ username: 'admin', password: 'supersecret' });

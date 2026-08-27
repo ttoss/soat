@@ -9,12 +9,9 @@ import { resolveAgentTools } from 'src/lib/agentToolResolver';
 import { clearGuardrailContextToolCache } from 'src/lib/guardrailContext';
 import { createGuardrail } from 'src/lib/guardrails';
 
-// `action_executed` at agent-generation time (approvals PRD Phase 4, closing the
-// documented v1 gap): the orchestration tool-node executor was the only
-// instrumented producer, so tool calls an agent made during a generation never
-// reached the feed. Driven through the resolver dispatch path — the entry point
-// that builds a generation's tool set — so the assertions cover the real
-// dispatch rather than the wrapper alone.
+// The orchestration tool-node executor was once the only instrumented producer,
+// so an agent's own tool calls never reached the feed. Driven through the
+// resolver dispatch so the assertions cover the real path, not the wrapper.
 
 const invokeExecute = async (
   resolvedTool: Tool,

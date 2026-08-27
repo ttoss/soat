@@ -10,13 +10,9 @@ import {
   writeWorkerHeartbeat,
 } from 'src/lib/orchestrationWorkerHealth';
 
-// The standalone worker's liveness signal (orchestration-queue P2 tail). It has
-// no HTTP listener, so its container healthcheck grades the freshness of a
-// heartbeat file instead of hitting `/health`.
-//
-// A `lib/` test by the keep-list rule: there is no entry point — the producer is
-// a background sweep and the consumer is the `workerHealthcheck` process
-// entrypoint, neither reachable through REST/MCP.
+// The standalone worker has no HTTP listener, so its healthcheck grades the
+// freshness of a heartbeat file. A `lib/` test by the keep-list rule: neither
+// the background-sweep producer nor the healthcheck consumer is an entry point.
 describe('orchestration worker heartbeat', () => {
   let dir: string;
   let file: string;

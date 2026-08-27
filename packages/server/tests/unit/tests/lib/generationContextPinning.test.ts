@@ -2,13 +2,10 @@ import { buildGenerationContext } from 'src/lib/agentGenerationContext';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
-// #850/#851 — regression: the server-derived identity keys (`sessionId`,
-// `actorId`, `actorExternalId`) were pinned only on the session generation
-// path (sessionOperations), so the direct-agent and conversation paths
-// forwarded a caller-forged identity into outbound `X-Soat-Context-*` headers
-// and the guardrail/audit context. The pin now lives at the shared chokepoint
-// (buildGenerationContext, reached by every fresh generation via
-// createGeneration), so no entry point can forget it.
+// The identity keys were once pinned only on the session path, so the
+// direct-agent and conversation paths forwarded a caller-forged identity into
+// outbound headers and the guardrail context (#850/#851). The pin now lives at
+// the shared chokepoint, which no entry point can forget.
 describe('buildGenerationContext — server identity pinning', () => {
   let agentId: string;
   let sessionId: string;

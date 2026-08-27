@@ -231,11 +231,9 @@ describe('Projects', () => {
           .send({ name: 'OAuth Other Project' });
         otherProjectId = projBRes.body.id;
 
-        // Decode the admin JWT to get publicId, then issue an OAuth-style token
-        // (same JWT_SECRET, adds prj claim to simulate the OAuth issueTokens hook).
-        // The `*` scope mirrors an "all permissions" consent — consent is now
-        // enforced at request time, so a token with no action scopes grants
-        // nothing. Project scoping is still enforced via the `prj` boundary.
+        // An OAuth-style token with a `prj` claim, mirroring the issueTokens
+        // hook. The `*` scope is an all-permissions consent: consent is enforced
+        // at request time, so a token with no action scopes grants nothing.
         const decoded = jwt.decode(adminToken) as {
           publicId: string;
           role: string;
@@ -945,12 +943,9 @@ describe('Projects', () => {
       ).toBeNull();
     });
 
-    // ── Modules added after the cascade was first written (#1079) ───────────
-    //
-    // Every one of these holds rows whose `projectId` FK is NO ACTION, so a
-    // project holding only them used to count `0` dependents and take the bare
-    // `project.destroy()` path — a raw 500 from the constraint, with `force`
-    // failing the same way once anything else was counted.
+    // Each holds rows whose `projectId` FK is NO ACTION, so a project holding
+    // only them counted 0 dependents and took the bare `destroy()` path — a raw
+    // 500 from the constraint, which `force` did not help (#1079).
 
     /** Creates a dataset + eval pair (evaluations), a workflow + task
      * (automation), a trigger, a guardrail and a quota in `project`. */

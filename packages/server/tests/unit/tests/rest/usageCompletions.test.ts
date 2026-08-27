@@ -5,13 +5,9 @@ import type { AddressInfo } from 'node:net';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient } from '../../testClient';
 
-// Chat completions are the one metered LLM path with a real HTTP entry point
-// that does not go through a Generation record, so they are driven here through
-// the REST routes against a local OpenAI-compatible stub provider (the same
-// fake-server boundary `memoryExtractionCompletion.test.ts` uses). The written
-// `llm_tokens` events are read back through GET /api/v1/usage/meters; the
-// listing scopes to the caller's project, so the per-prefix project isolates
-// these assertions from other suites' events.
+// The one metered LLM path with a real HTTP entry point that does not go through
+// a Generation record. Driven through REST against a local stub provider; the
+// per-prefix project isolates these assertions from other suites' events.
 
 type MeterRow = {
   meter_type: string;

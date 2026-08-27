@@ -935,11 +935,9 @@ describe('Conversations', () => {
       expect(res.status).toBe(404);
     });
 
-    // Regression: this route used to put generateConversationMessage's
-    // internal result straight on the wire (camelCase generationId/traceId/
-    // requiredAction.toolCalls[].toolName). Both the `completed` and
-    // `requires_action` branches of the mapping need coverage; the rest of
-    // this describe block only exercises `completed` responses.
+    // This route used to put the internal result straight on the wire, in
+    // camelCase. The rest of this block only exercises `completed`, so the
+    // `requires_action` branch of the mapping needs its own coverage.
     test('maps a requires_action result to the documented snake_case shape', async () => {
       const aiProvRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/ai-providers')

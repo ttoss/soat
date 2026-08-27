@@ -173,12 +173,10 @@ test('the bundle documents the error contract agents have to parse', () => {
 });
 
 test('the published ErrorResponse schema requires the hint and the docs URL', () => {
-  // A caller generated from this document must see `hint` as always-present,
-  // not optional: it is the field that makes an unfamiliar code actionable, so
-  // an optional one would be read as "handle its absence" and skipped.
-  // Asserted against the serialized schema: `components.schemas` is `unknown`
-  // by design (it holds whatever the module specs declared), and narrowing it
-  // here would mean casting.
+  // `hint` must be always-present, not optional: it is what makes an unfamiliar
+  // code actionable, and an optional one reads as "handle its absence" and gets
+  // skipped. Asserted against the serialized schema because `components.schemas`
+  // is `unknown` by design and narrowing it here would mean casting.
   const schema = JSON.stringify(bundle().components.schemas.ErrorResponse);
 
   assert.match(schema, /"required":\["code","message","hint","docs_url"\]/);

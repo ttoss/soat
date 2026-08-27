@@ -20,18 +20,12 @@ import { validateFormationTemplateAsync } from 'src/lib/formationsValidationAsyn
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 
-// ── About this file ─────────────────────────────────────────────────────────
+// The seam is the HTTP boundary to an operator's handler (#1078), so a real
+// handler runs on localhost: the request is genuinely serialized and signed, and
+// the signature verified here by independent HMAC.
 //
-// An operator-registered resource type delegates its lifecycle to an external
-// HTTP handler (#1078). The seam under test is that HTTP boundary, so the test
-// runs a **real** handler on localhost rather than mocking anything: the
-// request is genuinely serialized, genuinely signed, and the signature is
-// verified here with an independent HMAC computation.
-//
-// It is a `lib/` test under the keep-list rule in `.claude/rules/tests.md`: the
-// handler protocol has no entry point of its own — it is reachable only from
-// inside an apply — and the failure signal through `deploy-formation` would be
-// a single recorded event string that names neither the operation nor the rule.
+// A `lib/` test per the keep-list rule: the protocol is reachable only from
+// inside an apply, whose recorded event names neither operation nor rule.
 
 const SECRET = 'handler-signing-secret';
 

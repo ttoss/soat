@@ -1,11 +1,8 @@
 import { buildEmbeddingModel, getEmbeddings } from 'src/lib/embedding';
 
-// The AI SDK's returned EmbeddingModel exposes `modelId` and `config.provider`
-// regardless of provider, plus (for the OpenAI-compatible builder) a
-// `config.url` function that resolves the actual request endpoint — enough to
-// assert the model string and base URL wiring landed correctly, instead of
-// only checking that `buildEmbeddingModel` didn't throw. This mirrors how
-// `buildModel` is tested in `agentModel.test.ts`.
+// The returned model exposes enough (`modelId`, `config.provider`, `config.url`)
+// to assert the wiring landed, not just that the builder didn't throw — the same
+// approach `agentModel.test.ts` takes.
 
 const asConfigured = (model: unknown) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

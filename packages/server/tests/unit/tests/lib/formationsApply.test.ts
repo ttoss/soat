@@ -15,14 +15,9 @@ import type {
 import { createMemory } from 'src/lib/memories';
 import { createWebhook } from 'src/lib/webhooks';
 
-// These tests drive the real formation-apply helpers against the real database
-// and the real resource handlers — no `db.*` stubbing and no internal-module
-// mocks. Each branch is exercised by choosing inputs that trigger it for real:
-//   - a real physical resource (a Memory)        → clean delete / update / create
-//   - a nonexistent agent id                      → `deleteAgent` throws
-//                                                    RESOURCE_NOT_FOUND (already-gone)
-//   - an unsupported resource type                → `applyDeleteResource` throws a
-//                                                    plain Error (generic failure)
+// Every branch is reached by choosing inputs that trigger it for real — a live
+// Memory, a nonexistent agent id, an unsupported resource type — rather than by
+// stubbing.
 
 let projectId: number;
 let formationId: number;

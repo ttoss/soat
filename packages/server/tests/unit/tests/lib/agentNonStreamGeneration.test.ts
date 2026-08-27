@@ -60,11 +60,9 @@ describe('agentNonStreamGeneration', () => {
     realAgentPublicId = agent.publicId;
   });
 
-  // Reset *before* each test, not only after: a `jest.doMock('ai')` is inert
-  // against a module the registry already holds, and this file's static import
-  // loads the module under test at file scope. Relying on the previous test's
-  // teardown made every test here pass only in file order — the first one ran
-  // against the real `ai` and failed on a fake model.
+  // Before each test, not only after: `doMock('ai')` is inert against a module
+  // the registry already holds, and relying on the previous test's teardown made
+  // these pass only in file order.
   beforeEach(() => {
     jest.resetModules();
   });
@@ -76,12 +74,9 @@ describe('agentNonStreamGeneration', () => {
   });
 
   test('runNonStreamGeneration normalizes a wire-shaped tool_choice before calling generateText', async () => {
-    // The agent's tool_choice is stored verbatim from the request body
-    // ({ type: "tool", tool_name: "..." } on the wire) but the AI SDK expects
-    // { type: "tool", toolName: "..." } — the runner must translate.
-    // The model output is a pending client tool call so the run suspends at
-    // requires_action (in-memory only) — the assertion below is about the
-    // toolChoice argument handed to generateText, not the final result.
+    // `tool_choice` is stored wire-shaped (`tool_name`) but the SDK expects
+    // `toolName`, so the runner must translate. The assertion is on the
+    // argument handed to `generateText`, not the final result.
     const generateTextMock = jest.fn().mockResolvedValue({
       steps: [
         {
@@ -124,14 +119,10 @@ describe('agentNonStreamGeneration', () => {
   });
 
   test('runNonStreamGeneration resolves a step rule active_tool_ids via resolveToolIdsToNames before calling generateText', async () => {
-    // `active_tool_ids` holds a persisted tool id; `prepareStep`'s `activeTools`
-    // needs the tool's name, so `runNonStreamGeneration` must resolve the id
-    // through `resolveToolIdsToNames` before building `prepareStep` (#809).
-    // `resolveToolIdsToNames` itself is a thin DB query covered end-to-end via
-    // `agentStreamGeneration`'s suite; mocked
-    // here instead of hitting the real DB because this test's dynamic
-    // `loadNonStreamModule()` re-requires a fresh, uninitialized `src/db`
-    // after the file's `afterEach` `jest.resetModules()`.
+    // `activeTools` needs names, not the persisted ids `active_tool_ids` holds
+    // (#809). `resolveToolIdsToNames` is mocked here only because the dynamic
+    // module reload leaves `src/db` uninitialized; it is covered for real in
+    // `agentToolIdResolution.test.ts`.
     const mockResolveToolIdsToNamesFn = jest
       .fn()
       .mockResolvedValue({ [`tool_abc`]: 'search' });
@@ -148,11 +139,8 @@ describe('agentNonStreamGeneration', () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         generateText: jest.fn().mockImplementation((opts: any) => {
           capturedOpts = opts;
-          // Resolves to a pending client-tool call (requires_action) rather
-          // than a completed result, so the run never reaches
-          // `buildCompletedGenerationResult` → `saveTrace` — irrelevant to
-          // this test, and unsafe here since the dynamically re-required
-          // `src/db` (see comment above) has no working DB connection.
+          // Suspending at `requires_action` keeps the run away from
+          // `saveTrace`, which the re-required `src/db` could not serve.
           return Promise.resolve({
             steps: [
               {
@@ -344,12 +332,9 @@ describe('agentNonStreamGeneration', () => {
   };
 
   test('runToolOutputsGeneration never re-forces a forced tool_choice on resume', async () => {
-    // A forced specific tool ({ type: "tool", ... }) is satisfied once the
-    // model has called that tool. If the continuation after
-    // submit-tool-outputs re-applied it, the model would be forced to call
-    // the tool again and the generation would pause forever — so the
-    // continuation must run with the SDK default (auto). This pins that
-    // invariant now that a wire-shaped forced tool_choice actually forces.
+    // A forced tool is satisfied once called. Re-applying it on the
+    // continuation would force the call again and pause the generation
+    // forever, so the continuation must run with the SDK default.
     const generateTextMock = jest.fn().mockResolvedValue({
       text: 'The order shipped.',
       finishReason: 'stop',
@@ -493,11 +478,8 @@ describe('agentNonStreamGeneration', () => {
     });
   });
 
-  // ── Client-tool guardrail gate wiring ────────────────────────────────────
-  // Drives runNonStreamGeneration with a client tool carrying a CLIENT_TOOL_GATE
-  // closure, mocking `ai.generateText` so the gate decision is deterministic.
-  // CLIENT_TOOL_GATE is imported from the SAME freshly-loaded module graph as
-  // runNonStreamGeneration (post doMock + resetModules) so the symbol matches.
+  // CLIENT_TOOL_GATE must come from the same freshly-loaded module graph as
+  // `runNonStreamGeneration`, or the symbol will not match.
 
   const gateTypedAgent = () => {
     return {
@@ -631,13 +613,8 @@ describe('agentNonStreamGeneration', () => {
   });
 });
 
-// Exercises runNonStreamGeneration's real tool-failure fallback (the
-// with-tools call fails, it retries without tools and completes) end-to-end:
-// real `generateText` against a local OpenAI-compatible stub, real DB, real
-// buildCompletedGenerationResult -> saveTrace. No `ai` mock and no
-// resetModules here (both would sever the real DB), so this uses the
-// statically-imported runNonStreamGeneration. This is the same local-fake-
-// server pattern memoryExtractionCompletion.test.ts uses.
+// The real tool-failure fallback end-to-end, against a local stub rather than an
+// `ai` mock — mocking or resetting modules here would sever the real DB.
 describe('runNonStreamGeneration tool-failure fallback (stub server)', () => {
   let stubServer: Server;
   let stubBaseUrl: string;

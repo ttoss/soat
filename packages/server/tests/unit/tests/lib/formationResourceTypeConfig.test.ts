@@ -14,13 +14,8 @@ import {
   unregisterFormationResourceTypes,
 } from 'src/lib/formationsRegistry';
 
-// ── About this file ─────────────────────────────────────────────────────────
-//
-// The operator config file that registers custom formation resource types is
-// parsed once, at boot, and every rejection here is a hard boot failure. That
-// makes the parser a pure function over a large input space whose failure
-// signal (the process refusing to start) says nothing about *which* rule fired
-// — a `lib/` test per the keep-list rule in `.claude/rules/tests.md`.
+// Parsed once at boot, where every rejection is a hard failure that says nothing
+// about which rule fired — a `lib/` test per the keep-list rule.
 
 const BUILT_INS = new Set(['agent', 'tool', 'model_route']);
 

@@ -209,11 +209,8 @@ describe('Evaluations', () => {
     // Shared spy: clear queued implementations and call counts, but never
     // restore — restoring would unwire it for every later test.
     jest.clearAllMocks();
-    // The eval queue is shared process state, so a test that starts a queued run
-    // without draining it would otherwise hand its tasks to the next test's
-    // drain (and eat that test's queued generation mocks). Every test that cares
-    // about the queue creates what it needs, so nothing depends on a task
-    // surviving past the test that enqueued it.
+    // The queue is shared process state, so an undrained run hands its tasks to
+    // the next test's drain and eats its generation mocks.
     await db.EvalRunTask.destroy({ where: {}, truncate: true });
   });
 
@@ -1335,11 +1332,9 @@ describe('Evaluations', () => {
       expect(mockCreateGeneration).toHaveBeenCalledTimes(2);
     });
 
-    // At-least-once delivery: a redelivered item must re-run into the *same*
-    // result row rather than adding a second one, or the run would count an item
-    // twice and its pass rate would be wrong. Redelivery is exercised while the
-    // run is still in flight, which is when it actually happens — once a run has
-    // settled, the worker drops its tasks without spending a generation on them.
+    // A redelivered item must re-run into the same result row, or the run counts
+    // it twice and its pass rate is wrong. Exercised in flight, which is when
+    // redelivery happens — a settled run's tasks are dropped.
     test('a redelivered item task inserts no duplicate result', async () => {
       const run = await startQueued();
       const runRow = await db.EvalRun.findOne({ where: { publicId: run.id } });
@@ -1494,11 +1489,9 @@ describe('Evaluations', () => {
       );
     });
 
-    // The in-flight race: a worker that already claimed its batch is past the
-    // liveness check, so it keeps executing and writing results after the cancel
-    // settles the run. Counters frozen at the cancel instant therefore
-    // under-report what ran — and `aggregate_scores` is deliberately null on a
-    // canceled run, so they are the only remaining signal of what was paid for.
+    // A worker past its liveness check keeps writing results after the cancel
+    // settles the run, so counters frozen at that instant under-report what ran
+    // — and on a canceled run they are the only signal of what was paid for.
     test('counters reconcile with results written after the cancel', async () => {
       const run = await startQueued();
       const runRow = await db.EvalRun.findOne({ where: { publicId: run.id } });
@@ -1652,11 +1645,10 @@ describe('Evaluations', () => {
       await drainEvalQueueOnce();
       expect(mockCreateGeneration).toHaveBeenCalledTimes(2);
 
-      // Rewind the run to the state a crash between the last ack and the
-      // update would have left: results present, nothing settled. Reloaded
-      // first because `instance.update` writes only fields that differ from the
-      // in-memory copy — a stale instance would silently keep `finished_at`,
-      // and the reaper's finalize claim is guarded on exactly that column.
+      // Rewinds to what a crash between the last ack and the update leaves:
+      // results present, nothing settled. Reloaded first because `update` writes
+      // only differing fields, and a stale instance would keep the
+      // `finished_at` the reaper's claim is guarded on.
       await runRow!.reload();
       await runRow!.update({
         status: 'running',

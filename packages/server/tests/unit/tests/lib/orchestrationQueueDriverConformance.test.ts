@@ -20,18 +20,14 @@ import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { type FakeSqs, startFakeSqs } from '../../fixtures/fakeSqs';
 import { authenticatedTestClient } from '../../testClient';
 
-// The shared driver-conformance suite (orchestration-queue P3). Every driver
-// must behave the same way for the four operations the durable runtime depends
-// on — at-least-once delivery, lease-based redelivery, delayed availability and
-// exclusive claim — so a deployment can swap `ORCHESTRATION_QUEUE_DRIVER`
+// Every driver must behave identically for the four operations the durable
+// runtime depends on, so a deployment can swap `ORCHESTRATION_QUEUE_DRIVER`
 // without the engine, scheduler or worker noticing.
 //
-// This is a `lib/` test by the keep-list rule: the SQS driver has **no** entry
-// point reachable from REST/MCP/the scheduler in CI (no AWS account), and the
-// point of the suite is to compare two implementations of one contract
-// directly. The SQS side runs the real driver and the real AWS client against a
-// local fake SQS server (`fixtures/fakeSqs.ts`), so command serialization is
-// exercised for real rather than mocked.
+// A `lib/` test by the keep-list rule: the SQS driver has no entry point
+// reachable in CI, and the point is to compare two implementations of one
+// contract directly. Its side runs the real driver and AWS client against a
+// local fake, so command serialization is exercised for real.
 
 const LEASE_TTL_MS = 60_000;
 

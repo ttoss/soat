@@ -455,15 +455,11 @@ const main = () => {
   const spec = load(raw) as OpenApiSpec;
   const schemas = spec.components?.schemas ?? {};
 
-  // Derived from the `*ResourceProperties` schemas themselves.
-  //
-  // This used to read the `ResourceDeclaration.type` enum, which stopped being
-  // the list of built-in types when custom resource types arrived: a
-  // deployment operator can register their own, so the declared type is an open
-  // string and the enum is gone. The schemas are the better source anyway —
-  // they are what each page is rendered *from*, so a type can no longer appear
-  // in the index with no page behind it (the mirror image of #900, where the
-  // second copy of the list was the one that fell behind).
+  // Derived from the `*ResourceProperties` schemas, not the
+  // `ResourceDeclaration.type` enum — which is gone, since an operator can
+  // register custom types and the declared type is an open string. The schemas
+  // are what each page renders from, so a type can no longer appear in the
+  // index with no page behind it.
   const resourceTypeOrder: string[] = Object.keys(schemas)
     .flatMap((schemaName) => {
       const match = /^(.+)ResourceProperties$/.exec(schemaName);

@@ -1,10 +1,7 @@
 import { createCliTestClient } from '../testClient';
 
-// CLI parity for the usage module: the `usage` REST/MCP surface exposes usage
-// aggregation and spend thresholds, and the generated CLI manifest must expose
-// them too (`get-usage`, `list-usage-thresholds`, `create-usage-threshold`,
-// `delete-usage-threshold`). These tests lock that parity in so a spec/manifest
-// regression can't silently drop the commands again.
+// The generated CLI manifest must expose the usage surface too, so a
+// spec/manifest regression cannot silently drop the commands again.
 describe('usage commands', () => {
   const cli = createCliTestClient();
 

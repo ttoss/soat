@@ -26,11 +26,9 @@ export const REQUIRED_SURFACES = [
   'robots.txt',
   '404.md',
   'agents.md',
-  // Markdown twins of the standalone pages, from `generatePageTwins.ts`. A page
-  // whose twin is missing is worse than one that never had it: the viewer
-  // request function rewrites `Accept: text/markdown` onto `<page>.md` without
-  // being able to check that the file is there, so the twin's absence shows up
-  // as a 404 on a page that plainly exists.
+  // The viewer request function rewrites `Accept: text/markdown` onto
+  // `<page>.md` without being able to check the file is there, so a missing
+  // twin surfaces as a 404 on a page that plainly exists.
   'about.md',
   'contact.md',
   'privacy.md',

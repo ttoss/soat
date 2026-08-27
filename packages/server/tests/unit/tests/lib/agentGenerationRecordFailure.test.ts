@@ -3,11 +3,8 @@ import * as generationsModule from 'src/lib/generations';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
-// `resolveContextAndRecord` fires off `createGenerationRecord` without
-// awaiting it (`.catch(() => {})`), so a DB failure while recording the
-// generation must never surface to the caller. Exercised with a real
-// agent/provider (no `jest.doMock`/module-registry isolation) so the
-// cross-module `createGenerationRecord` import can be spied on directly.
+// `createGenerationRecord` is fired without awaiting, so a DB failure recording
+// the generation must never surface to the caller.
 describe('createGeneration — createGenerationRecord failure is swallowed', () => {
   test('does not throw when createGenerationRecord rejects', async () => {
     await testClient

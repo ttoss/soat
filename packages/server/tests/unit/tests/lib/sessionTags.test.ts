@@ -1,11 +1,9 @@
 import { db } from 'src/db';
 import { getSessionTags, updateSessionTags } from 'src/lib/sessionTags';
 
-// The `tags` column defaults to `{}` on every session created through the
-// API (see Session model), so the `?? {}` fallback in both functions is
-// only reachable for a row whose `tags` is explicitly `null` — a state the
-// nullable column allows but no REST write path produces. Exercised
-// directly here via a raw DB row, rather than through the entry point.
+// `tags` defaults to `{}` on every session created through the API, so the
+// `?? {}` fallback is reachable only for an explicitly-null row — a state the
+// column allows but no REST path produces, so it is set up directly.
 describe('sessionTags — null tags column default', () => {
   let agentId: number;
   let projectId: number;

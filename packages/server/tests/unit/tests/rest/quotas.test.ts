@@ -902,15 +902,11 @@ describe('Quotas', () => {
       expect(blocked.headers['retry-after']).toBeDefined();
     });
 
-    // The concurrent twin of the test above, on the *deferred* attribution path
-    // (#1049). A sequential sequence only proves the counter advances; it says
-    // nothing about what happens when the N+1th request is evaluated while the
-    // Nth is still in flight. It holds because counting and checking are the
-    // same statement — `incrementCounter`'s `INSERT … ON CONFLICT DO UPDATE …
-    // RETURNING "count"` — so a request is compared against a count that
-    // already includes itself and every predecessor that reached the row first.
-    // Split that into a read plus a write (or defer the write past the check)
-    // and the overshoot here scales with concurrency.
+    // The concurrent twin of the test above (#1049): a sequential sequence says
+    // nothing about the N+1th request evaluated while the Nth is in flight. It
+    // holds because counting and checking are one statement, so a request is
+    // compared against a count already including itself. Split that into a read
+    // plus a write and the overshoot scales with concurrency.
     test('an unscoped key never admits more than limit under concurrency', async () => {
       const { enfProjectId } = await setupEnforcementProject(
         'quotas-unscoped-concurrency'
@@ -1481,11 +1477,9 @@ describe('Quotas', () => {
         await db.UsageEvent.count({ where: { projectId: projectInternalId } })
       ).toBe(before);
 
-      // Alice has spent nothing, so the same quota does not stop her — this is
-      // what makes the null-ref quota per-actor rather than a project total.
-      // Her generation does reach the provider, and ollama is not running in
-      // unit CI, so it may still fail upstream; what this pins is that it was
-      // never the quota gate that stopped her.
+      // Alice has spent nothing, so the same quota does not stop her — what
+      // makes a null-ref quota per-actor rather than a project total. Her call
+      // may still fail upstream; what this pins is that the gate did not stop it.
       await authenticatedTestClient(adminToken)
         .post(`/api/v1/sessions/${alice.sessionId}/messages`)
         .send({ role: 'user', content: 'hello' });

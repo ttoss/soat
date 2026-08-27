@@ -516,11 +516,9 @@ describe('Usage', () => {
     });
   });
 
-  // Metering is an observability side effect: it must never fail the work it
-  // measures. That contract lives entirely in `.catch()` swallow branches, and
-  // no real DB write fails deterministically — so per tests.md these use the
-  // sanctioned force-failure stub (a minimal spy that rejects) purely to drive
-  // the swallow. The happy paths above still run against the real database.
+  // Metering must never fail the work it measures, a contract living entirely in
+  // `.catch()` swallow branches that no real DB write reaches deterministically
+  // — hence the sanctioned force-failure stubs. The happy paths above are real.
   describe('metering never fails the work it measures', () => {
     afterEach(() => {
       jest.restoreAllMocks();
@@ -1139,11 +1137,9 @@ describe('Usage', () => {
       expect(llm.output_tokens).toBeGreaterThanOrEqual(20);
     });
 
-    // Verification spend has to be separable from production spend: an eval run
-    // is one real generation per dataset item and an `llm_judge` scorer doubles
-    // the calls, so a project that evaluates cannot read its own bill without
-    // this dimension. The two eval labels stay distinct so *running* a suite can
-    // be priced apart from *grading* it.
+    // An eval run is one generation per dataset item and a judge doubles the
+    // calls, so a project that evaluates cannot read its bill without this
+    // dimension. The two labels stay distinct to price running apart from grading.
     test('groups by source, separating verification spend from production', async () => {
       const project = await db.Project.findOne({
         where: { publicId: projectId },
@@ -1954,11 +1950,9 @@ describe('Usage', () => {
   });
 
   describe('a generation that fails after the provider answered', () => {
-    // The model answers (tokens billed) but the text does not satisfy the
-    // agent's `output_schema`, so the turn fails with
-    // OUTPUT_SCHEMA_VALIDATION_FAILED. The provider was paid either way, and
-    // the AI SDK hands the counts back on the error — so the spend must be
-    // metered, not dropped because the turn ended `failed`.
+    // The model answers but the text fails the agent's `output_schema`. The
+    // provider was paid either way and the SDK hands the counts back on the
+    // error, so the spend is metered rather than dropped for a `failed` turn.
     let failedGenerationId: string;
 
     beforeAll(async () => {
@@ -2010,11 +2004,9 @@ describe('Usage', () => {
   });
 
   describe('nested run cost attribution', () => {
-    // A parent whose only node is a `sub_orchestration`: the parent itself
-    // meters no tokens, every one of them is spent by the child run. The
-    // parent's own `usage` therefore reads zero tokens while the work it
-    // ordered cost real money — which is exactly the reading that made a
-    // loop-bearing run's total wrong.
+    // A parent whose only node is a `sub_orchestration` meters no tokens itself,
+    // so its own `usage` reads zero while the work it ordered cost real money —
+    // the reading that made a loop-bearing run's total wrong.
     let parentRunId: string;
     let childRunId: string;
 
@@ -2431,12 +2423,9 @@ describe('Usage', () => {
     });
   });
 
-  // Compute metering (usage-metering P4): every orchestration node execution
-  // that actively ran writes one `compute_execution` event carrying a single
-  // `compute_second` component (wall-clock seconds from the node's own
-  // timestamps), attributed to run + node, priced via a `soat`/`compute-second`
-  // SKU when one is defined. This is independent of any LLM token meter, so a
-  // non-LLM node (transform) still meters compute.
+  // Every node execution that actively ran writes one `compute_execution` event,
+  // attributed to run + node. Independent of any token meter, so a non-LLM node
+  // still meters compute.
   describe('compute metering (P4)', () => {
     let unpricedRunId: string;
     let pricedTransformRunId: string;

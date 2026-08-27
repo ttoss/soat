@@ -14,14 +14,9 @@ import {
   type MappedApproval,
 } from 'src/lib/approvals';
 
-// The tool-call continuation is the resolution half of the return-pending loop:
-// when a class-C guardrail files a tool_call approval and a human resolves it,
-// this handler executes the frozen action and fires the continuation
-// generation. It is an internal resume-handler seam (registered on the approvals
-// module, triggered by resolution) with a large branch space, so it is covered
-// directly (tests.md keep-list rule 2). Real DB + a local fake tool server (the
-// executed action) and a local fake OpenAI-compatible server (the continuation
-// generation's model call). The LLM is never asserted on, only structural state.
+// An internal resume-handler seam with a large branch space, so it is covered
+// directly (tests.md keep-list rule 2). Real DB plus local fake tool and model
+// servers; only structural state is asserted, never the LLM's output.
 
 describe('agentToolApprovalContinuation (tool_call resolution)', () => {
   let toolServer: Server;
@@ -224,12 +219,9 @@ describe('agentToolApprovalContinuation (tool_call resolution)', () => {
   });
 
   test('the continuation carries the principal persisted on the proposing generation', async () => {
-    // The durability property #894 turns on: the continuation re-mints its
-    // credential from the *row*, then records the same principal on its own
-    // generation — so a further approval in the same chain re-mints from there
-    // in turn, however many hops later. Whether that credential authenticates
-    // is asserted end-to-end in `rest/soatSelfCall.test.ts`; what this pins is
-    // that the identity survives the hop at all.
+    // The durability property #894 turns on: the identity survives the hop, so
+    // a further approval re-mints from the continuation's own row. That the
+    // credential authenticates is asserted in `rest/soatSelfCall.test.ts`.
     const agent = await db.Agent.findOne({
       where: { publicId: agentPublicId },
     });

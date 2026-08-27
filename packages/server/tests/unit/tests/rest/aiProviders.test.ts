@@ -734,13 +734,10 @@ describe('AI Providers', () => {
     });
 
     test('an API-key provider with no secret linked returns 400', async () => {
-      // The asymmetry this pins: an OpenAI-family listing needs the record's own
-      // key, so a secret-less record cannot list. `vertex` and `bedrock` resolve
-      // credentials from the server environment instead, which is why the vertex
-      // case above gets as far as complaining about `config.project` rather than
-      // about a missing key. Documented under "Listing the models a provider can
-      // run" in the module docs; if this ever starts passing, that section is
-      // wrong too.
+      // An OpenAI-family listing needs the record's own key, so a secret-less
+      // record cannot list — while `vertex`/`bedrock` resolve credentials from
+      // the environment, which is why the vertex case above complains about
+      // `config.project` rather than a missing key.
       const openaiRes = await authenticatedTestClient(userToken)
         .post('/api/v1/ai-providers')
         .send({

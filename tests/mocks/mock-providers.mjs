@@ -1,28 +1,13 @@
 #!/usr/bin/env node
-// Deterministic mock provider endpoints for the `ingest-images-and-audio`
-// tutorial, so the converter flow can be validated in the tutorials runner
-// without external API keys — and *correctly*, by checking the bytes the
-// tutorial actually sent against the fixture files checked into the repo
-// (packages/website/docs/tutorials/fixtures/), not just returning canned
-// text regardless of input.
-//
-// The tutorial demonstrates the two converter kinds side by side:
-//   * images → an **agent** converter (native `openai` provider → Responses
-//     API). Mocked at POST /v1/responses: extracts the base64 image embedded
-//     in the request's `input_image` part and compares it byte-for-byte
-//     against fixtures/receipt.png.
-//   * audio  → a **tool** converter (a plain `http` tool calling a real,
-//     non-chat STT REST API directly, `body_mode: multipart`). Mocked at
-//     POST /v1/stt: parses the multipart/form-data body, extracts the `file`
-//     part, and compares it byte-for-byte against fixtures/meeting.mp3.
-//
-// Either mismatch responds with an error instead of the canned success text,
-// so a tutorial regression (wrong fixture, broken base64, wrong field name)
-// fails the CI run loudly instead of silently passing.
+// Mock provider endpoints for the `ingest-images-and-audio` tutorial, so the
+// converter flow runs without external API keys. Each endpoint compares the
+// bytes the tutorial actually sent against the checked-in fixtures rather than
+// returning canned text, so a wrong fixture, broken base64 or wrong field name
+// fails the run loudly instead of passing silently.
 //
 //   GET  /health        — readiness probe for docker-compose.
-//   POST /v1/responses  — Responses API (native OpenAI provider, image OCR).
-//   POST /v1/stt        — xAI-shaped speech-to-text REST endpoint (audio tool).
+//   POST /v1/responses  — Responses API (agent converter, image OCR).
+//   POST /v1/stt        — speech-to-text REST endpoint (tool converter).
 
 import http from 'node:http';
 import fs from 'node:fs';

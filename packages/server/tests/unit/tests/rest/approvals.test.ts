@@ -13,11 +13,9 @@ import {
 } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
-// The approvals queue has no public create endpoint — items are platform-created
-// (an `approval` node in Phase 1; tool-call interception in Phase 2). There is
-// therefore no REST entry point to seed through, so tests seed via the module's
-// own `emitApproval` (the sanctioned "no entry point exists" lib path), then
-// exercise list/get/approve/reject/expiry through REST as a real client would.
+// No public create endpoint — items are platform-created, so tests seed via
+// `emitApproval` (the sanctioned "no entry point" path) and then exercise the
+// lifecycle through REST as a client would.
 
 describe('Approvals', () => {
   let adminToken: string;
@@ -130,11 +128,9 @@ describe('Approvals', () => {
     });
 
     test('a concurrent dedup-race create surfaces the unique violation', async () => {
-      // The dedup fast-path find always catches an existing pending item, so
-      // the create-time unique-violation backstop (§3 race) is only reachable
-      // by forcing the write to reject — a sanctioned force-failure spy
-      // (tests.md exception #2). No pending winner exists for this key, so the
-      // error re-propagates rather than resolving to an existing item.
+      // The dedup fast path always catches an existing pending item, so the
+      // create-time unique-violation backstop is reachable only by forcing the
+      // write to reject. With no pending winner, the error re-propagates.
       const uniqueError = Object.assign(new Error('duplicate key'), {
         name: 'SequelizeUniqueConstraintError',
       });
@@ -595,13 +591,10 @@ describe('Approvals', () => {
     });
   });
 
-  // A project-scoped principal (project key / OAuth token) carries a policy
-  // whose resources are SRN-scoped to the project (`srn:<project>:*:*`) rather
-  // than the wildcard `*` the other tests use. The get/approve/reject handlers
-  // must therefore check against a concrete item SRN — not the implicit `*`
-  // default — or the SRN-scoped Allow never matches and every resolution 403s
-  // even though list succeeds. This reproduces the list-allowed/get-denied split
-  // reported in A-1.
+  // A project-scoped principal's policy is SRN-scoped rather than the wildcard
+  // the other tests use, so the handlers must check a concrete item SRN — with
+  // the implicit `*` default the Allow never matches and every resolution 403s
+  // while list succeeds.
   describe('SRN-scoped principal can resolve, not just list', () => {
     let scopedToken: string;
 

@@ -314,12 +314,10 @@ describe('Documents', () => {
       expect(response.status).toBe(403);
     });
 
-    // Regression: checkDocumentPermission built the SRN and isAllowed check
-    // from `doc.projectId`, but getDocument's mapped shape only has
-    // `project_id` — the SRN resolved to `srn:undefined:document:<id>` and
-    // never matched an SRN-scoped policy. The rest of this describe block
-    // only uses `userToken`'s action-only policy, which never exercises
-    // resource matching, so it never caught this.
+    // The permission check read `doc.projectId` from a mapped shape that only
+    // has `project_id`, so the SRN resolved to `srn:undefined:...` and never
+    // matched an SRN-scoped policy. An action-only policy never exercises
+    // resource matching, which is why the rest of this block missed it.
     test('a user with an SRN-scoped (not action-only) policy can get the document', async () => {
       const scopedUserRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/users')

@@ -5,11 +5,9 @@ import {
   stripApprovalJustification,
 } from 'src/lib/agentToolApproval';
 
-// Pure return-pending / dedup / justification-schema machinery shared by the
-// guardrail interceptor when a class-C guardrail files a tool-call approval.
 // A large input space that would be expensive and low-resolution to drive
-// through a full generation, so it is covered directly (tests.md keep-list
-// rule 1). The dispatch-path wiring is covered through the guardrail gate.
+// through a full generation (tests.md keep-list rule 1). The dispatch wiring is
+// covered through the guardrail gate.
 
 describe('agentToolApproval', () => {
   describe('resolvedActionName', () => {

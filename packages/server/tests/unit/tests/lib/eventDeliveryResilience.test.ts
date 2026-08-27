@@ -206,11 +206,9 @@ describe('event delivery resilience', () => {
         url: 'https://example.com/attempt-crash',
       });
 
-      // `attemptDelivery` handles a failing *request* itself — it records the
-      // failed attempt on the row. What it cannot handle is its own bookkeeping
-      // failing, and the only way in is a rejecting read before the request:
-      // `prepareAttempt` loads the webhook. One rejection drives the branch that
-      // exists solely to keep that throw off the fire-and-forget path.
+      // A failing request is handled by recording the attempt; what is not is
+      // the bookkeeping itself failing. A rejecting `prepareAttempt` read is the
+      // only way into that branch.
       jest
         .spyOn(db.Webhook, 'findByPk')
         .mockRejectedValueOnce(new Error('connection terminated'));

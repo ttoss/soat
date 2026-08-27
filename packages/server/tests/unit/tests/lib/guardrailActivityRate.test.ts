@@ -9,13 +9,9 @@ import { resolveAgentTools } from 'src/lib/agentToolResolver';
 import { clearGuardrailContextToolCache } from 'src/lib/guardrailContext';
 import { createGuardrail } from 'src/lib/guardrails';
 
-// `runtime.activity.actions_1h` / `actions_24h` (approvals PRD task 5.4): the
-// project's autonomous-action rate, read off the activity feed at evaluation
-// time so a guardrail can cap how many actions an agent takes per window.
-//
-// Driven through the resolver dispatch path (the entry point that builds a
-// generation's tool set), exactly as `guardrailRunCeiling.test.ts` does, so the
-// assertions cover the real gate rather than the context builder alone.
+// The project's autonomous-action rate, read off the activity feed at evaluation
+// time so a guardrail can cap actions per window. Driven through the resolver
+// dispatch so the assertions cover the real gate, not the context builder alone.
 
 const invokeExecute = async (
   resolvedTool: Tool,

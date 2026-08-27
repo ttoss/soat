@@ -1,16 +1,8 @@
-// Boundary note (PRD test-quality Appendix A — the sanctioned exception).
-// These helpers exist purely to orchestrate the LLM call (`ai`'s
-// `streamText`/`generateText`, which are non-configurable and can only be
-// substituted via `jest.mock` in an isolated module registry). Their only
-// observable side effects are `traces.saveTrace` and
-// `generations.updateGenerationRecord`, which fire-and-forget behind
-// `.catch()` guards and would otherwise require a full
-// project → aiProvider → agent → trace → generation fixture chain plus a
-// forced DB failure to drive each defensive branch. Per Appendix A this file
-// is the one file kept-and-documented rather than rewritten onto the real DB:
-// `saveTrace`/`updateGenerationRecord` are stubbed as companions to the
-// sanctioned `ai` mock so the helpers' own logic (message assembly, result
-// shape, prepareStep rules, rejection-swallowing) can be asserted in isolation.
+// The sanctioned `ai` mock (non-configurable exports, so `jest.mock` in an
+// isolated registry is the only option). `saveTrace`/`updateGenerationRecord`
+// are stubbed alongside it: both fire-and-forget behind `.catch()`, so driving
+// their swallow branches for real would need a full fixture chain plus a forced
+// DB failure.
 import {
   buildAllMessages,
   buildCompletedGenerationResult,
@@ -536,10 +528,9 @@ describe('runStreamGeneration', () => {
   });
 
   describe('onEnd callback and prepareStep via isolateModules', () => {
-    // streamText is non-configurable so jest.spyOn can't override it, and
-    // jest.mock at file scope won't intercept the already-loaded module.
-    // jest.isolateModules reloads the module fresh inside the mock registry,
-    // so we also mock traces and generations inside the same isolated scope.
+    // `streamText` is non-configurable and the module is already loaded, so
+    // `isolateModules` reloads it inside the mock registry — traces and
+    // generations are mocked in that same scope.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let isolatedRunStreamGeneration: (...args: any[]) => any;
     const mockStreamTextFn = jest.fn();

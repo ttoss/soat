@@ -131,12 +131,9 @@ describe('backfillKnowledgeConfigCasing', () => {
   test('a pre-single-casing agent resolves its knowledge fields only after the backfill', async () => {
     await seedPreSingleCasingAgent();
 
-    // Red: the read path maps the wire casing field by field, so every key
-    // whose spellings differ resolves to nothing — memory-scoped injection,
-    // the write_memory tool and the extraction provider are all silently off.
-    // This is the exact failure the deleted deep transform existed to prevent.
-    // (`limit` and `extraction.enabled/model/prompt` are casing-neutral, so
-    // they survive either way and prove nothing.)
+    // The read path maps casing field by field, so a key whose spellings differ
+    // resolves to nothing and its feature is silently off. `limit` and the
+    // `extraction.*` keys are casing-neutral and prove nothing.
     const stale = readKnowledgeConfig(await reloadAgentConfig());
     expect(stale?.writeMemoryId).toBeUndefined();
     expect(stale?.memoryIds).toBeUndefined();

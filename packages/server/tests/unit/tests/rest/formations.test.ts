@@ -1364,13 +1364,9 @@ resources:
       });
     });
 
-    // The blocker an operator actually hits: an agent that has generated. The
-    // evaluations docs tell them to declare an agent and the eval that verifies
-    // it in one stack, and running the suite — the whole point — gives the agent
-    // history. Teardown is ordered and not transactional, so discovering the
-    // refusal by attempting the delete destroyed everything ordered ahead of the
-    // agent and left the stack wedged in `delete_failed` (#985). A predictable
-    // refusal must be found before the first delete.
+    // Teardown is ordered and not transactional, so discovering this refusal by
+    // attempting the delete destroyed everything ordered ahead of the agent and
+    // wedged the stack in `delete_failed` (#985).
     test('an agent with generation history blocks teardown before anything is deleted', async () => {
       const aiProvRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/ai-providers')
@@ -1583,11 +1579,9 @@ resources:
       },
     };
 
-    // `ToolResourceProperties.execute` in formations.yaml documents the inner
-    // keys a tool's execute config may carry. These two assert that the
-    // documented set is actually what an apply carries through to the tool, so
-    // a field present in the tools REST spec but missing from the formation
-    // schema shows up here rather than as a surprise at authoring time.
+    // Asserts the documented execute keys are what an apply actually carries
+    // through, so a field in the tools REST spec but missing from the formation
+    // schema fails here rather than surprising an author.
     test('carries execute.body_mode through an apply', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/formations')
@@ -1769,11 +1763,8 @@ resources:
   describe('Template key casing round-trips verbatim', () => {
     let camelCaseFormationId: string;
 
-    // A template whose logical IDs and parameter names are intentionally not
-    // snake_case: a PascalCase logical ID and a camelCase parameter name. These
-    // are author-chosen identifiers (the tutorial uses `poemDoc`/`stanza1Agent`,
-    // the docs use `MyProvider`/`ApiSecret`) and must be stored and returned
-    // exactly as written — the caseTransform middleware must not rewrite them.
+    // Logical IDs and parameter names are author-chosen identifiers and must
+    // round-trip exactly as written, whatever their casing.
     const camelCaseTemplate = {
       parameters: {
         memoryDisplayName: {
@@ -2204,11 +2195,9 @@ resources:
         );
       });
 
-      // A parameter name containing an underscore (e.g. `api_token`) is the
-      // conventional way to name a secret-bearing parameter. The request's
-      // `parameters` map must not be case-transformed independently of the
-      // `template.parameters` declaration it is keyed against, or a supplied
-      // value silently fails to match and the parameter is reported missing.
+      // The request's `parameters` map must not be transformed independently of
+      // the `template.parameters` it is keyed against, or a supplied value
+      // silently fails to match and is reported missing.
       test('accepts a supplied value for a required parameter whose name contains an underscore', async () => {
         const templateWithUnderscoreParam = {
           parameters: {
@@ -4527,11 +4516,9 @@ resources:
       expect(gone.status).toBe(404);
     });
 
-    // `scope`, `metric`, and `window` are immutable after creation. Changing one
-    // through the formation lifecycle must fail loudly: silently applying only
-    // the mutable fields would leave the declared template and the enforced cap
-    // divergent, so an operator tightening a cap would believe a limit is live
-    // while the old one is still what enforces.
+    // Changing an immutable field must fail loudly: applying only the mutable
+    // ones leaves template and enforced cap divergent, so an operator tightening
+    // a cap believes a limit is live while the old one still enforces.
     test('fails a formation update that changes an immutable quota field, leaving the quota untouched', async () => {
       const create = await authenticatedTestClient(userToken)
         .post('/api/v1/formations')

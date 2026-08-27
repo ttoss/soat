@@ -1,38 +1,26 @@
 // Deterministic `tool_choice` shim in front of Ollama.
 //
-// Why this exists: SOAT reaches Ollama through its OpenAI-compatible endpoint
-// (`buildOllamaModel` in packages/server/src/lib/agentModel.ts), and that
-// endpoint does **not** implement `tool_choice` — Ollama's compatibility docs
-// list the field as unsupported, so it is silently dropped. An agent configured
-// with `tool_choice: {type:'tool', tool_name:'x'}` therefore gets no forcing at
-// all in CI: whether the run pauses on a client tool depends on whether
-// `qwen2.5:0.5b` volunteers a tool call, which it does only sometimes. That is
-// the flake behind issue #774 — it failed a release pipeline, not a code change.
+// Ollama's OpenAI-compatible endpoint does not implement `tool_choice` and drops
+// it silently, so a forcing agent gets no forcing at all in CI — whether a run
+// pauses on a client tool depends on whether `qwen2.5:0.5b` volunteers one. That
+// is the flake behind #774, which failed a release pipeline.
 //
-// This proxy implements exactly the missing field, for an explicit allowlist of
-// tools (`TOOL_CHOICE_TOOLS`), and nothing else:
+// This implements exactly that missing field, for the tools in
+// `TOOL_CHOICE_TOOLS`, and nothing else:
 //
-//   * `POST **/chat/completions` forcing an **allowlisted** tool → a synthesized
-//     OpenAI-shaped `tool_calls` response. The model is never called, so the
-//     forced call is deterministic.
-//   * the same, but the request does not offer that tool → `400`. That is a
-//     wiring break, and forwarding it would hand the outcome back to the model
-//     and revive the flake downstream, where it no longer looks like a break.
-//   * everything else — an unlisted tool, no `tool_choice`, `"auto"`, `"none"`,
-//     `/v1/embeddings`, any other route — is forwarded to Ollama verbatim.
+//   * forcing an allowlisted tool → a synthesized `tool_calls` response; the
+//     model is never called, so the forced call is deterministic.
+//   * forcing one the request does not offer → `400`. That is a wiring break,
+//     and forwarding it revives the flake downstream where it no longer looks
+//     like one.
+//   * everything else is forwarded to Ollama verbatim.
 //
-// Every request that asks for forcing logs one line with the outcome, so a
-// downstream failure can be attributed without guessing.
+// Every request asking for forcing logs its outcome, so a downstream failure can
+// be attributed without guessing. The allowlist keeps the blast radius at one
+// step per suite: other flows force tools whose arguments only the model can
+// fill, and those keep running against the real model.
 //
-// The allowlist keeps the blast radius at one step per suite. Other CI flows
-// force tools whose arguments only the model can fill (the guardrail-gated tool
-// in the smoke suite, `step_rules` forcing in the formations tutorial), and
-// those keep running against the real model exactly as they do today.
-// Tool-call arguments are built from the caller-authored JSON Schema, which is
-// also what keeps authored key casing (`orderId`, `cityName`) intact.
-//
-// Used by tests/docker-compose.tutorials.yml and tests/docker-compose.smoke.yml
-// as OLLAMA_BASE_URL. Tested by tests/harness/ollamaToolChoiceProxy.test.mjs.
+// Used as OLLAMA_BASE_URL by the smoke and tutorials compose stacks.
 import { createServer } from 'node:http';
 
 const CHAT_COMPLETIONS_PATH = /\/chat\/completions$/;

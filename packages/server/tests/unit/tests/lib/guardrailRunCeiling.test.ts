@@ -10,14 +10,10 @@ import { resolveAgentTools } from 'src/lib/agentToolResolver';
 import { clearGuardrailContextToolCache } from 'src/lib/guardrailContext';
 import { createGuardrail } from 'src/lib/guardrails';
 
-// The per-run cumulative ceiling (#486). `runtime.usage.cost_usd_*` / `tokens_*`
-// are windowed per project — the wrong granularity for aborting a single
-// runaway run — so `runtime.usage.run_tokens` / `run_cost_usd` sum only the meter
-// rows recorded against the current run so far.
-//
-// Driven through the resolver dispatch path (the entry point that builds a
-// generation's tool set), exactly as `agentToolGuardrailGate.test.ts` does, so
-// the assertions cover the real gate rather than the context builder alone.
+// The per-run cumulative ceiling (#486): the windowed per-project counters are
+// the wrong granularity for aborting one runaway run, so these sum only the
+// meter rows recorded against the current run. Driven through the resolver
+// dispatch so the assertions cover the real gate.
 
 const invokeExecute = async (
   resolvedTool: Tool,

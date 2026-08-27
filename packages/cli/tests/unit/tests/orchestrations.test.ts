@@ -35,11 +35,9 @@ describe('orchestration run commands', () => {
   });
 
   test('list-orchestration-runs sends an undeclared filter flag as a query param, not a body', async () => {
-    // `limit` is not declared as a query param on listOrchestrationRuns, so it
-    // used to fall through the dispatcher's path/query/body split into the
-    // request body. A GET request with a body is rejected by the fetch
-    // runtime ("Request with GET/HEAD method cannot have body."), making the
-    // command unusable whenever any undeclared filter flag was passed.
+    // Undeclared as a query param, `limit` fell through into the request body —
+    // and fetch rejects a GET carrying one, so any undeclared filter flag made
+    // the command unusable.
     const requests = await cliTestClient.call([
       'list-orchestration-runs',
       '--orchestration-id',

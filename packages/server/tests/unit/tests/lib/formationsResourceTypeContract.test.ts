@@ -9,23 +9,12 @@ import {
 import { validateFormationTemplate } from 'src/lib/formationsValidation';
 import { camelToSnakeKey } from 'src/lib/resource-inputs/normalizers';
 
-// ── About this file ─────────────────────────────────────────────────────────
-//
-// Two rules that used to be restated per resource type, and drifted:
-//
-//   1. The set of resource types a template may declare (#900). It was a
-//      hand-written literal that had fallen one entry behind the registry, so
-//      `model_route` was unreachable through the API.
-//   2. camelCase property keys are accepted (#901). Twenty modules called
-//      `normalizePropertyKeys`; four did not.
-//
-// Both are now derived — from the registry and from the module-dispatch seam
-// respectively — so these tests are table-driven over *every registered type*.
-// A 25th module cannot reintroduce either gap without failing here.
-//
-// Pure validation over the full resource-type table: a `lib/` test per the
-// keep-list rule in `.claude/rules/tests.md` (large input space, and a bare
-// "Unknown field" through REST would not say which type regressed).
+// Two rules that were restated per resource type and drifted: the declarable
+// type set (#900, a literal one entry behind the registry) and camelCase key
+// acceptance (#901, missing in four of 24 modules). Both are now derived, so
+// these run table-driven over every registered type and a 25th module cannot
+// reintroduce either gap. A `lib/` test per the keep-list rule — REST's bare
+// "Unknown field" would not say which type regressed.
 
 const SPEC_PATH = path.resolve(
   __dirname,

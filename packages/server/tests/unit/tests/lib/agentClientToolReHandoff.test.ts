@@ -4,11 +4,8 @@ import { pendingGenerations } from 'src/lib/agentGenerationHelpers';
 import { emitApproval } from 'src/lib/approvals';
 import { createGenerationRecord } from 'src/lib/generations';
 
-// On approval, a class-C client-tool item cannot run server-side — it is
-// re-handed-off to the client as a fresh generation suspended at
-// `requires_action` with the frozen (or edited) call pending. Real DB; no model
-// call is made (buildGenerationContext only constructs the model, never invokes
-// it).
+// An approved client-tool item cannot run server-side, so it is re-handed-off as
+// a fresh generation suspended at `requires_action`.
 
 describe('emitClientToolReHandoff (client-tool approval → requires_action)', () => {
   let projectId: number;

@@ -1,33 +1,21 @@
 #!/usr/bin/env node
-// WS7 drift guardrail — docs lint.
+// Docs drift guardrail. Greps the website docs for classes of rot that would
+// otherwise re-accumulate silently:
 //
-// Greps the website docs for the drift classes the 2026-07 audit found and that
-// the module-enhancements sweep removed, so they cannot silently re-accumulate:
-//
-//   1. Forbidden TypeScript casts in SDK examples (` as any`, ` as unknown`).
-//   2. camelCase path params in URL templates (`:paramName`) — the external
-//      contract uses snake_case `{param_name}`.
-//   3. A stale-term denylist: renamed permission actions / soat-tool actions and
-//      the wrong public-ID prefixes fixed by WS2. Runtime prefixes live in
-//      packages/postgresdb/src/utils/publicId.ts.
+//   1. Forbidden TypeScript casts in SDK examples.
+//   2. camelCase path params in URL templates — the contract is snake_case.
+//   3. A stale-term denylist: renamed actions and wrong public-ID prefixes.
 //   4. A documented `soat <cmd> --flag` naming no real CLI parameter.
-//   5. A documented SDK or curl request-body field naming no real body property.
-//   6. An endpoint mention (`METHOD /path`) that does not link to its generated
-//      API-reference page — and any /docs/api/ link addressing a page no
-//      operation generates.
-//   7. A doc without a non-empty, unique `description` front matter field —
-//      the snippet search engines and AI crawlers quote for the page.
+//   5. A documented SDK or curl request-body field naming no real property.
+//   6. An endpoint mention not linked to its generated reference page, and any
+//      /docs/api/ link addressing a page no operation generates.
+//   7. A doc without a non-empty, unique `description` front matter field.
 //
-// Checks 4 and 5 are existence checks against the in-repo sources of truth, and
-// they cover all three tabs every module example ships. Guarding one language is
-// what let three of the four examples #992 reported stay broken after the fix:
-// the CLI tab was corrected, and the SDK and curl tabs of the same example kept
-// the field name no endpoint accepts.
-//
-// Denylist entries are removed here once a term is legitimately reintroduced.
+// Checks 4 and 5 are existence checks against the in-repo sources of truth,
+// covering all three tabs every module example ships — guarding one language is
+// what let three of the four examples #992 reported stay broken after the fix.
 //
 // Usage: node scripts/docs-lint.mjs
-// Exits non-zero (and prints every offending line) when any check fails.
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
@@ -103,10 +91,9 @@ const CHECKS = [
     re: /[?&]async=|--async\b|\basync:\s*(true|false)\b/,
   },
   // Fields removed for v1 (#997, #1005). `\btool_ids\b` does not match
-  // `active_tool_ids`, which is still a real field — `_` is a word character, so
-  // there is no boundary before `tool_ids` there. The `tools` shorthand gets no
-  // entry: the word is far too common to denylist, and a documented `--tools`
-  // flag is already caught by the CLI-flag check below.
+  // `active_tool_ids`, still a real field, since `_` is a word character. The
+  // `tools` shorthand gets no entry: too common to denylist, and a documented
+  // `--tools` flag is already caught by the CLI-flag check below.
   {
     label: "removed field: 'tool_ids' (agents attach tools via tool_bindings)",
     re: /\btool_ids\b/,
@@ -119,15 +106,11 @@ const CHECKS = [
     label: 'retired camelCase spelling (use the snake_case wire name)',
     re: /\b(toolChoice|activeToolIds|toolName|bodyMode)\b/,
   },
-  // The API's only error shape is `{ error: { code, message, meta? } }`
-  // (`.claude/rules/errors.md`), and the SDK's `error` *is* that raw body — the
-  // CLI spreads it unwrapped for exactly that reason. So the code always lives
-  // one level down, at `error.error.code`. A doc that reads `error.code`
-  // prints `undefined` for the one value the step exists to show, and the
-  // tutorials runner cannot catch it: it executes only the CLI tab, so the SDK
-  // and curl tabs of the same step are never run.
-  //
-  // `[\w$]*` cannot span a dot, so the correct `x.error.code` never matches.
+  // The SDK's `error` is the raw API body, so the code lives one level down at
+  // `error.error.code`. A doc reading `error.code` prints `undefined` for the
+  // one value the step exists to show, and the tutorials runner executes only
+  // the CLI tab so it cannot catch it. `[\w$]*` cannot span a dot, so the
+  // correct `x.error.code` never matches.
   {
     label:
       'SDK error shape: the body nests under `error` (use `error.error.code`)',
@@ -147,17 +130,11 @@ const CHECKS = [
 
 // ── Check 4: documented CLI flags must exist ────────────────────────────────
 //
-// A documented `soat <cmd> --flag` that names no real parameter fails the moment
-// a reader copy-pastes it. Nothing else catches this: the tutorials runner
-// executes only `docs/tutorials/`, so `docs/modules/` CLI tabs are never run,
-// and the regex checks above are about vocabulary, not existence. That is how
-// `--content_base64` — a field no endpoint has ever accepted — survived in all
-// three tabs of one page.
-//
-// The allowlist is derived from the two in-repo sources of truth, so this stays
-// a static check with no server and no dependencies:
-//   - packages/cli/src/generated/routes.ts   (generated from the OpenAPI specs)
-//   - packages/cli/src/cli-wrappers/wrappers (flags a wrapper adds by hand)
+// A documented flag naming no real parameter fails the moment a reader
+// copy-pastes it, and nothing else catches it: the tutorials runner executes
+// only `docs/tutorials/`, and the checks above are about vocabulary, not
+// existence. The allowlist is derived from the generated route manifest and the
+// hand-written wrappers, so this stays a static check.
 
 const CLI_DIR = join(ROOT, 'packages/cli');
 
@@ -190,11 +167,10 @@ const sliceArray = (line, key) => {
 const buildCommandFlags = () => {
   const manifestPath = join(CLI_DIR, 'src/generated/routes.ts');
 
-  // The manifest is generated from the OpenAPI specs and gitignored, so it is
-  // absent in a fresh clone. `pnpm run docs-lint` generates it first; a bare
-  // `node scripts/docs-lint.mjs` may not have. Fail loudly with the fix rather
-  // than an ENOENT stack trace — and never skip the check, since a check that
-  // quietly no-ops is the exact failure this one exists to catch.
+  // The manifest is gitignored, so a fresh clone lacks it until
+  // `pnpm run docs-lint` generates it. Fail loudly with the fix rather than an
+  // ENOENT trace, and never skip — a check that quietly no-ops is the exact
+  // failure this one exists to catch.
   if (!existsSync(manifestPath)) {
     console.error(
       'docs-lint: the CLI route manifest is missing, so documented flags cannot be checked.\n' +
@@ -335,22 +311,14 @@ const checkCliFlags = (files, commandFlags) => {
 
 // ── Check 5: documented SDK / curl body fields must exist ───────────────────
 //
-// Check 4 covers CLI tabs only, which is exactly how three of the four examples
-// #992 reported stayed broken after being "fixed": the CLI tab was corrected and
-// the SDK and curl tabs of the same example kept the field name no endpoint
-// accepts (`prompt` for `messages`, `content` for `message`). Every module
-// example ships all three languages, so checking one of them leaves two thirds
-// of the surface unguarded — and a reader on the SDK tab has no working tab to
-// fall back to.
+// Check 4 covers CLI tabs only, which is how three of the four examples #992
+// reported stayed broken after being "fixed" — every module example ships three
+// languages, so guarding one leaves two thirds unguarded and a reader on the SDK
+// tab with nothing that works.
 //
-// `strictFields` answers `400 VALIDATION_FAILED` for these at runtime, so the
-// examples fail on copy-paste exactly like the CLI ones did. Nothing executes
-// them: the tutorials runner extracts `<TabItem value="cli">` blocks only.
-//
-// Scope is deliberately the **top-level** field names of a JSON request body,
-// which is where every reported instance lived. Nested objects are not checked —
-// the CLI manifest flattens a body to its top-level flags, so a nested schema is
-// not available from the same static source.
+// Scope is deliberately the top-level fields of a JSON body, where every
+// reported instance lived: the CLI manifest flattens a body to its top-level
+// flags, so nested schemas are not available from the same static source.
 
 const OPENAPI_DIR = join(ROOT, 'packages/server/src/rest/openapi/v1');
 
@@ -611,23 +579,17 @@ const checkCurlBodyFields = (files, bodyFields, routeIndex) => {
 
 // ── Check 6: an endpoint mention must link to its reference page ─────────────
 //
-// A reader who meets `POST /api/v1/documents/ingest` in prose wants the request
-// schema, and the generated reference page has it. Linking only the first
-// mention of a page was the initial plan and is the wrong cut: reference docs
-// are entered by deep link — search results, `#re-ingesting-a-document`, a
-// cross-page anchor — so a reader landing mid-page never sees the top of it.
-// "Every resolvable mention is linked" is also the only version of the rule a
-// script can check; "the first one" is an ordinal judgement that each new page
-// would have to remember.
+// Every resolvable mention, not just the first on a page: reference docs are
+// entered by deep link, so a reader landing mid-page never sees the top. It is
+// also the only version of the rule a script can check.
 //
-// The address is derived, not stored: `docs/api/` is gitignored, so the slug
-// only exists after a generator runs. `pr.yml` skips the website build whenever
-// a PR touches Markdown only, which is precisely the PR that adds these links —
-// so a typo would otherwise surface at the next release deploy.
+// The address is derived rather than stored, since `docs/api/` is gitignored and
+// the slug exists only after a generator runs. `pr.yml` skips the website build
+// for Markdown-only PRs — precisely the PR that adds these links — so a typo
+// would otherwise surface at the next release deploy.
 //
-// A mention that resolves to no operation is left alone: `POST /chat/completions`
-// and `POST /v1/stt` are provider-side, and "every mutating `POST` … under
-// `/api/v1`" names a class, not a route.
+// A mention resolving to no operation is left alone: provider-side routes, and
+// phrases naming a class rather than a route.
 
 /**
  * The slug `docusaurus-plugin-openapi-docs` derives from an `operationId`,
@@ -742,12 +704,10 @@ const checkReferenceLinks = (files, routeIndex) => {
 
 // ── Check 7: every doc has a non-empty, unique description ──────────────────
 //
-// The `description` front matter becomes the page's <meta name="description">
-// and og:description — the snippet search engines and AI crawlers quote when
-// they cite the page. Docusaurus silently falls back to the site tagline when
-// it is missing, so an undescribed page still builds; it just competes for
-// queries with every other undescribed page. The duplicate rule catches the
-// copy-paste variant of the same failure.
+// It becomes the snippet search engines and AI crawlers quote. Docusaurus
+// silently falls back to the site tagline when it is missing, so an undescribed
+// page still builds — it just competes with every other undescribed page. The
+// uniqueness rule catches the copy-paste variant.
 
 /**
  * Extract the `description` front matter value from a doc's source, or null

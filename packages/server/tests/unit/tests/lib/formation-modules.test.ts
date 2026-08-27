@@ -8,21 +8,10 @@ import {
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
-// ── About this file ─────────────────────────────────────────────────────────
-//
-// Formation modules are thin adapters that map a formation resource's
-// snake_case `properties` onto the module's lib CRUD functions. This suite
-// exercises them through the real `applyCreate/Update/DeleteResource` entry
-// points against the real Postgres testcontainer — no internal `spyOn` and no
-// `as any`/`as unknown` casts (per `.claude/rules/tests.md` "Never Mock What
-// You Own"). Every create/update/delete is verified by reading the resource
-// back through the module's own `read`, so a broken adapter (wrong field name,
-// missing normalization) fails the assertion rather than silently passing
-// against a mock.
-//
-// Shared referenced resources (project, ai provider, agent, tool, memory,
-// policy, actor, secret) are created once via the REST API as the bootstrap
-// admin; formation modules resolve public → internal ids themselves.
+// Drives the adapters through the real `apply*Resource` entry points against the
+// real database, verifying each write by reading it back through the module's
+// own `read` — so a wrong field name or missing normalization fails rather than
+// passing against a mock. Shared referenced resources are created once via REST.
 
 let adminToken: string;
 let projectId: string; // public id
@@ -192,12 +181,8 @@ describe('non-object properties are rejected', () => {
   );
 });
 
-// ── Create → read round-trips (consolidated) ────────────────────────────────
-//
-// Each case creates a resource through the real adapter and reads it back
-// through the same adapter, asserting the snake_case round-trip. Property
-// factories are functions so the shared fixture ids (set in `beforeAll`) are
-// read at test time, not at table-construction time.
+// Property factories are functions so the shared fixture ids, set in
+// `beforeAll`, are read at test time rather than at table construction.
 
 type RoundTripSpec = {
   create: Record<string, unknown>;
@@ -549,12 +534,8 @@ const CASES: RoundTripCase[] = [
   {
     resourceType: 'workflow',
     build: (seed) => {
-      // A representative workflow: an initial `human` state, an automated state
-      // whose `on_enter` dispatches an agent and routes on completion, and a
-      // terminal state. Exercises the deep snake↔camel conversion of nested
-      // state/transition keys (`stalled_after`, `on_enter`, `on_complete`,
-      // `agent_id`, `requires_approval`) while a JSON-Logic `guard` body round-
-      // trips verbatim.
+      // Exercises the nested state/transition key conversion while a JSON-Logic
+      // `guard` body round-trips verbatim.
       const states = [
         { name: 'todo', initial: true, kind: 'human', stalled_after: 3600 },
         {
@@ -868,12 +849,9 @@ describe('documentsFormationModule chunking', () => {
   });
 });
 
-// ── quota (Quotas Phase 3) ──────────────────────────────────────────────────
-//
-// A quota has no free-form field and is unique per
-// (project, scope, scope_ref, metric, window), so it can't ride the shared
-// round-trip table (which re-creates each resource several times in one
-// project). This drives one resource through its full lifecycle instead.
+// A quota is unique per (project, scope, scope_ref, metric, window), so it
+// cannot ride the shared round-trip table, which re-creates each resource
+// several times in one project.
 
 describe('quotasFormationModule', () => {
   test('create → read → update → delete lifecycle (project scope)', async () => {
@@ -2323,13 +2301,8 @@ describe('orchestrationsFormationModule', () => {
   });
 });
 
-// ── dataset / dataset_item / eval (Evaluations Phase 3) ─────────────────────
-//
-// A dataset and its items are the fixtures an eval runs against, so the three
-// types are exercised as one lifecycle: a template declares the dataset, its
-// items (each its own resource, the memory/memory_entry shape — so an item
-// curated through the API is never collateral of a formation apply), and the
-// eval that binds them to the agent under test.
+// The three types are one lifecycle. Each item is its own resource, so an item
+// curated through the API is never collateral of a formation apply.
 
 describe('evaluations formation modules', () => {
   test('dataset → dataset_item → eval create/read/update/delete lifecycle', async () => {

@@ -3,16 +3,11 @@ import { createGeneration } from 'src/lib/agentGeneration';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
-// Regression test for soat#815: createGenerationRecord created the Trace row
-// before the Generation row with no shared transaction, so a Generation.create
-// failure (a transient DB error, a constraint violation, etc.) left an
-// orphaned Trace behind — zero Generations, invisible to
-// GET /api/v1/generations?agent_id=..., but enough on its own to trip
-// deleteAgent's "no dependents" precondition with a 409.
-//
-// `db.Generation.create` is spied to reject once — the sanctioned
-// force-failure-stub pattern for `.catch()` resilience branches (tests.md) —
-// since no real DB write fails deterministically.
+// The Trace row was once created before the Generation with no shared
+// transaction, so a failed `Generation.create` left an orphaned Trace —
+// invisible to the generations listing, but enough to trip `deleteAgent`'s
+// no-dependents precondition with a 409 (#815). `Generation.create` is spied to
+// reject once, the sanctioned force-failure pattern.
 describe('createGenerationRecord — Trace/Generation atomicity', () => {
   test('a Generation.create failure does not leave an orphaned Trace behind', async () => {
     await testClient

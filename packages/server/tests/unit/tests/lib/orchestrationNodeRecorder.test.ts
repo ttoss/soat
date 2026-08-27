@@ -52,12 +52,9 @@ describe('buildRunError', () => {
     expect(typeof result.message).toBe('string');
   });
 
-  // Node's fetch throws a generic `TypeError: fetch failed` for any network-
-  // level failure (DNS, connection refused, protocol mismatch, …) and puts the
-  // actual reason on `.cause`. Dropping `.cause` is exactly what made ttoss/
-  // soat#820 unreproducible: a tool-node HTTP dispatch failure recorded only
-  // "fetch failed" on the run, with no way to tell a plain-HTTP host issue
-  // apart from a DNS failure or a timeout after the fact.
+  // `fetch` throws a generic `TypeError: fetch failed` with the real reason on
+  // `.cause`. Dropping it is what made #820 unreproducible — nothing told a bad
+  // host from a DNS failure or a timeout.
   test('an Error with an Error cause appends the cause message, surfacing the real network reason', () => {
     const cause = new Error('connect ECONNREFUSED 10.0.0.1:80');
     const error = new Error('fetch failed', { cause });

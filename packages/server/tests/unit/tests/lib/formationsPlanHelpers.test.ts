@@ -7,13 +7,9 @@ import {
 import { createMemory } from 'src/lib/memories';
 import { createSecret } from 'src/lib/secrets';
 
-// These tests drive the extracted plan-diffing helpers directly with real
-// inputs (a real Memory row for the read-diff paths), following the
-// pure-algorithm keep-list rule in tests.md: every resourceType's `read`
-// swallows its own errors and returns null, so the outer "read failed"
-// resilience branch in `planResourceChange` cannot be reached by any real
-// entry point — a single `jest.spyOn` forces that one branch, matching the
-// sanctioned "force-failure stub for a .catch() resilience branch" pattern.
+// Every resourceType's `read` swallows its own errors and returns null, so
+// `planResourceChange`'s "read failed" branch is unreachable from any entry
+// point — one `jest.spyOn` forces it, the sanctioned force-failure pattern.
 
 let projectId: number;
 let memoryCounter = 0;

@@ -107,11 +107,9 @@ describe('Sessions', () => {
       expect(response.body.actor_id).toBeNull();
     });
 
-    // Creating a session provisions a conversation but deliberately no actor:
-    // the end user is linked by the caller via `actor_id`. Pinned because a
-    // session without an actor carries no end-user attribution, so its
-    // generations match no actor-scoped quota — silently unenforced spend if
-    // this ever starts auto-creating (or is documented as if it did).
+    // A session provisions a conversation but deliberately no actor — the
+    // caller links one. Without it there is no end-user attribution, so its
+    // generations match no actor-scoped quota.
     test('creates no actors — the caller links one via actor_id', async () => {
       const before = await authenticatedTestClient(adminToken).get(
         `/api/v1/actors?project_id=${projectId}`
@@ -172,11 +170,9 @@ describe('Sessions', () => {
       });
     });
 
-    // `tool_context` is a caseTransform pass-through: its keys are HTTP header
-    // names, not SOAT field names, so every shape is stored exactly as sent and
-    // the outbound `X-Soat-Context-*` header is predictable from the request
-    // body alone. Pinned in all three places it could drift — storage (the
-    // header source), the response echo, and the round-trip.
+    // Its keys are HTTP header names, not SOAT field names, so every shape is
+    // stored as sent and the outbound header is predictable from the request
+    // body alone. Pinned in all three places it could drift.
     test('stores tool_context keys verbatim, whatever their case', async () => {
       const toolContext = {
         actor_external_id: 'snake',
@@ -1870,13 +1866,9 @@ describe('Sessions', () => {
     });
   });
 
-  // ── Identity keys at the session→generation boundary ─────────────────────
-  //
-  // Since #850 the reserved identity keys (`sessionId`, `actorId`,
-  // `actorExternalId`) are stamped inside createGeneration's context builder
-  // (see lib/generationContextPinning.test.ts), not on this path. What this
-  // path owes the chokepoint is (a) the typed, trusted `sessionId` argument
-  // and (b) the caller bags forwarded without inventing identity keys.
+  // The reserved identity keys are stamped at the generation chokepoint (#850),
+  // not here. What this path owes it: the typed, trusted `sessionId` argument,
+  // and caller bags forwarded without inventing identity keys.
 
   describe('identity keys at the generation boundary', () => {
     let withActorSessionId: string;
@@ -2543,13 +2535,10 @@ describe('Sessions', () => {
     describe('POST /messages with message_delay_seconds and auto_generate', () => {
       let delaySessionId: string;
 
-      // `session.generatingAt` is cleared in a `finally` block that runs after
-      // the mocked generation resolves — awaiting only the mock invocation
-      // (`generationStarted`) leaves that clear still in flight. Poll for it
-      // as the deterministic settle signal instead of a fixed sleep, both to
-      // assert the session isn't left stuck and to stop that in-flight clear
-      // from leaking into the next test (which would otherwise see a stale
-      // `generatingAt` and silently skip scheduling its own generation).
+      // `generatingAt` clears in a `finally` after the generation resolves, so
+      // awaiting only the mock invocation leaves it in flight. Polling both
+      // asserts the session is not stuck and stops that clear leaking into the
+      // next test, which would see a stale value and skip its own generation.
       const waitForGeneratingAtCleared = async (timeoutMs = 5000) => {
         const startedAt = Date.now();
         let generatingAt: unknown;

@@ -527,11 +527,9 @@ describe('quota admission at fire time', () => {
   }, 120_000);
 
   test('a counter error fails open and the firing still dispatches', async () => {
-    // Sanctioned force-failure stub (`.claude/rules/tests.md`): the fail-open
-    // branch only exists for an infrastructure error, and no real counter write
-    // fails deterministically. A quota is cost control, not authorization, so a
-    // broken counter must never block work — this is the branch that guarantees
-    // it, and it is unreachable any other way.
+    // Sanctioned force-failure stub: no real counter write fails
+    // deterministically, and this fail-open branch — a quota is cost control,
+    // not authorization — is unreachable any other way.
     const spy = jest
       .spyOn(quotaEnforcement, 'evaluateRequestQuotas')
       .mockRejectedValueOnce(new Error('counter unavailable'));
