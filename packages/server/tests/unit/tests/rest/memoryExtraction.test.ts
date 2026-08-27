@@ -88,11 +88,9 @@ describe('Memory Extraction', () => {
     return entries;
   };
 
-  // `writeCandidates` processes every extracted candidate sequentially in one
-  // async chain, and `recordExtractionSummary` (writing generation.metadata.
-  // extraction) only runs once that whole chain finishes. Polling for it is a
-  // deterministic settle signal for "all candidates — including skipped
-  // duplicates — have been processed", replacing a fixed settling sleep.
+  // `recordExtractionSummary` runs only once the whole candidate chain
+  // finishes, so polling for it is a deterministic settle signal rather than a
+  // fixed sleep.
   const waitForExtractionSummary = async (
     generationId: string,
     timeoutMs = 8000
@@ -598,12 +596,9 @@ describe('Memory Extraction', () => {
 
   describe('read-time knowledge_config normalization (stale agents)', () => {
     test('extraction runs for an agent whose stored config is still snake_case', async () => {
-      // Simulates a formation-deployed agent persisted before write-time
-      // normalization: its knowledge_config blob is raw snake_case. Runtime
-      // code reads camelCase, so without read-time normalization the write
-      // memory and extraction flag would be invisible and extraction would
-      // silently no-op. Seed the stale shape directly, since no current API
-      // path produces it any more.
+      // An agent persisted before write-time normalization holds a raw
+      // snake_case blob, which runtime code reading camelCase would find empty
+      // — extraction silently no-ops. No current API path produces this shape.
       const memoryId = await createMemory('Stale Config Memory');
       const agentId = await createAgent({ name: 'StaleConfigAgent' });
 

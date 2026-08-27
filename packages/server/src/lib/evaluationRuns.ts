@@ -1,19 +1,12 @@
 /**
  * Starting, and stopping, eval runs (the evaluations module doc).
  *
- * A run creates **one real agent generation per dataset item** through the
- * ordinary `createGeneration` machinery, so it exercises the agent's true
- * instructions, tools, model and knowledge rather than a simulation of them;
- * each result links the generation (and through it the trace) for drill-down.
- *
- * Two modes, one execution path (`evaluationRunExecution.ts`):
- *
- * - `wait: true` — synchronous and sequential, dataset capped at
- *   {@link SYNC_ITEM_CAP} items, terminal before the request returns.
- * - `wait: false` — one queued task per item, answered `queued` immediately.
- *   The worker executes items and the last one to finish finalizes the run.
- *
- * The list/get side lives in `evaluationRunReads.ts`.
+ * One real agent generation per dataset item through `createGeneration`, so a
+ * run exercises the agent's true config rather than a simulation; each result
+ * links the generation for drill-down. Two modes, one execution path
+ * (`evaluationRunExecution.ts`): `wait: true` is sequential and capped at
+ * {@link SYNC_ITEM_CAP} items; `wait: false` queues a task per item and the
+ * last one to finish finalizes the run. Reads live in `evaluationRunReads.ts`.
  */
 import createDebug from 'debug';
 
@@ -370,18 +363,14 @@ export const startEvalRun = async (args: {
 // ── Canceling a run ────────────────────────────────────────────────────────
 
 /**
- * Cancels a queued or running run.
- *
- * Drops the run's outstanding item tasks so it stops consuming provider budget
- * on the next worker tick, and settles the row `canceled` with whatever it had
- * already scored. Results already written are left exactly as they are — they are
- * real measurements of real generations that were really paid for.
+ * Cancels a queued or running run: drops its outstanding item tasks so it stops
+ * consuming provider budget on the next worker tick, and settles the row
+ * `canceled` with whatever it had scored. Results already written are left as
+ * they are — real measurements of generations that were really paid for.
  *
  * `aggregate_scores` is deliberately **not** computed for a canceled run: a
- * partial roll-up presented in the same field a completed run uses is the
- * "subset reported as a whole-dataset verdict" failure the sync cap exists to
- * prevent. `completed_count` / `errored_count` still report what ran, and the
- * per-item results remain readable.
+ * partial roll-up in the field a completed run uses is the "subset reported as
+ * a whole-dataset verdict" failure the sync cap exists to prevent.
  */
 export const cancelEvalRun = async (args: {
   projectIds?: number[];
@@ -415,10 +404,9 @@ export const cancelEvalRun = async (args: {
 
   await run.update({ status: 'canceled', finishedAt: new Date() });
 
-  // Counts what has landed so far. Items already claimed by a worker are past
-  // its liveness check and keep writing results after this point; each of those
-  // late writes recounts, so the numbers converge on what really ran instead of
-  // freezing at the cancel instant.
+  // Items already claimed are past their liveness check and keep writing after
+  // this point; each late write recounts, so the numbers converge on what
+  // really ran instead of freezing at the cancel instant.
   await recountEvalRunProgress({ run });
 
   return mapEvalRun(await reloadEvalRun(run as EvalRunRow));

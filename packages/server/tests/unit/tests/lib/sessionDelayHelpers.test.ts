@@ -10,12 +10,9 @@ describe('sessionDelayHelpers', () => {
     });
 
     test('unrefs the debounce timer so it cannot keep the process alive', () => {
-      // The delayed-generation debounce timer is a background side effect. Like
-      // the pollers in scheduler.ts (which call `timer.unref()`), it must not
-      // hold the Node event loop open — otherwise a session scheduled near the
-      // end of a test run leaves an active timer and Jest reports "a worker
-      // process has failed to exit gracefully ... ensure that .unref() was
-      // called on them".
+      // The debounce timer must not hold the event loop open, or a session
+      // scheduled near the end of a run leaves Jest reporting a worker that
+      // failed to exit gracefully.
       const realSetTimeout = global.setTimeout;
       const armed: ReturnType<typeof setTimeout>[] = [];
 

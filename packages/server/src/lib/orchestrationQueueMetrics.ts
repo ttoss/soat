@@ -1,13 +1,6 @@
-// ── Claim-latency ring buffer (queue stats) ────────────────────────────────
-// In-process record of recent claim latencies (time from a task becoming
-// available to being claimed), used by the queue-stats endpoint to report
-// p50/p95 over a rolling window with no external metrics stack (per the PRD's
-// no-new-infrastructure philosophy). Bounded in size so it never grows without
-// limit; entries older than the reporting window are ignored at read time.
-//
-// Driver-agnostic on purpose: every queue driver records into the same ring at
-// claim time, so the stats endpoint reports the same percentiles regardless of
-// which driver is active.
+// Recent claim latencies, so the queue-stats endpoint reports p50/p95 with no
+// external metrics stack. Every driver records into this same ring at claim
+// time, so the percentiles are driver-independent.
 const CLAIM_LATENCY_RING_CAPACITY = 4096;
 
 type ClaimLatencySample = { at: number; latencyMs: number };

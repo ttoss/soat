@@ -214,19 +214,16 @@ const recordClaimLatencies = (args: {
 };
 
 /**
- * Claims up to `limit` due tasks using `SELECT … FOR UPDATE SKIP LOCKED`, then
- * marks the claimable subset claimed (setting the lease and incrementing
- * `attempts`) — all in one transaction so two workers racing the same tick
- * never claim the same task. A task is due when `available_at <= now` and it is
- * either unclaimed or its previous lease has expired (redelivery).
+ * Claims up to `limit` due tasks with `SELECT … FOR UPDATE SKIP LOCKED`, then
+ * marks the claimable subset claimed (setting the lease, incrementing
+ * `attempts`) in one transaction, so two workers racing a tick never claim the
+ * same task. A task is due when `available_at <= now` and it is either
+ * unclaimed or its lease has expired.
  *
  * The claimable subset also honors each run's project `max_concurrent_runs`
- * limit (D8/D9): a task whose project already has that many runs actively
- * driven (holding a claimed, lease-valid task) stays queued until a slot frees.
- * Only actively-driven runs occupy a slot — parked runs hold no task — and a
- * run never blocks on itself.
- *
- * Returns the claimed task rows, freshly reloaded with their new lease.
+ * (D8/D9): a task whose project already has that many runs actively driven
+ * stays queued. Only actively-driven runs occupy a slot — parked runs hold no
+ * task — and a run never blocks on itself.
  */
 export const claimRunTasks = async (args: {
   limit: number;

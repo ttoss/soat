@@ -33,10 +33,9 @@ export const buildMcpToolExecute = (args: {
   mcpHeaders: Record<string, string>;
   mcpToolName: string;
   presetParameters?: object | null;
-  // This call's `tool_context` and the listed tool's own schema — a
-  // `{{context:}}` token in a preset resolves against the first and is retyped
-  // by the second, at call time so a missing key fails this call rather than
-  // the resolution of every tool the agent has (#345).
+  // A `{{context:}}` token in a preset resolves against this call's context and
+  // is retyped by the tool's schema — at call time, so a missing key fails this
+  // call rather than the resolution of every tool the agent has (#345).
   toolContext?: Record<string, string>;
   presetSchema?: unknown;
   logToolCallingError: LogToolCallingError;
@@ -125,16 +124,13 @@ const buildMcpToolEntry = (args: {
 export const resolveMcpTools = async (args: {
   typedTool: {
     mcp: { url: string; headers?: Record<string, string> };
-    // Optional allowlist of MCP tool names to expose. `null`/`undefined`
-    // exposes the entire MCP server surface (default); a set restricts the
-    // model to just those tools — the capability-level primitive that makes a
-    // read-only scope over a read+write MCP server enforceable, not just a
-    // prompt-level suggestion.
+    // Absent exposes the whole MCP surface. A set is the capability-level
+    // primitive that makes a read-only scope over a read+write server
+    // enforceable, not just a prompt-level suggestion.
     actions?: string[] | null;
-    // Optional denylist of MCP tool names to hide. Applied after the allowlist,
-    // and takes precedence over it: a name in both lists is denied. This is the
-    // ergonomic way to scope a read+write server read-only — deny just the write
-    // tools instead of enumerating every read tool in the allowlist.
+    // Applied after, and taking precedence over, the allowlist. The ergonomic
+    // way to scope a read+write server read-only: deny the write tools instead
+    // of enumerating every read tool.
     deniedActions?: string[] | null;
     // Per-tool allowlist of `tool_context` keys that may be forwarded as
     // prefixed context headers. `null`/`undefined` forwards all (#945).
@@ -222,18 +218,11 @@ export const resolveMcpTools = async (args: {
 /**
  * Invokes a SOAT platform action on behalf of a `soat` tool.
  *
- * The action is served **in this process** (`dispatchApiRequest`), not fetched
- * from `http://localhost:$PORT` (#888). Everything the loopback was there to
- * reuse — the route's permission check, strict-field validation, the audit
- * record, request metering, the snake_case response contract — still runs,
- * because the dispatch runs the app's real middleware chain; what is gone is the
- * socket, the JSON round trip, and the requirement that the process be listening
- * on a port at all.
- *
- * `authHeader` therefore keeps its exact former meaning: the credential the
- * action is performed with. A call without one is unauthenticated and is refused
- * by the same middleware that refused it over the wire — sharing a process never
- * implies sharing authority.
+ * Served in-process via `dispatchApiRequest` rather than over loopback (#888):
+ * the app's real middleware chain still runs, so permission checks, validation,
+ * audit, metering and the response contract are unchanged — only the socket is
+ * gone. `authHeader` keeps its meaning; a call without one is refused by the
+ * same middleware, since sharing a process never implies sharing authority.
  */
 export const executeSoatTool = async (args: {
   toolName: string;
@@ -251,11 +240,8 @@ export const executeSoatTool = async (args: {
   }) => Record<string, string>;
   logToolCallingError: LogToolCallingError;
 }) => {
-  // Path *and* query string. This used to be `def.path(...)` alone, which
-  // substitutes path parameters only — so every `in: query` parameter the
-  // action advertises was discarded (#924): a `list-*` call returned everything
-  // the credential could see no matter what was asked for, and a
-  // `preset_parameters` value targeting a query parameter did nothing at all.
+  // Path *and* query string: `def.path(...)` alone substitutes path parameters
+  // only, discarding every `in: query` parameter the action advertises (#924).
   const path = buildSoatActionTarget({ def: args.def, args: args.rawArgs });
   const body = buildSoatRequestBody({
     def: args.def,

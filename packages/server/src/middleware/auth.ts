@@ -180,15 +180,12 @@ const resolveProjectKey = async (ctx: Context, rawKey: string) => {
  * *names the key* everywhere attribution is derived — task history, audit
  * entries, the principal an automation chain inherits (#887). The claim already
  * decided the run's authorization boundary in `resolveScopedBoundaryDocs`; this
- * makes the identity match the authority, rather than reporting the owning user
- * and losing which of that user's keys acted.
+ * makes the identity match the authority.
  *
- * Deliberately *only* `apiKeyPublicId`, never the `apiKeyProject*` pair. Those
- * two drive write-project defaulting and scope enforcement, and a run token's
- * project already travels as `oauthProjectPublicId` — every reader of the pair
- * (`assertCredentialProjectScope`, `resolveWriteProjectId`) falls back to it, so
- * setting them would change nothing except by introducing a second source of
- * truth for the same project.
+ * Deliberately *only* `apiKeyPublicId`, never the `apiKeyProject*` pair: those
+ * drive write-project defaulting and scope enforcement, and a run token's
+ * project already travels as `oauthProjectPublicId`, which every reader of the
+ * pair falls back to — so setting them would only add a second source of truth.
  */
 const buildScopedIdentityFields = (args: {
   scopedProjectPublicId?: string;
@@ -282,10 +279,8 @@ const resolveJwt = async (ctx: Context, token: string) => {
   const runApiKeyPublicId =
     typeof payload.key === 'string' ? payload.key : undefined;
 
-  // OAuth access tokens, trigger run-as tokens and orchestration run-as tokens
-  // are all project-scoped credentials: they intersect the owning user's
-  // policies with a boundary through the same evaluator used for API keys,
-  // hard-confined to the project.
+  // All project-scoped credentials: they intersect the owning user's policies
+  // with a boundary through the same evaluator API keys use.
   const boundaryPolicyDocs = await resolveScopedBoundaryDocs({
     scopedProjectPublicId,
     triggerPublicId: isTriggerToken ? payload.trg : undefined,

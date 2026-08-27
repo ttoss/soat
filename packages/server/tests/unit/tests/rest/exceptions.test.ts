@@ -10,12 +10,9 @@ import {
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
-// The Exceptions module (G3 Phase 3). Items have no public create endpoint —
-// they are auto-filed by producers (run failures, guardrail tripwires, expired
-// approvals) or filed explicitly (`manual`). Lifecycle/dedup/severity are
-// exercised via the `fileException` lib (the only way to create one; there is
-// no create route); the producer paths are driven end-to-end through the run
-// and approval entry points.
+// No public create endpoint — items are auto-filed by producers or filed
+// `manual`. Lifecycle and dedup go through `fileException`, the only way to
+// create one; the producers are driven end-to-end through their entry points.
 
 describe('Exceptions', () => {
   let adminToken: string;
@@ -208,11 +205,10 @@ describe('Exceptions', () => {
       ).toBe(403);
     });
 
-    // Regression: exceptionSrn() built the item SRN from `exception.projectId`,
-    // but the mapper's wire field is `project_id` — the SRN resource resolved
-    // to `srn:undefined:exception:<id>` and never matched an SRN-scoped
-    // policy. An action-only policy (like the rest of this describe block)
-    // never exercises the resource-matching path, so it slipped through.
+    // `exceptionSrn()` read `projectId` from a mapper whose field is
+    // `project_id`, so the SRN resolved to `srn:undefined:...` and never
+    // matched an SRN-scoped policy. An action-only policy never exercises
+    // resource matching, which is how it slipped through.
     test('a user with an SRN-scoped (not action-only) policy can get the item', async () => {
       const scopedUserRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/users')
@@ -374,12 +370,10 @@ describe('Exceptions', () => {
     });
   });
 
-  // The producers are fire-and-forget off the event bus, so their branches were
-  // only ever covered incidentally by other tests' async handlers landing in
-  // time — which made src/lib/exceptions.ts coverage flaky and intermittently
-  // failed the CI coverage gate. Drive each producer (and the dedup-race path)
-  // deterministically here: emit the event directly and poll the filed row, so
-  // every branch is exercised regardless of async timing. No production change.
+  // The producers are fire-and-forget off the event bus, so their branches
+  // were covered only incidentally by other tests' handlers landing in time —
+  // flaky enough to intermittently fail the coverage gate. Emitting directly
+  // and polling the filed row makes every branch deterministic.
   describe('producer branch coverage (deterministic)', () => {
     const pollException = async (
       predicate: (e: Record<string, unknown>) => boolean

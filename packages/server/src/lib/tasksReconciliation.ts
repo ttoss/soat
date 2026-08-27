@@ -129,9 +129,8 @@ export const claimOrphanedDispatch = async (args: {
   if (!onEnter) return false;
 
   // Classified by the dispatcher's own set, so a recovered run routes down the
-  // branch a live one would have. `awaiting_input` is a success here for the
-  // same reason it is there: it is a resting point the run can be resumed from,
-  // not a failure.
+  // branch a live one would have — `awaiting_input` included, a resting point
+  // rather than a failure.
   const succeeded = !NON_SUCCESS_TERMINAL_STATUSES.has(run.status);
   const dispatch = args.task.activeDispatch as ActiveDispatch;
   const enteredAt = (args.task.enteredStateAt as Date).getTime();

@@ -23,11 +23,9 @@ const fakeFetch = (
   const calls: { url: string; headers: Headers }[] = [];
   const fetchImpl: FetchLike = (url, init) => {
     calls.push({ url, headers: new Headers(init?.headers) });
-    // Keyed by the *whole* URL, not by origin: an origin-keyed fake answers
-    // every path under a host, so an enumerator asking for a route the
-    // provider does not serve still passes. That is how #1080 shipped — the
-    // vertex listing built a project-scoped path Google answers with an HTML
-    // 404, and three tests went green against it.
+    // Keyed by the whole URL, not the origin: an origin-keyed fake answers every
+    // path under a host, so a request for a route the provider does not serve
+    // still passes. That is how #1080 shipped past three green tests.
     const response = responses[url];
     if (!response) {
       return Promise.reject(new Error(`unexpected request to ${url}`));
@@ -252,13 +250,10 @@ describe('enumerateProviderModels — vertex', () => {
       fetchImpl,
     });
 
-    // `publisherModels.list` is rooted at `publishers/*` — it is *not*
-    // project-scoped the way generation's `baseURL` is. Google answers the
-    // project-scoped path with a generic HTML 404 (#1080), so the path is
-    // pinned here rather than left to the fake's matching — query string
-    // included, because `launchStage` is only populated under the FULL view
-    // and a fake that ignores the query cannot tell the two views apart
-    // (#1089).
+    // Rooted at `publishers/*`, not project-scoped like generation's `baseURL`
+    // — Google answers that path with a generic HTML 404 (#1080). The query
+    // string is pinned too: `launchStage` only appears under the FULL view, and
+    // a fake ignoring the query cannot tell the views apart (#1089).
     expect(calls[0].url).toBe(
       'https://us-central1-aiplatform.googleapis.com/v1beta1/publishers/google/models?view=PUBLISHER_MODEL_VIEW_FULL'
     );
@@ -374,12 +369,9 @@ describe('enumerateProviderModels — vertex', () => {
       fetchImpl,
     });
 
-    // `global` is not a region, so it takes no `<location>-` host prefix:
-    // `global-aiplatform.googleapis.com` does not resolve to an endpoint and
-    // answers the same generic HTML 404 that #1080 chased, while the
-    // unprefixed host answers for real (#1087). This is not a corner case —
-    // several current Gemini models are served at `global` and 404 in a
-    // region, so it is the location those providers must be configured with.
+    // `global` is not a region and takes no `<location>-` host prefix — the
+    // prefixed host is a non-endpoint 404 (#1087). Not a corner case: several
+    // current Gemini models are served only at `global`.
     expect(calls[0].url).toBe(VERTEX_GLOBAL_LIST_URL);
     expect(models).toEqual([
       { id: 'gemini-3.5-flash', vendor: 'google', lifecycle: 'active' },
@@ -409,11 +401,9 @@ describe('enumerateProviderModels — vertex', () => {
       fetchImpl,
     });
 
-    // `eu` and `us` are data-residency multi-regions, not regions, and they
-    // take a third host shape again — `eu-aiplatform.googleapis.com` is the
-    // same non-endpoint 404 as `global-`. Verified with the unauthenticated
-    // probe from #1080: a real endpoint answers `401 UNAUTHENTICATED`, a
-    // non-endpoint answers Google's generic HTML 404.
+    // Data-residency multi-regions take a third host shape again. Verified by
+    // probe: a real endpoint answers `401 UNAUTHENTICATED`, a non-endpoint
+    // answers Google's generic HTML 404.
     expect(calls[0].url).toBe(VERTEX_EU_LIST_URL);
   });
 
@@ -766,11 +756,9 @@ describe('enumerateProviderModels — listing honors the linked secret (#1044)',
   });
 
   test('vertex still refuses to list when no project can be resolved at all', async () => {
-    // The project stopped reaching the listing URL with #1080, so the test
-    // above can no longer read it back out of `calls[0].url`. This is the
-    // other half of that guard: strip `project_id` from the same key file and
-    // the record is refused, which is what proves the field above was the
-    // thing being resolved rather than an ignored input.
+    // `project` no longer reaches the listing URL (#1080), so it cannot be read
+    // back out of the request. Refusing the record without it is what proves the
+    // field is resolved rather than ignored.
     await expect(
       enumerateProviderModels({
         provider: 'vertex',

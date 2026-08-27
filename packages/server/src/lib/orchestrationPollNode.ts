@@ -6,10 +6,9 @@ import type { NodeExecutionResult } from './orchestrationNodeTypes';
 import type { OrchestrationNode } from './orchestrations';
 import { callTool } from './tools';
 
-// Poll node safety bounds. `maxIterations` caps the number of attempts. There
-// is no longer a wall-clock ceiling: each attempt runs in its own scheduled
-// resumption rather than inside a single held-open HTTP request, so the only
-// bound that matters is the attempt cap.
+// No wall-clock ceiling: each attempt runs in its own scheduled resumption
+// rather than a single held-open request, so the attempt cap is the only bound
+// that matters.
 const DEFAULT_POLL_ATTEMPTS = 10;
 const MAX_POLL_ATTEMPTS = 1000;
 
@@ -36,20 +35,14 @@ const assertPollNode = (
 };
 
 /**
- * Executes a single poll attempt. Calls `toolId` (with `inputMapping` resolved
- * against state), then evaluates `exitCondition` against an augmented context —
- * `{ ...state, response, attempt }` — where `response` is the latest tool
- * result and `attempt` is the 1-based count. Returns:
+ * Executes a single poll attempt: calls `toolId` with `inputMapping` resolved
+ * against state, then evaluates `exitCondition` against
+ * `{ ...state, response, attempt }`. Returns an `artifact` when the condition
+ * is met, an `artifact` with `timedOut: true` at the attempt cap (or throws
+ * when `failOnTimeout`), or a `wait` while attempts remain.
  *
- * - an `artifact` result when the condition is met (`conditionMet: true`);
- * - an `artifact` result when the attempt cap is reached without the condition
- *   holding (`conditionMet: false`, `timedOut: true`), or throws when
- *   `failOnTimeout` is set;
- * - a `wait` result when more attempts remain, so the scheduler resumes the
- *   node after `interval` for the next attempt.
- *
- * The wait between attempts is no longer an in-process sleep: it is offloaded
- * to the background scheduler, so a poll never holds an HTTP request open.
+ * The wait between attempts is offloaded to the background scheduler rather
+ * than slept in-process, so a poll never holds an HTTP request open.
  */
 export const executePollNode = async (args: {
   node: OrchestrationNode;

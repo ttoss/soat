@@ -4,16 +4,11 @@ import { resolveDocumentSearch } from 'src/lib/knowledge';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
-// Regression: a `document_paths` / `document_ids` filter joins `File` (nested
-// two levels below the `DocumentChunk` query root) and applies a `limit`. When
-// Sequelize builds the query with its default `subQuery: true`, the LIMIT is
-// applied to the chunk rows *before* the join filter, so in a project holding
-// more matching-by-distance chunks than the limit, the single path-matched
-// document is ranked past the window and dropped — the search returns zero
-// even though the exact path exists. The REST/constant-embedding tests can't
-// surface this because every chunk shares one vector (all distances equal);
-// here we hand-place a far-away embedding on the target so a real vector sort
-// pushes it to the end, reproducing the drop deterministically.
+// With Sequelize's default `subQuery: true`, the LIMIT applies to chunk rows
+// before the join filter — so a path-matched document ranked past the window is
+// dropped and the search returns zero despite the path existing. The
+// constant-embedding tests cannot surface this (all distances equal), so the
+// target gets a far-away embedding to push it to the end deterministically.
 describe('resolveDocumentSearch — nested path filter with a limit', () => {
   let adminToken: string;
   let projectId: string;
@@ -90,14 +85,10 @@ describe('resolveDocumentSearch — nested path filter with a limit', () => {
   });
 });
 
-// A `$`-prefixed policyWhere key (e.g. `$file.path$`, produced by the policy
-// compiler for the `document` resourceType) requires `subQuery: false` on
-// the underlying Sequelize query. It also has to be rewritten from
-// `$file.<col>$` to `$document.file.<col>$` before reaching `DocumentChunk`
-// queries, since `file` is nested one level deeper there than on the
-// `Document` model that the alias was designed for — no existing REST-level
-// test exercises a path-scoped policy against knowledge search, so both the
-// search and no-search branches are exercised directly here.
+// A `$`-prefixed policyWhere key needs `subQuery: false`, and must be rewritten
+// to `$document.file.<col>$` for `DocumentChunk` queries, where `file` sits a
+// level deeper than on the `Document` model the alias was designed for. No
+// REST-level test exercises a path-scoped policy against knowledge search.
 describe('resolveDocumentSearch — policyWhere with a $-prefixed key', () => {
   let adminToken: string;
   let projectId: string;

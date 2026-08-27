@@ -28,12 +28,8 @@ const writeToState = (
 ): void => {
   const normalizedPath = path.startsWith('state.') ? path : `state.${path}`;
   const fieldName = normalizedPath.slice('state.'.length);
-  // A dotted target (`state.proposed.action_id`) must build a nested object so
-  // it can later be read back with `{ "var": "proposed.action_id" }` — the
-  // JSON-Logic `var` reader descends dot-paths. Writing the whole dotted string
-  // as a single flat key (the previous behavior) left `{ "var": "a.b" }`
-  // resolving to null, since `var` looks for `state.a.b`, not `state["a.b"]`.
-  // The nested read path (`resolveLoopCollection`) already assumed this shape.
+  // A dotted target must build a nested object: JSON-Logic's `var` descends
+  // dot-paths, so a flat `state["a.b"]` key reads back as null.
   const segments = fieldName.split('.');
   let cursor = state;
   for (let i = 0; i < segments.length - 1; i += 1) {
@@ -68,11 +64,9 @@ export const applyStateMapping = (
   if (!stateMapping) return;
   const context = { output: artifact, state };
   for (const [statePath, expr] of Object.entries(stateMapping)) {
-    // Clone before writing: the evaluator returns references, so an
-    // expression like { "var": "state" } (or { "var": "" }) resolves to the
-    // live state object — writing it back uncloned would nest state inside
-    // itself and crash JSON serialization at the next checkpoint/response.
-    // Same hazard writeNodeArtifact guards against for the nodes namespace.
+    // The evaluator returns references, so `{ "var": "state" }` resolves to
+    // the live object — writing it back uncloned nests state inside itself and
+    // crashes serialization at the next checkpoint.
     writeToState(
       statePath,
       structuredClone(evaluateLogic(expr, context)),
@@ -144,16 +138,12 @@ export const executeAgentNode = async (args: {
   projectIds: number[];
   traceId: string | null;
   authHeader?: string;
-  // Orchestration attribution: the public run id that owns this node execution
-  // and the trigger firing (if any) that started the run. Both are stamped onto
-  // the generation's usage event so spend rolls up per run, per node, and per
-  // trigger.
+  // Stamped onto the generation's usage event so spend rolls up per run, per
+  // node and per trigger.
   runPublicId?: string;
   triggerId?: string;
-  // This node's 1-based retry attempt. Stamped on the generation next to the run
-  // and node so a retried node's generations are told apart — the node execution
-  // row stores no generation id, so this is what makes the run → generation
-  // lookup exact rather than a guess from timestamps.
+  // The node execution row stores no generation id, so this is what tells a
+  // retried node's generations apart without guessing from timestamps.
   nodeAttempt?: number;
   // The run's `tool_context`, forwarded to this generation so the agent's
   // `http`/`mcp`/`soat` tool calls carry the caller's context headers (#945).
@@ -220,11 +210,9 @@ export const executeToolNode = async (args: {
   // The run's public id — threaded into the guardrail evaluation identity so a
   // guard can read `runtime.run.*`.
   orchestrationRunId?: string | null;
-  // Set when re-dispatching after a class-C approval: the frozen (or edited)
-  // arguments the human approved. Their presence bypasses the guardrail gate
-  // entirely (the call was already adjudicated) and skips input mapping — the
-  // approved args ARE the tool input. Re-evaluating here would re-route to
-  // approval and loop forever (Q4: skip re-eval on resume).
+  // The arguments a human approved. Their presence bypasses the guardrail gate
+  // and input mapping — the call was already adjudicated, and re-evaluating
+  // would re-route to approval and loop forever.
   approvedArguments?: Record<string, unknown> | null;
   // The run's `tool_context`, forwarded to the tool call so a `{{context:}}`
   // header or preset on the tool resolves from the run's own bag — the same
@@ -238,10 +226,8 @@ export const executeToolNode = async (args: {
   const inputs =
     args.approvedArguments ?? applyInputMapping(node.inputMapping, state);
 
-  // Guardrail interception (G4): classify the call at project + tool scope and
-  // enact the strictest decision before dispatch (a zero-overhead passthrough
-  // when no guardrail applies). Skipped entirely on an approved re-dispatch —
-  // the call was already adjudicated at approval time (Q4).
+  // Classify at project + tool scope and enact the strictest decision before
+  // dispatch. Skipped on an approved re-dispatch, already adjudicated.
   const scopeProjectId = args.projectId ?? projectIds[0];
   const gated: ToolNodeGateResult =
     args.approvedArguments != null || scopeProjectId === undefined
@@ -270,12 +256,9 @@ export const executeToolNode = async (args: {
       ? (result as Record<string, unknown>)
       : { result };
 
-  // Activity feed (G3 Phase 4): record the successful execution. This is the
-  // run-scoped call site — a tool node has no agent in scope, so it attributes
-  // to the run and node. Agent-generation-time tool calls are recorded by the
-  // resolver instead (`recordToolActivity`), which this path deliberately does
-  // not opt into: it threads no `ActivityCallContext`, so no call is recorded
-  // twice. Fire-and-forget so a recording failure never affects the run.
+  // The run-scoped call site: a tool node has no agent in scope. Threading no
+  // `ActivityCallContext` is what keeps the resolver's own `recordToolActivity`
+  // from recording the same call twice. Fire-and-forget.
   if (scopeProjectId !== undefined) {
     void emitActivityEntry({
       projectId: scopeProjectId,

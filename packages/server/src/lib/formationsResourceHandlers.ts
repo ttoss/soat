@@ -5,11 +5,9 @@ import type {
   UpdateOutcome,
 } from './formationsTypes';
 
-// The write half of the module-dispatch seam (the read half is
-// `runFormationModuleHooks` in `formationsValidation.ts`). The apply and plan
-// pipelines already normalize upstream; normalizing again here — it is
-// idempotent — is what makes the guarantee hold for any caller of these entry
-// points, so no module has to remember (#901).
+// The write half of the module-dispatch seam. The pipelines already normalize
+// upstream; normalizing again here is idempotent and makes the guarantee hold
+// for any caller, so no module has to remember (#901).
 
 // ── Public API ────────────────────────────────────────────────────────────
 

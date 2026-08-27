@@ -47,10 +47,8 @@ import {
 } from './textEncodedToolCall';
 import { serializeSteps } from './traces';
 
-// Bounds the server-side auto-resume loop for the "every pending client call was
-// gated" case: a model that re-proposes a blocked/tripped client tool every turn
-// would otherwise resume forever. Past the cap the generation completes with the
-// last turn as its terminal state.
+// Bounds the auto-resume loop: a model re-proposing a blocked client tool every
+// turn would otherwise resume forever.
 const MAX_CLIENT_GATE_RESUMES = 12;
 
 const log = createDebug('soat:generation');
@@ -365,11 +363,10 @@ export const runNonStreamGeneration = async (args: {
     if (Object.keys(args.resolvedTools).length === 0) {
       throw error;
     }
-    // The fallback exists for a provider that chokes on our *tool definitions*.
-    // A schema violation is the model's output, not the tool surface: retrying
-    // without tools would burn a second call to hit the same schema, and worse,
-    // it could succeed — completing an answer the agent was required to use a
-    // tool to reach (exactly the reviewer that never read its source).
+    // The fallback is for a provider that chokes on our tool *definitions*. A
+    // schema violation is the model's output, so retrying without tools would
+    // burn a call to hit the same schema — or worse, succeed, answering without
+    // the tool the agent was required to use.
     if (
       error instanceof DomainError &&
       error.code === 'OUTPUT_SCHEMA_VALIDATION_FAILED'
@@ -441,10 +438,9 @@ const completeContinuation = async (args: {
   pending: PendingGeneration;
   result: AgentRunResult;
 }): Promise<GenerationResult> => {
-  // Same guard as the initial turn: a continuation ends on model text too, and
-  // a call written out as text is no more an answer here than there. Failing
-  // before `fireCompletionSideEffects` is what keeps the generation off
-  // `completed`; the trace is written by the failure path instead.
+  // A continuation ends on model text too, so a call written out as text is no
+  // more an answer here than on the initial turn. Failing before
+  // `fireCompletionSideEffects` is what keeps the generation off `completed`.
   const textEncodedToolCall = args.pending.agentConfig.outputSchema
     ? null
     : findTextEncodedToolCall({

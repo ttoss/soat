@@ -1,16 +1,11 @@
-// Tests for command-boundary detection in tests/tutorials-tests.sh.
+// Command-boundary detection in tests/tutorials-tests.sh.
 //
-// The runner joins a multi-line command by tracking whether it is still inside
-// an unclosed single-quoted string — a real need, since tutorials pass JSON to
-// `--knowledge-config '{...}'` across several lines. The check used to count
-// every `'` in the accumulated text, which cannot tell a quote from an
-// apostrophe: one `Alice's` inside a double-quoted argument made the count odd,
-// so the runner swallowed every following line and died on `unexpected EOF`
-// several steps later, naming a command that had already run fine.
+// The runner joins multi-line commands by tracking unclosed single quotes. The
+// check used to count every `'`, which cannot tell a quote from an apostrophe —
+// one `Alice's` made the count odd, so the runner swallowed every later line and
+// died on `unexpected EOF` naming a command that had already run fine.
 //
-// The runner is driven against throwaway tutorial markdown files, so no server
-// or LLM is involved — the commands under test are plain shell.
-//
+// Driven against throwaway markdown, so no server or LLM is involved.
 // Run: pnpm run test:harness
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -151,12 +146,10 @@ describe('command boundaries and quoting', () => {
   });
 
   test('an apostrophe followed by a multi-line filter keeps both intact', async () => {
-    // The two shapes above, interleaved — which is what `memories-agent.md`
-    // actually contained when #1046 fired. Neither alone reproduces it: the
-    // apostrophe leaves the old counter odd, and the *opening* quote of the
-    // following two-line filter brings it back to even, so the runner flushed
-    // a blob whose single quote was still open and bash reported
-    // `unexpected EOF` from a command several steps earlier.
+    // The two shapes interleaved, as `memories-agent.md` had them when #1046
+    // fired. Neither alone reproduces it: the apostrophe leaves the old counter
+    // odd and the next opening quote brings it back to even, so the runner
+    // flushed a blob whose quote was still open.
     const file = await writeTutorial(
       'apostrophe-then-multiline',
       [

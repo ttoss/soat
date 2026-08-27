@@ -4,12 +4,9 @@ import * as toolsModule from 'src/lib/tools';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient } from '../../testClient';
 
-// Guardrail interception on the orchestration `tool` node dispatch path (G4).
-// The interceptor was previously wired only into agent tool-dispatch; a tool
-// node executed `callTool` directly with no classification. These tests drive
-// the gate through the run entry point: a class-D guardrail must block the
-// call (routable `blocked` outcome, edges can branch on it) without ever
-// reaching the tool, and a passing/absent guardrail must let it execute.
+// The interceptor was once wired only into agent tool-dispatch, so a tool node
+// called `callTool` directly with no classification. Driven through the run
+// entry point: a class-D guardrail must block without reaching the tool.
 
 describe('Orchestration tool-node guardrails', () => {
   let userToken: string;
@@ -374,11 +371,9 @@ describe('Orchestration tool-node guardrails', () => {
       expect(Math.abs(windowSeconds - EXPIRES_IN)).toBeLessThan(120);
     });
 
-    // Regression: a class-C-approved tool node whose re-dispatch THROWS (e.g. the
-    // tool target returns a non-2xx) must fail the run — not leave it hung in
-    // `awaiting_input`. The re-dispatch runs inside the approvals resume callback,
-    // which swallows handler errors, so before the resume-path guard the run
-    // stayed `awaiting_input` forever with the error lost. Found in live E2E QA.
+    // The re-dispatch runs inside the approvals resume callback, which swallows
+    // handler errors — so a throwing re-dispatch left the run hung in
+    // `awaiting_input` forever with the error lost.
     test('a failing tool re-dispatch on approval fails the run instead of hanging', async () => {
       const orchestrationId = await buildApprovalPipeline();
       // Force the approved re-dispatch to throw, exactly as a real HTTP 4xx/5xx

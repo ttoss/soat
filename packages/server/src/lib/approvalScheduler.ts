@@ -1,8 +1,6 @@
-// Side-effect imports: register the producer resume handlers so an item this
-// sweeper expires still resumes its producer — a scheduler-only process must
-// register them too, not only the REST router. The tool-call producer fires its
-// continuation; the task-transition producer clears the gate and records the
-// expiry in the task's history.
+// Side-effect imports registering the producer resume handlers, so an item this
+// sweeper expires still resumes its producer — a scheduler-only process needs
+// them registered too, not just the REST router.
 import 'src/lib/agentToolApprovalContinuation';
 import 'src/lib/tasksApprovalGate';
 

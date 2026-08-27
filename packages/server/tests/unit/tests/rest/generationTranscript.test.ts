@@ -338,11 +338,9 @@ describe('GET /api/v1/generations/:generation_id/transcript', () => {
   });
 
   test('returns a 200 skeleton carrying the purging principal', async () => {
-    // A generation purge clears the generation's columns but leaves the trace's
-    // steps file alone (that is `DELETE /traces/{id}/content`). The turn's
-    // answer lives in both, so the transcript must not project the file back —
-    // serving erased content in a response that reports it as erased is exactly
-    // the gap #835/#836 closed.
+    // A generation purge leaves the trace's steps file alone, and the turn's
+    // answer lives in both — so the transcript must not project the file back,
+    // serving erased content in a response that reports it erased (#835/#836).
     const generation = await runGeneration({});
 
     const purge = await asUser().delete(

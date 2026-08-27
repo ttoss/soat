@@ -8,22 +8,15 @@ const log = createDebug('soat:evaluations');
  * Clears the copied output of every eval result linking one of these
  * generations.
  *
- * `EvalResult.output` is a **copy** of the generation's final text on another
- * table, so a content purge that stopped at the generation row would not be a
- * purge at all — the same "erased but still readable" gap the trace cascade
- * exists to close (the evaluations module doc — Retention and erasure).
+ * `EvalResult.output` is a copy of the generation's final text on another
+ * table, so a purge that stopped at the generation row would leave content
+ * "erased but still readable" (the evaluations module doc — Retention and
+ * erasure). Only `output` is cleared: scores and the frozen `input`/
+ * `expected_output` are the run's own record, so aggregates stay meaningful.
+ * Datasets are operator-owned fixtures and are never touched.
  *
- * Only `output` is cleared. Scores, `passed`, and the frozen
- * `input`/`expected_output` are the run's own record rather than the
- * generation's content, so run aggregates stay meaningful after an erasure.
- *
- * Datasets sit deliberately on the other side of this line: they are
- * operator-owned fixtures, and purging a generation never deletes or mutates a
- * dataset item — including one curated from it.
- *
- * Lives in its own module so `contentPurge.ts` can reach it without importing
- * the eval run machinery (and, through it, the generation path it is called
- * from).
+ * Its own module so `contentPurge.ts` can reach it without importing the eval
+ * run machinery.
  */
 export const redactEvalResultOutputs = async (args: {
   generationDbIds: number[];

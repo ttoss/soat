@@ -4,12 +4,9 @@ set -e
 SERVER_URL="${SERVER_URL:-http://localhost:50477}"
 BASE_URL="$SERVER_URL"
 
-# Ollama endpoint the AI providers created below point at. In the compose stack
-# this is the tool_choice shim (tests/mocks/ollamaToolChoiceProxy.mjs), which
-# implements the `tool_choice` field Ollama's OpenAI-compatible endpoint drops
-# and forwards everything else to the real Ollama. A provider that pins
-# `base_url` overrides the server's OLLAMA_BASE_URL, so it must be routed here
-# too or the client-tool step goes back to depending on what the model decides.
+# In the compose stack this is the tool_choice shim, not Ollama directly. A
+# provider pinning `base_url` overrides the server's OLLAMA_BASE_URL, so it must
+# be routed here too or the client-tool step depends on what the model decides.
 OLLAMA_URL="${OLLAMA_URL:-http://ollama:11434}"
 
 # ── CLI setup ─────────────────────────────────────────────────────────────────
@@ -340,13 +337,10 @@ expect_cli_error_status 400 create-tool \
 $SOAT_CLI delete-tool --tool-id "$SECRET_REF_TOOL_ID"
 echo "Secret reference coverage: OK"
 
-# Context references ({{context:...}}) in tool headers: accepted in `headers`,
-# echoed back verbatim, and rejected outside `headers`. Calling such a tool
-# through `/tools/{id}/call` — a path that carries no tool_context — must fail
-# closed rather than put the literal token on the wire as a credential.
-# Resolution against a real tool_context is covered by the server suite against a
-# local echo server, which can assert the received header; there is no
-# deterministic agent turn here that would call an http tool.
+# Context references are accepted in `headers`, echoed verbatim, and rejected
+# elsewhere. Through `/tools/{id}/call`, which carries no tool_context, the call
+# must fail closed rather than put the literal token on the wire. Resolution
+# against a real context is covered by the server suite's echo server.
 CONTEXT_REF_TOKEN="Bearer {{context:ocaToken}}"
 CONTEXT_REF_TOOL_RESP=$($SOAT_CLI create-tool \
   --project-id "$PROJECT_PUBLIC_ID" \
@@ -382,11 +376,9 @@ expect_cli_error_status 400 create-tool \
 $SOAT_CLI delete-tool --tool-id "$CONTEXT_REF_TOOL_ID"
 echo "Context reference coverage: OK"
 
-# Per-tool context_keys allowlist: accepted on create, echoed back verbatim,
-# narrowable and clearable via update, and rejected when an entry could never be
-# a tool_context key. Which keys actually reach the wire is asserted in the
-# server suite against a local echo server, the only place the received headers
-# are observable.
+# The allowlist is accepted on create, echoed verbatim, narrowable and clearable,
+# and rejected for an entry that could never be a key. Which keys reach the wire
+# is asserted in the server suite, the only place headers are observable.
 CTX_KEYS_TOOL_RESP=$($SOAT_CLI create-tool \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name smoke-context-keys-tool \
@@ -425,11 +417,9 @@ expect_cli_error_status 400 create-tool \
 $SOAT_CLI delete-tool --tool-id "$CTX_KEYS_TOOL_ID"
 echo "Context keys allowlist coverage: OK"
 
-# execute.auth computed credentials: an aws_sigv4 config is accepted and its
-# credential fields are echoed back as {{secret:...}} references, never
-# resolved. Malformed configs must fail at create time, not at first call.
-# The signed request itself is covered by the server suite against a local echo
-# server — there are no cloud credentials in the smoke stack to call for real.
+# An aws_sigv4 config is accepted with its credentials echoed back as references,
+# never resolved, and a malformed one fails at create time rather than first
+# call. The signed request itself is covered by the server suite.
 SIGV4_AUTH_JSON="{\"type\":\"aws_sigv4\",\"region\":\"us-east-1\",\"service\":\"s3\",\"access_key_id\":\"AKIASMOKEEXAMPLE\",\"secret_access_key\":\"{{secret:$SECRET_ID}}\"}"
 SIGV4_TOOL_RESP=$($SOAT_CLI create-tool \
   --project-id "$PROJECT_PUBLIC_ID" \
@@ -941,15 +931,12 @@ if [ "$REINGEST_STATUS" != "ready" ]; then
 fi
 echo "Re-ingest: OK"
 
-# 12f. Both of the above again with an UNSCOPED api-key (issue #801).
+# 12f. Both of the above again with an UNSCOPED api-key (#801).
 #
-# Every step so far runs as $TOKEN, a login JWT — and a JWT is exempt from
-# request attribution, so it never exercises the deferred-attribution path that
-# an unscoped key takes. That is precisely why #801 (get-document-status and
-# reingest-document returning 500 for any unscoped key) reached production with
-# both routes already covered above. An unscoped key is the shape a platform
-# integration uses for its shared service credential, so it is worth a pass of
-# its own on any route that derives its project from a parent resource.
+# Every step so far runs as a login JWT, which is exempt from request
+# attribution and so never exercises the deferred path an unscoped key takes —
+# which is how #801 reached production with both routes already covered. Worth a
+# pass of its own on any route deriving its project from a parent resource.
 echo "--- Re-checking document status/re-ingest with an unscoped api-key ---"
 DOC_UNSCOPED_KEY_RESP=$($SOAT_CLI create-api-key --name smoke-docs-unscoped-key)
 DOC_UNSCOPED_KEY_ID=$(printf '%s\n' "$DOC_UNSCOPED_KEY_RESP" | jq -r '.id')
@@ -1071,12 +1058,10 @@ $SOAT_CLI delete-tool --tool-id "$CONVERTER_TOOL_ID"
 $SOAT_CLI delete-tool --tool-id "$CONVERTER_HTTP_TOOL_ID"
 echo "Ingestion rule resources cleaned up."
 
-# 12h. Async conversion — a converter deferring with { status: "pending" }
-# leaves the document `processing` instead of failing, and the new
-# ingestion-callback endpoint is live (a bad token is rejected with 401).
-# The pipeline's fixed `output` always returns the deferral, regardless of
-# the wrapped http call's real response (same deterministic-stub pattern as
-# the sync converter above) — no external provider needed.
+# 12h. A converter deferring with { status: "pending" } leaves the document
+# `processing` rather than failing, and the ingestion-callback endpoint is live.
+# The pipeline's fixed `output` always returns the deferral, so no external
+# provider is needed.
 echo "--- Creating an async (pending) converter tool chain ---"
 ASYNC_HTTP_TOOL_RESP=$($SOAT_CLI create-tool \
   --project-id "$PROJECT_PUBLIC_ID" \
@@ -1595,11 +1580,9 @@ echo "Completed run: OK"
 # An async run (no --wait) therefore only reaches `succeeded` if that separate
 # process claimed the task and drove the run.
 echo "--- Async run drained by the standalone worker fleet ---"
-# `--tool-context` rides along here rather than in its own run: the worker path
-# is the one that proves the bag lives on the run row, since the process that
-# drives it has no request to read it from.
-# `--metadata` rides along for the same reason: the caller's attribution label
-# has to come back off the run row, not out of the request that started it.
+# `--tool-context` and `--metadata` ride along here rather than in their own run:
+# the worker path is what proves both live on the run row, since the process
+# driving it has no request to read them from.
 ORCH_ASYNC_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
   --orchestration-id "$ORCH_ID" \
   --tool-context '{"ocaToken":"smoke-run-token"}' \
@@ -1823,11 +1806,9 @@ if ! printf '%s\n' "$ORCH_RUN_RECEIPT" | jq -e --argjson nodes "$ORCH_RUN_NODE_I
 fi
 echo "Per-node receipt attribution: OK"
 
-# Nested run attribution: a `sub_orchestration` child is its own run, so the
-# parent's `usage` spans the subtree and `usage_own` covers the parent's own
-# nodes. Transform-only on both sides — this asserts the wiring (the link, the
-# two filters, both roll-ups), not the arithmetic, which the unit suite pins
-# numerically.
+# A `sub_orchestration` child is its own run, so `usage` spans the subtree and
+# `usage_own` covers the parent's nodes. Transform-only: this asserts the wiring,
+# not the arithmetic, which the unit suite pins numerically.
 NESTED_CHILD_ORCH=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name "smoke-orchestration-nested-child" \
@@ -2324,12 +2305,10 @@ TOOL_RESP=$($SOAT_CLI create-tool \
 TOOL_ID=$(printf '%s\n' "$TOOL_RESP" | jq -r '.id')
 echo "Agent Tool id: $TOOL_ID"
 
-# 19b. Create a pipeline tool that chains the list-projects HTTP tool twice and
-# maps both step outputs. Exercises deterministic multi-step execution and JSON
-# Logic output mapping over { input, steps } as a single callable unit. Step
-# `b`'s input and the pipeline `output` both nest a `var` marker inside a plain
-# object (e.g. `note.wrapped`, `echoed.container`) to exercise recursive JSON
-# Logic resolution at any depth, not just at the top level (see issue #321).
+# 19b. A pipeline chaining one HTTP tool twice and mapping both step outputs.
+# Step `b`'s input and the pipeline `output` nest a `var` marker inside a plain
+# object, to exercise recursive JSON Logic resolution at depth, not just at the
+# top level (#321).
 echo "--- Creating pipeline tool ---"
 PIPELINE_TOOL_RESP=$($SOAT_CLI create-tool \
   --project_id "$PROJECT_PUBLIC_ID" \
@@ -2555,24 +2534,16 @@ fi
 echo "Generation metadata round-trip: OK"
 
 # 22a3. output_schema is enforced on the way back, not just sent to the provider.
-# A generation that *completes* here means enforcement is off, which is invisible
-# from every other assertion in this suite.
+# A generation that completes here means enforcement is off.
 #
-# The schema contradicts itself on purpose: `enum` admits only "ok", which can
-# never match `pattern` "^zzz$". That makes the violation deterministic without
-# pinning model behavior — whichever way the provider treats the schema, the
-# value violates it. If the grammar honors `enum` the value is exactly "ok"; if
-# the provider ignores the schema entirely, free-form prose does not match
-# "^zzz$" either. Both branches fail validation, so nothing here depends on the
-# sandbox model choosing to misbehave.
+# The schema contradicts itself deliberately: `enum` admits only "ok", which can
+# never match `pattern` "^zzz$". Whichever way the provider treats the schema the
+# value violates it, so nothing depends on the model misbehaving.
 #
-# Do NOT express this as a large `minLength` instead. The schema is handed to the
-# provider as a generation constraint, so an unsatisfiable one is unsatisfiable
-# for the generator too: llama.cpp's JSON-schema-to-grammar implements
-# `minLength` by repeating its character rule, and `minLength: 5000` expanded the
-# grammar until the Ollama model runner segfaulted — the request then failed as
-# AI_PROVIDER_ERROR before validation ever ran, testing nothing. Keep any
-# violated keyword cheap to compile.
+# Do NOT use a large `minLength` instead: the schema is a generation constraint
+# too, and llama.cpp compiles `minLength` by repeating its character rule —
+# `minLength: 5000` expanded the grammar until the model runner segfaulted, so
+# the request failed before validation ran. Keep any violated keyword cheap.
 echo "--- Verifying output_schema enforcement ---"
 SCHEMA_AGENT_RESP=$($SOAT_CLI create-agent \
   --project_id "$PROJECT_PUBLIC_ID" \
@@ -2999,12 +2970,10 @@ $SOAT_CLI delete-tool --tool-id "$GATED_TOOL_ID" >/dev/null 2>&1 || true
 $SOAT_CLI delete-guardrail --guardrail-id "$GATED_GUARDRAIL_ID" >/dev/null 2>&1 || true
 echo "Guardrail-gated flow cleanup: OK"
 
-# 22h. Agent-generation tool call: activity recording + the activity-rate guard
-# context. A class-B guardrail whose guard reads `runtime.activity.actions_24h`
-# against a very high ceiling must PASS — which only happens if the key really
-# resolves off the feed. An unresolvable `runtime.*` var fails closed (tripwire), so
-# a tool call that executes here is itself the proof the provider is wired. The
-# executed call must then appear on the feed as `action_executed`.
+# 22h. A class-B guardrail reading `runtime.activity.actions_24h` against a very
+# high ceiling must pass, which happens only if the key resolves off the feed —
+# an unresolvable `runtime.*` var fails closed. So a tool call executing here is
+# itself proof the provider is wired.
 echo "--- Creating activity-recorded tool and rate-guarded agent ---"
 ACT_TOOL_RESP=$($SOAT_CLI create-tool \
   --project_id "$PROJECT_PUBLIC_ID" \
@@ -3085,16 +3054,11 @@ echo "Agent tool deleted."
 
 # 25. Create an MCP agent tool pointing at the SOAT MCP server
 echo "--- Creating MCP agent tool ---"
-# Scoped to the one action the agent below is asked to call. Unscoped, this tool
-# puts the entire SOAT MCP surface — every tool schema the server exposes — into
-# the agent's prompt, and prefilling that on a CPU-only runner made this the most
-# expensive generation in the suite (~75s, routinely past the 30s timeout below,
-# at which point the step skipped its own assertions). One schema instead of
-# hundreds keeps the assertions enforced rather than warned past.
-#
-# Nothing is lost by scoping: this tool is only ever used by the MCP agent, and
-# whole-surface exposure is still exercised by the `soat-mcp-denylist` tool
-# created further down.
+# Scoped to the one action the agent below calls. Unscoped, this puts every tool
+# schema the server exposes into the prompt, which on a CPU-only runner made this
+# the suite's most expensive generation (~75s, routinely past the timeout below,
+# skipping its own assertions). Whole-surface exposure is still exercised by the
+# `soat-mcp-denylist` tool further down.
 MCP_TOOL_RESP=$($SOAT_CLI create-tool \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name soat-mcp \
@@ -3338,12 +3302,10 @@ if [ -z "$CLIENT_AGENT_ID" ] || [ "$CLIENT_AGENT_ID" = "null" ]; then
 fi
 echo "Client Agent id: $CLIENT_AGENT_ID"
 
-# 33. Start a generation — expect requires_action with a tool call.
-# The agent forces `tool_choice: get_weather`, and the compose stack routes
-# Ollama through tests/mocks/ollamaToolChoiceProxy.mjs, which implements the
-# `tool_choice` field Ollama's OpenAI-compatible endpoint drops. The pause is
-# therefore deterministic — no retry loop, and a failure here is a real
-# regression in the client-tool pause path rather than a model coin flip.
+# 33. Start a generation — expect requires_action with a tool call. The agent
+# forces `tool_choice`, which the compose stack's shim implements, so the pause
+# is deterministic: a failure here is a real regression in the client-tool pause
+# path rather than a model coin flip.
 echo "--- Starting client-tool generation ---"
 CLIENT_GEN_RESP=$($SOAT_CLI create-agent-generation --wait true --agent-id "$CLIENT_AGENT_ID" \
   --messages '[{"role":"user","content":"Call get_weather with cityName Paris and wait for tool output. Do not answer directly."}]' | sanitize_json)
@@ -3514,11 +3476,8 @@ if [ -n "$CLIENT_TRACE_ID" ] && [ "$CLIENT_TRACE_ID" != "null" ]; then
   fi
   echo "Trace grouping: OK (step_count $TRACE_STEPS_BEFORE -> $TRACE_STEPS_AFTER over $GROUPED_GENS_COUNT generations)"
 
-  # A transcript stays scoped to its own turn once the trace holds two of them.
-  # The steps object now holds both turns concatenated, so a transcript that read
-  # the whole object would report the other generation's steps as part of this
-  # one: the first generation's must not grow, and the second must read back only
-  # its own segment.
+  # The steps object holds both turns concatenated, so a transcript reading the
+  # whole object would report the other generation's steps as its own.
   REGROUPED_TRANSCRIPT_STEPS=$($SOAT_CLI get-generation-transcript --generation-id "$FIRST_GENERATION_ID" | sanitize_json | jq -r '.steps | length')
   GROUPED_TRANSCRIPT_STEPS=$($SOAT_CLI get-generation-transcript --generation-id "$GROUPED_GEN_ID" | sanitize_json | jq -r '.steps | length')
   if [ "$REGROUPED_TRANSCRIPT_STEPS" != "$TRANSCRIPT_STEPS" ]; then
@@ -3741,12 +3700,10 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
   fi
   echo "Usage aggregate endpoint: OK (project $PROJECT_PUBLIC_ID)"
 
-  # 34b-iii-b. Measured quantities — the token fields describe llm_tokens only,
-  # so a non-token meter must report what it measured via `components`. The
-  # orchestration run earlier in this suite metered compute_execution in this
-  # same project (its run receipt asserted the meter exists), so that bucket has
-  # zero tokens and a positive compute_second quantity. Reporting it as an
-  # all-zero bucket is the regression this guards.
+  # 34b-iii-b. The token fields describe llm_tokens only, so a non-token meter
+  # must report what it measured via `components`. The run earlier in this suite
+  # metered compute in this project, so that bucket has zero tokens and a
+  # positive compute_second — reporting it all-zero is the regression guarded.
   USAGE_QTY_OK=$(printf '%s\n' "$USAGE_AGG_RESP" | jq -r '
     [.groups[] | select(.key == "compute_execution")] as $g
     | ($g | length == 1)
@@ -4051,12 +4008,10 @@ if [ -z "$SOAT_TOOL_ID" ] || [ "$SOAT_TOOL_ID" = "null" ]; then
 fi
 echo "SOAT Agent Tool id: $SOAT_TOOL_ID"
 
-# 37b. A soat action's query string must reach the route (issue #924). The
-# request path used to be built from the path parameters alone, so every
-# `in: query` parameter — `project_id`, filters, pagination — was dropped
-# silently and a `list-*` action always answered with the default page. `limit`
-# is echoed back in the response, so both shapes are directly observable: one
-# supplied by the caller, one baked in with `preset_parameters`.
+# 37b. A soat action's query string must reach the route (#924): the path was
+# once built from path parameters alone, so every `in: query` parameter was
+# dropped and a `list-*` action always answered the default page. `limit` is
+# echoed back, so both a caller-supplied and a preset value are observable.
 echo "--- Calling a soat list action with a query parameter ---"
 SOAT_QUERY_TOOL_RESP=$($SOAT_CLI create-tool \
   --project_id "$PROJECT_PUBLIC_ID" \
@@ -4335,11 +4290,9 @@ echo "Conversation generate: OK (message document_id: $CONVO_GEN_MSG_ID)"
 
 # 48b. Verify the generated message is listed in conversation messages
 echo "--- Verifying generated message persisted ---"
-# Persisted messages echo the model's output. Two hazards, both handled:
-# `sanitize_json` strips raw control bytes the API may embed, and the response is
-# piped with `printf '%s\n'` rather than `echo` — POSIX `echo` expands the `\n`
-# escapes inside JSON string values into real newlines, which is itself what makes
-# jq (strict since 1.7) reject the document.
+# Two hazards in echoing model output: `sanitize_json` strips raw control bytes,
+# and `printf '%s\n'` is used because POSIX `echo` expands `\n` escapes inside
+# JSON strings into real newlines, which jq then rejects.
 CONVO_MSGS_RESP=$($SOAT_CLI list-conversation-messages --conversation-id "$NAMED_CONVO_ID" | sanitize_json)
 MSG_COUNT=$(printf '%s\n' "$CONVO_MSGS_RESP" | jq 'if type=="array" then length else (.data | length) end')
 if [ "$MSG_COUNT" -lt "2" ]; then
@@ -4915,11 +4868,9 @@ $SOAT_CLI delete-formation --formation_id "$QUOTA_FORMATION_ID"
 expect_cli_error_status 404 get-quota --quota-id "$QUOTA_PHYS_ID"
 echo "Formation quota resource verified."
 
-# Custom (operator-registered) resource type — the smoke stack registers
-# `smoke_channel` via FORMATION_RESOURCE_TYPES_CONFIG, whose lifecycle is
-# delegated to the `formation-handler` service. The handler verifies the request
-# signature, so a passing step proves the signing half too; nothing else about
-# the template distinguishes it from a built-in resource.
+# An operator-registered resource type, its lifecycle delegated to the
+# `formation-handler` service. The handler verifies the request signature, so a
+# passing step proves the signing half too.
 echo "--- Validating a formation with a custom resource type ---"
 CUSTOM_VALIDATE_RESP=$($SOAT_CLI validate-formation \
   --template '{"resources":{"chan":{"type":"smoke_channel","properties":{"name":"Smoke Channel","kind":"whatsapp"}}}}')
@@ -5896,17 +5847,15 @@ $SOAT_CLI delete-workflow --workflow-id "$WORKFLOW_ID" >/dev/null
 
 # ── A run that transitions its own task (#886) ───────────────────────────────
 #
-# The composed loop the run-identity work exists for: a workflow state
-# dispatches an orchestration, and that run moves the task on through a `builtin`
-# tool node. A task-dispatched run is always durable, so the self-call has no
-# request to borrow a header from — it authenticates with a run-as token minted
-# from the principal persisted on the run.
+# A workflow state dispatches an orchestration, and that run moves the task on
+# through a `builtin` tool node. A task-dispatched run is always durable, so the
+# self-call has no request to borrow a header from — it authenticates with a
+# run-as token minted from the principal persisted on the run.
 #
-# Four shipped behaviours meet on this one path and none of them had live-stack
-# coverage before: the run→task transition edge (#879), the chain budget that
-# bounds it (#885), the principal attribution that rides it (#887), and the
-# in-process dispatch that now carries all of it (#888). Deterministic
-# throughout — the tool node calls no model, so this adds no inference time.
+# Four behaviours meet on this path with no live-stack coverage before it: the
+# run→task edge (#879), the chain budget bounding it (#885), the principal
+# attribution riding it (#887), and the in-process dispatch carrying it (#888).
+# The tool node calls no model, so this adds no inference time.
 echo "--- Self-advancing task: workflow -> orchestration -> transition-task ---"
 
 SELF_TOOL_ID=$($SOAT_CLI create-tool \
@@ -6012,15 +5961,11 @@ if ! printf '%s\n' "$SELF_HISTORY" | jq -e --arg uid "$ADMIN_USER_ID" \
 fi
 echo "Automated transition attribution: OK"
 
-# #950: the dispatched run carries the task's tool_context, so an agent node of
-# that run — and any child run it starts — calls its tools with the credential
-# the task was moved with. The run is where the bag is readable; the task never
-# returns it.
-# The run id comes from the run list, not from the task history: this flow's
-# `finish` row is the run's own `builtin` tool moving the task with a run-as token,
-# so it is recorded as the user that started the chain with no run id attached
-# (#786/#887). This orchestration is dispatched by exactly one task, so its run
-# list has exactly one entry.
+# The dispatched run carries the task's tool_context, so its agent nodes call
+# tools with the credential the task was moved with (#950). The run is where the
+# bag is readable; the task never returns it. The run id comes from the run list,
+# not the task history — this flow's `finish` row is recorded as the user that
+# started the chain with no run id attached (#786/#887).
 SELF_RUNS=$($SOAT_CLI list-orchestration-runs --orchestration-id "$SELF_ORCH_ID")
 SELF_RUN_ID=$(printf '%s\n' "$SELF_RUNS" | jq -r '.data[0].id // empty')
 if [ -z "$SELF_RUN_ID" ]; then
@@ -6050,12 +5995,10 @@ if ! printf '%s\n' "$SELF_TASK_GET" | jq -e 'has("tool_context") | not' >/dev/nu
 fi
 echo "Task tool_context is write-only: OK"
 
-# A key that could not become an HTTP header name is rejected at write time, on
-# both entry points — the same contract as every other tool_context surface.
-#
-# On a workflow of its own: the two above have on_enter automation, and the
-# module's main workflow is deleted earlier in this section, so borrowing either
-# would make these checks depend on another block's lifetime.
+# A key that could not become an HTTP header name is rejected at write time on
+# both entry points. On its own workflow: the two above have on_enter automation
+# and the main one is deleted earlier, so borrowing either would tie these checks
+# to another block's lifetime.
 CTX_WF_ID=$($SOAT_CLI create-workflow \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name smoke-tool-context-workflow \
@@ -6245,11 +6188,9 @@ expect_cli_error_status 400 create-quota \
   --project-id "$PROJECT_PUBLIC_ID" --scope api_key --metric tokens \
   --window calendar_month --limit 1000
 
-# scope=actor caps one end user's spend, matched from the generation's session.
-# A named scope_ref caps that actor; a null scope_ref is one budget per actor.
-#
-# Needs its own actor: the one from the actors section above is deleted there,
-# and scope_ref is validated against live rows at create time.
+# scope=actor caps one end user's spend, matched from the generation's session: a
+# named scope_ref caps that actor, a null one is a budget per actor. Needs its own
+# actor — the one above is deleted there, and scope_ref is validated live.
 QUOTA_ACTOR_ID=$($SOAT_CLI create-actor \
   --project_id "$PROJECT_PUBLIC_ID" --name smoke-quota-actor | jq -r '.id')
 if [ -z "$QUOTA_ACTOR_ID" ] || [ "$QUOTA_ACTOR_ID" = "null" ]; then
@@ -6316,17 +6257,12 @@ QUOTA_ENF_POLICY_ID=$($SOAT_CLI create-policy \
 QUOTA_ENF_KEY=$($SOAT_CLI create-api-key \
   --name smoke-quota-enf-key \
   --policy_ids "[\"$QUOTA_ENF_POLICY_ID\"]" | jq -r '.key')
-# `calendar_month`, not `rolling_1m`: this is a *counted sequence* — request one
-# consumes the allowance that request two must be refused for — and a quota
-# window is a fixed bucket keyed by a truncated timestamp, despite the
-# `rolling_` prefix (`windowKeyFor` in `lib/quotaWindows.ts`). With a
-# minute-sized bucket the assertion holds only while both requests land in the
-# same minute; when they straddle :00 the second one opens a fresh bucket with
-# count 0, is allowed, and the step fails having found nothing wrong. Observed
-# on PR #1094 — quota created at 12:43:59.691Z, second request at 12:44:00.17Z.
-# This is the same trap as #1049, which is why the unit suite pins every counted
-# sequence to `COUNTED_WINDOW = 'calendar_month'` (`rest/quotas.test.ts`). The
-# project is created fresh above, so its month bucket starts empty either way.
+# `calendar_month`, not `rolling_1m`: this is a counted sequence, and a quota
+# window is a fixed bucket keyed by a truncated timestamp despite the `rolling_`
+# prefix. With a minute-sized bucket the assertion holds only while both requests
+# land in the same minute — straddling :00, the second opens a fresh bucket and
+# is allowed, failing the step having found nothing wrong (seen on #1094). Same
+# trap as #1049. The project is created fresh above, so its bucket starts empty.
 QUOTA_ENF_QUOTA_ID=$($SOAT_CLI create-quota \
   --project-id "$QUOTA_ENF_PROJECT_ID" --scope project --metric requests \
   --window calendar_month --limit 1 | jq -r '.id')
@@ -6451,11 +6387,10 @@ expect_cli_error_status 404 create-dataset-item-from-generation \
 
 # Eval
 echo "--- Creating eval ---"
-# A json_logic scorer that only asserts the agent produced *some* text: the
-# model's wording is not deterministic, so nothing here grades its content.
-# The embedding_similarity scorer exercises the embedding wiring end-to-end
-# (two real qwen3-embedding calls per item) with pass_threshold 0 so the
-# verdict never depends on how close the model's wording lands.
+# The model's wording is not deterministic, so nothing here grades content: the
+# json_logic scorer asserts only that some text was produced, and the
+# embedding_similarity scorer runs with pass_threshold 0 to exercise the
+# embedding wiring without depending on how close the wording lands.
 EVAL_RESP=$($SOAT_CLI create-eval \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-eval" \
@@ -6693,13 +6628,10 @@ if [ "$EVAL_JUDGE_BAD_EXIT" -eq 0 ]; then
   exit 1
 fi
 
-# Custom (tool) scorer — the evaluations engine's bring-your-own-algorithm
-# seam. The scorer is a pipeline tool: one step pings the live server through
-# an http tool, and the pipeline `output` mapping computes the verdict from the
-# scorer input contract ({ input, output, expected, item } is the pipeline's
-# merged input) — score 1 / passed true when the agent produced non-empty text,
-# the same predicate the json_logic scorer above asserts. No LLM in the path,
-# so unlike the judge the outcome over a completed generation is deterministic.
+# The bring-your-own-algorithm seam, as a pipeline tool: one step pings the live
+# server and the `output` mapping computes the verdict from the scorer input
+# contract, asserting the same predicate as the json_logic scorer above. No LLM
+# in the path, so unlike the judge the outcome is deterministic.
 echo "--- Creating a custom scorer tool (pipeline over http) ---"
 SCORER_PING_TOOL_RESP=$($SOAT_CLI create-tool \
   --project_id "$PROJECT_PUBLIC_ID" \

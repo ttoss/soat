@@ -7,20 +7,16 @@ import { workflowCollectionToCamel } from './workflowsWire';
 const log = createDebug('soat:tasks');
 
 /**
- * Resolves the state machine a task lives in (issue #882).
+ * Resolves the state machine a task lives in (#882).
  *
- * A task is pinned to a workflow version at creation and every later read of the
- * definition — validating a transition, parking an approval gate, validating a
- * payload — resolves it through this module rather than reading the live
- * `Workflow` row. That is the whole fix: `update-workflow` can rewire, add or
- * delete states freely, and a task parked for weeks still transitions on the
- * machine it entered on.
+ * A task is pinned to a workflow version at creation and every later read of
+ * the definition resolves through here rather than the live `Workflow` row, so
+ * `update-workflow` can rewire freely and a task parked for weeks still
+ * transitions on the machine it entered on.
  *
- * The single seam matters as much as the pinning. Before this, three call sites
- * each did `workflow.transitions as WorkflowTransition[]`, so getting one of them
- * right and missing another would look correct in review and still leave the bug
- * in the path that matters least often — which is exactly the path a long-lived
- * task ends up in.
+ * The single seam matters as much as the pinning: before this, three call sites
+ * each cast `workflow.transitions`, so missing one would look correct in review
+ * and leave the bug in the path a long-lived task ends up in.
  */
 
 export type WorkflowDefinition = {
@@ -85,21 +81,17 @@ const findArchivedDefinition = async (args: {
 
 /**
  * The state machine a task must run on: its pinned version's, falling back to
- * the live row when there is no pinned version to resolve.
+ * the live row when there is no pinned version.
  *
- * The fallback covers exactly one real case — a task created before pinning
- * existed, whose `workflowVersion` is null. Those tasks behave as they did before
- * #882 because the live row is the only machine they ever had; there is nothing
- * better to give them, and refusing to transition them would strand every task
- * that was open across the deploy.
+ * The fallback covers one real case — a task created before pinning existed,
+ * whose `workflowVersion` is null. The live row is the only machine those tasks
+ * ever had, and refusing to transition them would strand every task open
+ * across the deploy.
  *
- * A pinned version whose archive row is missing degrades the same way rather than
- * refusing the move. It is unreachable through the API — a version is archived
- * before any task can pin it, and versions are only deleted with their workflow,
- * which deletes its tasks in the same transaction — so this is a guard against an
- * out-of-band deletion, not a supported state. Refusing the transition instead
- * would turn a bookkeeping inconsistency into a permanently stuck task, and the
- * log line names it either way.
+ * A pinned version whose archive row is missing degrades the same way. It is
+ * unreachable through the API, so this guards an out-of-band deletion rather
+ * than a supported state; refusing instead would turn a bookkeeping
+ * inconsistency into a permanently stuck task. The log line names either case.
  */
 export const resolveTaskDefinition = async (args: {
   task: PinnedTask;

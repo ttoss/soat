@@ -402,12 +402,9 @@ describe('Orchestration versions', () => {
     });
 
     test('a restored graph keeps a node reference whose target is gone', async () => {
-      // Deliberately a 200, not a 400. An orchestration's node references
-      // (`agent_id`, `tool_id`, `orchestration_id`) resolve when a run reaches
-      // the node, not when the graph is written — `assertOrchestrationValid` is a
-      // static check, so restoring a graph is exactly as legal as authoring it
-      // was. The dangling reference surfaces as a failed run, which is where it
-      // surfaces on the create path too.
+      // Deliberately 200: node references resolve when a run reaches the node,
+      // not when the graph is written, so restoring is as legal as authoring
+      // was. The dangling reference surfaces as a failed run either way.
       const target = await createOrchestration({ name: 'Restore Target' });
       const orch = await createOrchestration({
         name: 'Dangling After Delete',

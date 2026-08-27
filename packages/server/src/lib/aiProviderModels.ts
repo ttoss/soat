@@ -330,32 +330,17 @@ const readBedrockLifecycle = (
 /**
  * The host `publisherModels.list` is served from for a location.
  *
- * A region prefixes the host with its own name, but three of Vertex's location
- * values are not regions and take a different host shape each:
+ * | `location`    | host                                     |
+ * | ------------- | ---------------------------------------- |
+ * | `global`      | `aiplatform.googleapis.com`              |
+ * | `eu` / `us`   | `aiplatform.<eu\|us>.rep.googleapis.com` |
+ * | anything else | `<location>-aiplatform.googleapis.com`   |
  *
- * | `location`    | host                                      |
- * | ------------- | ----------------------------------------- |
- * | `global`      | `aiplatform.googleapis.com`               |
- * | `eu` / `us`   | `aiplatform.<eu\|us>.rep.googleapis.com`   |
- * | anything else | `<location>-aiplatform.googleapis.com`    |
- *
- * Interpolating those three into the regional shape builds a host that does
- * not exist, and Google answers a non-host with the same generic HTML 404 that
- * #1080 chased — so listing failed with `MODEL_LISTING_FAILED` for every
- * provider configured that way (#1087). Confirmed with #1080's unauthenticated
- * probe, which separates the two: a real endpoint answers `401 UNAUTHENTICATED`,
- * a non-endpoint answers the HTML 404.
- *
- * ```
- * aiplatform.googleapis.com          401   global-aiplatform.googleapis.com  404
- * aiplatform.eu.rep.googleapis.com   401   eu-aiplatform.googleapis.com      404
- * ```
- *
- * `global` is not a corner case: several current Gemini models are served
- * there and 404 in a region, so it is the location those providers have to be
- * configured with. This mirrors the mapping the AI SDK applies when it builds
- * generation's `baseURL`, which is why the same record could generate and yet
- * fail to list — keep the two in step if Google adds a fourth host shape.
+ * Three of Vertex's locations are not regions; interpolating them into the
+ * regional shape builds a host that does not exist, and Google answers it with
+ * a generic HTML 404, so listing failed for every provider configured that way
+ * (#1087). `global` is not a corner case — several Gemini models are served
+ * only there. Mirrors the mapping the AI SDK uses for generation's `baseURL`.
  */
 const vertexListingHost = (location: string): string => {
   if (location === 'global') return 'https://aiplatform.googleapis.com';
@@ -382,11 +367,8 @@ const enumerateVertex = async (
   });
 
   if ('apiKey' in settings) {
-    // `publisherModels.list` refuses API keys outright — it answers one with
-    // `401 UNAUTHENTICATED`, "API keys are not supported by this API. Expected
-    // OAuth2 access token or other authentication credentials that assert a
-    // principal." Express mode holds nothing else, so there is no credential
-    // to list with.
+    // `publisherModels.list` answers an API key with `401 UNAUTHENTICATED`, and
+    // express mode holds no other credential to list with.
     throw new DomainError(
       'MODEL_LISTING_UNSUPPORTED',
       'A Vertex provider in express mode (API key) cannot list models: the publisher-model listing rejects API keys and needs a credential that asserts a principal. Link a service-account key, or authenticate through Application Default Credentials, to list.'
@@ -400,21 +382,14 @@ const enumerateVertex = async (
 
   const payload = await readJson({
     fetchImpl: args.fetchImpl,
-    // `publisherModels.list` is rooted at `publishers/*`, not at
-    // `projects/*/locations/*/publishers/*` — unlike generation's `baseURL`,
-    // which *is* project-scoped. Reusing generation's shape here built a path
-    // Google does not serve, and it answered with a generic HTML 404 that
-    // surfaced as MODEL_LISTING_FAILED for every vertex caller (#1080).
-    //
-    // `project` therefore no longer reaches the URL, but it stays required by
-    // `resolveVertexSettings`: it is what selects the ADC/service-account
-    // branch that mints the token, and it is the project the token is billed
-    // and quota'd against. The regional host is what scopes the answer to
-    // `location`.
-    // `view=PUBLISHER_MODEL_VIEW_FULL` is what populates `launchStage`; the
-    // default view omits it, which left the lifecycle mapping reading an
-    // always-absent field. `pageSize` stays unsent: the bare call answers the
-    // whole regional catalogue, and 500 is rejected with a `400`.
+    // Rooted at `publishers/*`, not the project-scoped path generation's
+    // `baseURL` uses — that shape is one Google does not serve, and its HTML
+    // 404 surfaced as MODEL_LISTING_FAILED for every vertex caller (#1080).
+    // `project` stays required by `resolveVertexSettings` even though it no
+    // longer reaches the URL: it selects the branch that mints the token and is
+    // what the token is billed against. `PUBLISHER_MODEL_VIEW_FULL` is what
+    // populates `launchStage`; `pageSize` stays unsent because the bare call
+    // answers the whole regional catalogue and 500 is rejected with a `400`.
     url: `${vertexListingHost(location)}/v1beta1/publishers/google/models?view=PUBLISHER_MODEL_VIEW_FULL`,
     headers: { authorization: `Bearer ${token}` },
     provider: args.provider,
@@ -432,10 +407,9 @@ const enumerateVertex = async (
       {
         id,
         vendor: 'google',
-        // No `streaming`: this listing carries no field for it, and it serves
-        // embedding, TTS and classification models alongside Gemini — so the
-        // `streaming: true` that used to be asserted for every entry was
-        // wrong for a good share of them (#1089).
+        // The listing carries no streaming field and serves embedding, TTS and
+        // classification models too, so asserting `streaming: true` for every
+        // entry was wrong for a good share of them (#1089).
         ...(lifecycle ? { lifecycle } : {}),
       },
     ];

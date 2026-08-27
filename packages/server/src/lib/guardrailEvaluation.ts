@@ -74,14 +74,11 @@ export const strictestDecision = (
   return DECISION_RANK[b] > DECISION_RANK[a] ? b : a;
 };
 
-// Builds the nested object the JSON Logic evaluator reads `var` dot-paths
-// against — `{ var: 'args.amount' }` selects `args.amount`, etc. The caller's
-// `args` / `guardrail_context` are opaque, application-owned bags whose keys
-// nothing on the request path rewrites, so a
-// `var` path resolves against exactly the casing the author wrote — matching how
-// tool `input`, task `payload`, and orchestration-run `input` are read back.
-// Every namespace defaults to an empty object so an absent one resolves to `null`
-// (fail-closed) rather than surfacing as an evaluator error.
+// The object JSON Logic reads `var` dot-paths against. `args` /
+// `guardrail_context` are opaque bags nothing rewrites, so a path resolves
+// against exactly the casing the author wrote. Every namespace defaults to an
+// empty object, so an absent one resolves to `null` (fail-closed) rather than
+// an evaluator error.
 const buildLogicContext = (context: GuardrailEvaluationContext) => {
   return {
     args: context.args ?? {},
@@ -119,14 +116,10 @@ const isFailClosedNamespacePath = (path: string): boolean => {
   );
 };
 
-// json-logic-engine coerces a `null` var operand to a zero-ish value for these
-// comparisons, so an unresolvable reference can silently flip a comparison the
-// wrong way (`null < 100` → `true`). `==`/`!=` are not in this set: `null`
-// compares as itself there, so an absent key legitimately (and safely) takes
-// the "not equal" branch — that's ordinary conditional design, not a coercion
-// bug, and documents intentionally rely on it (e.g. `{ if: [{ "==": [{ "var":
-// "context.tier" }, "high"] }, "C", "A"] }` defaulting to "A" when the tier is
-// unconfirmed).
+// json-logic-engine coerces a `null` var operand to zero for these, so an
+// unresolvable reference silently flips the comparison (`null < 100` → `true`).
+// `==`/`!=` are excluded: `null` compares as itself there, so an absent key
+// safely takes the "not equal" branch — documents intentionally rely on it.
 const UNSAFE_COMPARISON_OPS: ReadonlySet<string> = new Set([
   '<',
   '<=',
@@ -134,11 +127,8 @@ const UNSAFE_COMPARISON_OPS: ReadonlySet<string> = new Set([
   '>=',
 ]);
 
-// Whether `node` is a bare `{ var: path }` (or `{ var: [path, default] }`)
-// referencing an unresolved `runtime.*`/`context.*` path. `args.*` is deliberately
-// excluded — its `null`-coercion behavior is documented as an existing caveat
-// callers are told to guard against explicitly, not a fail-closed invariant to
-// enforce here.
+// `args.*` is deliberately excluded: its `null`-coercion is a documented caveat
+// callers guard against explicitly, not a fail-closed invariant to enforce here.
 const isUnresolvedFailClosedVarNode = (
   node: unknown,
   logicContext: Record<string, unknown>

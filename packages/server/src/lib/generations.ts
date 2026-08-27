@@ -244,11 +244,9 @@ export const updateGenerationRecord = async (
     if (args[field] !== undefined) updates[field] = args[field];
   }
 
-  // Zero-retention (#838): drop the content columns from the write while the
-  // lifecycle columns on the same update still land. Enforced here rather than
-  // at the call sites because this is the only place those columns can be
-  // written — a future caller inherits the guarantee instead of having to
-  // remember it.
+  // Drops the content columns while the lifecycle columns on the same update
+  // still land (#838). Enforced here, the only place those columns can be
+  // written, so a future caller inherits the guarantee.
   await suppressContentWrites({
     agentDbId: gen.agentId,
     alreadyRedacted: gen.contentRedactedAt !== null,
@@ -384,10 +382,8 @@ export const listGenerations = async (args: {
   });
   if (!resolved) return emptyPage(args);
 
-  // Plain equality, unlike the filters above: these columns store the run's
-  // public id and the node id verbatim rather than an internal FK, so there is
-  // nothing to resolve. An unknown value simply matches no row, and project
-  // scoping is already applied via `where.projectId`.
+  // Plain equality: these columns store public ids verbatim, not an internal
+  // FK, so there is nothing to resolve and an unknown value matches no row.
   if (args.orchestrationRunId !== undefined) {
     where.orchestrationRunId = args.orchestrationRunId;
   }
@@ -464,12 +460,9 @@ export const getGeneration = async (args: {
   return mapGeneration(gen);
 };
 
-// Attaches caller-supplied metadata to a generation (F-15). The provided keys
-// are shallow-merged over the existing metadata so repeated patches accumulate.
-// The bag holds only caller keys — server-owned state is in its own columns — so
-// a merge here cannot touch attribution, and there is nothing to preserve
-// against. Returns null when the generation does not exist within the caller's
-// project scope.
+// Shallow-merged so repeated patches accumulate. The bag holds only caller
+// keys — server-owned state lives in its own columns — so a merge here cannot
+// touch attribution.
 export const updateGenerationMetadata = async (args: {
   publicId: string;
   projectIds?: number[];

@@ -18,13 +18,9 @@ import {
 import { defineFormationModule } from './defineFormationModule';
 import { isFormationExpression } from './formationSpecLoader';
 
-// ── Business rule validation ─────────────────────────────────────────────
-// `validateIngestionRule` needs the converter's tool type to enforce the
-// client-tool-forbidden and soat/mcp-action-required rules, and that type is
-// only knowable after a DB lookup. At this pure, template-validation stage we
-// pass `toolType: null` so those two checks are skipped here and left to the
-// authoritative check inside `createIngestionRule`/`updateIngestionRule`
-// (called from `create`/`update` below, once refs are resolved).
+// Two of `validateIngestionRule`'s rules need the converter's tool type, which
+// is only knowable after a DB lookup — so this pure stage passes
+// `toolType: null` and leaves them to the lib's authoritative check.
 
 const asRefPresence = (value: unknown): string | undefined => {
   if (value === undefined || value === null) return undefined;

@@ -684,11 +684,9 @@ describe('MCP tools - happy path', () => {
       expect(createDocumentResult.id).toBeDefined();
     });
 
-    // A tag key is read back by IAM as a `soat:ResourceTag/<key>` context key, so
-    // the MCP surface must preserve it exactly as the REST caseTransform does.
-    // `snakeToCamelDeep` would rewrite `cost_center` to `costCenter` on read, so
-    // a tag set through one surface would not match a policy written for the
-    // other.
+    // A tag key is read back by IAM as a `soat:ResourceTag/<key>`, so rewriting
+    // it on read would leave a tag set through one surface not matching a policy
+    // written for the other.
     test('create-document preserves multi-word tag keys verbatim', async () => {
       const tags = { cost_center: 'platform', Environment: 'prod' };
 
@@ -1445,11 +1443,9 @@ describe('MCP tools - happy path', () => {
       expect(result.tool_context).toEqual({ userId: 'u1' });
     });
 
-    // A `toolContext` key is an HTTP header name (`X-Soat-Context-<key>`), not a
-    // SOAT field name, so the MCP surface must preserve it verbatim exactly as
-    // the REST caseTransform middleware does. `snakeToCamelDeep` would otherwise
-    // rewrite `actor_external_id` to `actorExternalId` on read, breaking the
-    // read→write round-trip and changing which header the tool receives.
+    // A `toolContext` key is an HTTP header name, not a SOAT field name, so
+    // rewriting it on read breaks the round-trip and changes which header the
+    // tool receives.
     test('create-session preserves non-camelCase toolContext keys verbatim', async () => {
       const toolContext = {
         actor_external_id: 'snake',
@@ -1540,11 +1536,9 @@ describe('MCP tools - happy path', () => {
       );
     });
 
-    // The MCP surface mirrors caseTransform's outbound pass-through set, so an
-    // IAM condition must survive here too: `snakeToCamelDeep` would rewrite the
-    // context key `soat:ResourceTag/cost_center` to `soat:ResourceTag/costCenter`
-    // on read, so echoing a policy back through update-policy would silently
-    // change which tag the condition selects.
+    // An IAM condition must survive here too: rewriting its context key on read
+    // means echoing a policy back through update-policy silently changes which
+    // tag the condition selects.
     test('policy condition keys survive a read → write round-trip', async () => {
       const condition = {
         StringEquals: { 'soat:ResourceTag/cost_center': 'platform' },
@@ -1915,11 +1909,8 @@ describe('MCP tools - happy path', () => {
       expect(result.errors.length).toBeGreaterThan(0);
     });
 
-    // Regression: https://github.com/ttoss/soat/issues/375
-    // PATCH/DELETE-backed MCP tools surfaced DomainError bodies
-    // (`{ error: { code, message } }`) as the unhelpful literal string
-    // "[object Object]" instead of the DomainError's readable message —
-    // while the equivalent GET tool surfaced it cleanly.
+    // PATCH/DELETE-backed MCP tools surfaced a DomainError body as the literal
+    // "[object Object]" while the equivalent GET tool surfaced it cleanly (#375).
     test('get-orchestration surfaces a readable not-found message', async () => {
       const res = await mcpCall('get-orchestration', {
         orchestration_id: 'orch_doesnotexist',
@@ -2022,15 +2013,10 @@ describe('MCP tools - happy path', () => {
     });
   });
 
-  // ── Guardrails ─────────────────────────────────────────────────────────────
-  // Regression: https://github.com/ttoss/soat/issues/651
-  // A guardrail's `document` and an evaluation's `context_snapshot` are
-  // free-form, JSON-Logic-bearing bags whose snake_case keys are contract
-  // fields (`default_class`, `expires_in`) and fully-qualified var paths
-  // (`runtime.usage.cost_usd_24h`, `context.max_daily_budget`). The MCP surface
-  // must preserve them verbatim, exactly as the REST caseTransform middleware
-  // does — the earlier `snakeToCamelDeep` mangled them (`defaultClass`,
-  // `costUsd_24h`), breaking read→write round-trips and the audit-key contract.
+  // A guardrail `document` and an evaluation `context_snapshot` are free-form
+  // bags whose keys are contract fields and fully-qualified var paths. A
+  // key-blind transform mangled both, breaking read→write round-trips and the
+  // audit-key contract (#651).
   describe('Guardrails', () => {
     let guardrailId: string;
 

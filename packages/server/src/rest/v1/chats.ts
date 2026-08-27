@@ -188,10 +188,9 @@ const requireStatelessCompletionAccess = async (args: {
     throw new DomainError('RESOURCE_NOT_FOUND', 'AI provider not found');
   }
 
-  // A provider whose project cannot be resolved is not authorizable against
-  // one. Passing the `undefined` through would read as "no project named" and
-  // fall back to the caller's entire scope — the #801 widening, in the one
-  // place it would be least visible.
+  // Passing the `undefined` through would read as "no project named" and fall
+  // back to the caller's entire scope — the #801 widening, where it would be
+  // least visible.
   if (!provider.project_id) {
     throw new DomainError('FORBIDDEN', 'Forbidden');
   }
@@ -269,12 +268,9 @@ const handleStreamingCompletion = async (args: {
 
     args.ctx.res.write('data: [DONE]\n\n');
   } catch (error) {
-    // The response headers went out with the `200` before the provider was
-    // even called, so an upstream rejection here can never become a status
-    // code — the terminal SSE event is the only place to report it. It still
-    // gets the same mapping the non-streaming branch applies, so the frame
-    // names the provider's status instead of whatever the AI SDK's raw
-    // message happened to say (#1081).
+    // Headers went out with the `200` before the provider was called, so an
+    // upstream rejection can never become a status code — the terminal SSE
+    // event is the only place left to report it (#1081).
     const mapped = toProviderDomainError(error) ?? error;
     const message =
       mapped instanceof Error ? mapped.message : 'Internal server error';
@@ -367,13 +363,9 @@ chatsRouter.post('/chat/completions', async (ctx: Context) => {
       throw new DomainError('RESOURCE_NOT_FOUND', 'AI provider not found');
     }
 
-    // The same mapping the agent generation paths apply (#179/#180). Without
-    // it an upstream rejection — an unavailable model, a bad credential, a
-    // provider outage — reached the error logger unmapped and came back as a
-    // bare `500 INTERNAL_ERROR`, which a caller cannot tell apart from a fault
-    // in SOAT itself (#1081). `toProviderDomainError` returns `null` for an
-    // error that did not come from the provider call, so those still rethrow
-    // untouched.
+    // Without this an upstream rejection came back as a bare
+    // `500 INTERNAL_ERROR`, indistinguishable from a fault in SOAT itself
+    // (#1081). Non-provider errors map to `null` and rethrow untouched.
     throw toProviderDomainError(error) ?? error;
   }
 });

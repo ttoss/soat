@@ -17,12 +17,8 @@ import {
 } from '../workflowsValidation';
 import { defineFormationModule } from './defineFormationModule';
 
-// ── Key normalization ────────────────────────────────────────────────────
-//
-// A workflow's `states` and `transitions` are stored (and read by the engine)
-// with camelCase structural keys, but authored and read back snake_case on
-// the wire. The deep conversion (leaving JSON-Logic `guard`/`when` bodies
-// verbatim) lives in `workflowsValidation.ts`, shared with `rest/v1/workflows.ts`.
+// `states`/`transitions` are stored camelCase but authored snake_case. The
+// conversion lives in `workflowsValidation.ts`, shared with `rest/v1/workflows.ts`.
 
 export const workflowsFormationModule = defineFormationModule({
   resourceType: 'workflow',
@@ -32,11 +28,9 @@ export const workflowsFormationModule = defineFormationModule({
       projectId,
       name: properties.name as string,
       description: toNullableString(properties.description),
-      // `states`/`transitions` are required and declared `array`, so a create
-      // that reaches here has been type-checked against the schema — the
-      // converter cannot return undefined. The `?? []` these used to carry was
-      // an unreachable guard, not a default (`.claude/rules/tests.md`: delete
-      // the branch no entry point can take rather than test it).
+      // Both are required and schema-checked before reaching here, so the
+      // converter cannot return undefined — the `?? []` these used to carry
+      // was an unreachable branch, not a default.
       states: toCamelCollection<WorkflowState>(
         properties.states
       ) as WorkflowState[],

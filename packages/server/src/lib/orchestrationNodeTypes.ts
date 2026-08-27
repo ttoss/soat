@@ -4,16 +4,14 @@ import type { GuardrailEvaluationRecord } from './guardrailEvaluationRecord';
  * The shared vocabulary of node execution: what a node hands back, and what the
  * engine persists when a node parks the run.
  *
- * These types live in their own module on purpose. They used to sit next to the
- * eight implementations in `orchestrationNodeExecutors.ts`, which forced every
+ * Their own module on purpose. They used to sit next to the eight
+ * implementations in `orchestrationNodeExecutors.ts`, which forced every
  * per-node-type file to import that module for a type while the module imported
- * them back for the implementation — five of the six import cycles #910 found
- * existed only for that reason. A module that declares types and imports
- * nothing but types cannot participate in a cycle.
+ * them back — five of the six import cycles #910 found existed only for that.
+ * A module that declares types and imports nothing but types cannot be in a
+ * cycle.
  *
- * Nothing here executes anything; see `orchestrationNodeDispatch.ts` for the
- * type → executor dispatch and `orchestrationBatchResults.ts` for what the run
- * loop does with a batch of results.
+ * Nothing here executes anything; see `orchestrationNodeDispatch.ts`.
  */
 
 /**
@@ -51,11 +49,9 @@ export type NodeExecutionResult =
   | { kind: 'artifact'; artifact: Record<string, unknown>; traceId?: string }
   | { kind: 'condition'; label: string }
   | {
-      // A guardrail blocked (class D) or tripwired (failed class B) a tool
-      // node's call before it dispatched. Routable outcome (not a run failure):
-      // the engine records `artifact`, seeds `label` so edges conditioned on
-      // `blocked`/`tripwire` follow, and treats the node like a decision node so
-      // an unlabeled happy-path edge does NOT auto-follow a blocked action.
+      // A routable outcome, not a run failure: the node is treated like a
+      // decision node, so an unlabeled happy-path edge does not auto-follow a
+      // blocked action.
       kind: 'blocked';
       nodeId: string;
       label: 'blocked' | 'tripwire';
@@ -73,10 +69,8 @@ export type NodeExecutionResult =
       approvalSpec?: ApprovalNodeSpec;
     }
   | {
-      // The node cannot complete now and must be resumed after `resumeInMs`.
-      // Used by `delay` (a timer) and `poll` (the wait between attempts) so
-      // long waits are offloaded to the background scheduler instead of holding
-      // the run loop — and its HTTP request — open.
+      // Offloads a long wait to the background scheduler instead of holding
+      // the run loop, and its HTTP request, open.
       kind: 'wait';
       nodeId: string;
       resumeInMs: number;
@@ -89,10 +83,9 @@ export type RequiredAction = {
   prompt: string;
   context: Record<string, unknown>;
   options?: string[];
-  // Carried while the run parks on an `approval` node. `approvalSpec` is the
-  // frozen proposal the engine emits as an ApprovalItem at settle time;
-  // `approvalId`/`expiresAt` are stamped back on once emitted so the persisted
-  // required_action exposes the created item to callers.
+  // `approvalSpec` is the frozen proposal emitted as an ApprovalItem at settle
+  // time; the ids are stamped back on so the persisted `required_action`
+  // exposes the created item to callers.
   approvalSpec?: ApprovalNodeSpec;
   approvalId?: string;
   expiresAt?: string;

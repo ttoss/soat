@@ -178,11 +178,9 @@ describe('SOAT in-process dispatch', () => {
         actions: ['download-file'],
       });
 
-    // `downloadFile` carries `x-soat-mcp-exclude`, so it is not among the
-    // actions a tool may bind. Refusing the binding beats refusing the call: an
-    // action that can only ever fail is never offered to a model, never spends
-    // its schema's tokens, and the failure lands on the author at create time
-    // instead of mid-generation.
+    // Refusing the binding beats refusing the call: an action that can only ever
+    // fail is never offered to a model, never spends its schema's tokens, and
+    // fails the author at create time rather than mid-generation.
     expect(toolRes.status).toBe(400);
     expect(toolRes.body.error.code).toBe('VALIDATION_FAILED');
     expect(toolRes.body.error.message).toMatch(/download-file/);
@@ -208,12 +206,10 @@ describe('SOAT in-process dispatch', () => {
       .field('project_id', projectId);
     expect(uploadRes.status).toBe(201);
 
-    // Dispatched directly because the seam's last reachable stream body was
-    // just removed from the action surface: no entry point leads here any more,
-    // and the guard has to keep holding for whatever route grows one next.
-    // Binary content has no JSON projection, and the alternative to refusing it
-    // is a result built out of a stream's internals — plus the stream's own
-    // file descriptor left open.
+    // No entry point reaches this any more, but the guard must keep holding for
+    // whatever route grows one next. Binary content has no JSON projection, and
+    // the alternative is a result built from a stream's internals with its file
+    // descriptor left open.
     await expect(
       dispatchApiRequest({
         method: 'GET',
@@ -341,13 +337,11 @@ describe('SOAT in-process dispatch', () => {
       authHeader,
     });
 
-    // The budget that bounds a composed dispatch→transition cycle (#885) is
-    // keyed on `ctx.authUser.isRunToken`, which only exists because the auth
-    // middleware decoded the `orn` claim off this header. A dispatch seam that
-    // passed a principal instead of a credential would skip that middleware,
-    // this hop would count as a person's move (depth 0), the cycle would
-    // silently become unbounded — and every #885 test would still pass, because
-    // they all drive the HTTP route directly.
+    // The cycle budget (#885) keys on `isRunToken`, which exists only because
+    // the auth middleware decoded the `orn` claim off this header. A seam
+    // passing a principal instead of a credential skips that middleware, so the
+    // hop counts as a person's move and the cycle becomes unbounded — while
+    // every #885 test still passes, since they all drive the route directly.
     expect(
       (result as { automation_chain_depth?: number }).automation_chain_depth
     ).toBe(1);

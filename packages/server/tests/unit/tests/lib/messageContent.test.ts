@@ -7,13 +7,10 @@ import { buildSrn } from 'src/lib/iam';
 import { resolveMessageContent } from 'src/lib/messageContent';
 import { createTool } from 'src/lib/tools';
 
-// These tests drive the real `resolveMessageContent` seam against the real
-// database and a real local HTTP server — no `src/**` module mocks. Documents
-// and tools are created through their real lib functions; the tool_output HTTP
-// call goes over the wire to a stub server so real serialization and
-// output-path resolution run. `authUser` is a plain test double passed as an
-// argument (dependency injection, not a module mock): its `isAllowed` records
-// the permission-argument shape the seam constructs.
+// The tool_output call goes over the wire to a stub server, so real
+// serialization and output-path resolution run. `authUser` is a double passed as
+// an argument, not a module mock — its `isAllowed` records the permission shape
+// the seam constructs.
 
 const createAuthUser = (overrides?: {
   isAllowed?: jest.Mock<

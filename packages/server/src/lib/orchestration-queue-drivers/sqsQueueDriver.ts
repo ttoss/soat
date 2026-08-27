@@ -273,28 +273,23 @@ const sqsStats = async (
 /**
  * The SQS driver, for deployments that standardize on a managed queue.
  *
- * The mapping onto SQS semantics:
- *
- * | Queue operation | SQS                                                   |
- * | --------------- | ----------------------------------------------------- |
- * | `enqueue`       | `SendMessage` (`DelaySeconds` for a future `availableAt`) |
+ * | Queue operation | SQS                                                       |
+ * | --------------- | --------------------------------------------------------- |
+ * | `enqueue`       | `SendMessage` (`DelaySeconds` for a future `availableAt`)  |
  * | `claim`         | `ReceiveMessage` — the visibility timeout **is** the lease |
- * | `ack`           | `DeleteMessage`                                        |
- * | `retry`         | `ChangeMessageVisibility` (the backoff delay)          |
- * | `failed`        | the queue's redrive policy → dead-letter queue         |
+ * | `ack`           | `DeleteMessage`                                           |
+ * | `retry`         | `ChangeMessageVisibility` (the backoff delay)             |
+ * | `failed`        | the queue's redrive policy → dead-letter queue            |
  *
- * At-least-once delivery and lease expiry come from SQS itself: a message whose
- * visibility timeout lapses without a `DeleteMessage` is redelivered, and
- * `ApproximateReceiveCount` is the delivery counter (`attempts`). Repeated
- * failures are handled by the **queue's** redrive policy rather than by the
- * driver — configure `maxReceiveCount` and a DLQ on the queue itself.
+ * At-least-once delivery and lease expiry come from SQS itself, and
+ * `ApproximateReceiveCount` is the `attempts` counter; repeated failures are
+ * the queue's redrive policy, so configure `maxReceiveCount` and a DLQ there.
  *
- * **Not supported:** per-project `max_concurrent_runs` (`enforcesProjectConcurrency:
- * false`). SQS hands out whatever is visible; it cannot evaluate a per-tenant
- * limit at receive time the way the Postgres claim's SQL join can. Under this
- * driver, parallelism is bounded only by `ORCHESTRATION_WORKER_CONCURRENCY` per
- * worker process (× the fleet size). Deployments that need per-project limits
- * should stay on the Postgres driver.
+ * **Not supported:** per-project `max_concurrent_runs` — SQS hands out whatever
+ * is visible and cannot evaluate a per-tenant limit at receive time the way the
+ * Postgres claim's SQL join can. Parallelism is bounded only by
+ * `ORCHESTRATION_WORKER_CONCURRENCY` per worker; deployments needing
+ * per-project limits stay on the Postgres driver.
  */
 export const createSqsQueueDriver = (args?: {
   client?: SQSClient;

@@ -23,16 +23,12 @@ import {
 
 const log = createDebug('soat:tasks');
 
-// Absent a per-transition override (none exists in the workflow schema yet), a
-// parked approval defaults to a 24h window — long enough for a human queue but
-// bounded so a gate can never park a task forever (the approvals expiry sweeper
-// enforces it server-side).
+// Long enough for a human queue, but bounded so a gate can never park a task
+// forever. There is no per-transition override in the workflow schema yet.
 const DEFAULT_APPROVAL_EXPIRES_IN_SECONDS = 24 * 60 * 60;
 
-// Transition failures at resolution time that mean the approved move can no
-// longer be applied — its guard now rejects it, or a concurrent change
-// invalidated it. Both are surfaced (a task event + a cleared gate), never
-// silently dropped (§6.5).
+// The approved move can no longer be applied — its guard now rejects it, or a
+// concurrent change invalidated it. Both are surfaced, never silently dropped.
 const REJECTION_CODES: ReadonlySet<string> = new Set([
   'TASK_GUARD_REJECTED',
   'TASK_TRANSITION_CONFLICT',
@@ -249,10 +245,8 @@ const appendResolutionNote = async (args: {
   });
 };
 
-// Fires the approved transition through `transitionTask` as the `approval`
-// principal. Guards re-run against the committed state; a now-invalid move is
-// surfaced (a `tasks.approval_failed` event + a cleared gate) rather than
-// leaving the task parked against a resolved approval.
+// Guards re-run against the committed state, and a now-invalid move is
+// surfaced rather than leaving the task parked against a resolved approval.
 const applyApprovedTransition = async (args: {
   item: MappedApproval;
   decision: DecisionOutput;

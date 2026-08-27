@@ -1,20 +1,14 @@
 /**
- * The wire half of an operator-registered formation resource type (#1078).
+ * The wire half of an operator-registered formation resource type (#1078): one
+ * signed `POST` per lifecycle operation to the URL the registration names.
+ * Ordering, `{ref}` resolution, apply, rollback, recording and drift stay in
+ * SOAT; the handler owns only what its resource means.
  *
- * One signed `POST` per lifecycle operation, to the URL the registration names.
- * Everything the engine owns — dependency ordering, `{ref}` resolution, apply,
- * rollback, recording, drift — stays in SOAT; the handler owns only what it
- * means to create, update, delete, validate or read *its* resource.
- *
- * ## One attempt, never two
- *
- * The client does not retry. A create that timed out may well have created the
- * resource, and a blind retry would provision a second one the engine has no id
- * for. The failure enters the normal apply-failure path instead, which rolls
- * back what this operation created and records why. `X-Soat-Idempotency-Key`
- * covers the case that *is* safe to repeat — an operator re-running a failed
- * deploy — by letting the handler recognise the same (resource, operation)
- * across applies.
+ * No retries. A create that timed out may well have created the resource, and a
+ * blind retry would provision a second one with no id the engine knows. The
+ * failure enters the normal apply-failure path instead.
+ * `X-Soat-Idempotency-Key` covers the case that is safe to repeat — an operator
+ * re-running a failed deploy.
  */
 
 import createDebug from 'debug';

@@ -1,3 +1,8 @@
+---
+paths:
+  - "packages/app/**"
+---
+
 # App Test Instructions
 
 How to write tests for `@soat/app` (the React UI served at `/app`). For server

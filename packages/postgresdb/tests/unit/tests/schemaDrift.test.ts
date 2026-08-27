@@ -163,13 +163,10 @@ describe('schema drift after sync({ alter: true })', () => {
   });
 
   test('every index covers exactly the columns its model declares', async () => {
-    // The hazard explicit names introduce, and the reason naming them is not
-    // the whole fix. `sync({ alter: true })` matches an index by name only: if
-    // the name is unchanged it is considered present and left alone, so
-    // *editing the field list of an already-named index silently does nothing*
-    // — the database keeps indexing the old columns forever, under a name that
-    // now promises different ones. No amount of reading the models reveals it;
-    // only the catalog does.
+    // `sync({ alter: true })` matches an index by name only, so editing the
+    // field list of an already-named index silently does nothing — the database
+    // keeps indexing the old columns under a name promising different ones.
+    // Only the catalog reveals it.
     const declaredColumns = new Map<string, string>();
 
     for (const model of modelList) {

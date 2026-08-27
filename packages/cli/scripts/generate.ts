@@ -25,36 +25,30 @@ const MODULE_DOCS_BASE_URL = 'https://soat.ttoss.dev/docs/modules';
 /**
  * The manifest type for a property the specs leave **typeless**.
  *
- * OpenAPI 3.0 has no union `type`, so a property that genuinely accepts more
- * than one shape omits it — `tool_choice` takes the string `"auto"` *or* an
- * object `{ type: 'tool', tool_name: '…' }`. `generateCliRouteManifest`
- * defaults a missing type to `"string"` (`propSchema.type ?? 'string'`), and
- * that default is not cosmetic: `parseFlagValue` never JSON-coerces a
- * *declared-string* flag — deliberately, so a JSON key file survives
- * `create-secret --value "$(cat key.json)"` — so the object form reached the
- * server as the literal text `{"type":"tool",…}`, `normalizeToolChoice` mapped
- * the unrecognized string to `undefined`, and forcing was silently dropped at
- * every layer (#955).
+ * OpenAPI 3.0 has no union `type`, so a property accepting more than one shape
+ * omits it — `tool_choice` takes `"auto"` *or* `{ type: 'tool', … }`.
+ * `generateCliRouteManifest` defaults a missing type to `"string"`, and
+ * `parseFlagValue` never JSON-coerces a declared-string flag (deliberately, so
+ * a JSON key file survives `create-secret --value "$(cat key.json)"`), so the
+ * object form reached the server as literal text and forcing was silently
+ * dropped at every layer (#955).
  *
- * `'any'` puts these flags back on the permissive path, where a `{`/`[` value
- * is parsed as JSON and a bare word stays a string — so both shapes work. In
- * JSON Schema an absent `type` means exactly that: any type.
+ * `'any'` puts these flags on the permissive path, where a `{`/`[` value is
+ * parsed as JSON and a bare word stays a string. In JSON Schema an absent
+ * `type` means exactly that.
  */
 const UNION_FLAG_TYPE = 'any';
 
 /**
  * The prefix every REST operation shares.
  *
- * `oauth.yaml` also describes the OAuth 2.1 protocol endpoints — `/authorize`,
- * `/token`, `/register` and the two `.well-known` documents — which
+ * `oauth.yaml` also describes the OAuth 2.1 protocol endpoints, which
  * `@ttoss/auth-core` mounts at the root with paths the RFCs fix. They are in a
- * spec so a client (or an agent reading `/openapi.json`) can find the flow
- * without a live host to probe; a CLI command for them would be actively wrong.
- * `/authorize` is a browser redirect, `/token` takes a form-encoded body the
- * manifest has no way to send, and `soat register` reads as a SOAT sign-up
- * rather than OAuth client registration.
- *
- * The SDK generator and the server's MCP tool surface apply the same rule.
+ * spec so a client can find the flow without a live host to probe; a CLI
+ * command for them would be actively wrong — `/authorize` is a browser
+ * redirect, `/token` takes a form-encoded body the manifest cannot send, and
+ * `soat register` reads as a SOAT sign-up. The SDK generator and the MCP tool
+ * surface apply the same rule.
  */
 const REST_PATH_PREFIX = '/api/v1/';
 
@@ -129,11 +123,11 @@ const classifyProperty = (args: {
 /**
  * Walks every schema in a spec, classifying each property it finds.
  *
- * The walk is deliberately structure-blind — it recurses through the whole
- * document rather than resolving request bodies the way the codegen does.
- * Mirroring the codegen's `$ref` + `oneOf` merge would duplicate logic that
- * lives in another package and could drift from it; collecting names and
- * subtracting the string-typed ones needs no such knowledge.
+ * Deliberately structure-blind — it recurses through the whole document rather
+ * than resolving request bodies the way the codegen does. Mirroring the
+ * codegen's `$ref` + `oneOf` merge would duplicate another package's logic and
+ * could drift from it; collecting names and subtracting the string-typed ones
+ * needs no such knowledge.
  */
 const collectPropertyTypes = (args: {
   node: unknown;
@@ -168,22 +162,19 @@ const collectPropertyTypes = (args: {
  * Property names some schema leaves typeless and **no** schema declares
  * `type: string`.
  *
- * Excluding string-typed names is what keeps this conservative: `value` (a
- * secret's, `type: string`) is never widened, so the behavior
- * `stringFlags.test.ts` pins is untouched — that carve-out exists because a GCP
- * key file passed to `create-secret --value` was being parsed into an object.
+ * Excluding string-typed names keeps this conservative: `value` (a secret's) is
+ * never widened, so the behavior `stringFlags.test.ts` pins is untouched — that
+ * carve-out exists because a GCP key file passed to `create-secret --value` was
+ * being parsed into an object.
  *
  * A *non*-string type elsewhere does not disqualify a name, which matters
- * because the specs already disagree with themselves about this exact field:
- * a step rule's `tool_choice` is declared `type: object` (`formations.yaml`)
- * while describing the same string-or-object union the typeless declarations
- * accept. Widening is still right there — the union genuinely includes an
- * object, and only flags the manifest calls `string` are retyped anyway.
+ * because the specs already disagree about this field: a step rule's
+ * `tool_choice` is `type: object` in `formations.yaml` while describing the same
+ * string-or-object union.
  *
- * The known gap: a name that is typeless in one schema and `type: string` in
- * another stays unwidened. No such case exists today, and the alternative —
- * resolving each request body's `$ref`/`oneOf` chain the way the codegen does —
- * would duplicate another package's logic and could drift from it silently.
+ * Known gap: a name typeless in one schema and `type: string` in another stays
+ * unwidened. No such case exists today, and resolving each body's `$ref`/`oneOf`
+ * chain would duplicate the codegen's logic and could drift from it silently.
  */
 const findUnionPropertyNames = (specsDir: string): Set<string> => {
   const typeless = new Set<string>();

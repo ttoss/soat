@@ -4,11 +4,9 @@ import { expireDueApprovals } from 'src/lib/approvalScheduler';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient } from '../../testClient';
 
-// End-to-end coverage of the `approval` orchestration node (producer #1): a run
-// parks on the node, the platform files an ApprovalItem, and resolving it
-// (approve / reject / expire) resumes the run and routes it down the matching
-// decision edge. Exercised through the real REST entry points — starting a run
-// and resolving via /approvals — with the run's own resume machinery.
+// A run parks on the node, the platform files an ApprovalItem, and resolving it
+// resumes the run down the matching decision edge — driven through the real REST
+// entry points.
 
 describe('Approval node (orchestration producer)', () => {
   let userToken: string;

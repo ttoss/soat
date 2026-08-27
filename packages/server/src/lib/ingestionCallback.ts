@@ -12,16 +12,12 @@ import { verifyIngestionCallbackToken } from './ingestionCallbackToken';
 
 const log = createDebug('soat:documents');
 
-// A document left in `pending`/`processing` with no progress for longer than
-// this is considered abandoned (e.g. the process crashed mid-ingestion) and is
-// marked `failed` on the next read so callers can recover. Configurable via
-// INGESTION_STALL_TIMEOUT_MS.
+// Past this with no progress a document is considered abandoned and marked
+// `failed` on the next read, so callers can recover.
 const INGESTION_STALL_DEFAULT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
-// A document awaiting an async converter callback (`conversionAttemptId` set)
-// uses this longer timeout instead — speech-to-text and similar jobs can run
-// well past the plain ingestion stall window. Configurable via
-// CONVERSION_STALL_TIMEOUT_MS.
+// Longer, for a document awaiting an async converter: speech-to-text and
+// similar jobs run well past the plain ingestion stall window.
 const CONVERSION_STALL_DEFAULT_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
 const getStallTimeoutMs = (): number => {

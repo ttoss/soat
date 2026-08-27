@@ -304,10 +304,9 @@ program
     const flags = wrapped.flags.single;
     const repeatedFlags = wrapped.flags.repeated;
 
-    // Declared type per flag (keyed by canonical name), so array-typed body
-    // params are serialized as JSON arrays instead of a bare scalar. Without
-    // this, `--document_paths /playbooks/` reached the API as the string
-    // "/playbooks/" and blew up server-side array handling.
+    // So array-typed body params serialize as JSON arrays, not a bare scalar:
+    // `--document_paths /playbooks/` used to reach the API as a string and
+    // blow up server-side array handling.
     const flagTypeByCanonical = new Map<string, string>(
       route.flags.map((f) => {
         return [toCanonical(f.name), f.type];
@@ -360,11 +359,8 @@ program
       }
     }
 
-    // Fall back to a generic `--id` flag or a bare positional argument
-    // (e.g. `soat get-formation frm_123`) when the command has exactly one
-    // path parameter and a more specific flag (e.g. `--formation_id`) did
-    // not already fill it. Ambiguous cases (zero or several path params)
-    // are left to the missing-parameter check below.
+    // Only when the command has exactly one path parameter and no specific
+    // flag filled it. Ambiguous cases are left to the check below.
     const positionalArgs = extractPositionalArgs({ cliArgs: rawArgs });
     const idAlias = flags['id'] ?? positionalArgs[0];
     const solePathParam = route.pathParams.length === 1 && route.pathParams[0];

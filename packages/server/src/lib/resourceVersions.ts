@@ -12,34 +12,23 @@ import { paginatedList, type PaginatedResult } from './pagination';
 const log = createDebug('soat:versions');
 
 /**
- * The shared resource-versioning engine (issue #877, layer 1).
+ * The shared resource-versioning engine (#877, layer 1).
  *
- * Agents and guardrails both keep an append-only archive of their configuration:
- * an immutable `(resource_id, version, config)` row written by the resource's
- * own write path, plus list / get / restore on top of it. The two had grown as
- * parallel copies — `AgentVersion`'s doc comment literally said "Mirrors
- * `GuardrailVersion`" — so the mechanism lives here once and each resource
- * supplies only what is genuinely its own:
+ * Agents and guardrails both keep an append-only archive of their config: an
+ * immutable `(resource_id, version, config)` row written by the resource's own
+ * write path, plus list / get / restore. The two had grown as parallel copies —
+ * `AgentVersion`'s doc comment literally said "Mirrors `GuardrailVersion`" — so
+ * the mechanism lives here once and each resource supplies only the config
+ * projection, `applyConfig`, `mapVersion` and `loadResource`.
  *
- * | Per resource | Why it cannot be shared |
- * |---|---|
- * | the config projection | which slice of the resource is *configuration* |
- * | `applyConfig` | the restore direction: config → that resource's update args |
- * | `mapVersion` | the wire field naming its parent (`agent_id` / `guardrail_id`) |
- * | `loadResource` | project-scoped lookup and its not-found message |
+ * Version *tables* stay per resource so the foreign key to the parent is a real
+ * one; only the lib code is shared.
  *
- * Version **tables** stay per resource (`agent_versions`, `guardrail_versions`)
- * so the foreign key to the parent is a real one. Only the lib code is shared —
- * there is no polymorphic version table.
- *
- * ## Why two factories
- *
- * {@link makeVersionStore} is the write side and knows nothing about the parent
- * resource beyond its row id; {@link makeVersionArchive} adds read, restore and
- * release support and therefore has to reach the resource's own update path.
+ * Two factories because {@link makeVersionStore} is the write side and knows
+ * nothing of the parent beyond its row id, while {@link makeVersionArchive}
+ * adds read, restore and release and must reach the resource's update path.
  * Keeping them apart is what lets `agents.ts` archive a version without
- * importing `agentVersions.ts`, which imports `agents.ts` back for `updateAgent`
- * — the split is the module cycle's absence, not a taste preference.
+ * importing `agentVersions.ts`, which imports `agents.ts` back.
  */
 
 /**
@@ -105,17 +94,13 @@ export const toResourceRef = (row: {
  * set of non-config keys.
  *
  * Only top-level keys are inspected, and only to decide whether to copy them —
- * no key is ever rewritten and no value is descended into, so nested
- * caller-authored payloads (`boundary_policy`, `knowledge_config`, a guardrail
- * `document`) are copied as values and cannot be mangled (see
- * `.claude/rules/case-convention.md`).
+ * no key is rewritten and no value descended into, so nested caller-authored
+ * payloads are copied as values (`.claude/rules/case-convention.md`).
  *
- * Stated as an exclusion rather than an allowlist on purpose. A field added to
- * the resource's mapper and forgotten here lands in snapshots automatically, so
- * `restore` keeps working; the opposite arrangement would silently stop
- * restoring the new field, with nothing to notice. The failure mode of this
- * direction is loud — a non-config field leaking in would make every update look
- * like a change and spray spurious versions.
+ * Stated as an exclusion rather than an allowlist: a field forgotten here lands
+ * in snapshots automatically so `restore` keeps working, whereas an allowlist
+ * would silently stop restoring it. This direction's failure mode is loud — a
+ * non-config field leaking in makes every update look like a change.
  */
 export const projectConfigSnapshot = (args: {
   resource: Record<string, unknown>;
@@ -138,13 +123,9 @@ const isSameConfig = (
   return isDeepStrictEqual(before, after);
 };
 
-// ── Reading a snapshot back ───────────────────────────────────────────────
-//
-// An archived config is untyped JSON, and its consumers — `restore` and the
-// agent served-version overlay — need every field as a definite value or `null`
-// (they replace the whole config, so "absent" must mean "cleared", never "leave
-// as is"). These readers express that once, instead of each call site pairing a
-// `toNullableX` with a `?? null`.
+// An archived config is untyped JSON, and its consumers replace the whole
+// config — so "absent" must read as "cleared", never "leave as is". Expressed
+// once here instead of each call site pairing a `toNullableX` with a `?? null`.
 
 export const configString = (value: unknown): string | null => {
   return typeof value === 'string' ? value : null;
@@ -521,10 +502,9 @@ const makeVersionReads = <TMappedVersion, TMappedResource>(
         return store.versionModel().findAndCountAll({
           where: { [store.foreignKey]: resource.dbId },
           include: store.versionInclude(),
-          // Newest first, ordered by the version counter rather than a
-          // timestamp: two versions can share a `createdAt` at timestamp
-          // resolution, and a non-deterministic page boundary in history is
-          // worse than useless.
+          // Ordered by the version counter, not a timestamp: two versions can
+          // share a `createdAt`, and a non-deterministic page boundary in
+          // history is worse than useless.
           order: [['version', 'DESC']],
           distinct: true,
           limit,

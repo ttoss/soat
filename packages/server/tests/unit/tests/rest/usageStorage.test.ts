@@ -8,12 +8,9 @@ import {
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
-// Storage metering has no HTTP entry point — the daily snapshot runs from the
-// scheduler tick (the sanctioned "no entry point" lib path). We drive the
-// emitter directly, seeding File rows as the upload flow would, then read the
-// written `storage` usage event back through GET /api/v1/usage/meters. The
-// listing scopes to the caller's own project, so a fresh per-file-prefix project
-// isolates these assertions from other suites' storage events.
+// No HTTP entry point — the daily snapshot runs from the scheduler tick, so the
+// emitter is driven directly with File rows seeded as the upload flow would. A
+// fresh per-prefix project isolates these from other suites' storage events.
 
 describe('Usage — storage metering', () => {
   let userToken: string;

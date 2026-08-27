@@ -34,11 +34,9 @@ const expectInvalid = (
   }
 };
 
-// #852 — the wire↔internal conversion must be an explicit field-by-field
-// mapper, not a key-blind recursive transform: only the named structural keys
-// change case, and every author-owned value — JSON Logic bodies, mapping
-// bags, and any key the mapper does not name — is copied verbatim, so its
-// inner keys can never be rewritten.
+// The conversion must be an explicit field-by-field mapper, not a key-blind
+// recursive transform (#852): only named structural keys change case, and every
+// author-owned value is copied verbatim.
 describe('workflowCollectionToCamel / workflowCollectionToSnake', () => {
   test('renames the structural keys and leaves author-owned bags verbatim', () => {
     const wire = [

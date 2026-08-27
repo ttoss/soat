@@ -259,10 +259,8 @@ export const windowedCostUsd = async (args: {
   return readTotal(rows[0]);
 };
 
-// Sums the windowed billable token count (input + output + cached). Resolves the
-// window's event ids first, then sums their token components — avoids a
-// join+aggregate whose column alias is brittle across Sequelize versions.
-// Exported for the guardrail `runtime.usage.tokens_*` context providers.
+// Resolves the window's event ids first, then sums their components — avoiding
+// a join+aggregate whose column alias is brittle across Sequelize versions.
 export const windowedTokens = async (args: {
   projectId: number;
   start: Date;
@@ -346,9 +344,7 @@ const windowedValue = (args: {
 type ThresholdInstance = InstanceType<(typeof db)['UsageThreshold']>;
 
 // Applies the hysteresis state machine to one threshold, mutating its fire
-// state in the DB. Returns the window key to report when it fires this round,
-// or null when it does not fire (either not crossed, already fired this window,
-// or a rolling window re-arming).
+// state. Returns the window key when it fires this round, else null.
 const applyFireDecision = async (args: {
   threshold: ThresholdInstance;
   value: number;

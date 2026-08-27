@@ -117,12 +117,9 @@ describe('parseModules', () => {
   });
 
   test('prefers a multipart upload sibling over a plain collection POST as the create op', () => {
-    // Mirrors the Files module: POST /files creates a metadata-only record
-    // (JSON body, no bytes), while POST /files/upload actually carries file
-    // content via a `format: binary` field. The generic form only ever
-    // renders a file picker for the operation wired to createOp, so that one
-    // must win — otherwise "Create" produces a form with no way to attach a
-    // file at all.
+    // Mirrors Files: one POST creates a metadata-only record, the other carries
+    // bytes. The form renders a file picker only for the operation wired to
+    // `createOp`, so that one must win or "Create" offers no way to attach a file.
     const spec: OpenApiSpec = {
       paths: {
         '/api/v1/files': {
@@ -426,12 +423,10 @@ describe('x-soat-ref cross-references', () => {
 });
 
 describe('parseModules — snake_cased served spec', () => {
-  // The server's caseTransform middleware snake_cases the entire served
-  // openapi.json, so structural OpenAPI keys arrive as operation_id and
-  // request_body. parseModules must normalise these back to camelCase, or
-  // form views report "No form schema available for this operation."
-  // Built through JSON.parse to mirror how the spec actually arrives (parsed
-  // from the wire) and to carry the off-spec snake_case keys without a cast.
+  // The served spec arrives snake_cased, structural OpenAPI keys included, and
+  // `parseModules` must normalise them back or form views find no schema. Built
+  // through `JSON.parse` to mirror the wire and carry the off-spec keys
+  // without a cast.
   const snakeSpec: OpenApiSpec = JSON.parse(
     JSON.stringify({
       paths: {
@@ -623,11 +618,9 @@ describe('resolveSchema — snake_cased component keys (served spec)', () => {
 });
 
 test('ignores operations mounted outside the REST API', () => {
-  // The served spec also describes the OAuth 2.1 protocol endpoints, whose
-  // paths the RFCs fix at the root. The engine builds a module per tag from
-  // whatever the spec declares, so without a boundary an "OAuth" module would
-  // appear in the sidebar offering to "create" a token — a browser redirect and
-  // a form-encoded grant rendered as CRUD.
+  // The spec also describes the OAuth protocol endpoints, and the engine builds
+  // a module per tag — so without a boundary the sidebar offers to "create" a
+  // token, rendering a browser redirect as CRUD.
   const modules = parseModules({
     paths: {
       '/token': {

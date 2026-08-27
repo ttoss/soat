@@ -275,10 +275,9 @@ export const updateProject = async (args: {
   // flip must take effect on the next request rather than after the TTL.
   invalidateReadAuditCache(args.id);
 
-  // The content-mode cache is keyed by agent, and a project flip changes the
-  // effective mode of every agent under it, so there is no narrower key to
-  // drop. Flipping to `none` must stop content writes on the next generation,
-  // not 30 seconds later.
+  // The cache is keyed by agent and a project flip changes every agent's
+  // effective mode, so there is no narrower key to drop — and `none` must stop
+  // content writes on the next generation, not 30 seconds later.
   if (args.traceContentMode !== undefined) {
     clearTraceContentModeCache();
   }

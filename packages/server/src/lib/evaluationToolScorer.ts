@@ -1,18 +1,12 @@
 /**
  * The `tool` scorer's invocation half (the evaluations module doc — Custom
- * scorers).
+ * scorers): the eval names a project tool, the engine calls it once per item,
+ * and the tool answers the same `{ score, passed }` shape every built-in
+ * produces — so nothing downstream needs a notion of "custom".
  *
- * A tool scorer is the evaluations engine's bring-your-own-algorithm seam: the
- * eval names a project [tool], the engine calls it once per item with the
- * item's context, and the tool answers with the same `{ score, passed }` shape
- * every built-in scorer produces — so aggregation, thresholds, and baseline
- * deltas need no notion of "custom" at all.
- *
- * Split from `evaluationScorers.ts` for the same reason `evaluationJudge.ts`
- * is: that module stays pure (no DB, no HTTP), which is what lets the scorer
- * algebra be driven directly in a `lib/` test. The output parser here is pure
- * too, and tested directly (`lib/evaluationToolScorer.test.ts`); the call and
- * the ref checks are covered through the REST entry point.
+ * Split from `evaluationScorers.ts` to keep that module pure. The output parser
+ * here is pure too and tested directly; the call and ref checks are covered
+ * through REST.
  */
 import createDebug from 'debug';
 
@@ -60,16 +54,14 @@ const requireToolScore = (score: unknown): number => {
 /**
  * Parses `{ score, passed?, reasoning? }` out of a scorer tool's result.
  *
- * Lenient about the envelope, for the same reason `parseJudgeVerdict` is: an
- * `http` target may answer `text/plain`, and an `mcp` tool's result is text
- * content — so a string is scanned for its first `{ … }` span. Strict about
- * the contract: `score` must be a finite number in 0–1, and `passed` — when
- * present — must be a real boolean, because it decides the verdict and
- * coercing `"false"` to anything would be worse than refusing it.
+ * Lenient about the envelope, as `parseJudgeVerdict` is — an `http` target may
+ * answer `text/plain` and an `mcp` result is text content, so a string is
+ * scanned for its first `{ … }` span. Strict about the contract: `score` must
+ * be a finite number in 0–1, and `passed`, when present, a real boolean, since
+ * it decides the verdict and coercing `"false"` would be worse than refusing.
  *
- * Throws `VALIDATION_FAILED` on a malformed result. The caller records that as
- * an **item-level error** — a scorer that cannot answer says nothing about the
- * agent, so it must never land as a score of 0.
+ * Throws `VALIDATION_FAILED`, which the caller records as an **item-level
+ * error** — a scorer that cannot answer must never land as a score of 0.
  */
 export const parseToolScorerOutput = (raw: unknown): ToolScorerVerdict => {
   const parsed =
@@ -105,17 +97,16 @@ export const parseToolScorerOutput = (raw: unknown): ToolScorerVerdict => {
 
 /**
  * Resolves every tool scorer's `tool_id` **within the eval's project** and
- * checks the tool is one an eval run can actually invoke.
+ * checks the tool is one an eval run can invoke.
  *
  * Shape validation (`validateScorers`) stays pure, so this DB half runs beside
  * it at the same three gates: eval create, eval update, and — authoritatively —
- * run start, because a tool can be deleted or its project scope is simply
- * wrong by then. A failure is a `400` naming the scorer, never a mid-run
- * surprise (the same rule as the `output_schema` re-check).
+ * run start, since a tool can be deleted by then. A failure is a `400` naming
+ * the scorer, never a mid-run surprise.
  *
- * `client` tools are refused for the same reason ingestion refuses them as
- * converters: they pause for a calling client to execute, and an eval run
- * executes server-side with no client attached.
+ * `client` tools are refused for the reason ingestion refuses them as
+ * converters: they pause for a calling client, and an eval run executes
+ * server-side with none attached.
  */
 export const validateToolScorerRefs = async (args: {
   scorers: unknown;

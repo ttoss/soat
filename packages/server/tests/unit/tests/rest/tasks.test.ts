@@ -190,11 +190,9 @@ describe('Tasks', () => {
       expect(history.body[0].actor_id).toBeUndefined();
     });
 
-    // #342 (same gap, third module): a task is long-lived, durable and moves
-    // through states for days. Its only caller-settable bag was `payload` —
-    // read by every guard and writable by the workflow's own `payload_writes`,
-    // so an infrastructural label put there is neither inert nor safe from the
-    // engine. `metadata` is caller-owned and untouched by both.
+    // A task's only caller-settable bag was `payload`, which every guard reads
+    // and `payload_writes` can write — so a label there is neither inert nor
+    // safe from the engine (#342).
     describe('metadata', () => {
       test('round-trips verbatim on create, single read and list', async () => {
         const metadata = { tenant_account_id: '42', source: 'zendesk' };
@@ -1656,11 +1654,9 @@ describe('Tasks', () => {
     });
 
     test('a failed dispatch with no recoverable cause id never persists a provenance-less automation transition (#792)', async () => {
-      // Simulates a dispatch failure that surfaces before any generation or
-      // orchestration run id exists (e.g. a bug upstream of recordGenerationFailure).
-      // Without a defensive check this would silently write a `to_failed` history
-      // row with principal_id, generation_id, and orchestration_run_id all null —
-      // a transition with no recorded cause at all.
+      // A dispatch failure surfacing before any generation or run id exists.
+      // Unchecked, this writes a history row with every cause column null — a
+      // transition with no recorded cause at all.
       mockCreateGeneration.mockRejectedValue(new Error('no meta at all'));
       const wf = await dispatchWorkflow({
         name: 'failing-no-provenance',
@@ -1925,13 +1921,10 @@ describe('Tasks', () => {
       const started = new Promise<void>((resolve) => {
         signalStarted = resolve;
       });
-      // Gate the generation so the orchestration run is genuinely in flight
-      // when the manual transition fires. This used to install a second spy on
-      // `agentGeneration` directly, because the shared one named the `agents`
-      // re-export and orchestration agent nodes bypassed it — and restoring
-      // that second spy unwired the shared one for every test after it. The
-      // barrel is gone (#911) and the shared spy names the defining module, so
-      // there is one spy again and nothing to restore.
+      // Gates the generation so the run is genuinely in flight when the manual
+      // transition fires. A second spy used to be needed here because the
+      // shared one named a re-export; the barrel is gone (#911), so there is
+      // one spy again and nothing to restore.
       mockCreateGeneration.mockImplementationOnce(async () => {
         signalStarted!();
         await gate;
@@ -2063,11 +2056,10 @@ describe('Tasks', () => {
       });
       const orchestrationRunId = (running.active_dispatch as { id: string }).id;
 
-      // The run must durably park as `sleeping` — its wake persisted, not held
-      // open by an in-process timer — before the scheduler ever ticks. This is
-      // exactly what #855 reports missing: `wait: true` used to `sleep()`
-      // through the whole delay in-process and never reach this state, so the
-      // scheduler-driven wake sweep never even saw the run.
+      // The run must durably park as `sleeping`, its wake persisted rather than
+      // held open by an in-process timer. `wait: true` used to sleep through the
+      // whole delay and never reach this state, so the wake sweep never saw it
+      // (#855).
       let parked: InstanceType<typeof db.OrchestrationRun> | null = null;
       for (let i = 0; i < 100; i += 1) {
         parked = await db.OrchestrationRun.findOne({
@@ -2095,15 +2087,11 @@ describe('Tasks', () => {
     });
 
     test('a dispatched run that settled while no in-process awaiter existed is reconciled and routed (restart recovery)', async () => {
-      // #855 proved the *run* survives a restart: the scheduler owns its wake.
-      // The task awaiting it does not. `runDispatch` resolves through
-      // `waitForOrchestrationRunSettlement`, an in-process poll loop reached
-      // from `dispatchOnEnter`'s detached promise (tracked only in the
-      // in-memory `pendingAutomations` set). A restart while the run is
-      // `sleeping` — the durable state a `delay`/`poll` node parks in, and the
-      // one that can last hours — loses that loop. The run then completes with
-      // nobody listening: `on_complete` never fires and the task is stranded at
-      // `automation_status: 'running'` forever.
+      // The run survives a restart because the scheduler owns its wake (#855);
+      // the task awaiting it does not. `runDispatch` resolves through an
+      // in-process poll loop tracked only in memory, so a restart while the run
+      // is `sleeping` — a state that can last hours — loses it. The run then
+      // completes with nobody listening and the task is stranded `running`.
       const orchestrationId = (
         await authenticatedTestClient(userToken)
           .post('/api/v1/orchestrations')
@@ -2174,11 +2162,10 @@ describe('Tasks', () => {
       expect(run.status).toBe(201);
       expect(run.body.status).toBe('succeeded');
 
-      // The post-restart row, written directly because no API call can produce
-      // it: a task parked in an automated state with a `running` dispatch
-      // pointing at a run that has since settled. `entered_state_at` is aged
-      // past the reconciler's grace window so a genuinely in-flight dispatch in
-      // a live process is never mistaken for an orphan.
+      // The post-restart row, which no API call can produce: a `running`
+      // dispatch pointing at a settled run. `entered_state_at` is aged past the
+      // grace window so a genuinely in-flight dispatch is never taken for an
+      // orphan.
       await db.Task.update(
         {
           state: 'working',
@@ -2416,11 +2403,9 @@ describe('Tasks', () => {
     });
 
     test('an agent dispatch, and a dispatch with no id yet, are both left to the live path', async () => {
-      // Two shapes the reconciler must decline. An `agent` dispatch can park in
-      // `requires_action` waiting for client tool outputs — legitimately
-      // outstanding, and indistinguishable from an orphan from here. A dispatch
-      // with `id: null` is one `setDispatchState` has written but whose record
-      // does not exist yet; there is nothing to look up.
+      // Two shapes the reconciler must decline: an `agent` dispatch parked in
+      // `requires_action` is legitimately outstanding and indistinguishable from
+      // an orphan here, and an `id: null` dispatch has no record to look up yet.
       const workflowId = (
         await authenticatedTestClient(userToken)
           .post('/api/v1/workflows')
@@ -2652,16 +2637,11 @@ describe('Tasks', () => {
     });
 
     test('a concurrent transition committing between the automation completion read and write is not clobbered (#590)', async () => {
-      // Reproduces the exact TOCTOU #590 describes: a concurrent transitionTask
-      // commits *after* the automation's post-dispatch read but *before* its
-      // write commits. A plain read-check-write can't be raced into that gap
-      // deterministically (there's no natural yield point between them), so we
-      // widen it with a force-failure-style spy (tests.md exception #2, same
-      // spirit as the dedup-race spy in approvals.test.ts) on the one `.save()`
-      // call the completion write makes. `on_complete` deliberately never
-      // matches: an auto-fired `to_done` runs in-process (no REST/auth
-      // overhead) and would always beat the externally-fired `abort` request
-      // to the row, confounding the race this test is actually after.
+      // The TOCTOU of #590: a concurrent `transitionTask` commits after the
+      // automation's post-dispatch read but before its write. There is no
+      // natural yield point between them, so a spy on the completion `.save()`
+      // widens the gap. `on_complete` deliberately never matches — an auto-fired
+      // `to_done` runs in-process and would always beat the external request.
       let releaseGen: (() => void) | undefined;
       const gate = new Promise<void>((resolve) => {
         releaseGen = resolve;
@@ -3073,11 +3053,10 @@ describe('Tasks', () => {
     });
 
     test('a guardrail-blocked call fails the dispatch instead of routing on_complete', async () => {
-      // The guardrail gate is the same one an orchestration `tool` node passes
-      // through — a workflow dispatch is not a way around it. In a graph a
-      // blocked call is a routable outcome an edge can branch on; a task
-      // dispatch has nowhere to put that, so it is a dispatch failure, which
-      // `on_failure` can route and a catch-all `on_complete` must not swallow.
+      // The same gate an orchestration `tool` node passes — a workflow dispatch
+      // is not a way around it. A graph can branch on a blocked call; a task has
+      // nowhere to put that, so it is a dispatch failure `on_failure` routes and
+      // a catch-all `on_complete` must not swallow.
       const guardrailId = (
         await authenticatedTestClient(userToken)
           .post('/api/v1/guardrails')
@@ -3767,11 +3746,10 @@ describe('Tasks', () => {
       expect(respun.automation_chain_depth).toBe(LIMIT);
     });
 
-    // The other half of the loop, and the one a budget keyed on `principal.kind`
-    // would miss entirely: a dispatch's own `soat` tool calls `transition-task`
-    // with a run-as token, which authenticates as the *user* who started the
-    // chain. On the wire that hop is indistinguishable from a person clicking a
-    // button — except for the `orn` claim.
+    // A budget keyed on `principal.kind` would miss this half entirely: a
+    // dispatch's `soat` tool calls `transition-task` with a run-as token
+    // authenticating as the user who started the chain, so on the wire the hop
+    // is indistinguishable from a person clicking a button but for the `orn`.
     describe('a transition fired by a run-as token', () => {
       /** Two states that bounce back and forth, with no automation of their own. */
       const pingPongWorkflow = async () => {
@@ -3849,12 +3827,9 @@ describe('Tasks', () => {
       });
     });
   });
-  // #950 — a workflow/task automation is a generation entry point like any
-  // other, so the caller context its dispatches forward must come from
-  // somewhere. It attaches per move (creation counts as the first move) and the
-  // move that supplies one replaces the stored bag wholesale, so the credential
-  // a dispatch runs with belongs to the same principal `resolveDispatchPrincipal`
-  // already makes it run as.
+  // Context attaches per move, creation counting as the first, and the move that
+  // supplies one replaces the bag wholesale — so a dispatch's credential belongs
+  // to the same principal `resolveDispatchPrincipal` runs it as (#950).
   describe('tool_context (#950)', () => {
     let ctxWorkflowId: string;
     let orchWorkflowId: string;

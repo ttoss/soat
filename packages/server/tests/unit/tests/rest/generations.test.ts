@@ -142,10 +142,8 @@ describe('Generations', () => {
       jest.clearAllMocks();
     });
 
-    // A client tool's `args` mirror the caller-authored `parameters` JSON
-    // Schema, which is stored and returned verbatim (e.g. camelCase). The
-    // requires_action payload must return those keys unchanged — the outbound
-    // caseTransform must not snake_case them, or the payload diverges from the
+    // `args` mirror the caller-authored `parameters` schema, stored verbatim, so
+    // the payload must return those keys unchanged or it diverges from the
     // schema the caller owns.
     test('preserves the authored casing of tool call args', async () => {
       mockCreateGeneration.mockResolvedValueOnce({
@@ -298,11 +296,9 @@ describe('Generations', () => {
     });
   });
 
-  // Server-owned generation state (usage attribution, the served agent version,
-  // the model route's record, the extraction summary, internal recovery state)
-  // lives in typed columns and is exposed as top-level snake_case fields.
-  // `metadata` is 100% caller-owned, so there is no reserved-key blocklist to
-  // maintain and a caller cannot forge attribution by writing into the bag.
+  // Server-owned state lives in typed columns, so `metadata` is entirely
+  // caller-owned: no reserved-key blocklist to maintain, and no way to forge
+  // attribution through the bag.
   describe('server-owned state is stored in columns, not metadata', () => {
     let attributedGenerationId: string;
 
@@ -432,11 +428,8 @@ describe('Generations', () => {
       expect(response.body.error.message).toMatch(/object/i);
     });
 
-    // Was: "rejects reserved metadata keys with 400", in both the wire and the
-    // stored camelCase spelling. Usage attribution is a column now, so neither
-    // spelling can reach it and there is nothing left to reject — the guard the
-    // blocklist provided is structural. `metadata` cannot forge attribution is
-    // asserted in the "server-owned state" describe above.
+    // Attribution is a column now, so neither spelling can reach it and there is
+    // nothing left to reject — the blocklist's guard is structural instead.
     test('does not let a metadata write reach usage attribution', async () => {
       const response = await authenticatedTestClient(userToken)
         .patch(`/api/v1/generations/${failedGenerationId}`)

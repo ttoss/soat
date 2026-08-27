@@ -1,10 +1,8 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
-// This module keeps its own `TOOL_NOT_FOUND` / `AGENT_NOT_FOUND` throws — a
-// *referenced-entity* miss on a request field is a `400`, not the `404` a
-// top-level lookup returns — so it borrows the scope rule alone. That is the
-// half that must not drift: how a credential scope narrows a lookup is one
-// rule, with one implementation.
+// Keeps its own throws because a referenced-entity miss is a `400`, not the
+// `404` a top-level lookup returns — and borrows the scope rule alone, which is
+// the half that must not drift.
 import { scopedWhere } from './resourceAccessor';
 
 /**

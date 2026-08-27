@@ -1,16 +1,14 @@
 /**
  * The eval item queue (the evaluations module doc).
  *
- * An async run enqueues one `EvalRunTask` per dataset item; the eval worker
- * claims them in batches with `SELECT … FOR UPDATE SKIP LOCKED`, executes each
- * item, and acks by deleting the row. Same claim/lease/redelivery mechanics the
- * orchestration queue uses, over this module's own table — see the note on
- * `EvalRunTask` for why the two do not share one.
+ * An async run enqueues one `EvalRunTask` per dataset item; the worker claims
+ * them in batches with `SELECT … FOR UPDATE SKIP LOCKED`, executes each, and
+ * acks by deleting the row. Same claim/lease/redelivery mechanics as the
+ * orchestration queue, over this module's own table — see `EvalRunTask` for why
+ * the two do not share one.
  *
- * At-least-once delivery is safe here without any extra bookkeeping: writing an
- * item's result is idempotent on the unique `(eval_run_id, dataset_item_id)`
- * index, so a redelivered task re-runs the item into the same row rather than
- * double-counting it.
+ * At-least-once delivery needs no extra bookkeeping: writing a result is
+ * idempotent on the unique `(eval_run_id, dataset_item_id)` index.
  */
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import { Op } from '@ttoss/postgresdb';
@@ -58,10 +56,8 @@ export const enqueueEvalItemTasks = async (args: {
   await db.EvalRunTask.bulkCreate(
     args.datasetItemIds.map((datasetItemId) => {
       return {
-        // Explicit: `bulkCreate` does not run the model's per-instance
-        // `beforeValidate` hook, so the generated public id has to be supplied
-        // here — the same reason `persistTokenEvent` passes one for its
-        // components.
+        // `bulkCreate` skips the per-instance `beforeValidate` hook, so the
+        // public id has to be supplied here.
         publicId: generatePublicId(PUBLIC_ID_PREFIXES.evalRunTask),
         evalRunId: args.evalRunId,
         datasetItemId,

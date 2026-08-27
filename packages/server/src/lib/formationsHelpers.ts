@@ -175,11 +175,9 @@ export const resolveParamExpressions = (
   resourceLogicalIds?: Set<string>
 ): unknown => {
   if (isParam(value)) {
-    // An unresolved param resolves to `undefined`, which drops the field from
-    // the resolved properties. Required params that are neither supplied nor
-    // kept are rejected upstream (`getMissingParams`), so the only way a param
-    // reaches here unresolved is an explicit "use previous value" request — the
-    // field is then intentionally omitted so the existing value is preserved.
+    // An unresolved param drops the field, preserving the existing value. The
+    // only way one reaches here unresolved is an explicit "use previous value"
+    // — missing required params are rejected upstream.
     return resolvedParams.get(value.param);
   }
   if (isSub(value)) {
@@ -277,12 +275,10 @@ export const buildAuditableParameters = (
   return Object.keys(result).length > 0 ? result : null;
 };
 
-// Build the template with param expressions resolved. Resolution runs whenever
-// the template declares parameters (not only when values resolved): a
-// `use_previous_value` parameter that is omitted yields no entry in the map,
-// yet its `{ param: ... }` expression must still be stripped to `undefined` so
-// the existing value is preserved rather than the raw expression being written
-// as the new value.
+// Runs whenever the template declares parameters, not only when values
+// resolved: an omitted `use_previous_value` parameter yields no map entry, yet
+// its expression must still be stripped so the existing value is preserved
+// rather than the raw expression written as the new one.
 export const resolveWorkingTemplate = (args: {
   template: FormationTemplate;
   parameters?: Record<string, string>;

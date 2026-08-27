@@ -64,19 +64,14 @@ export const generateSecretValue = (): string => {
 
 /**
  * Decrypts a stored trigger / webhook secret, refusing a value that is not
- * valid ciphertext.
+ * valid ciphertext. There is no plaintext fallback for pre-encryption rows: a
+ * secret is either encrypted or refused.
  *
- * This used to fall back to treating an undecryptable value as plaintext, for
- * rows written before secret-at-rest encryption. That fallback is gone: a
- * secret is either encrypted or it is refused.
- *
- * The refusal is a named error rather than the raw
- * `unable to authenticate data` a bare `decryptValue` surfaces, because the two
- * causes an operator needs to tell apart both land here — a row that predates
- * encryption (rotate it) and a `SECRETS_ENCRYPTION_KEY` that has changed since
- * the value was written (restore the key; rotating would work but discards
- * every other secret encrypted under the old one). The stored value is never
- * included in the message: it may *be* the plaintext secret.
+ * The refusal is a named error rather than the raw `unable to authenticate
+ * data`, because the two causes an operator must tell apart both land here — a
+ * row predating encryption (rotate it) and a changed `SECRETS_ENCRYPTION_KEY`
+ * (restore the key; rotating discards every other secret under the old one).
+ * The stored value is never in the message: it may *be* the plaintext secret.
  */
 export const decryptStoredSecret = (args: {
   stored: string;
@@ -183,12 +178,9 @@ export const updateSecret = async (args: {
   return mapSecret(secret);
 };
 
-// ── Secret references ({{secret:sec_...}}) ────────────────────────────────
-//
-// Any string-valued input across the API may embed a `{{secret:<publicId>}}`
-// token. The token is what gets stored and echoed back by GET/LIST endpoints;
-// it is resolved to the decrypted value server-side, at the point of use only
-// (e.g. right before an outbound fetch for an http tool).
+// Any string-valued input may embed a `{{secret:<publicId>}}` token. The token
+// is what gets stored and echoed back; it resolves to the decrypted value
+// server-side at the point of use only.
 
 const SECRET_REF_RE = /\{\{secret:(sec_[A-Za-z0-9]+)\}\}/g;
 

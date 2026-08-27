@@ -18,17 +18,14 @@ const sleep = (ms: number) => {
  * Runs a database operation again when it rejects, and rethrows the last error
  * once the attempts are spent.
  *
- * This exists for the writes that happen **after** their domain transaction has
- * committed — emitting an event, matching its subscriptions, inserting the
- * delivery row. A caller on that path has nothing left to fail: the response has
- * already been written, so a rejection there is not an error anyone can be told
- * about, only work that silently does not happen. Retrying is what turns a
- * connection blip from lost data into a slightly later write.
+ * For the writes that happen **after** their domain transaction has committed —
+ * emitting an event, matching subscriptions, inserting the delivery row. The
+ * response is already written, so a rejection there is not an error anyone can
+ * be told about, only work that silently does not happen.
  *
- * It is deliberately small and in-process. Retries that must survive a restart
- * belong in a row with its own due time — that is what the webhook delivery
- * outbox and the orchestration queue already are, and this is only the step that
- * gets an event *into* one of them.
+ * Deliberately small and in-process. Retries that must survive a restart belong
+ * in a row with its own due time — the webhook outbox and the orchestration
+ * queue already are that, and this is only the step that gets an event into one.
  */
 export const retryTransient = async <T>(args: {
   operation: () => Promise<T>;

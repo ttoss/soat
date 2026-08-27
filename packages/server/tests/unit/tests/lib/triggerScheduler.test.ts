@@ -33,13 +33,9 @@ const flush = () => {
   });
 };
 
-// ── Real-DB fixtures ──────────────────────────────────────────────────────
-//
-// The scheduler is a real entry point, so these tests drive fireDueTriggers
-// against the real database. Schedule triggers are created through the REST API
-// (so the run-as creator and its StartRun permission are wired exactly as in
-// production), then their `nextFireAt` is manipulated directly to model the due
-// / future / misfired states the scheduler reclaims.
+// Triggers are created through REST, so the run-as creator and its StartRun
+// permission are wired as in production, then `nextFireAt` is manipulated
+// directly to model the due / future / misfired states.
 
 let userToken: string;
 let projectPublicId: string;

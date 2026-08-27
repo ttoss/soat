@@ -41,10 +41,9 @@ const KNOWN_SOAT_ACTIONS = new Set(
   })
 );
 
-// SOAT action names are kebab-case (e.g. "search-knowledge"), matching the MCP
-// tool name derived from the OpenAPI operationId. A common mistake is passing
-// the operationId itself (camelCase, e.g. "searchKnowledge") — detect that case
-// and suggest the correct kebab-case name.
+// Action names are kebab-case, matching the MCP tool name derived from the
+// operationId. Passing the camelCase operationId itself is a common mistake, so
+// it is detected and the right name suggested.
 const camelToKebab = (value: string): string => {
   return value.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
 };
@@ -430,11 +429,9 @@ export const deleteTool = async (args: {
 
 // ── Call ──────────────────────────────────────────────────────────────────
 
-// `callResolvedTool` (and `InlineToolDefinition`, an agent's ephemeral inline
-// tool) reads camelCase fields, but `mapTool` is the wire mapper — it emits
-// the response's snake_case shape. Converts explicitly rather than passing
-// the wire object straight through, which would silently resolve every
-// camelCase field to undefined (deniedActions, presetParameters, ...).
+// The call path reads camelCase but `mapTool` emits the wire's snake_case.
+// Converted explicitly: passing the wire object straight through resolves every
+// camelCase field to undefined.
 const toCallableTool = (tool: MappedTool): CallableToolDefinition => {
   return {
     name: tool.name,
@@ -464,10 +461,9 @@ export const callTool = async (args: {
   // Forwarded to an HTTP tool as the `Idempotency-Key` request header (D7),
   // so a redelivered orchestration node call can be deduped downstream.
   idempotencyKey?: string;
-  // The caller's `tool_context`. An orchestration `tool`/`poll` node passes the
-  // run's bag, so a tool reached without an agent in between still resolves its
-  // `{{context:}}` headers and presets and still receives its context headers
-  // (#345). A direct `POST /tools/{id}/call` passes none.
+  // An orchestration `tool`/`poll` node passes the run's bag, so a tool reached
+  // with no agent in between still resolves its `{{context:}}` tokens (#345). A
+  // direct `POST /tools/{id}/call` passes none.
   toolContext?: Record<string, string>;
 }): Promise<unknown> => {
   const toolInstance = await tools.getByPublicId({

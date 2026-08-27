@@ -13,39 +13,29 @@ const log = createDebug('soat:responseContract');
 type Next = () => Promise<void>;
 
 /**
- * The single job the deleted `caseTransform` middleware actually did well — keep
- * responses on the documented contract — expressed as a check instead of a
- * rewrite.
+ * The one job the deleted `caseTransform` middleware did well — keep responses
+ * on the documented contract — expressed as a check instead of a rewrite.
  *
  * Every response body is now serialized field by field in a lib mapper, so a
- * mapper that emits `projectId` where the spec says `project_id` is a plain bug
- * with no middleware to paper over it. This middleware turns that bug into a
- * deterministic failure, using the route's OpenAPI response schema — the same
- * specs that drive the SDK, CLI, and MCP tool surface — to decide what a key
- * should have been called.
+ * mapper emitting `projectId` where the spec says `project_id` is a plain bug.
+ * This turns it into a deterministic failure, using the route's OpenAPI
+ * response schema to decide what a key should have been called.
  *
- * It only ever *reads* the body. Two properties follow from that, and they are
- * the whole point of the design:
+ * It only ever *reads* the body, and two properties follow:
  *
- * - **Opaque bags are untouchable.** A guardrail `document`, a `tool_context`, a
- *   `tags` map, an orchestration `input` — anything the spec models as an open
- *   object — is a *value* here, never a set of keys to inspect or rewrite. There
- *   is no skip list to forget a bag from, because bags were never at risk.
- * - **Failures are loud, not silent.** A key-blind rewrite made a mismatched key
- *   look correct; this makes it fail.
+ * - **Opaque bags are untouchable.** A guardrail `document`, a `tool_context`,
+ *   a `tags` map — anything the spec models as an open object — is a *value*
+ *   here. There is no skip list to forget a bag from, because bags were never
+ *   at risk.
+ * - **Failures are loud, not silent.** A key-blind rewrite made a mismatched
+ *   key look correct; this makes it fail.
  *
- * ## Two severities, on purpose
- *
- * - A **camelCase key** is a hard failure. Under a snake_case wire contract it
- *   can only mean a mapper skipped serialization, which is exactly the bug class
- *   this issue removes the machinery for.
- * - A **snake_case key the spec does not declare** is logged, not thrown. That
- *   is pre-existing spec drift, and it is pervasive: the response-shape validator
- *   in `tests/unit/openapiContract.ts` documents ~1900 such cases and
- *   deliberately narrows itself to the list-envelope and agent-generation shapes
- *   for the same reason. Throwing here would silently expand this change into
- *   that burn-down; keeping it as a log leaves the drift visible without
- *   coupling the two.
+ * Two severities on purpose. A **camelCase key** is a hard failure: under a
+ * snake_case wire contract it can only mean a mapper skipped serialization. A
+ * **snake_case key the spec does not declare** is logged, because that is
+ * pre-existing spec drift — ~1900 cases, documented in
+ * `tests/unit/openapiContract.ts` — and throwing would silently expand this
+ * change into that burn-down.
  */
 
 /** Statuses whose bodies are error envelopes, not the documented resource. */
@@ -112,9 +102,8 @@ const findings = (args: {
       };
     });
 
-  // Descend exactly one level into a list envelope's `data` array — the other
-  // place a resource mapper's own keys surface. Deeper nesting is deliberately
-  // not walked: below a resource's top level the spec thins out, and a false
+  // Exactly one level, into a list envelope's `data`. Deeper is deliberately
+  // not walked: the spec thins out below a resource's top level, and a false
   // positive in a guardrail is worse than a missed key.
   const itemSchema = envelopeItemSchema(properties);
   const data = args.value.data;

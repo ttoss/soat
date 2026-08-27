@@ -237,11 +237,9 @@ test('every page outside the docs tree either has a twin or is declared HTML-onl
 });
 
 test('every Markdown page under src/pages has a generated twin', () => {
-  // The `.tsx` case above is the HTML-only half of the same invariant. A
-  // Markdown page is the other half: it must NOT be declared HTML-only, and the
-  // twin the function rewrites to must actually be generated — the function
-  // cannot check that a file exists, so `/about` with `Accept: text/markdown`
-  // becomes a 404 the moment the twin stops being written.
+  // The other half of the invariant above: a Markdown page must not be declared
+  // HTML-only, and its twin must actually be generated — the function cannot
+  // check a file exists, so the page 404s the moment the twin stops being written.
   const pagesDir = path.resolve(__dirname, '..', 'src', 'pages');
 
   const markdownPages = fs

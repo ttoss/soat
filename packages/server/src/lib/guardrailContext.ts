@@ -173,9 +173,7 @@ const resolveWindowedUsage = async (args: {
   }
 };
 
-// `runtime.activity.actions_*` — how many actions this project executed
-// autonomously in the rolling window ending now, read off the activity feed. An
-// empty feed is a real 0 (not unresolved), so a rate ceiling passes for a
+// An empty feed is a real 0, not unresolved, so a rate ceiling passes for a
 // project that has taken no actions yet. An unknown window suffix is left
 // unresolved.
 const resolveWindowedActivity = async (args: {
@@ -201,10 +199,9 @@ const resolveWindowedActivity = async (args: {
   }
 };
 
-// Dispatches one referenced catalog key to the namespace that computes it. A key
-// outside these namespaces is either already set by `buildDeterministicRuntime` or
-// one we don't compute — returning UNRESOLVED leaves it unset, so it reads as
-// null → fail-closed.
+// A key outside these namespaces is either already set by
+// `buildDeterministicRuntime` or one we do not compute; UNRESOLVED leaves it
+// unset, so it reads as null and fails closed.
 const resolveAsyncRuntimeKey = (args: {
   rel: string;
   path: string;

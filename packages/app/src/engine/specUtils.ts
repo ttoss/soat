@@ -190,10 +190,8 @@ const collectTagOps = (
 ): void => {
   const raw = pathItem[method] as RawOp | undefined;
   if (!raw) return;
-  // The server's caseTransform middleware snake_cases the whole served spec
-  // (operationId → operation_id, requestBody → request_body). Normalise the
-  // camelCase OpenAPI keys back so the rest of the engine can rely on them —
-  // without this, form views can't find the create/edit body schema.
+  // The served spec arrives snake_cased, so the camelCase OpenAPI keys are
+  // normalised back — without this, form views cannot find the body schema.
   const operation: OpenApiOperation = {
     ...raw,
     operationId: raw.operationId ?? raw.operation_id ?? '',
@@ -238,10 +236,8 @@ export const getIdParamName = (getPath: string, listPath: string): string => {
   return extra ? extra.slice(1, -1) : 'id';
 };
 
-// Picks the right object key for a $ref segment. The server's caseTransform
-// middleware snake_cases the served spec's component KEYS (ActorRecord →
-// _actor_record) while leaving $ref strings pointing at the original name, so
-// we fall back to the snake_cased key when the exact one is absent.
+// The served spec snake_cases component keys while leaving $ref strings on the
+// original name, so an absent exact key falls back to the snake_cased one.
 const lookupRefKey = (obj: Record<string, unknown>, part: string): string => {
   if (part in obj) return part;
   const snake = part.replace(/[A-Z]/g, (char) => {
@@ -333,11 +329,10 @@ const unwrapPaginatedItems = (
   return arrayProp?.items ? resolveSchema(arrayProp.items, spec) : undefined;
 };
 
-// Resolves the per-record schema of a list/collection operation from its OUTER
-// 2xx response. Handles both a bare `array` response and a paginated wrapper
-// object — without this, refs on paginated lists (e.g. actors' project_id)
-// never get their x-soat-ref annotation and so never link. (Operating on the
-// outer schema avoids mistaking a record's own array field for the list.)
+// Handles both a bare `array` response and a paginated wrapper — without the
+// latter, refs on paginated lists never get their `x-soat-ref` and never link.
+// Working from the outer schema avoids mistaking a record's own array field
+// for the list.
 export const getListItemSchema = (
   op: ModuleOp | undefined,
   spec: OpenApiSpec
@@ -388,11 +383,9 @@ const hasDetailRoute = (targetModule: ModuleInfo): boolean => {
   return extractPathParams(targetModule.getOp.pathTemplate).length >= 1;
 };
 
-// Builds a detail-view descriptor that opens `id` in the target module. The
-// trailing path parameter receives `id`; any preceding (parent) parameters are
-// filled from `context` — the current path params plus the row's own fields.
-// Returns null when a required parent id is absent, so callers can fall back to
-// plain text instead of rendering a dead link.
+// Parent path parameters are filled from `context`. Returns null when a
+// required parent id is absent, so callers fall back to plain text instead of
+// rendering a dead link.
 export const buildRefDescriptor = (
   targetModule: ModuleInfo,
   id: string,
@@ -416,10 +409,8 @@ export const buildRefDescriptor = (
   };
 };
 
-// Narrows a field→resource map to the references whose target is a known module
-// exposing a detail route. References to skipped or unknown resources are
-// dropped. Nested targets are kept as candidates here; per-row resolution then
-// decides whether the parent ids are available to form a live link.
+// Nested targets are kept as candidates here; per-row resolution decides
+// whether the parent ids are available to form a live link.
 export const resolvableRefFields = (
   refFields: Record<string, string>,
   modules: ModuleInfo[]
@@ -434,10 +425,8 @@ export const resolvableRefFields = (
   return resolvable;
 };
 
-// Builds the link context for a record: the current path params merged with the
-// record's own string fields. A nested cross-ref (e.g. a session under an
-// agent) recovers its parent id from either the surrounding scope or a
-// foreign-key field on the record itself.
+// Path params merged with the record's own string fields, so a nested cross-ref
+// recovers its parent id from either the surrounding scope or the record.
 export const refLinkContext = (
   item: JsonObject,
   pathParams: Record<string, string>

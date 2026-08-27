@@ -1,3 +1,9 @@
+---
+paths:
+  - "packages/server/**"
+  - "packages/website/**"
+---
+
 # Documentation Update Rule
 
 Every implementation that adds or changes a module's behavior **must** update the corresponding module documentation page before the work is considered done.

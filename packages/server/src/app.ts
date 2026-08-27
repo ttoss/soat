@@ -44,12 +44,10 @@ app.use(authMiddleware);
 // the route handlers, it records one entry per mutating /api/v1 request
 // post-commit through a fire-and-forget queue.
 app.use(auditMiddleware);
-// API-request metering + request-quota enforcement, in that order: the meter
-// records arrivals, the quota decides admissions. A project-scoped key is
-// attributed here, before routing, so no handler work is wasted on a request a
-// quota will reject; an unscoped key is attributed once the route resolves and
-// authorizes its project. Mounted after `audit` so it wraps the already-wrapped
-// authorizer and the admitting check is audited even on a 429.
+// Metering then enforcement: the meter records arrivals, the quota decides
+// admissions. A project-scoped key is attributed before routing, so no handler
+// work is wasted on a request a quota will reject. Mounted after `audit` so the
+// admitting check is audited even on a 429.
 app.use(requestAttributionMiddleware);
 
 // OAuth 2.1 authorization server (issuer side): /authorize, /token, /register,

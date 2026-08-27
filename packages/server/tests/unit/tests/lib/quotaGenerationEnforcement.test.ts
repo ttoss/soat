@@ -9,12 +9,9 @@ import {
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient } from '../../testClient';
 
-// Direct lib test for the token/cost pre-generation check. Justified under the
-// keep-list rule: a pure aggregation algorithm over a large input space
-// (scope × metric × window × attribution) whose only external I/O is the real
-// DB. Driving every branch through a live LLM generation would be slow and
-// low-resolution (a bare 429 hides which scope/window fired). Usage rows are
-// seeded directly — there is no create API for metered events.
+// A pure aggregation over scope × metric × window × attribution, where a bare
+// 429 through a live generation would hide which combination fired. Usage rows
+// are seeded directly — there is no create API for metered events.
 
 describe('evaluateGenerationQuotas', () => {
   let adminToken: string;
@@ -149,12 +146,9 @@ describe('evaluateGenerationQuotas', () => {
     return quota;
   };
 
-  // ── Unpriced cost_usd caps ────────────────────────────────────────────────
-  //
-  // An unpriced usage event contributes 0 to a cost aggregate, so a `cost_usd`
-  // cap on a project with no effective price book can never breach — it looks
-  // healthy while protecting nothing. These cover the exception that surfaces
-  // that dead cap for triage.
+  // An unpriced event contributes 0, so a `cost_usd` cap on a project with no
+  // price book can never breach — healthy-looking while protecting nothing.
+  // These cover the exception that surfaces the dead cap.
   describe('unpriced cost_usd quotas', () => {
     const unpricedExceptions = async (projectInternalId: number) => {
       return db.ExceptionItem.findAll({
@@ -623,12 +617,9 @@ describe('evaluateGenerationQuotas', () => {
     expect(captured[0].data.mode).toBe('enforce');
   });
 
-  // ── Actor scope ───────────────────────────────────────────────────────────
-  //
-  // An actor-scoped quota caps one end user's spend. The generation supplies a
-  // `sessionId`; the actor is derived from the session (the same rule usage
-  // attribution follows), so a caller can never bill one actor under another's
-  // session. A generation with no session has no actor and is never matched.
+  // The actor is derived from the session, as usage attribution does, so a
+  // caller can never bill one actor under another's session. A generation with
+  // no session has no actor and is never matched.
   describe('actor scope', () => {
     const createActorAndSession = async (opts: {
       projectPublicId: string;

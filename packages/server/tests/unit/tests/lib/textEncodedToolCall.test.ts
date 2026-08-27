@@ -1,16 +1,9 @@
 import { findTextEncodedToolCall } from 'src/lib/textEncodedToolCall';
 
-// A pure function over a large input space (every shape a model may improvise
-// when it narrates a tool call instead of making one, against every shape of
-// ordinary answer that must survive untouched), so it earns a direct lib test
-// under the keep-list: driving one case through a generation would need a
-// project + provider + agent + a stub response each time, and the signal — a
-// generation that completed instead of failing — would not say which shape
-// slipped through.
-//
-// The wiring — that a generation actually consults this, and fails instead of
-// completing — is covered at the entry point, in
-// `rest/agentGeneration.test.ts`.
+// A pure function over every shape a model may improvise when it narrates a tool
+// call, against every ordinary answer that must survive untouched. Through a
+// generation the signal — completed instead of failed — would not say which
+// shape slipped through. The wiring is covered in `rest/agentGeneration.test.ts`.
 describe('findTextEncodedToolCall', () => {
   const toolNames = ['get-fundamental-truth', 'search-web'];
 

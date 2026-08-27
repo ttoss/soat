@@ -250,11 +250,9 @@ describe('ollamaToolChoiceProxy', () => {
     assert.equal(upstreamRequests.length, before + 1);
   });
 
-  // The shim's whole job is to make a forced allowlisted call deterministic, so
-  // "the request forces an allowlisted tool but does not offer it" is a wiring
-  // break, not a model decision. Forwarding it would hand the outcome back to
-  // the sandbox model and re-create the #774 coin flip — with no trace of why.
-  // Fail closed instead, naming the tool.
+  // Forcing an allowlisted tool the request does not offer is a wiring break,
+  // not a model decision. Forwarding it hands the outcome back to the sandbox
+  // model and revives the #774 coin flip with no trace of why.
   test('rejects a forced allowlisted tool the request does not offer', async () => {
     const before = upstreamRequests.length;
 

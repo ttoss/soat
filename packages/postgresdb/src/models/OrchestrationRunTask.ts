@@ -11,18 +11,15 @@ import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { OrchestrationRun } from './OrchestrationRun';
 
 /**
- * A unit of work in the orchestration queue (the Postgres queue driver). A task
- * marks that a run needs driving right now (or at `availableAt`): a fresh run to
- * start (`continue`), a parked run whose wait came due (`wake`), or external
- * input applied that must be resumed (`resume`). Parking itself holds no task —
- * a `sleeping` / `awaiting_input` run is pure DB state; tasks exist only when a
- * worker could pick up work.
+ * A unit of work in the orchestration queue (the Postgres driver): a run needs
+ * driving now, or at `availableAt` — a fresh run (`continue`), a parked run
+ * whose wait came due (`wake`), or external input to resume. Parking holds no
+ * task; tasks exist only when a worker could pick up work.
  *
- * Tasks are claimed in batches with `SELECT … FOR UPDATE SKIP LOCKED`; the
- * claimer sets `leaseExpiresAt` and, if it fails to `ack` (delete) the task
- * before the lease expires, the task becomes claimable again — the at-least-once
- * redelivery mechanism. `attempts` counts deliveries and is deliberately **not**
- * part of any node idempotency key.
+ * Claimed in batches with `SELECT … FOR UPDATE SKIP LOCKED`; the claimer sets
+ * `leaseExpiresAt` and a task unacked past its lease becomes claimable again.
+ * `attempts` counts deliveries and is deliberately **not** part of any node
+ * idempotency key.
  */
 @Table({
   tableName: 'orchestration_run_tasks',

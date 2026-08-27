@@ -114,11 +114,9 @@ const fireStreamEndSideEffects = (args: {
     rootTraceId: args.rootTraceId,
   }).catch(() => {});
 
-  // The blob has already gone down the wire — a stream cannot be recalled —
-  // but the record of it can still tell the truth. Recording `failed` is what
-  // makes this findable on the generation and the trace instead of only in
-  // whatever consumed the stream. (`output_schema` never reaches here:
-  // streaming rejects it upfront.)
+  // The blob has already gone down the wire, but the record of it can still
+  // tell the truth — `failed` is what makes this findable on the generation and
+  // the trace instead of only in whatever consumed the stream.
   const streamedToolCall = findTextEncodedToolCall({
     text: finalStepText(args.steps),
     toolNames: Object.keys(args.resolvedTools),
@@ -155,21 +153,13 @@ const fireStreamEndSideEffects = (args: {
 };
 
 /**
- * Persists a streamed generation that failed mid-flight, and returns the error
+ * Persists a streamed generation that failed mid-flight and returns the error
  * to fail the stream with.
  *
- * A run that fails before any step completes never reaches `onEnd` — the SDK
- * rejects its result promises instead — so nothing else writes this
- * generation's terminal state: without this the record sat `in_progress`
- * forever while the caller had already been told the run ended. (A run that
- * fails *after* a step does reach `onEnd`, which is what the `failed` flag on
- * `fireStreamEndSideEffects` is for.)
- *
- * The error is mapped the way the non-stream path maps at its own provider call
- * (`callGenerateText`), so the record, the `agents.generation.failed` event and
- * the terminal SSE frame all carry the provider's own status. It is awaited
- * before the stream is failed, so the record is already truthful by the time
- * the caller reads the error frame.
+ * A run that fails before any step completes never reaches `onEnd`, so nothing
+ * else writes its terminal state and the record sat `in_progress` forever.
+ * Errors are mapped as `callGenerateText` maps them, and awaited before the
+ * stream fails so the record is truthful when the caller reads the error frame.
  */
 const recordStreamFailure = async (args: {
   generationId: string;
@@ -194,21 +184,13 @@ const recordStreamFailure = async (args: {
 };
 
 /**
- * Wraps the stream `streamText` returns so a captured failure actually reaches
- * the caller.
+ * Wraps `streamText`'s stream so a captured failure reaches the caller.
  *
- * `streamText` does not throw from that stream: a failure is handed to
- * `onError` and the stream then **closes cleanly** — deliberately, so a
- * provider fault cannot crash the server mid-response. Left alone, the route
- * read an ordinary end-of-stream and wrote `data: [DONE]`, so a rejected
- * generation was answered `200` with no content and no error, and one that
- * failed part-way was indistinguishable from a complete answer (#1084).
- *
- * Chunks are forwarded as they arrive and the failure is raised only after the
- * last one, so a stream that dies part-way keeps everything it already
- * produced and still reports why it stopped. Erroring the stream is what makes
- * the route's existing `catch` — which writes the terminal SSE error frame and
- * no `[DONE]` — reachable at all.
+ * `streamText` hands failures to `onError` and then closes the stream cleanly,
+ * so the route read an ordinary end-of-stream and answered `200` with no error
+ * (#1084). Chunks are forwarded as they arrive and the failure raised after the
+ * last one, which keeps partial output and makes the route's `catch` — terminal
+ * SSE error frame, no `[DONE]` — reachable.
  */
 const withTerminalError = (args: {
   source: ReadableStream<string>;
@@ -260,10 +242,8 @@ export const runStreamGeneration = async (args: {
       : 0
   );
   log('runStreamGeneration: tools=%o', Object.keys(args.resolvedTools));
-  // Captured here rather than acted on here: `onError` fires while the stream
-  // is still being read, and the failure must not overtake the chunks already
-  // on their way to the caller. `withTerminalError` raises it once the stream
-  // drains.
+  // Captured, not acted on: `onError` fires mid-read, and the failure must not
+  // overtake chunks already on their way to the caller.
   let streamError: unknown;
   const result = streamText({
     model: args.model,

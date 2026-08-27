@@ -21,20 +21,13 @@ const errorMessage = (error: unknown): string => {
 };
 
 /**
- * Re-mints the credential the continuation acts with, from the principal
- * persisted on the generation that proposed the approved call.
+ * Re-mints the continuation's credential from the principal persisted on the
+ * generation that proposed the approved call.
  *
- * The approval is the durable work here — it can sit pending for days, and the
- * request that resolved it is gone before any of this runs — so identity has to
- * come from the row, not from the resolving request. Note whose identity it is
- * *not*: the approver decided **whether** the proposed action happens, not **as
- * whom**; re-minting from the resolver would silently widen the chain to that
- * person's access.
- *
- * `undefined` when the chain has no principal — a trigger- or OAuth-started
- * generation deliberately records none — or when the principal no longer
- * resolves. The continuation then behaves exactly as it did before it had an
- * identity: its self-calls go out unauthenticated.
+ * The approval can sit pending for days, so identity comes from the row, not
+ * the resolving request: the approver decided *whether* the action happens, not
+ * *as whom*. `undefined` when the chain has no principal or it no longer
+ * resolves; self-calls then go out unauthenticated.
  */
 const resolveContinuationAuthHeader = async (args: {
   item: MappedApproval;
@@ -224,12 +217,9 @@ export const runToolCallContinuation = async (args: {
 
     let result: object | null = null;
     if (args.decision.decision === 'approved') {
-      // A client tool cannot be executed server-side; approving one re-hands the
-      // frozen/edited call off to the client via a fresh linked generation. When
-      // that path fires, there is no server-side result and no NL continuation —
-      // the client will execute and resume the loop itself. A throw here
-      // propagates to this function's outer catch (best-effort continuation), so
-      // no inner catch is needed.
+      // A client tool cannot run server-side, so approval re-hands the call off
+      // via a fresh linked generation and there is no server-side result or NL
+      // continuation — the client resumes the loop itself.
       const reHandedOff = await emitClientToolReHandoff({
         item,
         projectInternalId,

@@ -73,10 +73,9 @@ const sweepProject = async (args: {
     if (due.length === 0) break;
 
     for (const trace of due) {
-      // Scoped to this project so a purge can never reach across projects, and
-      // shared with the REST route so both paths produce identical audit
-      // entries, events and `content_redacted_at` semantics — there is exactly
-      // one purge implementation (#837).
+      // Shared with the REST route so both paths produce identical audit
+      // entries, events and redaction semantics — one purge implementation
+      // (#837), scoped so it can never reach across projects.
       await purgeTraceContent({
         traceId: trace.publicId,
         projectIds: [args.projectDbId],
@@ -115,15 +114,10 @@ const sweepProject = async (args: {
  * `trace_content_retention_days`, turning "the customer must remember to
  * request a purge" into "the system guarantees it" (#837).
  *
- * Retention is opt-in: a project with a `null` window is skipped entirely, so
- * shipping this feature destroys nothing anyone already stored.
- *
- * Safe under overlapping ticks and multiple instances — `purgeTraceContent` is
- * idempotent and the due-set query excludes already-redacted rows, so a
- * concurrent re-run purges nothing twice.
- *
- * Returns the number of root traces purged (each may have cascaded to
- * descendants and their generations).
+ * Opt-in: a project with a `null` window is skipped, so shipping this destroys
+ * nothing anyone already stored. Safe under overlapping ticks and multiple
+ * instances — `purgeTraceContent` is idempotent and the due-set query excludes
+ * already-redacted rows. Returns the number of root traces purged.
  */
 export const sweepExpiredTraceContent = async (args?: {
   now?: Date;

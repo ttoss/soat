@@ -4,29 +4,13 @@ import * as path from 'node:path';
 import { load } from 'js-yaml';
 import { AGENT_TOOL_TYPES } from 'src/lib/agentToolResolver';
 
-// ── About this file ─────────────────────────────────────────────────────────
+// Pins `AGENT_TOOL_TYPES` to the enum the OpenAPI spec publishes — the direction
+// a typechecker cannot see, since the spec is YAML. Without it, a type added to
+// the spec but never to the union is accepted on write and silently dropped on
+// read, which is #1002 ("the agent ignored my tool") by another road.
 //
-// The tool-kind dispatch in `agentToolResolver` used to end in a bare
-// `default: return {}` (#1002). A tool whose `type` it did not recognise was
-// not an error — it resolved to no tools at all and vanished from the agent's
-// tool surface. The generation then ran normally, minus a tool the agent was
-// configured with, and nothing anywhere reported it. The symptom reached a user
-// as "the agent ignored my tool", several layers away from the cause.
-//
-// Two halves close that:
-//
-//   1. `AGENT_TOOL_TYPES` + a `never` guard in the dispatch's `default`, so
-//      adding a type to the union without dispatching it is a *type* error.
-//   2. This file, which pins that union to the enum the OpenAPI spec publishes
-//      — the direction a typechecker cannot see, since the spec is YAML.
-//
-// Without (2), a type added to the spec (and so to the SDK, the CLI, and the
-// MCP tool surface) but never to the union is accepted on write and silently
-// dropped on read, which is the original bug arriving by a different road.
-//
-// Pure comparison of two declarations, so a `lib/` test per the keep-list rule
-// in `.claude/rules/tests.md`: there is no entry point that would report *which*
-// type went missing, only an agent that quietly has fewer tools.
+// A `lib/` test per the keep-list rule: no entry point reports *which* type went
+// missing, only an agent that quietly has fewer tools.
 
 const SPEC_PATH = path.resolve(
   __dirname,

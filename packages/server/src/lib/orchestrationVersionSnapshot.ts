@@ -24,19 +24,16 @@ export type OrchestrationConfigSnapshot = ConfigSnapshot;
 
 /**
  * The keys of an orchestration response that are **not** configuration: its
- * identity, its version bookkeeping, its timestamps — and its name and
- * description.
+ * identity, version bookkeeping, timestamps — and its name and description.
  *
- * Name and description are metadata, as they are for a guardrail: bumping the
- * version when one of them changes would make two version numbers denote the
- * same topology, and the version number is exactly what a run cites to say which
- * topology it executed. What remains — `nodes`, `edges`, `state_schema`,
- * `input_schema` — is the graph the engine executes and nothing else.
+ * Name and description are metadata, as for a guardrail: bumping the version
+ * when one changes would make two version numbers denote the same topology, and
+ * the version number is what a run cites to say which topology it executed.
+ * What remains is the graph the engine executes.
  *
- * Stated as an exclusion rather than an allowlist on purpose; see
- * `projectConfigSnapshot` for why. `orchestrationVersions.test.ts` pins the exact
- * key set the projection produces, so adding an orchestration field forces a
- * deliberate choice here.
+ * Stated as an exclusion rather than an allowlist; see `projectConfigSnapshot`
+ * for why. `orchestrationVersions.test.ts` pins the exact key set, so adding a
+ * field forces a deliberate choice here.
  */
 const NON_CONFIG_ORCHESTRATION_FIELDS: ReadonlySet<string> = new Set([
   'id',

@@ -1,16 +1,15 @@
 /**
  * Executing and finalizing an eval run's items (the evaluations module doc).
  *
- * Both run modes funnel through here: a synchronous run loops over the items
- * in-process, and a queued run has one worker task per item. That is deliberate —
- * a second execution path is how the two modes drift into scoring differently,
- * which would make a `wait: true` run and a `wait: false` run of the same Eval
- * incomparable.
+ * Both run modes funnel through here — a synchronous run loops in-process, a
+ * queued run has one worker task per item — because a second execution path is
+ * how the two would drift into scoring differently, making a `wait: true` and a
+ * `wait: false` run of the same Eval incomparable.
  *
  * Aggregation reads the **persisted** `EvalResult` rows rather than in-memory
- * outcomes, for the same reason: the queued path has no in-memory list to roll
- * up, and a DB-driven finalize is the only version that is correct for a run
- * assembled by several workers.
+ * outcomes, for the same reason: the queued path has no in-memory list, and a
+ * DB-driven finalize is the only version correct for a run assembled by several
+ * workers.
  */
 import createDebug from 'debug';
 
@@ -188,11 +187,9 @@ export const runEvalItem = async (args: {
       ...buildScorerRunners({ projectId: args.projectId }),
     });
   } catch (error) {
-    // A scorer that could not produce a verdict (a judge call failing, a
-    // malformed judge reply) is an item error — the agent's answer was never
-    // graded, so recording 0 would fabricate a regression. The generation and
-    // its output are both kept: they happened and cost money, and the output is
-    // what the failed scorer was looking at.
+    // An ungraded answer is an item error, not a 0 — recording 0 would
+    // fabricate a regression. The generation and output are kept: they happened
+    // and cost money, and the output is what the failed scorer was looking at.
     return erroredOutcome(
       `Scoring failed: ${errorMessage(error)}`,
       generationDbId,
@@ -448,16 +445,14 @@ export const failEvalRun = async (args: {
  * Wins the exclusive right to settle a run, atomically.
  *
  * Several workers can finish a run's last items at the same instant and each
- * observe an empty task queue, so "is it done?" must not be a read followed by a
- * write. This is one conditional `UPDATE` on `finished_at IS NULL`: exactly one
- * caller sees a row count of 1 and goes on to finalize, and the rest see 0 and
- * stop. Without it a run would fire `eval_run.completed` more than once — and a
- * promotion gate that receives the same verdict twice is a gate that can act
- * twice.
+ * observe an empty task queue, so "is it done?" must not be a read followed by
+ * a write. This is one conditional `UPDATE` on `finished_at IS NULL`: exactly
+ * one caller sees a row count of 1. Without it a run would fire
+ * `eval_run.completed` more than once — and a promotion gate that receives the
+ * same verdict twice can act twice.
  *
- * Guarding on `finished_at` rather than on a `finalizing` status keeps the
- * public status vocabulary unchanged; the column is already written by every
- * terminal transition and read by nothing that branches on it.
+ * Guarding on `finished_at` rather than a `finalizing` status keeps the public
+ * status vocabulary unchanged.
  */
 export const claimRunFinalization = async (args: {
   runDbId: number;

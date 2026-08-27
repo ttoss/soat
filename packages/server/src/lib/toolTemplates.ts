@@ -11,44 +11,31 @@ const log = createDebug('soat:toolTemplates');
  * The `{{...}}` template grammar a tool definition may use, and its resolution
  * at the point of use.
  *
- * Two token kinds exist, and the difference between them is *when* the value is
- * known:
- *
  * | Token | Value comes from | Valid in |
  * |---|---|---|
  * | `{{secret:sec_...}}` | a project secret, decrypted server-side | anywhere in `execute` / `mcp` |
  * | `{{context:<key>}}` | the caller's `tool_context` for this call | `execute.headers`, `mcp.headers`, `preset_parameters` |
  *
- * `{{context:}}` exists because `tool_context` alone can only ever produce
- * headers under the deployment's context prefix (`X-Soat-Context-` by default,
- * see `buildContextHeaderName`) — an invariant that must not be relaxed, since
- * caller context must never be able to overwrite a tool's configured credential
- * headers or the server-pinned identity headers (#843/#850/#851). The token
- * inverts the authority: the **tool** declares which header its credential goes
- * in (it is the party that knows the header shape), and the caller only supplies
- * the value.
+ * `{{context:}}` exists because `tool_context` alone can only produce headers
+ * under the deployment's context prefix — an invariant that must not be
+ * relaxed, since caller context must never overwrite a tool's configured
+ * credential headers or the server-pinned identity headers (#843/#850/#851).
+ * The token inverts the authority: the **tool** declares which header its
+ * credential goes in, and the caller supplies only the value.
  *
- * The two places it is allowed are the two the tool's author controls the shape
- * of. A header is one the tool declares; a preset parameter is a value the tool
- * pins **over** whatever the model supplies (#345), which is what lets a
- * per-run boundary — the one account this run may act on — be expressed at all.
- * `execute.url` stays off-limits: a context value is caller-controlled data, and
- * letting it reach the URL would let a caller steer the outbound request to a
- * host the tool's author never configured.
+ * The two places it is allowed are the two whose shape the tool's author
+ * controls. `execute.url` stays off-limits: a context value is caller-controlled
+ * data, and letting it reach the URL would let a caller steer the outbound
+ * request to a host the author never configured.
  */
 
-// The inner alternation lets a `${...}` sub placeholder's own closing brace
-// pass through without prematurely ending the `{{...}}` match — a plain
-// `[^}]*` body would stop at the sub's inner `}` and leave a mangled,
-// one-brace-short capture for `{{secret:${ApiSecret}}}`.
+// The inner alternation lets a `${...}` placeholder's own closing brace pass
+// through: a plain `[^}]*` body stops at it, leaving a one-brace-short capture.
 const DOUBLE_CURLY_RE = /\{\{((?:[^{}]|\$\{[^}]*\})*)\}\}/g;
 
-// A resolved reference (`secret:sec_...`) or a formation `sub` placeholder
-// still awaiting resolution (`secret:${LogicalIdOrParam}`) are both valid —
-// a formation template is statically validated *before* `${...}` tokens
-// resolve, so `{ "sub": "Bearer {{secret:${ApiSecret}}}" }` is legitimate
-// template source, not an authoring mistake (see the "Composition" section
-// of the expressions & templating reference doc).
+// An unresolved `secret:${...}` placeholder is as valid as a resolved
+// `secret:sec_...`: a formation template is statically validated before `${...}`
+// tokens resolve, so it is legitimate source, not an authoring mistake.
 const VALID_SECRET_TOKEN_RE = /^secret:(sec_[A-Za-z0-9]+|\$\{[^}]+\})$/;
 
 // A context key reaches an outbound header name via `tool_context`, so the same
@@ -220,10 +207,9 @@ export const assertValidToolTemplateTokens = (args: {
       };
     },
     {
-      // A preset is a context *sink*, so only the shape rule applies to it —
-      // there is no "misplaced" here. Checking it at write time is what keeps a
-      // typo'd `{{ocaAdAccountId}}` from reaching the target as the literal
-      // parameter value, which comes back as an opaque `not found`.
+      // A preset is a context *sink*, so only the shape rule applies. Checking
+      // at write time keeps a typo'd token from reaching the target as a
+      // literal parameter value and coming back as an opaque `not found`.
       invalid: findInvalidTemplateTokens(args.presetParameters),
       misplacedContext: [],
     }
@@ -294,10 +280,8 @@ const substituteTokens = (args: {
           ? args.toolContext[key]
           : undefined;
       if (resolved === undefined) {
-        // The two messages are worth distinguishing: "no tool_context at all"
-        // usually means the tool was reached through a path that carries none
-        // (`/tools/{id}/call`, an orchestration `tool` node), which is a different
-        // fix from adding one key.
+        // "No tool_context at all" usually means the tool was reached through
+        // a path that carries none, a different fix from adding one key.
         throw new DomainError(
           'MISSING_TOOL_CONTEXT_KEY',
           args.toolContext
@@ -374,36 +358,28 @@ export type ResolvedPresetParameters = {
 };
 
 /**
- * Resolves `{{context:<key>}}` inside `preset_parameters`, deep-walking strings,
- * arrays and objects, at the point of use — the stored config keeps the tokens.
+ * Resolves `{{context:<key>}}` inside `preset_parameters`, deep-walking
+ * strings, arrays and objects at the point of use — the stored config keeps the
+ * tokens.
  *
  * This is what makes a pin express a **per-run** boundary. A pin already wins
- * over whatever the model supplies for the same key (see
- * {@link mergePresetParameters}), so it is the one place a value can be put
- * genuinely out of the model's hands; without token resolution that value had to
- * be fixed when the tool was created, which forced one tool per tenant for the
- * exact scope — an ad account, a workspace — that the run already knows.
+ * over whatever the model supplies, so it is the one place a value can be put
+ * out of the model's hands; without token resolution that value had to be fixed
+ * at tool-creation time, forcing one tool per tenant for a scope the run
+ * already knows.
  *
- * Two rules are inherited from headers rather than re-decided here:
- *
- * - **A missing key fails the call** with `MISSING_TOOL_CONTEXT_KEY`, never a
- *   literal `{{context:...}}` on the wire. The literal reaches the target as a
- *   resource id and comes back as an opaque `Not found`, several steps from the
- *   mistake.
- * - **`context_keys` does not gate it.** That allowlist governs which keys are
- *   *forwarded* as `X-Soat-Context-*` headers to a tool that never asked for
- *   them; a token is the tool naming the key it consumes, which is the opposite
- *   direction. `resolveToolHeaderTemplates` already works this way and
- *   `agentToolResolver.test.ts` pins it.
+ * Two rules are inherited from headers rather than re-decided: a missing key
+ * fails the call with `MISSING_TOOL_CONTEXT_KEY` (a literal `{{context:...}}`
+ * on the wire comes back as an opaque `Not found` several steps from the
+ * mistake), and `context_keys` does not gate it — that allowlist governs which
+ * keys are *forwarded* to a tool that never asked for them, while a token is
+ * the tool naming the key it consumes.
  *
  * `{{secret:...}}` is deliberately **not** resolved here: a preset value travels
- * into the tool's request body, into guardrail evaluation input and into the
- * activity record, so putting secret plaintext there is a decision of its own
- * rather than a side effect of this one. The token stays literal, exactly as it
- * does today. Passing an empty secret map (rather than skipping secrets) keeps
- * the single-pass guarantee `substituteTokens` documents: a substituted context
- * value is never rescanned, so a caller cannot read a project secret back out by
- * putting a secret token in `tool_context`.
+ * into the request body, guardrail input and the activity record, so secret
+ * plaintext there is a decision of its own. Passing an empty secret map keeps
+ * `substituteTokens`'s single-pass guarantee, so a caller cannot read a secret
+ * back out by putting a secret token in `tool_context`.
  */
 export const resolvePresetParameterTemplates = (args: {
   presetParameters?: object | null;
@@ -490,24 +466,18 @@ export const resolvePresetParametersForCall = (args: {
 };
 
 /**
- * {@link resolvePresetParametersForCall} for the **guardrail gate only**, where a
- * missing key falls back to the unresolved presets instead of throwing.
+ * {@link resolvePresetParametersForCall} for the **guardrail gate only**, where
+ * a missing key falls back to the unresolved presets instead of throwing.
  *
- * The gate classifies a call that has not been dispatched yet, and the dispatch
- * site resolves the same presets a moment later — so a resolution failure still
- * fails the call there, with the same error, before any request goes out.
- * Throwing here as well would move that failure from the tool call to *tool
- * resolution*, taking down the whole generation (every other tool included) over
- * one tool's missing key. What matters at the gate is that a guardrail reading
- * the pinned value sees the run's real value whenever there is one, rather than
- * the literal `{{context:...}}` text.
+ * The gate classifies a call not yet dispatched, and the dispatch site resolves
+ * the same presets a moment later — so a resolution failure still fails the
+ * call there, with the same error, before any request goes out. Throwing here
+ * would move that failure to *tool resolution*, taking down the whole
+ * generation over one tool's missing key.
  *
- * The swallow is deliberately total rather than narrowed to
- * `MISSING_TOOL_CONTEXT_KEY`: the gate must never be the thing that fails a
- * generation, and nothing can proceed on unresolved presets anyway, since the
- * dispatch re-resolves and reports whatever went wrong. A narrower catch would
- * also carry a rethrow branch no input can reach — substitution raises that one
- * code and the coercion is pure — which is dead code, not defence.
+ * The swallow is total rather than narrowed to `MISSING_TOOL_CONTEXT_KEY`: the
+ * gate must never fail a generation, nothing can proceed on unresolved presets
+ * anyway, and a narrower catch would carry a rethrow branch no input can reach.
  */
 export const resolvePresetParametersForGate = (args: {
   presetParameters?: Record<string, unknown> | null;

@@ -5,31 +5,23 @@ import { DomainError } from '../errors';
 /**
  * Egress control for destinations an agent's tool call can reach.
  *
- * SOAT never executes agent-authored code, so the host is not reachable
- * through a shell — but an `http`/`mcp` tool is a `fetch` the server performs
- * on the agent's behalf, and by default that could name the deployment's own
- * network: a sibling service, the API's own loopback, or the cloud metadata
- * endpoint that hands out the instance's IAM credentials.
+ * SOAT never executes agent-authored code, but an `http`/`mcp` tool is a
+ * `fetch` the server performs on the agent's behalf, and by default that could
+ * name the deployment's own network: a sibling service, the API's loopback, or
+ * the cloud metadata endpoint that hands out the instance's IAM credentials.
  *
- * The rule is therefore: **a tool reaches the public internet, and nothing
- * else.** Anything not publicly routable — loopback, RFC1918, link-local,
- * CGNAT, IPv6 ULA — is refused unless the deployment declares it in
- * `TOOL_EGRESS_ALLOWED_HOSTS`. That inverts the default to safe while keeping
- * the legitimate case (a tool calling an internal service) available as an
- * explicit, operator-authored decision.
+ * So: **a tool reaches the public internet, and nothing else.** Anything not
+ * publicly routable — loopback, RFC1918, link-local, CGNAT, IPv6 ULA — is
+ * refused unless declared in `TOOL_EGRESS_ALLOWED_HOSTS`, which keeps the
+ * legitimate internal-service case available as an explicit operator decision.
  *
- * Two things make this a real control rather than a string check on the URL:
+ * Two things make this a real control rather than a string check: it validates
+ * the **resolved address** (`evil.com` can A-record to `169.254.169.254`), and
+ * it validates **every redirect hop** (`fetch` follows redirects unchecked).
  *
- * - **It validates the resolved address, not the hostname.** `evil.com` with an
- *   A record pointing at `169.254.169.254` reads as an ordinary public URL.
- * - **It validates every redirect hop.** A legitimate first request answering
- *   `302 Location: http://169.254.169.254/…` would otherwise walk straight in,
- *   since `fetch` follows redirects with no further checks.
- *
- * Known limitation, deliberate: between the DNS check and the socket connect
- * there is a TOCTOU window a rebinding attacker could use, because pinning the
- * connection to the checked address requires replacing the fetch dispatcher.
- * The allowlist is a deployment-level control, not a per-project one.
+ * Deliberate limitation: a TOCTOU window between the DNS check and the socket
+ * connect, since pinning the connection requires replacing the fetch
+ * dispatcher. The allowlist is deployment-level, not per-project.
  */
 
 export type EgressHostEntry = {

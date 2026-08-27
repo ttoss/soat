@@ -97,23 +97,18 @@ describe('getSchemaSyncLockTimeoutMs', () => {
 
 describe('schema sync reboot idempotency', () => {
   test('sync({ alter: true }) does not crash when run again against an already-synced schema', async () => {
-    // Regression guard: an auto-generated index/constraint name longer than
-    // Postgres's 63-char identifier limit gets silently truncated on create.
-    // The next `sync({ alter: true })` recomputes the full (untruncated) name,
-    // sees it "missing" against the truncated one actually in the catalog, and
-    // tries to recreate it -> 42P07 "relation already exists". This crashes
-    // every boot after the first against a persisted database.
+    // A derived name over Postgres's 63-char limit is truncated on create, so
+    // the next `sync({ alter: true })` recomputes the full name, sees it
+    // missing, and recreates it — 42P07 on every boot after the first.
     await expect(sequelize.sync({ alter: true })).resolves.not.toThrow();
   });
 });
 
 describe('syncSchemaWithAdvisoryLock', () => {
   test('serializes concurrent boot syncs on SOAT’s advisory lock key', async () => {
-    // Two tasks booting at once both run sync({ alter: true }); without a lock
-    // the ALTER TABLE steps race on the same DB and can deadlock or corrupt the
-    // schema. This proves the second boot *waits* for the first: we hold SOAT's
-    // boot-sync lock on one connection (standing in for the task that got there
-    // first), then start a sync and assert it does not proceed until we release.
+    // Without the lock, two boots race their ALTER TABLE steps on one DB. Holds
+    // the boot-sync lock on one connection, then asserts a sync does not proceed
+    // until it is released.
     let synced = false;
 
     await sequelize.transaction(async (t) => {
@@ -127,11 +122,9 @@ describe('syncSchemaWithAdvisoryLock', () => {
         synced = true;
       });
 
-      // While the lock is held the sync cannot proceed. `synced` is monotonic
-      // and only flips after we unlock below, so this assertion can never
-      // false-fail on a slow machine — it is a genuine "is it blocked?" check,
-      // not a fire-and-forget settling sleep. Had the helper used a different
-      // key (or skipped the wait), it would complete here and flip `synced`.
+      // `synced` is monotonic and only flips after the unlock below, so this
+      // cannot false-fail on a slow machine — a helper that skipped the wait
+      // would have flipped it here.
       await new Promise((resolve) => {
         setTimeout(resolve, 300);
       });
@@ -148,13 +141,9 @@ describe('syncSchemaWithAdvisoryLock', () => {
   });
 
   test('fails fast with a lock-timeout error when the lock is held past the bound', async () => {
-    // Regression guard for PR #549: a peer SIGKILLed mid-boot leaves the
-    // session advisory lock held until its backend is reaped (minutes behind a
-    // pooler/Aurora). Without a bound every later boot blocks forever and the
-    // whole deploy deadlocks. The bound turns that into a fast, logged failure
-    // that propagates to startServer's catch -> process.exit(1). Here we hold
-    // the lock on one connection, set a tiny bound, and assert the sync rejects
-    // quickly with a lock-timeout error instead of hanging indefinitely.
+    // A peer SIGKILLed mid-boot holds the advisory lock until its backend is
+    // reaped, which can be minutes behind a pooler — unbounded, every later boot
+    // blocks forever and the deploy deadlocks (#549).
     const saved = process.env.SCHEMA_SYNC_LOCK_TIMEOUT_MS;
     process.env.SCHEMA_SYNC_LOCK_TIMEOUT_MS = '250';
 
@@ -205,11 +194,9 @@ describe('logDatabaseConnectionError', () => {
   });
 });
 
-// `CREATE EXTENSION IF NOT EXISTS` is not race-safe in PostgreSQL: two
-// processes booting together (the API tier and a worker-fleet member) can both
-// pass the existence check and one loses on `pg_extension_name_index`. The
-// predicate below is what tells that recoverable race apart from a real
-// failure, so it is tested directly with the error shapes PostgreSQL produces.
+// `CREATE EXTENSION IF NOT EXISTS` is not race-safe: two processes booting
+// together can both pass the existence check and one loses on
+// `pg_extension_name_index`. This predicate tells that race from a real failure.
 describe('isConcurrentExtensionCreationError', () => {
   const raceError = (code: string): unknown => {
     return Object.assign(new Error('duplicate key value'), {

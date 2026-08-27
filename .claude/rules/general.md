@@ -23,6 +23,24 @@ Prefer using functions instead of classes for better simplicity and composabilit
 - Use uppercase with underscores for constants (e.g., `MY_CONSTANT`).
 - For test files, use the same name as the file being tested with `.test` appended before the extension (e.g., `myFile.test.ts`).
 
+## Code Comments
+
+Add a comment only when it is strictly necessary — when the **why** is not
+obvious from the code itself: a hidden constraint, a non-obvious invariant, a
+workaround for a specific bug (reference the issue/PR when one exists), or
+behavior that would otherwise surprise a future reader.
+
+- **Never** write a comment that restates **what** the code does — well-named
+  identifiers already say that.
+- **Never** leave commented-out code, dead `TODO`/`FIXME` markers, or
+  narration of the current task/fix in a comment (that belongs in the commit
+  message or PR description, and rots as the codebase evolves).
+- Keep a necessary comment as short as it can be while still conveying the
+  why. If removing it would not confuse a future reader, don't write it in
+  the first place.
+- This applies to every package in this repo — `server`, `app`, `cli`, `sdk`,
+  `postgresdb`, `website` — and to test files.
+
 ## Linting
 
 To fix ESLint issues in a specific file, run `pnpm eslint --fix path/to/file`.

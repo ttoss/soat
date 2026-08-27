@@ -41,18 +41,13 @@ const readGate = (tool: Tool | undefined): ClientToolGate | undefined => {
 };
 
 /**
- * The guardrail gate for the `requires_action` handoff. For each pending client
- * tool call, runs the gate the resolver attached (if any) and partitions the
- * batch:
- *
- * - **released** — class A or a passing class B: the call is handed to the
- *   client (as it always was), with the approval-justification fields stripped.
- * - **synthesizedResults** — class D (blocked), a class-B tripwire, or class C
- *   (`route_to_approval`, which files the approval item and returns
- *   `pending_approval`): the call is NOT released; a tool result is synthesized
- *   so the model loop can proceed. See [guardrails.md — Client Tools].
- *
- * A call whose tool carries no gate (no guardrail applies) is released untouched.
+ * The guardrail gate for the `requires_action` handoff: runs the gate the
+ * resolver attached to each pending client tool call and partitions the batch
+ * into **released** (class A or a passing class B, handed to the client with
+ * the approval-justification fields stripped) and **synthesizedResults**
+ * (class D, a class-B tripwire, or class C `route_to_approval` — not released,
+ * with a tool result synthesized so the model loop can proceed). See
+ * [guardrails.md — Client Tools]. A tool with no gate is released untouched.
  */
 export const gatePendingClientTools = async (args: {
   pendingToolCalls: PendingClientToolCall[];

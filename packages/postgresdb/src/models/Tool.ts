@@ -69,9 +69,7 @@ export class Tool extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare deniedActions: string[] | null;
 
-  // Optional allowlist of `tool_context` keys that may reach this tool as
-  // prefixed context headers. `null` forwards every key (the behavior of every
-  // tool created before this column existed); `[]` forwards none. The
+  // `null` forwards every key (pre-existing rows); `[]` forwards none. The
   // server-pinned identity keys are always forwarded regardless (#945).
   @Column({ type: DataType.JSONB, allowNull: true })
   declare contextKeys: string[] | null;
@@ -85,9 +83,7 @@ export class Tool extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare outputMapping: object | null;
 
-  // Public IDs of guardrails attached at the tool scope. A guardrail here
-  // governs this tool wherever it is used, by any agent (guardrails.md —
-  // Attachment).
+  // Governs this tool wherever it is used, by any agent.
   @Column({ type: DataType.JSONB, allowNull: true })
   declare guardrailIds: string[] | null;
 

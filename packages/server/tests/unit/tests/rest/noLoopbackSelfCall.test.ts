@@ -94,15 +94,10 @@ describe('tool surfaces do not self-call over the loopback', () => {
   });
 
   test('no src file anywhere fetches a URL it built from its own PORT', () => {
-    // A sweep, so a self-call reintroduced in a *new* file is caught too — the
-    // path list above only covers the files that own this today.
-    //
-    // Both halves are required. Building `http://host:${PORT}` is legitimate
-    // and common: `oauth/server.ts` derives `ISSUER` from it (the server's own
-    // public identity, which OAuth discovery must advertise), and `server.ts`
-    // logs it at startup. Calling `fetch` is equally legitimate on its own —
-    // that is what an `http` tool does. Only a file that does both is building
-    // a URL back to itself in order to call it.
+    // A sweep, so a self-call reintroduced in a new file is caught too. Both
+    // halves are required: building `http://host:${PORT}` is legitimate (OAuth
+    // discovery advertises it) and so is calling `fetch`. Only a file doing both
+    // is building a URL back to itself in order to call it.
     const offenders: string[] = [];
 
     const walk = (dir: string) => {

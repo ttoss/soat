@@ -95,11 +95,9 @@ describe('pinServerIdentityToolContext', () => {
   });
 });
 
-// #945 item 4 — a platform fronting SOAT must not leak the substrate name to
-// the third-party tool providers its agents call, so the context-header prefix
-// is deployment configuration. It stays a plain concatenation: the prefix is
-// prepended and the key reaches the header name with no character transformed
-// (`.claude/rules/case-convention.md`).
+// The header prefix is deployment configuration, so a platform fronting SOAT
+// does not leak the substrate name to third-party tool providers (#945). A plain
+// concatenation: no character of the key is transformed.
 describe('TOOL_CONTEXT_HEADER_PREFIX', () => {
   const originalPrefix = process.env.TOOL_CONTEXT_HEADER_PREFIX;
 

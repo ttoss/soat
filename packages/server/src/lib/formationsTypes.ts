@@ -236,15 +236,9 @@ export const buildFormationError = (args: {
   };
 };
 
-// ── Wire Types ────────────────────────────────────────────────────────────
-//
-// `PlanChange`/`FormationEvent` carry structural keys in camelCase
-// internally, but are documented (and specced in `formations.yaml`) as
-// snake_case on the wire — both in the `POST /formations/plan` response and
-// embedded in a `FormationOperation`'s `events`/`plan`. `diff.desired` /
-// `diff.current` are the resource's own template properties (already
-// snake_case, author-authored) and round-trip verbatim, unlike the
-// structural fields around them.
+// `PlanChange`/`FormationEvent` are camelCase internally but snake_case on the
+// wire. `diff.desired`/`diff.current` are author-authored template properties
+// and round-trip verbatim, unlike the structural fields around them.
 
 export type PlanChangeWire = {
   logical_id: string;

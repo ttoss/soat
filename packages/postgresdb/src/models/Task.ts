@@ -37,10 +37,7 @@ import { Workflow } from './Workflow';
       name: 'tasks_project_id_status_entered_state_at_idx',
       fields: ['project_id', 'status', 'entered_state_at'],
     },
-    // Stall sweeper (Phase 3): the precise due-set query. `stall_deadline_at` is
-    // the precomputed `entered_state_at + stalled_after` for the current state
-    // (null when the state defines no threshold or the stall was already
-    // emitted this episode), so the sweeper selects only genuinely-due tasks.
+    // The stall sweeper's due-set query.
     {
       name: 'tasks_status_stall_deadline_at_idx',
       fields: ['status', 'stall_deadline_at'],
@@ -81,11 +78,9 @@ export class Task extends Model {
   @Column({ type: DataType.INTEGER, allowNull: false })
   declare workflowId: number;
 
-  // CASCADE (not RESTRICT): deleting a workflow removes its task instances too.
-  // The open-task guard in `deleteWorkflow` still blocks deletion while any task
-  // is open; once every task is closed (terminal), deleting the workflow also
-  // removes those closed task rows (and their cascaded transition history),
-  // matching the documented "only open tasks block deletion" semantics (#604).
+  // CASCADE (not RESTRICT): `deleteWorkflow` blocks while any task is open, so
+  // the cascade only ever removes closed tasks — the documented "only open
+  // tasks block deletion" semantics (#604).
   @BelongsTo(
     () => {
       return Workflow;
@@ -94,18 +89,10 @@ export class Task extends Model {
   )
   declare workflow: Workflow;
 
-  // The workflow version this task lives in, stamped at creation and never
-  // changed afterwards (#882). Every read of the state machine — the transition
-  // validator, the approval gate, and payload validation — resolves through this
-  // number rather than the live `Workflow` row, so editing a workflow cannot
-  // re-shape a task already in flight, including one parked for weeks.
-  //
-  // A version *number* rather than a foreign key to `workflow_versions`: the
-  // number is what the task response exposes and what an audit reader cites, it
-  // matches `OrchestrationRun.orchestrationVersion` and `Generation.agentVersion`,
-  // and the archive row is reachable from it with no join. Null only for tasks
-  // created before pinning existed, which fall back to the live row — the
-  // pre-#882 behavior, and the only thing there is to fall back to.
+  // Stamped at creation and never changed, so editing a workflow cannot
+  // re-shape a task already in flight (#882). Every read of the state machine
+  // resolves through this rather than the live row. Null for tasks predating
+  // pinning, which fall back to the live row.
   @Column({ type: DataType.INTEGER, allowNull: true })
   declare workflowVersion: number | null;
 
@@ -135,32 +122,21 @@ export class Task extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare lastResult: unknown;
 
-  // The caller context the *next* automation dispatch forwards as
-  // `X-Soat-Context-*` headers on its tool calls (#950). Supplied per move — at
-  // creation, and on each transition — and replaced wholesale by the move that
-  // supplies one, so the credential a dispatch runs with belongs to whoever last
-  // moved the task, matching the principal `resolveDispatchPrincipal` already
-  // inherits.
+  // Forwarded as `X-Soat-Context-*` headers on the next dispatch's tool calls
+  // (#950), replaced wholesale by each move that supplies one.
   //
-  // Deliberately **write-only**: unlike `OrchestrationRun.toolContext`, it is
-  // absent from `mapTask` and therefore from every task read, webhook payload and
-  // audit export. A run is short-lived and single-caller; a task is long-lived and
-  // multi-actor, so a readable field here would park one principal's credential
-  // where every other principal on the board can read it. Cleared when the task
-  // reaches a terminal state, so a closed task holds no credential at rest.
+  // Deliberately **write-only** — absent from `mapTask`, so it never reaches a
+  // task read, webhook payload or audit export. A task is long-lived and
+  // multi-actor, so a readable field would park one principal's credential
+  // where every other principal on the board can read it. Cleared on reaching
+  // a terminal state.
   @Column({ type: DataType.JSONB, allowNull: true, defaultValue: null })
   declare toolContext: Record<string, string> | null;
 
-  // Caller-owned key/value annotations supplied at creation, for attributing a
-  // task to whatever the caller's own system knows about it — the tenant it
-  // belongs to, the ticket that raised it, the import batch (#342).
-  //
-  // Distinct from `payload` on both sides: the engine may write into a payload
-  // (a state's declared `payload_writes`) and every guard reads it, so a label
-  // parked there is neither inert nor safe from the machine. Nothing in the
-  // engine reads or writes this bag, and unlike `toolContext` it is readable —
-  // a label is not a credential, so there is nothing here to leak to the other
-  // principals on the board.
+  // Caller-owned labels (tenant, ticket, import batch), supplied at creation
+  // (#342). Separate from `payload`, which the engine writes into and guards
+  // read; nothing in the engine touches this. Readable, unlike `toolContext` —
+  // a label is not a credential.
   @Column({ type: DataType.JSONB, allowNull: true, defaultValue: null })
   declare metadata: Record<string, unknown> | null;
 
@@ -176,17 +152,12 @@ export class Task extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare automationStatus: string | null;
 
-  // How many machine-driven transitions have run back-to-back with no outside
-  // intervention (#885). A workflow state may dispatch work that transitions the
-  // task straight back into that same state, and neither layer's validator sees
-  // the cycle: orchestration cycle detection is intra-graph, and revisiting a
-  // state is what workflows are *for*. This counter is the bound.
-  //
-  // It counts a *chain*, not a lifetime: any move by a person, a plain API key,
-  // or an approval resolution resets it to 0, because an outside intervention is
-  // exactly the evidence that the task is not spinning unattended. So a
-  // long-lived task that legitimately revisits states for months is never
-  // bounded by its own history — only by how far it can travel untouched.
+  // Bounds machine-driven transitions running back-to-back with no outside
+  // intervention (#885) — a state can dispatch work that transitions straight
+  // back into itself, and neither validator sees that cycle. Counts a chain,
+  // not a lifetime: any human/API-key move or approval resolution resets it, so
+  // a task that legitimately revisits states for months is never bounded by its
+  // own history.
   @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 0 })
   declare automationChainDepth: number;
 
@@ -194,22 +165,17 @@ export class Task extends Model {
   @Column({ type: DataType.DATE, allowNull: false })
   declare enteredStateAt: Date;
 
-  // Phase 3 approval-gated transitions. While a transition declaring
-  // `requires_approval` is parked awaiting an ApprovalItem, the task exposes the
-  // pending transition name here; `pendingApprovalId` links the gating item so
-  // resolution can clear exactly the gate it resolved. Both are cleared when the
-  // task next transitions (approval approved) or the approval is rejected/expired.
+  // While a `requires_approval` transition is parked, `pendingApprovalId` links
+  // the gating item so resolution clears exactly the gate it resolved.
   @Column({ type: DataType.STRING, allowNull: true })
   declare pendingTransition: string | null;
 
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare pendingApprovalId: string | null;
 
-  // Phase 3 stall sweeper. Precomputed `entered_state_at + stalled_after` for the
-  // current state, or null when the state declares no `stalled_after` or the
-  // stall was already emitted this episode. The sweeper claims a due row by
-  // nulling this, so `tasks.stalled` fires exactly once per episode; the next
-  // transition re-arms it.
+  // Precomputed `entered_state_at + stalled_after`. The sweeper claims a due
+  // row by nulling this, so `tasks.stalled` fires exactly once per episode; the
+  // next transition re-arms it.
   @Column({ type: DataType.DATE, allowNull: true })
   declare stallDeadlineAt: Date | null;
 

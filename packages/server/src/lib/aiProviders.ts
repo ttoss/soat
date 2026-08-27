@@ -113,19 +113,13 @@ export const updateAiProvider = async (args: {
   return mapAiProvider(await aiProviders.reload(instance));
 };
 
-// Cap on how many offending public IDs we echo back in a 409. Hard references
-// are usually few, but a single provider can power many chats — list a workable
-// sample (the counts always report the true totals) rather than an unbounded
-// blob.
+// A single provider can power many chats, so the 409 lists a workable sample
+// rather than an unbounded blob; the counts still report true totals.
 const DEPENDENT_ID_SAMPLE_CAP = 20;
 
-// Splits everything that references a provider into two policy classes and
-// builds the 409 `meta`. Hard references (chats/agents) are
-// independently-valuable resources that *use* the provider — they always block
-// deletion, because deleting a provider must never cascade into deleting
-// someone's work. Soft dependents (price overrides, usage/generation records)
-// are bookkeeping that only has meaning relative to the provider — they block
-// by default but clear under `force`.
+// Hard references (chats/agents) always block deletion — removing a provider
+// must never cascade into deleting someone's work. Soft dependents are
+// bookkeeping meaningful only relative to the provider, so `force` clears them.
 const collectAiProviderDependents = async (args: {
   aiProviderId: number;
   aiProviderPublicId: string;
@@ -221,11 +215,9 @@ export const deleteAiProvider = async (args: {
     );
   }
 
-  // No hard references, and either no soft dependents or force=true: clear the
-  // bookkeeping and remove the provider atomically. Price overrides are dropped
-  // (meaningless without the provider); usage/generation records keep their rows
-  // with the provider link nulled, preserving the as-billed receipt and
-  // history.
+  // Price overrides are dropped as meaningless without the provider;
+  // usage/generation rows survive with the link nulled, preserving the
+  // as-billed receipt.
   const aiProviderId = instance.id;
   await db.sequelize.transaction(async (transaction) => {
     if (softCount > 0) {

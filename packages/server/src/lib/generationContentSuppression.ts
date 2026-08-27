@@ -20,17 +20,10 @@ export const suppressContentWrites = async (args: {
   alreadyRedacted: boolean;
   updates: Record<string, unknown>;
 }): Promise<void> => {
-  // A write carrying no content column has nothing to suppress, so it must not
-  // pay for the mode lookup. This is not only an optimization: several
-  // lifecycle writes (notably the `requires_action` flip in
-  // `savePendingGeneration`) are dispatched fire-and-forget, and a caller that
-  // reads the row straight after is racing that write. Putting an extra query
-  // in front of it widens that window for every generation in the system, to
-  // decide something these writes cannot change.
-  //
-  // Nothing is lost by skipping the stamp here: a zero-retention generation is
-  // already stamped at creation, because `buildCreateContentColumns` always
-  // passes a `metadata` key through this function.
+  // Not only an optimization: several lifecycle writes are fire-and-forget, and
+  // a caller reading the row straight after is racing them. An extra query
+  // widens that window to decide something these writes cannot change. Nothing
+  // is lost — a zero-retention generation is already stamped at creation.
   const writesContent = GENERATION_CONTENT_FIELDS.some((field) => {
     return field in args.updates;
   });

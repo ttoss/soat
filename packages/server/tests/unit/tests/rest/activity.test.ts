@@ -8,12 +8,9 @@ import { fireDueTriggers } from 'src/lib/triggerScheduler';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
-// The activity feed (G3 Phase 4) has no public create endpoint — entries are
-// platform-written by producers (approval resolution, exception filing,
-// schedule firing, orchestration tool execution). Tests seed directly via the
-// module's own `emitActivityEntry` (the sanctioned "no entry point exists" lib
-// path) for shape/pagination/filter coverage, then exercise each real producer
-// end-to-end for wiring coverage.
+// No public create endpoint — entries are platform-written by producers. Shape
+// and filter coverage seeds via `emitActivityEntry` (the sanctioned "no entry
+// point" path); each real producer is then exercised end-to-end.
 
 describe('Activity', () => {
   let adminToken: string;
@@ -246,11 +243,9 @@ describe('Activity', () => {
     // fails, so the failure has to be injected — no real DB write fails
     // deterministically (sanctioned in tests.md for exactly this shape).
     test('emitActivityEntry returns null once a write failure outlives its retries', async () => {
-      // `mockRejectedValue`, not `…Once`: a single rejection is now retried and
-      // the entry is written after all (#1130), so only a failure that persists
-      // across every attempt reaches the null-returning branch. The caller is a
-      // fire-and-forget bus handler, so `null` stays the contract — but the
-      // entry that was lost is counted.
+      // Not `…Once`: a single rejection is retried and the entry written after
+      // all (#1130), so only a failure persisting across every attempt reaches
+      // the null-returning branch.
       const spy = jest
         .spyOn(db.ActivityEntry, 'create')
         .mockRejectedValue(new Error('simulated write failure'));
@@ -324,11 +319,9 @@ describe('Activity', () => {
       expect(found.project_id).toBe(projectId);
     });
 
-    // `manual` above happens to default to `warning`, the same value the
-    // activity kind defaults to, so it cannot tell inheritance from the
-    // default. `run_failed` defaults to `critical`, which the entry must carry:
-    // otherwise the feed's top-level severity understates the worst thing it
-    // records, and `critical` is unreachable through any producer.
+    // `manual` defaults to the same `warning` the activity kind does, so it
+    // cannot tell inheritance from the default. `run_failed` defaults to
+    // `critical`, which is otherwise unreachable through any producer.
     test('exception_created inherits the exception severity', async () => {
       const exception = await fileException({
         projectId: projectInternalId,

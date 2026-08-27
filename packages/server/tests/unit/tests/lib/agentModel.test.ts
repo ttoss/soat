@@ -5,11 +5,8 @@ import {
   resolveVertexSettings,
 } from 'src/lib/agentModel';
 
-// The AI SDK's returned LanguageModel exposes `modelId` and `config.provider`
-// regardless of provider, plus (for OpenAI-compatible builders) a
-// `config.url` function that resolves the actual request endpoint — enough
-// to assert the model string and base URL/resource wiring landed correctly,
-// instead of only checking that `buildModel` didn't throw.
+// The returned model exposes enough (`modelId`, `config.provider`, `config.url`)
+// to assert the wiring landed, rather than only that `buildModel` didn't throw.
 
 const asConfigured = (model: unknown) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -346,11 +343,8 @@ describe('resolveVertexSettings', () => {
   });
 });
 
-// `buildBedrockModel` delegates credential precedence to
-// `resolveBedrockCredentials`, which is now tested directly: the AI SDK's
-// returned model object doesn't expose which credential branch it took
-// (headers/signing happen at request time), so asserting on the model
-// itself couldn't distinguish correct from incorrect wiring.
+// `resolveBedrockCredentials` is tested directly because the returned model does
+// not expose which credential branch it took — signing happens at request time.
 describe('resolveBedrockCredentials', () => {
   test('falls back to the AWS default credential chain when nothing is provided', () => {
     const result = resolveBedrockCredentials({ secretValue: null });

@@ -67,21 +67,17 @@ const getContextHeaderPrefix = (): string => {
 
 /**
  * The key → header-name rule: prepend the configured context prefix
- * (`X-Soat-Context-` by default). That is the whole rule — the key is a
- * caller-owned identifier and reaches the header name with **no character
- * transformed**, so the header is a string concatenation the caller can compute
- * from the prefix alone.
+ * (`X-Soat-Context-` by default) and transform **no character**, so the header
+ * is a concatenation the caller can compute from the prefix alone.
  *
- * Deliberately not title-casing, and deliberately not uppercasing the first
- * character either. Normalizing separators would silently change which header
- * an existing caller's key lands on, and caller keys take precedence over the
- * session's auto-populated ones, so it could rewrite the identity an `http`
- * tool authorizes against. Uppercasing just the first character avoided that
- * but kept the shape of the transform — and this project has already paid for
- * key-rewriting four times (#651, #690, #729, #737). The casing was also never
- * observable: header names are case-insensitive (RFC 9110 §5.1) and HTTP/2
- * lowercases them on the wire (RFC 9113 §8.2.1), so it bought presentation
- * only, at the cost of a rule every reader had to be warned not to extend.
+ * Deliberately neither title-casing nor uppercasing the first character.
+ * Normalizing separators would change which header an existing caller's key
+ * lands on, and caller keys take precedence over the session's, so it could
+ * rewrite the identity an `http` tool authorizes against; uppercasing one
+ * character avoided that but kept the shape of a transform this project has
+ * already paid for four times (#651, #690, #729, #737). It was never observable
+ * either — header names are case-insensitive (RFC 9110 §5.1) and HTTP/2
+ * lowercases them (RFC 9113 §8.2.1).
  */
 export const buildContextHeaderName = (key: string): string => {
   return `${getContextHeaderPrefix()}${key}`;
@@ -149,10 +145,9 @@ export const assertValidToolContextKeys = (
  * tool mysteriously not receiving its credential at call time.
  */
 export const assertValidToolContextAllowlist = (
-  // `unknown` rather than `string[] | null`: both callers hand this straight
-  // from an untyped request body or template property, and the check below is
-  // the thing that establishes the type. A cast at each call site would assert
-  // exactly what has not been verified yet.
+  // `unknown` because both callers pass an untyped body or template property
+  // and the check below is what establishes the type — a cast at the call site
+  // would assert exactly what is not yet verified.
   contextKeys?: unknown
 ): void => {
   if (contextKeys === undefined || contextKeys === null) return;
@@ -249,22 +244,19 @@ export const pinServerIdentityToolContext = (args: {
 };
 
 /**
- * Narrows a `tool_context` bag to what one tool is allowed to receive (#945
- * item 3). `undefined`/`null` `contextKeys` means "forward everything" — every
- * tool authored before the allowlist existed keeps its exact behavior — while an
- * empty list forwards nothing but the identity keys.
+ * Narrows a `tool_context` bag to what one tool may receive (#945 item 3).
+ * `undefined`/`null` `contextKeys` forwards everything, so every tool authored
+ * before the allowlist keeps its behavior; an empty list forwards nothing but
+ * the identity keys.
  *
- * Matching is case-insensitive because an entry names an outbound header, and
- * header names are case-insensitive (RFC 9110 §5.1) — `assertValidToolContextKeys`
- * already refuses two keys differing only in case for that same reason. A
- * case-sensitive match would let one header be allowed or denied depending on how
- * the entry happened to be typed.
+ * Matching is case-insensitive because an entry names an outbound header (RFC
+ * 9110 §5.1) — `assertValidToolContextKeys` refuses two keys differing only in
+ * case for the same reason — so a header cannot be allowed or denied depending
+ * on how the entry was typed.
  *
  * The reserved identity keys survive any allowlist: they are derived from the
- * session and its actor rather than supplied by the caller, and they are how a
- * downstream tool knows who it is acting for. A tool cannot opt out of knowing
- * that, and nothing is contained by hiding it — the containment this allowlist
- * provides is over *caller* data, credentials above all.
+ * session, not supplied by the caller, and are how a downstream tool knows who
+ * it acts for. The containment this provides is over *caller* data.
  */
 export const filterToolContext = (args: {
   toolContext?: Record<string, string>;

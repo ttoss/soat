@@ -8,18 +8,15 @@ import { evaluateProjectThresholds } from './usageThresholds';
 
 const log = createDebug('soat:usage');
 
-// The platform SKU a compute_execution event is billed against: the vendor slug
-// is `soat` (a platform meter type, not an AI provider) and the billed unit is
-// the compute-second. A compute event carries exactly one `compute_second`
-// component whose quantity is the node's wall-clock seconds.
+// A platform meter type, not an AI provider. One `compute_second` component per
+// event, quantified by the node's wall-clock seconds.
 const COMPUTE_PROVIDER = 'soat';
 const COMPUTE_MODEL = 'compute-second';
 const COMPUTE_COMPONENT = 'compute_second';
 
-// Atomic + idempotent on the resolved key: a redelivered node execution finds
-// the compute event already present and writes nothing. Distinct from the
-// llm_tokens key namespace so an agent node's token and compute events never
-// collide on the shared unique `idempotency_key`.
+// Idempotent on the resolved key, so a redelivered node execution writes
+// nothing. A separate namespace from `llm_tokens`, so an agent node's token and
+// compute events never collide on the shared unique `idempotency_key`.
 const persistComputeEvent = async (args: {
   projectId: number;
   orchestrationRunId: number | null;

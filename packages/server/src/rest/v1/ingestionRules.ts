@@ -67,10 +67,9 @@ ingestionRulesRouter.get(
       action: 'ingestion-rules:GetIngestionRule',
       resourceType: 'ingestionRule',
     });
-    // Scoping the fetch by projectIds (rather than checking permission after
-    // an unscoped lookup) converges "doesn't exist" and "exists in a project
-    // the caller cannot access" into the same 404 — a cross-project id must
-    // not be distinguishable from a nonexistent one.
+    // Scoping the fetch, rather than checking permission after an unscoped
+    // lookup, converges "doesn't exist" and "exists elsewhere" into one 404 —
+    // a cross-project id must not be distinguishable from a nonexistent one.
     ctx.body = await getIngestionRule({
       projectIds,
       id: ctx.params.ingestion_rule_id,

@@ -1,18 +1,15 @@
 /**
  * The seam a `loop` or `sub_orchestration` node uses to start a child run.
  *
- * Those two nodes are the only reason the node executors ever needed the
- * engine, and the engine needs the executors back to dispatch a node — a real
- * runtime import cycle (#910). Importing the engine dynamically breaks it: a
- * dynamic import is resolved when the call is made, not when the module graph
- * is built, so nothing here appears in the engine's load-time dependencies.
+ * Those two nodes are the only reason the executors need the engine, and the
+ * engine needs the executors back — a real runtime cycle (#910). A dynamic
+ * import is resolved at call time, not when the module graph is built, so
+ * nothing here appears in the engine's load-time dependencies.
  *
- * Deliberately branch-free. An earlier version registered the starter up front
- * (the shape `registerApprovalResumeHandler` uses) and fell back to this import
- * when nothing had registered — but every path that reaches a loop node runs
- * *through* the engine, so the unregistered branch was unreachable by
- * construction. Per `.claude/rules/tests.md`, a branch no entry point can reach
- * is dead code to delete, not a case to test.
+ * Deliberately branch-free: an earlier version fell back to this import when
+ * nothing had registered a starter, but every path reaching a loop node runs
+ * *through* the engine, so that branch was unreachable — dead code to delete,
+ * not a case to test (`.claude/rules/tests.md`).
  */
 
 /**
@@ -35,12 +32,9 @@ export type NestedRunStarter = (args: {
   // levels down still calls its tools with the caller's context (#945).
   toolContext?: Record<string, string>;
   wait: boolean;
-  // The run and node starting this child, stamped on the child's row so a
-  // parent's cost roll-up can reach the work it ordered (#1135). Deliberately
-  // not part of the public `start-orchestration-run` contract: parentage is
-  // recorded by the engine that executes the parent, never claimed by a caller.
-  // `nodeId` is always known — every nested start has a node behind it; `runId`
-  // is absent only on a direct-call path with no run above.
+  // Stamped on the child so a parent's cost roll-up reaches the work it ordered
+  // (#1135). Deliberately outside the public contract: parentage is recorded by
+  // the engine executing the parent, never claimed by a caller.
   parent: NestedRunParent;
 }) => Promise<{ output: Record<string, unknown> | null }>;
 

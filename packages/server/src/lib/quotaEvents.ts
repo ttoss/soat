@@ -7,10 +7,8 @@ import { fileException } from './exceptions';
 
 const log = createDebug('soat:quotas');
 
-// The webhook event fired the first time a quota is breached within a window,
-// for both `enforce` and `monitor` quotas. `monitor` quotas fire this and
-// nothing else (they never block); `enforce` quotas fire it in addition to the
-// 429.
+// Fired on the first breach within a window, in both modes: a `monitor` quota
+// fires this and nothing else, an `enforce` one fires it alongside the 429.
 export const QUOTA_EXCEEDED_EVENT = 'quota.exceeded';
 
 type QuotaInstance = InstanceType<(typeof db)['Quota']>;
@@ -119,12 +117,9 @@ export const fireQuotaExceeded = async (args: {
     timestamp: args.now.toISOString(),
   });
 
-  // A `monitor` breach never blocks, so the request it rode in on returns
-  // success and leaves no durable trace of the breach beyond this webhook. Write
-  // a system-attributed audit entry so the breach is queryable after the fact —
-  // the same once-per-window guard above keeps it to one entry per window.
-  // `enforce` breaches need no entry here: they surface as a `429` the audit
-  // middleware already records on the blocked request.
+  // A `monitor` breach never blocks, so without this entry it leaves no durable
+  // trace beyond the webhook. `enforce` breaches need none: they surface as a
+  // `429` the audit middleware already records.
   if (quota.mode === 'monitor') {
     enqueueAuditWrite({
       projectPublicId,

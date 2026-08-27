@@ -1,8 +1,5 @@
-// Tests for the `# → retry N` annotation in tests/tutorials-tests.sh.
-//
-// The runner is driven against throwaway tutorial markdown files, so no server
-// or LLM is involved — the commands under test are plain shell.
-//
+// The `# → retry N` annotation in tests/tutorials-tests.sh, driven against
+// throwaway markdown so no server or LLM is involved.
 // Run: pnpm run test:harness
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -122,11 +119,9 @@ describe('tutorials-tests.sh retry annotation', () => {
     assert.match(output, /failed after 3 attempts/);
   });
 
-  // Every tutorials failure so far has been a budget sized by guesswork, and the
-  // log gave no way to tell "the feature is broken" from "it needed 12 more
-  // seconds" — the container buffers its output, so the line timestamps all
-  // collapse to the flush. Reporting the elapsed wall-clock makes the next
-  // budget a measurement instead of another guess (#1112 tutorials run).
+  // The container buffers its output, so log timestamps collapse to the flush
+  // and give no way to tell "broken" from "needed 12 more seconds". Reporting
+  // elapsed wall-clock makes the next budget a measurement, not a guess (#1112).
   test('reports the elapsed wall-clock when the budget is exhausted', async () => {
     const [cmd] = flakyCommand('never-passes-timed', 99);
     const file = await writeTutorial(

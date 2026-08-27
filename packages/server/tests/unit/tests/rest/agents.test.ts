@@ -1387,12 +1387,9 @@ describe('Agents', () => {
       expect(res.body.tools).toBeUndefined();
     });
 
-    // Regression: fromWireInlineTool/toWireInlineTool convert an inline
-    // binding's tool between the wire's snake_case fields and the camelCase
-    // fields every consumer (toolsCall.ts's deny-list/preset-parameter
-    // handling) actually reads. Storing the wire object verbatim (the bug)
-    // made denied_actions a deny-list that never denied anything and dropped
-    // preset_parameters/output_mapping silently.
+    // An inline binding's tool must be converted between the wire's snake_case
+    // and the camelCase every consumer reads. Storing the wire object verbatim
+    // made `denied_actions` deny nothing and dropped the other fields silently.
     test('an inline binding tool round-trips denied_actions/preset_parameters/output_mapping', async () => {
       const res = await createAgentWith({
         tool_bindings: [
@@ -1629,11 +1626,8 @@ describe('Agents', () => {
           tool_context: { user_id: 'u1', env: 'test' },
         });
 
-      // This suite doesn't run a real Ollama server (only the smoke/tutorials
-      // CI jobs do), so the generation call deterministically either
-      // succeeds (200, if a local Ollama happens to be reachable) or fails
-      // upstream (502 AI_PROVIDER_ERROR) — never 400, which is what this
-      // test actually cares about (toolContext was accepted as valid input).
+      // No Ollama here, so the call either succeeds or fails upstream — never
+      // 400, which is what this asserts: `toolContext` was accepted as input.
       expect([200, 502]).toContain(response.status);
     });
 
@@ -1657,11 +1651,9 @@ describe('Agents', () => {
     });
 
     test('a background generation that fails records the failure for polling', async () => {
-      // Sanctioned force-failure stub (tests.md — "Force-failure stubs for
-      // `.catch()` resilience branches"): the background path swallows the
-      // dispatch error and records it on the generation, and no real provider
-      // call fails deterministically in unit CI. The happy path above runs
-      // against the real pipeline.
+      // Sanctioned force-failure stub: no real provider call fails
+      // deterministically, and the background path's swallow-and-record branch
+      // is unreachable otherwise. The happy path above uses the real pipeline.
       jest
         .spyOn(agentNonStreamGenerationModule, 'runNonStreamGeneration')
         .mockRejectedValueOnce(new Error('provider exploded'));

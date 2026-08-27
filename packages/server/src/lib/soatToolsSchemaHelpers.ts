@@ -79,12 +79,9 @@ const dereferenceValue = (args: {
       // recursing and return an empty schema rather than looping forever.
       if (seenRefs.has(refName)) return {};
       const resolved = spec.components?.schemas?.[refName];
-      // A ref with no target in this document — most often one pointing into
-      // another file, e.g. `ToolBinding.properties.tool` ->
-      // `./tools.yaml#/components/schemas/CreateToolRequest`. Resolve it the
-      // same way as a circular ref: an empty schema, which accepts any value,
-      // so the property stays discoverable rather than vanishing from the tool
-      // definition. Matches @ttoss/http-server-mcp-openapi (ttoss/ttoss#1174).
+      // A ref with no target in this document, usually one pointing into
+      // another file. Resolved like a circular ref — an empty schema accepting
+      // any value — so the property stays discoverable rather than vanishing.
       if (resolved === undefined) return {};
       return dereferenceValue({
         value: resolved,
@@ -238,29 +235,20 @@ export const sanitizeDescription = (description: string): string => {
 };
 
 /**
- * Turns an OpenAPI subschema into valid JSON Schema, recursively.
+ * Turns an OpenAPI subschema into valid JSON Schema, recursively. Two
+ * OpenAPI-isms must be handled wherever they appear, because the generated
+ * schema is compiled by a real validator when the MCP tool is registered:
  *
- * Two OpenAPI-isms have to be dealt with wherever they appear, not just on
- * top-level properties, because the generated schema is compiled by a real
- * JSON Schema validator when the MCP tool is registered:
- *
- * 1. **`nullable`** is an OpenAPI extension with no meaning in JSON Schema, and
- *    a validator rejects it outright. `nullable: true` merges `'null'` into the
- *    sibling `type`; a subschema with no declared `type` already permits null,
- *    so the keyword is simply dropped. Nested occurrences are easy to miss —
- *    the formation specs declare one several levels down, inside a `oneOf`
- *    alternative's `additionalProperties`.
- *
- * 2. **`undefined` values**, which {@link dereferenceSchema} leaves behind for a
- *    `$ref` it cannot resolve — it only follows same-file
- *    `#/components/schemas/...` refs, so a cross-file ref such as
- *    `ToolBinding.properties.tool` → `./tools.yaml#/...` yields `undefined`.
- *    JSON has no `undefined`, so such a key was already invisible to clients
- *    (serialising the schema dropped it); leaving it on the in-memory object
- *    makes the validator throw as it compiles `properties`. Dropping the key
- *    keeps exactly the shape clients already saw.
+ * 1. **`nullable`** has no meaning in JSON Schema and a validator rejects it.
+ *    `nullable: true` merges `'null'` into the sibling `type`; with no declared
+ *    `type` the keyword is dropped. Nested occurrences are easy to miss — the
+ *    formation specs declare one inside a `oneOf` alternative's
+ *    `additionalProperties`.
+ * 2. **`undefined` values**, left by {@link dereferenceSchema} for a cross-file
+ *    `$ref` it cannot resolve. Such a key was already invisible to clients
+ *    (serialising dropped it), but leaving it on the in-memory object makes the
+ *    validator throw as it compiles `properties`.
  */
-/** Merges `'null'` into a subschema's `type`, however that type is expressed. */
 const mergeNullIntoType = (schema: Record<string, unknown>): void => {
   const type = schema.type;
 
@@ -303,30 +291,25 @@ export const normalizeSubschema = (value: unknown): unknown => {
 };
 
 /**
- * Whether a request-body property is kept out of the tool input schema.
- *
- * Two distinct markers, deliberately not merged — they say different things to
- * the next person reading the spec:
+ * Whether a request-body property is kept out of the tool input schema. Two
+ * markers, deliberately not merged — they say different things to the next
+ * person reading the spec:
  *
  * - `x-soat-server-managed` — the platform supplies the value (trace lineage,
- *   call depth). A caller *may not* set it, but the field is honored when the
- *   server injects it (see `extractAcceptedBodyFields`, which keeps them).
+ *   call depth). A caller may not set it, but it is honored when the server
+ *   injects it (`extractAcceptedBodyFields` keeps them).
  * - `x-soat-tool-unsupported` — the field selects a response mode a tool call
- *   cannot receive at all, such as an SSE stream. Nothing injects it later; it
- *   is simply not reachable from a tool.
+ *   cannot receive at all, such as an SSE stream. Nothing injects it later.
  *
- * Both are invisible to REST, SDK and CLI callers, which read the spec's
- * schemas rather than this projection of them.
+ * Both are invisible to REST, SDK and CLI callers, which read the spec itself.
  */
 /**
  * The value a `x-soat-tool-forced` parameter is pinned to for tool calls, or
- * `undefined` when the parameter is a normal caller-chosen one.
+ * `undefined` for a normal caller-chosen one.
  *
- * The third marker in the family described above, for a parameter whose *only*
- * correct value in a tool context is fixed. `wait` is the case it exists for: a
- * tool call is one request returning one result, with no channel to poll a
- * background run later, so a nested `create-agent-generation` must block — the
- * mirror image of `stream`, which a tool call equally cannot receive.
+ * `wait` is the case it exists for: a tool call is one request returning one
+ * result, with no channel to poll a background run later, so a nested
+ * `create-agent-generation` must block — the mirror image of `stream`.
  */
 export const forcedToolParamValue = (
   parameter: unknown

@@ -18,10 +18,9 @@ export type CollectedGuardrail = AttachedGuardrail & {
   contextMode: string;
 };
 
-// The document of a dangling reference (a guardrail_id whose guardrail was
-// deleted). Evaluating it yields class C → route_to_approval, the documented
-// fail-closed behavior (guardrails.md — Deletion). version 0 marks it so the
-// audit record can surface it as a null governing version.
+// Stands in for a guardrail_id whose guardrail was deleted: evaluates to class
+// C, the documented fail-closed behavior. Version 0 marks it so the audit
+// record surfaces a null governing version.
 const danglingDocument: GuardrailDocument = { class: DEFAULT_ACTION_CLASS };
 
 /**

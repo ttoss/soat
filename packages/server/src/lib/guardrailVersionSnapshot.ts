@@ -20,16 +20,15 @@ export type GuardrailConfigSnapshot = ConfigSnapshot;
 /**
  * Projects a guardrail down to its versioned surface.
  *
- * Unlike an agent — whose whole mutable surface is configuration — a guardrail
- * versions only its policy `document`. Name, description and the context binding
- * are metadata: bumping the version when one of them changes would make two
- * version numbers denote the same policy, and the version number is precisely
- * what an evaluation record cites to say which policy governed a decision.
+ * Unlike an agent, whose whole mutable surface is configuration, a guardrail
+ * versions only its policy `document`. Name, description and the context
+ * binding are metadata: bumping the version for one of them would make two
+ * version numbers denote the same policy, and the version number is what an
+ * evaluation record cites.
  *
- * The document is copied as a **value**. It is a caller-authored JSON payload
- * with contract-fixed keys (`default_class`, `guard`, `escalate`) that this
- * platform does not own, so nothing here descends into it or rewrites a key
- * (`.claude/rules/case-convention.md`).
+ * The document is copied as a **value** — a caller-authored payload with
+ * contract-fixed keys this platform does not own, so nothing here descends into
+ * it (`.claude/rules/case-convention.md`).
  */
 export const buildGuardrailConfigSnapshot = (guardrail: {
   document: object;

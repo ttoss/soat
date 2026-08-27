@@ -34,18 +34,15 @@ export const isFetchFailure = (
  * **mid-run** — a `data: {"error": {"message": ...}}` frame rather than a failed
  * request — or `null` when the value is not one of those.
  *
- * The AI SDK forwards that frame's own JSON value to `onError`: nothing threw,
- * the response was already `200`, so there is no `APICallError` to match on. Left
+ * The AI SDK forwards that frame's own JSON to `onError`: nothing threw and the
+ * response was already `200`, so there is no `APICallError` to match on. Left
  * unmatched it fell through to the generic wrapper, and a fault the provider had
- * named reached the caller as "Internal Server Error" and the generation record
- * as `[object Object]` (#1084).
+ * named reached the caller as "Internal Server Error" and the record as
+ * `[object Object]` (#1084).
  *
- * A real `Error` is deliberately excluded: those are served by
- * `toProviderDomainError`'s earlier branches and by
- * `buildGenerationErrorPayload`, and mapping every one of them to
- * `AI_PROVIDER_ERROR` would relabel failures that never came from the provider.
- * What is left — a bare object carrying a string `message`, optionally wrapped in
- * an `error` key — only reaches this function from a provider stream.
+ * A real `Error` is excluded: those are served by `toProviderDomainError`'s
+ * earlier branches, and mapping them all to `AI_PROVIDER_ERROR` would relabel
+ * failures that never came from the provider.
  */
 const streamedProviderErrorMessage = (error: unknown): string | null => {
   if (error instanceof Error || typeof error !== 'object' || error === null) {
@@ -114,12 +111,8 @@ export const usageFromFailure = (
 export const toProviderDomainError = (error: unknown): DomainError | null => {
   const unwrapped = unwrapProviderError(error);
 
-  // The model returned something that is not the object the agent's
-  // `output_schema` describes — unparseable JSON, or JSON that violates the
-  // schema (see `validateStructuredOutput`). Upstream-caused like an
-  // `APICallError`, so it belongs on this path: mapping it here covers the
-  // initial turn and the tool-outputs continuation at once, since both funnel
-  // their failures through this function.
+  // Upstream-caused like an `APICallError`, so it belongs on this path —
+  // which covers the initial turn and the tool-outputs continuation at once.
   if (NoObjectGeneratedError.isInstance(unwrapped)) {
     const mapped = new DomainError(
       'OUTPUT_SCHEMA_VALIDATION_FAILED',

@@ -160,19 +160,15 @@ export const hasModelBinding = (value: unknown): boolean => {
 
 /**
  * A consumer resolves its completion model through **at most one** of a pinned
- * provider (`ai_provider_id`, optionally with `model`) or a `model_route_id`.
- * Naming neither means "inherit the project's `default_model_route_id`"; that
- * the project actually has one is a database fact, so it is checked by
- * `assertModelBindingResolvable` rather than here (this function stays pure).
+ * provider (`ai_provider_id`, optionally with `model`) or a `model_route_id`;
+ * naming neither inherits the project's `default_model_route_id`, whose
+ * existence is a database fact checked by `assertModelBindingResolvable` so
+ * this stays pure.
  *
- * Enforcing exclusivity — rather than letting a route override a pin — keeps
- * `ai_provider_id` from lingering as permanently dead config with the
- * precedence rule living in prose. `model` may not accompany a route, named or
- * inherited, because each target names its own.
- *
- * Callers pass the **effective** post-write state (for a partial update: the
- * incoming value where provided, the stored value otherwise). Returns a message
- * or `null` when valid.
+ * Enforcing exclusivity rather than letting a route override a pin keeps
+ * `ai_provider_id` from lingering as dead config with the precedence rule in
+ * prose. `model` may not accompany a route, since each target names its own.
+ * Callers pass the effective post-write state; returns a message or `null`.
  */
 export const validateModelRouteExclusivity = (args: {
   modelRouteId: unknown;

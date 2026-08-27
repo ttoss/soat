@@ -4,17 +4,15 @@ const log = createDebug('soat:model-routes:breaker');
 
 /**
  * Provider health is a hot-path hint with a half-life of seconds, so breaker
- * state lives in process memory per node rather than in the database: a
- * persisted counter would add a write on every completion and a read before
- * every target attempt for a fact that is stale by the time it commits. A cold
- * node re-learns an outage within `failure_threshold` requests. Multi-node
- * deployments may briefly disagree about a target's health; that is accepted.
+ * state lives in process memory per node: a persisted counter would add a write
+ * per completion and a read per attempt for a fact that is stale by the time it
+ * commits. A cold node re-learns an outage within `failure_threshold` requests,
+ * and multi-node deployments may briefly disagree — accepted.
  *
- * State is keyed by `(ai_provider_db_id, model)` and therefore **shared across
- * routes**: a dead backend is dead regardless of which route noticed it. The
- * *counter* is shared; the *policy* (`failure_threshold` / `cooldown_seconds`)
- * comes from the route evaluating the target, so two routes may legitimately
- * hold different opinions about when to start skipping.
+ * Keyed by `(ai_provider_db_id, model)` and therefore **shared across routes**:
+ * a dead backend is dead whichever route noticed. The *counter* is shared; the
+ * *policy* comes from the route evaluating the target, so two routes may hold
+ * different opinions about when to start skipping.
  */
 type BreakerState = {
   consecutiveFailures: number;

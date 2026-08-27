@@ -1,19 +1,12 @@
 /**
- * Scorers: the pure half of the evaluations module (the evaluations module doc).
+ * Scorers: the pure half of the evaluations module.
  *
- * Everything here is a function of its arguments — no DB, no I/O — which is
- * what lets `tests/unit/tests/lib/evaluationScorers.test.ts` drive the whole
- * input space directly rather than constructing a project, agent, dataset and
- * run per branch (`.claude/rules/tests.md` — keep-list rule 1).
- *
- * Two shapes are load-bearing:
- *
- * - **Every scorer returns `{ score: 0–1, passed: boolean }`.** Binary scorers
- *   emit 0/1. One shape keeps aggregation, thresholds and (Phase 2) baseline
- *   deltas scorer-agnostic, so a new scorer type needs no aggregation change.
- * - **A scorer reads the generation's two output channels explicitly.** Text
- *   scorers read `output.content`; `output_schema` validates `output.object`
- *   and never re-parses the text. `json_logic` sees both.
+ * No DB, no I/O, so `lib/evaluationScorers.test.ts` drives the whole input
+ * space directly (`.claude/rules/tests.md` — keep-list rule 1). Two shapes are
+ * load-bearing: every scorer returns `{ score: 0–1, passed: boolean }`, which
+ * keeps aggregation and thresholds scorer-agnostic; and a scorer reads the
+ * generation's output channels explicitly — text scorers `output.content`,
+ * `output_schema` only `output.object`, `json_logic` both.
  */
 import { DomainError } from '../errors';
 import {
@@ -122,12 +115,9 @@ type ScorerCheck = (args: {
   agentHasOutputSchema: boolean;
 }) => string | null;
 
-// `llm_judge.pass_threshold` is required with no default: a judge emits a
-// continuous score, so nothing about the score itself says where "good enough"
-// is — and a defaulted cutoff would silently decide the gate every run-level
-// `passed` is computed from (the evaluations module doc — Pass semantics).
-// `isUnitInterval` (shared with the tool scorer's optional threshold) comes
-// from `evaluationToolScorerContract.ts`.
+// Required with no default: a judge emits a continuous score, so nothing about
+// it says where "good enough" is, and a defaulted cutoff would silently decide
+// the gate every run-level `passed` is computed from.
 
 /**
  * The per-type config rules, keyed by type so a new entry in
@@ -160,11 +150,9 @@ const SCORER_CHECKS: Record<ScorerType, ScorerCheck> = {
     if (scorer.schema !== undefined && !isPlainObject(scorer.schema)) {
       return `${path}.schema must be a JSON Schema object.`;
     }
-    // The platform only produces `output.object` when the **agent** carries an
-    // `output_schema` — `buildStructuredOutput` is what constrains the model.
-    // A scorer schema against an unconstrained agent would find `object`
-    // permanently absent and score 0 on every item of every run: a fabricated
-    // regression, which is the exact signal this module exists to prevent.
+    // `output.object` exists only when the *agent* carries an `output_schema`.
+    // A scorer schema against an unconstrained agent would find it permanently
+    // absent and score 0 on every item — a fabricated regression.
     if (!agentHasOutputSchema) {
       return `${path} requires the agent under test to have an output_schema; without one the agent produces no structured output to validate.`;
     }
@@ -254,10 +242,8 @@ export const validateScorers = (args: {
     });
     if (error) return error;
 
-    // Aggregate scores are keyed by the outcome's scorer key — the type for
-    // built-ins, the scorer's own `name` for tool scorers — so two scorers
-    // sharing a key would collapse into one bucket and silently lose a signal.
-    // Tool scorers may therefore appear several times, under distinct names.
+    // Keyed by the outcome's scorer key, so two scorers sharing one would
+    // collapse into a single bucket and silently lose a signal.
     const type = scorer.type as string;
     const key = type === TOOL_SCORER_TYPE ? (scorer.name as string) : type;
     if (seen.has(key)) {
@@ -582,7 +568,5 @@ export const scoreOutput = async (args: {
   return outcomes;
 };
 
-// Run-level aggregation (`aggregateScores`, `resolveRunPassed`,
-// `AggregateScores`) lives in `evaluationScorerAggregation.ts`: scoring
-// produces one item's outcomes, and the roll-up over persisted outcomes is a
-// separate consumer's concern (the run finalizer's).
+// Run-level aggregation lives in `evaluationScorerAggregation.ts`: scoring
+// produces one item's outcomes, and the roll-up is the run finalizer's concern.

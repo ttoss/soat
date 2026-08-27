@@ -12,13 +12,9 @@ import {
   validateStructuredOutput,
 } from 'src/lib/outputSchema';
 
-// ── The validator, directly ──────────────────────────────────────────────────
-//
-// A pure algorithm over a large input space (every JSON Schema keyword an agent
-// author may write), so it earns a direct lib test under the keep-list: reaching
-// a single keyword through a generation would need a project + provider + agent
-// + a stub model response per case, and the failure signal (a bare 502) would
-// hide which keyword fired.
+// A pure algorithm over every JSON Schema keyword an author may write. Reaching
+// one keyword through a generation would need a full fixture chain per case, and
+// the bare 502 would hide which keyword fired.
 describe('validateStructuredOutput', () => {
   const themeSchema = {
     type: 'object',
@@ -43,12 +39,9 @@ describe('validateStructuredOutput', () => {
     expect(result.success && result.value).toEqual(value);
   });
 
-  // The regression this whole module exists for (naturali.ai#…): grok-4.5
-  // returned `{text: "get-fundamental-truth", title: "get-fundamental-truth",
-  // reason: "get-fundamental-truth", approved: true}` — every required key
-  // present, every type correct, and semantically the name of the agent's own
-  // tool used as filler. A required+type-only check passes this; `minLength` is
-  // what rejects it, so the validator must honor the whole schema.
+  // The regression this module exists for: a model returned every required key
+  // with every type correct, filled with the name of the agent's own tool. A
+  // required+type-only check passes that; `minLength` is what rejects it.
   test('rejects a degenerate object whose keys and types are all correct', () => {
     const result = validateStructuredOutput(themeSchema)({
       text: 'get-fundamental-truth',
@@ -141,14 +134,8 @@ describe('validateStructuredOutput', () => {
   });
 });
 
-// ── The wiring, end to end ───────────────────────────────────────────────────
-//
-// Real `generateText` against a local OpenAI-compatible stub, real DB, real
-// buildCompletedGenerationResult — the same local-fake-server pattern
-// agentNonStreamGeneration.test.ts and memoryExtractionCompletion.test.ts use. This
-// is what proves the validator is actually reached by a generation: before the
-// fix, the stub's degenerate object completed the generation with
-// `output.object` set and no error anywhere.
+// Proves a generation actually reaches the validator: before the fix, the stub's
+// degenerate object completed with `output.object` set and no error anywhere.
 describe('output_schema enforcement (stub server)', () => {
   let stubServer: Server;
   let stubBaseUrl: string;

@@ -8,11 +8,9 @@ import {
 import { getFormationModule } from './formationsRegistry';
 import type { PlanChange, ResourceDeclaration } from './formationsTypes';
 
-// Resolves a resource's template properties (parameter substitution, then
-// ref/sub substitution against already-known physical ids) for use in a plan
-// diff. A ref to a not-yet-created resource is left unresolved rather than
-// thrown, so the raw expression surfaces in the plan's `desired` payload
-// instead of failing the whole plan call.
+// A ref to a not-yet-created resource is left unresolved rather than thrown, so
+// the raw expression surfaces in the plan's `desired` payload instead of
+// failing the whole call.
 const resolveParamExpressionsForDiff = (args: {
   decl: ResourceDeclaration;
   resolvedParams: Map<string, string>;
@@ -132,10 +130,9 @@ export const planResourceChange = async (args: {
         });
       }
 
-      // `read` returned null. For write-only resources (e.g. secrets, whose
-      // value is encrypted at rest) this is expected on every call, not a
-      // sign of external deletion — diff against the last-applied snapshot
-      // instead, the same source of truth `applyUpdateChange` uses.
+      // For a write-only resource a null `read` is expected on every call, not
+      // external deletion — diff against the last-applied snapshot instead,
+      // the same source of truth `applyUpdateChange` uses.
       if (module.writeOnly && lastAppliedProperties) {
         return buildComparedChange({
           logicalId,
@@ -167,11 +164,10 @@ export const planResourceChange = async (args: {
   };
 };
 
-// Resources tracked by the ledger that the new template no longer declares
-// are about to be orphaned/deleted on the next `update-formation` — surfacing
-// them as `delete` plan changes keeps `plan` and `update` reporting the same
-// set. Rows already tombstoned (status 'deleted') are excluded so a resource
-// removed in a prior deploy doesn't keep showing up as a pending delete.
+// Ledger resources the new template no longer declares are deleted on the next
+// `update-formation`, so surfacing them keeps `plan` and `update` reporting the
+// same set. Tombstoned rows are excluded, or a resource removed in a prior
+// deploy would keep showing up as pending.
 export const computeOrphanedPlanChanges = (args: {
   templateResourceKeys: Set<string>;
   existingResources: InstanceType<(typeof db)['FormationResource']>[];

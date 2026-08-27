@@ -24,20 +24,17 @@ const apiKeysRouter = new Router<Context>();
  * The project a scoped credential is confined to, or `undefined` when it is
  * unscoped and may manage keys in any project its owner can reach.
  *
- * Key management is the one surface where the binding has to guard the
- * *credential being written*, not just a resource being read. Every resource
- * route resolves its project through the shared preamble, so a key scoped to
- * project A cannot touch project B — but `POST /api-keys` is self-service
- * (`requireAuth` and nothing else), so that same confined key could mint a
- * brand-new **unscoped** key for its owning user and be outside its boundary in
- * one call. The item routes, gated on owner-or-admin alone, then let it read,
- * re-scope, or delete that owner's keys in any project (#1038). A per-tenant
- * credential handed to a fronting service is only a boundary if it cannot mint
- * its way past it.
+ * Key management is the one surface where the binding must guard the
+ * *credential being written*, not just a resource being read. `POST /api-keys`
+ * is self-service, so a confined key could mint a brand-new **unscoped** key
+ * for its owning user and be outside its boundary in one call; the item routes,
+ * gated on owner-or-admin alone, then let it read, re-scope or delete that
+ * owner's keys in any project (#1038). A per-tenant credential is only a
+ * boundary if it cannot mint its way past it.
  *
  * Every route below therefore runs `assertCredentialProjectScope` against the
- * project of the key it is about to create, read, or write — passing `null` for
- * an unscoped key, which a confined credential may not manage either.
+ * project of the key it is about to touch — passing `null` for an unscoped key,
+ * which a confined credential may not manage either.
  */
 const credentialProjectPublicId = (ctx: Context): string | undefined => {
   return (
@@ -125,10 +122,9 @@ const resolveScopedProjectId = async (args: {
 apiKeysRouter.get('/api-keys', async (ctx: Context) => {
   requireAuth(ctx);
 
-  // A credential scoped to a project lists only that project's keys. The list
-  // is the read half of the same boundary the item routes enforce below, so a
-  // project-scoped OAuth token — which carries its project as a public id, not
-  // as `apiKeyProjectId` — is filtered here too rather than falling through to
+  // The read half of the boundary the item routes enforce below. A
+  // project-scoped OAuth token carries its project as a public id rather than
+  // `apiKeyProjectId`, so it is filtered here too instead of falling through to
   // the owner-wide branch.
   const scopedProjectId =
     ctx.authUser.apiKeyProjectId ??

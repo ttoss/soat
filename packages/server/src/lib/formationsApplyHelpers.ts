@@ -201,10 +201,9 @@ export const applyUpdateChange = async (args: {
   // no longer disagree about whether a resource changed (#902).
   const { merged: mergedProperties, changed: propertiesChanged } =
     mergeWithPrevious({ resolved: resolvedProperties, previous: lastProps });
-  // Captured before the row is written: on this path `resourceRow` *is*
-  // `existing`, so `resourceRow.update` below mutates the instance — reading
-  // the previous id off it afterwards would hand the replacement's own id to
-  // the disposal that is meant to remove the resource it superseded.
+  // `resourceRow` is `existing` here, so the update below mutates it — reading
+  // the previous id afterwards would hand the replacement's own id to the
+  // disposal meant to remove what it superseded.
   const previousPhysicalResourceId = existing.physicalResourceId;
 
   resolvedIds.set(logicalId, previousPhysicalResourceId);
@@ -266,20 +265,15 @@ export const applyUpdateChange = async (args: {
 /**
  * Walks back the resources this operation created, newest first.
  *
- * An apply that stops at the first failure used to leave every resource it had
- * already created live and unmanaged (#999): the formation was `failed`, but
- * the provider, memory and tools it had provisioned were still there, and a
- * corrected re-apply could collide with them. Reversing `sortedOrder` is the
- * same order `deleteFormation` tears a stack down in, so a dependency is only
- * removed after its dependents.
+ * An apply that stopped at the first failure left everything it had already
+ * created live and unmanaged (#999), so a corrected re-apply could collide with
+ * it. Reversing `sortedOrder` is the order `deleteFormation` uses, so a
+ * dependency is only removed after its dependents.
  *
- * Only creates are unwound. An update that already succeeded has no prior state
- * to restore without a pre-update snapshot, so its resource is left as it is.
- *
- * A `deletion_policy: 'retain'` resource is skipped entirely — not tombstoned
- * the way `deleteFormation` does it. The physical resource survives either way,
- * and keeping its row pointing at it is what lets a corrected re-apply adopt it
- * instead of provisioning a duplicate alongside it.
+ * Only creates are unwound — an update has no prior state to restore without a
+ * snapshot. A `deletion_policy: 'retain'` resource is skipped entirely rather
+ * than tombstoned: keeping its row pointing at the surviving resource is what
+ * lets a corrected re-apply adopt it instead of duplicating it.
  */
 export const rollbackCreatedResources = async (args: {
   created: ResourceRow[];

@@ -113,13 +113,10 @@ describe('Policies', () => {
       expect(response.body.updated_at).toBeDefined();
     });
 
-    // A `condition` block's keys are IAM condition operators (`StringEquals`)
-    // and context keys (`soat:ResourceTag/<tag>`) — an external vocabulary the
-    // policy compiler matches by exact string, not SOAT field names. They must
-    // round-trip verbatim: `camelToSnake` mangles the operator to
-    // `_string_equals` and the context key to `soat:_resource_tag/env`, and
-    // `snakeToCamel` rewrites a snake_case tag name (`cost_center` →
-    // `costCenter`) so it no longer matches the tag a formation template wrote.
+    // A `condition` block's keys are IAM operators and context keys — an
+    // external vocabulary matched by exact string, not SOAT field names. Any
+    // case transform mangles the operator or rewrites a tag name so it no
+    // longer matches what a formation template wrote.
     test('condition operators and context keys round-trip verbatim', async () => {
       const condition = {
         StringEquals: { 'soat:ResourceTag/env': 'prod' },

@@ -79,12 +79,9 @@ export type OrchestrationNode = {
   // human node
   prompt?: string;
   options?: string[];
-  // approval node — proposes a guarded tool call (`toolId`) and parks the run as
-  // `awaiting_input` until a human approves/rejects (or it expires). `arguments`
-  // is an input-mapping-style object resolved against run state at emit time;
-  // `reasoning`/`evidence`/`predictedImpact` are JSON Logic resolved into the
-  // item's evidence; `expiresIn` is seconds until expiry; `instructions` is
-  // optional approver guidance.
+  // approval node — parks the run as `awaiting_input` until a human resolves
+  // the proposed call or it expires. `arguments` and the evidence fields are
+  // JSON Logic resolved against run state at emit time.
   arguments?: Record<string, unknown>;
   expiresIn?: number;
   instructions?: string;
@@ -98,10 +95,8 @@ export type OrchestrationNode = {
   collection?: string;
   itemVariable?: string;
   parallelism?: number;
-  // poll node — reuses toolId/operationId/inputMapping (the tool to call) and
-  // maxIterations (attempt cap). exitCondition is the JSON Logic stop condition
-  // (truthy ⇒ stop), interval is the wait between attempts, and failOnTimeout
-  // fails the run when the attempt cap is reached without the condition holding.
+  // poll node — reuses the tool fields above; `exitCondition` is JSON Logic,
+  // truthy to stop.
   exitCondition?: unknown;
   interval?: string;
   failOnTimeout?: boolean;
@@ -112,21 +107,16 @@ export type OrchestrationNode = {
   // Outbound notification is not a webhook node concern: emit an `emit_event`
   // node instead and let a Webhook subscription deliver it (see eventType).
   mode?: 'receive';
-  // emit_event node — emits an internal domain event of type `eventType`
-  // carrying the input-mapped payload as the event `data`. Any Webhook
-  // subscribed to that event type (in the run's project) then delivers it —
-  // signed, retried, and tracked by the Webhooks module — so a graph never
-  // holds a URL or secret of its own. Reactive, fire-and-forget: the run does
-  // not block on or fail from delivery outcome.
+  // emit_event node — emits an internal domain event that subscribed Webhooks
+  // deliver, so a graph never holds a URL or secret of its own. Fire-and-forget:
+  // the run neither blocks on nor fails from the delivery outcome.
   eventType?: string;
   // sub_orchestration node
   orchestrationId?: string;
   // Shared: max iterations for cycles
   maxIterations?: number;
-  // Shared mappings — values are JSON Logic (literal or expression).
-  // inputMapping: { <inputKey>: <expr over state> }.
-  // stateMapping: { <state.path>: <expr over { output: artifact, state }> } —
-  // keys are write destinations, mirroring input_mapping's read-source shape.
+  // JSON Logic (literal or expression). `stateMapping` keys are write
+  // destinations, mirroring `inputMapping`'s read-source shape.
   inputMapping?: Record<string, unknown>;
   stateMapping?: Record<string, unknown>;
   outputSchema?: object;
@@ -212,11 +202,9 @@ export type MappedOrchestrationRun = {
   // re-cased, and no key reserved — the engine reads nothing from here.
   metadata: Record<string, unknown> | null;
   output: Record<string, unknown> | null;
-  // The run and node that started this one, set only on a `loop` /
-  // `sub_orchestration` child. Both null for a run a caller started.
-  // Qualified by its resource, like every other run id on the wire: SOAT has
-  // three unrelated run concepts, so a bare `parent_run_id` would be one more
-  // spelling to paste into the wrong flag (`rest/runParamNamingContract.test.ts`).
+  // Set only on a `loop` / `sub_orchestration` child. Qualified by its
+  // resource, like every other run id on the wire: SOAT has three unrelated
+  // run concepts, so a bare `parent_run_id` invites pasting into the wrong flag.
   parent_orchestration_run_id: string | null;
   parent_node_id: string | null;
   node_executions: MappedNodeExecution[];
@@ -230,10 +218,8 @@ export type MappedOrchestrationRun = {
     total_reasoning_tokens: number;
     total_cost_usd: number | null;
   };
-  // The same roll-up summed over this run *and every run descended from it*
-  // through `loop` / `sub_orchestration` nodes. Equal to `usage` for a run with
-  // no children. Populated on the single-run read alongside `usage`, which is
-  // the subtree total.
+  // The roll-up summed over this run and every descendant, so it equals `usage`
+  // only for a run with no children.
   usage_own?: {
     total_input_tokens: number;
     total_output_tokens: number;
@@ -505,10 +491,9 @@ export const updateOrchestration = async (
     projectIds: args.projectIds,
   });
 
-  // `orch` is loaded with its project so it can be mapped directly, before and
-  // after the write: `update` mutates the instance in place, so the same
-  // reference yields the pre-write config here and the post-write one below,
-  // with no second query and no chance of the two views disagreeing.
+  // `update` mutates the instance in place, so this one reference yields both
+  // the pre- and post-write config with no second query and no chance of the
+  // two views disagreeing.
   const asMappable = orch as InstanceType<typeof db.Orchestration> & {
     project: InstanceType<typeof db.Project>;
   };
@@ -539,12 +524,10 @@ export const updateOrchestration = async (
 
   await orch.update(updates);
 
-  // A graph write bumps the version and archives the new graph, so a run pinned
-  // to any earlier version still resolves the topology it started on.
-  // Metadata-only edits (name / description) leave the version untouched — as
-  // does re-writing the graph the orchestration already holds, which is what
-  // makes restoring the live graph a genuine no-op rather than an endless
-  // version chain.
+  // A graph write bumps the version, so a run pinned to an earlier one still
+  // resolves the topology it started on. Metadata-only edits and re-writing the
+  // identical graph leave it untouched — restoring the live graph is a genuine
+  // no-op rather than an endless version chain.
   await orchestrationVersionStore.archiveConfigChange({
     resourceDbId: orch.id as number,
     currentVersion: orch.version,
@@ -629,10 +612,8 @@ export const findOrchestrationRun = async (args: {
 }): Promise<MappedOrchestrationRun | null> => {
   log('findOrchestrationRun %o', { id: args.id });
 
-  // The run's own includes plus the node executions, and — when the caller
-  // pins one — an inner `where` on the orchestration that turns the join into
-  // a filter. Built here rather than taken from the accessor because it varies
-  // per call; the scoped `where` is the part that must not.
+  // Built per call rather than taken from the accessor because the includes
+  // vary; the scoped `where` is the part that must not.
   const include: object[] = [
     { model: db.Project, as: 'project' },
     args.orchestrationId
@@ -666,16 +647,11 @@ export const findOrchestrationRun = async (args: {
 
 export const listOrchestrationRuns = async (args: {
   orchestrationPublicId?: string;
-  // Public id of a parent run: returns the runs its `loop` /
-  // `sub_orchestration` nodes started. Without it a caller holding a parent has
-  // no way to name its children, which is what let a parent's total read as
-  // complete when it was not (#1135).
+  // Without this a caller holding a parent could not name its children, which
+  // let a parent's total read as complete when it was not (#1135).
   parentRunId?: string;
-  // Whether the run was started by another run. `false` selects the runs a
-  // caller started (no parent), `true` the runs a `loop` /
-  // `sub_orchestration` node started; omitted returns both. This is what makes
-  // an aggregate over runs safe: `usage` is transitive, so summing it across a
-  // list that mixes parents and their children counts the children twice.
+  // Makes an aggregate over runs safe: `usage` is transitive, so summing it
+  // across a list mixing parents and children counts the children twice.
   nested?: boolean;
   projectIds?: number[];
   limit?: number;

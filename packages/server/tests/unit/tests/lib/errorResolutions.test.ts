@@ -142,11 +142,9 @@ describe('error resolutions', () => {
    * names SOAT, not just the ones fixed here.
    */
   test('no hint names SOAT or hardcodes a URL', () => {
-    // Rendered under a non-default base: the *default* base legitimately
-    // contains "soat" (soat.ttoss.dev), so checking the default rendering
-    // would flag the configured case along with the hardcoded one. Swapping
-    // the base isolates what #1126 is actually about — text a deployment
-    // cannot relocate by setting `SOAT_DOCS_BASE_URL`.
+    // The default base legitimately contains "soat", so checking it would flag
+    // the configured case too. A non-default base isolates what #1126 is about:
+    // text a deployment cannot relocate.
     const original = process.env.SOAT_DOCS_BASE_URL;
     process.env.SOAT_DOCS_BASE_URL = 'https://docs.example.com';
     let allHints: string[];

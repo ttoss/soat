@@ -117,11 +117,9 @@ export const emitActivityEntry = async (
     log('emitActivityEntry: created id=%s', mapped.id);
     return mapped;
   } catch (error) {
-    // A swallowed failure here is not only a missing feed row: guardrails gate
-    // on this table (`runtime.activity.actions_1h`), so an entry that is never
-    // written silently loosens the limit it was supposed to count against
-    // (#1130). Returning `null` stays the contract — the caller is a
-    // fire-and-forget bus handler — but the loss is now counted and printed.
+    // Guardrails gate on this table, so a swallowed failure silently loosens
+    // the limit the entry was supposed to count against (#1130). Still returns
+    // `null` for the fire-and-forget caller, but the loss is counted.
     recordDroppedEvent({
       stage: 'activity_write',
       type: args.kind,
@@ -274,15 +272,8 @@ export const listActivity = async (args: {
   return { data, next_cursor: nextCursor };
 };
 
-// ── Producers (event-driven) ────────────────────────────────────────────────
-//
-// approval_resolved and exception_created auto-record by subscribing to
-// events the platform already emits — no change to the approvals/exceptions
-// modules. schedule_fired is emitted directly from `triggerScheduler.ts`
-// (no existing event to subscribe to there). action_executed is emitted from
-// two call sites: the orchestration tool-node executor (run-scoped) and the
-// agent tool resolver via `agentToolActivity.ts` (agent-scoped). Every handler
-// here is fire-and-forget — a recording failure must never disturb the producer.
+// Every handler here is fire-and-forget: a recording failure must never disturb
+// the producer.
 
 const asRecord = (value: unknown): Record<string, unknown> => {
   return typeof value === 'object' && value !== null
@@ -344,12 +335,9 @@ const fileExceptionCreatedActivity = async (
     summary: `Exception ${exceptionId ?? '(unknown)'} filed (${
       asStringOrNull(record.kind) ?? 'unknown'
     })`,
-    // Inherit the exception's own severity rather than taking this kind's
-    // `warning` default: an exception already carries a per-kind severity (a
-    // `run_failed` is `critical`), and defaulting here would make the feed's
-    // top-level severity understate the worst thing it records — leaving
-    // `critical` unreachable through any producer. Falls back to the default
-    // when the event carries no usable severity.
+    // Inherit the exception's own severity: defaulting to this kind's
+    // `warning` would understate the worst thing the feed records, leaving
+    // `critical` unreachable through any producer.
     severity: asSeverityOrUndefined(record.severity),
     detail: {
       exceptionKind: record.kind,

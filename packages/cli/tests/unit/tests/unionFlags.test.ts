@@ -1,16 +1,11 @@
 import { createCliTestClient } from '../testClient';
 
-// A body property the spec declares with *no* `type` accepts more than one
-// shape — `tool_choice` takes a string ("auto", "required") or an object
-// ({ type: "tool", tool_name: "…" }). OpenAPI 3.0 has no union `type`, so the
-// schema simply omits it, and the manifest generator used to default a missing
-// type to `"string"`.
-//
-// That default is what broke forcing: a string-typed flag is (correctly) never
-// JSON-coerced, so the object form reached the server as the *text*
-// `{"type":"tool",...}`, and `normalizeToolChoice` maps an unrecognized string
-// to `undefined`. The agent was created, `get-agent` echoed the value back, and
-// the model was never actually forced — silently, at every layer (#955).
+// A property the spec declares with no `type` accepts more than one shape —
+// OpenAPI 3.0 has no union `type`, so the schema omits it and the generator used
+// to default to `"string"`. That broke forcing: a string-typed flag is never
+// JSON-coerced, so the object form arrived as text and mapped to `undefined`.
+// The agent was created, `get-agent` echoed the value back, and the model was
+// never forced — silently, at every layer (#955).
 describe('union-typed flags (no `type` in the spec) accept both shapes', () => {
   const cli = createCliTestClient();
 
@@ -72,11 +67,8 @@ describe('union-typed flags (no `type` in the spec) accept both shapes', () => {
     });
   });
 
-  // The fix widens *only* properties the spec leaves typeless. A property the
-  // spec really does declare `type: string` must keep the verbatim behavior
-  // that `stringFlags.test.ts` pins — a JSON document passed to `--value` is a
-  // string, not an object (a GCP key file used to be sent as an object and
-  // answered 500).
+  // Only typeless properties widen. A genuine `type: string` keeps the verbatim
+  // behavior `stringFlags.test.ts` pins.
   test('a genuinely string-typed flag is still not JSON-coerced', async () => {
     const keyFile = '{"type":"service_account","project_id":"p"}';
 

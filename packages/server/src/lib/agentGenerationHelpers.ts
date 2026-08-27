@@ -146,10 +146,9 @@ const storePendingGenerationState = (args: {
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
 }): void => {
-  // The in-memory copy and the persisted one carry the same turn. Each piece is
-  // computed once here rather than twice below, so a change to how a turn is
-  // frozen cannot land on only one of them — a recovered generation would then
-  // resume from a different history than a live one.
+  // Computed once rather than twice below, so a change to how a turn is frozen
+  // cannot land on only one copy and leave a recovered generation resuming from
+  // a different history than a live one.
   const syntheticToolResults = args.syntheticToolResults ?? [];
   const pendingToolCalls = toPendingToolCalls(args.pendingToolCalls);
   const messages = [...args.allMessages, ...args.result.response.messages];
@@ -184,11 +183,9 @@ const storePendingGenerationState = (args: {
     toolContext: args.toolContext ?? null,
     remainingDepth: args.remainingDepth ?? null,
   };
-  // Writes `pendingState`'s own column. This used to be
-  // `metadata: { pendingState }` — a full replace of the bag that also held
-  // usage attribution, so every generation that paused for a client tool lost
-  // its action/trigger/run/node attribution and all caller metadata, and its
-  // usage event was recorded unattributed.
+  // `pendingState`'s own column, not `metadata: { pendingState }` — that
+  // replaced the whole bag, so every generation pausing for a client tool lost
+  // its attribution and metered unattributed.
   updateGenerationRecord({
     publicId: args.generationId,
     pendingState,
@@ -284,11 +281,9 @@ export const buildCompletedGenerationResult = async (args: {
     parentTraceId: args.parentTraceId ?? null,
     rootTraceId: args.rootTraceId ?? null,
   });
-  // After the trace is written and before the generation is marked completed:
-  // the offending text is the whole evidence for this failure, so it must be
-  // on the trace, and a generation that throws here must never have been
-  // recorded `completed`. The caller's `recordGenerationFailure` stamps the
-  // failure onto both records from here.
+  // After the trace is written — the offending text is the whole evidence —
+  // and before the generation is marked completed, which a generation throwing
+  // here must never have been.
   assertNoTextEncodedToolCall({
     text: args.result.text,
     toolNames: args.toolNames ?? [],

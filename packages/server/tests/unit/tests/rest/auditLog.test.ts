@@ -214,12 +214,9 @@ describe('Audit Log — write hook', () => {
 });
 
 describe('Audit Log — item-scoped mutations authorized via resolveProjectIds (no explicit project_id)', () => {
-  // `PATCH`/`DELETE /tools/:tool_id` authorize with `resolveProjectIds({ action,
-  // resourceType })` — no `projectPublicId` argument, since the route does not
-  // know which project the target belongs to until the lib layer resolves it.
-  // Regression coverage for the bug where such routes wrote no audit entry at
-  // all (github.com/ttoss/soat/issues/689): update and delete must each be
-  // recorded, scoped to the tool's actual project, with a precise resource SRN.
+  // These routes authorize without a `projectPublicId`, since the project is
+  // unknown until the lib resolves it — such routes used to write no audit
+  // entry at all (#689).
   test('updating a tool by id yields a tools:UpdateTool entry scoped to its project', async () => {
     const createRes = await authenticatedTestClient(userToken)
       .post('/api/v1/tools')
@@ -287,11 +284,9 @@ describe('Audit Log — item-scoped mutations authorized via resolveProjectIds (
       });
     const toolId = createRes.body.id as string;
 
-    // A plain JWT user with zero policies resolves to an *empty* accessible-
-    // project set (not a `null`/403 decision — see `resolveProjectIdsByPublicIdAndPolicy`),
-    // so the lib layer 404s instead of denying. A project-scoped API key whose
-    // policy excludes `tools:UpdateTool` genuinely denies via
-    // `resolveApiKeyScopedProjectIds`, producing the real 403 this test needs.
+    // A policy-less JWT user resolves to an empty project set, so the lib 404s
+    // instead of denying. A project-scoped key whose policy excludes the action
+    // genuinely denies, producing the real 403 this needs.
     const policyRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/policies')
       .send({
@@ -356,11 +351,9 @@ describe('Audit Log — read API filters', () => {
   });
 
   test('?resource_srn= also finds rows written under the retired soat: prefix', async () => {
-    // Audit entries are append-only, so rows written before the srn: rename
-    // keep their original `soat:` SRN forever — the one place the rename could
-    // not migrate. A prefix query must still reach them, or every audit search
-    // silently loses its history. Seeded directly because no client can write
-    // the retired spelling any more.
+    // Append-only rows written before the `srn:` rename keep the old prefix
+    // forever, so a prefix query must still reach them or every audit search
+    // loses its history. Seeded directly — no client can write it now.
     const project = await db.Project.findOne({
       where: { publicId: projectId },
     });
@@ -1163,11 +1156,9 @@ describe('Audit Log — NDJSON export (audit-log P3)', () => {
   });
 });
 
-// Global (non-project-scoped) admin operations are gated by a direct
-// `ctx.authUser.role !== 'admin'` comparison rather than `isAllowed`, so they
-// never touched the audit middleware's instrumentation and produced zero
-// entries — successful mutations included (see #745). These pin that the
-// gate now explicitly records its decision via `recordAuthorizationDecision`.
+// Global admin operations gate on a direct role comparison rather than
+// `isAllowed`, so they never touched the audit instrumentation and produced zero
+// entries, successful mutations included (#745).
 describe('Audit Log — global admin-gated mutations (#745)', () => {
   test('creating a user is audited', async () => {
     const res = await authenticatedTestClient(adminToken)

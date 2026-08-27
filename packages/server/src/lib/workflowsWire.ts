@@ -1,22 +1,12 @@
 import { isPlainObject } from './plainObject';
 
-// ── Wire <-> internal conversion ─────────────────────────────────────────
-//
-// A workflow's `states`/`transitions` carry structural keys in camelCase
-// internally (`stalledAfter`, `onEnter`, `onComplete`, `requiresApproval`,
-// `agentId`) but are authored and read back snake_case on the wire — REST and
-// formation templates alike. The conversion is an explicit field-by-field
-// mapper (`case-convention.md`): every structural key that changes case is
-// named below at its exact position, and everything the mapper does not name
-// — a transition's `guard`, an on_complete rule's `when` (JSON Logic bodies),
-// a dispatch's `input_mapping` (keys are the *target* run's own input field
-// names) and `payload_writes`, and any unrecognized author key — is copied as
-// an opaque **value**, so its inner keys are never even looked at. A key-blind
-// recursive transform guarded by a skip list used to live here; that is the
-// construct `case-convention.md` bans (#852, and #651/#690/#729/#737 before
-// it). Shared by `rest/v1/workflows.ts` and
-// `formation-modules/workflowsFormationModule.ts` — both boundaries face the
-// identical shape.
+// A workflow's `states`/`transitions` are camelCase internally but authored
+// snake_case on the wire. An explicit field-by-field mapper per
+// `case-convention.md`: every renamed key is named below at its exact position,
+// and anything unnamed — guards, JSON Logic bodies, `input_mapping`,
+// `payload_writes`, unrecognized author keys — is copied as an opaque value, so
+// its inner keys are never looked at. The key-blind recursive transform that
+// used to live here is the construct that rule bans (#852).
 
 /**
  * Moves `from` to `to` in place when present. Values — including whole nested
@@ -56,10 +46,8 @@ const ON_ENTER_KEYS: KeyRename[] = [
   ['on_failure', 'onFailure'],
 ];
 
-// States and transitions run through the same collection mapper (both call
-// sites convert the two arrays with one function), so the item mapper carries
-// both key sets; they are disjoint and keyed by presence. An `OnCompleteRule`
-// has no renames — `when` is opaque and `transition` is case-stable.
+// One mapper serves states and transitions, so it carries both key sets; they
+// are disjoint and keyed by presence.
 const ITEM_KEYS: KeyRename[] = [
   ['stalled_after', 'stalledAfter'],
   ['on_enter', 'onEnter'],

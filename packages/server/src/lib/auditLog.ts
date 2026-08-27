@@ -62,17 +62,11 @@ const mapAuditEntry = (
     request_id: instance.requestId,
     ip: instance.ip,
     user_agent: instance.userAgent,
-    // `detail` is still written camelCase by its producers (e.g. the audit
-    // middleware's `additionalChecks`, guardrail evaluation records). Every
-    // surface that reads an entry — this mapper's direct callers
-    // (`listAuditEntries`/`getAuditEntry`), the export stream, and the
-    // `audit.entry_created` webhook — documents the same snake_case read
-    // contract, so the conversion belongs here rather than being duplicated
-    // (and previously missed) in each of those surfaces individually.
-    // Shallow only: a guardrail_evaluation record's `contextSnapshot` is
-    // spread into `detail` verbatim and is itself an author/runtime-owned
-    // bag one level down — a deep transform would recurse into it and
-    // rename keys SOAT does not own (the #690 class).
+    // `detail` is written camelCase by its producers, and every surface that
+    // reads an entry documents the same snake_case contract — so the
+    // conversion belongs here rather than in each of them. Shallow only: a
+    // nested `contextSnapshot` is a runtime-owned bag, and a deep transform
+    // would rename keys SOAT does not own (the #690 class).
     detail: isPlainObject(instance.detail)
       ? convertKeys(instance.detail, camelToSnakeKey)
       : ((instance.detail as null) ?? null),

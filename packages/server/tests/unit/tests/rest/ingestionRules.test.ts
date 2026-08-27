@@ -1056,11 +1056,9 @@ describe('IngestionRules', () => {
         const docId = await ingestPendingAudio('callback-timeout.mp3');
         const token = latestCallbackToken();
 
-        // Simulate a converter that never called back: push updatedAt beyond
-        // the (default 30-minute) conversion stall timeout. `status` must be
-        // included alongside `updatedAt` — Sequelize's bulk `update()` with
-        // `silent: true` and only a timestamp field in the values set is a
-        // no-op (0 rows affected), even though the row matches the `where`.
+        // A converter that never called back. `status` must accompany
+        // `updatedAt`: a silent bulk `update()` carrying only a timestamp is a
+        // no-op, even when the row matches the `where`.
         const stale = new Date(Date.now() - 60 * 60 * 1000);
         await db.Document.update(
           { status: 'processing', updatedAt: stale },

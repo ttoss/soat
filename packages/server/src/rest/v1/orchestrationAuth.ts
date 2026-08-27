@@ -33,22 +33,18 @@ export const hintAuditResourceForOrchestration = async (args: {
   });
 };
 
-// Run-scoped actions (cancel/human-input/resume) address an existing run by
-// orchestration_run_id, so unlike create they never need a single "primary" project to
-// create into — projectIds is only used as an optional scoping filter, same
-// as GET /orchestration-runs/:orchestration_run_id. Requiring a resolvable primaryId here
-// broke the unrestricted admin JWT case, where resolveProjectIds()
-// legitimately returns `undefined` ("no filter — all projects").
+// Run-scoped actions address an existing run, so unlike create they need no
+// primary project — `projectIds` is only a scoping filter. Requiring a
+// resolvable primary id here broke the unrestricted admin JWT, for which
+// `resolveProjectIds()` legitimately returns `undefined`.
 export const resolveRunAuth = async (
   ctx: Context,
   action: string
 ): Promise<{ projectIds?: number[] }> => {
   requireAuth(ctx);
-  // An empty (but non-null) array means "permitted in zero projects" — distinct
-  // from `undefined`, which means "unrestricted" for an admin JWT. Only the
-  // former is rejected, which is exactly what `requireProjectAccess` does; this
-  // used to be written out here, and writing it out is what the rest of the
-  // module forgot (#1029).
+  // An empty array means "permitted in zero projects"; `undefined` means
+  // unrestricted. Only the former is rejected — deferred to
+  // `requireProjectAccess` rather than restated, which is what #1029 forgot.
   const projectIds = await requireProjectAccess({
     ctx,
     action,

@@ -243,10 +243,8 @@ const invokeAgentConverter = async (args: {
     );
   }
 
-  // Agent converters are always awaited inline — there is no callback path
-  // for them, so a `{ status: "pending" }`-shaped string is treated as a
-  // failure rather than a deferral. Structurally unreachable today (LLM
-  // output is always plain text), but guards intent if that ever changes.
+  // Agent converters have no callback path, so a `{ status: "pending" }`-shaped
+  // reply is a failure, not a deferral.
   const outcome = parseConverterOutput(result.output.content);
   if (outcome.status === 'pending') {
     throw new DomainError(

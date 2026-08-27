@@ -31,13 +31,9 @@ export const mockCreateGeneration = jest.spyOn(
   'createGeneration'
 );
 
-// All embedding providers route through the AI SDK against an OpenAI-compatible
-// endpoint (`src/lib/embedding.ts`). Rather than mock the non-configurable `ai`
-// exports (which collides with the per-file `ai` mocks in the generation
-// tests), the suite serves a local OpenAI-compatible `/v1/embeddings` stub and
-// points EMBEDDING_BASE_URL at it — exercising the real request serialization
-// against the external-I/O boundary, the same pattern memoryExtractionCompletion.test
-// uses for `generateText`.
+// A local OpenAI-compatible stub rather than a mock of the non-configurable `ai`
+// exports, which would collide with the generation tests' own `ai` mocks. This
+// also exercises the real request serialization.
 let embeddingServer: Server;
 
 const embeddingResponse = (body: {

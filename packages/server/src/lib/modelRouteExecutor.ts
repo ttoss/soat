@@ -253,11 +253,9 @@ export const createRoutedModel = (spec: RoutedModelSpec): LanguageModel => {
         },
       });
     },
-    // Fallback applies before the first token only. Once a provider has started
-    // streaming, `doStream` has already resolved, so a mid-response failure
-    // surfaces on the stream and reaches the caller — replaying a partial
-    // stream elsewhere would duplicate tool side effects, re-bill the prefix,
-    // and splice two models' outputs into one message.
+    // Before the first token only: replaying a partial stream elsewhere would
+    // duplicate tool side effects, re-bill the prefix, and splice two models'
+    // outputs into one message.
     doStream: (options) => {
       return runWithFallback<RoutedStreamResult>({
         spec,

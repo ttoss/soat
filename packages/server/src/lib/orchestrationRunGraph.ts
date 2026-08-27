@@ -7,20 +7,17 @@ import type { OrchestrationEdge, OrchestrationNode } from './orchestrations';
 const log = createDebug('soat:orchestrations');
 
 /**
- * Resolves the graph a run executes (issue #872).
+ * Resolves the graph a run executes (#872).
  *
- * A run is pinned to an orchestration version at `start-orchestration-run` and
- * every later execution — the first drive of a queued run, a wake from
- * `sleeping`, a human or approval resume, a redrive after a lease expiry —
- * resolves its topology through this module rather than reading the live
- * `Orchestration` row. That is the whole fix: `update-orchestration` can rewire
- * or delete nodes freely, and a run parked for days still finishes on the graph
- * it started on.
+ * A run is pinned to an orchestration version at start, and every later
+ * execution — first drive, wake from `sleeping`, human or approval resume,
+ * redrive after a lease expiry — resolves its topology here rather than reading
+ * the live row, so `update-orchestration` can rewire freely and a run parked for
+ * days still finishes on the graph it started on.
  *
- * The single seam matters as much as the pinning. Before this, four call sites
- * each did `orch.nodes as OrchestrationNode[]`, so getting one of them right and
- * missing another would look correct in review and still leave the bug in the
- * path that matters least often — which is exactly the path a run parks in.
+ * The single seam matters as much as the pinning: before this, four call sites
+ * each cast `orch.nodes`, so missing one would look correct in review and leave
+ * the bug in the path a parked run takes.
  */
 
 export type RunGraph = {
@@ -68,21 +65,17 @@ const findArchivedGraph = async (args: {
 
 /**
  * The graph a run must execute: its pinned version's, falling back to the live
- * row when there is no pinned version to resolve.
+ * row when there is no pinned version.
  *
- * The fallback covers exactly one real case — a run created before pinning
- * existed, whose `orchestrationVersion` is null. Those runs behave as they did
- * before #872 because the live row is the only graph they ever had; there is
- * nothing better to give them, and refusing to drive them would strand every
- * run that was in flight across the deploy.
+ * The fallback covers one real case — a run created before pinning existed,
+ * whose `orchestrationVersion` is null. The live row is the only graph those
+ * runs ever had, and refusing to drive them would strand every run in flight
+ * across the deploy.
  *
- * A pinned version whose archive row is missing degrades the same way rather
- * than failing the run. It is unreachable through the API — a version is
- * archived before any run can pin it, and versions are only deleted with their
- * orchestration, which deletes its runs in the same transaction — so this is a
- * guard against an out-of-band deletion, not a supported state. Failing the run
- * instead would turn a bookkeeping inconsistency into lost work, and the log
- * line names it either way.
+ * A pinned version whose archive row is missing degrades the same way. It is
+ * unreachable through the API, so this guards an out-of-band deletion rather
+ * than a supported state; failing the run instead would turn a bookkeeping
+ * inconsistency into lost work. The log line names either case.
  */
 export const resolveRunGraph = async (args: {
   run: InstanceType<typeof db.OrchestrationRun>;

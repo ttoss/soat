@@ -313,12 +313,9 @@ export const GuideChat = () => {
   const [collapsed, setCollapsed] = React.useState(false);
   const token = state.status === 'authenticated' ? state.token : '';
 
-  // The active project is derived from the main view's URL, which the guide
-  // itself changes when it mounts a non-project-scoped view. Pin the guide to
-  // the last project the user selected so its session survives navigation; it
-  // only switches when the user explicitly opens a different project.
-  // Track the last non-null project so the panel survives navigation to
-  // views that are not project-scoped (where activeProjectId becomes null).
+  // The active project comes from the main view's URL, which the guide itself
+  // changes when it mounts a non-project-scoped view. Pinning to the last
+  // selected project keeps the session alive across that navigation.
   const [pinnedProjectId, setPinnedProjectId] = React.useState<string | null>(
     activeProjectId
   );

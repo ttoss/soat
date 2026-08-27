@@ -50,20 +50,16 @@ export const extractApiErrorMessage = (body: unknown): string | null => {
 /**
  * Serves one REST-backed MCP tool call against this process's own app.
  *
- * This used to `fetch` `http://localhost:$PORT` — the server calling itself
- * over the network to reuse the route handler's permission checks and
- * snake_case boundary (#888, extended from the agent-side `soat` tool to the
- * MCP surface). `dispatchApiRequestOrThrow` runs the app's real middleware
- * chain instead, so every reason the hop existed still holds — the same auth
- * middleware, permission evaluation, strict-field validation, audit record,
- * metering, and response contract — while the socket, the JSON round trip, and
- * the requirement that the process be listening on a port at all are gone.
+ * This used to `fetch` `http://localhost:$PORT` — the server calling itself to
+ * reuse the route handler's permission checks and snake_case boundary (#888).
+ * `dispatchApiRequestOrThrow` runs the app's real middleware chain instead, so
+ * every reason the hop existed still holds while the socket, the JSON round
+ * trip and the listening port are gone.
  *
- * The thrown-`Error` contract is what MCP needs and why this wrapper exists at
- * all: `@ttoss/http-server-mcp`'s own `apiCall` builds its error via
- * `new Error(err.error)`, which stringifies a `DomainError`'s `{ code, message }`
- * body to the literal `"[object Object]"`. Here the real message reaches the
- * client.
+ * The thrown-`Error` contract is why this wrapper exists at all:
+ * `@ttoss/http-server-mcp`'s own `apiCall` builds its error via
+ * `new Error(err.error)`, which stringifies a `DomainError` body to
+ * `"[object Object]"`. Here the real message reaches the client.
  */
 export const dispatchMcpApiRequest = async (args: {
   method: string;

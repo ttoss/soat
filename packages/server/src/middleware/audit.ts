@@ -77,23 +77,18 @@ const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
  * route-level authorization decision is recorded onto `checks`.
  *
  * Only route-level checks are captured: `resolveProjectIds` builds its internal
- * list-scoping `isAllowed` calls from the *unwrapped* function it closed over
- * when `authMiddleware` built `authUser`, so wrapping the public `isAllowed`
- * here never sees them.
+ * list-scoping `isAllowed` calls from the *unwrapped* function it closed over,
+ * so wrapping the public one never sees them.
  *
- * The `resolveProjectIds` wrapper records two shapes:
- * - an explicit `projectPublicId` — the create/write path (type-level SRN
- *   `srn:{project}:{type}:*`).
- * - no `projectPublicId` on a *mutating* method — an item-scoped `PATCH`/
- *   `DELETE`/etc. that authorizes against the caller's allowed project set
- *   before the target resource (and its real project) is resolved deeper in
- *   the lib layer. The project and precise SRN are not known yet here;
- *   `recordEntry` recovers them once the handler has run (see
- *   {@link recoverMissingProject}).
+ * The `resolveProjectIds` wrapper records two shapes: an explicit
+ * `projectPublicId` (the create/write path), and no `projectPublicId` on a
+ * *mutating* method — an item-scoped write authorizing against the caller's
+ * allowed set before the target resource is resolved deeper in the lib layer,
+ * whose project and SRN `recordEntry` recovers once the handler has run (see
+ * {@link recoverMissingProject}).
  *
  * A no-`projectPublicId` call on a `GET` is the unscoped list-enumeration path
- * and is deliberately left unrecorded so the log is never flooded with
- * read-scoping noise.
+ * and is left unrecorded so the log is not flooded with read-scoping noise.
  */
 const instrumentAuthUser = (
   authUser: AuthUser,
@@ -401,10 +396,9 @@ export const auditMiddleware = async (ctx: Context, next: Next) => {
   ctx.state.auditChecks = checks;
   instrumentAuthUser(ctx.authUser, checks, ctx.method);
 
-  // The status recorded is the final one. On a thrown error the outer error
-  // middleware sets `ctx.status` *after* this middleware unwinds, so the status
-  // is derived from the error here instead (same mapping the error middleware
-  // uses), letting failed mutations — including thrown denials — be audited.
+  // On a thrown error the outer middleware sets `ctx.status` after this one
+  // unwinds, so the status is derived from the error here instead — letting
+  // failed mutations, thrown denials included, be audited.
   let errorStatus: number | null = null;
   try {
     await next();

@@ -32,10 +32,8 @@ import { Workflow } from './Workflow';
       unique: true,
       fields: ['public_id'],
     },
-    // Serves both the point lookup of one version — which every transition of a
-    // pinned task performs — and the newest-first paginated listing
-    // (`WHERE workflow_id = ? ORDER BY version DESC`), so no separate index on
-    // `created_at` is needed.
+    // Serves the point lookup every transition of a pinned task performs, and
+    // the newest-first listing.
     {
       name: 'workflow_versions_workflow_id_version_unique',
       unique: true,

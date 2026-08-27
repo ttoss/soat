@@ -28,10 +28,9 @@ type ProjectPriceBody = {
   effective_from?: string;
 };
 
-// Authorizes a project-scoped price request against the project itself.
-// Returns the project public ID, or null when a 401/403 response has already
-// been set on ctx and the caller should return. The lib resolves existence and
-// throws RESOURCE_NOT_FOUND (404) for an unknown project the caller can reach.
+// Returns the project public id, or null once a 401/403 has already been set on
+// ctx. Existence is the lib's to resolve — it 404s an unknown project the
+// caller can reach.
 const authorizeProjectPrices = async (args: {
   ctx: Context;
   action: string;

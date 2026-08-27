@@ -79,10 +79,8 @@ filesRouter.get('/files', async (ctx: Context) => {
 
 filesRouter.post('/files', async (ctx: Context) => {
   requireAuth(ctx);
-  // NOTE: POST /files is intentionally lenient — it accepts and ignores
-  // client-supplied read-only/storage fields (path, storage_*) as a
-  // robustness/security behavior, so it is excluded from strict field
-  // validation. See the strict-field-validation PRD.
+  // POST /files is deliberately lenient — it accepts and ignores client-supplied
+  // storage fields — so it is excluded from strict field validation.
 
   const body = ctx.request.body as {
     project_id?: string;

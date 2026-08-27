@@ -1,13 +1,9 @@
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
-// ─── Group 15: Resource-level SRN precision (audit-log Phase 0) ────────────
-//
-// A policy that grants an action on ONE specific resource
-// (`srn:{project}:secret:{sec_a}`) must permit that resource and deny a
-// sibling in the same project (`sec_b`). Before Phase 0 the by-id route
-// handlers probed `isAllowed` with the project-wildcard SRN
-// (`srn:{project}:*:*`), so a policy scoped to a single resource could never
-// match — resource-level policy statements were effectively unenforceable.
+// A policy granting an action on one specific resource must deny a sibling in
+// the same project. By-id handlers used to probe with the project-wildcard SRN,
+// so a single-resource policy could never match and resource-level statements
+// were unenforceable.
 
 describe('Group 15: JWT — policy scoped to a single resource SRN is enforced per-resource', () => {
   let adminToken: string;
@@ -940,15 +936,9 @@ describe('Group 9: notPermissions overrides permissions when action appears in b
   });
 });
 
-// ─── Group 10: Regression — project-scoped resource SRN in JWT policy ───────
-//
-// Before the auth.ts fix, isAllowed() was called without a `resource` arg when
-// resolving which projects a user can access. That caused the default resource
-// value of '*' to be tested against a policy pattern like
-// `srn:proj_xxx:*:*`, which never matched — so every policy-scoped user got
-// 403 even when their policy explicitly granted access.
-//
-// These tests would have failed on main before the fix.
+// Resolving accessible projects called `isAllowed()` with no `resource`, so the
+// default `*` was tested against a pattern like `srn:proj_xxx:*:*` and never
+// matched — every policy-scoped user got 403 despite an explicit grant.
 
 describe('Group 10: JWT — policy with explicit project-scoped resource SRN grants access', () => {
   let adminToken: string;
@@ -1068,11 +1058,8 @@ describe('Group 10: JWT — policy with explicit project-scoped resource SRN gra
   });
 });
 
-// ─── Group 11: Regression — project-scoped resource SRN in API key policy ─
-//
-// Mirrors Group 10 for the API key code path (resolveApiKeyScopedProjectIds).
-// The key's own policy carries an explicit resource SRN; before the fix the
-// apiKeyIsAllowed call omitted the resource arg and always evaluated to false.
+// The API-key twin of the group above: the key's policy carries an explicit
+// resource SRN, and the call omitted the resource arg, always evaluating false.
 
 describe('Group 11: API key — scoped key with project-resource SRN in key policy grants access', () => {
   let adminToken: string;
@@ -1160,13 +1147,9 @@ describe('Group 11: API key — scoped key with project-resource SRN in key poli
   });
 });
 
-// ─── Group 12: Regression — admin API key with full-access policy ─────────
-//
-// An API key owned by an admin user with a full-access policy (action: ["*"],
-// resource: ["*"]) was returning 403 on every endpoint. The root cause was
-// that createApiKeyIsAllowed evaluated the user's explicit policyIds without
-// checking the admin role bypass, causing evalUser to return false for admins
-// who carry no policyIds.
+// An admin-owned key with a full-access policy 403'd on every endpoint: the
+// evaluator checked the user's explicit policyIds without the admin role bypass,
+// so an admin carrying no policyIds evaluated false.
 
 describe('Group 12: Admin API key with full-access policy is not 403', () => {
   let adminToken: string;
@@ -1248,14 +1231,9 @@ describe('Group 12: Admin API key with full-access policy is not 403', () => {
   });
 });
 
-// ─── Group 13: Regression — https://github.com/ttoss/soat/issues/355 ─────
-//
-// A project-scoped API key with a policy whose resource SRN is scoped to the
-// project (e.g. `srn:{projectId}:*:*`), the same pattern proven to work for
-// files in Group 11, returned 403 for memories, ai-providers, and
-// memory-entries single-resource routes (get/update/delete), because those
-// route handlers called `isAllowed` without a `resource`/`resources` field —
-// unlike files, which build an explicit SRN via `canAccessFile`.
+// The same project-scoped SRN pattern that works for files 403'd on memories,
+// ai-providers and memory-entries by-id routes, whose handlers called
+// `isAllowed` with no `resource` field (#355).
 
 describe('Group 13: API key with project-scoped SRN policy — memories, ai-providers, memory-entries', () => {
   let adminToken: string;
@@ -1397,12 +1375,8 @@ describe('Group 13: API key with project-scoped SRN policy — memories, ai-prov
   });
 });
 
-// ─── Group 14: Regression — https://github.com/ttoss/soat/issues/380 ─────
-//
-// Same bug pattern as Group 13 (#355/#361), reproduced for the `formations`
-// module: GET/PUT/DELETE/events-by-id routes called `isAllowed` without a
-// `resource` field, so a project-scoped SRN policy (`srn:{projectId}:*:*`)
-// never matched and every by-ID formations route returned 403.
+// The same pattern again for `formations`: its by-id routes called `isAllowed`
+// with no `resource`, so a project-scoped SRN policy never matched (#380).
 
 describe('Group 14: API key with project-scoped SRN policy — formations', () => {
   let adminToken: string;

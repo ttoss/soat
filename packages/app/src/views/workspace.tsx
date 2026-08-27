@@ -42,11 +42,9 @@ const byLabel = (a: ModuleInfo, b: ModuleInfo): number => {
   return a.label.localeCompare(b.label);
 };
 
-// A module is reachable from the top-level sidebar only if its list path has no
-// parent path param to fill (project_id is supplied from the active project).
-// Nested sub-resources (e.g. Sessions at /agents/{agent_id}/sessions) are
-// reached from their parent's detail view instead — listing them standalone
-// would leave an unfilled {agent_id} in the URL.
+// Only modules whose list path has no parent path param to fill; project_id
+// comes from the active project. Listing a nested sub-resource standalone would
+// leave an unfilled `{agent_id}` in the URL.
 const isTopLevelModule = (m: ModuleInfo): boolean => {
   if (!m.listOp) return false;
   return extractPathParams(m.listOp.pathTemplate).every((param) => {

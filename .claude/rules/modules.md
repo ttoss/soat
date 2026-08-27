@@ -1,3 +1,11 @@
+---
+paths:
+  - "packages/server/**"
+  - "packages/website/**"
+  - "packages/sdk/**"
+  - "packages/cli/**"
+---
+
 # Module Instructions
 
 A module is a named resource (e.g., `files`, `users`) that is exposed through the REST API, the MCP server, and documented in the website. Whenever a module is created or changed, **all four areas must be updated together**:

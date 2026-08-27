@@ -26,10 +26,9 @@ export type StepRule = {
   active_tool_ids?: unknown;
 };
 
-// `tool_choice` (agent-level and inside `step_rules`) is stored verbatim from
-// the request body, so the object form arrives wire-shaped:
-// { type: "tool", tool_name: "..." }. The AI SDK expects
-// { type: "tool", toolName: "..." } — this is the single translation point.
+// `tool_choice` is stored verbatim, so its object form arrives wire-shaped
+// (`tool_name`) while the AI SDK expects `toolName`. The single translation
+// point for that.
 export const normalizeToolChoice = (
   value: unknown
 ):

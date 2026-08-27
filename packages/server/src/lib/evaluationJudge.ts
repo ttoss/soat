@@ -2,16 +2,14 @@
  * The `llm_judge` scorer's provider call (the evaluations module doc).
  *
  * A judge is just a completion: it resolves its model through the ordinary
- * ai-providers path, so it meters and traces like any other call — no dedicated
- * judge config, no second provider abstraction. It runs tool-less and
- * promptless-of-instructions: the only thing sent is the rendered judge prompt,
- * so a judged output cannot trigger side effects.
+ * ai-providers path, so it meters and traces like any other call. It runs
+ * tool-less, and the only thing sent is the rendered judge prompt, so a judged
+ * output cannot trigger side effects.
  *
- * Split from `evaluationScorers.ts` so that module stays pure (no I/O), which is
- * what lets the whole deterministic scorer space be driven directly in a `lib/`
- * test. The two pure halves of judging — rendering the prompt and parsing the
- * verdict — live here alongside the call they belong to, and are exported so
- * they can be tested without a provider.
+ * Split from `evaluationScorers.ts` so that module stays pure, which is what
+ * lets the deterministic scorer space be driven directly in a `lib/` test. The
+ * two pure halves of judging live here, exported so they can be tested without
+ * a provider.
  */
 import { generateText } from 'ai';
 import createDebug from 'debug';
@@ -86,15 +84,13 @@ export const renderJudgePrompt = (args: {
  * Parses `{score, reasoning}` out of a judge's reply.
  *
  * Lenient about the envelope (models fence JSON, or prefix it with prose): the
- * first `{ … }` span in the text is parsed, matching how
- * `memoryExtraction.parseFactCandidates` reads an LLM array. Strict about the
- * contract: `score` must be a finite number in 0–1, because an out-of-range or
- * non-numeric score would silently corrupt every aggregate that pools it.
+ * first `{ … }` span is parsed, as `memoryExtraction.parseFactCandidates` reads
+ * an LLM array. Strict about the contract: `score` must be a finite number in
+ * 0–1, since an out-of-range value would corrupt every aggregate pooling it.
  *
- * Throws `VALIDATION_FAILED` on a malformed reply. The caller turns that into an
- * **item-level error** — the judge failing to answer says nothing about the
- * agent, so it must not be recorded as a score of 0 (the same rule that makes a
- * `requires_action` generation an error rather than a zero).
+ * Throws `VALIDATION_FAILED` on a malformed reply, which the caller turns into
+ * an **item-level error** — a judge failing to answer says nothing about the
+ * agent, so it must not be recorded as a score of 0.
  */
 /** The first `{ … }` span in the text, parsed, or null when there is none. */
 const firstJsonObject = (text: string): Record<string, unknown> | null => {
@@ -201,10 +197,8 @@ export const runJudgeCompletion = async (args: {
     maxRetries: routedMaxRetries(model) ?? 1,
   });
 
-  // A judge call is a real provider call, so it meters like any other — against
-  // the target that actually served when it ran through a route. Attributed
-  // `eval_judge` so grading spend is separable from both production and the
-  // run's own item generations.
+  // A real provider call, so it meters like any other. Attributed `eval_judge`
+  // to keep grading spend separable from the run's own item generations.
   meterCompletion({
     model,
     fallback: attribution,

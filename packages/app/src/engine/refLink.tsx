@@ -14,10 +14,9 @@ const stringIds = (value: JsonValue): string[] => {
   return [];
 };
 
-// Renders a cross-resource id (or array of ids) as link(s). Each id is resolved
-// independently against the row context: navigable ids become links, the rest
-// render as plain monospace text. Returns null when nothing is linkable so the
-// caller can fall through to its default rendering with a single branch.
+// Each id resolves independently against the row context, so unnavigable ones
+// stay plain text. Returns null when nothing is linkable, so the caller falls
+// through to its default rendering in a single branch.
 export const renderRefLink = (args: {
   refResource?: string;
   value: JsonValue;

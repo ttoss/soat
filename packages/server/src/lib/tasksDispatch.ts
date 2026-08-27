@@ -11,24 +11,18 @@ import type { MappedOrchestrationRun } from './orchestrations';
 import type { RequestPrincipal } from './principals';
 import type { WorkflowDispatch } from './workflowsValidation';
 
-// Terminal statuses a settled orchestration run can end in. Unlike a failed
-// agent generation (which throws), a failed/cancelled/expired orchestration
-// run resolves normally with its partial state — so runDispatch must check
-// for these explicitly rather than relying on a rejected promise, or a
-// failed dispatch would look identical to a successful one to its caller.
-// Exported for the same reason as `RUN_IN_FLIGHT_STATUSES` below: the
-// reconciler must classify a settled run's outcome by this exact set, or a
-// recovered dispatch could route `on_complete` where a live one routed
-// `on_failure`.
+// Unlike a failed generation, a failed/cancelled/expired run resolves normally
+// with its partial state, so `runDispatch` must check these explicitly or a
+// failed dispatch looks identical to a successful one. Exported so the
+// reconciler classifies by this exact set — a second copy could drift and route
+// `on_complete` where a live dispatch routed `on_failure`.
 export const NON_SUCCESS_TERMINAL_STATUSES: ReadonlySet<
   MappedOrchestrationRun['status']
 > = new Set(['failed', 'cancelled', 'expired']);
 
-// A run has reached a resting point once it leaves these — `queued`/`running`
-// are transient, `sleeping` is a durable, scheduler-owned wait (#855). Exported
-// so the reconciler (`tasksReconciliation`) decides "settled" by the same rule
-// the in-process awaiter below does, rather than keeping a second copy that
-// could drift into disagreeing about a status.
+// `sleeping` is a durable, scheduler-owned wait, not in flight (#855).
+// Exported so the reconciler decides "settled" by the same rule as the
+// in-process awaiter below.
 export const RUN_IN_FLIGHT_STATUSES: ReadonlySet<
   MappedOrchestrationRun['status']
 > = new Set(['queued', 'running', 'sleeping']);
@@ -158,21 +152,15 @@ const runAgentDispatch = async (args: {
  *
  * Delegates to the orchestration engine's `tool` node executor rather than
  * calling `callTool` directly, so a workflow-dispatched call is adjudicated by
- * exactly the same guardrail gate (class B/C/D) and recorded in the same
- * activity feed as the identical call made from an orchestration graph. Calling
- * `callTool` here instead would have quietly created a second, ungoverned path
- * to every tool in the project.
- *
- * The executor is node-shaped, so the dispatch is expressed as the one-node
- * graph it is. `state` is the task context and `inputMapping` the dispatch's
- * own, mapped by the executor exactly as a graph node's would be.
+ * the same guardrail gate and recorded in the same activity feed as the
+ * identical call from an orchestration graph; calling `callTool` here would
+ * have created a second, ungoverned path to every tool in the project.
  *
  * Only an `artifact` outcome is a completed dispatch. A guardrail that blocks
- * the call (class D / tripwire) or routes it to human approval (class C)
- * produces a result a task dispatch has nowhere to put — there is no run to
- * park and resume — so it fails the dispatch, which `on_failure` can route. An
- * approval-gated tool belongs behind an orchestration dispatch, whose engine
- * can park on it.
+ * the call or routes it to human approval produces a result a task dispatch has
+ * nowhere to put — there is no run to park and resume — so it fails the
+ * dispatch, which `on_failure` can route. An approval-gated tool belongs behind
+ * an orchestration dispatch, whose engine can park on it.
  */
 const runToolDispatch = async (args: {
   toolId: string;
@@ -182,11 +170,9 @@ const runToolDispatch = async (args: {
   projectId: number;
   taskPublicId: string;
   principal?: RequestPrincipal;
-  // The task's stored caller context. A `tool` dispatch is the task calling a
-  // tool on its own behalf, so it carries the bag its `agent` and
-  // `orchestration` siblings already carry — without it a tool naming a
-  // `{{context:}}` header or preset cannot be dispatched from a workflow at
-  // all (#345).
+  // A `tool` dispatch carries the same bag its `agent`/`orchestration` siblings
+  // do; without it a tool naming a `{{context:}}` header or preset cannot be
+  // dispatched from a workflow at all (#345).
   toolContext?: Record<string, string>;
 }): Promise<DispatchResult> => {
   const authHeader = await buildRunAuthHeader({
@@ -229,10 +215,9 @@ const runToolDispatch = async (args: {
   };
 };
 
-// Runs one dispatch and returns its exposed `{result}` and provenance ids. A
-// generation exposes its output; an orchestration run exposes its final state
-// (matching sub-orchestration semantics, PRD D2); a tool call exposes the
-// tool's own return value.
+// Returns the dispatch's exposed `{result}` and provenance ids: a generation's
+// output, a run's final state (matching sub-orchestration semantics), or a tool
+// call's return value.
 export const runDispatch = async (args: {
   dispatch: WorkflowDispatch;
   projectId: number;
@@ -287,13 +272,10 @@ export const runDispatch = async (args: {
     });
   }
 
-  // Started in durable/async mode (`wait` omitted) rather than `wait: true`:
-  // a task dispatch must never force the underlying run through the
-  // in-process `inlineWaits` path, or a poll/delay node sleeps the whole
-  // interval in this process instead of parking `sleeping` for the scheduler
-  // to wake (#855). `runDispatch` still resolves once the run settles — only
-  // *how* it waits changes, so callers (retry, on_complete/on_failure
-  // routing) are unaffected.
+  // Durable mode, never `wait: true`: the in-process `inlineWaits` path would
+  // sleep a poll/delay node's whole interval here instead of parking
+  // `sleeping` for the scheduler (#855). `runDispatch` still resolves once the
+  // run settles, so callers are unaffected.
   const started = await startOrchestrationRun({
     orchestrationPublicId: args.dispatch.orchestrationId!,
     projectIds: [args.projectId],

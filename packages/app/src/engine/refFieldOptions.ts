@@ -7,10 +7,8 @@ import type { OpenApiSchema } from './types';
 
 export type RefOption = { value: string; label: string };
 
-// Loads picker options for every `x-soat-ref` field in a schema by fetching the
-// referenced resource's collection (e.g. policy_ids → GET /api/v1/policies).
-// Shared by the create/edit form and the action modal so both render populated
-// single-select / multi-select pickers instead of a raw text field.
+// Fetches each referenced resource's collection. Shared by the create/edit form
+// and the action modal so both render populated pickers rather than raw text.
 export const useRefFieldOptions = ({
   schema,
   token,

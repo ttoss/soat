@@ -9,23 +9,17 @@ import type {
  * The boundary between the snake_case orchestration graph on the wire and the
  * camelCase `OrchestrationNode` / `OrchestrationEdge` the engine reads.
  *
- * A graph is **author-authored data**, not a resource the platform owns, and it
- * is persisted as JSON. Two consequences shape this module:
- *
- * - **The internal type stays camelCase.** 22 modules read `node.toolId` and
- *   every orchestration already stored in the database has camelCase node JSON.
- *   Flipping the type would need a data migration; mapping at the boundary needs
- *   none, so the conversion lives here and nowhere else.
- * - **Every value is copied as a value.** `expression`, `arguments`,
- *   `input_mapping`, `state_mapping`, `output_schema`, `reasoning`, `evidence`,
- *   `predicted_impact` and `exit_condition` are JSON Logic or caller-owned
- *   payloads whose inner keys the author wrote deliberately — a `var` path like
- *   `{"var": "state.max_daily_budget"}` must round-trip byte-for-byte. Nothing
- *   here recurses into a value, which is the property that makes #737's bug
- *   class unrepresentable rather than merely avoided.
+ * A graph is author-authored data persisted as JSON, so two things hold. The
+ * internal type stays camelCase — 22 modules read `node.toolId` and every
+ * stored orchestration has camelCase node JSON, so flipping it would need a
+ * data migration while mapping here needs none. And every value is copied as a
+ * value: `expression`, `arguments`, `input_mapping`, `output_schema` and the
+ * rest are JSON Logic or caller-owned payloads whose inner keys must round-trip
+ * byte-for-byte, so nothing here recurses into one — which makes #737's bug
+ * class unrepresentable rather than merely avoided.
  *
  * Both directions are explicit field lists, so a field added to the spec but
- * forgotten here fails `strictFields` on write instead of being silently dropped.
+ * forgotten here fails `strictFields` instead of being silently dropped.
  */
 
 /** Drops keys whose value is `undefined` so a node round-trips without gaining them. */

@@ -35,14 +35,10 @@ export const isStale = (args: {
   return enteredAt.getTime() !== args.token;
 };
 
-// Applies a post-dispatch mutation to a task row atomically: locks the row
-// `FOR UPDATE`, re-runs `guard` against the freshly-locked read, and only
-// mutates + saves if it passes — all inside one transaction, so there is no
-// window between the check and the write for a concurrent `transitionTask` to
-// commit into. Returns the saved task, or `null` when the guard rejected
-// (the task moved, re-entered, or was already routed by the time we could
-// write), which is when a plain read-check-write would otherwise clobber the
-// concurrent write with a stale one (#590).
+// Locks the row, re-runs `guard` against the locked read and only then writes,
+// all in one transaction — so no concurrent `transitionTask` can commit between
+// the check and the write. Returns `null` when the guard rejected, which is
+// exactly where a plain read-check-write clobbered it with stale data (#590).
 export const applyLocked = async (args: {
   taskPublicId: string;
   guard: (task: TaskWithWorkflow) => boolean;

@@ -236,11 +236,10 @@ const applyErrorResponse = (ctx: Context, error: unknown, status: number) => {
       }
     }
 
-    // `expose` is the framework's own judgement about whether the message is
-    // safe to return, so it decides both halves: an exposed rejection keeps its
-    // reason, an unexposed one is indistinguishable from any other 500. The
-    // status stays the framework's — `REQUEST_REJECTED` labels the class, and
-    // its registry `httpStatus` is only the default for throwing it directly.
+    // `expose` is the framework's judgement about whether the message is safe
+    // to return, so it decides both halves. The status stays the framework's —
+    // `REQUEST_REJECTED`'s registry `httpStatus` is only the default for
+    // throwing it directly.
     ctx.body = error.expose
       ? errorBody({ code: 'REQUEST_REJECTED', message: error.message })
       : errorBody({ code: 'INTERNAL_ERROR', message: OPAQUE_MESSAGE });
