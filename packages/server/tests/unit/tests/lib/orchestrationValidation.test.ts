@@ -367,11 +367,9 @@ describe('validateOrchestrationGraph', () => {
     });
 
     test('accepts a namespaced `input.<name>` reference against the input schema', () => {
-      // The run input is seeded under an `input` namespace (matching the
-      // pipeline/formation `{ "var": "input.<name>" }` convention), so a
-      // reference through that namespace must validate even with a closed
-      // input_schema — it used to be rejected as "no upstream node writes
-      // 'state.input'".
+      // Run input is seeded under `input.`, so a reference through it must
+      // validate even with a closed input_schema — this used to be rejected as
+      // "no upstream node writes 'state.input'".
       const result = validate({
         nodes: [
           {

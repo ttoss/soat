@@ -1,11 +1,8 @@
 import { createCliTestClient } from '../testClient';
 
-// Array-typed body flags (e.g. `document_paths`, `document_ids`, `memory_ids`,
-// `memory_tags` on `search-knowledge`) must be serialized as JSON arrays. The
-// generic dispatcher used to send only the last scalar value per flag, so
-// `--document_paths /playbooks/` reached the server as the string
-// `"/playbooks/"`. The knowledge search then ran `paths.map(...)` on a string
-// and returned HTTP 500 — the reported "document_paths matches nothing" bug.
+// Array-typed body flags must serialize as JSON arrays. The dispatcher used to
+// send only the last scalar per flag, so the server received a string, ran
+// `paths.map(...)` on it and answered 500 — the "matches nothing" bug.
 describe('array-typed body flags are sent as arrays', () => {
   const cli = createCliTestClient();
 

@@ -1,12 +1,9 @@
 import { createCliTestClient } from '../testClient';
 
-// A flag the spec declares as `type: string` must reach the server as a string,
-// whatever its content looks like. Value coercion used to be type-blind: any
-// value starting with `{` or `[`, or matching a number/boolean/null, was parsed
-// as JSON. That made a whole class of string payloads unsendable from the CLI —
-// most visibly `create-secret --value "$(cat service-account.json)"`, where a
-// GCP service account key file was sent as an object and the server answered
-// 500 instead of storing the secret.
+// A `type: string` flag must reach the server as a string whatever its content
+// looks like. Coercion used to be type-blind, parsing anything JSON-shaped —
+// which made `--value "$(cat service-account.json)"` arrive as an object and
+// answer 500 instead of storing the secret.
 describe('string-typed flags are not JSON-coerced', () => {
   const cli = createCliTestClient();
 
@@ -47,12 +44,9 @@ describe('string-typed flags are not JSON-coerced', () => {
     expect(body.value).toBe('4455');
   });
 
-  // `null` must survive as JSON null even on a string-typed flag: "set it to
-  // null to clear" is the documented way to detach a nullable reference
-  // (`--default_model_route_id null`, `--ai_provider_id null`). Passing the
-  // literal string through made the server look up a route *named* "null" and
-  // answer 400 MODEL_ROUTE_NOT_FOUND instead of clearing the field — caught by
-  // the smoke suite, not by unit tests.
+  // `null` must survive as JSON null even on a string-typed flag, since "set it
+  // to null to clear" is the documented way to detach a nullable reference.
+  // The literal string made the server look up a route named "null".
   test('the literal null clears a nullable string flag', async () => {
     const requests = await cli.call([
       'update-project',

@@ -52,12 +52,8 @@ const flush = () => {
   });
 };
 
-// ── Real-DB fixtures ──────────────────────────────────────────────────────
-//
-// The scheduler is a real entry point, so these tests drive it against the real
-// database rather than stubbing `db.*`. A project and two orchestrations are set
-// up once; individual runs are created directly as DB rows to model the parked /
-// orphaned states the scheduler reclaims.
+// Runs are created directly as DB rows to model the parked/orphaned states the
+// scheduler reclaims.
 
 let userToken: string;
 let projectPublicId: string;
@@ -571,11 +567,10 @@ describe('wakeRun (branch coverage)', () => {
   });
 });
 
-// #907: three entry points failed a run whose orchestration was gone, and each
-// wrote a different field set. `wakeRun` in particular left `leaseExpiresAt`
-// populated on a run it had just moved to `failed`, so the reaper kept seeing an
-// active lease on a terminal run. `redriveRun` held the superset, which is the
-// intended semantics — asserted here for every path so they cannot diverge again.
+// Three entry points failed a run whose orchestration was gone, each writing a
+// different field set — `wakeRun` left `leaseExpiresAt` on a run it had just
+// failed, so the reaper saw an active lease on a terminal run (#907).
+// `redriveRun`'s superset is the intended semantics, asserted for every path.
 describe('a run whose orchestration is gone fails the same way from every path', () => {
   const LEASE = new Date(Date.now() - 60_000);
   const WAKE_CONTEXT = {

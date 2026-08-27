@@ -3,21 +3,13 @@ import {
   schemaNameForResourceType,
 } from 'src/lib/formation-modules/defineFormationModule';
 
-// ── About this file ─────────────────────────────────────────────────────────
+// The mechanical half of a formation module used to be restated in all 24, which
+// is what allowed #900 and #901. Now one implementation, tested once.
 //
-// The mechanical half of a formation module — the object guard, the schema
-// load, the unknown/required/type checks, the apply-time re-validation, and the
-// `read` drift contract — used to be written out in all 24 modules. Restating
-// it is what allowed #900 and #901; it is now one implementation, so it is
-// tested once here instead of 24 times.
-//
-// A `lib/` test per the keep-list rule in `.claude/rules/tests.md`: pure
-// validation over a large input space, where the observable signal through REST
-// (a bare "Unknown field") would not say which rule fired.
-//
-// `quota` is used as the carrier type because `QuotaResourceProperties` has
-// required fields, a nullable field, and typed fields of three kinds — the
-// factory loads the real spec, so the test exercises the real derivation.
+// A `lib/` test per the keep-list rule: pure validation over a large input
+// space, where REST's bare "Unknown field" would not say which rule fired.
+// `quota` carries it because its schema has required, nullable and three kinds
+// of typed field, so the real derivation is exercised.
 
 const BASE_PATH = 'resources.<quota>.properties';
 

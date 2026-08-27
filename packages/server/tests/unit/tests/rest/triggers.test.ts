@@ -1695,16 +1695,9 @@ describe('Triggers', () => {
     });
   });
 
-  // A project-scoped credential (project key / OAuth token) carries a policy
-  // whose resources are SRN-scoped to the project, not the wildcard `*`. The
-  // ── Eval targets (the evaluations module doc) ──────────────────────
-  //
-  // A schedule trigger pointed at an Eval is how a suite runs on a cadence
-  // (nightly regression) rather than only when someone remembers to start it.
-  // The dispatch starts a **queued** run: an eval is unbounded work — one real
-  // agent generation per dataset item — so blocking the scheduler tick on it
-  // would be the "operation that outlasts its request" case
-  // `.claude/rules/sync-async.md` exists to prevent.
+  // A schedule trigger on an Eval runs a suite on a cadence. The dispatch starts
+  // a queued run: an eval is unbounded work, one generation per dataset item, so
+  // blocking the scheduler tick on it is what `sync-async.md` exists to prevent.
   describe('eval targets', () => {
     let evalTriggerId: string;
     const workerWasDisabled = process.env.EVAL_WORKER_DISABLED;

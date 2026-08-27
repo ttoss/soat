@@ -390,11 +390,9 @@ describe('Tools', () => {
     });
 
     test('calling an http tool whose target is not publicly routable returns 403', async () => {
-      // The deployment-level egress control, seen through the entry point a
-      // caller (or a prompt-injected agent) actually reaches: the unit suite
-      // allows loopback, so this names an internal address it does not allow.
-      // Nothing listens there — a connection error would be a 502, so the 403
-      // proves the call was refused before any socket was opened.
+      // The suite allows loopback, so this names an internal address it does
+      // not. Nothing listens there — a connection error would be 502, so the
+      // 403 proves the call was refused before any socket opened.
       const created = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')
         .send({
@@ -461,11 +459,9 @@ describe('Tools', () => {
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/tools/${presetToolId}/call`)
         .send({});
-      // The action is extracted from presetParameters, so this must not hit the
-      // "operationId required" validation error (400). The SOAT tool self-calls
-      // process.env.PORT: if a concurrent test (mcp.test.ts binds that port)
-      // happens to be listening the call reaches a live server (200), otherwise
-      // it is refused (500). Either proves the preset action got past the 400.
+      // The action comes from presetParameters, so this must not hit the
+      // "operationId required" 400. The self-call either reaches a concurrently
+      // bound port or is refused; either outcome proves it got past the 400.
       expect([200, 500]).toContain(response.status);
     });
   });
@@ -639,12 +635,9 @@ describe('Tools', () => {
     });
 
     test('calling the pipeline runs the steps and wraps a failing step (422)', async () => {
-      // SOAT steps self-call process.env.PORT. When that port is unbound the
-      // first step fails and the runner wraps it as PIPELINE_STEP_FAILED (422);
-      // when a concurrent test (mcp.test.ts) is binding it, the step succeeds
-      // and the pipeline completes (200). Either outcome proves the runner
-      // dispatched and executed the step. The failure shape is asserted when it
-      // occurs.
+      // The self-called port is bound only when a concurrent test holds it, so
+      // the step either fails as PIPELINE_STEP_FAILED or completes. Either
+      // proves the runner dispatched and executed it.
       const res = await authenticatedTestClient(userToken)
         .post(`/api/v1/tools/${pipelineToolId}/call`)
         .send({ input: { n: 1 } });

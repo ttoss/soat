@@ -275,11 +275,9 @@ describe('zero-retention mode', () => {
     });
 
     test('a content-free lifecycle write is left completely alone', async () => {
-      // Several lifecycle writes (the `requires_action` flip in
-      // savePendingGeneration among them) are dispatched fire-and-forget, and
-      // callers read the row straight after. Suppression must not put a mode
-      // lookup in front of a write that carries no content to suppress —
-      // doing so widens that race for every generation in the system.
+      // Several lifecycle writes are fire-and-forget with callers reading the
+      // row straight after, so a mode lookup in front of a write carrying no
+      // content would widen that race for every generation.
       const publicId = await makeGeneration({
         projectDbId: zeroProjectDbId,
         projectPublicId: zeroProjectId,

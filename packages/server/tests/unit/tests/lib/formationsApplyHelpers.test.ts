@@ -9,11 +9,8 @@ import { planResourceChange } from 'src/lib/formationsPlanHelpers';
 import type { FormationEvent } from 'src/lib/formationsTypes';
 import { createMemory, getMemory } from 'src/lib/memories';
 
-// These tests drive the real formation-apply helpers against the real database
-// and the real resource handlers — no `db.*` stubbing and no internal-module
-// mocks. `memory` is used as the physical resource because its create/update
-// surface is minimal (`name` + `description`), which lets the merge/no-op
-// decision logic be asserted through the real resource state it produces.
+// `memory` carries these because its create/update surface is minimal, letting
+// the merge/no-op decision be asserted through real resource state.
 
 type ResourceRowWithId = InstanceType<(typeof db)['FormationResource']> & {
   physicalResourceId: string;

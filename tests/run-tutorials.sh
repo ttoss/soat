@@ -1,23 +1,14 @@
 #!/bin/bash
-# Run tutorial validation for all (or one) tutorials.
-#
-# Reads TUTORIALS_DIR for *.md files, skips entries listed in
-# IGNORE_FILE (tests/.tutorialsignore), then runs tutorials-tests.sh for each.
-#
-# Usage inside Docker (via docker-compose.tutorials.yml):
-#   bash /run-tutorials.sh
+# Run tutorial validation for all (or one) tutorials, skipping entries listed in
+# IGNORE_FILE. Usage: bash /run-tutorials.sh
 #
 # Environment:
 #   SOAT_BASE_URL    Server base URL (required)
-#   TUTORIAL_ID      If set, run only the tutorial with this base name
-#                    (filename without .md), e.g. TUTORIAL_ID=permissions
-#   TUTORIALS_DIR    Directory containing *.md tutorial files
-#                    (default: /tutorials)
-#   IGNORE_FILE      Path to tests/.tutorialsignore
-#                    (default: /repo/tests/.tutorialsignore)
+#   TUTORIAL_ID      Run only this tutorial, by filename without .md
+#   TUTORIALS_DIR    Directory of *.md tutorials (default: /tutorials)
+#   IGNORE_FILE      Path to .tutorialsignore
 #   TUTORIALS_SH     Path to tutorials-tests.sh
-#                    (default: /tutorials-tests.sh)
-#   VERBOSE          Set to 1 for verbose output (default: 0)
+#   VERBOSE          Set to 1 for verbose output
 
 set -e
 

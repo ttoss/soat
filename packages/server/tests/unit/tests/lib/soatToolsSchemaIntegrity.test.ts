@@ -60,11 +60,8 @@ describe('generated tool schema integrity (real OpenAPI specs)', () => {
   });
 
   test('a cross-file $ref resolves to an empty schema, staying discoverable', () => {
-    // `ToolBinding.properties.tool` refs
-    // `./tools.yaml#/components/schemas/CreateToolRequest`, which the
-    // dereferencer cannot follow. Resolving it to `{}` keeps the field in the
-    // tool definition and accepts any value, rather than dropping it and
-    // hiding a field the API does accept.
+    // This cross-file `$ref` cannot be followed, so resolving it to `{}` keeps
+    // the field discoverable rather than hiding one the API does accept.
     const patchAgent = soatTools.find((tool) => {
       return tool.name === 'patch-agent';
     });

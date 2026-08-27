@@ -468,12 +468,9 @@ describe('Agent Generation Routes', () => {
   });
 
   describe('tool-outputs real continuation (local stub server)', () => {
-    // Exercises submitToolOutputs' real body end-to-end (message building,
-    // runToolOutputsGeneration, resolveToolOutputsResult) without mocking
-    // db/eventBus/generations or the `ai` package. A local HTTP server
-    // stands in for the AI provider — the same pattern used by
-    // memoryExtractionCompletion.test.ts — so the real `ai.generateText` call
-    // goes over real HTTP to a server we control instead of a live LLM.
+    // A local HTTP server stands in for the provider, so the real
+    // `generateText` call goes over real HTTP rather than to a live LLM and
+    // nothing internal is mocked.
     let stubServer: Server;
     let stubBaseUrl: string;
     let userToken: string;
@@ -693,12 +690,9 @@ describe('Agent Generation Routes', () => {
       expect(pendingGenerations.has('gen_stub_pending')).toBe(false);
     });
 
-    // Regression: pausing on a client tool used to persist recovery state by
-    // *replacing* the generation's metadata bag (`metadata: { pendingState }`),
-    // which is where usage attribution lived. Every generation that paused lost
-    // its action/trigger/run/node attribution and all caller metadata, so its
-    // usage event was billed unattributed. Attribution is a column now, so the
-    // pending-state write cannot reach it.
+    // Pausing used to persist recovery state by replacing the metadata bag,
+    // where attribution lived — so every paused generation metered
+    // unattributed. Attribution is a column now, out of that write's reach.
     test('a generation that pauses on a client tool keeps its usage attribution', async () => {
       nextToolCall = { name: 'show_dialog', args: { message: 'confirm?' } };
 
@@ -713,12 +707,9 @@ describe('Agent Generation Routes', () => {
       expect(paused.status).toBe(200);
       expect(paused.body.status).toBe('requires_action');
 
-      // `buildRequiresActionGenerationResult` persists `requires_action`
-      // fire-and-forget, so the record can still read `in_progress` for a moment
-      // after the response returns — the generation lifecycle is poll-based by
-      // design. Poll a bounded predicate rather than reading once: a single read
-      // passes on a fast machine and fails under CI load, which is how this went
-      // red on one shard while passing everywhere else.
+      // `requires_action` is persisted fire-and-forget, so the record can read
+      // `in_progress` briefly after the response. A single read passes on a
+      // fast machine and fails under CI load, so poll a bounded predicate.
       let record = await authenticatedTestClient(userToken).get(
         `/api/v1/generations/${paused.body.id}`
       );
@@ -741,11 +732,8 @@ describe('Agent Generation Routes', () => {
     }, 60000);
 
     test('tool-outputs recovers a pending generation from the DB when not in memory', async () => {
-      // Simulates a server restart: no pendingGenerations map entry exists,
-      // so submitToolOutputs must fall back to recoverPendingFromDb, which
-      // rebuilds the pending state from the generation record's
-      // `pendingState` column — real DB, real aiProviders/agentModel
-      // resolution, no mocking.
+      // Simulates a restart: with no pending-map entry, `submitToolOutputs`
+      // must fall back to rebuilding from the `pendingState` column.
       await createGenerationRecord({
         publicId: 'gen_recovered',
         projectId: projectDbId,
@@ -777,13 +765,9 @@ describe('Agent Generation Routes', () => {
       expect(response.body.output.content).toBe('final answer');
     });
 
-    // The tool-outputs continuation completes the generation via
-    // `resolveToolOutputsResult` -> `fireCompletionSideEffects`, a different
-    // code path than the direct (no-pending-tool) completion in
-    // `buildCompletedGenerationResult`. Only the latter called
-    // `recordGenerationUsage`, so any generation that pauses for a client
-    // tool call never got a usage event, even though the stub server
-    // above returns real `usage` on every response.
+    // The continuation completes down a different path than a direct
+    // completion, and only the latter used to meter usage — so a generation
+    // that paused for a client tool never got a usage event.
     test('tool-outputs continuation records usage — meters and receipt reflect it', async () => {
       await createGenerationRecord({
         publicId: 'gen_usage_metered',
@@ -850,12 +834,9 @@ describe('Agent Generation Routes', () => {
       expect(receiptRes.body.total_output_tokens).toBe(1);
     });
 
-    // A model that writes its tool invocation out as assistant text instead of
-    // making a structured call used to be indistinguishable from a real
-    // answer: `finish_reason: stop`, one step, `status: completed`,
-    // `error: null`, and the JSON blob as `output.content` — with the tool
-    // never executed. Downstream consumers ran on the blob as if it were the
-    // agent's work, and nothing anywhere said otherwise.
+    // A model narrating its tool call as assistant text used to be
+    // indistinguishable from a real answer — completed, no error, the JSON blob
+    // as content, and the tool never executed.
     describe('a tool call written out as text', () => {
       const blob =
         '```json\n{"name": "show_dialog", "arguments": {"message": "hi"}}\n```';
@@ -1030,14 +1011,10 @@ describe('Agent Generation Routes', () => {
   // ── Streaming provider rejections (#1084) ─────────────────────────────────
 
   describe('POST /api/v1/agents/:id/generate - streaming provider rejection', () => {
-    // A local OpenAI-compatible endpoint that rejects every completion the way
-    // a provider rejects an unavailable model: `404`, with the provider's own
-    // JSON error body. The ollama builder targets
-    // `${base_url}/v1/chat/completions`, so the real `streamText` call runs end
-    // to end and the AI SDK raises a genuine `APICallError` — which is the
-    // thing the stream has to surface. A mock would skip the serialization that
-    // produces it, and `streamText`'s swallow-the-error behavior is exactly
-    // what a mocked stream cannot reproduce.
+    // Rejects every completion the way a provider rejects an unavailable model,
+    // so the real `streamText` call raises a genuine `APICallError`. A mock
+    // would skip the serialization that produces it, and cannot reproduce
+    // `streamText`'s swallow-the-error behavior.
     let rejectingServer: Server;
     let userToken: string;
     let agentId: string;
@@ -1045,12 +1022,9 @@ describe('Agent Generation Routes', () => {
     let partialAgentId: string;
     let partialAgentDbId: number;
 
-    // When set, the endpoint instead answers `200` and streams one text chunk
-    // followed by the provider's own mid-run error frame — the shape a provider
-    // that dies part-way through a completion sends. It is the case the issue
-    // calls worse than an outright rejection: nothing threw, the status line is
-    // long gone, and the delivered prefix is indistinguishable from a finished
-    // answer unless the failure is reported after it.
+    // Streams one chunk then the provider's mid-run error frame — worse than an
+    // outright rejection: nothing threw, the status line is long gone, and the
+    // delivered prefix reads as a finished answer unless the failure follows it.
     let streamPartialThenFail = false;
 
     const PARTIAL_CHUNK = 'The weather in Lisbon is ';

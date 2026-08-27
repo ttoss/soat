@@ -120,11 +120,8 @@ describe('Knowledge', () => {
     });
 
     test('matches a document stored via a path lacking a leading slash', async () => {
-      // Regression (F-10): documents whose path was persisted without a
-      // leading slash (e.g. ingested with a slash-less pathPrefix) must still
-      // be reachable by a leading-slash prefix. createDocument now normalizes
-      // the stored path, so `no-slash/nested.txt` is keyed as
-      // `/no-slash/nested.txt` and matches `document_paths: ['/no-slash/']`.
+      // Documents persisted without a leading slash must still be reachable by
+      // a leading-slash prefix, which the stored path is now normalized to.
       await authenticatedTestClient(userToken).post('/api/v1/documents').send({
         project_id: projectId,
         content: 'A slash-less playbook document.',
@@ -500,11 +497,8 @@ describe('Knowledge', () => {
     });
 
     test('returns memory entries when searching by memory_tags without a project_id (admin, cross-project)', async () => {
-      // An admin JWT with no project_id resolves projectIds to `undefined`
-      // (see createJwtResolveProjectIds), which exercises the
-      // unscoped/cross-project branch of resolveMemoryIdsByGlobTags and
-      // buildMemoryIncludeWhere in src/lib/knowledgeMemory.ts — every other
-      // test in this file passes an explicit project_id.
+      // An admin JWT with no project_id resolves to `undefined`, exercising the
+      // unscoped branch — every other test here passes an explicit project_id.
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/knowledge/search')
         .send({
@@ -598,12 +592,9 @@ describe('Knowledge', () => {
     });
 
     test('min_score keeps a document whose true score clears the threshold', async () => {
-      // The constant-vector stub gives a correct document score of 1, so a
-      // min_score of 0.5 must keep the result. Under the sub-query bug the
-      // score collapsed to the fallback 0, which is below 0.5 and would be
-      // filtered out — so this pins the score to its true value (1), not merely
-      // "non-null". A threshold between the buggy 0 and the correct 1 is what
-      // makes this a genuine red/green regression test.
+      // The constant-vector stub scores 1, and the sub-query bug collapsed it to
+      // 0 — so a `min_score` between the two is what makes this genuinely
+      // red/green rather than merely asserting non-null.
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/knowledge/search')
         .send({

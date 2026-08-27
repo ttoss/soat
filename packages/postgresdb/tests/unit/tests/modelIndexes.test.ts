@@ -1,11 +1,8 @@
 import { Sequelize } from '@ttoss/postgresdb';
 
-// The built output, not `src`: Babel's TypeScript transform rejects a decorated
-// `declare` field, so the model sources cannot be transpiled by `babel-jest`.
-// `dist` is compiled by tsdown with real TypeScript decorators and is what both
-// consumers and `ttoss-postgresdb sync` load, so asserting against it checks the
-// artifact that actually reaches the database. `turbo run test` depends on
-// `build`; run `pnpm build` first when running this suite directly.
+// The built output, not `src`: Babel rejects a decorated `declare` field, and
+// `dist` is what both consumers and `sync` load — so this asserts against the
+// artifact that actually reaches the database. Run `pnpm build` first.
 import { models } from '../../../dist/index.cjs';
 
 /**
@@ -29,11 +26,9 @@ import { models } from '../../../dist/index.cjs';
  */
 const modelList = Object.values(models);
 
-// Registering the models with a Sequelize instance is what resolves the
-// decorator metadata into `rawAttributes` / `options.indexes`. `underscored`
-// mirrors `initialize()` in @ttoss/postgresdb so attribute names map to the same
-// columns as in production. No connection is opened — nothing here talks to a
-// database.
+// Registering the models is what resolves decorator metadata into
+// `options.indexes`. `underscored` mirrors `initialize()` so attributes map to
+// production's columns. No connection is opened.
 new Sequelize({
   dialect: 'postgres',
   define: { underscored: true },
@@ -144,18 +139,11 @@ describe('every index name is written, not derived', () => {
   });
 
   test('no model uses the `@Index` decorator', () => {
-    // `@Index` is silently inert here. The bundled models invoke decorators
-    // through the `__decorate` helper, which passes a third `descriptor`
-    // argument, and in that call shape sequelize-typescript registers nothing —
-    // so the decorator reads as an index in review and produces none in the
-    // database. Seven of them had accumulated, leaving `traces.agent_id`,
-    // `traces.parent_trace_id`, `traces.root_trace_id` and
-    // `usage_events.ai_provider_id` unindexed. Declare indexes in `@Table`,
-    // where they demonstrably work.
-    //
-    // This asserts on the *effect* rather than grepping source: an index that
-    // reaches `options.indexes` is real, and one that does not is not, whatever
-    // syntax produced it.
+    // `@Index` is silently inert: the bundled models invoke decorators through
+    // `__decorate`, whose third argument makes sequelize-typescript register
+    // nothing — so it reads as an index and produces none. Seven had
+    // accumulated, leaving four columns unindexed. Asserts on the effect rather
+    // than grepping source: what reaches `options.indexes` is real.
     const declaredFieldSets = new Set(
       modelEntries.flatMap(({ table, indexes }) => {
         return indexes.map((index) => {

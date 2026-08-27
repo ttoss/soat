@@ -8,15 +8,9 @@ import {
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient } from '../../testClient';
 
-// `recoverPendingFromDb` rebuilds the in-memory `PendingGeneration` from a
-// generation record's `pendingState` column after a server restart, when the
-// pending map is empty. Its happy path is exercised end-to-end through the REST
-// tool-outputs route in `rest/agentGeneration.test.ts`; every failure branch,
-// however, collapses to an indistinguishable `GENERATION_NOT_FOUND` (404) at
-// that boundary. These tests drive the recovery function directly on the real
-// DB so each branch is asserted individually and the rebuilt shape
-// (resolvedModel / resolvedTools / agentConfig) — which the REST layer never
-// exposes — is verified. No internal (`src/**`) module is mocked.
+// The happy path is covered through the REST tool-outputs route, but every
+// failure branch collapses to an indistinguishable 404 there — so the branches
+// and the rebuilt shape, which REST never exposes, are asserted directly.
 describe('recoverPendingFromDb (real DB)', () => {
   let adminToken: string;
   let projectPublicId: string;
@@ -177,12 +171,9 @@ describe('recoverPendingFromDb (real DB)', () => {
     expect(result!.agentConfig.instructions).toBeNull();
   });
 
-  // A generation that pauses for a client tool keeps its tool surface in the
-  // pending map; recovering the same generation from the DB after a restart
-  // must rebuild the *same* surface. `write_memory` is derived from the agent's
-  // `knowledge_config` rather than from `tool_bindings`, so it is the field that
-  // exposes whether the two paths still agree — a resumed run that silently
-  // lost it would answer without the memory tool the agent is configured with.
+  // `write_memory` comes from `knowledge_config`, not `tool_bindings`, so it is
+  // what exposes whether the in-memory and recovered surfaces still agree — a
+  // resumed run that lost it would answer without a tool the agent has.
   test('rebuilds the knowledge-derived tools, not only the bound ones', async () => {
     await seedGeneration({
       publicId: 'gen_recover_memory',

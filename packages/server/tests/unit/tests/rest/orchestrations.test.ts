@@ -994,11 +994,9 @@ describe('Orchestrations', () => {
         });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('awaiting_input');
-      // `input_mapping` keys are author-authored: whatever the graph declares is
-      // what the resolved context carries back, verbatim. This assertion used to
-      // expect `document_id` / `is_long` because the outbound transform rewrote
-      // the author's own keys — the #737 bug class. `context` is an opaque bag
-      // now, so `documentId` in means `documentId` out.
+      // `input_mapping` keys are author-authored and carry back verbatim. This
+      // used to expect rewritten keys, because the outbound transform mangled
+      // the author's own (#737).
       expect(runRes.body.required_action.context).toEqual({
         language: 'pt-BR',
         threshold: 0.8,
@@ -1744,11 +1742,9 @@ describe('Orchestrations', () => {
       });
     });
 
-    // #342: a run is the platform's one long-lived, resumable object, and it
-    // had nowhere for the caller to record *whose* run it is — while a single
-    // generation did. `metadata` is that label: caller-owned, no reserved keys,
-    // round-tripping verbatim, and never merged into run state (which is what
-    // made `input` the wrong place for it).
+    // A run is the one long-lived resumable object and had nowhere to record
+    // whose it is, while a generation did (#342). Caller-owned, round-tripped
+    // verbatim, and never merged into run state — which is why not `input`.
     describe('metadata', () => {
       const createRun = async (name: string, body: object) => {
         const createRes = await authenticatedTestClient(userToken)
@@ -1858,12 +1854,9 @@ describe('Orchestrations', () => {
       });
     });
 
-    // #747: an agent node's output_schema silently reverted to `{ content }`
-    // when the model wrapped its JSON in a markdown code fence — the standard
-    // shape a model returns structured JSON in, even when told to return it
-    // bare. End-to-end check that the fix survives the full run/node-
-    // execution-recording pipeline; the parsing/precedence edge cases
-    // themselves are covered directly in orchestrationNodeExecutors.test.ts.
+    // An `output_schema` silently reverted to `{ content }` when the model
+    // fenced its JSON — the standard shape models return it in (#747). The
+    // parsing edge cases are covered in `orchestrationNodeExecutors.test.ts`.
     test('an agent node with output_schema parses a markdown-fenced JSON response', async () => {
       const aiProviderRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/ai-providers')
@@ -1982,11 +1975,9 @@ describe('Orchestrations', () => {
     });
 
     test('a run that throws a non-Error value records a readable error message', async () => {
-      // A JSON-Logic `map` whose per-item mapper is a multi-key object is not
-      // valid JSON-Logic: the engine treats the first key as an operator, finds
-      // none, and throws a bare object `{ type: 'Unknown Operator' }` — not an
-      // Error. buildRunError used to String() that into the useless
-      // "[object Object]". The message must instead carry the serialized cause.
+      // A multi-key `map` mapper is invalid JSON-Logic: the engine throws a bare
+      // `{ type: 'Unknown Operator' }` object, not an Error, which `String()`
+      // collapsed to "[object Object]".
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations')
         .send({
@@ -2622,12 +2613,9 @@ describe('Orchestrations', () => {
       expect(response.status).toBe(403);
     });
 
-    // Regression: the bootstrap admin authenticates via JWT with no project
-    // membership, so resolveProjectIds() legitimately returns `undefined`
-    // ("no filter — all projects"). human-input required a resolvable single
-    // primaryId and rejected that case with a spurious 400
-    // 'project_id is required', even though submitHumanInput only needs the
-    // (optional) projectIds array to scope its query.
+    // The bootstrap admin has no project membership, so `resolveProjectIds()`
+    // legitimately returns `undefined`. human-input required a resolvable
+    // primary id and rejected that with a spurious 400.
     test('admin (unrestricted JWT, no explicit project) can submit human input', async () => {
       const createRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/orchestrations')
@@ -4143,15 +4131,10 @@ describe('Orchestrations', () => {
     });
   });
 
-  // `input_mapping` and `arguments` keys are author-authored names that leave
-  // SOAT verbatim: an `input_mapping` key becomes a sub-tool's body key, an
-  // emit-event node's `data` key, or a line in the prompt an agent node builds;
-  // an approval node's `arguments` keys are frozen onto the proposed tool call.
-  // They belong with `state_mapping` on the same node — which is already a
-  // pass-through — rather than with SOAT's own field names. Without the skip a
-  // caller's `cost_center` was stored as `costCenter`, so the sub-tool received
-  // a key the author never wrote while every `{"var": ...}` reference kept the
-  // authored casing.
+  // These keys leave SOAT verbatim — as a sub-tool's body key, an event's `data`
+  // key, or frozen onto a proposed tool call — so they belong with
+  // `state_mapping`, already a pass-through. Without the skip, a sub-tool
+  // received a key the author never wrote while every `var` kept the original.
   describe('author-authored mapping keys', () => {
     test('input_mapping and arguments keys round-trip verbatim', async () => {
       const authored = {

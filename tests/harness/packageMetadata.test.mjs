@@ -121,11 +121,9 @@ describe('published package metadata', () => {
   });
 
   test('the retired "AI Apps" tagline does not come back', () => {
-    // The project described itself four different ways at once — "AI Apps" in
-    // the site tagline and the llms.txt/MCP descriptions, "AI agents" in the
-    // README and the design system. Search engines quoted whichever they found.
-    // The wording is settled now (see `.claude/rules/website.md`); this keeps a
-    // copy of the old one from drifting back into a surface nobody re-reads.
+    // The project once described itself four ways at once and search engines
+    // quoted whichever they found. The wording is settled in
+    // `.claude/rules/website.md`; this keeps an old copy from drifting back.
     const offenders = SELF_DESCRIBING_SOURCES.filter((file) => {
       const full = path.resolve(__dirname, '../..', file);
       return (

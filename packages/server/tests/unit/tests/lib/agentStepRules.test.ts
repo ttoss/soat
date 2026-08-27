@@ -155,13 +155,9 @@ describe('buildPrepareStep', () => {
   });
 
   test('buildPrepareStep honors a string tool_choice, not just a named tool', () => {
-    // `tool_choice` accepts the strings "auto" / "required" / "none" as well as
-    // the { type: "tool" } object, at the agent level and inside a step rule
-    // alike. Forcing *some* tool call on the first step — without naming which
-    // tool, because that varies per message — is the whole point of a rule like
-    // { step: 1, tool_choice: "required" }: agent-level "required" applies to
-    // every step and never lets the run stop, so the string form has to work
-    // here or the rule is a silent no-op.
+    // Forcing *some* tool on the first step without naming it is the point of
+    // `{ step: 1, tool_choice: "required" }` — agent-level "required" applies to
+    // every step and never lets the run stop.
     const prepareStep = buildPrepareStep({
       stepRules: [{ step: 1, tool_choice: 'required' }],
       logContext: 'non_stream',

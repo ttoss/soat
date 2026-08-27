@@ -587,11 +587,9 @@ describe('extractBodyProps', () => {
   });
 
   test('deep-resolves $refs nested inside array item properties (issue #344)', () => {
-    // Reproduces the create-agent-generation bug: messages[].content is a
-    // oneOf containing $refs to components/schemas. Those refs must be
-    // inlined before the schema reaches an LLM provider as a tool
-    // definition, since the provider-facing schema has no `components`
-    // section to resolve against.
+    // `messages[].content` is a oneOf of `$ref`s, which must be inlined before
+    // the schema reaches a provider — the provider-facing schema has no
+    // `components` section to resolve against.
     const spec = {
       components: {
         schemas: {

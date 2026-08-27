@@ -721,11 +721,9 @@ describe('Memories', () => {
     });
 
     describe('provenance and temporal invalidation', () => {
-      // Test embeddings are constant, so any second write into a memory that
-      // already holds a valid entry scores 1.0 and would be skipped as a
-      // duplicate. A `duplicate_threshold` above 1 makes that comparison false,
-      // which is the only way to land two independent entries in one memory
-      // here (the merge band already creates on this path).
+      // Test embeddings are constant, so a second write scores 1.0 and is
+      // skipped as a duplicate. A threshold above 1 is the only way to land two
+      // independent entries in one memory here.
       const createEntry = async (args: {
         memoryId: string;
         content: string;
@@ -742,11 +740,8 @@ describe('Memories', () => {
           });
       };
 
-      // No public API path sets `invalidated_at` until the LLM arbitration of
-      // Memories 5a ships — RC-2 deliberately lands the schema and the API
-      // shape first — so the invalidated state is seeded directly on the model.
-      // The behaviour under test (invalidated entries drop out of listing,
-      // dedup and search) is still exercised entirely through the API.
+      // No public path sets `invalidated_at` yet, so the state is seeded
+      // directly; the behaviour under test still runs entirely through the API.
       const invalidateEntry = async (args: {
         entryId: string;
         supersededBy?: string;

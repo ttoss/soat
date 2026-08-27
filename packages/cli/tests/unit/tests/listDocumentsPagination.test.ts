@@ -1,10 +1,8 @@
 import { createCliTestClient } from '../testClient';
 
-// `--limit`/`--offset` on `list-documents` were falling through the generic
-// dispatcher's path/query/body split into the request body, because the
-// OpenAPI spec did not declare them as query parameters. A GET request with
-// a body is rejected by the fetch runtime ("Request with GET/HEAD method
-// cannot have body."), making pagination impossible via the CLI.
+// Undeclared as query parameters, these fell through the dispatcher's split
+// into the request body — and fetch rejects a GET carrying one, making
+// pagination impossible from the CLI.
 describe('list-documents pagination flags are sent as query params', () => {
   const cli = createCliTestClient();
 

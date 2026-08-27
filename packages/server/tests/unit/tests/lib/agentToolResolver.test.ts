@@ -316,11 +316,9 @@ describe('resolveAgentTools', () => {
     expect(result.body).toContain('AUDIO-BYTES-123');
   });
 
-  // The wire is the real contract. `buildContextHeaders` is unit-tested above,
-  // but only a live request proves what a tool endpoint actually receives —
-  // and it makes the docs' central claim executable: Node lowercases incoming
-  // header names, so the casing a caller chose is NOT what they read back.
-  // A tool endpoint must match these case-insensitively.
+  // Only a live request proves what a tool endpoint receives: Node lowercases
+  // incoming header names, so the casing a caller chose is not what they read
+  // back, and an endpoint must match case-insensitively.
   test('http tool forwards tool_context to the endpoint as X-Soat-Context-<key>, which arrives lowercased', async () => {
     let received: IncomingHttpHeaders | null = null;
     const server = createServer((req, res) => {
@@ -1171,11 +1169,9 @@ describe('resolveAgentTools', () => {
     }
   });
 
-  // A preset is a pin, not a default: it wins over whatever the model supplies
-  // for the same key, and the key is not offered to the model at all. `http`
-  // and `client` tools used to ignore `preset_parameters` outright — only
-  // `builtin` applied them — so an operator-fixed value was in fact chosen by
-  // the model on every call.
+  // A preset is a pin, not a default: it wins over the model's value and is not
+  // offered to the model at all. `http` and `client` tools used to ignore
+  // presets outright, so an operator-fixed value was chosen by the model.
   describe('preset_parameters', () => {
     const startBodyCaptureServer = async () => {
       const bodies: unknown[] = [];
@@ -1503,11 +1499,9 @@ describe('buildContextHeaders', () => {
     ).toEqual({});
   });
 
-  // A key names a header, and header names are case-insensitive (RFC 9110
-  // §5.1) — `assertValidToolContextKeys` already refuses two keys that differ
-  // only in case for that reason. So an allowlist entry matches the key it
-  // names regardless of case; anything else would let the same header be both
-  // allowed and denied depending on how it was typed.
+  // Header names are case-insensitive, so an allowlist entry matches regardless
+  // of case — otherwise the same header could be both allowed and denied
+  // depending on how it was typed.
   test('matches allowlist entries case-insensitively', () => {
     expect(
       buildContextHeaders({
@@ -2211,12 +2205,9 @@ describe('resolveAgentTools - mcp and soat types', () => {
 
     const tools = await resolveAgentTools({
       toolIds: [deniedSoatRes.body.id],
-      // `files:GetFile` is the action the route enforces for both listing and
-      // getting, so this `Deny` is what refuses the call. It used to be written
-      // as `files:ListFiles` — a string that names no real permission — and the
-      // test still passed, because the boundary was evaluated against the tool
-      // name `list-files` and denied everything by default. That is the bug this
-      // assertion now pins: the message names the action a policy can target.
+      // This used to read `files:ListFiles`, which names no real permission,
+      // and still passed because the boundary was evaluated against the tool
+      // name and denied everything. The message must name a targetable action.
       boundaryPolicy: {
         statement: [{ effect: 'Deny', action: ['files:GetFile'] }],
       },
@@ -2327,11 +2318,9 @@ describe('resolveAgentTools - mcp and soat types', () => {
   });
 
   test('soat tool preset_parameters win over a model-supplied value', async () => {
-    // The pin the tutorials rely on: two tools binding one action, each aimed
-    // at a fixed resource. A model that names the key anyway must not be able
-    // to re-aim the call — the preset key is hidden from its schema, but
-    // nothing sets `additionalProperties: false`, so hiding alone is not a
-    // guarantee and the merge order is.
+    // Two tools binding one action, each aimed at a fixed resource. Hiding the
+    // preset key from the schema is not a guarantee — nothing sets
+    // `additionalProperties: false` — so the merge order is what pins it.
     const targetRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/tools')
       .send({

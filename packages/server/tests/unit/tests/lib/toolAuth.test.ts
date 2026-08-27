@@ -19,11 +19,9 @@ import {
  * opaque upstream 403 that names no branch.
  */
 
-// The canonical AWS Signature Version 4 worked example from the AWS docs
-// ("Signature Version 4 signing process" — ListUsers against IAM). Its
-// intermediate values are published, so a mismatch localizes the defect:
-// a wrong canonical-request hash is canonicalization, a wrong signature with
-// the right hash is key derivation.
+// AWS's published SigV4 worked example. Its intermediate values are documented,
+// so a mismatch localizes the defect: a wrong canonical-request hash is
+// canonicalization, a wrong signature with the right hash is key derivation.
 const AWS_EXAMPLE = {
   accessKeyId: 'AKIDEXAMPLE',
   secretAccessKey: 'wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY',

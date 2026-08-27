@@ -1,11 +1,8 @@
 import { executeApprovalNode } from 'src/lib/orchestrationApprovalNode';
 import type { OrchestrationNode } from 'src/lib/orchestrations';
 
-// executeApprovalNode is a pure mapping-resolver: its branch space (present vs
-// absent reasoning/evidence/impact, default vs explicit expiry, non-object
-// coercion, missing tool_id) is large and expensive to drive through a full
-// orchestration run per case, so it is covered directly here. The end-to-end
-// park → resolve → resume flow is covered via REST in rest/approvalNode.test.ts.
+// A pure mapping-resolver with a branch space too large to drive through a full
+// run per case. The park → resolve → resume flow is covered via REST.
 
 const base: OrchestrationNode = {
   id: 'gate',

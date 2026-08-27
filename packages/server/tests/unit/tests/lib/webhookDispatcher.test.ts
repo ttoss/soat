@@ -61,14 +61,9 @@ describe('webhookDispatcher', () => {
     });
   };
 
-  // The sentinel webhook matches every event and is never deleted. Because
-  // `handleEvent` iterates all matching webhooks in one synchronous pass
-  // (nothing is awaited until each webhook's own `deliverWebhook` starts),
-  // observing the sentinel's fetch call for a given event proves the whole
-  // dispatch loop - including the decision for the webhook under test - has
-  // already run for that event. This gives a deterministic sync point for
-  // "this event should NOT reach a given webhook" assertions, without a
-  // fixed sleep.
+  // `handleEvent` iterates all matching webhooks in one synchronous pass, so the
+  // sentinel's fetch call proves the whole dispatch loop already ran for that
+  // event — a deterministic sync point for "should NOT reach" assertions.
   /**
    * A sweep clock moved past any backoff this suite can schedule, so a claimed
    * retry is due immediately instead of the test waiting out real seconds.
@@ -263,12 +258,9 @@ describe('webhookDispatcher', () => {
       data: Record<string, unknown>;
     };
 
-    // Select the entry under test by action, don't assume it arrived first. The
-    // previous test's `afterEach` deletes its webhooks, and each delete is itself
-    // an audited mutation whose `webhooks:DeleteWebhook` entry dispatches
-    // asynchronously — late enough to land on *this* test's wildcard subscriber
-    // and take the first slot. Same principle as `callsToUrlForEvent`, one level
-    // deeper: filter to the event under test rather than trusting arrival order.
+    // The previous test's teardown deletes webhooks, and each delete is itself
+    // an audited mutation dispatching asynchronously — late enough to take the
+    // first slot here. Filter by action rather than trusting arrival order.
     const auditPayloads = (): AuditPayload[] => {
       return callsToUrlForEvent(url, 'audit.entry_created').map(([, init]) => {
         return JSON.parse((init as { body: string }).body) as AuditPayload;
@@ -414,13 +406,10 @@ describe('webhookDispatcher', () => {
   });
 
   test('an undecryptable secret records a failed delivery instead of vanishing', async () => {
-    // `deliverWebhook` is fired and forgotten behind a `.catch()` whose comment
-    // promises "delivery failures are recorded in the database". Signing happens
-    // before the request, so a secret that cannot be decrypted — a row written
-    // before secret-at-rest encryption, or a changed SECRETS_ENCRYPTION_KEY —
-    // must still leave a `failed` delivery row. Otherwise the webhook goes
-    // quiet with nothing in the log to say why, which is the one outcome that
-    // comment must not be allowed to become false about.
+    // Signing happens before the request, so an undecryptable secret — a
+    // pre-encryption row, or a changed SECRETS_ENCRYPTION_KEY — must still leave
+    // a `failed` delivery row. Otherwise the webhook goes quiet with nothing in
+    // the log to say why.
     const created = await createWebhook({
       project_id: projectId,
       name: 'Undecryptable Secret Webhook',
@@ -532,13 +521,9 @@ describe('webhookDispatcher', () => {
         return callsToUrl(RETRY_LEAK_URL).length >= 3;
       });
 
-      // Settle deterministically: wait until every delivery-timeout timer that
-      // was created has also been cleared. Reaching the creation count is not
-      // enough — each attempt clears its timer in a `finally` that runs only
-      // after an awaited `delivery.update(...)`, so asserting on the count
-      // alone races that DB write (flaky under parallel load). `size === 0`
-      // holds only once all attempts' `finally` blocks have run, and stays 0
-      // because this test emits no further events.
+      // The creation count is not enough: each attempt clears its timer in a
+      // `finally` that runs only after an awaited DB write, so counting races
+      // it. `size === 0` holds only once every `finally` has run.
       await waitFor(
         () => {
           return deliveryTimersCreated >= 3 && openDeliveryTimers.size === 0;
@@ -606,11 +591,9 @@ describe('webhookDispatcher', () => {
         timestamp: new Date().toISOString(),
       });
 
-      // The mocked timeout fires `controller.abort()` synchronously, before
-      // `fetch` is even called, so the signal is already aborted by the time
-      // our fetch mock attaches its `abort` listener — the first attempt's
-      // fetch promise never settles and the retry loop never reaches
-      // attempt 2. Only one call is expected.
+      // The mocked timeout aborts synchronously, before `fetch` is called, so
+      // the first attempt's promise never settles and the retry loop never
+      // reaches attempt 2.
       await waitFor(() => {
         return callsToUrl('https://example.com/hook-timeout').length > 0;
       });
@@ -744,24 +727,11 @@ describe('webhookDispatcher', () => {
       });
     };
 
-    // Should retry up to MAX_ATTEMPTS since status is not ok.
-    //
-    // Drive the attempts deliberately — wait for each one to be recorded before
-    // sweeping for the next. The obvious "sweep in a loop until 3 fetch calls"
-    // shape loses to two separate races:
-    //
-    //   - `attemptDelivery` records a `fetch` call the instant it *invokes* it,
-    //     but the attempt only reaches the row once the response is awaited and
-    //     `recordFailedAttempt` writes it. Polling the call count can return
-    //     inside that window and read a still-`pending` delivery — which is how
-    //     this test failed the v0.29.6 release run.
-    //   - `pastAnyBackoff()` is ten minutes ahead, well past the lease an
-    //     in-flight attempt holds, so `duePredicate` sees that delivery as
-    //     claimable again. A sweep issued while attempt N is still running
-    //     re-dispatches it, producing a 4th call for the same delivery.
-    //
-    // Sweeping only once the previous attempt has landed closes both, and needs
-    // no sleep: every wait is bounded by an observed row change.
+    // Sweep only once the previous attempt has landed. Polling the fetch count
+    // instead loses to two races: a call is recorded when invoked but reaches
+    // the row only after the response is awaited, and `pastAnyBackoff()` is far
+    // past an in-flight attempt's lease, so a sweep mid-attempt re-dispatches
+    // it. Every wait here is bounded by an observed row change, with no sleep.
     await waitForAttempts(1);
     await sweepDueWebhookDeliveries({ now: pastAnyBackoff() });
     await waitForAttempts(2);
@@ -790,13 +760,9 @@ describe('webhookDispatcher', () => {
       events: ['files.created.*'],
     });
 
-    // `WebhookDelivery.eventType` is a VARCHAR(255) column, so an event whose
-    // type exceeds that length makes the real `WebhookDelivery.create` insert
-    // reject with a genuine DB error. This drives `deliverWebhook`'s failure
-    // path against the real database (no `db` mock). Both the sentinel (`*`) and
-    // the webhook above (`files.created.*`) match this event, so both
-    // delivery-record inserts fail; their rejections must be swallowed by
-    // `handleEvent`'s `.catch()`.
+    // An event type past `eventType`'s VARCHAR(255) makes the real insert reject,
+    // driving the failure path without a `db` mock. Both matching webhooks fail,
+    // and `handleEvent` must swallow each rejection.
     const overLongType = asCustomEventName({
       name: `files.created.${'x'.repeat(300)}`,
     });

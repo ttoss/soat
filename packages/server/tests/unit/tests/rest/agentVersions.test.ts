@@ -107,12 +107,10 @@ describe('Agent versions', () => {
       expect(res.status).toBe(200);
       expect(res.body.config.name).toBe('Snapshot Shape');
 
-      // Pinned deliberately. The snapshot is derived by *excluding* non-config
-      // keys from the agent response, so a new agent field joins snapshots
-      // automatically — which is what keeps `restore` complete. This assertion
-      // is the counterweight: adding a field to the agent response makes it
-      // fail, forcing a decision about whether the field is configuration
-      // (leave it in) or bookkeeping (exclude it in agentVersionSnapshot.ts).
+      // The snapshot is derived by excluding non-config keys, so a new agent
+      // field joins it automatically — which keeps `restore` complete. This is
+      // the counterweight: adding a field fails here, forcing a decision about
+      // whether it is configuration or bookkeeping.
       expect(Object.keys(res.body.config).sort()).toEqual(
         [
           'active_tool_ids',
@@ -388,13 +386,9 @@ describe('Agent versions', () => {
       expect(res.status).toBe(401);
     });
 
-    // These routes address an agent by ID with no `project_id` parameter, so a
-    // principal lacking the action resolves to an empty project set and the
-    // agent is simply not found. The status is 404 rather than 403 by design —
-    // identical to `GET /api/v1/agents/{agent_id}` — and it is the stronger
-    // answer: an unauthorized caller learns nothing about whether the agent
-    // exists. What matters for the security property is that no history leaks,
-    // which each of these asserts.
+    // 404 rather than 403 by design, matching `GET /agents/{agent_id}`: an
+    // unauthorized caller learns nothing about whether the agent exists. What
+    // matters is that no history leaks.
     test('user without permission gets no version list', async () => {
       const res = await authenticatedTestClient(noPermToken).get(
         `/api/v1/agents/${agentId}/versions`
@@ -914,11 +908,9 @@ describe('Agent versions', () => {
           metadata: { agent_version: 99 },
         });
 
-      // The request is accepted — `agent_version` in the caller's bag is just
-      // an annotation now. Attributing a canary's behavior to the stable
-      // version (or the reverse) would corrupt every downstream comparison, so
-      // what matters is that the served-version field is the resolver's, not
-      // the caller's. It is a column the request body cannot address.
+      // `agent_version` in the caller's bag is just an annotation: the served
+      // version is the resolver's, in a column the request body cannot address.
+      // Otherwise a canary's behavior would be attributed to the stable version.
       expect(res.status).toBe(502);
       const record = await authenticatedTestClient(userToken).get(
         `/api/v1/generations/${res.body.error.meta.generation_id}`

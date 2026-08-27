@@ -9,11 +9,9 @@ import {
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
-// API-request metering has no HTTP entry point of its own — the middleware
-// counts every project/api-key request in memory and a scheduler flushes the
-// counts to `api_request` usage events. We drive real requests with a
-// project-scoped key, flush directly (the sanctioned no-entry-point path), and
-// read the aggregated event back through GET /api/v1/usage/meters.
+// No HTTP entry point of its own: the middleware counts in memory and a
+// scheduler flushes. Real requests are driven, then flushed directly (the
+// sanctioned no-entry-point path) and read back through the meters listing.
 
 describe('Usage — API-request metering', () => {
   let userToken: string;

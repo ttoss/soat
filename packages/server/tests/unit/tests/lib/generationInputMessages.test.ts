@@ -1,13 +1,9 @@
 import { resolveGenerationInputMessages } from 'src/lib/generationInputMessages';
 
-// resolveGenerationInputMessages is a thin wrapper over resolveMessageContent:
-// it passes array content (raw AI SDK tool messages) through untouched and
-// delegates everything else. Its own branches (array passthrough + delegation)
-// are covered here without mocking. The document/tool_output resolution logic
-// it delegates to lives in messageContent.ts and is covered by
-// messageContent.test.ts; the one delegated branch not exercised there — a
-// missing document — is driven here for real (a nonexistent id makes the real
-// getDocument return null), so no src/** module is mocked.
+// A thin wrapper: array content passes through untouched, everything else
+// delegates to `resolveMessageContent` (covered in `messageContent.test.ts`).
+// The one delegated branch not exercised there — a missing document — is driven
+// here for real with a nonexistent id.
 describe('resolveGenerationInputMessages', () => {
   test('keeps string message content unchanged', async () => {
     const result = await resolveGenerationInputMessages({

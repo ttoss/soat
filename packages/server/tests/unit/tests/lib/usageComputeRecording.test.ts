@@ -1,16 +1,9 @@
 import { db } from 'src/db';
 import { recordComputeUsage } from 'src/lib/usageComputeRecording';
 
-// Compute metering is idempotent on `compute:{run}:node:{node}:attempt:{n}`, so
-// an at-least-once redelivery of the same node execution meters the node's
-// wall-clock seconds exactly once. Driving this through an entry point is not
-// possible: every REST/scheduler path meters a given (run, node, attempt) at
-// most once by construction, so the redelivery is tested directly against the
-// real DB (no mocks) per the `lib/` keep-list.
-//
-// The happy path is covered end-to-end through real orchestration runs in
-// `rest/usage.test.ts` ("compute metering (P4)"); this file covers only the
-// replay branch.
+// Only the replay branch — the happy path is covered through real runs in
+// `rest/usage.test.ts`. No entry point can drive it: every REST/scheduler path
+// meters a given (run, node, attempt) at most once by construction.
 describe('recordComputeUsage idempotency', () => {
   let projectId: number;
   let runPublicId: string;

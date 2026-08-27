@@ -117,11 +117,9 @@ describe('projectTranscriptSteps', () => {
   });
 
   test('ignores the getter-backed fields a stored step never carries', () => {
-    // The #1012 failure mode, as a regression guard. `text`, `toolCalls` and
-    // `toolResults` are prototype getters on DefaultStepResult, so they are
-    // absent from every real trace on disk. A projection that reads them
-    // typechecks, passes against live SDK objects, and returns nothing for
-    // every stored trace — so reading them here must have no effect.
+    // `text`, `toolCalls` and `toolResults` are prototype getters, absent from
+    // every stored trace. A projection reading them typechecks and passes
+    // against live SDK objects while returning nothing for real data (#1012).
     const steps = [
       {
         finishReason: 'stop',

@@ -1,12 +1,8 @@
 import { db } from 'src/db';
 import { resolveToolIdsToNames } from 'src/lib/agentToolSelection';
 
-// `resolveToolIdsToNames` is the id->name lookup `buildPrepareStep` uses to
-// translate a step rule's persisted `active_tool_ids` into the tool names the
-// AI SDK's `activeTools` option expects (#809). The generation-flow tests
-// (`agentGenerationHelpers.test.ts`, `agentNonStreamGeneration.test.ts`) stub
-// this function out to avoid a DB round trip per prepareStep case, so it is
-// exercised for real here: a thin DB query with a small input space.
+// The generation-flow tests stub this out to avoid a DB round trip per
+// prepareStep case, so it is exercised for real here (#809).
 
 describe('resolveToolIdsToNames', () => {
   let projectId: number;
