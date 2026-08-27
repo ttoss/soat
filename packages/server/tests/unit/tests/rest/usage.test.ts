@@ -146,7 +146,11 @@ describe('Usage', () => {
     // exists for.
     const actorRes = await authenticatedTestClient(userToken)
       .post('/api/v1/actors')
-      .send({ project_id: projectId, name: 'Usage End User' });
+      .send({
+        project_id: projectId,
+        name: 'Usage End User',
+        tags: { plan: 'pro', region: 'eu' },
+      });
     expect(actorRes.status).toBe(201);
     actorId = actorRes.body.id;
 
@@ -350,6 +354,7 @@ describe('Usage', () => {
       const event = response.body.data[0];
       expect(event.actor_id).toBe(actorId);
       expect(event.session_id).toBe(sessionId);
+      expect(event.tags).toEqual({ plan: 'pro', region: 'eu' });
     });
 
     test('a generation outside a session has null actor_id and session_id', async () => {
