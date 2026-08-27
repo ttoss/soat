@@ -1,3 +1,11 @@
+---
+paths:
+  - "packages/server/**"
+  - "packages/postgresdb/**"
+  - "packages/sdk/**"
+  - "packages/cli/**"
+---
+
 # Case Convention
 
 The wire is **snake_case**. Internal TypeScript is **camelCase**. A lib mapper

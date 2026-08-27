@@ -8,15 +8,10 @@
 #   SOAT_BASE_URL   Server base URL (required)
 #   VERBOSE         Set to 1 for verbose output
 #
-# Special comment annotations in the tutorial markdown (inline after commands):
-#   # → 403         Expect a non-zero exit (the number is the HTTP status code).
-#                   The command is run; a zero exit is treated as an error.
-#   # → ignore      Run the command but ignore its exit code entirely.
-#   # → retry N     Re-run until it exits 0, up to N attempts, 1s apart. Prints
-#                   the elapsed wall-clock, since N attempts is not N seconds —
-#                   each also pays a CLI round trip. For steps slow to converge,
-#                   not steps whose outcome an LLM decides; make those
-#                   deterministic instead.
+# Command annotations in the tutorial markdown — `# → 403` / `# → expect-fail`
+# (non-zero exit required), `# → ignore`, `# → retry N` — are specified in
+# .claude/rules/tests.md (semantics, placement, budgeting) and pinned by
+# tests/harness/tutorialsRetryAnnotation.test.mjs.
 #
 # Non-interactive profile handling: "soat login-user" output is captured and its
 # token written to a profile file directly, so a later "soat configure" line is
