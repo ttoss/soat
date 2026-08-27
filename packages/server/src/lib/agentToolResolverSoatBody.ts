@@ -8,10 +8,9 @@ import { filterToolContext } from './toolContext';
  * body assembly with no outbound I/O of its own.
  */
 
-// A `soat` action that accepts `tool_context` propagates the bag to whatever it
-// starts — a nested generation, session or run — so the tool's allowlist applies
-// here too, not only to the outbound headers. Leaving this unfiltered would make
-// the allowlist advisory on the one path that carries context furthest.
+// A `soat` action propagates the bag to whatever it starts, so the allowlist
+// applies here too — unfiltered, it would be advisory on the one path that
+// carries context furthest.
 const withToolContext = (args: {
   body: Record<string, unknown>;
   toolContext?: Record<string, string>;

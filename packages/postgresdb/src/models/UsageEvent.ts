@@ -139,13 +139,10 @@ export class UsageEvent extends Model {
   )
   declare generation: Generation | null;
 
-  // End-user attribution: the actor the metered occurrence was produced for and
-  // the session it ran in, copied from the generation at write time (the same
-  // freeze-at-write rule as `cost_usd`). Both null for work with no end user
-  // behind it — orchestration runs, triggers, direct API generations. SET NULL
-  // on delete so removing an actor or session never blocks on, or silently
-  // rewrites, the historical spend attributed to it: the row survives with a
-  // null dimension rather than disappearing from the project's totals.
+  // Copied from the generation at write time, the same freeze-at-write rule as
+  // `cost_usd`. SET NULL on delete so removing an actor or session never blocks
+  // on historical spend — the row survives with a null dimension rather than
+  // disappearing from the project's totals.
   @ForeignKey(() => {
     return Actor;
   })
@@ -190,10 +187,9 @@ export class UsageEvent extends Model {
   )
   declare trace: Trace | null;
 
-  // The specific AI provider instance billed. Correlates the event to the
-  // price book (a project may have several providers with the same slug).
-  // SET NULL on delete so an old event never blocks provider removal; the
-  // denormalized `provider`/`model` below preserve the as-billed receipt.
+  // Correlates the event to the price book — a project may have several
+  // providers with the same slug. SET NULL on delete so an old event never
+  // blocks provider removal; `provider`/`model` below keep the as-billed SKU.
   @ForeignKey(() => {
     return AiProvider;
   })
@@ -208,9 +204,8 @@ export class UsageEvent extends Model {
   )
   declare aiProvider: AiProvider | null;
 
-  // Public id of the trigger firing that initiated the occurrence (agent-target
-  // triggers). A denormalized as-billed snapshot rather than an FK — it arrives
-  // via generation metadata and must survive trigger deletion. Null otherwise.
+  // Denormalized rather than an FK: it arrives via generation metadata and must
+  // survive trigger deletion.
   @Column({ type: DataType.STRING, allowNull: true })
   declare triggerId: string | null;
 
@@ -219,13 +214,9 @@ export class UsageEvent extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare actionId: string | null;
 
-  // The workload that produced the spend. For a generation-backed event: `eval`
-  // (an eval run's item generations) or null (ordinary agent traffic, already
-  // identified by `generation_id` / `agent_id`). For a generation-less
-  // completion it names the path — `chat`, `memory_extraction`,
-  // `memory_consolidation`, `eval_judge` — the same label its idempotency key
-  // carries. Verification spend is therefore `source IN ('eval','eval_judge')`
-  // (the evaluations module doc).
+  // `eval` or null for a generation-backed event; for a generation-less
+  // completion, the path (`chat`, `memory_extraction`, …) its idempotency key
+  // already carries. Verification spend is `source IN ('eval','eval_judge')`.
   @Column({ type: DataType.STRING, allowNull: true })
   declare source: string | null;
 
@@ -234,19 +225,15 @@ export class UsageEvent extends Model {
   @Column({ type: DataType.STRING, allowNull: false })
   declare meterType: string;
 
-  // Denormalized as-billed SKU: the vendor slug (`openai`, or `soat` for
-  // platform meter types) and the billed unit — the model id for LLM calls,
-  // the platform unit (e.g. `compute-second`) otherwise. Retained even if the AI
-  // provider is later deleted so historical receipts stay accurate.
+  // As-billed SKU, retained even if the provider is later deleted so historical
+  // receipts stay accurate.
   @Column({ type: DataType.STRING, allowNull: false })
   declare provider: string;
 
   @Column({ type: DataType.STRING, allowNull: false })
   declare model: string;
 
-  // Total cost in USD: the sum of the priced component costs, frozen at write
-  // time. Null when no component was priced (usage captured, not yet priced) —
-  // never "free".
+  // Frozen at write time. Null means "captured, not yet priced" — never free.
   @Column({ type: DataType.DECIMAL, allowNull: true })
   declare costUsd: string | null;
 

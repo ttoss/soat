@@ -27,12 +27,9 @@ const log = createDebug('soat:orchestrations');
  */
 const describeThrown = (error: unknown): string => {
   if (error instanceof Error) {
-    // `fetch` (and other network/runtime errors) throw a generic wrapper —
-    // e.g. `TypeError: fetch failed` — with the actual reason (DNS failure,
-    // connection refused, protocol mismatch, …) only on `.cause`. Dropping it
-    // is what made ttoss/soat#820 unreproducible: a tool-node HTTP dispatch
-    // failure recorded only "fetch failed" on the run, with nothing to
-    // distinguish a plain-HTTP host issue from a timeout or a bad DNS entry.
+    // `fetch` throws a generic `TypeError: fetch failed` with the real reason
+    // only on `.cause`. Dropping it is what made #820 unreproducible — nothing
+    // distinguished a bad host from a timeout or a DNS failure.
     if (error.cause !== undefined) {
       const causeMessage =
         error.cause instanceof Error
@@ -42,11 +39,9 @@ const describeThrown = (error: unknown): string => {
     }
     return error.message;
   }
-  // A non-Error throw is common from third-party evaluators — e.g.
-  // json-logic-engine throws a bare `{ type: 'Unknown Operator' }` object for
-  // an unrecognized operator (such as a multi-key object used as a
-  // `map`/`filter` mapper). `String(obj)` collapses that to the useless
-  // "[object Object]", so serialize the value to preserve the actual cause.
+  // Third-party evaluators throw non-Errors — json-logic-engine throws a bare
+  // `{ type: 'Unknown Operator' }` — which `String(obj)` would collapse to
+  // "[object Object]".
   if (typeof error === 'object' && error !== null) {
     try {
       const json = JSON.stringify(error);
@@ -294,10 +289,8 @@ const runNodeAndRecord = async (
     projectId: ctx.runRecord.projectId as number,
     runPublicId: ctx.runRecord.publicId as string,
     triggerId: ctx.runRecord.triggerId ?? undefined,
-    // Read off the run row, exactly like `triggerId` above, so every drive of
-    // the run — the inline one, a worker claiming a queued run, a wake from
-    // `sleeping`, a human/approval resume, a redrive after a crash — carries the
-    // same context without any of them having to thread it (#945).
+    // Read off the run row like `triggerId` above, so every drive of the run
+    // carries the same context without having to thread it (#945).
     toolContext: ctx.runRecord.toolContext ?? undefined,
     traceId: ctx.traceId,
     authHeader: ctx.authHeader,

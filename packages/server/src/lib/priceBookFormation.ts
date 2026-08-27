@@ -1,10 +1,7 @@
-// Formation-managed project prices — the write path behind the `project_price`
-// formation resource. A formation owns a single project + provider-slug price
-// row declaratively. Unlike the REST/admin paths, `effective_from` is not
-// restricted to the future — the formation is the source of truth and its
-// deploy is idempotent — and it defaults to deploy time so a freshly deployed
-// price is live immediately. Already-recorded costs are safe regardless: usage
-// components snapshot the charged `unit_price` and `cost_usd` at record time.
+// Unlike the REST/admin paths, `effective_from` is not restricted to the future
+// — the formation is the source of truth and its deploy is idempotent — and
+// defaults to deploy time so a freshly deployed price is live immediately.
+// Already-recorded costs are safe: usage components snapshot what was charged.
 
 import createDebug from 'debug';
 

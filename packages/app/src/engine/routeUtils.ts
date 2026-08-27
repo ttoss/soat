@@ -74,10 +74,8 @@ export const viewToPath = (
   return appPath;
 };
 
-// The board is a view over a resource's detail path: `/app/v1/workflows/{id}/board`
-// resolves to that resource's detail GET, rendered in board mode. Generic over
-// any module with a detail route (the BoardView decides whether the resource is
-// actually board-shaped).
+// A view over a resource's detail GET, rendered in board mode. Generic over any
+// module with a detail route — BoardView decides whether it is board-shaped.
 const findBoardViewForPath = (
   apiPath: string,
   modules: ModuleInfo[]
@@ -167,10 +165,9 @@ const findViewFromSpecPath = (
     };
   }
 
-  // No GET on this path: a POST/PUT/PATCH/DELETE here is a standalone action.
-  // Without covering PUT/PATCH/DELETE, action URLs like
-  // /app/v1/users/{id}/policies resolve to a null view and drop the user out
-  // of the page.
+  // A POST/PUT/PATCH/DELETE with no GET is a standalone action. Without
+  // covering all four verbs, such URLs resolve to a null view and drop the user
+  // out of the page.
   for (const method of ACTION_METHODS) {
     const op = pathItem[method];
     if (op) {

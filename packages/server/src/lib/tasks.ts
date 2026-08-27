@@ -227,10 +227,9 @@ const findInitialState = (states: WorkflowState[]): WorkflowState => {
   return initial;
 };
 
-// In-flight on_enter automations. Dispatch is fire-and-forget in production
-// (nothing awaits it), but this lets callers that need determinism — tests, a
-// graceful shutdown — drain the trailing async work via `flushTaskAutomations`
-// rather than leaving DB writes in flight past teardown.
+// Dispatch is fire-and-forget, but this lets callers needing determinism —
+// tests, a graceful shutdown — drain the trailing writes via
+// `flushTaskAutomations` rather than leaving them in flight past teardown.
 const pendingAutomations = new Set<Promise<void>>();
 
 /**
@@ -249,10 +248,8 @@ export const dispatchOnEnter = (args: {
   taskPublicId: string;
   projectId: number;
   state: WorkflowState;
-  // The identity the dispatch runs as, whichever kind it is. A task dispatch is
-  // request-less — a run is always durable (never `wait`), and an agent
-  // generation is fire-and-forget — so without one its `soat` tool nodes and
-  // tools have no credential; see `orchestrationRunToken.ts`.
+  // A task dispatch is request-less, so without this its `soat` tool nodes and
+  // tools have no credential.
   principal?: RequestPrincipal;
 }): void => {
   if (!args.state.onEnter || args.state.kind === 'human') return;
@@ -465,12 +462,9 @@ export const updateTask = async (args: {
   }
 
   if (args.payload !== undefined) {
-    // PATCH semantics: shallow-merge the patch over the existing payload so a
-    // caller setting one key (e.g. `approved`) does not discard the others
-    // (including any `payload_writes` the workflow declared). The payload is
-    // caller-owned; the automation result lives in the `last_result` column,
-    // which no patch can reach (#846). The merged result is what gets
-    // validated and persisted.
+    // PATCH semantics: a caller setting one key must not discard the others,
+    // including any `payload_writes` the workflow declared. The automation
+    // result lives in `last_result`, which no patch can reach (#846).
     const merged = {
       ...((task.payload as Record<string, unknown> | null) ?? {}),
       ...args.payload,

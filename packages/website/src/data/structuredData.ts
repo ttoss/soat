@@ -25,10 +25,8 @@ export const HEAD_TAGS: Config['headTags'] = [
     },
   },
   {
-    // Docusaurus emits og:title, og:description, og:image and the canonical
-    // link on its own; og:type is the one entity-resolution signal it leaves
-    // out, so it has to be declared here. `checkAgentSurfaces` fails the
-    // build if it stops being emitted.
+    // og:type is the one entity-resolution signal Docusaurus does not emit
+    // itself. `checkAgentSurfaces` fails the build if it stops being emitted.
     tagName: 'meta',
     attributes: {
       property: 'og:type',
@@ -36,10 +34,9 @@ export const HEAD_TAGS: Config['headTags'] = [
     },
   },
   {
-    // Brand identity, so a search for "SOAT" can be tied to this domain
-    // rather than to one of the many unrelated things spelled the same way.
-    // `alternateName` carries the qualified forms people actually type, and
-    // `sameAs` the profiles that corroborate the name.
+    // Ties a search for "SOAT" to this domain rather than the many unrelated
+    // things spelled the same way: `alternateName` carries the qualified forms
+    // people type, `sameAs` the profiles that corroborate the name.
     tagName: 'script',
     attributes: { type: 'application/ld+json' },
     innerHTML: JSON.stringify({
@@ -75,11 +72,9 @@ export const HEAD_TAGS: Config['headTags'] = [
         'https://github.com/ttoss/soat',
         'https://www.npmjs.com/org/soat',
       ],
-      // Every support channel is a public URL, not an address or a phone
-      // number: SOAT is self-hosted software developed in the open, so there
-      // is no support desk to route a caller to. `url` is the field
-      // schema.org provides for exactly that, and it keeps the structured
-      // answer identical to the one /contact gives a reader.
+      // A public URL rather than an address or phone number: SOAT is
+      // self-hosted software developed in the open, with no support desk to
+      // route a caller to.
       contactPoint: [
         {
           '@type': 'ContactPoint',

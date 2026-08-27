@@ -123,11 +123,9 @@ const validateAwsSigV4Auth = (args: {
     field: 'secret_access_key',
   });
 
-  // SigV4 signs a hash of the exact request payload, but in multipart mode
-  // `fetch` generates the body and its boundary itself — the bytes that go on
-  // the wire are not knowable at signing time, so any signature produced here
-  // would be rejected upstream. Reject the combination instead of shipping a
-  // request that always fails with an opaque 403.
+  // SigV4 signs a hash of the exact payload, but in multipart mode `fetch`
+  // generates the body and boundary itself — the wire bytes are unknowable at
+  // signing time, so the signature is always rejected upstream.
   if (args.bodyMode === 'multipart') {
     throw new DomainError(
       'VALIDATION_FAILED',
@@ -195,10 +193,9 @@ export const validateExecuteAuth = (args: { execute: unknown }): void => {
     return;
   }
 
-  // Mirrors `parseHttpExecuteConfig`'s `bodyMode ?? body_mode` precedence
-  // exactly. Reading only the wire spelling here would let an authored
-  // `bodyMode: 'multipart'` pass validation and then be honored at execution,
-  // producing a signature over a payload hash that does not match the body.
+  // Mirrors `parseHttpExecuteConfig`'s precedence exactly: reading only the wire
+  // spelling would let an authored `bodyMode: 'multipart'` pass validation and
+  // then be honored, signing a payload hash that does not match the body.
   const rawBodyMode = args.execute.bodyMode ?? args.execute.body_mode;
 
   validateHttpToolAuth({

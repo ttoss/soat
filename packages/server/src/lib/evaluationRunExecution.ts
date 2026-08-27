@@ -188,11 +188,9 @@ export const runEvalItem = async (args: {
       ...buildScorerRunners({ projectId: args.projectId }),
     });
   } catch (error) {
-    // A scorer that could not produce a verdict (a judge call failing, a
-    // malformed judge reply) is an item error — the agent's answer was never
-    // graded, so recording 0 would fabricate a regression. The generation and
-    // its output are both kept: they happened and cost money, and the output is
-    // what the failed scorer was looking at.
+    // An ungraded answer is an item error, not a 0 — recording 0 would
+    // fabricate a regression. The generation and output are kept: they happened
+    // and cost money, and the output is what the failed scorer was looking at.
     return erroredOutcome(
       `Scoring failed: ${errorMessage(error)}`,
       generationDbId,

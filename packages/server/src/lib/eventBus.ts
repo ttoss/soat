@@ -215,11 +215,9 @@ const emitEnvelope = (args: {
       projectPublicId,
       resourceType: args.resourceType,
       resourceId: args.resourceId,
-      // The payload is a mapper's own return type. TypeScript will not assign
-      // such a type to an index signature even though every key is a string;
-      // asserting it here, once, is what keeps the 38 call sites free of the
-      // `as unknown as Record<string, unknown>` double casts they used to carry
-      // (forbidden by the repo's type-safety rule). Nothing reads a key of it.
+      // TypeScript will not assign a mapper's return type to an index
+      // signature even though every key is a string. Asserted once here so the
+      // call sites carry no `as unknown` double casts; nothing reads a key.
       data: args.data as Record<string, unknown>,
       timestamp: new Date().toISOString(),
       causationChain,
@@ -239,10 +237,9 @@ const emitEnvelope = (args: {
   })
     .then(emit)
     .catch((error: unknown) => {
-      // Only reachable once the retries are spent. The event is lost — there is
-      // no envelope to emit without the public id, since it is what builds the
-      // SRN a webhook policy is evaluated against — but it is now counted and
-      // printed rather than dropped on a `debug` line nobody sees in production.
+      // Reachable only once the retries are spent. The event is genuinely lost
+      // — the public id is what builds the SRN a webhook policy evaluates
+      // against — so it is counted and printed, not dropped on a `debug` line.
       recordDroppedEvent({
         stage: 'project_lookup',
         type: args.type,

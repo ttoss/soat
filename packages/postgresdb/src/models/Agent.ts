@@ -84,9 +84,8 @@ export class Agent extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare model: string | null;
 
-  // The agent↔tool attachment: array of binding objects `{ toolId | tool }`.
-  // The pre-`toolBindings` `toolIds`/`tools` columns are gone; a row that held
-  // only those reads as having no tools.
+  // The pre-`toolBindings` `toolIds`/`tools` columns are gone, so a row that
+  // held only those reads as having no tools.
   @Column({ type: DataType.JSONB, allowNull: true })
   declare toolBindings: object[] | null;
 
@@ -123,9 +122,7 @@ export class Agent extends Model {
   @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
   declare singleSessionPerActor: boolean;
 
-  // Public IDs of guardrails attached at the agent scope. A guardrail here
-  // governs every tool call the agent makes, across all its bindings
-  // (guardrails.md — Attachment).
+  // Governs every tool call the agent makes, across all its bindings.
   @Column({ type: DataType.JSONB, allowNull: true })
   declare guardrailIds: string[] | null;
 

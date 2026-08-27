@@ -73,10 +73,9 @@ const sweepProject = async (args: {
     if (due.length === 0) break;
 
     for (const trace of due) {
-      // Scoped to this project so a purge can never reach across projects, and
-      // shared with the REST route so both paths produce identical audit
-      // entries, events and `content_redacted_at` semantics — there is exactly
-      // one purge implementation (#837).
+      // Shared with the REST route so both paths produce identical audit
+      // entries, events and redaction semantics — one purge implementation
+      // (#837), scoped so it can never reach across projects.
       await purgeTraceContent({
         traceId: trace.publicId,
         projectIds: [args.projectDbId],

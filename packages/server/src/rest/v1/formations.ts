@@ -38,10 +38,8 @@ const missingParamsToErrors = (
   });
 };
 
-// The formation-level `metadata` field is a static annotation bag, not a
-// substitution site (only `template.metadata` resolves at deploy). Reject any
-// `sub`/`param`/`ref` expression here so it fails loudly instead of being
-// stored verbatim and silently never resolved (F-16).
+// Only `template.metadata` resolves at deploy, so an expression here is
+// rejected loudly instead of being stored verbatim and never resolved.
 const assertStaticMetadata = (metadata: unknown): void => {
   if (metadata === undefined || metadata === null) return;
   const violations = detectStaticMetadataViolations(metadata);

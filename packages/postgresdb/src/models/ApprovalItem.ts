@@ -30,9 +30,7 @@ import { User } from './User';
       name: 'approval_items_project_id_status_expires_at_idx',
       fields: ['project_id', 'status', 'expires_at'],
     },
-    // A tool-call producer must not enqueue the same proposal twice while one
-    // is still pending — the partial unique index makes that a DB-level
-    // guarantee (used from Phase 2).
+    // Makes "no duplicate proposal while one is pending" a DB-level guarantee.
     {
       unique: true,
       fields: ['dedup_key'],
@@ -82,11 +80,9 @@ export class ApprovalItem extends Model {
   })
   declare status: 'pending' | 'approved' | 'rejected' | 'expired';
 
-  // Frozen at emit time: `{ toolId, arguments }`. Tool-call items also freeze
-  // the resolved `action` (the soat/mcp action name) so the platform can execute
-  // the exact proposed call at resolution time. Null for producers whose proposal
-  // is not a tool call (a `task_transition` item gates a workflow transition,
-  // named by `taskTransition`, not a tool).
+  // Frozen at emit time, including the resolved `action`, so the platform can
+  // execute the exact proposed call at resolution time. Null for a producer
+  // whose proposal is not a tool call.
   @Column({ type: DataType.JSONB, allowNull: true })
   declare proposedAction: {
     toolId: string;
@@ -111,9 +107,8 @@ export class ApprovalItem extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare dedupKey: string | null;
 
-  // ── Provenance (producer-dependent) ──────────────────────────────────────
-  // The originating orchestration run (node producer). Held as an FK so
-  // resolution can re-enqueue the parked run; the mapper exposes its publicId.
+  // An FK so resolution can re-enqueue the parked run; the mapper exposes its
+  // publicId.
   @ForeignKey(() => {
     return OrchestrationRun;
   })
@@ -142,8 +137,7 @@ export class ApprovalItem extends Model {
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare agentId: string | null;
 
-  // Set on `task_transition` items (Phase 3): the gated task's public id and the
-  // transition name to fire on approval. Resolution re-fires it through
+  // On `task_transition` items, the transition resolution re-fires through
   // `transitionTask` as the `approval` principal.
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare taskId: string | null;
@@ -154,11 +148,8 @@ export class ApprovalItem extends Model {
   @Column({ type: DataType.STRING(64), allowNull: true })
   declare policyVersion: string | null;
 
-  // Set on a re-proposal admitted after an earlier item with the same
-  // `dedup_key` was *rejected* (approvals decision 2): the prior rejected item's
-  // public id, so approvers see the recurrence. Null on a first proposal or a
-  // pending-dedup return. Held as the referenced item's publicId (a soft link,
-  // like the other provenance ids) rather than an FK.
+  // The prior rejected item with this `dedup_key`, so approvers see the
+  // recurrence. A soft link, like the other provenance ids.
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare previousItemId: string | null;
 

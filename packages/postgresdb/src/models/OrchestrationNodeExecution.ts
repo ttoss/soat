@@ -37,19 +37,15 @@ export class OrchestrationNodeExecution extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare nodeType: string | null;
 
-  // 1-based attempt number this execution record is for. A node with a retry
-  // policy produces one record per attempt: failed attempts 1..N-1 followed by a
-  // final `completed` (or a final `failed` when retries are exhausted).
+  // A node with a retry policy produces one record per attempt.
   @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 1 })
   declare attempt: number;
 
-  // Run-scoped idempotency key: `{orchestration_run_id}:{node_id}:{attempt}` where `attempt`
-  // is the node retry attempt (this row's `attempt`), NOT the queue delivery
-  // counter. Written `running` before a side-effecting node dispatches, then
-  // updated in place. A redelivered task that finds a `completed` row for the
-  // same key reuses its stored `output` instead of re-executing. NULL for pure
-  // nodes (condition, transform, delay, human, approval, webhook), which have no
-  // external side effect and keep record-after-execution behavior.
+  // `{run}:{node}:{attempt}`, where `attempt` is the node retry attempt, NOT
+  // the queue delivery counter. Written `running` before a side-effecting node
+  // dispatches, so a redelivered task finding a `completed` row reuses its
+  // stored `output` instead of re-executing. NULL for pure nodes, which have no
+  // side effect to guard.
   @Column({ type: DataType.STRING, allowNull: true })
   declare idempotencyKey: string | null;
 

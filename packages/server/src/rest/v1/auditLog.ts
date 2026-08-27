@@ -13,10 +13,9 @@ import { requireAuth, resolveReadProjectIds } from './helpers';
 
 const auditLogRouter = new Router<Context>();
 
-// Absent is not the same as invalid: a filter the caller never supplied is
-// simply not applied (`undefined`), but one supplied and unparseable throws
-// rather than being silently dropped — an unparseable `from`/`to` must never
-// widen a query into "every entry" without the caller knowing (audit-log#691).
+// Absent is not invalid: an unsupplied filter is simply not applied, but a
+// supplied unparseable one throws — it must never widen a query into "every
+// entry" without the caller knowing (#691).
 const parseDateParam = (args: {
   value: unknown;
   paramName: string;

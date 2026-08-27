@@ -73,13 +73,9 @@ const fileGuardrailTripwireException = async (
   const agentId = asStringOrNull(data.agentId);
   const toolName = asStringOrNull(data.toolName) ?? event.resourceId;
   const guardrailVersion = asStringOrNull(data.guardrailVersion);
-  // Fold repeated trips of the same guardrail on the same call site (a tool
-  // node that trips every attempt, an agent looping) into one open item.
-  // The run path keys on `orchestrationRunId:nodeId`, which is stable across retries of the
-  // same node. The non-run path must key on the call site (`agentId:toolName`)
-  // rather than `generationId` — every generation gets a fresh id, so keying
-  // on it would make dedup impossible for the exact "agent looping" case this
-  // fold exists to handle.
+  // Folds repeated trips on the same call site into one open item. The non-run
+  // path must key on `agentId:toolName`, not `generationId` — a fresh id per
+  // generation would make dedup impossible for the looping case this exists for.
   const scope = orchestrationRunId
     ? `${orchestrationRunId}:${nodeId ?? ''}`
     : `${agentId ?? ''}:${toolName}`;

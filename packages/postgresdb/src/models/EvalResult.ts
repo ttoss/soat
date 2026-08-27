@@ -33,9 +33,9 @@ import { Generation } from './Generation';
       fields: ['public_id'],
     },
     { name: 'eval_results_eval_run_id_idx', fields: ['eval_run_id'] },
-    // One result per item per run. Populated at insert time, so the later
-    // `SET NULL` cannot collide (PostgreSQL unique indexes ignore NULLs), and
-    // a redelivered item task in Phase 2 is a no-op rather than a duplicate.
+    // One result per item per run, so a redelivered item task is a no-op
+    // rather than a duplicate. Populated at insert time, so the later
+    // `SET NULL` cannot collide.
     {
       name: 'eval_results_eval_run_id_dataset_item_id_unique',
       unique: true,

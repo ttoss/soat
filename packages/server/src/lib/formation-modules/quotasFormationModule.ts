@@ -21,10 +21,9 @@ export const quotasFormationModule = defineFormationModule({
     });
   },
 
-  // Only `limit` and `mode` are mutable. `scope`/`metric`/`window` are passed
-  // through rather than dropped so `updateQuota` can reject a changed value:
-  // silently applying just the mutable fields would leave the template and the
-  // enforced cap divergent with the operation still reporting success.
+  // The immutable fields are passed through rather than dropped so
+  // `updateQuota` can reject a changed value — applying only the mutable ones
+  // would leave template and enforced cap divergent, reporting success.
   update: async ({ properties, physicalResourceId }) => {
     await updateQuota({
       id: physicalResourceId,

@@ -149,10 +149,9 @@ export const assertValidToolContextKeys = (
  * tool mysteriously not receiving its credential at call time.
  */
 export const assertValidToolContextAllowlist = (
-  // `unknown` rather than `string[] | null`: both callers hand this straight
-  // from an untyped request body or template property, and the check below is
-  // the thing that establishes the type. A cast at each call site would assert
-  // exactly what has not been verified yet.
+  // `unknown` because both callers pass an untyped body or template property
+  // and the check below is what establishes the type — a cast at the call site
+  // would assert exactly what is not yet verified.
   contextKeys?: unknown
 ): void => {
   if (contextKeys === undefined || contextKeys === null) return;

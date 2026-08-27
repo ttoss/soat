@@ -158,10 +158,8 @@ const parseFutureEffectiveFrom = (value: string, now: Date): Date => {
   return effectiveFrom;
 };
 
-// Core find-or-create keyed on (aiProviderId, projectId, provider, model,
-// component, effectiveFrom). Shared by every write path (global, per-provider,
-// per-project, and formation). Takes an already-resolved `effectiveFrom` so
-// each caller enforces its own timestamp policy.
+// Shared by every write path. Takes an already-resolved `effectiveFrom` so each
+// caller enforces its own timestamp policy.
 export const persistPriceRow = async (args: {
   aiProviderId: number | null;
   projectId: number | null;
@@ -210,10 +208,9 @@ export const persistPriceRow = async (args: {
   return row.id as number;
 };
 
-// Core price-row write shared by the global, per-provider, and per-project
-// REST paths. Past-effective prices are immutable: a recorded cost must always
-// be explainable by the row that produced it, so corrections ship as new
-// future-dated rows rather than edits to historical prices.
+// Past-effective prices are immutable: a recorded cost must always be
+// explainable by the row that produced it, so corrections ship as new
+// future-dated rows rather than edits.
 const writePriceRow = async (args: {
   aiProviderId: number | null;
   projectId: number | null;

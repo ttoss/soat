@@ -315,10 +315,9 @@ export const getGenerationTranscript = async (args: {
     stop_reason: generation.stopReason,
     started_at: generation.startedAt,
     completed_at: generation.completedAt,
-    // A counter, not `steps.length`: it is part of the skeleton a purge
-    // preserves, so it still reports the size of a turn whose content is gone.
-    // This turn's own count, not the trace's — a trace grouping several
-    // generations would otherwise report every one of them here (#1024).
+    // A counter, not `steps.length`: part of the skeleton a purge preserves, so
+    // it still reports the size of a turn whose content is gone. This turn's
+    // own count — a trace grouping several would report all of them (#1024).
     step_count: generationStepCount(generation),
     input,
     steps,

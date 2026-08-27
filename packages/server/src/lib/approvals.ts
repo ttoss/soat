@@ -210,10 +210,8 @@ const findPendingByDedupKey = async (args: {
   });
 };
 
-// Returns the most recent *rejected* item matching a dedup key in a project, or
-// null. Feeds §3 decision 2: a re-proposal after a rejection is admitted (not
-// suppressed) and linked to that prior rejected item via `previous_item_id`, so
-// approvers see the recurrence and learned-rules keeps the rejection signal.
+// A re-proposal after a rejection is admitted, not suppressed, and linked to
+// the prior item so approvers see the recurrence.
 const findLatestRejectedByDedupKey = async (args: {
   projectId: number;
   dedupKey: string;
@@ -228,11 +226,8 @@ const findLatestRejectedByDedupKey = async (args: {
   });
 };
 
-// Resolves the `previous_item_id` to stamp on a newly filed item (§3 decision
-// 2): with no matching item still pending, a proposal identical to a *recently
-// rejected* one is admitted rather than suppressed and linked to that prior item
-// so approvers see the recurrence. Auto-linked only when the caller has a
-// `dedupKey` and did not already supply a `previousItemId`.
+// Auto-linked only when the caller has a `dedupKey` and supplied no
+// `previousItemId` of its own.
 const resolvePreviousItemId = async (
   args: EmitApprovalArgs
 ): Promise<string | null> => {
@@ -409,11 +404,7 @@ export const listApprovals = async (args: {
   });
 };
 
-// ── Recurrence view (G3) ────────────────────────────────────────────────────
-// A read-only rollup answering "what keeps coming back?" over the queue's own
-// columns. Exact-`dedup_key` grouping only: dedup already threads a re-proposal
-// to the item it recurs from (`previous_item_id`, decision 2), so a group is the
-// set of items sharing a `dedup_key`. Semantic clustering of *paraphrased*
+// Exact-`dedup_key` grouping only. Semantic clustering of paraphrased
 // corrections stays out of this deliberately deterministic module.
 
 /** Default status a recurrence group is built from — recurring *rejections*. */
@@ -511,11 +502,9 @@ export const listApprovalRecurrences = async (args: {
     return { data: [], total: 0, limit, offset };
   }
 
-  // Exact-key grouping in memory: only dedup-keyed items can recur, and the
-  // status filter (rejected by default) keeps the scanned set to a small subset
-  // of a project's queue — a governance-review surface, not a hot path. This
-  // avoids a GROUP BY + HAVING whose aggregate-alias ordering is brittle across
-  // pages, and keeps every value fully typed off the real model instances.
+  // In memory rather than a GROUP BY + HAVING, whose aggregate-alias ordering
+  // is brittle across pages. The status filter keeps the scanned set small —
+  // this is a governance-review surface, not a hot path.
   const items = await db.ApprovalItem.findAll({
     where: {
       projectId: args.projectIds,

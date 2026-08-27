@@ -327,10 +327,8 @@ export const createFile = async (args: {
   size?: number;
   metadata?: string;
 }) => {
-  // The full key (`path`) is built from `prefix` (directory, defaults to `/`)
-  // and `filename`. Storage backend is system-managed (see the active storage
-  // provider); a metadata-only record records the active backend's storageType
-  // with an empty storagePath, filled in when bytes are uploaded.
+  // A metadata-only record carries the active backend's storageType with an
+  // empty storagePath, filled in when bytes are uploaded.
   const normalizedPath = buildPath({
     prefix: args.prefix,
     filename: args.filename,

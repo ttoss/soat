@@ -74,9 +74,8 @@ export class UsageThreshold extends Model {
   @Column({ type: DataType.DECIMAL, allowNull: false })
   declare threshold: string;
 
-  // Set to the moment the threshold last fired; null until first fire. For
-  // `rolling_24h` a non-null value also marks the "fired" (disarmed) state,
-  // cleared when the windowed value drops below 90% of the threshold.
+  // For `rolling_24h`, a non-null value also marks the disarmed state, cleared
+  // once the windowed value drops below 90% of the threshold.
   @Column({ type: DataType.DATE, allowNull: true })
   declare lastFiredAt: Date | null;
 

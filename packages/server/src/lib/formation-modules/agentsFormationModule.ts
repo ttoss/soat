@@ -67,13 +67,9 @@ const pushModelBindingErrors = (args: {
   if (message) errors.push({ path: basePath, message });
 };
 
-// ── tool_bindings ↔ template shape ───────────────────────────────────────
-//
-// Binding entries are stored camelCase (internal convention) but declared and
-// read snake_case in templates. Only `tool_id` entries are supported in
-// formations (no inline `tool` — declare a tool resource instead), so the
-// conversion enumerates known keys. Tool-call gating is owned by guardrails,
-// which attach through `guardrail_ids`, not through the binding.
+// Bindings are stored camelCase but authored snake_case. Only `tool_id`
+// entries are supported in formations — declare a tool resource instead of an
+// inline `tool` — so the conversion enumerates known keys.
 
 const parseFormationToolBindings = (
   value: unknown
@@ -170,11 +166,9 @@ export const agentsFormationModule = defineFormationModule({
   resourceType: 'agent',
 
   extraChecks: ({ properties, basePath, forUpdate, errors }) => {
-    // A `boundary_policy` gates the agent's SOAT-native tool actions, so its
-    // action strings must be real and enforceable — otherwise a mis-named `Deny`
-    // silently no-ops and the boundary fails open. Validate the action names here
-    // (only when it is shaped as a policy object); structural validation is
-    // applied by the boundary evaluator at generation time.
+    // A mis-named `Deny` would silently no-op and fail the boundary open, so
+    // the action names are checked here; the evaluator handles structure at
+    // generation time.
     const boundaryPolicy = properties.boundary_policy;
     if (boundaryPolicy != null && isObjectRecord(boundaryPolicy)) {
       for (const message of validatePolicyActions(boundaryPolicy).errors) {
@@ -199,10 +193,8 @@ export const agentsFormationModule = defineFormationModule({
       id: physicalResourceId,
       createdByUserId:
         await resolveApplyingPrincipalForAgent(physicalResourceId),
-      // Same semantics as a REST PATCH: an explicit `null` clears the binding,
-      // an undeclared field leaves it alone. Switching an agent to a route
-      // therefore declares `model_route_id` together with
-      // `ai_provider_id: null`.
+      // REST PATCH semantics: an explicit `null` clears the binding, an
+      // undeclared field leaves it alone.
       aiProviderId: toNullableString(properties.ai_provider_id),
       modelRouteId: toNullableString(properties.model_route_id),
       name: toNullableString(properties.name),
@@ -231,12 +223,9 @@ export const agentsFormationModule = defineFormationModule({
     return deleteAgent({ id: physicalResourceId });
   },
 
-  // An agent that has ever generated is the one teardown blocker an operator
-  // actually hits (an eval run is *defined* as one generation per dataset item),
-  // and the platform deliberately never force-deletes it on their behalf. Left
-  // to be discovered by the delete itself, that refusal lands after the dataset,
-  // its items and the eval are already gone — so the stack the agent belongs to
-  // is destroyed around it. Answering here fails the teardown intact instead.
+  // Checked up front rather than left to the delete: that refusal would land
+  // after the dataset, its items and the eval are already gone, destroying the
+  // stack around the agent. Failing here leaves the teardown intact.
   deletionBlocker: ({ physicalResourceId }) => {
     return findAgentDeletionBlocker({ id: physicalResourceId });
   },

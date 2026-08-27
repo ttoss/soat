@@ -50,18 +50,15 @@ const setDispatchState = async (args: {
   await args.task.save();
 };
 
-// Transition failures that mean the matched rule could not be applied — the
-// automation principal was guard-rejected, or a concurrent move invalidated the
-// transition. Both must be surfaced, not swallowed, so the task is never left
-// silently parked as `completed` (PRD §6.3).
+// The matched rule could not be applied — guard-rejected, or invalidated by a
+// concurrent move. Surfaced rather than swallowed, so the task is never left
+// silently parked as `completed`.
 const REJECTION_CODES: ReadonlySet<string> = new Set([
   'TASK_GUARD_REJECTED',
   'TASK_TRANSITION_CONFLICT',
-  // The chain budget refusing a hop is the same class of outcome: the matched
-  // rule could not be applied. Routing it here is what makes the bound *visible*
-  // — otherwise it propagates to the fire-and-forget `.catch` in
-  // `dispatchOnEnter`, and the cycle would stop silently, which is barely better
-  // than looping (#885).
+  // Routed here to make the bound visible: otherwise it reaches the
+  // fire-and-forget `.catch` in `dispatchOnEnter` and the cycle stops silently,
+  // barely better than looping (#885).
   'TASK_AUTOMATION_CHAIN_LIMIT',
 ]);
 
@@ -149,10 +146,8 @@ const routeOnComplete = async (args: {
         toolId: args.toolId,
       });
     } catch (error) {
-      // A matched rule whose transition is guard-rejected (or invalidated by a
-      // concurrent move) would otherwise propagate up to the fire-and-forget
-      // `.catch` in dispatchOnEnter and leave the task looking `completed` with
-      // no signal. Surface it instead.
+      // Otherwise this reaches the fire-and-forget `.catch` in
+      // `dispatchOnEnter` and leaves the task looking `completed` with no signal.
       if (error instanceof DomainError && REJECTION_CODES.has(error.code)) {
         log(
           'routeOnComplete: transition=%s rejected (%s) task=%s',
@@ -272,10 +267,8 @@ const handleFailure = async (args: {
   }
 };
 
-// Atomically writes the dispatch completion (provenance, status, last_result,
-// and any declared `payload_writes`), unless the task moved or re-entered
-// since the dispatch started — the stale write is discarded rather than
-// clobbering the new state (#590).
+// Discarded rather than clobbering the new state if the task moved or
+// re-entered since the dispatch started (#590).
 const commitCompletion = async (args: {
   taskPublicId: string;
   stateName: string;

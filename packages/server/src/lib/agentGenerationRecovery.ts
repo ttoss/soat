@@ -96,11 +96,9 @@ const buildPendingFromState = async (args: {
   traceId: string;
   pendingState: PendingStateDb;
 }): Promise<PendingGeneration | undefined> => {
-  // A route-only agent has no pinned provider, so the resumption path has to
-  // resolve the route too — a client-tool continuation is the least-traveled
-  // consumer and would otherwise be the one place routing silently broke. An
-  // agent whose binding no longer resolves makes the pending generation
-  // unrecoverable, which the caller reports as a plain "not found".
+  // A route-only agent has no pinned provider, so the resumption path must
+  // resolve the route too — otherwise this least-traveled consumer is the one
+  // place routing silently breaks.
   const resolution = await resolveAgentModel(args.typedAgent);
   if (resolution.failure) return undefined;
 
@@ -112,10 +110,8 @@ const buildPendingFromState = async (args: {
     authHeader: args.authHeader,
     toolContext: args.pendingState.toolContext ?? undefined,
     remainingDepth: args.pendingState.remainingDepth ?? undefined,
-    // Trusted read: `pendingState.toolContext` is persisted AFTER the
-    // chokepoint pin in buildGenerationContext (#850), so a `sessionId` key
-    // here is always server-stamped — a caller-forged value never reaches the
-    // persisted state.
+    // Trusted: `pendingState.toolContext` is persisted after the chokepoint pin
+    // (#850), so a caller-forged value never reaches it.
     sessionId: args.pendingState.toolContext?.sessionId ?? null,
   });
 

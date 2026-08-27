@@ -186,11 +186,9 @@ const buildTypedProperty = (param: {
     };
   }
 
-  // A property the spec declares with neither a `type` nor alternatives accepts
-  // more than one shape — `tool_choice` is a string *or* an object. Guessing a
-  // single type here (the old behaviour guessed `string`) advertises a narrower
-  // contract than the REST API enforces, so the object form looks invalid. An
-  // absent `type` accepts any shape, including null, matching the spec.
+  // A property declared with no `type` accepts more than one shape
+  // (`tool_choice` is a string *or* an object). Guessing one advertises a
+  // narrower contract than REST enforces, making the object form look invalid.
   if (param.type === undefined) {
     return { description };
   }
@@ -269,10 +267,9 @@ export const buildInputSchema = (
     properties[param.name] = buildTypedProperty(param);
   }
 
-  // `required` is omitted rather than set to `undefined`: JSON has no
-  // `undefined`, so the key was never visible to clients anyway, and leaving
-  // explicit `undefined` on the in-memory schema only risks tripping the
-  // validator that compiles it at tool-registration time.
+  // Omitted rather than set to `undefined`: JSON has no `undefined`, so the key
+  // was never visible to clients, and an explicit one risks tripping the
+  // validator that compiles the schema at registration time.
   return {
     type: 'object',
     properties,
@@ -459,12 +456,10 @@ export const processOperation = (args: {
     path: buildPathFn(args.pathTemplate, pathParams),
     query: buildQueryFn(queryParams),
     body: buildBodyFn(bodyProps),
-    // `x-iam-action` is the explicit override, for an operation whose enforced
-    // action differs from the catalog's entry for its own id. Everything else
-    // resolves from the permission catalog — the same operationId→action map
-    // the route handlers enforce — so `boundary_policy` is evaluated against a
-    // name a policy author is allowed to write. Falling back to the tool's
-    // kebab-case name would leave a `Deny` matching nothing (#1070).
+    // Resolved from the same operationId→action catalog the route handlers
+    // enforce, so `boundary_policy` is evaluated against a name a policy author
+    // may write. Falling back to the kebab-case tool name left a `Deny`
+    // matching nothing (#1070). `x-iam-action` overrides per operation.
     iamAction:
       args.operation['x-iam-action'] ??
       getActionForOperation(args.operation.operationId),

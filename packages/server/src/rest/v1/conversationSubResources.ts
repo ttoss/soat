@@ -284,10 +284,9 @@ conversationSubResourcesRouter.post(
       throw new DomainError('FORBIDDEN', 'Forbidden');
     }
 
-    // Background by default; ?wait=true blocks until the generation settles.
-    // The agent is resolved first either way, so an unknown agent is still a
+    // The agent is resolved first either way, so an unknown one is still a
     // synchronous 404 rather than a failure the caller can only discover by
-    // polling the conversation.
+    // polling.
     if (ctx.query['wait'] !== 'true') {
       await resolveConversationAndAgent({
         conversationId: ctx.params.conversation_id,

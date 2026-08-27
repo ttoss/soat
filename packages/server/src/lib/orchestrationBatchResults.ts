@@ -60,10 +60,9 @@ const findFirstTraceId = (
   return null;
 };
 
-// Records a completed node's result into the run's shared structures: a
-// condition contributes its label (recorded as { label } in the nodes
-// namespace so a validated nodes.<conditionId> ref is readable at runtime);
-// every other node contributes its artifact plus its state_mapping writes.
+// A condition contributes its label, recorded under the nodes namespace so a
+// validated `nodes.<conditionId>` ref is readable at runtime; every other node
+// contributes its artifact plus its `state_mapping` writes.
 const recordCompletedNode = (args: {
   nodeId: string;
   nodeDefn: OrchestrationNode;
@@ -83,10 +82,9 @@ const recordCompletedNode = (args: {
     return;
   }
   if (execResult.kind === 'blocked') {
-    // A guardrail-blocked tool node records its refusal artifact AND seeds a
-    // branch label so `condition: 'blocked'`/'tripwire' edges route. It is
-    // treated as a decision node at advance time (see processNodeResultBatch)
-    // so unlabeled happy-path edges do not follow.
+    // The seeded branch label is what lets `blocked`/`tripwire` edges route.
+    // Treated as a decision node at advance time, so unlabeled happy-path edges
+    // do not follow.
     conditionLabels.set(nodeId, execResult.label);
     artifacts[nodeId] = execResult.artifact;
     writeNodeArtifact({ nodeId, artifact: execResult.artifact, state });
@@ -98,10 +96,8 @@ const recordCompletedNode = (args: {
   applyStateMapping(nodeDefn.stateMapping, execResult.artifact, state);
 };
 
-// Records a just-completed node's result and, when the run is still advancing,
-// activates its successors. A guardrail-`blocked` tool node advances as a
-// decision node (label-only branching), so its unlabeled happy-path edge never
-// auto-follows.
+// A guardrail-`blocked` tool node advances as a decision node, so its unlabeled
+// happy-path edge never auto-follows.
 const settleCompletedNode = (args: {
   nodeId: string;
   nodeDefn: OrchestrationNode;
@@ -191,10 +187,8 @@ export const processNodeResultBatch = (args: {
     }
 
     if (execResult.kind === 'wait') {
-      // The node is not complete — it must be resumed after a timer. Record the
-      // first wait and stop advancing; the node stays uncompleted so it (or its
-      // successors) resume correctly. Mirrors the single-pause model used for
-      // requires_action nodes.
+      // The node must resume after a timer, so it stays uncompleted and
+      // advancing stops here — the single-pause model `requires_action` uses.
       if (!scheduledWait) {
         scheduledWait = {
           nodeId: execResult.nodeId,

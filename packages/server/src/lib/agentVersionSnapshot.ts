@@ -71,10 +71,8 @@ export const buildAgentConfigSnapshot = (
   });
 };
 
-// ── Agent-specific snapshot readers ───────────────────────────────────────
-//
-// The scalar readers (`configString`, `configNumber`, …) are shared; this one
-// is not, because it re-runs agent-specific parsing over an archived value.
+// Unlike the shared scalar readers, this one re-runs agent-specific parsing
+// over an archived value.
 
 /**
  * Reads the archived `tool_bindings` as canonical bindings.

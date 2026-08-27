@@ -113,13 +113,11 @@ generationsRouter.get(
       resourceType: 'generation',
     });
 
-    // The response merges the generation's own columns with the trace's steps
-    // object, so the caller must be allowed to read both — otherwise
-    // `generations:GetGeneration` alone would silently widen to cover trace
-    // content (tool arguments and results) that is today only reachable through
-    // `GET /traces/{id}` plus the files API. Deriving authority from exactly the
-    // two resources the transcript projects also means it cannot drift from
-    // them later. Same dual-check shape as curating a dataset item (#1012).
+    // The response merges generation columns with the trace's steps, so the
+    // caller must be allowed to read both — otherwise `GetGeneration` alone
+    // would silently widen to cover trace content reachable today only through
+    // `GET /traces/{id}`. Deriving authority from exactly the two resources
+    // projected also keeps it from drifting from them later (#1012).
     await requireProjectAccess({
       ctx,
       action: 'traces:GetTrace',

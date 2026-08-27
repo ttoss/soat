@@ -80,10 +80,9 @@ const buildFileInclude = (args: {
   if (args.paths && args.paths.length > 0) {
     conditions.push({
       [Op.or]: args.paths.map((p) => {
-        // Stored `File.path` values are always leading-slash normalized, so a
-        // prefix supplied without one (`playbooks/`) must be normalized the
-        // same way or the `LIKE '<prefix>%'` match never fires. The trailing
-        // slash is preserved to keep folder-prefix semantics intact.
+        // Stored paths are leading-slash normalized, so a prefix without one
+        // must be too or the `LIKE` never fires. The trailing slash stays, to
+        // keep folder-prefix semantics.
         const prefix = p.startsWith('/') ? p : `/${p}`;
         return { path: { [Op.like]: `${prefix}%` } };
       }),
@@ -437,10 +436,8 @@ export const searchKnowledge = async (
     });
   }
 
-  // Not a page: `allResults` is already in memory, and this is the top-k of a
-  // similarity search rather than a slice of a table. Named accordingly so it
-  // reads as distinct from the `limit`/`offset` list envelope, whose bound lives
-  // in `pagination.ts`.
+  // Top-k of an in-memory similarity search, not a page — named so it reads as
+  // distinct from the `limit`/`offset` list envelope.
   const topK = args.limit ?? DEFAULT_SEARCH_TOP_K;
   return allResults.slice(0, topK);
 };

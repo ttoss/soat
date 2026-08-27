@@ -23,23 +23,16 @@ export type UsageReceiptLine = {
   meter_type: string;
   provider: string;
   model: string;
-  // The orchestration node the event was produced by, on a run receipt: an
-  // `agent` node's `llm_tokens` line and the `compute_execution` line of every
-  // node execution both carry it, so grouping a run receipt's lines by
-  // `node_id` yields the per-node cost the run total alone hides. Null when no
-  // node produced the event (a standalone generation, a run-level meter).
-  //
-  // The event carries no attempt number, so a retried node's attempts share one
-  // `node_id` — the right default for spend, since a retry is real money.
+  // Grouping a run receipt's lines by this yields the per-node cost the run
+  // total hides. A retried node's attempts share one `node_id` — the right
+  // default for spend, since a retry is real money.
   node_id: string | null;
   cost_usd: number | null;
   components: UsageReceiptComponent[];
 };
 
-// One entry per distinct meter type on the receipt, so downstream billing can
-// read the "tokens + infra" cost split without re-scanning the raw lines. A
-// single-type receipt (today's generations are all `llm_tokens`) has exactly
-// one entry whose cost equals the receipt total.
+// One entry per meter type, so downstream billing reads the tokens/infra cost
+// split without re-scanning the raw lines.
 export type UsageReceiptMeterTypeTotal = {
   meter_type: string;
   cost_usd: number | null;
@@ -265,16 +258,10 @@ const toTotals = (receipt: UsageReceipt): UsageTotals => {
   };
 };
 
-// Every run descended from `runPublicId` through `loop` / `sub_orchestration`
-// nodes, as internal ids. The run itself is not included — the caller already
-// holds its id and its line items.
-//
-// Breadth-first one level at a time (the `parent_run_id` column is indexed), rather than a
-// recursive CTE, so the walk stays in the query builder the rest of this module
-// uses. `seen` is a genuine guard, not decoration: the parent link is written by
-// the engine and a cycle should be impossible, but a walk that trusted that
-// would loop forever on one bad row instead of returning a slightly wrong
-// number.
+// Descendants of `runPublicId` as internal ids, excluding the run itself.
+// Breadth-first per level rather than a recursive CTE, to stay in the query
+// builder this module uses. `seen` guards a cycle that should be impossible:
+// trusting it would loop forever on one bad row.
 const descendantRunIds = async (args: {
   runPublicId: string;
 }): Promise<number[]> => {

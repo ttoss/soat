@@ -276,10 +276,9 @@ const PROJECT_CASCADE_PRE_STEPS: Partial<
     await db.OrchestrationRunTask.destroy({ where, transaction });
   },
 
-  // ConversationMessage.documentId is RESTRICT, so messages referencing a
-  // document owned by this project's files must be removed before the document
-  // itself; messages tied to this project's own conversations cascade
-  // automatically when the conversation is destroyed.
+  // `ConversationMessage.documentId` is RESTRICT, so such messages must go
+  // before the document itself; those tied to this project's conversations
+  // cascade automatically.
   Conversation: async ({ ids, transaction }) => {
     if (ids.documentIds.length === 0) return;
 

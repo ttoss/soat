@@ -12,10 +12,9 @@ import type {
 
 const log = createDebug('soat:guardrails');
 
-// The audit `action` every guardrail-evaluation audit entry carries. No
-// principal authorizes the evaluation — it is a platform governance decision —
-// so entries are identified by this action with null principal columns, the
-// same convention as `quotas:MonitorBreach`.
+// No principal authorizes an evaluation — it is a platform decision — so
+// entries carry this action with null principal columns, as
+// `quotas:MonitorBreach` does.
 const GUARDRAIL_EVALUATION_AUDIT_ACTION = 'guardrails:Evaluate';
 
 /**
@@ -147,10 +146,9 @@ const enqueueGuardrailAuditEntries = async (args: {
       action: GUARDRAIL_EVALUATION_AUDIT_ACTION,
       resourceSrn: `srn:${projectPublicId}:guardrail:${record.guardrailId}`,
       resourcePublicId: record.guardrailId,
-      // The evaluation event itself was recorded successfully; the enacted
-      // outcome lives in `detail.decision`, not in this HTTP-shaped field
-      // (one tool call can produce several evaluations with different
-      // decisions but a single HTTP response).
+      // The enacted outcome lives in `detail.decision`, not this HTTP-shaped
+      // field: one tool call can produce several evaluations with different
+      // decisions but a single response.
       status: 200,
       detail: {
         ...record,

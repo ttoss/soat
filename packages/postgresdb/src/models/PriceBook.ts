@@ -35,10 +35,9 @@ import { Project } from './Project';
       fields: ['public_id'],
     },
     {
-      // Explicit name: the auto-generated name for this many columns exceeds
-      // Postgres's 63-char identifier limit, and a truncated catalog name no
-      // longer matches the recomputed expected name on the next
-      // `sync({ alter: true })`, crashing boot with 42P07.
+      // The derived name for this many columns exceeds Postgres's 63-char
+      // limit, and the truncation crashes the next `sync({ alter: true })`
+      // with 42P07.
       name: 'price_books_scope_sku_component_effective_uk',
       unique: true,
       fields: [

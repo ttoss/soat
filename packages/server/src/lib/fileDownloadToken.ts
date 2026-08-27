@@ -3,10 +3,8 @@ import jwt from 'jsonwebtoken';
 import { DomainError } from '../errors';
 import { JWT_SECRET } from '../middleware/auth';
 
-// Short-lived, single-purpose token that lets an external converter (which is
-// not a SOAT user) fetch a file via GET /files/:id/download?token=... . Scoped
-// to one file id so it cannot be used to read any other file. Reuses the app's
-// JWT secret — no new key material. (PRD Phase 4.)
+// Lets an external converter fetch one file without being a SOAT user. Scoped
+// to a single file id, so it cannot read any other.
 
 const DOWNLOAD_TOKEN_PURPOSE = 'file-download';
 const DEFAULT_TTL_SECONDS = 10 * 60; // 10 minutes

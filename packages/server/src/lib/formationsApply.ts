@@ -76,10 +76,8 @@ export const handleOrphanedDeletes = async (args: {
 
 type ResourceRow = InstanceType<(typeof db)['FormationResource']>;
 
-// A logical id that was previously deleted must be treated as a fresh
-// create, even though its FormationResource row (and stale
-// physicalResourceId) still exists — otherwise it would be diffed as an
-// update against a physical resource that no longer exists.
+// A previously deleted logical id keeps its row and stale physicalResourceId,
+// so without this it would diff as an update against a resource that is gone.
 const isCreateChange = (existing: ResourceRow | undefined): boolean => {
   return (
     !existing || existing.status === 'deleted' || !existing.physicalResourceId
@@ -104,10 +102,9 @@ export const processResourceChange = async (args: {
     projectId,
     formationId,
   } = args;
-  // Normalized here, at the top of the apply pipeline, so the merge diff and
-  // the `lastAppliedProperties` snapshot below are keyed the same way the
-  // module's `read()` reports them — a camelCase template used to store camel
-  // keys and then compare them against a snake_case read forever after (#901).
+  // At the top of the pipeline, so the diff and the `lastAppliedProperties`
+  // snapshot are keyed the way the module's `read()` reports them — a camelCase
+  // template used to compare its own keys against a snake_case read (#901).
   const resolvedProperties = normalizeDeclaredProperties(
     resolveRefs(decl.properties, resolvedIds) as Record<string, unknown>
   );
@@ -174,10 +171,8 @@ export const processResourceChange = async (args: {
   return resourceRow;
 };
 
-// Applies each resource change in dependency order. Returns true on success;
-// on the first failure it unwinds the resources it created in this operation,
-// records the failed operation and returns false so the caller stops before
-// finalizing.
+// In dependency order. On the first failure it unwinds what this operation
+// created and returns false, so the caller stops before finalizing.
 const runResourceChanges = async (args: {
   sortedOrder: string[];
   workingTemplate: FormationTemplate;

@@ -265,12 +265,9 @@ export const listGuardrails = async (args: {
   });
 };
 
-// Cross-project access resolves as "not found" rather than a 403, so a
-// guardrail's existence never leaks across a tenant boundary — that decision
-// lives in `scopedWhere`, not here.
-//
-// Exported because `guardrailVersions.ts` needs the same scoped lookup; it kept
-// a byte-identical private copy until the two were converged here.
+// Cross-project access resolves as "not found", so a guardrail's existence
+// never leaks across a tenant boundary — that decision lives in `scopedWhere`.
+// Exported because `guardrailVersions.ts` needs the identical scoped lookup.
 export const findGuardrailInstance = async (args: {
   projectIds?: number[];
   id: string;
@@ -330,11 +327,9 @@ export const updateGuardrail = async (
 
   await guardrail.update(updates);
 
-  // A `document` write bumps the version and archives the new document, so the
-  // audit chain survives edits. Metadata-only edits (name / description /
-  // context) leave the version untouched — as does re-writing the document the
-  // guardrail already holds, which is what makes restoring the live policy a
-  // genuine no-op rather than an endless version chain.
+  // A `document` write bumps the version, so the audit chain survives edits.
+  // Metadata-only edits and re-writing the identical document leave it
+  // untouched — restoring the live policy is a no-op, not a version chain.
   await guardrailVersionStore.archiveConfigChange({
     resourceDbId: (guardrail as unknown as { id: number }).id,
     currentVersion: guardrail.version,

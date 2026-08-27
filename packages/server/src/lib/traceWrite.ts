@@ -329,11 +329,9 @@ const readTraceBase = async (
 const writeTrace = async (args: SaveTraceArgs): Promise<void> => {
   const serializedSteps = serializeSteps(args.steps);
 
-  // Zero-retention (#838): the steps object is never written, so there are no
-  // bytes to leak, to miss in a sweep, or to sit in a backup. The skeleton row
-  // is still upserted — a run stays auditable and attributable for billing —
-  // and is stamped with the same redaction columns a purge sets, so every
-  // reader already understands "content is not available here".
+  // The steps object is never written, so there are no bytes to leak or miss in
+  // a sweep (#838). The skeleton row is still upserted, stamped with the same
+  // redaction columns a purge sets so every reader already understands it.
   const mode = await resolveTraceContentModeForAgent({
     projectDbId: args.projectId,
     agentPublicId: args.agentId,

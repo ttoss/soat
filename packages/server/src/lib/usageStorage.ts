@@ -8,10 +8,9 @@ import { evaluateProjectThresholds } from './usageThresholds';
 
 const log = createDebug('soat:usage');
 
-// A storage event is billed against the platform `soat`/`gb-day` SKU: one
-// `gb_day` component whose quantity is the project's stored gigabytes sampled
-// for the day (bytes ÷ 1e9). Distinct meterType and idempotency namespace from
-// tokens/compute so a day's snapshot never collides with another meter's key.
+// One `gb_day` component per event, quantified by the day's sampled gigabytes.
+// A separate meterType and idempotency namespace from tokens/compute, so a
+// day's snapshot never collides with another meter's key.
 const STORAGE_PROVIDER = 'soat';
 const STORAGE_MODEL = 'gb-day';
 const STORAGE_COMPONENT = 'gb_day';
@@ -32,11 +31,8 @@ const readBytes = (rows: unknown[]): number => {
   return Number(row.bytes);
 };
 
-// Total stored bytes for a project: uploaded file sizes plus the chunked
-// document text the platform holds for retrieval. Aggregated at snapshot time
-// (a SUM per source) rather than tracked incrementally — the daily sample is
-// the accepted v1 granularity (event-driven byte accounting is a noted future
-// refinement).
+// Aggregated at snapshot time rather than tracked incrementally — a daily
+// sample is the accepted granularity here.
 const projectStoredBytes = async (projectId: number): Promise<number> => {
   const [fileRows] = await db.sequelize.query(
     `SELECT COALESCE(SUM("size"), 0) AS bytes FROM "files" WHERE "project_id" = :projectId`,

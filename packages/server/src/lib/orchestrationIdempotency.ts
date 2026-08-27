@@ -7,13 +7,10 @@ import { isUniqueViolation } from './uniqueViolation';
 
 const log = createDebug('soat:orchestrations');
 
-// Node types with an external side effect (a tool/HTTP call, an agent
-// generation, a memory write, an emitted event, a child run). These are keyed
-// for run-scoped idempotency (D5): the keyed `running` record is written before
-// dispatch and updated in place, so a redelivered task that finds a `completed`
-// key reuses the stored output instead of re-executing the side effect. Pure
-// nodes (condition/transform/delay/human/approval/webhook) and re-attempting
-// nodes (poll manages its own attempt loop) keep record-after-execution.
+// Node types with an external side effect. Their `running` record is written
+// before dispatch, so a redelivered task finding a `completed` key reuses the
+// stored output instead of repeating the effect. Pure nodes, and `poll` which
+// manages its own attempt loop, keep record-after-execution.
 const SIDE_EFFECTING_NODE_TYPES = new Set([
   'agent',
   'tool',

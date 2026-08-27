@@ -79,12 +79,9 @@ const dereferenceValue = (args: {
       // recursing and return an empty schema rather than looping forever.
       if (seenRefs.has(refName)) return {};
       const resolved = spec.components?.schemas?.[refName];
-      // A ref with no target in this document — most often one pointing into
-      // another file, e.g. `ToolBinding.properties.tool` ->
-      // `./tools.yaml#/components/schemas/CreateToolRequest`. Resolve it the
-      // same way as a circular ref: an empty schema, which accepts any value,
-      // so the property stays discoverable rather than vanishing from the tool
-      // definition. Matches @ttoss/http-server-mcp-openapi (ttoss/ttoss#1174).
+      // A ref with no target in this document, usually one pointing into
+      // another file. Resolved like a circular ref — an empty schema accepting
+      // any value — so the property stays discoverable rather than vanishing.
       if (resolved === undefined) return {};
       return dereferenceValue({
         value: resolved,

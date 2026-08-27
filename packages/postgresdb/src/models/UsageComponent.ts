@@ -77,10 +77,9 @@ export class UsageComponent extends Model {
   @Column({ type: DataType.STRING, allowNull: false })
   declare unit: string;
 
-  // Whether this component contributes to cost. Non-billable components (e.g.
-  // `reasoning_tokens`, which is a subset of `output_tokens` reported for
-  // visibility only) carry a quantity but never a price, so they are excluded
-  // from cost and from billable-token totals.
+  // Non-billable components (e.g. `reasoning_tokens`, a subset of
+  // `output_tokens` reported for visibility) carry a quantity but never a
+  // price, so they are excluded from cost and billable-token totals.
   @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: true })
   declare billable: boolean;
 
@@ -93,9 +92,8 @@ export class UsageComponent extends Model {
   @Column({ type: DataType.DECIMAL, allowNull: true })
   declare costUsd: string | null;
 
-  // The exact price-book row that produced `unitPrice`/`costUsd` — the price
-  // version for an auditable receipt. SET NULL on delete: the cost is already
-  // frozen, so a removed price row never changes the recorded cost.
+  // The price version behind an auditable receipt. SET NULL on delete: the
+  // cost is already frozen, so a removed price row never changes it.
   @ForeignKey(() => {
     return PriceBook;
   })

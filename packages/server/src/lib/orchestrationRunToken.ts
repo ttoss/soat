@@ -39,10 +39,9 @@ export const signRunToken = (payload: {
       publicId: payload.publicId,
       role: payload.role,
       prj: payload.projectPublicId,
-      // `orn` marks this as a run token, the way `trg` marks a trigger one.
-      // Without a marker the middleware cannot tell a project-scoped run token
-      // from an OAuth access token, and would build a consent boundary out of
-      // this token's (absent) `scope` claim — an allow-nothing policy.
+      // Without this marker the middleware cannot tell a project-scoped run
+      // token from an OAuth access token, and would build a consent boundary
+      // out of its absent `scope` claim — an allow-nothing policy.
       orn: payload.workPublicId,
       ...(payload.apiKeyPublicId ? { key: payload.apiKeyPublicId } : {}),
     },
@@ -128,13 +127,10 @@ export const readRunTokenPrincipal = (
     const payload = jwt.verify(authHeader.slice(7), JWT_SECRET);
     if (typeof payload === 'string') return null;
 
-    // Identified by the `orn` marker, so nothing else is mistaken for one. In
-    // particular a trigger run-as token (`trg`) and an OAuth access token
-    // (`scope`) each carry a boundary that lives in the *token*, not in the
-    // principal: the trigger's attached policy, the consented scope. Re-minting
-    // either as a plain run token later would drop that boundary and hand the
-    // run more access than the credential that started it, so those runs record
-    // no principal at all and keep today's behaviour instead.
+    // A trigger run-as token and an OAuth access token each carry a boundary
+    // living in the *token*, not the principal. Re-minting either as a plain
+    // run token would drop that boundary and hand the run more access than the
+    // credential that started it, so those runs record no principal at all.
     if (typeof payload.orn !== 'string') return null;
 
     const keyClaim = payload.key;

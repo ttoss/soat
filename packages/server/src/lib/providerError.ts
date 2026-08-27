@@ -114,12 +114,8 @@ export const usageFromFailure = (
 export const toProviderDomainError = (error: unknown): DomainError | null => {
   const unwrapped = unwrapProviderError(error);
 
-  // The model returned something that is not the object the agent's
-  // `output_schema` describes — unparseable JSON, or JSON that violates the
-  // schema (see `validateStructuredOutput`). Upstream-caused like an
-  // `APICallError`, so it belongs on this path: mapping it here covers the
-  // initial turn and the tool-outputs continuation at once, since both funnel
-  // their failures through this function.
+  // Upstream-caused like an `APICallError`, so it belongs on this path —
+  // which covers the initial turn and the tool-outputs continuation at once.
   if (NoObjectGeneratedError.isInstance(unwrapped)) {
     const mapped = new DomainError(
       'OUTPUT_SCHEMA_VALIDATION_FAILED',

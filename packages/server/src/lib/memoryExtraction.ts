@@ -50,10 +50,9 @@ const buildExtractionPrompt = (args: {
   transcript: string;
   instructions?: string;
 }): string => {
-  // A custom prompt replaces only the task instructions. The response
-  // contract and the transcript are always engine-owned: the parser accepts
+  // A custom prompt replaces only the task instructions: the parser accepts
   // nothing but a JSON array, so letting a prompt change the output format
-  // would only break extraction silently.
+  // would break extraction silently.
   return [
     args.instructions ?? DEFAULT_EXTRACTION_INSTRUCTIONS,
     'Respond with a JSON array of strings and nothing else. Respond with [] when there is nothing worth remembering.',

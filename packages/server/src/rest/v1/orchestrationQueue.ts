@@ -32,10 +32,9 @@ const mapQueueStats = (stats: QueueStats) => {
   };
 };
 
-// Queue operations for orchestrations live on their own router so the main
-// orchestrations router stays within its size budget. The `queue/stats` path
-// has three segments, so it never collides with `/orchestrations/:id` (two
-// segments) regardless of mount order.
+// A separate router so the main orchestrations one stays within its size
+// budget. `queue/stats` has three path segments, so it never collides with the
+// two-segment `/orchestrations/:id` regardless of mount order.
 export const orchestrationQueueRouter = new Router<Context>();
 
 /**

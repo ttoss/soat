@@ -116,10 +116,7 @@ const resolveApiKeyScopedProjectIds = async (args: {
   return [proj.id as number];
 };
 
-// Both call sites (a real API key's `resolveProjectIds`, and an OAuth
-// token's when its consented scope carries a project) only construct this
-// with a project already resolved: a scoped API key carries a project id, and
-// the OAuth call site is itself gated on `oauthProjectPublicId` being set. So
+// Both call sites construct this only with a project already resolved, so
 // `apiKeyProjectPublicId` is always defined here — unscoped keys use
 // `createUnscopedApiKeyResolveProjectIds` instead.
 export const createApiKeyResolveProjectIds = (args: {

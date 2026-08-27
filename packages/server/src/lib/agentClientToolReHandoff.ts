@@ -24,10 +24,9 @@ const buildReHandoffNote = (args: {
   ].join(' ');
 };
 
-// Seeds and stores the re-handoff generation: one already-approved client call,
-// released directly (NOT re-gated), suspended at `requires_action`. A
-// deterministic tool-call id keeps the assistant tool-call and the submitted
-// tool-result paired.
+// One already-approved client call, released directly rather than re-gated. The
+// tool-call id is deterministic so the assistant call and the submitted result
+// stay paired.
 const seedReHandoffPending = (args: {
   agentId: string;
   toolName: string;
@@ -88,11 +87,10 @@ const seedReHandoffPending = (args: {
 export const emitClientToolReHandoff = async (args: {
   item: MappedApproval;
   projectInternalId: number;
-  // The chain's re-minted credential (see `agentToolApprovalContinuation`). The
-  // re-handoff generation resolves its tool surface here and is resumed later by
-  // the client, so it needs the same identity as the other two continuation
-  // branches — and records the same principal, so a further approval on it
-  // re-mints from its own row.
+  // The re-handoff generation resolves its tool surface here and is resumed
+  // later by the client, so it needs the same identity as the other two
+  // continuation branches — and records the same principal, so a further
+  // approval re-mints from its own row.
   authHeader?: string;
 }): Promise<boolean> => {
   const proposed = args.item.proposed_action;
@@ -132,10 +130,8 @@ export const emitClientToolReHandoff = async (args: {
   });
 
   const traceId = generatePublicId(PUBLIC_ID_PREFIXES.trace);
-  // Not wrapped in `.catch`: the initiator, agent, and project all exist in the
-  // real flow (this runs off an approval those rows produced). A genuine failure
-  // propagates to runToolCallContinuation's catch, which is the right place to
-  // fall back — swallowing here would seed a pending generation with no DB row.
+  // Deliberately uncaught: swallowing here would seed a pending generation with
+  // no DB row. A genuine failure belongs in `runToolCallContinuation`'s catch.
   await createGenerationRecord({
     publicId: ctx.generationId,
     projectId: args.projectInternalId,

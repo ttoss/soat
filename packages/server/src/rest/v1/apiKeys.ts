@@ -125,10 +125,9 @@ const resolveScopedProjectId = async (args: {
 apiKeysRouter.get('/api-keys', async (ctx: Context) => {
   requireAuth(ctx);
 
-  // A credential scoped to a project lists only that project's keys. The list
-  // is the read half of the same boundary the item routes enforce below, so a
-  // project-scoped OAuth token — which carries its project as a public id, not
-  // as `apiKeyProjectId` — is filtered here too rather than falling through to
+  // The read half of the boundary the item routes enforce below. A
+  // project-scoped OAuth token carries its project as a public id rather than
+  // `apiKeyProjectId`, so it is filtered here too instead of falling through to
   // the owner-wide branch.
   const scopedProjectId =
     ctx.authUser.apiKeyProjectId ??

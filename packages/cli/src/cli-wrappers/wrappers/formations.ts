@@ -93,11 +93,8 @@ const readTemplateFromPath = (args: { templatePath: string }): unknown => {
   }
 };
 
-// Sentinel returned when a `@VAR` / bare-KEY reference has no env value.
-// The parameter is then omitted from the request body entirely, so the
-// server falls back to its own resolution: reuse a formation's previous
-// value when the parameter declares `use_previous_value`, or error if no
-// previous value exists (see formationsHelpers.ts `paramHasValue`).
+// Omits the parameter from the request body entirely, so the server falls back
+// to its own resolution — a previous value, or its own error.
 const OMIT_PARAMETER = Symbol('omit-parameter');
 
 const resolveEnvRef = (args: {
@@ -106,10 +103,8 @@ const resolveEnvRef = (args: {
 }): string | typeof OMIT_PARAMETER => {
   const { value, env } = args;
 
-  // @ENV_VAR_NAME — shell-safe reference; the shell does not expand @ prefixes.
-  // A missing var is not an error here: the whole point of `@VAR` is to
-  // reference a formation parameter's value by name, and an unset var means
-  // "use whatever the server resolves" (previous value, or its own error).
+  // Shell-safe: the shell does not expand `@` prefixes. A missing var is not an
+  // error — it means "use whatever the server resolves".
   const atRef = /^@([A-Za-z_][A-Za-z0-9_]*)$/.exec(value);
   if (atRef) {
     const resolved = env[atRef[1]];

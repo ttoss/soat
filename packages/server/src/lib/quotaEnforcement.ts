@@ -27,15 +27,9 @@ export type QuotaBreach = {
   retryAfter: number;
 };
 
-// Specificity for attribution when several matching quotas breach at once. The
-// most specific scope is reported: an entity-scoped cap (`actor`, `agent`,
-// `api_key`) is more specific than the project-wide cap. `requests` only ever
-// produces `api_key`/`project`; `tokens`/`cost_usd` only ever produce
-// `actor`/`agent`/`project`.
-//
-// `actor` outranks `agent`: it names one end user, the narrowest population a
-// cap can address, so it is the most actionable thing to report to a caller who
-// was just blocked.
+// Which scope to report when several quotas breach at once — the most specific
+// wins. `actor` outranks `agent` because it names one end user, the most
+// actionable thing to tell a caller who was just blocked.
 const scopeRank = (scope: string): number => {
   if (scope === 'actor') return 4;
   if (scope === 'agent') return 3;
@@ -323,10 +317,8 @@ const resolveSessionActor = async (args: {
   return { id: actor.id as number, publicId: actor.publicId };
 };
 
-// Aggregates one token/cost quota's current window and, on a breach (at or over
-// the limit), fires `quota.exceeded` once per window (both modes). Returns the
-// breach only when the quota is `enforce` (so a `monitor` breach fires the
-// webhook but never blocks the generation).
+// Fires `quota.exceeded` once per window in both modes, but returns the breach
+// only for `enforce` — a `monitor` breach webhooks without blocking.
 const evaluateGenerationQuota = async (args: {
   quota: QuotaInstance;
   agentInternalId: number;

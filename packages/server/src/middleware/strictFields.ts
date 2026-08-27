@@ -28,10 +28,9 @@ export const STRICT_FIELDS_OPT_OUT: ReadonlySet<string> = new Set([
   // Open / passthrough input.
   'POST /api/v1/embeddings',
   'POST /api/v1/tools/{tool_id}/call',
-  // POST /files intentionally accepts-and-ignores client storage fields
-  // (path, storage_*) as a documented robustness behavior. The multipart
-  // upload routes carry no application/json schema, so the resolver skips
-  // them on its own.
+  // POST /files accepts-and-ignores client storage fields as a documented
+  // robustness behavior. The multipart upload routes carry no JSON schema, so
+  // the resolver skips them on its own.
   'POST /api/v1/files',
   // Public auth flows — left untouched.
   'POST /api/v1/users/login',
@@ -80,10 +79,9 @@ export const strictFieldsMiddleware = async (ctx: Context, next: Next) => {
     return;
   }
 
-  // `validateRequestBody` resolves the route's request schema and throws a
-  // `DomainError('VALIDATION_FAILED')` (400) on any unknown field (at any
-  // nesting level) or missing top-level required field; it no-ops when the
-  // route has no property-based body schema.
+  // `validateRequestBody` throws `VALIDATION_FAILED` on an unknown field at any
+  // nesting level, or a missing top-level required one; it no-ops for a route
+  // with no property-based body schema.
   validateRequestBody({ method: ctx.method, path: template, body });
 
   await next();

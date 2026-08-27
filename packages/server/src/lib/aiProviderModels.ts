@@ -382,11 +382,8 @@ const enumerateVertex = async (
   });
 
   if ('apiKey' in settings) {
-    // `publisherModels.list` refuses API keys outright — it answers one with
-    // `401 UNAUTHENTICATED`, "API keys are not supported by this API. Expected
-    // OAuth2 access token or other authentication credentials that assert a
-    // principal." Express mode holds nothing else, so there is no credential
-    // to list with.
+    // `publisherModels.list` answers an API key with `401 UNAUTHENTICATED`, and
+    // express mode holds no other credential to list with.
     throw new DomainError(
       'MODEL_LISTING_UNSUPPORTED',
       'A Vertex provider in express mode (API key) cannot list models: the publisher-model listing rejects API keys and needs a credential that asserts a principal. Link a service-account key, or authenticate through Application Default Credentials, to list.'
@@ -400,21 +397,14 @@ const enumerateVertex = async (
 
   const payload = await readJson({
     fetchImpl: args.fetchImpl,
-    // `publisherModels.list` is rooted at `publishers/*`, not at
-    // `projects/*/locations/*/publishers/*` — unlike generation's `baseURL`,
-    // which *is* project-scoped. Reusing generation's shape here built a path
-    // Google does not serve, and it answered with a generic HTML 404 that
-    // surfaced as MODEL_LISTING_FAILED for every vertex caller (#1080).
-    //
-    // `project` therefore no longer reaches the URL, but it stays required by
-    // `resolveVertexSettings`: it is what selects the ADC/service-account
-    // branch that mints the token, and it is the project the token is billed
-    // and quota'd against. The regional host is what scopes the answer to
-    // `location`.
-    // `view=PUBLISHER_MODEL_VIEW_FULL` is what populates `launchStage`; the
-    // default view omits it, which left the lifecycle mapping reading an
-    // always-absent field. `pageSize` stays unsent: the bare call answers the
-    // whole regional catalogue, and 500 is rejected with a `400`.
+    // Rooted at `publishers/*`, not the project-scoped path generation's
+    // `baseURL` uses — that shape is one Google does not serve, and its HTML
+    // 404 surfaced as MODEL_LISTING_FAILED for every vertex caller (#1080).
+    // `project` stays required by `resolveVertexSettings` even though it no
+    // longer reaches the URL: it selects the branch that mints the token and is
+    // what the token is billed against. `PUBLISHER_MODEL_VIEW_FULL` is what
+    // populates `launchStage`; `pageSize` stays unsent because the bare call
+    // answers the whole regional catalogue and 500 is rejected with a `400`.
     url: `${vertexListingHost(location)}/v1beta1/publishers/google/models?view=PUBLISHER_MODEL_VIEW_FULL`,
     headers: { authorization: `Bearer ${token}` },
     provider: args.provider,
@@ -432,10 +422,9 @@ const enumerateVertex = async (
       {
         id,
         vendor: 'google',
-        // No `streaming`: this listing carries no field for it, and it serves
-        // embedding, TTS and classification models alongside Gemini — so the
-        // `streaming: true` that used to be asserted for every entry was
-        // wrong for a good share of them (#1089).
+        // The listing carries no streaming field and serves embedding, TTS and
+        // classification models too, so asserting `streaming: true` for every
+        // entry was wrong for a good share of them (#1089).
         ...(lifecycle ? { lifecycle } : {}),
       },
     ];

@@ -133,10 +133,9 @@ export const generateSessionResponse = async (args: {
   sessionId: string;
   model?: string;
   toolContext?: Record<string, string>;
-  // The credential this turn's tools run with. Only request-less callers set it
-  // — an approved tool call's continuation re-mints one from the principal on
-  // the generation that proposed the call (#894). A session turn driven by a
-  // real request leaves it unset and behaves exactly as before.
+  // Only request-less callers set it: an approved tool call's continuation
+  // re-mints one from the principal on the generation that proposed the call
+  // (#894). A turn driven by a real request leaves it unset.
   authHeader?: string;
 }) => {
   const session = await findSessionRecord({
@@ -175,13 +174,10 @@ export const generateSessionResponse = async (args: {
   const agent = (
     session as unknown as { agent: InstanceType<(typeof db)['Agent']> }
   ).agent;
-  // Both layers here are caller-owned (the persisted session bag and the
-  // per-request bag); a request value wins the merge. The server-derived
-  // identity keys (`sessionId`, `actorId`, `actorExternalId`) are NOT pinned
-  // here — since #850 they are stamped at the generation chokepoint
-  // (buildGenerationContext) from the `sessionId` passed below, which covers
-  // this path and every other entry point uniformly (#843's per-path pin
-  // lived here and left the sibling paths open).
+  // Both layers are caller-owned and a request value wins. The server-derived
+  // identity keys are deliberately not pinned here — they are stamped at the
+  // generation chokepoint, which covers every entry point uniformly (#850);
+  // the per-path pin that lived here left the sibling paths open.
   const mergedToolContext = {
     ...(session.toolContext ?? {}),
     ...(args.toolContext ?? {}),
@@ -201,11 +197,9 @@ export const generateSessionResponse = async (args: {
       model: args.model,
       toolContext: mergedToolContext,
       abortSignal: controller.signal,
-      // Only the session id is passed: the actor is derived from the session
-      // record itself (see resolveEndUserAttribution). Attribution is never
-      // read off `mergedToolContext` — that bag is caller-overridable (a
-      // request's `toolContext` wins the merge), so trusting it would let a
-      // caller bill another actor.
+      // The actor is derived from the session record, never read off
+      // `mergedToolContext` — that bag is caller-overridable, so trusting it
+      // would let a caller bill another actor.
       sessionId: session.publicId,
       authHeader: args.authHeader,
     });

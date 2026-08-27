@@ -357,13 +357,10 @@ const resolveAuthSecrets = async (args: {
   };
 };
 
-// Resolves template tokens in the request url and headers at the point of use —
-// the stored config (and anything echoed back by GET/LIST) keeps the reference.
-//
-// The url and auth resolve `{{secret:...}}` only; headers additionally resolve
-// `{{context:...}}` against this call's `tool_context` (#945). The asymmetry is
-// the point: a context value is caller-supplied, so it may not steer the
-// outbound url — see `toolTemplates.ts`.
+// Resolved at the point of use, so the stored config keeps the reference.
+// The url and auth take `{{secret:...}}` only; headers also take
+// `{{context:...}}` (#945) — a caller-supplied value may not steer the
+// outbound url.
 const resolveHttpRequestTemplates = async (args: {
   url: string;
   headers?: Record<string, string>;
@@ -513,10 +510,8 @@ const withHttpToolAuth = async (args: {
   const headers = (args.init.headers ?? {}) as Record<string, string>;
   const body = args.init.body;
 
-  // `body` is a string in json mode and a `FormData` in multipart mode. Only
-  // the former is hashable at signing time, which is why `validateExecuteAuth`
-  // rejects aws_sigv4 + multipart at every write path — so a non-string body
-  // can only pair with `gcp_service_account`, which does not sign the payload.
+  // Only a string body is hashable at signing time, which is why
+  // `validateExecuteAuth` rejects aws_sigv4 + multipart at every write path.
   const authHeaders = await applyHttpToolAuth({
     auth: args.auth,
     method: args.method,
@@ -553,10 +548,8 @@ const readHttpToolResponse = async (args: {
     );
   }
 
-  // The target may return a 2xx with a non-JSON body (HTML, plain text, an
-  // empty 204) — fall back to the raw text instead of letting `SyntaxError`
-  // from a strict `response.json()` escape as an unmapped (and thus opaque
-  // 500) error.
+  // A 2xx with a non-JSON body must not surface as an opaque 500 from
+  // `response.json()`'s `SyntaxError`.
   const responseText = await response.text();
   try {
     return JSON.parse(responseText);
@@ -597,10 +590,8 @@ export const buildHttpToolExecute = (
     const hasBody = !['GET', 'HEAD'].includes(method);
     let url = args.execute.url;
     try {
-      // Presets resolve here, not at tool-resolution time: a missing
-      // `{{context:}}` key must fail *this call* (with nothing sent), the way a
-      // missing key in a header does, rather than aborting resolution of every
-      // other tool the agent has.
+      // Here, not at tool-resolution time, so a missing `{{context:}}` key
+      // fails this call rather than every other tool the agent has.
       const rawArgs = mergePresetParameters({
         presetParameters: resolvePresetParametersForCall({
           presetParameters: args.presetParameters,
@@ -641,12 +632,9 @@ export const buildHttpToolExecute = (
         contextKeys: args.contextKeys,
         extraHeaders: args.extraHeaders,
       });
-      // Credentials are computed last, over the final method, url, headers and
-      // body — SigV4 signs a hash of exactly what goes on the wire, so nothing
-      // may be added to the request after this point.
-      // Egress-guarded: the target must be publicly routable or listed in
-      // TOOL_EGRESS_ALLOWED_HOSTS, checked on the resolved address and on
-      // every redirect hop (see toolEgress.ts).
+      // Last, over the final request: SigV4 signs a hash of exactly what goes
+      // on the wire, so nothing may be added after this point. Egress is
+      // checked on the resolved address and every redirect hop (toolEgress.ts).
       const response = await fetchWithEgressGuard(
         resolved.fetchUrl,
         await withHttpToolAuth({
@@ -747,21 +735,17 @@ const resolveClientTool = (
     ),
   });
   if (!typedTool.presetParameters) return resolved;
-  // A client tool has no server-side `execute`, so its presets must already be
-  // resolved when they are attached — there is no later step that still holds
-  // this call's `tool_context`. A missing key therefore fails resolution here,
-  // which is the only place left to fail closed.
+  // A client tool has no server-side `execute`, so no later step still holds
+  // this call's `tool_context` — this is the only place left to fail closed.
   const presetParameters = resolvePresetParametersForCall({
     presetParameters: typedTool.presetParameters,
     toolContext,
     toolName: typedTool.name,
     schema: parameters,
   });
-  // No `execute` to merge into — the call is dispatched by the client, so the
-  // presets ride along to the `requires_action` handoff, where
-  // `findPendingClientTools` pins them onto the arguments the client receives.
-  // Adding a symbol-keyed property keeps the tool execute-less, which is what
-  // marks it a client tool downstream.
+  // The presets ride along to the `requires_action` handoff instead. A
+  // symbol-keyed property keeps the tool execute-less, which is what marks it
+  // a client tool downstream.
   return Object.assign(resolved, {
     [CLIENT_TOOL_PRESETS]: presetParameters,
   });
@@ -799,11 +783,9 @@ const resolveMcpToolEntry = async (
       logToolCallingError,
     });
   } catch (error) {
-    // A missing `{{context:...}}` key is a caller error, not a network fault.
-    // This swallow exists so an unreachable MCP server does not abort resolution
-    // of every other tool; dropping the tool silently here would hide exactly
-    // the misconfiguration the token is meant to surface, and the agent would
-    // then fail several steps later with "no such tool".
+    // The swallow is for an unreachable MCP server, not a missing
+    // `{{context:...}}` key — dropping that one silently would hide the
+    // misconfiguration and fail several steps later as "no such tool".
     if (
       error instanceof DomainError &&
       error.code === 'MISSING_TOOL_CONTEXT_KEY'
@@ -874,10 +856,9 @@ const localInjectableSchema = (
     typedTool.type === 'pipeline' ||
     typedTool.type === 'client'
   ) {
-    // Injection *replaces* the model-visible schema, so it has to start from
-    // the pinned-key-stripped shape — handing over the raw `parameters` would
-    // put every preset key back in front of the model the moment a class-C
-    // guardrail applies.
+    // Injection replaces the model-visible schema, so it must start from the
+    // pinned-key-stripped shape — the raw `parameters` would put every preset
+    // key back in front of the model.
     return modelVisibleSchema(typedTool.parameters, typedTool.presetParameters);
   }
   return undefined;
@@ -979,10 +960,9 @@ const resolveToolByType = async (
   const toolType = typedTool.type;
 
   if (!isAgentToolType(toolType)) {
-    // A stored type this server does not know (an older or newer writer, a
-    // hand-edited row). The tool is still dropped rather than failing the whole
-    // generation — but it is no longer dropped *silently*, which is what made
-    // #1002 surface as "the agent ignored my tool" with nothing to grep for.
+    // An unknown stored type still drops the tool rather than failing the
+    // generation, but never silently — that is what made #1002 surface as "the
+    // agent ignored my tool" with nothing to grep for.
     log(
       'resolveToolByType: dropping tool with unhandled type id=%s name=%s type=%s',
       typedTool.publicId,

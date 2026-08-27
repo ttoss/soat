@@ -122,12 +122,9 @@ type ScorerCheck = (args: {
   agentHasOutputSchema: boolean;
 }) => string | null;
 
-// `llm_judge.pass_threshold` is required with no default: a judge emits a
-// continuous score, so nothing about the score itself says where "good enough"
-// is — and a defaulted cutoff would silently decide the gate every run-level
-// `passed` is computed from (the evaluations module doc — Pass semantics).
-// `isUnitInterval` (shared with the tool scorer's optional threshold) comes
-// from `evaluationToolScorerContract.ts`.
+// Required with no default: a judge emits a continuous score, so nothing about
+// it says where "good enough" is, and a defaulted cutoff would silently decide
+// the gate every run-level `passed` is computed from.
 
 /**
  * The per-type config rules, keyed by type so a new entry in
@@ -160,11 +157,9 @@ const SCORER_CHECKS: Record<ScorerType, ScorerCheck> = {
     if (scorer.schema !== undefined && !isPlainObject(scorer.schema)) {
       return `${path}.schema must be a JSON Schema object.`;
     }
-    // The platform only produces `output.object` when the **agent** carries an
-    // `output_schema` — `buildStructuredOutput` is what constrains the model.
-    // A scorer schema against an unconstrained agent would find `object`
-    // permanently absent and score 0 on every item of every run: a fabricated
-    // regression, which is the exact signal this module exists to prevent.
+    // `output.object` exists only when the *agent* carries an `output_schema`.
+    // A scorer schema against an unconstrained agent would find it permanently
+    // absent and score 0 on every item — a fabricated regression.
     if (!agentHasOutputSchema) {
       return `${path} requires the agent under test to have an output_schema; without one the agent produces no structured output to validate.`;
     }
@@ -254,10 +249,8 @@ export const validateScorers = (args: {
     });
     if (error) return error;
 
-    // Aggregate scores are keyed by the outcome's scorer key — the type for
-    // built-ins, the scorer's own `name` for tool scorers — so two scorers
-    // sharing a key would collapse into one bucket and silently lose a signal.
-    // Tool scorers may therefore appear several times, under distinct names.
+    // Keyed by the outcome's scorer key, so two scorers sharing one would
+    // collapse into a single bucket and silently lose a signal.
     const type = scorer.type as string;
     const key = type === TOOL_SCORER_TYPE ? (scorer.name as string) : type;
     if (seen.has(key)) {
@@ -582,7 +575,5 @@ export const scoreOutput = async (args: {
   return outcomes;
 };
 
-// Run-level aggregation (`aggregateScores`, `resolveRunPassed`,
-// `AggregateScores`) lives in `evaluationScorerAggregation.ts`: scoring
-// produces one item's outcomes, and the roll-up over persisted outcomes is a
-// separate consumer's concern (the run finalizer's).
+// Run-level aggregation lives in `evaluationScorerAggregation.ts`: scoring
+// produces one item's outcomes, and the roll-up is the run finalizer's concern.

@@ -13,10 +13,8 @@ export const isMultipartOp = (op: ModuleOp | undefined): boolean => {
 
 export type RevealedSecret = { key: string; value: string };
 
-// A create response may echo a write-once secret in plaintext (e.g. an API
-// key's `key`, a signing `secret`). These are masked everywhere else, so the
-// create form is the only place the caller can copy them. Pick out the
-// non-empty string fields whose name marks them sensitive.
+// A create response may echo a write-once secret in plaintext. It is masked
+// everywhere else, so the create form is the only place a caller can copy it.
 export const extractRevealedSecrets = (data: JsonObject): RevealedSecret[] => {
   return Object.entries(data)
     .filter(([key, value]) => {

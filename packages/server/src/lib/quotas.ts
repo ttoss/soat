@@ -398,10 +398,9 @@ export const updateQuota = async (args: {
   id: string;
   limit?: unknown;
   mode?: string;
-  // Immutable fields are accepted so callers that carry the full desired state
-  // (formation templates) can be validated here rather than silently dropping
-  // them. Supplying a value that differs from the stored one is an error; the
-  // REST route rejects these fields earlier via its PATCH field allowlist.
+  // Immutable fields are accepted, not dropped, so a caller carrying full
+  // desired state is validated here — a differing value is an error. The REST
+  // route rejects them earlier via its PATCH allowlist.
   scope?: unknown;
   scopeRef?: unknown;
   metric?: unknown;
@@ -446,14 +445,11 @@ export const updateQuota = async (args: {
       throw new DomainError('VALIDATION_FAILED', limitError);
     }
     const nextLimit = String(Number(args.limit));
-    // The once-per-window fire guard is keyed to the window alone, so a breach
-    // already fired in this window would silence every later breach for the
-    // rest of it — including breaches of the *new* limit. Since raising a
-    // breached cap is the core monitor-mode tuning loop (and `calendar_month`
-    // windows stay open for weeks), re-arm the guard whenever the limit
-    // actually changes: a different limit makes any subsequent breach a
-    // distinct event worth reporting. `lastFiredAt` is left alone — it records
-    // when the quota genuinely last fired.
+    // The fire guard is keyed to the window alone, so a breach already fired
+    // would silence breaches of the *new* limit for the rest of it — and
+    // raising a breached cap is the core tuning loop, over windows that stay
+    // open for weeks. A changed limit makes any later breach a distinct event.
+    // `lastFiredAt` is left alone: it records when the quota genuinely fired.
     if (nextLimit !== String(Number(quota.limit))) {
       updates.firedWindowKey = null;
     }

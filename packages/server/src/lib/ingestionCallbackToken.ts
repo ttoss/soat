@@ -2,14 +2,10 @@ import jwt from 'jsonwebtoken';
 
 import { JWT_SECRET } from '../middleware/auth';
 
-// Signed token that lets an external converter (not a SOAT user) deliver an
-// async conversion result to POST /documents/:id/ingestion-callback. Scoped to
-// one document + one ingestion attempt, so a callback from a superseded
-// attempt (after re-ingest) or a replay after the callback already completed
-// is rejected. No `exp` claim — a long-running conversion's duration is
-// unknown up front, so expiry is governed by CONVERSION_STALL_TIMEOUT_MS and
-// the document's `processing` state, not wall-clock token expiry. Reuses the
-// app's JWT secret — no new key material. (Phase 5.)
+// Lets an external converter deliver an async result without being a SOAT user.
+// Scoped to one document + attempt, so a superseded attempt or a replay is
+// rejected. No `exp`: a conversion's duration is unknown up front, so expiry is
+// governed by CONVERSION_STALL_TIMEOUT_MS and the document's state instead.
 
 const INGESTION_CALLBACK_PURPOSE = 'ingestion-callback';
 

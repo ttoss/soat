@@ -111,13 +111,10 @@ const assembleContextMessages = async (args: {
   return allMessages;
 };
 
-// #850 — the identity chokepoint. Every fresh generation (direct agent,
-// conversation, session, trigger, orchestration node, nested `soat` tool
-// call) builds its context in buildGenerationContext, so pinning once here
-// makes the reserved `tool_context` identity keys unforgeable on every path —
-// there is no per-entry-point pin left to forget. The pinned bag is what gets
-// persisted into `pendingState`, so a recovered generation resumes with the
-// same trusted identity.
+// The identity chokepoint (#850): every fresh generation builds its context
+// here, so pinning once makes the reserved `tool_context` keys unforgeable on
+// every path, with no per-entry-point pin left to forget. The pinned bag is
+// what `pendingState` persists, so a recovered generation resumes trusted.
 const resolvePinnedToolContext = async (args: {
   toolContext?: Record<string, string>;
   sessionId?: string | null;
@@ -160,10 +157,8 @@ export const buildGenerationContext = async (args: {
       `Agent '${args.agentId}' not found.`
     );
 
-  // Resolved before anything reads the config: while a staged rollout is active
-  // this request is assigned one of its two archived versions, and everything
-  // below — instructions, model, tools, guardrails — must come from that
-  // version rather than from the live row.
+  // Before anything reads the config: under a staged rollout everything below
+  // must come from the assigned archived version, not the live row.
   const { typedAgent, agentVersion } = await resolveServedAgentVersion({
     agent: liveAgent,
     sessionId: args.sessionId,

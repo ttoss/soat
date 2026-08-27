@@ -202,10 +202,8 @@ const settleRun = async (args: {
     traceId,
   } = args;
 
-  // When the run parks on an `approval` node, emit the ApprovalItem now (the run
-  // record is in scope here) and stamp the created item's id/expiry back onto the
-  // persisted required_action. The bulky frozen spec is dropped after emit — the
-  // ApprovalItem is its durable home.
+  // Emitted here because the run record is in scope. The bulky frozen spec is
+  // dropped after emit — the ApprovalItem is its durable home.
   if (
     runStatus === 'awaiting_input' &&
     requiredAction?.type === 'approval' &&
@@ -428,10 +426,8 @@ const createRunRecord = async (args: {
 }): Promise<InstanceType<typeof db.OrchestrationRun>> => {
   return db.OrchestrationRun.create({
     orchestrationId: args.orchestration.id as number,
-    // Pin the run to the graph it starts on (#872). Every later execution of
-    // this run resolves its topology through this number, so an
-    // `update-orchestration` that lands while the run is queued, sleeping or
-    // awaiting input cannot re-shape it.
+    // Pin the run to the graph it starts on, so an `update-orchestration` that
+    // lands while it is parked cannot re-shape it (#872).
     orchestrationVersion: args.orchestration.version,
     projectId: args.projectId,
     // Synchronous mode enters `running` immediately (it drives in-process);
@@ -467,11 +463,9 @@ export const startOrchestrationRun = async (args: {
   projectId?: number;
   projectIds?: number[];
   input?: Record<string, unknown>;
-  // Caller context forwarded as `X-Soat-Context-*` headers on the tool calls of
-  // every agent generation this run — and every child run it spawns — produces.
-  // Validated here rather than at generation time only: an async run answers 201
-  // long before its first node executes, so a key that could not become a header
-  // has to be rejected while the caller is still listening.
+  // Validated here, not just at generation time: an async run answers 201 long
+  // before its first node executes, so a key that could not become a header has
+  // to be rejected while the caller is still listening.
   toolContext?: Record<string, string>;
   // Caller-owned annotations stored on the run and returned verbatim (#342).
   // Never merged into run state, so a graph's `input_schema` stays free to
@@ -483,15 +477,12 @@ export const startOrchestrationRun = async (args: {
   // trigger. Persisted on the run and propagated to in-run generations' usage
   // events for in-run trigger attribution.
   triggerId?: string;
-  // The principal starting this run, persisted so the background worker can
-  // re-establish it later (see `orchestrationRunToken.ts`). When omitted, a run
-  // started by another run inherits its parent's identity from `authHeader`,
-  // which for `loop` / `sub_orchestration` children is the parent's run token.
+  // Persisted so the background worker can re-establish it later. When omitted,
+  // a child run inherits its parent's identity from `authHeader`.
   principal?: RequestPrincipal;
-  // Invoked with the run's public id as soon as the run row is created, before
-  // any (in `wait` mode, blocking) execution begins. Lets a caller persist the
-  // run id immediately — e.g. a workflow task recording `active_dispatch.id` so
-  // cancellation-on-exit can reach a still-running run (#606).
+  // Fires as soon as the run row exists, before any blocking execution, so a
+  // caller can persist the id — a workflow task records `active_dispatch.id`
+  // here so cancellation-on-exit can reach a still-running run (#606).
   onRunCreated?: (args: { orchestrationRunId: string }) => Promise<void> | void;
   // Set by `startNestedRun` only — see the starter's own type for why.
   parent?: NestedRunParent;
@@ -570,11 +561,9 @@ export const startOrchestrationRun = async (args: {
     });
   }
 
-  // Durable async mode (default): enqueue a `continue` task and return
-  // immediately with status 'queued'. No node executes inside this HTTP request;
-  // a worker claims the task and drives the run. `kickWorker` lets a
-  // single-process deployment (the API process is itself a valid worker) start
-  // draining right away without a separate worker process.
+  // Durable mode: no node executes inside this request; a worker claims the
+  // task and drives the run. `kickWorker` lets a single-process deployment
+  // start draining without a separate worker.
   await getOrchestrationQueueDriver().enqueue({
     orchestrationRunId: runRecord.id as number,
     kind: 'continue',
@@ -860,10 +849,8 @@ const applyResumeOutcomeOrSettleFailure = async (args: {
   }
 };
 
-// Decision-routed node ids for a resume: the graph's `approval` nodes, plus a
-// gated `tool` node that parked for approval — its unlabeled success edge
-// follows only on `approved`, so a rejected/expired decision never falls
-// through to the happy path.
+// A gated `tool` node's unlabeled success edge follows only on `approved`, so
+// a rejected/expired decision never falls through to the happy path.
 const buildResumeDecisionNodeIds = (args: {
   nodes: OrchestrationNode[];
   resumedNode?: OrchestrationNode;

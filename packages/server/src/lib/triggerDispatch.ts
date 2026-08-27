@@ -180,10 +180,9 @@ const dispatchToTarget = async (args: {
   }
 
   if (args.targetType === 'eval') {
-    // Always background. An eval is one real agent generation per dataset item
-    // with no cap on the item count, so blocking a scheduler tick (or a manual
-    // fire's HTTP request) on it is exactly the case `.claude/rules/sync-async.md`
-    // rules out; the firing records the run id, which is the handle to poll.
+    // Always background: an eval is one generation per dataset item with no cap
+    // on the count, so blocking a scheduler tick on it is the case
+    // `sync-async.md` rules out. The firing records the run id to poll.
     const run = await startEvalRun({
       evalId: args.targetId,
       projectIds: [args.projectId],

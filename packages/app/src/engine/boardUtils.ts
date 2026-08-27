@@ -52,10 +52,8 @@ export const boardResourceParam = (module: ModuleInfo): string | null => {
   return params.length > 0 ? params[params.length - 1] : null;
 };
 
-// The companion "cards" module for a board: another module whose collection can
-// be filtered by this resource's id (its `<resource>_id` query parameter). For
-// the Workflows module this resolves to the Tasks module. Generic — nothing is
-// hard-coded to workflows or tasks.
+// Another module whose collection filters by this resource's `<resource>_id`.
+// Generic — nothing is hard-coded to workflows or tasks.
 export const findBoardCardsModule = (
   module: ModuleInfo,
   modules: ModuleInfo[]
@@ -73,10 +71,8 @@ export const findBoardCardsModule = (
   );
 };
 
-// Groups card records into columns keyed by their column-field value, preserving
-// the workflow's declared state order. Cards whose state is not in the
-// definition (e.g. a state removed after the card entered it) are collected
-// under `extraColumns` so nothing is silently dropped from the board.
+// Preserves the workflow's declared state order. A card whose state is not in
+// the definition goes to `extraColumns`, so nothing is silently dropped.
 export const groupCardsByState = (args: {
   cards: JsonObject[];
   states: BoardColumnState[];

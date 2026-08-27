@@ -58,10 +58,8 @@ export const enqueueEvalItemTasks = async (args: {
   await db.EvalRunTask.bulkCreate(
     args.datasetItemIds.map((datasetItemId) => {
       return {
-        // Explicit: `bulkCreate` does not run the model's per-instance
-        // `beforeValidate` hook, so the generated public id has to be supplied
-        // here — the same reason `persistTokenEvent` passes one for its
-        // components.
+        // `bulkCreate` skips the per-instance `beforeValidate` hook, so the
+        // public id has to be supplied here.
         publicId: generatePublicId(PUBLIC_ID_PREFIXES.evalRunTask),
         evalRunId: args.evalRunId,
         datasetItemId,

@@ -115,30 +115,22 @@ export class Trace extends Model {
   @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 0 })
   declare stepCount: number;
 
-  // How the steps object is divided between the generations grouped under this
-  // trace, in the order they first wrote: `[{ generationId, stepCount }]`. The
-  // object is the concatenation of these segments, so a caller-supplied
-  // `trace_id` reused by a second generation appends its steps instead of
-  // replacing the first generation's (#1024), while a generation that writes
-  // again — the tool-outputs continuation — rewrites only its own slice.
-  //
-  // Skeleton, not content: public ids and counters, the same class as
-  // `stepCount`. Reset by a purge because the object it indexes is deleted.
+  // How the steps object divides between the generations under this trace, in
+  // first-write order. The object is the concatenation of these segments, so a
+  // reused `trace_id` appends rather than replacing the first generation's
+  // steps (#1024), and a re-writing generation rewrites only its own slice.
+  // Skeleton, not content, but reset by a purge because the object it indexes
+  // is deleted.
   @Column({ type: DataType.JSONB, allowNull: false, defaultValue: [] })
   declare stepSegments: { generationId: string; stepCount: number }[];
 
-  // Structured error payload recorded when a generation in this trace fails
-  // (e.g. upstream AI provider errors). Cleared by a content purge: an error
-  // payload can carry a tool's request/response bodies, so it is content and
-  // not part of the auditable skeleton.
+  // Content, not skeleton: an error payload can carry a tool's request and
+  // response bodies, so a purge clears it.
   @Column({ type: DataType.JSONB, allowNull: true })
   declare error: Record<string, unknown> | null;
 
-  // Content-purge marker. When set, the trace's steps file has been deleted
-  // from storage and its content fields cleared; the row survives as an
-  // auditable skeleton (ids, timestamps, step count) so a purge is provable
+  // The row survives a purge as an auditable skeleton, so a purge is provable
   // rather than indistinguishable from a resource that never existed.
-  // The principal pair mirrors Generation's `startedByPrincipal*` columns.
   @Column({ type: DataType.DATE, allowNull: true })
   declare contentRedactedAt: Date | null;
 
