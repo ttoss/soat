@@ -1,3 +1,9 @@
+---
+paths:
+  - "packages/server/**"
+  - "packages/website/**"
+---
+
 # Synchronous vs Asynchronous Execution
 
 Any operation that can outlast a request — an LLM generation, an ingestion, a run —

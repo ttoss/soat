@@ -1,3 +1,12 @@
+---
+paths:
+  - "packages/server/**"
+  - "packages/postgresdb/**"
+  - "tests/**"
+  - "scripts/**"
+  - ".github/workflows/**"
+---
+
 # Test Instructions
 
 ## Running Tests
