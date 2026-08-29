@@ -72,6 +72,17 @@ paths:
                           enum: [openai, anthropic, google, xai, groq, ollama, azure, bedrock, vertex, gateway, custom]
                         default_model:
                           type: string
+                        secret_id:
+                          x-soat-ref: secrets
+                          type: string
+                          nullable: true
+                          description: Secret ID containing API credentials, or null when the record links none.
+                        base_url:
+                          type: string
+                          description: Custom base URL for the provider. Absent when the record sets none.
+                        config:
+                          type: object
+                          description: Additional provider-specific configuration. Absent when the record sets none.
                         project_id:
                           x-soat-ref: projects
                           type: string

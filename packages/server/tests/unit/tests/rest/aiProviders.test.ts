@@ -1,5 +1,48 @@
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+
+import { load } from 'js-yaml';
+
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
+
+/**
+ * The properties the list operation's row schema declares. Read from the spec
+ * rather than from a generated client: the spec is what the SDK, CLI and MCP
+ * surface are built from, so it is the artefact that must not under-describe
+ * the response.
+ */
+const listedRowProperties = (): Record<string, unknown> => {
+  const spec: unknown = load(
+    fs.readFileSync(
+      path.resolve(
+        __dirname,
+        '../../../../src/rest/openapi/v1/ai-providers.yaml'
+      ),
+      'utf8'
+    )
+  );
+  const at = (node: unknown, key: string): unknown => {
+    return node && typeof node === 'object'
+      ? (node as Record<string, unknown>)[key]
+      : undefined;
+  };
+  const properties = [
+    'paths',
+    '/api/v1/ai-providers',
+    'get',
+    'responses',
+    '200',
+    'content',
+    'application/json',
+    'schema',
+    'properties',
+    'data',
+    'items',
+    'properties',
+  ].reduce(at, spec);
+  return (properties as Record<string, unknown> | undefined) ?? {};
+};
 
 describe('AI Providers', () => {
   let adminToken: string;
@@ -49,6 +92,40 @@ describe('AI Providers', () => {
 
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body.data)).toBe(true);
+    });
+
+    test('every field a listed row carries is declared in the spec', async () => {
+      // The list rows are built by the same `mapAiProvider` as the item read,
+      // so they carry `secret_id`, `base_url` and `config` — none of which the
+      // list schema declared. A generated client types the row from that
+      // schema, so the fields were invisible to every SDK consumer.
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: 'Listed Shape',
+          provider: 'bedrock',
+          default_model: 'model-x',
+          secret_id: secretId,
+          base_url: 'https://example.invalid',
+          config: { region: 'us-east-1' },
+        });
+      expect(created.status).toBe(201);
+
+      const response = await authenticatedTestClient(userToken)
+        .get('/api/v1/ai-providers')
+        .query({ project_id: projectId, limit: 100 });
+      expect(response.status).toBe(200);
+
+      const row = response.body.data.find((item: { id: string }) => {
+        return item.id === created.body.id;
+      });
+      expect(row).toBeDefined();
+
+      const undeclared = Object.keys(row).filter((key) => {
+        return !(key in listedRowProperties());
+      });
+      expect(undeclared).toEqual([]);
     });
 
     test('unauthenticated request returns 401', async () => {
