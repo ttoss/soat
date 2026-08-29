@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.33.1](https://github.com/ttoss/soat/compare/v0.33.0...v0.33.1) (2026-08-29)
+
+### Bug Fixes
+
+* **server:** declare every field the ai-provider listing returns ([#1159](https://github.com/ttoss/soat/issues/1159)) ([08aacd9](https://github.com/ttoss/soat/commit/08aacd9b03fdd339b2e214e94983ea1772a1e6f4))
+
 # [0.33.0](https://github.com/ttoss/soat/compare/v0.32.0...v0.33.0) (2026-08-26)
 
 ### Bug Fixes
