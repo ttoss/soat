@@ -146,12 +146,6 @@ export const resolveChainLineage = async (args: {
   };
 };
 
-/**
- * Resolves the lineage a turn inherits from its declared initiator, and refuses
- * the turn when the chain that initiator belongs to has spent its budget.
- * Explicit trace ids win — a nested call passes its own, and it is bounded by
- * `max_call_depth` rather than by this.
- */
 const refuseChain = async (args: {
   agentId: string;
   projectIds?: number[];
@@ -187,6 +181,12 @@ const refuseChain = async (args: {
   });
 };
 
+/**
+ * Resolves the lineage a turn inherits from its declared initiator, and refuses
+ * the turn when the chain that initiator belongs to has spent its budget.
+ * Explicit trace ids win — a nested call passes its own, and is bounded by
+ * `max_call_depth` rather than by this.
+ */
 export const resolveChainOrRefuse = async (args: {
   agentId: string;
   projectIds?: number[];
