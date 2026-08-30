@@ -8,6 +8,7 @@ import type {
 } from './agentGenerationTypes';
 import { emitResourceEvent, resolveProjectPublicId } from './eventBus';
 import { updateGenerationRecord } from './generations';
+import { resolveStopReason } from './generationStopReason';
 import { saveRoutingMetadata } from './modelRouteMetadata';
 import { buildGenerationErrorPayload, usageFromFailure } from './providerError';
 import { recordTraceError, saveTrace, serializeSteps } from './traces';
@@ -218,7 +219,11 @@ const runCompletionSideEffects = async (
       publicId: args.generationId,
       status: 'completed',
       completedAt: new Date(),
-      stopReason: args.result.finishReason,
+      stopReason: resolveStopReason({
+        finishReason: args.result.finishReason,
+        stepCount: args.result.steps.length,
+        maxSteps: args.pending.agentConfig.maxSteps,
+      }),
     }),
     saveRoutingMetadata({
       generationId: args.generationId,

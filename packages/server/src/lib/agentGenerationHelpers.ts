@@ -10,6 +10,7 @@ import {
 } from './agentGenerationTypes';
 import { emitResourceEvent } from './eventBus';
 import { updateGenerationRecord } from './generations';
+import { resolveStopReason } from './generationStopReason';
 import { saveRoutingMetadata } from './modelRouteMetadata';
 import { assertNoTextEncodedToolCall } from './textEncodedToolCall';
 import {
@@ -244,6 +245,28 @@ export const savePendingGeneration = (args: {
   return requiresActionResult;
 };
 
+/**
+ * The terminal record write for a completed turn. Fire-and-forget: the result
+ * is already built, and a failed status write must not fail the generation.
+ */
+const markGenerationCompleted = (args: {
+  generationId: string;
+  finishReason: string;
+  stepCount: number;
+  maxSteps: unknown;
+}): void => {
+  updateGenerationRecord({
+    publicId: args.generationId,
+    status: 'completed',
+    completedAt: new Date(),
+    stopReason: resolveStopReason({
+      finishReason: args.finishReason,
+      stepCount: args.stepCount,
+      maxSteps: args.maxSteps,
+    }),
+  }).catch(() => {});
+};
+
 export const buildCompletedGenerationResult = async (args: {
   generationId: string;
   traceId: string;
@@ -290,12 +313,12 @@ export const buildCompletedGenerationResult = async (args: {
     outputSchema: args.typedAgent.outputSchema,
     generationId: args.generationId,
   });
-  updateGenerationRecord({
-    publicId: args.generationId,
-    status: 'completed',
-    completedAt: new Date(),
-    stopReason: args.result.finishReason,
-  }).catch(() => {});
+  markGenerationCompleted({
+    generationId: args.generationId,
+    finishReason: args.result.finishReason,
+    stepCount: serializedStepsCompleted.length,
+    maxSteps: args.typedAgent.maxSteps,
+  });
 
   const model = args.result.response?.modelId ?? args.typedAgent.model ?? '';
 

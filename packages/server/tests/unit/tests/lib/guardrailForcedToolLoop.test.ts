@@ -7,6 +7,8 @@ import { db } from 'src/db';
 import { createGeneration } from 'src/lib/agentGeneration';
 import type { GenerationResult } from 'src/lib/agentGenerationTypes';
 import { DEFAULT_TOOL_APPROVAL_EXPIRES_IN_SECONDS } from 'src/lib/agentToolApproval';
+import { runToolCallContinuation } from 'src/lib/agentToolApprovalContinuation';
+import { expireApprovalIfDue, getApproval } from 'src/lib/approvals';
 // Also registers the tool_call resume handler the expiry sweeper fires.
 import { expireDueApprovals } from 'src/lib/approvalScheduler';
 import { createGuardrail } from 'src/lib/guardrails';
@@ -40,6 +42,7 @@ import { createGuardrail } from 'src/lib/guardrails';
 // visible without running 20 provider calls per generation.
 const MAX_STEPS = 2;
 const ROUNDS = 3;
+const CHAIN_BUDGET = 4;
 const WAIT_TIMEOUT_MS = 20_000;
 
 describe('guardrail-held tool calls under tool_choice: "required"', () => {
@@ -129,6 +132,7 @@ describe('guardrail-held tool calls under tool_choice: "required"', () => {
   afterEach(async () => {
     modelRequests = [];
     toolRequests = [];
+    delete process.env.MAX_CONTINUATION_CHAIN_GENERATIONS;
     // Nothing may survive into the next test's sweep: `expireDueApprovals` is
     // process-wide, and a leftover item would seed a generation there.
     await db.ApprovalItem.destroy({ where: { status: 'pending' } });
@@ -286,6 +290,19 @@ describe('guardrail-held tool calls under tool_choice: "required"', () => {
     const pending = await pendingApprovals(fixture.projectId);
     expect(pending).toHaveLength(MAX_STEPS);
 
+    // Exhaustion is distinguishable from a pause: the provider's own finish
+    // reason still reads `tool-calls`, but the record says the step budget ran
+    // out — which is what makes "this turn can never finish" observable.
+    await waitFor({
+      until: async () => {
+        const row = await db.Generation.findOne({
+          where: { publicId: result.id },
+        });
+        return row?.stopReason === 'max_steps';
+      },
+      describe: `generation ${result.id} to record stop_reason=max_steps`,
+    });
+
     // The ~24h cadence the bursts ran on is the platform default TTL.
     expect(DEFAULT_TOOL_APPROVAL_EXPIRES_IN_SECONDS).toBe(24 * 60 * 60);
     const ttlSeconds =
@@ -323,75 +340,70 @@ describe('guardrail-held tool calls under tool_choice: "required"', () => {
     expect(toolRequests).toHaveLength(0);
   });
 
-  test('the chain compounds every round while the depth guard stays blind to it', async () => {
+  test('the chain is one linked tree, and it stops growing at its budget', async () => {
+    // Small enough to be reached in two rounds; the platform default is 100.
+    process.env.MAX_CONTINUATION_CHAIN_GENERATIONS = String(CHAIN_BUDGET);
+
     const fixture = await createFixture('Forced Loop Chain');
+    const seed = await runGeneration(fixture);
+    const seedRow = await db.Generation.findOne({
+      where: { publicId: seed.id },
+    });
 
-    await runGeneration(fixture);
-
-    let expectedGenerations = 1;
+    // Resumptions are driven sequentially here rather than through the sweeper,
+    // so the budget is read and spent one continuation at a time: concurrent
+    // resumptions each read the chain before any of them has written to it, and
+    // the bound would only hold approximately.
     const populationPerRound: number[] = [];
     for (let round = 0; round < ROUNDS; round += 1) {
-      // Each held call of each generation seeds one more generation.
-      expectedGenerations += MAX_STEPS ** (round + 1);
-      await expireHeldCallsAndSettle({
-        projectId: fixture.projectId,
-        expectedCompleted: expectedGenerations,
-      });
+      for (const item of await pendingApprovals(fixture.projectId)) {
+        await item.update({ expiresAt: new Date(Date.now() - 1000) });
+        await expireApprovalIfDue({ id: item.publicId });
+        await runToolCallContinuation({
+          item: await getApproval({ id: item.publicId }),
+          decision: {
+            decision: 'expired',
+            approvalId: item.publicId,
+            resolvedBy: null,
+            editedArgs: null,
+            reason: null,
+            result: null,
+          },
+        });
+      }
       populationPerRound.push((await generationsOf(fixture.projectId)).length);
     }
 
-    // 1 → 3 → 7 → 15 with MAX_STEPS = 2: the daily population grows by a
-    // constant factor, exactly as the incident's 6 → 29 → 401 → 1,416 did.
-    expect(populationPerRound).toEqual([3, 7, 15]);
-
+    // Unbounded, this was 3 → 7 → 15 (and the incident's 6 → 29 → 401 → 1,416).
+    // The chain now stops at its budget and the third round adds nothing.
     const generations = await generationsOf(fixture.projectId);
+    expect(generations.length).toBeLessThanOrEqual(1 + CHAIN_BUDGET);
+    expect(populationPerRound[ROUNDS - 1]).toBe(populationPerRound[ROUNDS - 2]);
 
-    // Not one generation ever finished: every turn stopped on tool calls.
+    // Every turn still spends its whole step budget on held calls — the loop is
+    // bounded, not fixed, and `max_steps` is what says so on the record.
     const stopReasons = new Set(
       generations.map((generation) => {
         return generation.stopReason;
       })
     );
-    expect([...stopReasons]).toEqual(['tool-calls']);
-
-    // The chain is deep. Walking `initiator_generation_id` from a leaf reaches
-    // the root in exactly one hop per round.
-    const byId = new Map(
-      generations.map((generation) => {
-        return [generation.id as number, generation];
-      })
-    );
-    const leaf = generations[generations.length - 1];
-    let chainDepth = 0;
-    let cursor = leaf;
-    while (cursor.initiatorGenerationId !== null) {
-      cursor = byId.get(cursor.initiatorGenerationId as number)!;
-      chainDepth += 1;
-    }
-    expect(chainDepth).toBe(ROUNDS);
-    expect(cursor.initiatorGenerationId).toBeNull();
-
-    // The depth guard, however, keys on trace lineage — and every link starts
-    // a brand-new trace with no parent and no root, so the lineage it counts
-    // is 1 deep forever and `remainingDepth` resets to the default each round.
-    const traces = await db.Trace.findAll({
-      where: { projectId: fixture.projectId },
-    });
-    expect(traces).toHaveLength(generations.length);
-    for (const trace of traces) {
-      expect(trace.parentTraceId).toBeNull();
-      expect(trace.rootTraceId).toBeNull();
-    }
-    const traceIds = new Set(
-      generations.map((generation) => {
-        return generation.traceId;
-      })
-    );
-    expect(traceIds.size).toBe(generations.length);
-
-    // Nothing ever short-circuited: no depth guard, and the tool the whole
-    // chain is about was never actually called.
+    expect([...stopReasons]).toEqual(['max_steps']);
     expect(stopReasons.has('depth_guard')).toBe(false);
     expect(toolRequests).toHaveLength(0);
+
+    // Every continuation declared its parent, and the lineage follows from it:
+    // one tree rooted at the seed, not a fresh root per hop.
+    const seedTrace = await db.Trace.findByPk(seedRow!.traceId as number);
+    const continuations = generations.filter((generation) => {
+      return generation.initiatorGenerationId !== null;
+    });
+    expect(continuations.length).toBe(generations.length - 1);
+    for (const continuation of continuations) {
+      const trace = await db.Trace.findByPk(continuation.traceId as number);
+      expect(trace!.rootTraceId).toBe(seedTrace!.id);
+      expect(trace!.parentTraceId).not.toBeNull();
+    }
+    expect(seedTrace!.parentTraceId).toBeNull();
+    expect(seedTrace!.rootTraceId).toBeNull();
   });
 });

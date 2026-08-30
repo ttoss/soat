@@ -23,6 +23,7 @@ import {
   runToolOutputsGeneration,
 } from './agentNonStreamGeneration';
 import { runStreamGeneration } from './agentStreamGeneration';
+import { type ChainLineage, resolveChainOrRefuse } from './generationChain';
 import { type GenerationInputMessage } from './generationInputMessages';
 import { recordGenerationFailure } from './generationLifecycle';
 import { createGenerationRecord } from './generations';
@@ -140,6 +141,8 @@ const resolveContextAndRecord = async (args: {
     projectId: ctx.typedAgent.project.id as number,
     agentId: args.agentId,
     traceId: args.traceId,
+    parentTraceId: args.parentTraceId,
+    rootTraceId: args.rootTraceId,
     initiatorGenerationId: args.initiatorGenerationId ?? null,
     ...startedByPrincipalColumns(principal),
     // Typed FK columns, not metadata keys: this is identity the platform
@@ -255,7 +258,7 @@ export type CreateGenerationArgs = {
  */
 type GenerationPrep =
   | { kind: 'short_circuit'; result: GenerationResult }
-  | { kind: 'ready'; ctx: GenerationContext; traceId: string };
+  | ({ kind: 'ready'; ctx: GenerationContext; traceId: string } & ChainLineage);
 
 const prepareGeneration = async (
   args: CreateGenerationArgs
@@ -277,6 +280,21 @@ const prepareGeneration = async (
   });
   if (depthGuard) return { kind: 'short_circuit', result: depthGuard };
 
+  // A declared initiator is what makes a turn a continuation: its lineage and
+  // its budget are both resolved from that one field.
+  const chain = await resolveChainOrRefuse({
+    agentId: args.agentId,
+    projectIds: args.projectIds,
+    initiatorGenerationId: args.initiatorGenerationId,
+    traceId,
+    parentTraceId: args.parentTraceId,
+    rootTraceId: args.rootTraceId,
+  });
+  if (chain.kind === 'refused') {
+    return { kind: 'short_circuit', result: chain.result };
+  }
+  const { parentTraceId, rootTraceId } = chain;
+
   // Before any context building or provider call, so a breached budget meters
   // nothing. Fails open on an infrastructure error: a quota is cost control,
   // not authorization, so one unmetered window beats blocking every generation.
@@ -297,8 +315,8 @@ const prepareGeneration = async (
     authUser: args.authUser,
     toolContext: args.toolContext,
     traceId,
-    parentTraceId: args.parentTraceId,
-    rootTraceId: args.rootTraceId,
+    parentTraceId,
+    rootTraceId,
     initiatorGenerationId: args.initiatorGenerationId,
     remainingDepth: maxDepth,
     knowledgeConfig: args.knowledgeConfig,
@@ -314,7 +332,7 @@ const prepareGeneration = async (
     source: args.source,
   });
 
-  return { kind: 'ready', ctx, traceId };
+  return { kind: 'ready', ctx, traceId, parentTraceId, rootTraceId };
 };
 
 /**
@@ -335,7 +353,7 @@ export const createGeneration = async (
 ): Promise<GenerationResult | ReadableStream> => {
   const prep = await prepareGeneration(args);
   if (prep.kind === 'short_circuit') return prep.result;
-  const { ctx, traceId } = prep;
+  const { ctx, traceId, parentTraceId, rootTraceId } = prep;
 
   log('createGeneration: agentId=%s stream=%s', args.agentId, args.stream);
 
@@ -345,8 +363,8 @@ export const createGeneration = async (
       ctx,
       traceId,
       agentId: args.agentId,
-      parentTraceId: args.parentTraceId,
-      rootTraceId: args.rootTraceId,
+      parentTraceId,
+      rootTraceId,
       abortSignal: args.abortSignal,
     });
   } catch (error) {
@@ -391,7 +409,7 @@ export const startGeneration = async (
       status: 'accepted',
     };
   }
-  const { ctx, traceId } = prep;
+  const { ctx, traceId, parentTraceId, rootTraceId } = prep;
 
   log(
     'startGeneration: agentId=%s generationId=%s',
@@ -407,8 +425,8 @@ export const startGeneration = async (
     ctx,
     traceId,
     agentId: args.agentId,
-    parentTraceId: args.parentTraceId,
-    rootTraceId: args.rootTraceId,
+    parentTraceId,
+    rootTraceId,
     abortSignal: args.abortSignal,
   }).catch(async (error) => {
     // A `try` rather than a second `.catch`: recording is best-effort (the

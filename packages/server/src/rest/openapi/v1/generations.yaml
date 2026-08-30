@@ -423,7 +423,13 @@ components:
         stop_reason:
           type: string
           nullable: true
-          description: Why the generation stopped (e.g. 'stop', 'error')
+          description: >
+            Why the generation stopped. Either the model provider's own finish
+            reason relayed unchanged ('stop', 'tool-calls', 'length', …) or one
+            the platform names itself: 'max_steps' when the turn spent its whole
+            step budget on tool calls, 'depth_guard' when a nested call exceeded
+            the call depth, 'chain_limit' when a continuation chain reached its
+            generation budget, or 'error' when the turn failed.
           example: error
         error:
           type: object
@@ -745,6 +751,10 @@ components:
         stop_reason:
           type: string
           nullable: true
+          description: >
+            Why the generation stopped — the provider's finish reason, or one of
+            the platform's own ('max_steps', 'depth_guard', 'chain_limit',
+            'error').
           example: stop
         started_at:
           type: string

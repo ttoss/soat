@@ -102,6 +102,7 @@ const runAgentGeneration = async (args: {
   abortSignal?: AbortSignal;
   sessionId?: string;
   authHeader?: string;
+  initiatorGenerationId?: string | null;
 }): Promise<InternalGenerationResult> => {
   const result = await createGeneration({
     agentId: args.agent.publicId,
@@ -110,6 +111,7 @@ const runAgentGeneration = async (args: {
     abortSignal: args.abortSignal,
     sessionId: args.sessionId,
     authHeader: args.authHeader,
+    initiatorGenerationId: args.initiatorGenerationId,
   });
 
   if (result instanceof ReadableStream) {
@@ -146,6 +148,7 @@ const runGenerationForAgent = async (args: {
   abortSignal?: AbortSignal;
   sessionId?: string;
   authHeader?: string;
+  initiatorGenerationId?: string | null;
 }): Promise<InternalGenerationResult> => {
   return runAgentGeneration({
     agent: args.generatingAgent,
@@ -154,6 +157,7 @@ const runGenerationForAgent = async (args: {
     abortSignal: args.abortSignal,
     sessionId: args.sessionId,
     authHeader: args.authHeader,
+    initiatorGenerationId: args.initiatorGenerationId,
   });
 };
 
@@ -305,6 +309,10 @@ export const generateConversationMessage = async (args: {
   // that re-minted one for durable work (an approved tool call's continuation,
   // #894); a request-driven turn leaves it unset, exactly as before.
   authHeader?: string;
+  // The generation this turn continues, when a resumption drove it (an
+  // approval's continuation). Declares the chain so it is bounded and linked;
+  // a person's own message leaves it unset.
+  initiatorGenerationId?: string | null;
 }): Promise<GenerateConversationMessageResult> => {
   const ctx = await loadGenerationContext({
     conversationId: args.conversationId,
@@ -328,6 +336,7 @@ export const generateConversationMessage = async (args: {
     abortSignal: args.abortSignal,
     sessionId: args.sessionId,
     authHeader: args.authHeader,
+    initiatorGenerationId: args.initiatorGenerationId,
   });
 
   if (genResult.status !== 'completed') {

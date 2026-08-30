@@ -20,6 +20,7 @@ import {
 } from './agentStepRules';
 import { recordGenerationFailure } from './generationLifecycle';
 import { updateGenerationRecord } from './generations';
+import { resolveMaxSteps, resolveStopReason } from './generationStopReason';
 import {
   collectSystemInstructions,
   withoutSystemMessages,
@@ -132,7 +133,11 @@ const fireStreamEndSideEffects = (args: {
       publicId: args.generationId,
       status: 'completed',
       completedAt: new Date(),
-      stopReason: args.finishReason,
+      stopReason: resolveStopReason({
+        finishReason: args.finishReason,
+        stepCount: args.steps.length,
+        maxSteps: args.typedAgent.maxSteps,
+      }),
     }).catch(() => {});
   }
 
@@ -257,7 +262,7 @@ export const runStreamGeneration = async (args: {
         : undefined,
     toolChoice: normalizeToolChoice(args.typedAgent.toolChoice),
     prepareStep,
-    stopWhen: isStepCount((args.typedAgent.maxSteps as number) ?? 20),
+    stopWhen: isStepCount(resolveMaxSteps(args.typedAgent.maxSteps)),
     temperature: (args.typedAgent.temperature as number) ?? undefined,
     onError: ({ error }) => {
       streamError = error;

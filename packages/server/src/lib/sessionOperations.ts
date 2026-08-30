@@ -137,6 +137,10 @@ export const generateSessionResponse = async (args: {
   // re-mints one from the principal on the generation that proposed the call
   // (#894). A turn driven by a real request leaves it unset.
   authHeader?: string;
+  // The generation this turn continues, when a resumption drove it (an
+  // approval's continuation). Declares the chain so it is bounded and linked;
+  // a person's own message leaves it unset.
+  initiatorGenerationId?: string | null;
 }) => {
   const session = await findSessionRecord({
     agentId: args.agentId,
@@ -202,6 +206,7 @@ export const generateSessionResponse = async (args: {
       // would let a caller bill another actor.
       sessionId: session.publicId,
       authHeader: args.authHeader,
+      initiatorGenerationId: args.initiatorGenerationId,
     });
   } finally {
     if (!controller.signal.aborted) {
@@ -226,6 +231,10 @@ export const addSessionMessage = async (args: {
   // Forwarded to the auto-generation this message may trigger; see
   // `generateSessionResponse`.
   authHeader?: string;
+  // The generation this turn continues, when a resumption drove it (an
+  // approval's continuation). Declares the chain so it is bounded and linked;
+  // a person's own message leaves it unset.
+  initiatorGenerationId?: string | null;
 }) => {
   const session = await findSessionRecord({
     agentId: args.agentId,
@@ -296,6 +305,7 @@ export const addSessionMessage = async (args: {
     toolContext: args.toolContext,
     authHeader: args.authHeader,
     generateFn: generateSessionResponse,
+    initiatorGenerationId: args.initiatorGenerationId,
   });
 };
 
@@ -310,6 +320,10 @@ export const sendSessionMessage = async (args: {
   // `addSessionMessage` may trigger and the explicit turn below, so the
   // credential reaches whichever of the two actually runs.
   authHeader?: string;
+  // The generation this turn continues, when a resumption drove it (an
+  // approval's continuation). Declares the chain so it is bounded and linked;
+  // a person's own message leaves it unset.
+  initiatorGenerationId?: string | null;
 }) => {
   await addSessionMessage({
     agentId: args.agentId,
@@ -318,6 +332,7 @@ export const sendSessionMessage = async (args: {
     toolContext: args.toolContext,
     authUser: args.authUser,
     authHeader: args.authHeader,
+    initiatorGenerationId: args.initiatorGenerationId,
   });
 
   return generateSessionResponse({
@@ -326,6 +341,7 @@ export const sendSessionMessage = async (args: {
     model: args.model,
     toolContext: args.toolContext,
     authHeader: args.authHeader,
+    initiatorGenerationId: args.initiatorGenerationId,
   });
 };
 

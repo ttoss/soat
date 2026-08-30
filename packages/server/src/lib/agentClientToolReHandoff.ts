@@ -5,6 +5,7 @@ import { db } from '../db';
 import { buildGenerationContext } from './agentGenerationContext';
 import { savePendingGeneration } from './agentGenerationHelpers';
 import type { MappedApproval } from './approvals';
+import { resolveChainLineage } from './generationChain';
 import { createGenerationRecord } from './generations';
 import { readRunTokenPrincipal } from './orchestrationRunToken';
 import { startedByPrincipalColumns } from './principals';
@@ -33,13 +34,15 @@ const seedReHandoffPending = (args: {
   frozenArgs: Record<string, unknown>;
   ctx: Awaited<ReturnType<typeof buildGenerationContext>>;
   traceId: string;
+  parentTraceId: string | null;
+  rootTraceId: string | null;
 }): void => {
   const toolCallId = `call_${args.ctx.generationId}`;
   savePendingGeneration({
     generationId: args.ctx.generationId,
     traceId: args.traceId,
-    parentTraceId: null,
-    rootTraceId: null,
+    parentTraceId: args.parentTraceId,
+    rootTraceId: args.rootTraceId,
     pendingToolCalls: [
       { toolCallId, toolName: args.toolName, input: args.frozenArgs },
     ],
@@ -130,6 +133,13 @@ export const emitClientToolReHandoff = async (args: {
   });
 
   const traceId = generatePublicId(PUBLIC_ID_PREFIXES.trace);
+  // The re-handoff is a continuation like any other, so it joins the chain it
+  // came from rather than starting a new root. It is not refused when that
+  // chain is over budget: a human approved this specific call, which is the
+  // one thing the runaway the budget exists for never had.
+  const lineage = await resolveChainLineage({
+    initiatorGenerationId: args.item.generation_id,
+  });
   // Deliberately uncaught: swallowing here would seed a pending generation with
   // no DB row. A genuine failure belongs in `runToolCallContinuation`'s catch.
   await createGenerationRecord({
@@ -137,6 +147,7 @@ export const emitClientToolReHandoff = async (args: {
     projectId: args.projectInternalId,
     agentId,
     traceId,
+    ...lineage,
     initiatorGenerationId: args.item.generation_id ?? null,
     ...startedByPrincipalColumns(readRunTokenPrincipal(args.authHeader)),
     // Keeps the continuation's usage attributed to the same end user as the
@@ -151,6 +162,7 @@ export const emitClientToolReHandoff = async (args: {
     frozenArgs,
     ctx,
     traceId,
+    ...lineage,
   });
 
   return true;

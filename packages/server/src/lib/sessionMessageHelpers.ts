@@ -69,6 +69,7 @@ type GenerateFn = (args: {
   sessionId: string;
   toolContext?: Record<string, string>;
   authHeader?: string;
+  initiatorGenerationId?: string | null;
 }) => Promise<unknown>;
 
 export const triggerOrReturnMessage = (args: {
@@ -80,6 +81,10 @@ export const triggerOrReturnMessage = (args: {
   savedContent: string | null;
   savedDocumentId: string | undefined;
   generateFn: GenerateFn;
+  // The generation this turn continues, when a resumption drove it (an
+  // approval's continuation). Declares the chain so it is bounded and linked;
+  // a person's own message leaves it unset.
+  initiatorGenerationId?: string | null;
 }) => {
   if (args.session?.autoGenerate && !args.session.generatingAt) {
     return args.generateFn({
@@ -87,6 +92,7 @@ export const triggerOrReturnMessage = (args: {
       sessionId: args.sessionId,
       toolContext: args.toolContext,
       authHeader: args.authHeader,
+      initiatorGenerationId: args.initiatorGenerationId,
     });
   }
   return {

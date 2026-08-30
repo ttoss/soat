@@ -117,14 +117,20 @@ A generation is a persisted lifecycle record for a single agent execution. While
 
 When `status` is `completed`, `stop_reason` indicates why:
 
-| Stop Reason               | Description                                        |
-| ------------------------- | -------------------------------------------------- |
-| `end_turn`                | Model produced a final response with no tool calls |
-| `max_steps`               | Step count reached `max_steps`                     |
-| `stop_condition`          | A configured `stop_conditions` rule was triggered  |
-| `no_executor`             | A tool without an executor was called (non-client) |
-| `stream_response_started` | Streaming generation handed off to the SSE stream  |
-| `depth_limit`             | Nested call exceeded `max_call_depth`              |
+| Stop Reason    | Description                                                                       |
+| -------------- | --------------------------------------------------------------------------------- |
+| `stop`         | The model produced a final response with no tool calls                             |
+| `tool-calls`   | The turn ended on tool calls the platform is still settling — a pause, not an end   |
+| `max_steps`    | The turn spent its whole `max_steps` budget on tool calls and could not finish      |
+| `depth_guard`  | A nested call exceeded `max_call_depth`                                             |
+| `chain_limit`  | A continuation chain reached its generation budget and was not resumed              |
+| `error`        | The turn failed; the `error` field carries the details                              |
+
+Any other value is the provider's own finish reason (`length`, `content-filter`,
+…) relayed unchanged. `max_steps` is the one case the platform names itself: a
+turn that exhausts its step budget finishes on the provider's `tool-calls`, the
+same value a turn that merely paused reports, so without it an agent that can
+never terminate is indistinguishable from ordinary tool use.
 
 ## Key Concepts
 
@@ -568,6 +574,25 @@ These events are dispatched to project [webhooks](./webhooks.md) as a generation
 | `agents.deleted`                    | An agent was deleted                                        |
 
 Every generation event carries the generation `id` and its `trace_id`. `agents.generation.failed` also carries the same structured `error` the generation record exposes (`error.code`, `error.message`). Subscribe to the family with the `agents.generation.*` pattern. The session equivalents are namespaced separately — see [Sessions → Webhook Events](./sessions.md#webhook-events).
+
+### Continuation chains
+
+A generation can be resumed long after the request that started it — an approval
+decided days later continues the turn that proposed the call. Each resumption is
+a new generation that declares the one it continues, so a chain is a linked tree
+rather than a series of unrelated roots, and it is bounded: once a chain has
+spawned `MAX_CONTINUATION_CHAIN_GENERATIONS` generations, further resumptions
+stop with `chain_limit` instead of extending it.
+
+The budget counts generations rather than hops because a chain fans out — a turn
+holding several gated calls seeds one continuation per call — so a limit on depth
+alone would still permit an exponential number of turns.
+
+## Configuration
+
+| Environment Variable                 | Required | Description                                                                  |
+| ------------------------------------ | -------- | ---------------------------------------------------------------------------- |
+| `MAX_CONTINUATION_CHAIN_GENERATIONS` | No       | Generations one continuation chain may spawn before it stops (default `100`) |
 
 ## Examples
 

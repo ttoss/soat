@@ -38,7 +38,7 @@ Generations can be listed via [`GET /generations`](/docs/api/generations/list-ge
 | `started_at`                | string         | When the generation started                                                                          |
 | `completed_at`              | string \| null | When the generation reached a terminal state                                                         |
 | `last_activity_at`          | string \| null | Last activity timestamp                                                                              |
-| `stop_reason`               | string \| null | Why the generation stopped (e.g. `stop`, `error`, `depth_guard`)                                     |
+| `stop_reason`               | string \| null | Why the generation stopped — see [Stop Reason](./agents.md#stop-reason)                              |
 | `error`                     | object \| null | Structured error payload recorded when the generation failed (see [Error Recording](#error-recording)) |
 | `metadata`                  | object \| null | Caller-owned key/value annotations, returned verbatim (see [Metadata](#metadata))                    |
 | `action_id`                 | string \| null | Logical action label supplied on the generate request                                                |

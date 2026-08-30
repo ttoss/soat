@@ -82,7 +82,7 @@ export type PendingAgentConfig = {
 };
 
 /** The AI SDK's default step budget, applied when the agent names none. */
-const DEFAULT_MAX_STEPS = 20;
+export const DEFAULT_MAX_STEPS = 20;
 
 /**
  * Freezes an agent's config for a generation that is about to pause. This

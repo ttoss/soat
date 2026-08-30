@@ -26,9 +26,23 @@ export const resolveAgentForGeneration = async (args: {
   return agent as unknown as TypedAgent | null;
 };
 
-// ── Depth Guard ───────────────────────────────────────────────────────────
+// ── Recursion and chain guards ─────────────────────────────────────────────
 
-export const buildDepthGuardResult = (args: {
+type GuardKind = 'depth_guard' | 'chain_limit';
+
+const GUARD_MESSAGES: Record<GuardKind, string> = {
+  depth_guard: 'Maximum call depth reached',
+  chain_limit: 'Continuation chain limit reached',
+};
+
+/**
+ * A turn refused before the provider is called: the trace records why, and the
+ * caller gets a completed result rather than an error, because a refusal is the
+ * platform working as intended. No generation row is written — the id never
+ * reached `createGenerationRecord`.
+ */
+const buildGuardResult = (args: {
+  kind: GuardKind;
   traceId: string;
   projectId: number;
   projectPublicId: string;
@@ -43,7 +57,7 @@ export const buildDepthGuardResult = (args: {
     projectPublicId: args.projectPublicId,
     agentId: args.agentId,
     generationId: args.generationId,
-    steps: [{ type: 'depth_guard', message: 'Maximum call depth reached' }],
+    steps: [{ type: args.kind, message: GUARD_MESSAGES[args.kind] }],
     parentTraceId: args.parentTraceId ?? null,
     rootTraceId: args.rootTraceId ?? null,
   }).catch(
@@ -56,7 +70,7 @@ export const buildDepthGuardResult = (args: {
     publicId: args.generationId,
     status: 'completed',
     completedAt: new Date(),
-    stopReason: 'depth_guard',
+    stopReason: args.kind,
   }).catch(/* istanbul ignore next -- see saveTrace above */ () => {});
   return {
     id: args.generationId,
@@ -64,10 +78,27 @@ export const buildDepthGuardResult = (args: {
     status: 'completed',
     output: {
       model: '',
-      content: 'Maximum call depth reached',
+      content: GUARD_MESSAGES[args.kind],
       finishReason: 'stop',
     },
   };
+};
+
+export const buildDepthGuardResult = (
+  args: Omit<Parameters<typeof buildGuardResult>[0], 'kind'>
+): GenerationResult => {
+  return buildGuardResult({ ...args, kind: 'depth_guard' });
+};
+
+/**
+ * The continuation chain spent its generation budget. Unlike the depth guard
+ * this is usually reached with nobody awaiting the result — the resumption that
+ * asked for the turn is a background sweep — so the trace is the record.
+ */
+export const buildChainGuardResult = (
+  args: Omit<Parameters<typeof buildGuardResult>[0], 'kind'>
+): GenerationResult => {
+  return buildGuardResult({ ...args, kind: 'chain_limit' });
 };
 
 // ── DB Recovery ───────────────────────────────────────────────────────────
