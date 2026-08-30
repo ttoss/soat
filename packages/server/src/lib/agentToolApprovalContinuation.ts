@@ -167,6 +167,7 @@ const fireContinuation = async (args: {
       sessionId: item.session_id,
       message,
       authHeader: args.authHeader,
+      initiatorGenerationId: item.generation_id,
     });
     return;
   }

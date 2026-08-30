@@ -6,6 +6,7 @@ type GenerateSessionResponseFn = (args: {
   sessionId: string;
   toolContext?: Record<string, string>;
   authHeader?: string;
+  initiatorGenerationId?: string | null;
 }) => Promise<unknown>;
 
 // One pending timer per session, keyed `${agentId}#${sessionId}`. Debounce:
@@ -29,6 +30,10 @@ export const scheduleDelayedGeneration = (args: {
   toolContext?: Record<string, string>;
   authHeader?: string;
   generateFn: GenerateSessionResponseFn;
+  // The generation this turn continues, when a resumption drove it (an
+  // approval's continuation). Declares the chain so it is bounded and linked;
+  // a person's own message leaves it unset.
+  initiatorGenerationId?: string | null;
 }) => {
   cancelDelayTimer(args.sessionKey);
   const timer = setTimeout(() => {
@@ -39,6 +44,7 @@ export const scheduleDelayedGeneration = (args: {
         sessionId: args.sessionId,
         toolContext: args.toolContext,
         authHeader: args.authHeader,
+        initiatorGenerationId: args.initiatorGenerationId,
       })
       .catch(() => {});
   }, args.delayMs);
@@ -57,6 +63,10 @@ export const triggerOrScheduleGeneration = (args: {
   toolContext?: Record<string, string>;
   authHeader?: string;
   generateFn: GenerateSessionResponseFn;
+  // The generation this turn continues, when a resumption drove it (an
+  // approval's continuation). Declares the chain so it is bounded and linked;
+  // a person's own message leaves it unset.
+  initiatorGenerationId?: string | null;
 }) => {
   const delayMs = (args.session.messageDelaySeconds ?? 0) * 1000;
   const sessionKey = `${args.agentId}#${args.sessionId}`;
@@ -70,6 +80,7 @@ export const triggerOrScheduleGeneration = (args: {
       toolContext: args.toolContext,
       authHeader: args.authHeader,
       generateFn: args.generateFn,
+      initiatorGenerationId: args.initiatorGenerationId,
     });
     return {
       role: 'user' as const,
@@ -87,5 +98,6 @@ export const triggerOrScheduleGeneration = (args: {
     savedContent: args.savedContent,
     savedDocumentId: args.savedDocumentId,
     generateFn: args.generateFn,
+    initiatorGenerationId: args.initiatorGenerationId,
   });
 };

@@ -32,6 +32,7 @@ import {
   recordContinuationFailure,
   recordGenerationFailure,
 } from './generationLifecycle';
+import { resolveMaxSteps } from './generationStopReason';
 import { applyToolOutputMapping } from './jsonLogicMapping';
 import {
   collectSystemInstructions,
@@ -132,7 +133,7 @@ const callGenerateText = async (args: {
       tools: hasTools ? args.resolvedTools : undefined,
       toolChoice: normalizeToolChoice(args.typedAgent.toolChoice),
       prepareStep: args.prepareStep,
-      stopWhen: isStepCount((args.typedAgent.maxSteps as number) ?? 20),
+      stopWhen: isStepCount(resolveMaxSteps(args.typedAgent.maxSteps)),
       temperature: (args.typedAgent.temperature as number) ?? undefined,
       abortSignal: args.abortSignal,
       // The route config is the only retry authority for a routed model; a

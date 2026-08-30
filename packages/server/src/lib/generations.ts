@@ -6,7 +6,7 @@ import {
   suppressContentWrites,
 } from './generationContentSuppression';
 import { mapGeneration, type PersistedGeneration } from './generationMapper';
-import { findOrCreateTrace } from './generationTrace';
+import { findOrCreateTrace, findTraceDbId } from './generationTrace';
 import { emptyPage, paginatedList } from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
 
@@ -82,6 +82,8 @@ const commitGenerationWithTrace = async (helperArgs: {
     publicId: string;
     projectId: number;
     traceId: string;
+    parentTraceId?: string | null;
+    rootTraceId?: string | null;
     startedByPrincipalType?: string | null;
     startedByPrincipalId?: string | null;
   };
@@ -94,10 +96,17 @@ const commitGenerationWithTrace = async (helperArgs: {
     helperArgs;
 
   return db.sequelize.transaction(async (transaction) => {
+    const [parentTraceDbId, rootTraceDbId] = await Promise.all([
+      findTraceDbId({ traceId: args.parentTraceId, transaction }),
+      findTraceDbId({ traceId: args.rootTraceId, transaction }),
+    ]);
+
     const trace = await findOrCreateTrace({
       traceId: args.traceId,
       projectId: args.projectId,
       agentDbId,
+      parentTraceDbId,
+      rootTraceDbId,
       transaction,
     });
 
@@ -132,6 +141,8 @@ export const createGenerationRecord = async (
     projectId: number;
     agentId: string;
     traceId: string;
+    parentTraceId?: string | null;
+    rootTraceId?: string | null;
     initiatorGenerationId?: string | null;
     startedByPrincipalType?: string | null;
     startedByPrincipalId?: string | null;
