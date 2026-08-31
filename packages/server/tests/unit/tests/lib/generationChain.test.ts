@@ -359,10 +359,14 @@ describe('continuation chain lineage and budget', () => {
       projectId,
       aiProviderId: aiProviderDbId,
       name: args.name,
+      // A realistic mix: the turn-scoped condition sits alongside the
+      // chain-scoped one, so the ceiling resolver has to skip an entry that is
+      // not its own rather than read the first thing in the list.
       stopConditions:
         args.maxGenerations === undefined
           ? null
           : [
+              { type: 'hasToolCall', tool_name: 'done' },
               {
                 type: 'maxChainGenerations',
                 max_generations: args.maxGenerations,

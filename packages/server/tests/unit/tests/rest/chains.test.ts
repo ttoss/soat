@@ -147,6 +147,19 @@ describe('Chains', () => {
       expect(ids).not.toContain(otherProjectChainId);
     });
 
+    test('an unscoped list is a page, not every project', async () => {
+      // Same contract as `list-exceptions`: without `project_id` an
+      // unrestricted caller resolves to no project filter, which this route
+      // reads as an empty scope rather than as "all projects". Chains are
+      // project-owned, so a cross-project firehose is the wrong default.
+      const res =
+        await authenticatedTestClient(adminToken).get('/api/v1/chains');
+
+      expect(res.status).toBe(200);
+      expect(res.body.total).toBe(0);
+      expect(res.body.data).toEqual([]);
+    });
+
     test('unauthenticated request returns 401', async () => {
       const res = await testClient.get('/api/v1/chains');
       expect(res.status).toBe(401);

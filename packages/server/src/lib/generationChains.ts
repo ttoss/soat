@@ -179,15 +179,45 @@ export const findOrCreateChain = async (args: {
   }
 };
 
+/**
+ * The chain a continuation's `chain_id` column names. Deliberately **not**
+ * best-effort like the writes below: this one feeds a column on the generation
+ * being created, and swallowing a read failure would store `chain_id: null` on a
+ * real chain member — a silently mis-linked row rather than a loud failure on a
+ * path whose caller already handles one.
+ */
 export const findChainIdByRoot = async (
   rootGenerationId: string
 ): Promise<string | null> => {
+  const chain = await findByRoot(rootGenerationId);
+  return chain?.publicId ?? null;
+};
+
+/**
+ * The best-effort contract, in one place: load the chain, apply an update, and
+ * let nothing escape.
+ *
+ * Every producer below shares it because every one of them is called from the
+ * generation path, where a thrown observability write would fail the thing it
+ * exists to describe. Written once rather than four times so "swallow and log"
+ * cannot drift into "swallow silently" in the copy nobody re-reads.
+ *
+ * A missing row is a no-op: the chain is created before any of these run, so it
+ * only means the row was removed underneath us (a project delete mid-flight).
+ */
+const withChain = async (
+  rootGenerationId: string,
+  apply: (chain: ChainInstance) => Promise<void>
+): Promise<void> => {
   try {
     const chain = await findByRoot(rootGenerationId);
-    return chain?.publicId ?? null;
+    if (!chain) return;
+    await apply(chain);
   } catch (error) {
-    log('findChainIdByRoot: failed root=%s %o', rootGenerationId, error);
-    return null;
+    /* istanbul ignore next -- only a broken DB write reaches here, and faking
+       one would mean mocking the database this suite deliberately runs for
+       real (`.claude/rules/tests.md`). */
+    log('withChain: failed root=%s %o', rootGenerationId, error);
   }
 };
 
@@ -202,10 +232,7 @@ export const findChainIdByRoot = async (
 export const recordChainGrowth = async (args: {
   rootGenerationId: string;
 }): Promise<void> => {
-  try {
-    const chain = await findByRoot(args.rootGenerationId);
-    if (!chain) return;
-
+  return withChain(args.rootGenerationId, async (chain) => {
     // Members are the continuations carrying the root's id, plus the root.
     const continuations = await db.Generation.count({
       where: { rootGenerationId: args.rootGenerationId },
@@ -216,9 +243,7 @@ export const recordChainGrowth = async (args: {
       generationCount: continuations + 1,
       lastGenerationAt: new Date(),
     });
-  } catch (error) {
-    log('recordChainGrowth: failed root=%s %o', args.rootGenerationId, error);
-  }
+  });
 };
 
 /**
@@ -231,14 +256,10 @@ export const markChainStatus = async (args: {
   rootGenerationId: string;
   status: Exclude<ChainStatus, 'active' | 'concluded'>;
 }): Promise<void> => {
-  try {
-    const chain = await findByRoot(args.rootGenerationId);
-    if (!chain) return;
+  return withChain(args.rootGenerationId, async (chain) => {
     await chain.update({ status: args.status });
     log('markChainStatus: chain=%s status=%s', chain.publicId, args.status);
-  } catch (error) {
-    log('markChainStatus: failed root=%s %o', args.rootGenerationId, error);
-  }
+  });
 };
 
 /**
@@ -281,20 +302,13 @@ const hasPendingApprovals = async (
 export const concludeChainIfSettled = async (args: {
   rootGenerationId: string;
 }): Promise<void> => {
-  try {
-    const chain = await findByRoot(args.rootGenerationId);
-    if (!chain || chain.status !== 'active') return;
+  return withChain(args.rootGenerationId, async (chain) => {
+    if (chain.status !== 'active') return;
     if (await hasPendingApprovals(args.rootGenerationId)) return;
 
     await chain.update({ status: 'concluded' });
     log('concludeChainIfSettled: chain=%s concluded', chain.publicId);
-  } catch (error) {
-    log(
-      'concludeChainIfSettled: failed root=%s %o',
-      args.rootGenerationId,
-      error
-    );
-  }
+  });
 };
 
 /**
@@ -310,21 +324,13 @@ export const concludeChainIfSettled = async (args: {
 export const expireChainIfSettled = async (args: {
   rootGenerationId: string;
 }): Promise<void> => {
-  try {
-    const chain = await findByRoot(args.rootGenerationId);
-    if (!chain || chain.status === 'budget_exhausted') return;
+  return withChain(args.rootGenerationId, async (chain) => {
+    if (chain.status === 'budget_exhausted') return;
     if (await hasPendingApprovals(args.rootGenerationId)) return;
-    await markChainStatus({
-      rootGenerationId: args.rootGenerationId,
-      status: 'expired',
-    });
-  } catch (error) {
-    log(
-      'expireChainIfSettled: failed root=%s %o',
-      args.rootGenerationId,
-      error
-    );
-  }
+
+    await chain.update({ status: 'expired' });
+    log('expireChainIfSettled: chain=%s expired', chain.publicId);
+  });
 };
 
 /**
