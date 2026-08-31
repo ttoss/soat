@@ -158,9 +158,10 @@ const buildCreateAgentArgs = (args: {
     toolBindings: parseWireToolBindings(body.tool_bindings),
     maxSteps: parseNumber(body.max_steps),
     toolChoice: body.tool_choice as string | object | undefined,
-    stopConditions: Array.isArray(body.stop_conditions)
-      ? body.stop_conditions
-      : undefined,
+    // Forwarded whatever its shape, like the update path already does: the lib
+    // owns the vocabulary, so a non-array (or a malformed condition) is a 400
+    // instead of being dropped here and stored as "no conditions".
+    stopConditions: parseOptional<object[]>(body.stop_conditions),
     activeToolIds: Array.isArray(body.active_tool_ids)
       ? body.active_tool_ids
       : undefined,
