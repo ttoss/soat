@@ -32,7 +32,7 @@ Every time an agent runs a generation, SOAT automatically records a trace: the s
 | `file_id`         | string \| null | ID of the file containing the serialized steps (JSON array)                            |
 | `step_count`      | number         | Number of reasoning steps recorded, across every generation grouped under the trace    |
 | `parent_trace_id` | string \| null | ID of the immediate parent trace; `null` when this trace is itself the root            |
-| `root_trace_id`   | string \| null | ID of the root trace in a multi-agent chain; `null` when this trace is itself the root |
+| `root_trace_id`   | string \| null | ID of the root trace in a multi-agent call tree; `null` when this trace is itself the root |
 | `error`           | object \| null | Structured error payload recorded when a generation in this trace failed; `null` otherwise |
 | `content_redacted_at` | string \| null | When the trace's content was purged; `null` while content is intact                |
 | `content_redacted_by_principal_type` | string \| null | Principal kind that purged the content (`user` or `api_key`)     |
@@ -67,7 +67,7 @@ together. See [Generations → Transcript](./generations.md#transcript).
 
 ### Grouping Generations Under One Trace
 
-[`POST /agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation) accepts a `trace_id`. Passing one that already exists groups the new generation with the earlier ones instead of starting a chain — use it when several turns are one logical run and `parent_trace_id` / `root_trace_id` would misrepresent them as nested calls.
+[`POST /agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation) accepts a `trace_id`. Passing one that already exists groups the new generation with the earlier ones instead of starting a new tree — use it when several turns are one logical run and `parent_trace_id` / `root_trace_id` would misrepresent them as nested calls.
 
 - **The steps object is the concatenation of every grouped generation's steps**, in the order the generations first wrote. A second generation appends; it never replaces what the first one recorded.
 - **`step_count` counts them all**, so it stays the length of the object `file_id` points at.
@@ -143,24 +143,37 @@ The retention sweep's schedule (not its per-project window, which is a project f
 
 This section is the canonical reference for how trace relationships work. All other SOAT documentation on traces points here.
 
+> **Trace lineage is not a [continuation chain](./chains.md).** They are different
+> axes, and a generation can sit on both. Trace lineage runs **inward**, through
+> the calls one turn makes — agent A calls agent B via a tool, within a single
+> request, bounded by `max_call_depth`. A continuation chain runs **forward in
+> time**, through turns resumed after their request is gone — an approval decided
+> three days later spawning a new generation, bounded by the chain budget.
+>
+> They are also kept deliberately independent: a chain is identified by its root
+> *generation*, not by trace lineage, because lineage is legitimately rewritten by
+> operations that know nothing about chains (deleting an agent nulls the trace
+> parentage of everything left beneath it). A chain keyed on lineage would have
+> been re-rooted — and handed a fresh budget — by an unrelated cleanup.
+
 ### Field Definitions
 
 | Field             | Meaning                                                                                                                              |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `parent_trace_id` | The `id` of the trace that **directly triggered** this generation. Always the immediate parent — never a grandparent or higher node. |
-| `root_trace_id`   | The `id` of the **top-level trace** that started the entire chain. Every trace in a chain shares the same value.                     |
+| `root_trace_id`   | The `id` of the **top-level trace** that started the entire tree. Every trace in a tree shares the same value.                       |
 
 ### Invariants
 
-1. **Root traces** — `parent_trace_id` is `null` **and** `root_trace_id` is `null`. A trace is the root of its chain if and only if both fields are `null`.
+1. **Root traces** — `parent_trace_id` is `null` **and** `root_trace_id` is `null`. A trace is the root of its tree if and only if both fields are `null`.
 2. **Child traces** — `parent_trace_id` is always the immediate parent (never skipped levels). `root_trace_id` is always the top-level ancestor (never `null` for non-root traces).
 3. **Sibling traces** share the same `parent_trace_id` and `root_trace_id`.
 4. **Depth-1 children** of the root have `parent_trace_id === root_trace_id`.
-5. The [`GET /traces/{id}/tree`](/docs/api/traces/get-trace-tree) endpoint accepts any `id` in the chain and always returns the same full tree rooted at the root trace.
+5. The [`GET /traces/{id}/tree`](/docs/api/traces/get-trace-tree) endpoint accepts any `id` in the tree and always returns the same full tree rooted at the root trace.
 
 ### Concrete Example
 
-A three-level chain — Agent A (top level) calls Agent B via a tool, and Agent B calls Agent C:
+A three-level tree — Agent A (top level) calls Agent B via a tool, and Agent B calls Agent C:
 
 ```
 trace_A   (root)
@@ -195,7 +208,7 @@ Note `trace_C`: `parent_trace_id` points to its immediate parent (`trace_B`), wh
 
 ### Reconstructing the Tree
 
-**Recommended:** supply any trace ID from the chain to the tree endpoint; the server resolves the root and returns the fully nested tree (root node with descendants under `children`) in one call:
+**Recommended:** supply any trace ID from the tree to the tree endpoint; the server resolves the root and returns the fully nested tree (root node with descendants under `children`) in one call:
 
 ```
 GET /api/v1/traces/{any_trace_id}/tree

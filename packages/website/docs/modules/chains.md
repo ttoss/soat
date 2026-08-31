@@ -27,7 +27,11 @@ gets no record. The table holds runaway candidates, not one row per turn.
 
 The behavior that produces a chain lives with the agent: see
 [Continuation chains](./agents.md#continuation-chains) for how a resumption is
-linked and bounded.
+linked and bounded. A chain is **not** the same thing as a
+[trace tree](./traces.md#trace-ancestry-model) — that one runs inward through the
+calls a single turn makes, while a chain runs forward in time through turns
+resumed after their request is gone; that section spells out the difference and
+why the two are kept independent.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
