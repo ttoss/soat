@@ -121,7 +121,7 @@ When `status` is `completed`, `stop_reason` indicates why:
 | Stop Reason    | Description                                                                       |
 | -------------- | --------------------------------------------------------------------------------- |
 | `stop`         | The model produced a final response with no tool calls                             |
-| `tool-calls`   | The turn ended on tool calls the platform is still settling — a pause, not an end   |
+| `tool-calls`   | The turn ended on a tool call — either one the platform is still settling (a pause), or the one a `hasToolCall` [stop condition](#stop-conditions) named |
 | `max_steps`    | The turn spent its whole `max_steps` budget on tool calls and could not finish      |
 | `depth_guard`  | A nested call exceeded `max_call_depth`                                             |
 | `chain_limit`  | A [continuation chain](./chains.md) reached its generation budget and was not resumed |
@@ -275,8 +275,11 @@ The work has two axes, and each condition names the one it bounds:
 }
 ```
 
-**Turn-scoped.** `max_steps` always applies: a condition narrows when the loop
-ends, it never lets the loop run longer. `tool_name` is the tool's
+**Turn-scoped.** `hasToolCall` is optional for an agent that can answer in text,
+and **required** for one whose [`tool_choice`](#tool-choice) forces a tool —
+forcing forbids the final message, so the named call is the only way such a turn
+ends short of its step budget. `max_steps` always applies: a condition narrows
+when the loop ends, it never lets the loop run longer. `tool_name` is the tool's
 [resolved name](./tools.md#tool-name-resolution), and the condition is checked
 after the step that makes the call — so with the example above, a turn that
 calls `done` on step 3 ends there instead of continuing to 50. Turn conditions
@@ -293,7 +296,9 @@ platform but never looser — see [Bounding a chain](./chains.md#bounding-a-chai
 Conditions are validated on write: an unknown `type`, a `hasToolCall` with no
 `tool_name`, or a `maxChainGenerations` whose `max_generations` is not a positive
 integer is refused with `400 VALIDATION_FAILED` rather than stored as a condition
-that never fires.
+that never fires. Dropping the `hasToolCall` an agent's forcing `tool_choice`
+depends on is refused too, with
+[`FORCED_TOOL_CHOICE_CANNOT_STOP`](../error-codes.md#forced_tool_choice_cannot_stop).
 
 ### Active Tools
 
