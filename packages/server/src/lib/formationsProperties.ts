@@ -1,11 +1,10 @@
 /**
  * The rules that govern a formation resource declaration's `properties` bag.
  *
- * Both used to be restated per pipeline and both had drifted: the key
- * normalization was written out by 20 of 24 modules and skipped by four (#901),
- * and the merge/changed predicate was implemented twice with different
- * semantics, so `plan-formation` could disagree with the apply it previewed
- * (#902).
+ * Both live here once rather than per pipeline: restated, the key normalization
+ * gets skipped by some modules, and a second merge/changed predicate with
+ * different semantics lets `plan-formation` disagree with the apply it
+ * previewed.
  *
  * Neither function takes, returns or inspects a field *name*: one rewrites only
  * an object's own keys via the shared shallow normalizer, the other moves whole
@@ -24,8 +23,8 @@ import { normalizePropertyKeys } from './resource-inputs/normalizers';
  * casing and every stage downstream agrees on the key set.
  *
  * The one place this happens per pipeline (validate, plan, apply, and the
- * module-dispatch seam), because 20 modules doing it by hand and 4 forgetting is
- * exactly how #901 happened. Shallow, per `case-convention.md`: nested value
+ * module-dispatch seam), rather than in each module by hand, where any one of
+ * them can forget. Shallow, per `case-convention.md`: nested value
  * bags — a policy `document`, orchestration node expressions, free-form
  * `metadata` — are copied as values and never inspected.
  */
@@ -46,9 +45,9 @@ export const normalizeDeclaredProperties = (
  * resource preserves what it has (a secret's encrypted value is never
  * re-applied).
  *
- * `plan-formation` and apply both need this verdict and both used to compute it,
- * differently (#902): apply compared `JSON.stringify` of the whole object, which
- * also reported a change on differing key order. The per-declared-key deep
+ * `plan-formation` and apply both need this verdict, so it is defined once: two
+ * implementations disagree, and comparing `JSON.stringify` of the whole object
+ * reports a change on differing key order alone. The per-declared-key deep
  * comparison here is the definition — only declared keys can change.
  */
 export const mergeWithPrevious = (args: {

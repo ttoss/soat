@@ -85,10 +85,10 @@ export const assertCredentialProjectScope = (args: {
  * altogether* — because a mapper named it `projectId`, or forgot it — does not,
  * and fails to typecheck at the helper boundary.
  *
- * `project_id?: string` accepted both, which is how #801 shipped: the object
- * type-checked, the value was `undefined` at runtime, and the authorization
- * call reached the DB with an undefined `WHERE` binding. Excess-property
- * checking does not cover it, since the object is passed as a variable.
+ * `project_id?: string` would accept both: the object type-checks, the value
+ * is `undefined` at runtime, and the authorization call reaches the DB with an
+ * undefined `WHERE` binding. Excess-property checking does not cover it, since
+ * the object is passed as a variable.
  *
  * Intersect it into the resource shape a permission helper accepts.
  */
@@ -122,11 +122,10 @@ export type AuthenticatedContext = Context & { authUser: AuthUser };
  *
  * Declared as a TypeScript **assertion** rather than a function returning the
  * user, so a bare `requireAuth(ctx);` narrows `ctx.authUser` for the rest of
- * the block. That is what let the guard replace inline `if (!ctx.authUser)`
- * blocks without threading a returned value around, and it retires the
- * `ctx.authUser!` assertions those blocks made necessary — so a handler that
- * forgets the guard no longer typechecks. (An assertion signature needs an
- * explicitly annotated call target, hence the type-then-implementation form.)
+ * the block. Nothing has to thread a returned value around and no
+ * `ctx.authUser!` assertion is needed: a handler that forgets the guard does
+ * not typecheck. (An assertion signature needs an explicitly annotated call
+ * target, hence the type-then-implementation form.)
  *
  * Prefer {@link resolveReadProjectIds} / {@link resolveWriteProjectId}, which
  * run this themselves. It stands alone only where a handler has no project to

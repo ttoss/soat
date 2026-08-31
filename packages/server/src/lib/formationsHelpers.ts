@@ -392,9 +392,9 @@ export const topologicalSort = (
  * Resolves a resource's public id to the internal primary key a lib argument
  * needs, or throws with the resource named.
  *
- * One body for what used to be six copies differing only by the model and the
- * noun — each of which also carried an `as unknown as { id: number }` double
- * cast that the model types make unnecessary.
+ * One body for every resource: the model and the noun are the only things that
+ * vary, and the model types make an `as unknown as { id: number }` double cast
+ * unnecessary.
  */
 const lookupInternalId = async (args: {
   model: {

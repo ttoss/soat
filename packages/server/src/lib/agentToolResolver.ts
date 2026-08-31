@@ -960,9 +960,9 @@ const resolveToolByType = async (
   const toolType = typedTool.type;
 
   if (!isAgentToolType(toolType)) {
-    // An unknown stored type still drops the tool rather than failing the
-    // generation, but never silently — that is what made #1002 surface as "the
-    // agent ignored my tool" with nothing to grep for.
+    // An unknown stored type drops the tool rather than failing the generation,
+    // but never silently: unlogged, it surfaces as "the agent ignored my tool"
+    // with nothing to grep for.
     log(
       'resolveToolByType: dropping tool with unhandled type id=%s name=%s type=%s',
       typedTool.publicId,

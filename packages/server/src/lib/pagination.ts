@@ -47,7 +47,7 @@ export const resolvePagination = (args: {
  * The empty page for a list that can answer without querying — no accessible
  * projects, a filter that resolved to nothing. It still reports the *resolved*
  * `limit`/`offset`, so an early return and a real query describe the page the
- * same way; hardcoding `limit: 50` here is how an early return used to disagree
+ * same way; hardcoding `limit: 50` here would make an early return disagree
  * with {@link paginatedList} about a request it clamped.
  */
 export const emptyPage = <T = never>(args: {

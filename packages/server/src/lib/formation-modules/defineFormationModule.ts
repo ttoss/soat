@@ -4,11 +4,10 @@
  * re-validate + `throw errors[0].message` preamble, the `read` try/catch, and
  * the log lines.
  *
- * Twenty-four modules used to restate it, which is what let the camelCase
- * normalization misses (#901) and the missing `model_route` allowlist entry
- * (#900) happen: a rule written twenty-four times is a rule twenty-four places
- * can skip. Each module now declares only the property→lib-arg mapping, its own
- * checks, and the read view.
+ * It lives here once because a rule restated in twenty-four modules is a rule
+ * twenty-four places can skip — a missed camelCase normalization or a missing
+ * allowlist entry in any one of them. Each module declares only the
+ * property→lib-arg mapping, its own checks, and the read view.
  *
  * Nothing here rewrites a key (`.claude/rules/case-convention.md`):
  * `normalizeDeclaredProperties` is the shared shallow declaration normalizer,
@@ -141,8 +140,8 @@ type Validator = (args: {
 
 /**
  * The validation core: the object guard, the schema-derived unknown/required/
- * type checks, and finally the module's own `extraChecks`. This is the sequence
- * that used to be transcribed into all 24 modules.
+ * type checks, and finally the module's own `extraChecks` — the sequence every
+ * module shares instead of transcribing.
  */
 const buildValidator = <TResource>(args: {
   definition: FormationModuleDefinition<TResource>;

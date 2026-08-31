@@ -28,8 +28,8 @@ const log = createDebug('soat:orchestrations');
 const describeThrown = (error: unknown): string => {
   if (error instanceof Error) {
     // `fetch` throws a generic `TypeError: fetch failed` with the real reason
-    // only on `.cause`. Dropping it is what made #820 unreproducible — nothing
-    // distinguished a bad host from a timeout or a DNS failure.
+    // only on `.cause`. Dropped, nothing distinguishes a bad host from a
+    // timeout or a DNS failure.
     if (error.cause !== undefined) {
       const causeMessage =
         error.cause instanceof Error

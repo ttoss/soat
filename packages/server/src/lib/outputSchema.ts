@@ -95,11 +95,11 @@ export type StructuredOutputValidation =
 /**
  * Validates a model-produced object against an agent's `output_schema`.
  *
- * Declaring a schema used to guarantee nothing: it was handed to the provider as
- * a `response_format` hint and never checked on the way back (`jsonSchema()`
- * with no `validate` makes the SDK's `safeValidateTypes` a pass-through), so a
- * model could return every required key with correct types and garbage values,
- * and a workflow's `payload_writes` propagated it as an answer.
+ * A schema handed to the provider is only a `response_format` hint, and
+ * `jsonSchema()` with no `validate` makes the SDK's `safeValidateTypes` a
+ * pass-through — so without this check a model could return every required key
+ * with correct types and garbage values, and a workflow's `payload_writes`
+ * would propagate it as an answer.
  *
  * Constraints beyond `required`/`type` are the point — `minLength`, `enum`,
  * `pattern`, `minItems` separate a real answer from filler — which is why this

@@ -50,11 +50,9 @@ export const extractApiErrorMessage = (body: unknown): string | null => {
 /**
  * Serves one REST-backed MCP tool call against this process's own app.
  *
- * This used to `fetch` `http://localhost:$PORT` — the server calling itself to
- * reuse the route handler's permission checks and snake_case boundary (#888).
- * `dispatchApiRequestOrThrow` runs the app's real middleware chain instead, so
- * every reason the hop existed still holds while the socket, the JSON round
- * trip and the listening port are gone.
+ * `dispatchApiRequestOrThrow` runs the app's real middleware chain in-process,
+ * so the call reuses the route handler's permission checks and snake_case
+ * boundary without a socket, a JSON round trip, or a listening port.
  *
  * The thrown-`Error` contract is why this wrapper exists at all:
  * `@ttoss/http-server-mcp`'s own `apiCall` builds its error via

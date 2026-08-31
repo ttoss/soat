@@ -131,11 +131,6 @@ const validateGenerateBody = (body: {
  * An agent's system prompt is its `instructions` field, so a `role: "system"`
  * entry in a generation request is refused (`systemMessageGuard.ts` carries
  * the surface-wide rule and why it sits at the REST boundary).
- *
- * It used to be resolved by position rather than by rule: `instructions` was
- * taken from the *first* system message of the combined history, so a caller's
- * system message won on an agent whose `instructions` was empty and was silently
- * dropped on one where it was set.
  */
 const AGENT_SYSTEM_MESSAGE_REMEDY =
   "An agent's system prompt is its `instructions` field \u2014 set it with `update-agent --instructions`, or create a separate agent.";
