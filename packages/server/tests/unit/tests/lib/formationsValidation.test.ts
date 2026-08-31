@@ -437,6 +437,101 @@ describe('validateFormationTemplate', () => {
     expect(result.errors).toHaveLength(0);
   });
 
+  // ── declared enums ─────────────────────────────────────────────────────
+
+  test('returns invalid when a provider slug is not a real one', () => {
+    const result = validateFormationTemplate({
+      resources: {
+        Provider: {
+          type: 'ai_provider',
+          properties: {
+            name: 'gpt4',
+            provider: 'openia',
+            default_model: 'gpt-4o',
+          },
+        },
+      },
+    });
+
+    expect(result.valid).toBe(false);
+    const error = result.errors.find((e) => {
+      return e.path.endsWith('.provider');
+    });
+    // Caught here, not by the Postgres enum mid-deploy: an apply that reaches
+    // the insert reports the driver's own text against a half-built stack.
+    expect(error?.message).toContain('must be one of');
+    expect(error?.message).toContain('openai');
+  });
+
+  test('returns invalid for an out-of-enum value on any resource type', () => {
+    const result = validateFormationTemplate({
+      resources: {
+        MyQuota: {
+          type: 'quota',
+          properties: {
+            scope: 'project',
+            metric: 'requests',
+            window: 'rolling_1h',
+            mode: 'observe',
+            limit_value: 10,
+          },
+        },
+      },
+    });
+
+    expect(result.valid).toBe(false);
+    expect(
+      result.errors.some((e) => {
+        return e.path.endsWith('.mode');
+      })
+    ).toBe(true);
+  });
+
+  test('accepts null where the declared enum lists it', () => {
+    const result = validateFormationTemplate({
+      resources: {
+        MyGuardrail: {
+          type: 'guardrail',
+          properties: {
+            name: 'gate',
+            document: { class: 'A' },
+            context_mode: null,
+          },
+        },
+      },
+    });
+
+    expect(
+      result.errors.some((e) => {
+        return e.path.endsWith('.context_mode');
+      })
+    ).toBe(false);
+  });
+
+  test('leaves a substitution expression for the deploy to resolve', () => {
+    // The value is not known at validate time, so an enum check on it would
+    // refuse every parameterised template.
+    const result = validateFormationTemplate({
+      parameters: { Slug: { type: 'string' } },
+      resources: {
+        Provider: {
+          type: 'ai_provider',
+          properties: {
+            name: 'gpt4',
+            provider: { param: 'Slug' },
+            default_model: 'gpt-4o',
+          },
+        },
+      },
+    });
+
+    expect(
+      result.errors.some((e) => {
+        return e.path.endsWith('.provider');
+      })
+    ).toBe(false);
+  });
+
   // ── deletion_policy ────────────────────────────────────────────────────
 
   test('returns invalid when deletion_policy is an unsupported value', () => {

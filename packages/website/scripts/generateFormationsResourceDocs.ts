@@ -28,7 +28,7 @@ interface OpenApiSchema {
   type?: string;
   description?: string;
   nullable?: boolean;
-  enum?: string[];
+  enum?: (string | null)[];
   items?: OpenApiSchema;
   properties?: Record<string, OpenApiSchema>;
   required?: string[];
@@ -221,6 +221,15 @@ const renderPropertyEntry = (
   ];
   if (prop.nullable) {
     parts.push(`_Nullable_: Yes`);
+  }
+  // A declared enum is refused at validate time, so the page must list it. A
+  // `null` member is real (a guardrail's `context_mode` accepts one), so it is
+  // spelled out rather than joined into an empty code span.
+  if (prop.enum?.length) {
+    const values = prop.enum.map((value) => {
+      return `\`${String(value)}\``;
+    });
+    parts.push(`_Allowed values_: ${values.join(', ')}`);
   }
   parts.push('', '---', '');
   return parts.join('\n');

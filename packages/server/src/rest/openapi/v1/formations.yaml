@@ -813,7 +813,19 @@ components:
           description: Provider display name
         provider:
           type: string
-          description: Provider type (e.g. openai, anthropic)
+          enum:
+            - openai
+            - anthropic
+            - google
+            - xai
+            - groq
+            - ollama
+            - azure
+            - bedrock
+            - vertex
+            - gateway
+            - custom
+          description: Provider type
         default_model:
           type: string
           description: Default model identifier (e.g. gpt-4o, claude-3-7-sonnet)

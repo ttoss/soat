@@ -25,6 +25,7 @@ import {
   isObjectRecord,
   loadModuleSpec,
   pickSpecFields,
+  pushFieldEnumErrors,
   pushFieldTypeErrors,
   pushRequiredFieldErrors,
   pushUnknownFieldErrors,
@@ -173,7 +174,19 @@ const buildValidator = <TResource>(args: {
     if (!forUpdate || definition.requiredOnUpdate) {
       pushRequiredFieldErrors({ spec, properties, basePath, errors });
     }
-    pushFieldTypeErrors({ spec, properties, basePath, errors });
+    const typeErrored = pushFieldTypeErrors({
+      spec,
+      properties,
+      basePath,
+      errors,
+    });
+    pushFieldEnumErrors({
+      spec,
+      properties,
+      basePath,
+      errors,
+      skipFields: typeErrored,
+    });
     definition.extraChecks?.({ properties, basePath, forUpdate, errors });
 
     return errors;

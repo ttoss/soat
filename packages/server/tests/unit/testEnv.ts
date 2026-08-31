@@ -24,4 +24,9 @@ export const applyTestEnv = () => {
   // test points at loopback — so the suite declares it, as the smoke stack does
   // its containers. Tests asserting the *block* pass their own allowlist.
   process.env.TOOL_EGRESS_ALLOWED_HOSTS = '127.0.0.1,localhost,::1';
+  // Cleared, not defaulted: upload/download/callback URLs are built by prefixing
+  // it, so a shell that exports one for its own use (a `soat` CLI session
+  // against a deployment) silently rewrites those URLs and the assertions on
+  // them fail — pointing at a real host, in a suite that reaches none.
+  delete process.env.SOAT_BASE_URL;
 };

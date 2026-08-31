@@ -14,6 +14,15 @@
 export type FieldSpec = {
   type?: string;
   nullable: boolean;
+  /**
+   * The schema's `enum`, when it declares one. Absent — never `[]` — for a
+   * field with no enum, so a validator that only checks for the key cannot read
+   * an unconstrained field as one that allows nothing.
+   *
+   * `unknown[]` because a member may be `null`: `context_mode` really does
+   * accept it, and dropping it would refuse a value the guardrail lib takes.
+   */
+  enumValues?: unknown[];
 };
 
 export type SchemaFields = {
@@ -65,6 +74,9 @@ export const deriveSchemaFields = (args: {
           ? propertySchema.type
           : undefined,
       nullable: propertySchema.nullable === true,
+      ...(Array.isArray(propertySchema.enum)
+        ? { enumValues: propertySchema.enum }
+        : {}),
     };
   }
 
