@@ -127,7 +127,6 @@ const resolveContextAndRecord = async (args: {
     // same agent version across calls.
     sessionId: args.sessionId,
     pinnedAgentVersion: args.pinnedAgentVersion,
-    initiatorGenerationId: args.initiatorGenerationId,
   });
 
   // Persisted rather than left to the request: work resuming after the request

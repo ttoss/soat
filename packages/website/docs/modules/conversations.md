@@ -45,7 +45,7 @@ Conversations are identified by an `id` prefixed with `conv_`. The internal data
 | Field         | Type           | Description                                                                                                                |
 | ------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `document_id` | string         | ID of the Document attached as a message                                                                                   |
-| `role`        | string         | Role of the message: `user` or `assistant`. Writes refuse `system` with `400 SYSTEM_MESSAGE_NOT_ALLOWED`; reads may still return it on rows written before that rule |
+| `role`        | string         | Role of the message: `user` or `assistant`. Writes refuse `system` with `400 SYSTEM_MESSAGE_NOT_ALLOWED`; reads may still return it for already-stored rows |
 | `actor_id`    | string \| null | Optional ID of the Actor who authored the message; `null` for messages not tied to an actor                                |
 | `agent_id`    | string \| null | Optional ID of the Agent that generated this message; `null` for non-generated messages                                    |
 | `position`    | integer        | Zero-based position of the message in the conversation                                                                     |

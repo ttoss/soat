@@ -113,6 +113,11 @@ The two producers share the item lifecycle but suspend differently:
   continuation carries `{ "decision": "expired" }`, the exact counterpart of
   the node path's `on_expired` edge. When the original generation ran in a
   session or conversation, the continuation's messages append there.
+- **The continuation runs the agent's own config.** That includes
+  [`tool_choice`](./agents.md#tool-choice): an agent that forces a tool reports
+  the decision by reaching its declared `hasToolCall`
+  [stop condition](./agents.md#stop-conditions), which is why that condition is
+  mandatory for a forcing agent rather than optional.
 
 ### Continuation identity
 

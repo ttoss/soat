@@ -12,7 +12,7 @@ import {
 } from 'src/lib/agentGenerationHelpers';
 import { buildDepthGuardResult } from 'src/lib/agentGenerationRecovery';
 import type { TypedAgent } from 'src/lib/agentGenerationTypes';
-import { resolveTurnToolChoice } from 'src/lib/agentStepRules';
+import { normalizeToolChoice } from 'src/lib/agentStepRules';
 import { runStreamGeneration } from 'src/lib/agentStreamGeneration';
 import * as generationsModule from 'src/lib/generations';
 import { CLIENT_TOOL_PRESETS } from 'src/lib/toolPresetParameters';
@@ -739,9 +739,9 @@ describe('runStreamGeneration', () => {
         model: {},
         allMessages: [{ role: 'user', content: 'Hi' }],
         resolvedTools: {},
-        toolChoice: resolveTurnToolChoice({
-          toolChoice: { type: 'tool', tool_name: 'get_weather' },
-          isContinuation: false,
+        toolChoice: normalizeToolChoice({
+          type: 'tool',
+          tool_name: 'get_weather',
         }),
         typedAgent: mockAgent,
         generationId: 'gen_tc_wire',

@@ -138,17 +138,6 @@ const userId = req.headers['x-soat-context-userid'];
 
 Do not match `X-Soat-Context-userId` as an exact string, and make any gateway, WAF, or log-routing rule that references these headers case-insensitive.
 
-:::note[Changed in recent releases]
-
-Two changes to this rule landed in quick succession. If you are upgrading from before either, check both.
-
-1. **Keys are no longer case-converted.** A key used to be rewritten like any other body field, so `actor_external_id` sent over REST was stored as `actorExternalId` and produced `X-Soat-Context-ActorExternalId`. Keys are now stored, echoed, and forwarded exactly as sent. If a tool endpoint of yours reads a camelCase context header fed by an explicitly-set snake_case key, either rename the key to camelCase or read the snake_case header.
-2. **The first character is no longer uppercased.** `userId` produced `X-Soat-Context-UserId` and now produces `X-Soat-Context-userId`. This is invisible to any client that looks headers up the normal way, for the reasons above. It matters only if something on your side matches the header name as an exact string.
-
-Session-auto-populated keys (`sessionId` / `actorId` / `actorExternalId`) were and remain camelCase; only the emitted header's first character changed.
-
-:::
-
 ## Auto-populated keys (sessions)
 
 When a generation runs through a [session](../modules/sessions.md), the server injects these keys automatically:

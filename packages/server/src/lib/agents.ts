@@ -6,7 +6,10 @@ import {
   type MappedAgent,
 } from './agentAccessor';
 import { assertValidOnApprovalExpiry } from './agentApprovalExpiry';
-import { assertValidStopConditions } from './agentStopConditions';
+import {
+  assertForcedToolChoiceCanStop,
+  assertValidStopConditions,
+} from './agentStopConditions';
 import {
   type AgentToolBinding,
   readAgentToolBindings,
@@ -189,6 +192,10 @@ export const createAgent = async (
   assertBoundaryPolicyActionsKnown(args.boundaryPolicy);
   assertValidOnApprovalExpiry(args.onApprovalExpiry);
   assertValidStopConditions(args.stopConditions);
+  assertForcedToolChoiceCanStop({
+    toolChoice: args.toolChoice,
+    stopConditions: args.stopConditions,
+  });
 
   const { aiProviderId, modelRouteId } = await resolveCreateModelBinding(args);
 
@@ -358,6 +365,18 @@ export const updateAgent = async (
   // the same mapper that serializes the response — the diff is then between two
   // wire-shaped configs, never between a model instance and a response body.
   const agent = await agents.getByPublicId(args);
+
+  // A field the body omits is unchanged, so the pair this rule is about has to
+  // be read off the merge of body and row: `PATCH { stop_conditions: [] }` names
+  // no tool_choice at all and still removes a forcing agent's only exit.
+  assertForcedToolChoiceCanStop({
+    toolChoice:
+      args.toolChoice === undefined ? agent.toolChoice : args.toolChoice,
+    stopConditions:
+      args.stopConditions === undefined
+        ? agent.stopConditions
+        : args.stopConditions,
+  });
 
   const beforeConfig = buildAgentConfigSnapshot(mapAgent(agent));
 

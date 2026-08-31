@@ -14,7 +14,7 @@ import {
 } from './agentKnowledge';
 import { resolveAgentModel } from './agentModelResolution';
 import { resolveServedAgentVersion } from './agentServedVersion';
-import { resolveTurnToolChoice, type TurnToolChoice } from './agentStepRules';
+import { normalizeToolChoice, type TurnToolChoice } from './agentStepRules';
 import { readAgentToolBindings, splitToolBindings } from './agentToolBindings';
 import { resolveAgentToolSurface } from './agentToolSurface';
 import { resolveServerToolContextIdentity } from './generationAttribution';
@@ -53,8 +53,8 @@ export type GenerationContext = {
    */
   agentVersion: number;
   /**
-   * The tool choice this turn runs under, which is the agent's own except on a
-   * continuation — see `resolveTurnToolChoice`. Resolved once here so the
+   * The tool choice this turn runs under — the agent's own, on a continuation
+   * as much as on the turn that started the chain. Resolved once here so the
    * stream and non-stream paths cannot disagree about it.
    */
   toolChoice: TurnToolChoice;
@@ -150,8 +150,6 @@ export type BuildGenerationContextArgs = {
   sessionId?: string | null;
   /** Forces one archived agent version — see `resolveServedAgentVersion`. */
   pinnedAgentVersion?: number | null;
-  /** Set when this turn continues an earlier one; see `resolveTurnToolChoice`. */
-  initiatorGenerationId?: string | null;
 };
 
 export const buildGenerationContext = async (
@@ -231,9 +229,6 @@ export const buildGenerationContext = async (
     toolContext: toolContext ?? null,
     remainingDepth: args.remainingDepth ?? null,
     agentVersion,
-    toolChoice: resolveTurnToolChoice({
-      toolChoice: typedAgent.toolChoice,
-      isContinuation: Boolean(args.initiatorGenerationId),
-    }),
+    toolChoice: normalizeToolChoice(typedAgent.toolChoice),
   };
 };

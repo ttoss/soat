@@ -121,7 +121,7 @@ When `status` is `completed`, `stop_reason` indicates why:
 | Stop Reason    | Description                                                                       |
 | -------------- | --------------------------------------------------------------------------------- |
 | `stop`         | The model produced a final response with no tool calls                             |
-| `tool-calls`   | The turn ended on tool calls the platform is still settling — a pause, not an end   |
+| `tool-calls`   | The turn ended on a tool call — either one the platform is still settling (a pause), or the one a `hasToolCall` [stop condition](#stop-conditions) named |
 | `max_steps`    | The turn spent its whole `max_steps` budget on tool calls and could not finish      |
 | `depth_guard`  | A nested call exceeded `max_call_depth`                                             |
 | `chain_limit`  | A [continuation chain](./chains.md) reached its generation budget and was not resumed |
@@ -182,8 +182,6 @@ The `instructions` field sets the agent's system prompt, and it is the only thin
 
 To vary the system prompt per call, edit the agent (`update-agent --instructions`, which archives a new [version](#agent-version)) or create a separate agent. [Chats](./chats.md#system-instructions) are the surface that does take per-call system content — through their `instructions` field, never through `messages` — since there the caller is the operator rather than an end user.
 
-> **Changed:** this previously depended on configuration rather than being a rule. `instructions` was taken from the *first* system message of the combined history, so a caller's system message won on an agent whose `instructions` was empty and was silently dropped on one where it was set — and neither outcome was reported.
-
 ### AI Provider Resolution
 
 The agent resolves its AI provider by `ai_provider_id`; if `model` is not set, the provider's `default_model` is used. See [AI Providers](./ai-providers.md).
@@ -202,16 +200,24 @@ The `tool_choice` field sets the **default** tool-selection strategy for every s
 
 `"required"` combined with a tool that has no `execute` configuration (a "done" tool) forces tool use at every step; the loop stops when the executor-less tool is called.
 
-**Turn-scoped.** The agent's `tool_choice` governs the model calls of one turn. A *forcing* value — `"required"` or the object form — does not carry across a turn boundary; `"auto"` and `"none"` pass through unchanged. Two kinds of turn begin from an earlier one, and both start at `"auto"`:
+**A forcing value must declare how a turn ends.** `"required"` and the object form forbid a final assistant message, so a turn running under one can only end by exhausting `max_steps` — on every turn of the agent's life, including a [continuation](#continuation-chains) spawned to carry an approval decision back to it. So an agent that forces a tool is refused on write unless its [`stop_conditions`](#stop-conditions) declare a terminal `hasToolCall`:
 
-- A generation that paused at `requires_action` for a [client tool](./tools.md#client) and resumed after `submit-tool-outputs` — the force is satisfied by the call that produced the pause. The resumed turn runs with the agent's **full** tool surface: the bound tools narrowed by `active_tool_ids`, plus the `write_memory` tool injected by `knowledge_config.write_memory_id`, whether or not the pause outlived a server restart.
-- A [continuation](#continuation-chains) carrying an approval decision back to the agent. It exists to report an outcome and finish, which a forcing value forbids — its only exits would be step exhaustion or another gated call.
+```json
+{
+  "tool_choice": "required",
+  "stop_conditions": [{ "type": "hasToolCall", "tool_name": "done" }]
+}
+```
 
-[Step Rules](#step-rules) are the exception, and the escape hatch: they are numbered from the first step of *each* turn, so `{ "step": 1, "tool_choice": … }` forces step 1 of a resumed or continued turn as well.
+Without it the write fails with [`FORCED_TOOL_CHOICE_CANNOT_STOP`](../error-codes.md#forced_tool_choice_cannot_stop). `maxChainGenerations` does not satisfy the rule — it bounds a chain, it never ends a turn. The check reads the config the write would *leave behind*, so removing the condition from a forcing agent is refused exactly like adding the forcing to one that has none.
 
-So a turn that resumed or continued another may **conclude in text without calling the "done" tool**. Read the generation's `stop_reason` rather than treating that call as the only terminal signal, or declare `{ "type": "hasToolCall", "tool_name": "done" }` in [`stop_conditions`](#stop-conditions) — enforced on every turn including resumed ones, it ends the loop on that call without forbidding text.
+The alternative is to stop forcing at the agent level: leave `tool_choice` at `"auto"` and force the one step you care about with [Step Rules](#step-rules), which are numbered from the first step of each turn.
 
-> **Changed:** a forcing value used to be re-applied to every continuation of the turn that set it, which is what let one abandoned agent run for 17 days (#1161). What bounds that now is the [chain budget](./chains.md#bounding-a-chain) and the `terminate` default for [approval expiry](#approval-expiry); turn scoping is why a continuation starts from `"auto"` in the first place.
+**The choice is the agent's on every turn of the chain.** A [continuation](#continuation-chains) runs under the agent's own `tool_choice`, not a rewritten one, so a forcing agent reaches its declared tool or spends the turn's steps — and a turn that ends on the step budget reports `stop_reason: "max_steps"`, which is how "this agent could not terminate on its own" is told apart from ordinary tool use.
+
+One resumption is the exception. When a generation pauses at `requires_action` for a [client tool](./tools.md#client) and resumes after `submit-tool-outputs`, it continues *the same turn* and runs with `"auto"`: the force is already satisfied by the call that produced the pause, and re-applying the object form there would demand the same tool again forever. That resumed turn gets the agent's **full** tool surface — the bound tools narrowed by `active_tool_ids`, plus the `write_memory` tool injected by `knowledge_config.write_memory_id` — whether or not the pause outlived a server restart.
+
+An agent already stored without the condition keeps running — the [chain budget](./chains.md#bounding-a-chain) is what bounds it — and is refused on its next write until it declares an exit, a [version restore](#versioning-and-staged-rollout) included, since restore re-validates the config it writes back.
 
 ### Step Rules
 
@@ -267,8 +273,11 @@ The work has two axes, and each condition names the one it bounds:
 }
 ```
 
-**Turn-scoped.** `max_steps` always applies: a condition narrows when the loop
-ends, it never lets the loop run longer. `tool_name` is the tool's
+**Turn-scoped.** `hasToolCall` is optional for an agent that can answer in text,
+and **required** for one whose [`tool_choice`](#tool-choice) forces a tool —
+forcing forbids the final message, so the named call is the only way such a turn
+ends short of its step budget. `max_steps` always applies: a condition narrows
+when the loop ends, it never lets the loop run longer. `tool_name` is the tool's
 [resolved name](./tools.md#tool-name-resolution), and the condition is checked
 after the step that makes the call — so with the example above, a turn that
 calls `done` on step 3 ends there instead of continuing to 50. Turn conditions
@@ -285,7 +294,9 @@ platform but never looser — see [Bounding a chain](./chains.md#bounding-a-chai
 Conditions are validated on write: an unknown `type`, a `hasToolCall` with no
 `tool_name`, or a `maxChainGenerations` whose `max_generations` is not a positive
 integer is refused with `400 VALIDATION_FAILED` rather than stored as a condition
-that never fires.
+that never fires. Dropping the `hasToolCall` an agent's forcing `tool_choice`
+depends on is refused too, with
+[`FORCED_TOOL_CHOICE_CANNOT_STOP`](../error-codes.md#forced_tool_choice_cannot_stop).
 
 ### Active Tools
 
@@ -631,12 +642,11 @@ When the lapsed call was held by a generation inside an existing
 [chain](./chains.md), that chain's record moves to `expired` — a deadline ended
 it, which is a different thing to triage than a chain that finished on its own.
 
-The default is `terminate` because an unwatched expiry is where the chain used to
-compound: the reaction turn proposed more gated calls, which were held, expired
-and continued again (#1161). The [chain budget](./chains.md#bounding-a-chain)
-bounds that now, but the turn still costs a model call to tell an agent
-something nobody is waiting to hear. Set `react` for an agent that genuinely
-handles staleness — retrying differently, notifying through an ungated tool.
+The default is `terminate` because the reaction turn costs a model call to tell
+an agent something nobody is waiting to hear, and an expiry nobody watched is
+where a chain grows without anyone reading the result. Set `react` for an agent
+that genuinely handles staleness — retrying differently, notifying through an
+ungated tool.
 
 Approved and rejected approvals are unaffected: both always continue, because a
 human decided and the agent has an outcome to act on.

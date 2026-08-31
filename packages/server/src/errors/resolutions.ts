@@ -37,6 +37,8 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'Check the id, and check that the credential can see the project that owns the resource — a resource in another project is indistinguishable from one that does not exist. List the collection to confirm.',
   VALIDATION_FAILED:
     'Fix the request and retry. Unknown fields are rejected outright, so compare the payload against the operation in `/openapi.json`; `meta` names the offending field when the check can identify one.',
+  FORCED_TOOL_CHOICE_CANNOT_STOP:
+    'Add `{ "type": "hasToolCall", "tool_name": "<your done tool>" }` to `stop_conditions`, or set `tool_choice` to `"auto"` and force the step you actually care about with `step_rules`. `maxChainGenerations` does not satisfy this — it bounds a chain, it never ends a turn.',
   FORMATION_HANDLER_FAILED:
     'A resource type this deployment registered delegates to an external handler, and that handler did not answer. The template is not at fault, so re-deploying it unchanged will fail identically — the deployment operator has to fix the handler (`meta.resource_type` names the type, `meta.request_type` the operation it failed on).',
   QUOTA_EXCEEDED:
