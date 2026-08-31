@@ -963,7 +963,9 @@ components:
           nullable: true
           items:
             type: object
-          description: Stop conditions
+          description: >-
+            Conditions that end the generation loop early, on top of
+            `max_steps` — see the create request body for the accepted shape.
         active_tool_ids:
           x-soat-ref: tools
           type: array
@@ -1319,6 +1321,14 @@ components:
           type: array
           items:
             type: object
+          description: >-
+            Conditions that end the generation loop early, on top of
+            `max_steps`. Each entry is
+            `{"type": "hasToolCall", "tool_name": "<resolved tool name>"}`, and
+            the loop stops after the step that calls the named tool. A
+            condition narrows when the loop ends — it never lets it run past
+            `max_steps`. An unknown `type`, a `hasToolCall` without a
+            `tool_name`, or a non-object entry is rejected with 400.
         active_tool_ids:
           x-soat-ref: tools
           type: array
@@ -1480,6 +1490,14 @@ components:
           nullable: true
           items:
             type: object
+          description: >-
+            Conditions that end the generation loop early, on top of
+            `max_steps`. Each entry is
+            `{"type": "hasToolCall", "tool_name": "<resolved tool name>"}`, and
+            the loop stops after the step that calls the named tool. A
+            condition narrows when the loop ends — it never lets it run past
+            `max_steps`. An unknown `type`, a `hasToolCall` without a
+            `tool_name`, or a non-object entry is rejected with 400.
         active_tool_ids:
           x-soat-ref: tools
           type: array
