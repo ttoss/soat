@@ -2034,6 +2034,81 @@ describe('Agents', () => {
       expect(res.status).toBe(400);
     });
   });
+  describe('on_approval_expiry', () => {
+    test('defaults to null — an expired approval ends the chain', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: 'expiry-default',
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.on_approval_expiry).toBeNull();
+    });
+
+    test('an agent can opt into reacting to an expiry', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: 'expiry-react',
+          on_approval_expiry: 'react',
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.on_approval_expiry).toBe('react');
+
+      const read = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${res.body.id}`
+      );
+      expect(read.body.on_approval_expiry).toBe('react');
+    });
+
+    test('an existing agent can be switched by update', async () => {
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: 'expiry-to-switch',
+        });
+
+      const res = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/agents/${created.body.id}`)
+        .send({ on_approval_expiry: 'react' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.on_approval_expiry).toBe('react');
+
+      // And back — clearing it returns the agent to the terminating default
+      // rather than leaving the opt-in stuck on.
+      const cleared = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/agents/${created.body.id}`)
+        .send({ on_approval_expiry: null });
+
+      expect(cleared.status).toBe(200);
+      expect(cleared.body.on_approval_expiry).toBeNull();
+    });
+
+    test('rejects an unknown value with 400', async () => {
+      // A typo must not read as the safe default at resume time.
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: 'expiry-bogus',
+          on_approval_expiry: 'continue',
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+  });
+
   describe('trace_content_mode (zero-retention)', () => {
     test('defaults to null — the agent inherits its project', async () => {
       const res = await authenticatedTestClient(userToken)

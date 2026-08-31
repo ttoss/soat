@@ -1,6 +1,7 @@
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { reactsToExpiredApproval } from './agentApprovalExpiry';
 import { emitClientToolReHandoff } from './agentClientToolReHandoff';
 import { createGeneration } from './agentGeneration';
 import {
@@ -135,13 +136,31 @@ const buildContinuationMessage = (args: {
 };
 
 /**
+ * Whether this agent wants an expired approval reported back to it.
+ *
+ * Read off the agent at resume time rather than frozen onto the approval at
+ * proposal time: the item can sit pending for days, and what its owner wants
+ * applied is the config as it stands now — the same reason the chain budget is
+ * read live rather than captured. An agent that no longer exists cannot react,
+ * so a missing row terminates.
+ */
+const reportsExpiryToAgent = async (item: MappedApproval): Promise<boolean> => {
+  if (!item.agent_id) return false;
+  const agent = await db.Agent.findOne({
+    where: { publicId: item.agent_id },
+    attributes: ['onApprovalExpiry'],
+  });
+  return reactsToExpiredApproval(agent?.onApprovalExpiry);
+};
+
+/**
  * Fires the continuation generation that closes the return-pending loop (§4.2),
  * feeding the decision back into the agent's context. Two paths:
  *
  * - **Session-backed**: the continuation appends to the originating session's
  *   thread via `sendSessionMessage`, so provenance flows through the shared
- *   conversation. (Threading `initiator_generation_id` through the session
- *   generation stack is a follow-up; the thread linkage is the provenance today.)
+ *   conversation, and `initiator_generation_id` rides the session generation
+ *   stack so the turn joins the same bounded chain as the standalone branch.
  * - **Standalone**: a new generation linked to the original via
  *   `initiator_generation_id`.
  */
@@ -236,6 +255,20 @@ export const runToolCallContinuation = async (args: {
         log('executeApprovedAction failed id=%s %o', item.id, error);
         return { error: errorMessage(error) };
       });
+    }
+
+    // An expiry means nobody was at the wheel, so by default there is nobody to
+    // report to and nothing a turn would add: the `expired` row, the
+    // `approvals.expired` event and the auto-filed exception are already the
+    // whole record. Continuing instead is what compounded #1161 — under a
+    // forcing `tool_choice` the reported-to turn can only propose more gated
+    // calls, which expire, which continue again.
+    if (
+      args.decision.decision === 'expired' &&
+      !(await reportsExpiryToAgent(item))
+    ) {
+      log('runToolCallContinuation: expiry is terminal id=%s', item.id);
+      return;
     }
 
     await fireContinuation({

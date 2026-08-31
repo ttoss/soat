@@ -51,6 +51,7 @@ Agents differ from [Chats](./chats.md) in that they can call tools, observe resu
 | `max_context_messages`     | number        | Maximum number of recent messages sent to the model per generation — see [Context Window Limiting](#context-window-limiting)     |
 | `single_session_per_actor` | boolean       | When `true`, only one open session per `actor_id` is allowed — see [Single Session Per Actor](#single-session-per-actor)         |
 | `trace_content_mode` | string \| null | `null` (default) inherits the project's setting; `none` opts this agent into [zero-retention](#zero-retention) — its trace and generation content is never written |
+| `on_approval_expiry` | string \| null | What happens when a held tool call expires un-approved — `null`/`terminate` (default) ends the chain, `react` reports it to the agent. See [Approval Expiry](#approval-expiry) |
 | `version`                  | number        | Current config version, starting at `1` — see [Versioning and Staged Rollout](#versioning-and-staged-rollout)                    |
 | `active_release`            | object/null   | Staged rollout in progress, or `null` when all traffic serves this config — see [Staged Rollout](#staged-rollout)                |
 | `created_at`               | string        | ISO 8601 creation timestamp                                                                                                      |
@@ -204,6 +205,8 @@ The `tool_choice` field sets the **default** tool-selection strategy for every s
 The object form applies to the current model call only. When a generation pauses at `requires_action` for a [client tool](./tools.md#client) and resumes after `submit-tool-outputs`, the continuation runs with `"auto"` — the force is satisfied by the call that produced the pause. The resumed turn runs with the agent's **full** tool surface — the bound tools narrowed by `active_tool_ids`, plus the `write_memory` tool injected by `knowledge_config.write_memory_id` — whether or not the pause outlived a server restart.
 
 The same relaxation applies to every [continuation](#continuation-chains) — a turn spawned to carry an approval decision back to the agent. A continuation exists to report an outcome and conclude, and under a forcing `tool_choice` it cannot: it can only propose more calls, which a guardrail may hold, which expire, which continue again. Re-applying the author's forcing to each resumption is what turned one abandoned agent into a 17-day runaway. Only a *forcing* value is relaxed, and only on a continuation — `"auto"` and `"none"` pass through, and the turn that starts a chain keeps whatever the agent declares.
+
+Two consequences of that relaxation are worth planning for. A continuation may **conclude in text without calling the "done" tool**, so a consumer that treats the done-tool call as the only terminal signal will come up empty on a turn that resumed from an approval — read the generation's `stop_reason` instead. And because an *expired* approval no longer continues at all by default (see [Approval Expiry](#approval-expiry)), the relaxed continuation is reached only for a decided approval, or for an agent that opted into reacting to staleness.
 
 ### Step Rules
 
@@ -577,6 +580,34 @@ These events are dispatched to project [webhooks](./webhooks.md) as a generation
 
 Every generation event carries the generation `id` and its `trace_id`. `agents.generation.failed` also carries the same structured `error` the generation record exposes (`error.code`, `error.message`). Subscribe to the family with the `agents.generation.*` pattern. The session equivalents are namespaced separately — see [Sessions → Webhook Events](./sessions.md#webhook-events).
 
+### Approval Expiry
+
+A [held tool call](./approvals.md) that nobody decides expires after its TTL. What
+happens next is `on_approval_expiry`:
+
+| Value | Behavior |
+| --- | --- |
+| `null` / `"terminate"` (default) | The chain ends there. No generation is spawned and no model call is paid for. |
+| `"react"` | A [continuation](#continuation-chains) is spawned to report the staleness to the agent, which may then act on it. |
+
+Terminating costs no observability — the expiry is already fully recorded
+without a turn: the approval reads `expired`, the `approvals.expired` webhook
+fires, and the platform files an
+[`approval_expired` exception](./exceptions.md#producers). A continuation adds
+no record; it only tells the agent, which is worth paying for solely when the
+agent does something about it.
+
+The default is `terminate` because the reaction turn is what compounded the
+runaway the chain budget exists for: an expiry nobody was watching spawned a
+turn that, under a forcing [`tool_choice`](#tool-choice), could only propose
+more gated calls — which were held, expired, and continued again. Set `react`
+for an agent that genuinely handles staleness (retrying differently, notifying
+through an ungated tool); its continuation resumes with a relaxed `tool_choice`
+so it can conclude.
+
+Approved and rejected approvals are unaffected: both always continue, because a
+human decided and the agent has an outcome to act on.
+
 ### Continuation chains
 
 A generation can be resumed long after the request that started it — an approval
@@ -595,6 +626,11 @@ when it is created and never rewritten afterwards. Deleting an agent rewrites th
 trace lineage of everything left beneath it, so a chain identified by its traces
 could be re-rooted — and handed a fresh budget — by a cleanup elsewhere in the
 project.
+
+A chain also has to be *fed* to grow. By default an expiry ends it rather than
+resuming it ([Approval Expiry](#approval-expiry)), so an unattended chain stops
+on its own and the budget stays a backstop for a chain that keeps finding real
+work.
 
 Refusing a resumption also files a
 [`chain_limit` exception](./exceptions.md#producers), deduped on that root. A

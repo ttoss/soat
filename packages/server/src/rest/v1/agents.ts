@@ -46,6 +46,7 @@ type CreateAgentBody = {
   single_session_per_actor?: unknown;
   guardrail_ids?: unknown;
   trace_content_mode?: unknown;
+  on_approval_expiry?: unknown;
   project_id?: string;
   /** Write-only tag for the version this write archives; never stored on the agent. */
   version_label?: unknown;
@@ -94,6 +95,10 @@ const parseUpdateAgentBody = (body: Record<string, unknown>) => {
     // Forwarded unvalidated so the lib rejects a bad value (or a loosening of
     // a zero-retention project) with a 400 rather than dropping it silently.
     traceContentMode: parseOptional<string | null>(body.trace_content_mode),
+    // Forwarded unvalidated for the same reason as `trace_content_mode`: the
+    // lib owns the vocabulary, so a bad value is a 400 rather than a silent
+    // fallback to the terminating default.
+    onApprovalExpiry: parseOptional<string | null>(body.on_approval_expiry),
     // Annotates the archived version, not the agent — deliberately absent from
     // the config snapshot, so labelling a change is not itself a change.
     versionLabel: parseNullableString(body.version_label),
@@ -172,6 +177,7 @@ const buildCreateAgentArgs = (args: {
         : undefined,
     guardrailIds: parseGuardrailIds(body.guardrail_ids),
     traceContentMode: body.trace_content_mode as string | null | undefined,
+    onApprovalExpiry: body.on_approval_expiry as string | null | undefined,
   };
 };
 

@@ -5,6 +5,7 @@ import {
   getAgentIncludes,
   type MappedAgent,
 } from './agentAccessor';
+import { assertValidOnApprovalExpiry } from './agentApprovalExpiry';
 import {
   type AgentToolBinding,
   readAgentToolBindings,
@@ -63,6 +64,7 @@ const mapAgent = (agent: AgentRow): MappedAgent => {
     single_session_per_actor: agent.singleSessionPerActor,
     guardrail_ids: agent.guardrailIds,
     trace_content_mode: agent.traceContentMode,
+    on_approval_expiry: agent.onApprovalExpiry,
     version: agent.version,
     // Normalized rather than echoed raw, so the release the API reports is
     // exactly the one the generation path will act on.
@@ -94,6 +96,7 @@ type AgentUpdateFields = {
   singleSessionPerActor?: boolean;
   guardrailIds?: string[] | null;
   traceContentMode?: string | null;
+  onApprovalExpiry?: string | null;
 };
 
 /**
@@ -125,6 +128,7 @@ const AGENT_SCALAR_FIELDS = [
   'singleSessionPerActor',
   'guardrailIds',
   'traceContentMode',
+  'onApprovalExpiry',
 ] as const;
 
 const buildAgentUpdates = (
@@ -152,6 +156,7 @@ const AGENT_CREATE_DEFAULTS = {
   boundaryPolicy: null,
   temperature: null,
   maxContextMessages: null,
+  onApprovalExpiry: null,
 };
 
 export const createAgent = async (
@@ -176,10 +181,12 @@ export const createAgent = async (
     singleSessionPerActor?: boolean;
     guardrailIds?: string[] | null;
     traceContentMode?: string | null;
+    onApprovalExpiry?: string | null;
   } & AgentVersionAuthorship
 ): Promise<MappedAgent> => {
   validateOutputSchema(args.outputSchema);
   assertBoundaryPolicyActionsKnown(args.boundaryPolicy);
+  assertValidOnApprovalExpiry(args.onApprovalExpiry);
 
   const { aiProviderId, modelRouteId } = await resolveCreateModelBinding(args);
 
@@ -342,6 +349,7 @@ export const updateAgent = async (
 ): Promise<MappedAgent> => {
   validateOutputSchema(args.outputSchema);
   assertBoundaryPolicyActionsKnown(args.boundaryPolicy);
+  assertValidOnApprovalExpiry(args.onApprovalExpiry);
 
   // Loaded with its joins so the pre-write config can be snapshotted through
   // the same mapper that serializes the response — the diff is then between two
