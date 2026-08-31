@@ -245,6 +245,20 @@ describe('stop_conditions', () => {
     expect(requestCount).toBe(1);
   });
 
+  test('a chain-scoped condition does not bound the per-turn loop', async () => {
+    // `maxChainGenerations` bounds the *chain*, evaluated when a continuation is
+    // spawned (`generationChain.test.ts`). Treating it as a `stopWhen` predicate
+    // would silently cap every turn's step count at the chain's number — a
+    // different limit on a different axis, quietly enforced on the wrong one.
+    const result = await run({
+      generationId: 'gen_stopcond_chainscoped',
+      stopConditions: [{ type: 'maxChainGenerations', max_generations: 1 }],
+    });
+
+    expect(result.status).toBe('completed');
+    expect(requestCount).toBe(MAX_STEPS);
+  });
+
   test('an unknown condition type is ignored rather than failing the turn', async () => {
     // Rows written before the vocabulary was validated may carry anything; a
     // stored value must not break a generation that used to run.

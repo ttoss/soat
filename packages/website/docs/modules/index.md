@@ -45,6 +45,7 @@ The generation engine and its building blocks.
 - [Chats](./chats.md) — raw LLM completions without an agent
 - [Actors](./actors.md) — participant identities in conversations
 - [Generations](./generations.md) — generation records and async jobs
+- [Chains](./chains.md) — continuation chains: the linked tree a resumed turn grows into, and the ceilings that stop it
 
 ## Orchestration & Automation
 

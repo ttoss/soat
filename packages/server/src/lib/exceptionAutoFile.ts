@@ -114,6 +114,10 @@ const fileChainLimitException = async (event: SoatEvent): Promise<void> => {
       initiatorGenerationId: asStringOrNull(data.initiatorGenerationId),
       chainSize: asNumberOrNull(data.chainSize),
       limit: asNumberOrNull(data.limit),
+      // Which ceiling refused it: the agent's own `maxChainGenerations`, or the
+      // deployment's `MAX_CONTINUATION_CHAIN_GENERATIONS`. Without it the number
+      // alone does not say which knob to turn.
+      limitSource: asStringOrNull(data.limitSource),
     },
     agentId,
     // The chain's root, which is the one id every refusal in it shares — an
@@ -214,6 +218,7 @@ export const emitChainLimitEvent = (args: {
   initiatorGenerationId: string | null;
   chainSize: number;
   limit: number;
+  limitSource: 'agent' | 'platform';
 }): void => {
   emitResourceEvent({
     type: 'generations.chain_limit',
@@ -226,6 +231,7 @@ export const emitChainLimitEvent = (args: {
       initiatorGenerationId: args.initiatorGenerationId,
       chainSize: args.chainSize,
       limit: args.limit,
+      limitSource: args.limitSource,
     },
   });
 };

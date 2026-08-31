@@ -23,8 +23,8 @@ export const generationsRouter = new Router<Context>();
  * GET /api/v1/generations
  * operationId: listGenerations
  * Lists generations the caller can access, optionally filtered by agent_id,
- * trace_id, orchestration_run_id, node_id, and status. Replaces the former
- * GET /traces/{trace_id}/generations.
+ * trace_id, chain_id, orchestration_run_id, node_id, and status. Replaces
+ * the former GET /traces/{trace_id}/generations.
  */
 generationsRouter.get('/generations', async (ctx: Context) => {
   requireAuth(ctx);
@@ -39,6 +39,7 @@ generationsRouter.get('/generations', async (ctx: Context) => {
     agent_id: agentId,
     trace_id: traceId,
     initiator_generation_id: initiatorGenerationId,
+    chain_id: chainId,
     orchestration_run_id: orchestrationRunId,
     node_id: nodeId,
     status,
@@ -51,6 +52,7 @@ generationsRouter.get('/generations', async (ctx: Context) => {
     agentId,
     traceId,
     initiatorGenerationId,
+    chainId,
     orchestrationRunId,
     nodeId,
     status,

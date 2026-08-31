@@ -65,6 +65,15 @@ paths:
             Null-initiated (top-level) generations are not returned.
           schema:
             type: string
+        - name: chain_id
+          in: query
+          required: false
+          description: >
+            Filter by the continuation chain the generation belongs to. This is
+            how a chain is expanded into its members — the chain record carries
+            only their count.
+          schema:
+            type: string
         - name: orchestration_run_id
           in: query
           required: false
@@ -395,6 +404,14 @@ components:
           description: >
             Public ID of the generation that triggered this one. Set for
             sub-agent invocations. Null for top-level generations.
+        chain_id:
+          x-soat-ref: chains
+          type: string
+          nullable: true
+          description: >
+            Public ID of the continuation chain this generation belongs to.
+            Set on every member of a chain — the continuations and the root they
+            descend from — and null on a generation that is not part of one.
         started_by_principal_type:
           type: string
           nullable: true

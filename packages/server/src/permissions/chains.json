@@ -1,0 +1,15 @@
+{
+  "module": "chains",
+  "operations": [
+    {
+      "operationId": "listChains",
+      "action": "chains:ListChains",
+      "description": "List continuation chains in a project"
+    },
+    {
+      "operationId": "getChain",
+      "action": "chains:GetChain",
+      "description": "Get a continuation chain by ID"
+    }
+  ]
+}

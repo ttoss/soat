@@ -3414,6 +3414,28 @@ if [ -n "$CLIENT_TRACE_ID" ] && [ "$CLIENT_TRACE_ID" != "null" ]; then
   fi
   echo "Generation retrieval endpoint: OK (status: $GENERATION_RETURNED_STATUS)"
 
+  # 34a1a2. Chains (#1165) — the continuation-chain record. Nothing here drives a
+  # continuation (that needs an approval decided after the fact), so the
+  # assertions are the wiring: the route answers, the page is well-formed, and a
+  # generation that is not part of a chain reports `chain_id: null` rather than
+  # omitting the field. A chain's own lifecycle is covered by the unit suite.
+  CHAINS_RESP=$($SOAT_CLI list-chains --project-id "$PROJECT_PUBLIC_ID" | sanitize_json)
+  CHAINS_TOTAL=$(printf '%s\n' "$CHAINS_RESP" | jq -r 'if (.data | type) == "array" then .total else empty end')
+  if [ -z "$CHAINS_TOTAL" ]; then
+    echo "ERROR: list-chains did not return a paginated page" >&2
+    printf '%s\n' "$CHAINS_RESP" >&2
+    exit 1
+  fi
+  echo "List chains endpoint: OK (total: $CHAINS_TOTAL)"
+
+  GENERATION_CHAIN_ID=$(printf '%s\n' "$GENERATION_GET_RESP" | jq -r 'if has("chain_id") then (.chain_id // "null") else empty end')
+  if [ -z "$GENERATION_CHAIN_ID" ]; then
+    echo "ERROR: get-generation omitted chain_id for '$FIRST_GENERATION_ID'" >&2
+    printf '%s\n' "$GENERATION_GET_RESP" >&2
+    exit 1
+  fi
+  echo "Generation chain_id field: OK ($GENERATION_CHAIN_ID)"
+
   # 34a1b. Transcript (#1021) — the turn read back step by step, projected from
   # the trace's steps object at read time. Structural assertions only: the step
   # texts are whatever the sandbox model produced.
