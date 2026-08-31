@@ -27,6 +27,7 @@ export type ExceptionKind =
   | 'approval_expired'
   | 'quota_unpriced'
   | 'event_trigger_loop'
+  | 'chain_limit'
   | 'manual';
 
 /**
@@ -37,8 +38,9 @@ export type ExceptionKind =
  * lapsed approval is a fail-safe missed SLA (`warning`); a cost cap that cannot
  * be evaluated is a control silently protecting nothing — it needs a config fix,
  * not an incident response (`warning`); an event trigger that refused to extend
- * a causal chain is a loop running unattended — the guard worked, and the wiring
- * still needs a human (`warning`).
+ * a causal chain, and a continuation chain that spent its generation budget, are
+ * loops running unattended — the guard worked, and the wiring still needs a
+ * human (`warning`).
  */
 const DEFAULT_SEVERITY_BY_KIND: Record<ExceptionKind, ExceptionSeverity> = {
   run_failed: 'critical',
@@ -46,6 +48,7 @@ const DEFAULT_SEVERITY_BY_KIND: Record<ExceptionKind, ExceptionSeverity> = {
   approval_expired: 'warning',
   quota_unpriced: 'warning',
   event_trigger_loop: 'warning',
+  chain_limit: 'warning',
   manual: 'warning',
 };
 

@@ -92,6 +92,7 @@ const resolveContextAndRecord = async (args: {
   traceId: string;
   parentTraceId?: string | null;
   rootTraceId?: string | null;
+  rootGenerationId?: string | null;
   initiatorGenerationId?: string | null;
   remainingDepth?: number;
   knowledgeConfig?: object;
@@ -143,6 +144,7 @@ const resolveContextAndRecord = async (args: {
     traceId: args.traceId,
     parentTraceId: args.parentTraceId,
     rootTraceId: args.rootTraceId,
+    rootGenerationId: args.rootGenerationId,
     initiatorGenerationId: args.initiatorGenerationId ?? null,
     ...startedByPrincipalColumns(principal),
     // Typed FK columns, not metadata keys: this is identity the platform
@@ -293,7 +295,7 @@ const prepareGeneration = async (
   if (chain.kind === 'refused') {
     return { kind: 'short_circuit', result: chain.result };
   }
-  const { parentTraceId, rootTraceId } = chain;
+  const { lineage } = chain;
 
   // Before any context building or provider call, so a breached budget meters
   // nothing. Fails open on an infrastructure error: a quota is cost control,
@@ -315,8 +317,7 @@ const prepareGeneration = async (
     authUser: args.authUser,
     toolContext: args.toolContext,
     traceId,
-    parentTraceId,
-    rootTraceId,
+    ...lineage,
     initiatorGenerationId: args.initiatorGenerationId,
     remainingDepth: maxDepth,
     knowledgeConfig: args.knowledgeConfig,
@@ -332,7 +333,7 @@ const prepareGeneration = async (
     source: args.source,
   });
 
-  return { kind: 'ready', ctx, traceId, parentTraceId, rootTraceId };
+  return { kind: 'ready', ctx, traceId, ...lineage };
 };
 
 /**

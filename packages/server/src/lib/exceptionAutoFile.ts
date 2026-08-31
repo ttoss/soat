@@ -2,8 +2,9 @@
  * Auto-files exceptions by subscribing to events the platform already emits,
  * so producers stay decoupled: an exhausted run and a lapsed approval reuse
  * the existing `orchestration_runs.failed` / `approvals.expired` events with
- * no change to those modules; a guardrail tripwire emits a dedicated
- * `guardrail.tripwire` event. Every handler is fire-and-forget — a filing
+ * no change to those modules; a guardrail tripwire and a refused continuation
+ * chain emit dedicated `guardrail.tripwire` / `generations.chain_limit`
+ * events. Every handler is fire-and-forget — a filing
  * failure must never disturb the producer.
  *
  * Split out of `exceptions.ts`, which carries the CRUD/query half of the
@@ -28,6 +29,10 @@ const asRecord = (value: unknown): Record<string, unknown> => {
 
 const asStringOrNull = (value: unknown): string | null => {
   return typeof value === 'string' ? value : null;
+};
+
+const asNumberOrNull = (value: unknown): number | null => {
+  return typeof value === 'number' ? value : null;
 };
 
 const fileRunFailedException = async (event: SoatEvent): Promise<void> => {
@@ -96,6 +101,29 @@ const fileGuardrailTripwireException = async (
   });
 };
 
+const fileChainLimitException = async (event: SoatEvent): Promise<void> => {
+  const data = asRecord(event.data);
+  const rootGenerationId = event.resourceId;
+  const agentId = asStringOrNull(data.agentId);
+  await fileException({
+    projectId: event.projectId,
+    kind: 'chain_limit',
+    title: `Continuation chain ${rootGenerationId} reached its generation budget`,
+    detail: {
+      rootGenerationId,
+      initiatorGenerationId: asStringOrNull(data.initiatorGenerationId),
+      chainSize: asNumberOrNull(data.chainSize),
+      limit: asNumberOrNull(data.limit),
+    },
+    agentId,
+    // The chain's root, which is the one id every refusal in it shares — an
+    // over-budget chain refuses once per resumption, so keying on the refused
+    // hop would file an item per occurrence of exactly the runaway this
+    // exists to report.
+    dedupKey: `chain_limit:${rootGenerationId}`,
+  });
+};
+
 /**
  * The events that auto-file an exception, keyed by name. A `Map` rather than an
  * object literal so the keys stay typed as registered event names: the
@@ -109,6 +137,7 @@ const EXCEPTION_FILERS = new Map<
   ['orchestration_runs.failed', fileRunFailedException],
   ['approvals.expired', fileApprovalExpiredException],
   ['guardrail.tripwire', fileGuardrailTripwireException],
+  ['generations.chain_limit', fileChainLimitException],
 ]);
 
 const handleEvent = (event: SoatEvent): void => {
@@ -168,6 +197,35 @@ export const emitGuardrailTripwireEvent = (args: {
       nodeId: args.nodeId ?? null,
       agentId: args.agentId ?? null,
       generationId: args.generationId ?? null,
+    },
+  });
+};
+
+/**
+ * Emits a `generations.chain_limit` event the exceptions listener turns into a
+ * `chain_limit` exception. Fire-and-forget from the chain guard, whose caller is
+ * usually a background sweep with nothing left to return a refusal to.
+ */
+export const emitChainLimitEvent = (args: {
+  projectId: number;
+  projectPublicId: string;
+  agentId: string;
+  rootGenerationId: string;
+  initiatorGenerationId: string | null;
+  chainSize: number;
+  limit: number;
+}): void => {
+  emitResourceEvent({
+    type: 'generations.chain_limit',
+    projectId: args.projectId,
+    projectPublicId: args.projectPublicId,
+    resourceType: 'generation',
+    resourceId: args.rootGenerationId,
+    data: {
+      agentId: args.agentId,
+      initiatorGenerationId: args.initiatorGenerationId,
+      chainSize: args.chainSize,
+      limit: args.limit,
     },
   });
 };

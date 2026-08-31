@@ -588,6 +588,19 @@ The budget counts generations rather than hops because a chain fans out — a tu
 holding several gated calls seeds one continuation per call — so a limit on depth
 alone would still permit an exponential number of turns.
 
+A chain is identified by the generation it is rooted at, recorded on every hop
+when it is created and never rewritten afterwards. Deleting an agent rewrites the
+trace lineage of everything left beneath it, so a chain identified by its traces
+could be re-rooted — and handed a fresh budget — by a cleanup elsewhere in the
+project.
+
+Refusing a resumption also files a
+[`chain_limit` exception](./exceptions.md#producers), deduped on that root. A
+chain is usually resumed by a background sweep with no caller waiting on the
+answer, so the exception is what actually reaches someone: an agent that cannot
+terminate on its own is stopped by the budget, but the wiring behind it still
+needs a human.
+
 ## Configuration
 
 | Environment Variable                 | Required | Description                                                                  |

@@ -90,6 +90,7 @@ export class ExceptionItem extends Model {
       'approval_expired',
       'quota_unpriced',
       'event_trigger_loop',
+      'chain_limit',
       'manual'
     ),
     allowNull: false,
@@ -100,6 +101,7 @@ export class ExceptionItem extends Model {
     | 'approval_expired'
     | 'quota_unpriced'
     | 'event_trigger_loop'
+    | 'chain_limit'
     | 'manual';
 
   @Column({ type: DataType.TEXT, allowNull: false })
