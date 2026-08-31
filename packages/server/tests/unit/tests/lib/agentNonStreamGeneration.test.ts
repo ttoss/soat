@@ -98,7 +98,7 @@ describe('agentNonStreamGeneration', () => {
     const { runNonStreamGeneration } = await loadNonStreamModule();
 
     const result = await runNonStreamGeneration({
-      // Resolved by the caller now (`normalizeToolChoice`), so the wire→SDK
+      // Resolved by the caller (`normalizeToolChoice`), so the wire→SDK
       // translation happens once for both the stream and non-stream paths.
       toolChoice: normalizeToolChoice({
         type: 'tool',

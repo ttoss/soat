@@ -5,10 +5,9 @@
  * without a turn: the approval row reads `expired`, `approvals.expired` is
  * emitted to webhooks, and the exceptions listener files `approval_expired`.
  * A continuation adds no record — it only tells the agent, which is worth
- * paying for solely when the agent acts on staleness. An unwatched expiry is
- * also where the chain used to compound: the reaction turn proposed more calls,
- * which the gate held, which expired, which continued again (#1161, 17 days and
- * ~US$424 on one abandoned fixture).
+ * paying for solely when the agent acts on staleness. An expiry nobody watched
+ * is also where a chain grows with nobody reading the result: the reaction turn
+ * proposes more calls, the gate holds them, they expire, and it continues.
  *
  * `react` restores that continuation for an agent that genuinely handles the
  * news — retry differently, notify through an ungated tool. It runs under the

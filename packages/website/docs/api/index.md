@@ -146,13 +146,8 @@ curl 'https://your-soat-server.com/api/v1/agents?project_id=proj_abc&limit=25&of
 
 - `limit` — Number of results per page. Defaults to `50` and is clamped to a maximum of `100`; a larger requested `limit` is capped, not rejected.
 - `offset` — Number of results to skip (default `0`).
+- Every list endpoint answers with `{ data, total, limit, offset }` — read the items from `response.data`, never the top-level body.
 - There is no `cursor`, `page`, or `sort`/`order` query parameter on any endpoint. Sort order (when defined) is fixed per endpoint — check that resource's module doc — and is not client-configurable.
-
-> **Breaking change (v1 list envelope).** Every list endpoint now returns
-> `{ data, total, limit, offset }`. Endpoints that previously returned a bare
-> JSON array (e.g. [`GET /api/v1/agents`](/docs/api/agents/list-agents), `/projects`, `/tools`, `/triggers`,
-> `/webhooks`, `/secrets`, and others) now return the envelope — read the items
-> from `response.data`, not the top-level body.
 
 There are currently no per-project or per-API-key request-rate limits, quotas, or throttling enforced by the server — every authenticated request is processed immediately, bounded only by the resource limits described above and the [1 MiB inbound webhook body cap](../modules/triggers.md#inbound-webhook-endpoint).
 

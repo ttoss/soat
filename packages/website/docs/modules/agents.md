@@ -182,8 +182,6 @@ The `instructions` field sets the agent's system prompt, and it is the only thin
 
 To vary the system prompt per call, edit the agent (`update-agent --instructions`, which archives a new [version](#agent-version)) or create a separate agent. [Chats](./chats.md#system-instructions) are the surface that does take per-call system content — through their `instructions` field, never through `messages` — since there the caller is the operator rather than an end user.
 
-> **Changed:** this previously depended on configuration rather than being a rule. `instructions` was taken from the *first* system message of the combined history, so a caller's system message won on an agent whose `instructions` was empty and was silently dropped on one where it was set — and neither outcome was reported.
-
 ### AI Provider Resolution
 
 The agent resolves its AI provider by `ai_provider_id`; if `model` is not set, the provider's `default_model` is used. See [AI Providers](./ai-providers.md).
@@ -219,7 +217,7 @@ The alternative is to stop forcing at the agent level: leave `tool_choice` at `"
 
 One resumption is the exception. When a generation pauses at `requires_action` for a [client tool](./tools.md#client) and resumes after `submit-tool-outputs`, it continues *the same turn* and runs with `"auto"`: the force is already satisfied by the call that produced the pause, and re-applying the object form there would demand the same tool again forever. That resumed turn gets the agent's **full** tool surface — the bound tools narrowed by `active_tool_ids`, plus the `write_memory` tool injected by `knowledge_config.write_memory_id` — whether or not the pause outlived a server restart.
 
-> **Changed:** a forcing `tool_choice` used to be silently rewritten to `"auto"` on every continuation, so the agent's declared configuration and what actually ran disagreed with nothing recording it. The configuration that rewrite existed to repair is now unwritable instead. Agents stored before this rule keep running as they are — the [chain budget](./chains.md#bounding-a-chain) is what bounds them — and are refused on their next write until they declare an exit, including a [version restore](#versioning-and-staged-rollout), which re-validates the config it writes back.
+An agent already stored without the condition keeps running — the [chain budget](./chains.md#bounding-a-chain) is what bounds it — and is refused on its next write until it declares an exit, a [version restore](#versioning-and-staged-rollout) included, since restore re-validates the config it writes back.
 
 ### Step Rules
 
@@ -644,12 +642,11 @@ When the lapsed call was held by a generation inside an existing
 [chain](./chains.md), that chain's record moves to `expired` — a deadline ended
 it, which is a different thing to triage than a chain that finished on its own.
 
-The default is `terminate` because an unwatched expiry is where the chain used to
-compound: the reaction turn proposed more gated calls, which were held, expired
-and continued again (#1161). The [chain budget](./chains.md#bounding-a-chain)
-bounds that now, but the turn still costs a model call to tell an agent
-something nobody is waiting to hear. Set `react` for an agent that genuinely
-handles staleness — retrying differently, notifying through an ungated tool.
+The default is `terminate` because the reaction turn costs a model call to tell
+an agent something nobody is waiting to hear, and an expiry nobody watched is
+where a chain grows without anyone reading the result. Set `react` for an agent
+that genuinely handles staleness — retrying differently, notifying through an
+ungated tool.
 
 Approved and rejected approvals are unaffected: both always continue, because a
 human decided and the agent has an outcome to act on.

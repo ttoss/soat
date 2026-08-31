@@ -150,11 +150,10 @@ const declaresTurnExit = (stopConditions: unknown): boolean => {
  * proposing more calls, and where those calls are gated too, each approval buys
  * another approval instead of an answer.
  *
- * Requiring the terminal condition makes that configuration unwritable rather
- * than silently repaired, which is why a continuation no longer has its forcing
- * rewritten to `auto` for it. It cannot *guarantee* the
- * model calls the named tool — nothing can — but it guarantees an exit exists
- * to be reached.
+ * Requiring the terminal condition makes that configuration unwritable, which
+ * is what lets a continuation run under the author's forcing unaltered. It
+ * cannot *guarantee* the model calls the named tool — nothing can — but it
+ * guarantees an exit exists to be reached.
  *
  * Evaluated against the config a write leaves behind, never the fields it
  * names: removing the exit and adding the forcing are the same violation

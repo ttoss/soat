@@ -420,9 +420,8 @@ describe('guardrail-held tool calls under tool_choice: "required"', () => {
     expect(modelRequests).toHaveLength(0);
     expect(await pendingApprovals(fixture.projectId)).toHaveLength(0);
 
-    // Terminating costs no observability: the record a human reads is the same
-    // one the reaction turn used to narrate — every held call reads `expired`,
-    // and the platform files the exception it always did.
+    // Terminating costs no observability: every held call reads `expired` and
+    // the platform files the exception, with no turn needed to narrate it.
     const items = await db.ApprovalItem.findAll({
       where: { projectId: fixture.projectId },
     });
@@ -499,9 +498,9 @@ describe('guardrail-held tool calls under tool_choice: "required"', () => {
     });
 
     // `tool_choice` is the agent's on every turn of the chain, not just the one
-    // the author wrote. The platform used to rewrite it to `auto` here so the
-    // continuation could answer; it no longer does, because a forcing agent now
-    // has to declare its own exit instead (`assertForcedToolChoiceCanStop`).
+    // the author wrote. Nothing rewrites it to `auto` for a continuation: a
+    // forcing agent declares its own exit instead
+    // (`assertForcedToolChoiceCanStop`).
     expect(modelRequests).not.toHaveLength(0);
     for (const body of modelRequests) {
       expect(body.tool_choice).toBe('required');

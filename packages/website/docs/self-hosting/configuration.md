@@ -52,7 +52,7 @@ services:
 
 :::note[Aurora PostgreSQL 18.3]
 
-Aurora PostgreSQL 18.3 crashes the DB instance when it receives the multi-statement session-setup query (`SET client_min_messages ...; SET TIME ZONE ...`) that the ORM sends on each new pooled connection, which previously caused a silent startup failure. SOAT suppresses the `SET TIME ZONE` half of that query (the session timezone is UTC either way), so it now boots against Aurora 18.3 without any extra configuration.
+Aurora PostgreSQL 18.3 crashes the DB instance when it receives the multi-statement session-setup query (`SET client_min_messages ...; SET TIME ZONE ...`) that the ORM sends on each new pooled connection. SOAT suppresses the `SET TIME ZONE` half of that query (the session timezone is UTC either way), so it boots against Aurora 18.3 without any extra configuration.
 
 :::
 
