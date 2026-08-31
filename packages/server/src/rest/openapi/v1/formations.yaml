@@ -614,17 +614,21 @@ components:
         stop_conditions:
           type: array
           nullable: true
-          description: Conditions that stop multi-step generation early. The loop stops when any condition is met.
+          description: Conditions that stop the agent's work early — turn-scoped (`hasToolCall`) or chain-scoped (`maxChainGenerations`).
           items:
             type: object
             properties:
               type:
                 type: string
-                description: 'Condition type — currently `hasToolCall`'
+                description: 'Condition type — `hasToolCall` or `maxChainGenerations`'
               tool_name:
                 type: string
                 nullable: true
                 description: Tool name to match when type is `hasToolCall`
+              max_generations:
+                type: integer
+                nullable: true
+                description: Generations the continuation chain may reach when type is `maxChainGenerations`
         active_tool_ids:
           x-soat-ref: tools
           type: array

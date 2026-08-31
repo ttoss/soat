@@ -20,6 +20,7 @@ export const PUBLIC_ID_PREFIXES = {
   user: 'user_',
   tool: 'tool_',
   generation: 'gen_',
+  generationChain: 'chain_',
   trace: 'trace_',
   webhook: 'wh_',
   webhookDelivery: 'wh_deliv_',

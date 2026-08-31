@@ -6,6 +6,7 @@ export type PersistedGeneration = {
   agent_id: string;
   trace_id: string;
   initiator_generation_id: string | null;
+  chain_id: string | null;
   started_by_principal_type: string | null;
   started_by_principal_id: string | null;
   status: string;
@@ -49,6 +50,9 @@ export const mapGeneration = (
     agent_id: gen.agent.publicId,
     trace_id: gen.trace.publicId,
     initiator_generation_id: gen.initiatorGeneration?.publicId ?? null,
+    // The continuation chain this turn belongs to; null when it is not one. The
+    // chain's own key (`rootGenerationId`) stays internal — this is the handle.
+    chain_id: gen.chainId,
     started_by_principal_type: gen.startedByPrincipalType,
     started_by_principal_id: gen.startedByPrincipalId,
     status: gen.status,

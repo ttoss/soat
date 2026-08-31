@@ -45,6 +45,9 @@ export const PROJECT_CASCADE_ORDER = [
   'ExceptionItem',
   'ActivityEntry',
   'GuardrailEvaluation',
+  // A chain references nothing (its agent and root generation are plain ids,
+  // deliberately not foreign keys) and nothing references it.
+  'GenerationChain',
 
   // Automation — a firing belongs to a trigger, a task to a workflow.
   'TriggerFiring',
@@ -135,6 +138,7 @@ export const PROJECT_COUNTED_MODELS = [
   'File',
   'Formation',
   'Generation',
+  'GenerationChain',
   'Guardrail',
   'GuardrailEvaluation',
   'IngestionRule',

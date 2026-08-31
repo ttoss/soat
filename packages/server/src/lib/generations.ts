@@ -6,9 +6,15 @@ import {
   resolveEndUserAttribution,
 } from './generationAttribution';
 import {
+  findChainIdByRoot,
+  noteChainMemberSettled,
+  recordChainGrowth,
+} from './generationChains';
+import {
   buildCreateContentColumns,
   suppressContentWrites,
 } from './generationContentSuppression';
+import { applyGenerationScopeFilters } from './generationListFilters';
 import { mapGeneration, type PersistedGeneration } from './generationMapper';
 import { findOrCreateTrace, findTraceDbId } from './generationTrace';
 import { emptyPage, paginatedList } from './pagination';
@@ -62,10 +68,11 @@ const commitGenerationWithTrace = async (helperArgs: {
   };
   agentDbId: number;
   initiatorDbId: number | null;
+  chainId: string | null;
   endUser: { actorId: number | null; sessionId: number | null };
   contentColumns: Record<string, unknown>;
 }) => {
-  const { args, agentDbId, initiatorDbId, endUser, contentColumns } =
+  const { args, agentDbId, initiatorDbId, chainId, endUser, contentColumns } =
     helperArgs;
 
   return db.sequelize.transaction(async (transaction) => {
@@ -91,6 +98,7 @@ const commitGenerationWithTrace = async (helperArgs: {
         traceId: trace.id,
         initiatorGenerationId: initiatorDbId,
         rootGenerationId: args.rootGenerationId ?? null,
+        chainId,
         startedByPrincipalType: args.startedByPrincipalType ?? null,
         startedByPrincipalId: args.startedByPrincipalId ?? null,
         startedByActorId: endUser.actorId,
@@ -164,13 +172,28 @@ export const createGenerationRecord = async (
     inputMessages: args.inputMessages,
   });
 
+  // Denormalized so a generation names its chain without a join. The chain row
+  // is created by `resolveChainContext` before this runs, so the lookup finds
+  // it; a null here just means this turn is not a continuation.
+  const chainId = args.rootGenerationId
+    ? await findChainIdByRoot(args.rootGenerationId)
+    : null;
+
   const gen = await commitGenerationWithTrace({
     args,
     agentDbId: agent.id as number,
     initiatorDbId: initiatorGeneration?.id ?? null,
+    chainId,
     endUser,
     contentColumns,
   });
+
+  // After the row commits, so the re-derived count includes this hop. Awaited
+  // (it never throws) so a caller reading the chain right after creating a
+  // generation sees the population it just joined.
+  if (args.rootGenerationId) {
+    await recordChainGrowth({ rootGenerationId: args.rootGenerationId });
+  }
 
   const fullGeneration = await db.Generation.findByPk(gen.id, {
     include: [
@@ -243,6 +266,12 @@ export const updateGenerationRecord = async (
 
   await gen.update(updates);
 
+  // A member settling is the only signal a chain has that it may be finished.
+  noteChainMemberSettled({
+    rootGenerationId: gen.rootGenerationId,
+    status: gen.status,
+  });
+
   const fullGeneration = await db.Generation.findByPk(gen.id, {
     include: [
       { model: db.Project, as: 'project' },
@@ -254,71 +283,6 @@ export const updateGenerationRecord = async (
   if (!fullGeneration) return null;
 
   return mapGeneration(fullGeneration);
-};
-
-// Resolves a project-scoped parent (agent/trace) publicId to its internal id
-// for use as a generation list filter. Returns null when it does not exist in
-// scope (caller yields an empty page).
-const resolveScopedId = async (
-  find: (where: {
-    publicId: string;
-    projectId?: number[];
-  }) => Promise<{ id?: number } | null>,
-  publicId: string,
-  projectIds?: number[]
-): Promise<number | null> => {
-  const where: { publicId: string; projectId?: number[] } = { publicId };
-  if (projectIds !== undefined) where.projectId = projectIds;
-  const row = await find(where);
-  return row?.id ?? null;
-};
-
-// Resolves agent/trace publicId filters into `where` (mutating it). Returns
-// false when a referenced agent/trace does not exist in scope.
-const applyGenerationScopeFilters = async (
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  where: Record<string, any>,
-  args: {
-    agentId?: string;
-    traceId?: string;
-    initiatorGenerationId?: string;
-    projectIds?: number[];
-  }
-): Promise<boolean> => {
-  if (args.agentId !== undefined) {
-    const agentId = await resolveScopedId(
-      (w) => {
-        return db.Agent.findOne({ where: w });
-      },
-      args.agentId,
-      args.projectIds
-    );
-    if (agentId === null) return false;
-    where.agentId = agentId;
-  }
-  if (args.traceId !== undefined) {
-    const traceId = await resolveScopedId(
-      (w) => {
-        return db.Trace.findOne({ where: w });
-      },
-      args.traceId,
-      args.projectIds
-    );
-    if (traceId === null) return false;
-    where.traceId = traceId;
-  }
-  if (args.initiatorGenerationId !== undefined) {
-    const initiatorId = await resolveScopedId(
-      (w) => {
-        return db.Generation.findOne({ where: w });
-      },
-      args.initiatorGenerationId,
-      args.projectIds
-    );
-    if (initiatorId === null) return false;
-    where.initiatorGenerationId = initiatorId;
-  }
-  return true;
 };
 
 type GenerationRow = InstanceType<(typeof db)['Generation']> & {
@@ -348,6 +312,7 @@ export const listGenerations = async (args: {
   agentId?: string;
   traceId?: string;
   initiatorGenerationId?: string;
+  chainId?: string;
   orchestrationRunId?: string;
   nodeId?: string;
   status?: string;
@@ -372,6 +337,7 @@ export const listGenerations = async (args: {
 
   // Plain equality: these columns store public ids verbatim, not an internal
   // FK, so there is nothing to resolve and an unknown value matches no row.
+  if (args.chainId !== undefined) where.chainId = args.chainId;
   if (args.orchestrationRunId !== undefined) {
     where.orchestrationRunId = args.orchestrationRunId;
   }

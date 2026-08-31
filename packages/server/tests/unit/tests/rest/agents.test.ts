@@ -2055,6 +2055,33 @@ describe('Agents', () => {
       ]);
     });
 
+    test('accepts the chain-scoped maxChainGenerations condition', async () => {
+      const res = await create([
+        { type: 'maxChainGenerations', max_generations: 20 },
+      ]);
+
+      expect(res.status).toBe(201);
+      expect(res.body.stop_conditions).toEqual([
+        { type: 'maxChainGenerations', max_generations: 20 },
+      ]);
+    });
+
+    test('rejects maxChainGenerations without a positive max_generations', async () => {
+      // A ceiling of 0 or a missing number would be stored and then read as "no
+      // agent ceiling", i.e. silently fall back to the platform's — which is the
+      // opposite of what the author asked for.
+      for (const condition of [
+        { type: 'maxChainGenerations' },
+        { type: 'maxChainGenerations', max_generations: 0 },
+        { type: 'maxChainGenerations', max_generations: 1.5 },
+        { type: 'maxChainGenerations', max_generations: '10' },
+      ]) {
+        const res = await create([condition]);
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      }
+    });
+
     test('rejects an unknown condition type', async () => {
       // The field used to accept anything and enforce nothing. A typo now fails
       // the write instead of reading as a condition that never fires.

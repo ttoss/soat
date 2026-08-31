@@ -10,6 +10,7 @@ import {
   type MappedApproval,
   registerApprovalResumeHandler,
 } from './approvals';
+import { expireChainIfSettled } from './generationChains';
 import { buildRunAuthHeader } from './orchestrationRunToken';
 import { isPlainObject } from './plainObject';
 import { sendSessionMessage } from './sessionOperations';
@@ -154,6 +155,25 @@ const reportsExpiryToAgent = async (item: MappedApproval): Promise<boolean> => {
 };
 
 /**
+ * Records a terminal expiry on the chain the lapsed call belonged to, when it
+ * belonged to one. A chain whose *root* held the call has no row — chains are
+ * created by the first continuation — so this only fires for a chain that had
+ * already grown, which is exactly the case where "it ended on a deadline" is
+ * worth distinguishing from "it finished".
+ */
+const recordChainExpiry = async (item: MappedApproval): Promise<void> => {
+  if (!item.generation_id) return;
+  const generation = await db.Generation.findOne({
+    where: { publicId: item.generation_id },
+    attributes: ['rootGenerationId'],
+  });
+  if (!generation?.rootGenerationId) return;
+  await expireChainIfSettled({
+    rootGenerationId: generation.rootGenerationId,
+  });
+};
+
+/**
  * Fires the continuation generation that closes the return-pending loop (§4.2),
  * feeding the decision back into the agent's context. Two paths:
  *
@@ -268,6 +288,7 @@ export const runToolCallContinuation = async (args: {
       !(await reportsExpiryToAgent(item))
     ) {
       log('runToolCallContinuation: expiry is terminal id=%s', item.id);
+      await recordChainExpiry(item);
       return;
     }
 

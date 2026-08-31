@@ -271,6 +271,42 @@ describe('MCP tools - happy path', () => {
     expect(resolved.status).toBe('resolved');
   });
 
+  // ── Chains ───────────────────────────────────────────────────────────────
+
+  test('list-chains and get-chain expose continuation chains', async () => {
+    // Read-only surface with no create endpoint: the row is written by the
+    // continuation path, so seed one the way the platform would.
+    const project = await db.Project.findOne({
+      where: { publicId: projectId },
+    });
+    const chain = await db.GenerationChain.create({
+      projectId: project!.id as number,
+      rootGenerationId: 'gen_mcpchainroot000000',
+      status: 'budget_exhausted',
+      generationCount: 7,
+    });
+
+    const listed = parseResult(
+      await mcpCall('list-chains', {
+        project_id: projectId,
+        status: 'budget_exhausted',
+      })
+    );
+    expect(
+      listed.data.some((item: { id: string }) => {
+        return item.id === chain.publicId;
+      })
+    ).toBe(true);
+
+    const fetched = parseResult(
+      await mcpCall('get-chain', { chain_id: chain.publicId })
+    );
+    expect(fetched.id).toBe(chain.publicId);
+    expect(fetched.generation_count).toBe(7);
+    // The chain's internal key never reaches the tool surface either.
+    expect(fetched.root_generation_id).toBeUndefined();
+  });
+
   // ── Activity ─────────────────────────────────────────────────────────────
 
   test('list-activity exposes the autonomous-execution feed', async () => {

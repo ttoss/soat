@@ -40,7 +40,7 @@ Agents differ from [Chats](./chats.md) in that they can call tools, observe resu
 | `tool_bindings`            | array         | Tools attached to this agent, one binding object per tool — see [Tool Bindings](#tool-bindings)                                  |
 | `max_steps`                | number        | Maximum reasoning steps before stopping (default: `20`)                                                                          |
 | `tool_choice`              | string/object | How the model selects tools — see [Tool Choice](#tool-choice)                                                                    |
-| `stop_conditions`          | array         | Additional stop conditions — see [Stop Conditions](#stop-conditions)                                                             |
+| `stop_conditions`          | array         | Turn- and chain-scoped stop conditions — see [Stop Conditions](#stop-conditions)                                                  |
 | `active_tool_ids`          | array         | Subset of bound tool IDs available at each step — see [Active Tools](#active-tools)                                              |
 | `guardrail_ids`            | array         | Guardrails attached at the agent scope, governing every tool call the agent makes — see [Guardrails — Attachment](./guardrails.md#attachment) |
 | `step_rules`               | array         | Per-step overrides for `tool_choice` and `active_tool_ids` — see [Step Rules](#step-rules)                                       |
@@ -124,7 +124,7 @@ When `status` is `completed`, `stop_reason` indicates why:
 | `tool-calls`   | The turn ended on tool calls the platform is still settling — a pause, not an end   |
 | `max_steps`    | The turn spent its whole `max_steps` budget on tool calls and could not finish      |
 | `depth_guard`  | A nested call exceeded `max_call_depth`                                             |
-| `chain_limit`  | A continuation chain reached its generation budget and was not resumed              |
+| `chain_limit`  | A [continuation chain](./chains.md) reached its generation budget and was not resumed |
 | `error`        | The turn failed; the `error` field carries the details                              |
 
 Any other value is the provider's own finish reason (`length`, `content-filter`,
@@ -244,29 +244,44 @@ For **dynamic** per-step control (when you don't know the plan in advance), use 
 
 ### Stop Conditions
 
-Besides `max_steps`, the loop stops when **any** condition in `stop_conditions` is met.
+`stop_conditions` declares when the agent's work stops, on top of `max_steps`.
+The work has two axes, and each condition names the one it bounds:
 
-| Condition                                      | Description                                  |
-| ---------------------------------------------- | -------------------------------------------- |
-| `{ type: "hasToolCall", tool_name: "<name>" }` | Stop when the model calls the specified tool |
+| Condition                                                  | Scope | Stops when                                                        |
+| ---------------------------------------------------------- | ----- | ----------------------------------------------------------------- |
+| `{ type: "hasToolCall", tool_name: "<name>" }`              | turn  | The model calls the named tool                                    |
+| `{ type: "maxChainGenerations", max_generations: <n> }`     | chain | The [continuation chain](./chains.md) has spawned `n` generations |
 
 ```json
 {
   "max_steps": 50,
-  "stop_conditions": [{ "type": "hasToolCall", "tool_name": "done" }]
+  "stop_conditions": [
+    { "type": "hasToolCall", "tool_name": "done" },
+    { "type": "maxChainGenerations", "max_generations": 20 }
+  ]
 }
 ```
 
-`max_steps` always applies: a condition narrows when the loop ends, it never
-lets the loop run longer. `tool_name` is the tool's
+**Turn-scoped.** `max_steps` always applies: a condition narrows when the loop
+ends, it never lets the loop run longer. `tool_name` is the tool's
 [resolved name](./tools.md#tool-name-resolution), and the condition is checked
 after the step that makes the call — so with the example above, a turn that
-calls `done` on step 3 ends there instead of continuing to 50.
+calls `done` on step 3 ends there instead of continuing to 50. Turn conditions
+are enforced on every turn, including one resumed after
+[`submit-tool-outputs`](./tools.md#client).
 
-Conditions are enforced on every turn, including one resumed after
-[`submit-tool-outputs`](./tools.md#client), and are validated on write: an
-unknown `type`, or a `hasToolCall` with no `tool_name`, is refused with
-`400 VALIDATION_FAILED` rather than stored as a condition that never fires.
+**Chain-scoped.** `maxChainGenerations` never shortens a turn. It is evaluated
+where a continuation is *spawned*: once the chain has reached that many
+generations, further resumptions stop with `chain_limit` instead of extending it.
+The effective ceiling is the smaller of this and the deployment's
+`MAX_CONTINUATION_CHAIN_GENERATIONS`, so an agent can be stricter than the
+platform but never looser — see [Continuation chains](#continuation-chains) and
+the [Chains](./chains.md#bounding-a-chain) module.
+
+Conditions are validated on write: an unknown `type`, a `hasToolCall` with no
+`tool_name`, or a `maxChainGenerations` whose `max_generations` is not a positive
+integer is refused with `400 VALIDATION_FAILED` rather than stored as a condition
+that never fires.
 
 ### Active Tools
 
@@ -608,6 +623,10 @@ fires, and the platform files an
 no record; it only tells the agent, which is worth paying for solely when the
 agent does something about it.
 
+When the lapsed call was held by a generation inside an existing
+[chain](./chains.md), that chain's record moves to `expired` — a deadline ended
+it, which is a different thing to triage than a chain that finished on its own.
+
 The default is `terminate` because the reaction turn is what compounded the
 runaway the chain budget exists for: an expiry nobody was watching spawned a
 turn that, under a forcing [`tool_choice`](#tool-choice), could only propose
@@ -632,11 +651,22 @@ The budget counts generations rather than hops because a chain fans out — a tu
 holding several gated calls seeds one continuation per call — so a limit on depth
 alone would still permit an exponential number of turns.
 
+The budget is a **pair** of ceilings, and the smaller wins: the deployment's
+`MAX_CONTINUATION_CHAIN_GENERATIONS`, and the agent's own
+`maxChainGenerations` [stop condition](#stop-conditions). Both are read from the
+current configuration each time a hop is spawned, so lowering either can stop a
+chain that is already running. An agent can be stricter than its deployment but
+never looser.
+
 A chain is identified by the generation it is rooted at, recorded on every hop
 when it is created and never rewritten afterwards. Deleting an agent rewrites the
 trace lineage of everything left beneath it, so a chain identified by its traces
 could be re-rooted — and handed a fresh budget — by a cleanup elsewhere in the
 project.
+
+The chain itself is a readable record — its size, whether it is still alive, and
+why it stopped — with its own [Chains](./chains.md) module; every generation in
+one carries the chain's id.
 
 A chain also has to be *fed* to grow. By default an expiry ends it rather than
 resuming it ([Approval Expiry](#approval-expiry)), so an unattended chain stops

@@ -6,7 +6,10 @@ import { db } from 'src/db';
 import { deleteAgent } from 'src/lib/agentDelete';
 import { createGeneration } from 'src/lib/agentGeneration';
 import type { GenerationResult } from 'src/lib/agentGenerationTypes';
+import { runToolCallContinuation } from 'src/lib/agentToolApprovalContinuation';
+import { getApproval } from 'src/lib/approvals';
 import { listExceptions, type MappedException } from 'src/lib/exceptions';
+import { getGeneration, listGenerations } from 'src/lib/generations';
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === 'object' && value !== null;
@@ -32,6 +35,7 @@ describe('continuation chain lineage and budget', () => {
   let modelBaseUrl: string;
   let projectId: number;
   let agentPublicId: string;
+  let aiProviderDbId: number;
   const originalBudget = process.env.MAX_CONTINUATION_CHAIN_GENERATIONS;
 
   const startModelServer = async (): Promise<string> => {
@@ -77,6 +81,7 @@ describe('continuation chain lineage and budget', () => {
       defaultModel: 'stub-model',
       baseUrl: modelBaseUrl,
     });
+    aiProviderDbId = aiProvider.id;
     const agent = await db.Agent.create({
       projectId,
       aiProviderId: aiProvider.id,
@@ -114,6 +119,27 @@ describe('continuation chain lineage and budget', () => {
       throw new Error('expected a non-streaming generation result');
     }
     return result;
+  };
+
+  // A member's completion updates the chain fire-and-forget off
+  // `updateGenerationRecord`, so the quiescent status lands shortly after the
+  // generation returns rather than with it.
+  const waitForChainStatus = async (args: {
+    rootGenerationId: string;
+    status: string;
+  }): Promise<void> => {
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      const chain = await db.GenerationChain.findOne({
+        where: { rootGenerationId: args.rootGenerationId },
+      });
+      if (chain?.status === args.status) return;
+      await new Promise((resolve) => {
+        return setTimeout(resolve, 25);
+      });
+    }
+    throw new Error(
+      `chain ${args.rootGenerationId} never reached status ${args.status}`
+    );
   };
 
   const traceOf = async (generationId: string) => {
@@ -172,6 +198,280 @@ describe('continuation chain lineage and budget', () => {
     // Refusing costs no generation record — the trace carries the evidence,
     // exactly as the depth guard's refusal does.
     expect(row).toBeNull();
+  });
+
+  const chainOf = async (rootGenerationId: string) => {
+    return db.GenerationChain.findOne({ where: { rootGenerationId } });
+  };
+
+  test('the first continuation creates the chain and links every member', async () => {
+    const root = await generate();
+
+    // A root that never continues is not a chain, so it gets no row: the table
+    // holds runaway candidates, not one row per generation.
+    expect(await chainOf(root.id)).toBeNull();
+
+    const first = await generate(root.id);
+    const chain = await chainOf(root.id);
+
+    expect(chain).not.toBeNull();
+    expect(chain?.publicId).toMatch(/^chain_/);
+    expect(chain?.projectId).toBe(projectId);
+    expect(chain?.agentId).toBe(agentPublicId);
+    // Root plus the one continuation — the same population
+    // `list-generations?chain_id=` returns, which is why the root is backfilled
+    // rather than left naming no chain.
+    expect(chain?.generationCount).toBe(2);
+    expect(chain?.lastGenerationAt).not.toBeNull();
+
+    for (const publicId of [root.id, first.id]) {
+      const row = await db.Generation.findOne({ where: { publicId } });
+      expect(row?.chainId).toBe(chain?.publicId);
+    }
+
+    // A second hop re-derives the count from its members instead of
+    // incrementing, so a lost write cannot leave the number permanently wrong.
+    await generate(first.id);
+    await chain?.reload();
+    expect(chain?.generationCount).toBe(3);
+  });
+
+  test('a generation names its chain on the wire and can be listed by it', async () => {
+    const root = await generate();
+    const first = await generate(root.id);
+    const chain = await chainOf(root.id);
+
+    const mapped = await getGeneration({
+      publicId: first.id,
+      projectIds: [projectId],
+    });
+    expect(mapped?.chain_id).toBe(chain?.publicId);
+
+    // The chain's own key stays internal; this filter is how a caller walks
+    // from a chain to the generations in it.
+    const page = await listGenerations({
+      projectIds: [projectId],
+      chainId: chain?.publicId,
+    });
+    expect(page.total).toBe(2);
+    expect(
+      page.data.map((generation) => {
+        return generation.id;
+      })
+    ).toEqual(expect.arrayContaining([root.id, first.id]));
+  });
+
+  test('a refused hop marks the chain budget_exhausted', async () => {
+    process.env.MAX_CONTINUATION_CHAIN_GENERATIONS = '2';
+
+    const root = await generate();
+    const first = await generate(root.id);
+    const second = await generate(first.id);
+
+    // Quiescent: nothing is running and no approval is holding a hop open, so
+    // the chain reads as finished rather than as a live runaway.
+    await waitForChainStatus({
+      rootGenerationId: root.id,
+      status: 'concluded',
+    });
+
+    const refused = await generate(second.id);
+    expect(refused.output?.content).toBe('Continuation chain limit reached');
+
+    // The refusal is the chain's own record now, not only a trace step and an
+    // exception: the row a human lists says why this chain stopped.
+    const chain = await chainOf(root.id);
+    expect(chain?.status).toBe('budget_exhausted');
+    expect(chain?.generationCount).toBe(3);
+  });
+
+  /**
+   * A held tool call on one chain member, lapsing un-approved, resumed the way
+   * the expiry sweeper resumes it. Driven directly because the sweeper's own
+   * resume is fire-and-forget — awaiting the runner makes the outcome an
+   * assertion rather than a race.
+   */
+  const expireHeldCallOn = async (generationId: string): Promise<void> => {
+    const item = await db.ApprovalItem.create({
+      projectId,
+      origin: 'tool_call',
+      status: 'expired',
+      proposedAction: { toolId: 'tool_chainexpiry00000', arguments: {} },
+      expiresAt: new Date(Date.now() - 1000),
+      generationId,
+      agentId: agentPublicId,
+    });
+
+    await runToolCallContinuation({
+      item: await getApproval({ id: item.publicId }),
+      decision: {
+        decision: 'expired',
+        approvalId: item.publicId,
+        resolvedBy: null,
+        editedArgs: null,
+        reason: null,
+        result: null,
+      },
+    });
+  };
+
+  test('a terminal expiry inside a chain records the chain as expired', async () => {
+    const root = await generate();
+    const first = await generate(root.id);
+    await waitForChainStatus({
+      rootGenerationId: root.id,
+      status: 'concluded',
+    });
+
+    // A held call on a chain member, expiring un-approved. The agent does not
+    // opt into reacting, so nothing resumes it — which is the chain's ending,
+    // not just this hop's, and the row is where that is legible.
+    await expireHeldCallOn(first.id);
+
+    const chain = await chainOf(root.id);
+    expect(chain?.status).toBe('expired');
+    // No continuation was spawned, so the population is unchanged.
+    expect(chain?.generationCount).toBe(2);
+  });
+
+  test('an expiry does not relabel a chain the budget already refused', async () => {
+    process.env.MAX_CONTINUATION_CHAIN_GENERATIONS = '2';
+
+    const root = await generate();
+    const first = await generate(root.id);
+    const second = await generate(first.id);
+    await generate(second.id);
+    expect((await chainOf(root.id))?.status).toBe('budget_exhausted');
+
+    // An over-budget chain's last held calls lapse as a matter of course, so
+    // letting the expiry win would retire the one status that says a number
+    // still needs fixing.
+    await expireHeldCallOn(second.id);
+
+    expect((await chainOf(root.id))?.status).toBe('budget_exhausted');
+  });
+
+  const createAgentWithChainBudget = async (args: {
+    name: string;
+    maxGenerations?: number;
+  }): Promise<string> => {
+    const agent = await db.Agent.create({
+      projectId,
+      aiProviderId: aiProviderDbId,
+      name: args.name,
+      stopConditions:
+        args.maxGenerations === undefined
+          ? null
+          : [
+              {
+                type: 'maxChainGenerations',
+                max_generations: args.maxGenerations,
+              },
+            ],
+    });
+    return agent.publicId;
+  };
+
+  const generateAs = async (args: {
+    agentId: string;
+    initiatorGenerationId?: string;
+  }): Promise<GenerationResult> => {
+    const result = await createGeneration({
+      agentId: args.agentId,
+      projectIds: [projectId],
+      messages: [{ role: 'user', content: 'continue' }],
+      initiatorGenerationId: args.initiatorGenerationId,
+    });
+    if (!('status' in result)) {
+      throw new Error('expected a non-streaming generation result');
+    }
+    return result;
+  };
+
+  const chainLimitDetail = async (
+    rootGenerationId: string
+  ): Promise<Record<string, unknown> | null> => {
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      const page = await listExceptions({ projectIds: [projectId] });
+      const match = page.data.find((item) => {
+        return (
+          item.kind === 'chain_limit' &&
+          isRecord(item.detail) &&
+          item.detail.root_generation_id === rootGenerationId
+        );
+      });
+      if (match && isRecord(match.detail)) return match.detail;
+      await new Promise((resolve) => {
+        return setTimeout(resolve, 25);
+      });
+    }
+    return null;
+  };
+
+  test('an agent may cap its chain below the platform budget', async () => {
+    // The platform default (100) is untouched here: the agent's own ceiling is
+    // what stops the chain, which is the point — a runaway is a property of one
+    // agent's wiring, and waiting for a deployment-wide backstop to notice it
+    // is what made #1161 take 17 days.
+    const agentId = await createAgentWithChainBudget({
+      name: 'Agent Budget',
+      maxGenerations: 2,
+    });
+
+    const root = await generateAs({ agentId });
+    const first = await generateAs({
+      agentId,
+      initiatorGenerationId: root.id,
+    });
+    const second = await generateAs({
+      agentId,
+      initiatorGenerationId: first.id,
+    });
+    expect(second.output?.content).not.toBe('Continuation chain limit reached');
+
+    const refused = await generateAs({
+      agentId,
+      initiatorGenerationId: second.id,
+    });
+    expect(refused.output?.content).toBe('Continuation chain limit reached');
+
+    const chain = await chainOf(root.id);
+    expect(chain?.status).toBe('budget_exhausted');
+
+    // Which ceiling refused it, so the fix is obvious from the exception: raise
+    // the agent's number, or raise the deployment's.
+    expect(await chainLimitDetail(root.id)).toMatchObject({
+      limit: 2,
+      limit_source: 'agent',
+    });
+  });
+
+  test('the platform budget still wins when it is the lower ceiling', async () => {
+    process.env.MAX_CONTINUATION_CHAIN_GENERATIONS = '1';
+
+    const agentId = await createAgentWithChainBudget({
+      name: 'Agent Budget Above Platform',
+      maxGenerations: 50,
+    });
+
+    const root = await generateAs({ agentId });
+    const first = await generateAs({
+      agentId,
+      initiatorGenerationId: root.id,
+    });
+
+    // An agent cannot raise its own ceiling past the deployment's: the
+    // effective budget is the smaller of the two.
+    const refused = await generateAs({
+      agentId,
+      initiatorGenerationId: first.id,
+    });
+    expect(refused.output?.content).toBe('Continuation chain limit reached');
+
+    expect(await chainLimitDetail(root.id)).toMatchObject({
+      limit: 1,
+      limit_source: 'platform',
+    });
   });
 
   test('the budget counts continuations, not a turn own nested calls', async () => {

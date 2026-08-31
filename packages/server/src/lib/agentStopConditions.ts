@@ -22,8 +22,28 @@ import { isPlainObject } from './plainObject';
 
 const log = createDebug('soat:generation');
 
-/** The condition vocabulary. One entry today; the shape is the extension point. */
-export const STOP_CONDITION_TYPES = ['hasToolCall'] as const;
+/**
+ * The condition vocabulary. Not every entry is a per-turn predicate: a condition
+ * declares *when the work stops*, and the work has two axes — the steps inside
+ * one turn, and the generations inside one continuation chain. Keeping both in
+ * one field is what lets an author express "stop after the done tool, and never
+ * grow this chain past 20 turns" in one place; keeping them apart in
+ * {@link resolveStopWhen} is what stops a chain-scoped number from silently
+ * capping every turn's step count.
+ */
+export const STOP_CONDITION_TYPES = [
+  'hasToolCall',
+  'maxChainGenerations',
+] as const;
+
+/**
+ * Conditions the per-turn loop cannot evaluate, because they are about the chain
+ * rather than the turn. Enforced at continuation-spawn time by
+ * `generationChain.ts` (via {@link resolveChainGenerationCeiling}).
+ */
+const CHAIN_SCOPED_TYPES: ReadonlySet<string> = new Set([
+  'maxChainGenerations',
+]);
 
 const KNOWN_TYPES: ReadonlySet<string> = new Set(STOP_CONDITION_TYPES);
 
@@ -37,11 +57,52 @@ const readToolName = (entry: Record<string, unknown>): string | null => {
     : null;
 };
 
+/**
+ * A chain ceiling is only meaningful as a positive whole number of generations.
+ * `0`, a fraction, or a numeric *string* all read as "no ceiling" downstream,
+ * which would silently fall back to the platform budget — the opposite of what
+ * an author writing a smaller number is asking for.
+ */
+const readMaxGenerations = (entry: Record<string, unknown>): number | null => {
+  const value = entry.max_generations;
+  return typeof value === 'number' && Number.isInteger(value) && value > 0
+    ? value
+    : null;
+};
+
 const invalid = (
   message: string,
   meta: Record<string, unknown>
 ): DomainError => {
   return new DomainError('VALIDATION_FAILED', message, meta);
+};
+
+/** One entry, checked against its own type's requirements. */
+const assertValidCondition = (entry: unknown): void => {
+  if (!isPlainObject(entry)) {
+    throw invalid('Each stop condition must be an object.', {
+      condition: entry,
+    });
+  }
+  const type = readType(entry);
+  if (!type || !KNOWN_TYPES.has(type)) {
+    throw invalid(
+      `Stop condition type must be one of: ${STOP_CONDITION_TYPES.join(', ')}.`,
+      { condition: entry }
+    );
+  }
+  if (type === 'hasToolCall' && !readToolName(entry)) {
+    throw invalid(
+      'A hasToolCall stop condition requires a non-empty tool_name.',
+      { condition: entry }
+    );
+  }
+  if (type === 'maxChainGenerations' && !readMaxGenerations(entry)) {
+    throw invalid(
+      'A maxChainGenerations stop condition requires max_generations to be a positive integer.',
+      { condition: entry }
+    );
+  }
 };
 
 /**
@@ -60,24 +121,7 @@ export const assertValidStopConditions = (value: unknown): void => {
   }
 
   for (const entry of value) {
-    if (!isPlainObject(entry)) {
-      throw invalid('Each stop condition must be an object.', {
-        condition: entry,
-      });
-    }
-    const type = readType(entry);
-    if (!type || !KNOWN_TYPES.has(type)) {
-      throw invalid(
-        `Stop condition type must be one of: ${STOP_CONDITION_TYPES.join(', ')}.`,
-        { condition: entry }
-      );
-    }
-    if (type === 'hasToolCall' && !readToolName(entry)) {
-      throw invalid(
-        'A hasToolCall stop condition requires a non-empty tool_name.',
-        { condition: entry }
-      );
-    }
+    assertValidCondition(entry);
   }
 };
 
@@ -108,13 +152,45 @@ export const resolveStopWhen = (config: {
 
   for (const entry of config.stopConditions) {
     if (!isPlainObject(entry)) continue;
+    const type = readType(entry);
     const toolName = readToolName(entry);
-    if (readType(entry) === 'hasToolCall' && toolName) {
+    if (type === 'hasToolCall' && toolName) {
       conditions.push(hasToolCall<ToolSet>(toolName));
       continue;
     }
+    // Deliberately not a predicate: it bounds the chain, not this turn, and is
+    // evaluated where a continuation is spawned. Silent rather than logged —
+    // it is a supported condition doing its job elsewhere.
+    if (type && CHAIN_SCOPED_TYPES.has(type)) continue;
     log('resolveStopWhen: ignoring unsupported condition %o', entry);
   }
 
   return conditions;
+};
+
+/**
+ * The largest chain the agent will let itself grow, or `null` when it declares
+ * no ceiling. The **smallest** declared number wins if several are present: the
+ * field is a list of things that stop the work, so more entries can only stop it
+ * sooner.
+ *
+ * Read from the agent's current config at spawn time rather than captured on the
+ * chain, for the same reason `on_approval_expiry` is: a chain can span days, and
+ * what its owner wants applied is the number as it stands now — lowering it has
+ * to be able to stop a chain that is already running away.
+ */
+export const resolveChainGenerationCeiling = (
+  stopConditions: unknown
+): number | null => {
+  if (!Array.isArray(stopConditions)) return null;
+
+  let ceiling: number | null = null;
+  for (const entry of stopConditions) {
+    if (!isPlainObject(entry)) continue;
+    if (readType(entry) !== 'maxChainGenerations') continue;
+    const declared = readMaxGenerations(entry);
+    if (declared === null) continue;
+    ceiling = ceiling === null ? declared : Math.min(ceiling, declared);
+  }
+  return ceiling;
 };

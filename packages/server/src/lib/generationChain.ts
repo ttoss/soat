@@ -7,8 +7,10 @@ import {
   buildChainGuardResult,
   resolveAgentForGeneration,
 } from './agentGenerationRecovery';
-import { type GenerationResult } from './agentGenerationTypes';
+import type { GenerationResult, TypedAgent } from './agentGenerationTypes';
+import { resolveChainGenerationCeiling } from './agentStopConditions';
 import { emitChainLimitEvent } from './exceptionAutoFile';
+import { findOrCreateChain, markChainStatus } from './generationChains';
 
 const log = createDebug('soat:generation');
 
@@ -28,6 +30,11 @@ const log = createDebug('soat:generation');
  */
 const DEFAULT_MAX_CONTINUATION_CHAIN_GENERATIONS = 100;
 
+/**
+ * The deployment-wide ceiling. An agent may declare a smaller one of its own
+ * (`stop_conditions`: `maxChainGenerations`); the effective budget is the
+ * smaller of the two, so this stays a backstop rather than a target.
+ */
 export const maxContinuationChainGenerations = (): number => {
   const configured = Number(process.env.MAX_CONTINUATION_CHAIN_GENERATIONS);
   return Number.isFinite(configured) && configured > 0
@@ -44,6 +51,31 @@ export type ChainContext = {
   rootGenerationId: string;
   /** Continuations already in this chain, the initiator's own hop included. */
   chainSize: number;
+};
+
+/** The initiator row plus the associations the chain is derived from. */
+const loadInitiator = async (initiatorGenerationId: string) => {
+  const initiator = await db.Generation.findOne({
+    where: { publicId: initiatorGenerationId },
+    include: [
+      {
+        model: db.Trace,
+        as: 'trace',
+        include: [{ model: db.Trace, as: 'rootTrace' }],
+      },
+      // Only to name the chain's opening agent on its row; the guard itself
+      // needs nothing from it.
+      { model: db.Agent, as: 'agent', attributes: ['publicId'] },
+    ],
+  });
+
+  if (!initiator) {
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Generation '${initiatorGenerationId}' not found.`
+    );
+  }
+  return initiator;
 };
 
 /**
@@ -67,27 +99,15 @@ export type ChainContext = {
  * and no chain to be counted against, so continuing would start a new one — the
  * unbounded case by another route, and one the caller cannot see, since
  * `createGenerationRecord`'s own refusal is swallowed on this path.
+ *
+ * Also where the chain's own row is created, lazily, on the first continuation
+ * (`generationChains.ts`) — before the hop is authorized, so a hop that is then
+ * refused still leaves the record that says why the chain stopped.
  */
 export const resolveChainContext = async (args: {
   initiatorGenerationId: string;
 }): Promise<ChainContext> => {
-  const initiator = await db.Generation.findOne({
-    where: { publicId: args.initiatorGenerationId },
-    include: [
-      {
-        model: db.Trace,
-        as: 'trace',
-        include: [{ model: db.Trace, as: 'rootTrace' }],
-      },
-    ],
-  });
-
-  if (!initiator) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Generation '${args.initiatorGenerationId}' not found.`
-    );
-  }
+  const initiator = await loadInitiator(args.initiatorGenerationId);
 
   // A root carries none, so the first continuation names the root itself and
   // every later hop copies what its initiator already holds.
@@ -100,6 +120,16 @@ export const resolveChainContext = async (args: {
 
   const trace = initiator.trace;
   const rootTrace = trace?.rootTrace ?? trace;
+
+  // Created here rather than after the hop commits, so a hop that is then
+  // *refused* still leaves the row that says why the chain stopped. Best-effort
+  // by construction (`generationChains.ts`) — the budget above is what enforces.
+  await findOrCreateChain({
+    projectId: initiator.projectId,
+    agentId: initiator.agent?.publicId ?? null,
+    rootGenerationId,
+    memberCount: chainSize + 1,
+  });
 
   return {
     parentTraceId: trace?.publicId ?? null,
@@ -143,17 +173,22 @@ export const resolveChainLineage = async (args: {
   };
 };
 
+/** Which ceiling refused the hop — the agent's own, or the deployment's. */
+type LimitSource = 'agent' | 'platform';
+
 const refuseChain = async (args: {
   agentId: string;
-  projectIds?: number[];
+  chainAgent: TypedAgent | null;
   traceId: string;
   chain: ChainContext;
+  limit: number;
+  limitSource: LimitSource;
   initiatorGenerationId?: string | null;
 }): Promise<GenerationResult> => {
-  const chainAgent = await resolveAgentForGeneration({
-    agentId: args.agentId,
-    projectIds: args.projectIds,
-  });
+  const { chainAgent } = args;
+  // Only the refusal needs the agent, and only to name the project on the guard
+  // result — so an unresolvable agent still throws here and nowhere else, which
+  // keeps the error a continuation to a missing agent produces unchanged.
   if (!chainAgent) {
     throw new DomainError(
       'RESOURCE_NOT_FOUND',
@@ -162,9 +197,11 @@ const refuseChain = async (args: {
   }
 
   log(
-    'refuseChain: budget spent initiator=%s size=%d',
+    'refuseChain: budget spent initiator=%s size=%d limit=%d source=%s',
     args.initiatorGenerationId,
-    args.chain.chainSize
+    args.chain.chainSize,
+    args.limit,
+    args.limitSource
   );
 
   const projectId = chainAgent.project.id as number;
@@ -179,7 +216,15 @@ const refuseChain = async (args: {
     rootGenerationId: args.chain.rootGenerationId,
     initiatorGenerationId: args.initiatorGenerationId ?? null,
     chainSize: args.chain.chainSize,
-    limit: maxContinuationChainGenerations(),
+    limit: args.limit,
+    limitSource: args.limitSource,
+  });
+
+  // The chain's own row carries the ending too: an exception is a triage item
+  // that a human resolves and closes, while this is the state of the chain.
+  await markChainStatus({
+    rootGenerationId: args.chain.rootGenerationId,
+    status: 'budget_exhausted',
   });
 
   return buildChainGuardResult({
@@ -211,6 +256,28 @@ const inheritedLineage = (args: {
 };
 
 /**
+ * The budget this hop is actually held to: the smaller of the deployment's
+ * ceiling and the agent's own declared one.
+ *
+ * `min` rather than "the agent's if set": a per-agent number exists so an author
+ * can be *stricter* than the deployment, and letting one raise its own ceiling
+ * would make the platform backstop opt-out — which is the one thing it cannot
+ * be, since the agent that runs away is exactly the one whose config is wrong.
+ */
+const resolveEffectiveLimit = (
+  agent: TypedAgent | null
+): { limit: number; limitSource: LimitSource } => {
+  const platform = maxContinuationChainGenerations();
+  const declared = agent
+    ? resolveChainGenerationCeiling(agent.stopConditions)
+    : null;
+
+  return declared !== null && declared < platform
+    ? { limit: declared, limitSource: 'agent' }
+    : { limit: platform, limitSource: 'platform' };
+};
+
+/**
  * Resolves the chain a turn inherits from its declared initiator, and refuses
  * the turn when that chain has spent its budget.
  */
@@ -225,20 +292,39 @@ export const resolveChainOrRefuse = async (args: {
   | { kind: 'ok'; lineage: ChainLineage }
   | { kind: 'refused'; result: GenerationResult }
 > => {
-  const chain = args.initiatorGenerationId
-    ? await resolveChainContext({
-        initiatorGenerationId: args.initiatorGenerationId,
-      })
-    : null;
+  if (!args.initiatorGenerationId) {
+    return {
+      kind: 'ok',
+      lineage: inheritedLineage({ explicit: args, chain: null }),
+    };
+  }
 
-  if (chain && chain.chainSize >= maxContinuationChainGenerations()) {
+  const chain = await resolveChainContext({
+    initiatorGenerationId: args.initiatorGenerationId,
+  });
+
+  // Loaded once, here, rather than only on the refusal path: the agent's own
+  // ceiling is part of the decision now, and the refusal reuses this instance.
+  // A null agent is deliberately not an error yet — the context builder owns
+  // that failure, and pre-empting it here would change the code a caller gets
+  // for a continuation naming a missing agent.
+  const chainAgent = await resolveAgentForGeneration({
+    agentId: args.agentId,
+    projectIds: args.projectIds,
+  });
+
+  const { limit, limitSource } = resolveEffectiveLimit(chainAgent);
+
+  if (chain.chainSize >= limit) {
     return {
       kind: 'refused',
       result: await refuseChain({
         agentId: args.agentId,
-        projectIds: args.projectIds,
+        chainAgent,
         traceId: args.traceId,
         chain,
+        limit,
+        limitSource,
         initiatorGenerationId: args.initiatorGenerationId,
       }),
     };

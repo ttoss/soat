@@ -59,7 +59,7 @@ Severity is keyed to actionability, not raw "badness". Each `kind` has a default
 | `approval_expired` | `warning` | Fail-safe missed SLA — the action never ran |
 | `quota_unpriced` | `warning` | A cost cap is protecting nothing; needs a config fix, not incident response |
 | `event_trigger_loop` | `warning` | The causation guard stopped a self-feeding [event trigger](./triggers.md#loops-and-cost); the wiring still needs a human |
-| `chain_limit` | `warning` | A [continuation chain](./agents.md#continuation-chains) spent its generation budget — the guard stopped it, and an agent that cannot terminate on its own still needs a human |
+| `chain_limit` | `warning` | A [continuation chain](./chains.md) spent its generation budget — the guard stopped it, and an agent that cannot terminate on its own still needs a human |
 | `manual` | `warning` | Author-chosen |
 
 ### Occurrence dedup
@@ -76,7 +76,7 @@ Exceptions are filed by subscribing to platform events, so producers stay decoup
 
 `event_trigger_loop` is filed by the [event-trigger](./triggers.md#loops-and-cost) dispatcher when a trigger refuses to extend the causal chain that reached it — because the chain already names that trigger, or because it has run past the depth cap. It is deduped on the trigger and the reason, so a loop that keeps re-arriving is one triage item whose `occurrence_count` reads as how often it was refused; `detail` carries the chain and the event name, which is the only place that wiring is visible (the events themselves are not persisted).
 
-`chain_limit` is filed when a [continuation chain](./agents.md#continuation-chains) is refused for spending its generation budget. It rides a dedicated `generations.chain_limit` event and is deduped on the chain's **root generation**, which is the one id every refusal in a chain shares: an over-budget chain is refused once per resumption, so keying on the refused hop would file one item per occurrence of exactly the runaway this reports. `detail` carries the root, the initiator that asked for the refused turn, the chain's size and the budget it hit.
+`chain_limit` is filed when a [continuation chain](./chains.md) is refused for spending its generation budget. It rides a dedicated `generations.chain_limit` event and is deduped on the chain's **root generation**, which is the one id every refusal in a chain shares: an over-budget chain is refused once per resumption, so keying on the refused hop would file one item per occurrence of exactly the runaway this reports. `detail` carries the root, the initiator that asked for the refused turn, the chain's size, the budget it hit, and `limit_source` — `agent` when the agent's own [`maxChainGenerations`](./agents.md#stop-conditions) refused it, `platform` when the deployment's ceiling did, so the number alone does not leave you guessing which knob to turn.
 
 This is the signal that a chain stopped growing. The refusal itself is recorded on a trace and returned to a caller that is usually a background sweep with nothing left to hand it to, so without the exception a runaway would be bounded but still reach nobody until the bill arrived.
 

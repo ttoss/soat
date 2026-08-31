@@ -93,6 +93,7 @@ const sidebars: SidebarsConfig = {
             'modules/chats',
             'modules/actors',
             'modules/generations',
+            'modules/chains',
           ],
         },
         {

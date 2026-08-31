@@ -479,6 +479,10 @@ export const ERROR_CODES = {
     httpStatus: 400,
     description: 'A reason is required when rejecting an approval item.',
   },
+  CHAIN_NOT_FOUND: {
+    httpStatus: 404,
+    description: 'The continuation chain does not exist or is not accessible.',
+  },
   EXCEPTION_NOT_FOUND: {
     httpStatus: 404,
     description: 'The exception item does not exist or is not accessible.',

@@ -39,6 +39,11 @@ import { Trace } from './Trace';
       name: 'generations_root_generation_id_idx',
       fields: ['root_generation_id'],
     },
+    // Backs `list-generations` filtered by `chain_id`.
+    {
+      name: 'generations_chain_id_idx',
+      fields: ['chain_id'],
+    },
     // Backs `list-generations` filtered by `orchestration_run_id`/`node_id`.
     {
       name: 'generations_orchestration_run_id_node_id_idx',
@@ -123,6 +128,13 @@ export class Generation extends Model {
   // its budget when an unrelated ancestor agent was deleted (#1161).
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare rootGenerationId: string | null;
+
+  // Public id of the `GenerationChain` row this generation belongs to; null when
+  // it is not part of a chain. Denormalized from `rootGenerationId` (which the
+  // chain is keyed on) at insert time so a generation names its chain without a
+  // join, and not a foreign key for the same delete-immunity reason as above.
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare chainId: string | null;
 
   @ForeignKey(() => {
     return Actor;
