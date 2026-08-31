@@ -15,8 +15,8 @@ import createDebug from 'debug';
 import type { TypedAgent } from './agentGenerationTypes';
 import {
   buildPrepareStep,
-  normalizeToolChoice,
   resolveAgentStepRuleToolIdToName,
+  type TurnToolChoice,
 } from './agentStepRules';
 import { recordGenerationFailure } from './generationLifecycle';
 import { updateGenerationRecord } from './generations';
@@ -225,6 +225,7 @@ export const runStreamGeneration = async (args: {
   allMessages: Array<{ role: string; content: unknown }>;
   resolvedTools: Record<string, Tool>;
   typedAgent: TypedAgent;
+  toolChoice: TurnToolChoice;
   generationId: string;
   traceId: string;
   agentId: string;
@@ -260,7 +261,7 @@ export const runStreamGeneration = async (args: {
       Object.keys(args.resolvedTools).length > 0
         ? args.resolvedTools
         : undefined,
-    toolChoice: normalizeToolChoice(args.typedAgent.toolChoice),
+    toolChoice: args.toolChoice,
     prepareStep,
     stopWhen: isStepCount(resolveMaxSteps(args.typedAgent.maxSteps)),
     temperature: (args.typedAgent.temperature as number) ?? undefined,

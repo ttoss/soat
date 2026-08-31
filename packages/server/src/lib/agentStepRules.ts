@@ -29,14 +29,10 @@ export type StepRule = {
 // `tool_choice` is stored verbatim, so its object form arrives wire-shaped
 // (`tool_name`) while the AI SDK expects `toolName`. The single translation
 // point for that.
-export const normalizeToolChoice = (
-  value: unknown
-):
-  | 'auto'
-  | 'required'
-  | 'none'
-  | { type: 'tool'; toolName: string }
-  | undefined => {
+export type TurnToolChoice =
+  'auto' | 'required' | 'none' | { type: 'tool'; toolName: string } | undefined;
+
+export const normalizeToolChoice = (value: unknown): TurnToolChoice => {
   if (value === 'auto' || value === 'required' || value === 'none') {
     return value;
   }
@@ -47,6 +43,30 @@ export const normalizeToolChoice = (
     }
   }
   return undefined;
+};
+
+/**
+ * The tool choice a turn actually runs under.
+ *
+ * A forcing choice — `required`, or a named tool — forbids a final assistant
+ * message, so the turn can only end by exhausting its step budget. That is a
+ * deliberate setting on an ordinary turn, and it is left alone there.
+ *
+ * A **continuation** is different: it exists to carry a decision back to the
+ * agent and let it conclude. Under a forcing choice it cannot conclude — it can
+ * only propose more calls, which the gate holds, which expire, which continue
+ * again. That is the engine of the 17-day runaway (#1161): the forcing the
+ * author set for the *first* turn was silently re-applied to every resumption
+ * of it. Relaxing to `auto` restores the ability to finish without forbidding
+ * a continuation from using a tool it legitimately needs.
+ */
+export const resolveTurnToolChoice = (args: {
+  toolChoice: unknown;
+  isContinuation: boolean;
+}): TurnToolChoice => {
+  const normalized = normalizeToolChoice(args.toolChoice);
+  const forces = normalized === 'required' || typeof normalized === 'object';
+  return args.isContinuation && forces ? 'auto' : normalized;
 };
 
 /**

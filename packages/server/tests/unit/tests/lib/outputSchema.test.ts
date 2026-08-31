@@ -209,6 +209,7 @@ describe('output_schema enforcement (stub server)', () => {
 
   const run = (generationId: string) => {
     return runNonStreamGeneration({
+      toolChoice: undefined,
       model: buildModel({
         provider: 'ollama',
         secretValue: null,
@@ -290,6 +291,7 @@ describe('output_schema enforcement (stub server)', () => {
 
     await expect(
       runNonStreamGeneration({
+        toolChoice: undefined,
         model: buildModel({
           provider: 'ollama',
           secretValue: null,

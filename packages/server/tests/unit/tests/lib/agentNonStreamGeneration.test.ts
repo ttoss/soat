@@ -10,6 +10,7 @@ import { buildModel } from 'src/lib/agentModel';
 // Statically imported (real `ai`, real DB) for the stub-server test below;
 // the doMock('ai') tests use the dynamic loadNonStreamModule instead.
 import { runNonStreamGeneration as runNonStreamGenerationReal } from 'src/lib/agentNonStreamGeneration';
+import { resolveTurnToolChoice } from 'src/lib/agentStepRules';
 
 const loadNonStreamModule = async () => {
   return import('src/lib/agentNonStreamGeneration');
@@ -73,10 +74,10 @@ describe('agentNonStreamGeneration', () => {
     jest.restoreAllMocks();
   });
 
-  test('runNonStreamGeneration normalizes a wire-shaped tool_choice before calling generateText', async () => {
+  test('runNonStreamGeneration passes the resolved tool_choice to generateText', async () => {
     // `tool_choice` is stored wire-shaped (`tool_name`) but the SDK expects
-    // `toolName`, so the runner must translate. The assertion is on the
-    // argument handed to `generateText`, not the final result.
+    // `toolName`. The assertion is on the argument handed to `generateText`,
+    // not the final result.
     const generateTextMock = jest.fn().mockResolvedValue({
       steps: [
         {
@@ -97,12 +98,17 @@ describe('agentNonStreamGeneration', () => {
     const { runNonStreamGeneration } = await loadNonStreamModule();
 
     const result = await runNonStreamGeneration({
+      // Resolved by the caller now (`resolveTurnToolChoice`), so the wire→SDK
+      // translation happens once for both the stream and non-stream paths.
+      toolChoice: resolveTurnToolChoice({
+        toolChoice: { type: 'tool', tool_name: 'forced_tool' },
+        isContinuation: false,
+      }),
       model: {} as never,
       allMessages: [{ role: 'user', content: 'hi' }],
       resolvedTools: { forced_tool: {} as Tool },
       typedAgent: {
         ...(buildTypedAgent() as object),
-        toolChoice: { type: 'tool', tool_name: 'forced_tool' },
         stepRules: null,
       } as never,
       generationId: 'gen_nonstream_tc_wire',
@@ -160,6 +166,7 @@ describe('agentNonStreamGeneration', () => {
     const { runNonStreamGeneration } = await loadNonStreamModule();
 
     await runNonStreamGeneration({
+      toolChoice: undefined,
       model: {} as never,
       allMessages: [{ role: 'user', content: 'hi' }],
       resolvedTools: { client_tool: {} as Tool },
@@ -255,6 +262,7 @@ describe('agentNonStreamGeneration', () => {
     const { runNonStreamGeneration } = await loadNonStreamModule();
 
     const result = await runNonStreamGeneration({
+      toolChoice: undefined,
       model: {} as never,
       allMessages: [{ role: 'user', content: 'hi' }],
       resolvedTools: { client: {} as Tool },
@@ -285,6 +293,7 @@ describe('agentNonStreamGeneration', () => {
 
     await expect(
       runNonStreamGeneration({
+        toolChoice: undefined,
         model: {} as never,
         allMessages: [{ role: 'user', content: 'hi' }],
         resolvedTools: {},
@@ -560,6 +569,7 @@ describe('agentNonStreamGeneration', () => {
     };
 
     const result = await runNonStreamGeneration({
+      toolChoice: undefined,
       model: {} as never,
       allMessages: [{ role: 'user', content: 'go' }],
       resolvedTools,
@@ -598,6 +608,7 @@ describe('agentNonStreamGeneration', () => {
     };
 
     const result = await runNonStreamGeneration({
+      toolChoice: undefined,
       model: {} as never,
       allMessages: [{ role: 'user', content: 'go' }],
       resolvedTools,
@@ -707,6 +718,7 @@ describe('runNonStreamGeneration tool-failure fallback (stub server)', () => {
 
     const result = await runNonStreamGenerationReal({
       model,
+      toolChoice: undefined,
       allMessages: [{ role: 'user', content: 'hi' }],
       resolvedTools: {
         lookup: tool({
