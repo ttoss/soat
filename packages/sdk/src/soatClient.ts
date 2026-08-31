@@ -10,6 +10,7 @@ import {
   ApiKeys as ApiKeysSdk,
   Approvals as ApprovalsSdk,
   AuditLog as AuditLogSdk,
+  Chains as ChainsSdk,
   Chats as ChatsSdk,
   Conversations as ConversationsSdk,
   Documents as DocumentsSdk,
@@ -118,6 +119,7 @@ export class SoatClient {
   readonly apiKeys: typeof ApiKeysSdk;
   readonly approvals: typeof ApprovalsSdk;
   readonly auditLog: typeof AuditLogSdk;
+  readonly chains: typeof ChainsSdk;
   readonly chats: typeof ChatsSdk;
   readonly conversations: typeof ConversationsSdk;
   readonly documents: typeof DocumentsSdk;
@@ -168,6 +170,7 @@ export class SoatClient {
     this.apiKeys = bindResource(ApiKeysSdk, httpClient);
     this.approvals = bindResource(ApprovalsSdk, httpClient);
     this.auditLog = bindResource(AuditLogSdk, httpClient);
+    this.chains = bindResource(ChainsSdk, httpClient);
     this.chats = bindResource(ChatsSdk, httpClient);
     this.conversations = bindResource(ConversationsSdk, httpClient);
     this.documents = bindResource(DocumentsSdk, httpClient);
