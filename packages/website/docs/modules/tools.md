@@ -141,7 +141,7 @@ A generation's `tool_context` is forwarded, in full, to every `http`, `mcp` and 
 
 | | |
 | --- | --- |
-| Omitted or `null` | Every key is forwarded (the default, and the behavior of pre-existing tools). |
+| Omitted or `null` | Every key is forwarded. This is the default. |
 | `[]` | No caller key is forwarded. |
 | Identity keys | `sessionId`, `actorId` and `actorExternalId` are server-derived and always forwarded regardless of the list. |
 | `{{context:<key>}}` tokens | Substituted regardless of the list: the tool declared that header itself. A key used only in a token need not be listed. |

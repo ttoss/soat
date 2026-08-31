@@ -146,7 +146,7 @@ Every webhook has a secret generated at creation time. The secret is returned in
 
 The secret is stored encrypted at rest using the same AES-256-GCM encryption as [secrets](./secrets.md), keyed by `SECRETS_ENCRYPTION_KEY`. It is decrypted only to sign outbound deliveries or to return it through the API to a caller with `webhooks:GetWebhookSecret`. See [Configuration](/docs/self-hosting/configuration) for the operational impact of losing this key.
 
-A stored secret that is **not** valid ciphertext — one written before secret-at-rest encryption, or encrypted under a `SECRETS_ENCRYPTION_KEY` that has since changed — is refused rather than guessed at. `GET .../secret` answers `500 SECRET_NOT_DECRYPTABLE`, and an outbound delivery is recorded as `failed` with the reason and `attempts: 0` rather than being sent unsigned. Rotate the secret to replace it, or restore the original key.
+A stored secret that is **not** valid ciphertext — encrypted under a `SECRETS_ENCRYPTION_KEY` that has since changed — is refused rather than guessed at. `GET .../secret` answers `500 SECRET_NOT_DECRYPTABLE`, and an outbound delivery is recorded as `failed` with the reason and `attempts: 0` rather than being sent unsigned. Rotate the secret to replace it, or restore the original key.
 
 #### Verifying `X-Soat-Signature-V2`
 

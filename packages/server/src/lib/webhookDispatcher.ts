@@ -183,7 +183,7 @@ const abandonDelivery = async (args: {
  * the delivery and returns `null` when it cannot.
  *
  * Signing happens here — before the request — so that a secret which cannot be
- * decrypted (a row written before secret-at-rest encryption, or a changed
+ * decrypted (a changed
  * `SECRETS_ENCRYPTION_KEY`) is *recorded* rather than thrown past the
  * fire-and-forget `.catch()` in `handleEvent`, which would leave the webhook
  * silently undelivered with nothing in the log to say why. An unsigned delivery

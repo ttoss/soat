@@ -86,7 +86,3 @@ Stay on the **default** when the work is genuinely detached: a UI that can rende
 
 - [**Webhooks**](../modules/webhooks.md) deliver generation lifecycle events, so you can react to completion instead of asking for it. [Chat with an LLM](../tutorials/chat-with-llm.md) wires this up end to end.
 - **Status endpoints are cheap.** [`GET /documents/{id}/status`](/docs/api/documents/get-document-status) returns only lifecycle fields rather than the assembled document, and it advances during processing — see [Polling Ingestion Status](../modules/documents.md#polling-ingestion-status).
-
-## Why `wait` and not `async`
-
-Earlier versions spelled this two ways: an `async` query parameter on ingestion and session generation, `wait` on the run endpoints — with **opposite polarity**, so `async=true` and `wait=true` meant opposite things. Unifying on `wait` keeps one positive verb (`wait=true` blocks, everywhere), avoids the `async` keyword collision in generated SDKs, and names what the caller wants rather than how the server executes it.

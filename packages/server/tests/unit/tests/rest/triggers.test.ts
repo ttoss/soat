@@ -972,16 +972,15 @@ describe('Triggers', () => {
       expect(row!.secret).not.toBe(current.body.secret);
     });
 
-    // Rows written before secret-at-rest encryption stored the raw value, and a
-    // fallback used to read them as plaintext. That fallback is gone, so such a
-    // row is now refused — with a named error pointing at rotate-secret, rather
-    // than the raw `unable to authenticate data` a bare decrypt would surface.
-    test('a legacy plaintext row (pre-encryption) is refused, naming the remedy', async () => {
+    // A stored value this key cannot decrypt is never read as plaintext: it is
+    // refused with a named error pointing at rotate-secret, rather than the raw
+    // `unable to authenticate data` a bare decrypt would surface.
+    test('an undecryptable stored secret is refused, naming the remedy', async () => {
       const row = await db.Trigger.findOne({
         where: { publicId: webhookTriggerId },
       });
-      const legacyPlaintextSecret = 'b'.repeat(64);
-      await row!.update({ secret: legacyPlaintextSecret });
+      const undecryptableSecret = 'b'.repeat(64);
+      await row!.update({ secret: undecryptableSecret });
 
       const res = await authenticatedTestClient(userToken).get(
         `/api/v1/triggers/${webhookTriggerId}/secret`
@@ -991,7 +990,7 @@ describe('Triggers', () => {
       expect(res.body.error.code).toBe('SECRET_NOT_DECRYPTABLE');
       expect(res.body.error.message).toMatch(/rotate/i);
       // The undecryptable value is never echoed back in the failure.
-      expect(JSON.stringify(res.body)).not.toContain(legacyPlaintextSecret);
+      expect(JSON.stringify(res.body)).not.toContain(undecryptableSecret);
     });
 
     test('rotate-secret on a non-webhook trigger returns 400', async () => {

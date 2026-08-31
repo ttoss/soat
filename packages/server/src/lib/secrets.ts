@@ -83,7 +83,7 @@ export const decryptStoredSecret = (args: {
     log('%s: stored value could not be decrypted', args.label);
     throw new DomainError(
       'SECRET_NOT_DECRYPTABLE',
-      'The stored secret could not be decrypted. It was either written before secret-at-rest encryption or encrypted under a different SECRETS_ENCRYPTION_KEY. Rotate the secret to replace it, or restore the original key.'
+      'The stored secret could not be decrypted: it was encrypted under a different SECRETS_ENCRYPTION_KEY. Rotate the secret to replace it, or restore the original key.'
     );
   }
 };
