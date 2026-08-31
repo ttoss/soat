@@ -32,7 +32,7 @@ Exceptions are **auto-filed by the platform** (or filed explicitly as `manual`);
 | `project_id` | string | Owning project |
 | `status` | string | `open`, `acknowledged`, `resolved` |
 | `severity` | string | `info`, `warning`, `critical` |
-| `kind` | string | `run_failed`, `guardrail_tripwire`, `approval_expired`, `quota_unpriced`, `event_trigger_loop`, `manual` |
+| `kind` | string | `run_failed`, `guardrail_tripwire`, `approval_expired`, `quota_unpriced`, `event_trigger_loop`, `chain_limit`, `manual` |
 | `title` | string | Human-readable one-line summary |
 | `detail` | object \| null | Structured context (tool, error, guardrail version) |
 | `occurrence_count` | integer | Times this exact failure was observed while open |
@@ -59,6 +59,7 @@ Severity is keyed to actionability, not raw "badness". Each `kind` has a default
 | `approval_expired` | `warning` | Fail-safe missed SLA — the action never ran |
 | `quota_unpriced` | `warning` | A cost cap is protecting nothing; needs a config fix, not incident response |
 | `event_trigger_loop` | `warning` | The causation guard stopped a self-feeding [event trigger](./triggers.md#loops-and-cost); the wiring still needs a human |
+| `chain_limit` | `warning` | A [continuation chain](./agents.md#continuation-chains) spent its generation budget — the guard stopped it, and an agent that cannot terminate on its own still needs a human |
 | `manual` | `warning` | Author-chosen |
 
 ### Occurrence dedup
@@ -74,6 +75,10 @@ An item is `open` when filed. **Acknowledge** it (`acknowledged`) to signal some
 Exceptions are filed by subscribing to platform events, so producers stay decoupled: `run_failed` rides the existing `orchestration_runs.failed` event, `approval_expired` rides `approvals.expired`, and `guardrail_tripwire` rides a dedicated `guardrail.tripwire` event emitted from the guardrail dispatch path. Every filing is fire-and-forget — it never disturbs the producer.
 
 `event_trigger_loop` is filed by the [event-trigger](./triggers.md#loops-and-cost) dispatcher when a trigger refuses to extend the causal chain that reached it — because the chain already names that trigger, or because it has run past the depth cap. It is deduped on the trigger and the reason, so a loop that keeps re-arriving is one triage item whose `occurrence_count` reads as how often it was refused; `detail` carries the chain and the event name, which is the only place that wiring is visible (the events themselves are not persisted).
+
+`chain_limit` is filed when a [continuation chain](./agents.md#continuation-chains) is refused for spending its generation budget. It rides a dedicated `generations.chain_limit` event and is deduped on the chain's **root generation**, which is the one id every refusal in a chain shares: an over-budget chain is refused once per resumption, so keying on the refused hop would file one item per occurrence of exactly the runaway this reports. `detail` carries the root, the initiator that asked for the refused turn, the chain's size and the budget it hit.
+
+This is the signal that a chain stopped growing. The refusal itself is recorded on a trace and returned to a caller that is usually a background sweep with nothing left to hand it to, so without the exception a runaway would be bounded but still reach nobody until the bill arrived.
 
 `quota_unpriced` is the exception to the event-driven pattern: it is filed inline from the [quota](./quotas.md#token-and-cost-enforcement) pre-generation check, which is the only place that knows a cost cap just evaluated against an unpriced window. It is deduped on the quota rather than the window, so one dead cap is one triage item and `occurrence_count` reads as the number of generations that ran unprotected. The check fails open, so a filing error can never block a generation.
 

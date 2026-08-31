@@ -1,6 +1,10 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { resolveEndUserAttribution } from './generationAttribution';
+import {
+  attributionColumns,
+  type GenerationAttribution,
+  resolveEndUserAttribution,
+} from './generationAttribution';
 import {
   buildCreateContentColumns,
   suppressContentWrites,
@@ -39,38 +43,6 @@ const findInitiatorGeneration = async (args: {
   return initiatorGeneration;
 };
 
-type GenerationAttribution = {
-  // Usage attribution, stored as typed columns. Server-supplied on every path
-  // that has them; a caller cannot reach these.
-  actionId?: string | null;
-  triggerId?: string | null;
-  orchestrationRunId?: string | null;
-  nodeId?: string | null;
-  // The node's retry attempt, so a retried node's generations are told apart
-  // rather than inferred from creation order. Set only by the orchestration
-  // agent-node path; null everywhere else.
-  nodeAttempt?: number | null;
-  agentVersion?: number | null;
-  // The workload behind the generation when it is not production traffic
-  // (`eval`). Read back at metering time onto the usage event's own `source`
-  // column (the evaluations module doc).
-  source?: string | null;
-};
-
-// Normalizes the optional attribution args to their column values, so the
-// create call below states each column once.
-const attributionColumns = (args: GenerationAttribution) => {
-  return {
-    actionId: args.actionId ?? null,
-    triggerId: args.triggerId ?? null,
-    orchestrationRunId: args.orchestrationRunId ?? null,
-    nodeId: args.nodeId ?? null,
-    nodeAttempt: args.nodeAttempt ?? null,
-    agentVersion: args.agentVersion ?? null,
-    source: args.source ?? null,
-  };
-};
-
 /**
  * Creates the Trace (if needed) and the Generation in one transaction.
  *
@@ -84,6 +56,7 @@ const commitGenerationWithTrace = async (helperArgs: {
     traceId: string;
     parentTraceId?: string | null;
     rootTraceId?: string | null;
+    rootGenerationId?: string | null;
     startedByPrincipalType?: string | null;
     startedByPrincipalId?: string | null;
   };
@@ -117,6 +90,7 @@ const commitGenerationWithTrace = async (helperArgs: {
         agentId: agentDbId,
         traceId: trace.id,
         initiatorGenerationId: initiatorDbId,
+        rootGenerationId: args.rootGenerationId ?? null,
         startedByPrincipalType: args.startedByPrincipalType ?? null,
         startedByPrincipalId: args.startedByPrincipalId ?? null,
         startedByActorId: endUser.actorId,
@@ -143,6 +117,9 @@ export const createGenerationRecord = async (
     traceId: string;
     parentTraceId?: string | null;
     rootTraceId?: string | null;
+    // The chain this generation belongs to, resolved by `generationChain.ts`,
+    // which is the only writer of the column.
+    rootGenerationId?: string | null;
     initiatorGenerationId?: string | null;
     startedByPrincipalType?: string | null;
     startedByPrincipalId?: string | null;

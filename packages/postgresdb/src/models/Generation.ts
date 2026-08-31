@@ -34,6 +34,11 @@ import { Trace } from './Trace';
       name: 'generations_trace_id_idx',
       fields: ['trace_id'],
     },
+    // Backs the continuation-budget count, which runs before every chain hop.
+    {
+      name: 'generations_root_generation_id_idx',
+      fields: ['root_generation_id'],
+    },
     // Backs `list-generations` filtered by `orchestration_run_id`/`node_id`.
     {
       name: 'generations_orchestration_run_id_node_id_idx',
@@ -108,6 +113,16 @@ export class Generation extends Model {
     { onDelete: 'RESTRICT' }
   )
   declare initiatorGeneration: Generation | null;
+
+  // Public id of the generation this continuation chain is rooted at; null when
+  // this generation is not a continuation. Deliberately **not** a foreign key,
+  // like `orchestrationRunId` below: the continuation budget counts rows by this
+  // value, so it has to survive every cleanup path unchanged. An FK would drag
+  // it into `agentDelete`'s null-out of self-referencing references — the same
+  // rewrite that, applied to trace lineage, let a chain re-root itself and reset
+  // its budget when an unrelated ancestor agent was deleted (#1161).
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare rootGenerationId: string | null;
 
   @ForeignKey(() => {
     return Actor;

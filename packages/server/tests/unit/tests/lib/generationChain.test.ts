@@ -3,8 +3,14 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 import { db } from 'src/db';
+import { deleteAgent } from 'src/lib/agentDelete';
 import { createGeneration } from 'src/lib/agentGeneration';
 import type { GenerationResult } from 'src/lib/agentGenerationTypes';
+import { listExceptions, type MappedException } from 'src/lib/exceptions';
+
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === 'object' && value !== null;
+};
 
 /**
  * The continuation chain: a generation that spawns another generation, days
@@ -191,5 +197,247 @@ describe('continuation chain lineage and budget', () => {
     expect(continuation.output?.content).not.toBe(
       'Continuation chain limit reached'
     );
+  });
+});
+
+/**
+ * The chain's identity is its own column, not borrowed from trace lineage.
+ *
+ * Traces exist to be read, and their lineage is legitimately rewritten by
+ * operations that know nothing about chains — `deleteAgent` nulls
+ * `parentTraceId`/`rootTraceId` on every surviving trace that pointed at the
+ * agent it removes. A budget keyed on that lineage therefore reset itself
+ * whenever an unrelated ancestor agent was deleted, which is a runaway escaping
+ * through a cleanup path (#1161).
+ */
+describe('chain identity survives trace lineage rewrites', () => {
+  let modelServer: Server;
+  let projectId: number;
+  let agentPublicId: string;
+  let ancestorAgentPublicId: string;
+  let aiProviderDbId: number;
+  const originalBudget = process.env.MAX_CONTINUATION_CHAIN_GENERATIONS;
+
+  beforeAll(async () => {
+    modelServer = createServer((req: IncomingMessage, res: ServerResponse) => {
+      req.on('data', () => {});
+      req.on('end', () => {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            id: 'chatcmpl-lineage',
+            object: 'chat.completion',
+            created: 0,
+            model: 'stub-model',
+            choices: [
+              {
+                index: 0,
+                message: { role: 'assistant', content: 'done' },
+                finish_reason: 'stop',
+              },
+            ],
+            usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+          })
+        );
+      });
+    });
+    await new Promise<void>((resolve) => {
+      modelServer.listen(0, '127.0.0.1', resolve);
+    });
+    const { port } = modelServer.address() as AddressInfo;
+
+    const project = await db.Project.create({ name: 'Lineage Project' });
+    projectId = project.id;
+
+    const aiProvider = await db.AiProvider.create({
+      projectId,
+      name: 'Lineage Provider',
+      provider: 'ollama',
+      defaultModel: 'stub-model',
+      baseUrl: `http://127.0.0.1:${String(port)}`,
+    });
+    aiProviderDbId = aiProvider.id;
+
+    const agent = await db.Agent.create({
+      projectId,
+      aiProviderId: aiProviderDbId,
+      name: 'Lineage Agent',
+    });
+    agentPublicId = agent.publicId;
+  });
+
+  beforeEach(async () => {
+    const ancestor = await db.Agent.create({
+      projectId,
+      aiProviderId: aiProviderDbId,
+      name: 'Ancestor Agent',
+    });
+    ancestorAgentPublicId = ancestor.publicId;
+  });
+
+  afterEach(() => {
+    if (originalBudget === undefined) {
+      delete process.env.MAX_CONTINUATION_CHAIN_GENERATIONS;
+      return;
+    }
+    process.env.MAX_CONTINUATION_CHAIN_GENERATIONS = originalBudget;
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((resolve) => {
+      modelServer.close(() => {
+        return resolve();
+      });
+    });
+  });
+
+  const generate = async (args: {
+    agentId: string;
+    initiatorGenerationId?: string;
+    parentTraceId?: string;
+    rootTraceId?: string;
+  }): Promise<GenerationResult> => {
+    const result = await createGeneration({
+      agentId: args.agentId,
+      projectIds: [projectId],
+      messages: [{ role: 'user', content: 'continue' }],
+      initiatorGenerationId: args.initiatorGenerationId,
+      parentTraceId: args.parentTraceId,
+      rootTraceId: args.rootTraceId,
+    });
+    if (!('status' in result)) {
+      throw new Error('expected a non-streaming generation result');
+    }
+    return result;
+  };
+
+  const chainLimitExceptions = async (): Promise<MappedException[]> => {
+    const page = await listExceptions({ projectIds: [projectId] });
+    return page.data.filter((item) => {
+      return item.kind === 'chain_limit';
+    });
+  };
+
+  // Filing rides the event bus fire-and-forget, so the row appears shortly
+  // after the refusal returns rather than with it — and the second refusal's
+  // fold lands later still.
+  const waitForOccurrences = async (args: {
+    rootGenerationId: string;
+    occurrences: number;
+  }): Promise<MappedException | null> => {
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      const match = (await chainLimitExceptions()).find((item) => {
+        return (
+          isRecord(item.detail) &&
+          item.detail.root_generation_id === args.rootGenerationId
+        );
+      });
+      if (match && match.occurrence_count >= args.occurrences) return match;
+      await new Promise((resolve) => {
+        return setTimeout(resolve, 25);
+      });
+    }
+    return null;
+  };
+
+  const publicTraceIdOf = async (generationId: string): Promise<string> => {
+    const generation = await db.Generation.findOne({
+      where: { publicId: generationId },
+      include: [{ model: db.Trace, as: 'trace' }],
+    });
+    const traceId = generation?.trace?.publicId as string | undefined;
+    if (!traceId) throw new Error(`no trace for ${generationId}`);
+    return traceId;
+  };
+
+  test('deleting an ancestor agent does not reset a chain budget', async () => {
+    process.env.MAX_CONTINUATION_CHAIN_GENERATIONS = '2';
+
+    // The ancestor's turn calls into another agent, which is the shape that
+    // puts a second agent's generations under the first agent's root trace.
+    const ancestorRoot = await generate({ agentId: ancestorAgentPublicId });
+    const ancestorTraceId = await publicTraceIdOf(ancestorRoot.id);
+
+    const nested = await generate({
+      agentId: agentPublicId,
+      parentTraceId: ancestorTraceId,
+      rootTraceId: ancestorTraceId,
+    });
+
+    const first = await generate({
+      agentId: agentPublicId,
+      initiatorGenerationId: nested.id,
+    });
+    const second = await generate({
+      agentId: agentPublicId,
+      initiatorGenerationId: first.id,
+    });
+    expect(second.output?.content).not.toBe('Continuation chain limit reached');
+
+    // Removes the ancestor and, with it, the root trace every hop above points
+    // at — the surviving traces are re-parented to null on the way out.
+    await deleteAgent({
+      id: ancestorAgentPublicId,
+      projectIds: [projectId],
+      force: true,
+    });
+
+    const afterDelete = await generate({
+      agentId: agentPublicId,
+      initiatorGenerationId: second.id,
+    });
+    expect(afterDelete.output?.content).toBe(
+      'Continuation chain limit reached'
+    );
+  });
+
+  test('a refused chain files one chain_limit exception per chain', async () => {
+    process.env.MAX_CONTINUATION_CHAIN_GENERATIONS = '1';
+
+    const root = await generate({ agentId: agentPublicId });
+    const first = await generate({
+      agentId: agentPublicId,
+      initiatorGenerationId: root.id,
+    });
+
+    // Two refusals on the same chain: an over-budget chain keeps being resumed
+    // by whatever background sweep owns it, so the exception has to fold them.
+    await generate({ agentId: agentPublicId, initiatorGenerationId: first.id });
+    await generate({ agentId: agentPublicId, initiatorGenerationId: first.id });
+
+    // Both refusals fold into the one item, so the chain is a single triage
+    // entry whose occurrence count reads as how often it was refused.
+    const filed = await waitForOccurrences({
+      rootGenerationId: root.id,
+      occurrences: 2,
+    });
+    expect(filed).not.toBeNull();
+    expect(filed?.severity).toBe('warning');
+    expect(filed?.agent_id).toBe(agentPublicId);
+    expect(filed?.detail).toMatchObject({
+      root_generation_id: root.id,
+      initiator_generation_id: first.id,
+      chain_size: 1,
+      limit: 1,
+    });
+
+    const forThisChain = (await chainLimitExceptions()).filter((item) => {
+      return (
+        isRecord(item.detail) && item.detail.root_generation_id === root.id
+      );
+    });
+    expect(forThisChain).toHaveLength(1);
+  });
+
+  test('a continuation naming an unknown initiator is refused', async () => {
+    // Silently re-rooting here is the same unbounded chain by another route:
+    // the budget counts from zero, and the generation runs with no record at
+    // all, because `createGenerationRecord`'s own refusal is swallowed.
+    await expect(
+      generate({
+        agentId: agentPublicId,
+        initiatorGenerationId: 'gen_missinginitiator000',
+      })
+    ).rejects.toThrow(/not found/i);
   });
 });

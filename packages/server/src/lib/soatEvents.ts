@@ -77,6 +77,8 @@ export const SOAT_EVENTS = {
     'agents.generation.failed': 'An agent generation failed.',
     'generations.content_purged':
       "A generation's content was redacted, leaving its auditable skeleton.",
+    'generations.chain_limit':
+      'A continuation chain reached its generation budget and was refused.',
   },
   guardrail: {
     'guardrail.tripwire': 'A guardrail tripwire aborted a tool call.',
