@@ -48,17 +48,18 @@ export const normalizeToolChoice = (value: unknown): TurnToolChoice => {
 /**
  * The tool choice a turn actually runs under.
  *
- * A forcing choice — `required`, or a named tool — forbids a final assistant
- * message, so the turn can only end by exhausting its step budget. That is a
- * deliberate setting on an ordinary turn, and it is left alone there.
+ * `tool_choice` is scoped to one turn, so a forcing value — `required`, or a
+ * named tool — does not cross a turn boundary. A continuation is a new turn:
+ * it carries a decision back to the agent to report and finish, which forcing
+ * forbids, leaving step exhaustion or another gated call as its only exits.
+ * Starting it at `auto` is that scope rule, not a safety valve — the bound on a
+ * chain that will not settle is the generation budget in `generationChain.ts`.
  *
- * A **continuation** is different: it exists to carry a decision back to the
- * agent and let it conclude. Under a forcing choice it cannot conclude — it can
- * only propose more calls, which the gate holds, which expire, which continue
- * again. That is the engine of the 17-day runaway (#1161): the forcing the
- * author set for the *first* turn was silently re-applied to every resumption
- * of it. Relaxing to `auto` restores the ability to finish without forbidding
- * a continuation from using a tool it legitimately needs.
+ * The client-tool resume path relaxes the same way by omitting `toolChoice`
+ * altogether (`runToolOutputsGeneration`); keep the two consistent. `stepRules`
+ * are deliberately not scoped this way — `buildPrepareStep` numbers them from
+ * step 1 of every turn, so a rule is how an author keeps a call mandatory on a
+ * continuation.
  */
 export const resolveTurnToolChoice = (args: {
   toolChoice: unknown;
