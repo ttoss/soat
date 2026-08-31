@@ -230,7 +230,7 @@ export const getGenerationTurn = async (args: {
   if (!Array.isArray(inputMessages) || inputMessages.length === 0) {
     throw new DomainError(
       'GENERATION_CONTENT_UNAVAILABLE',
-      `Generation '${args.generationId}' has no stored input: its content was never retained, has been purged, or predates input recording.`
+      `Generation '${args.generationId}' has no stored input: its content was never retained, or has been purged.`
     );
   }
 

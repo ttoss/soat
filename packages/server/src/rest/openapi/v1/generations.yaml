@@ -795,7 +795,7 @@ components:
           description: >
             The messages the turn was asked, as recorded. Message content is
             caller-owned and passed through verbatim. Null when the content was
-            never stored, has been purged, or predates input recording.
+            never stored or has been purged.
           items:
             type: object
         steps:

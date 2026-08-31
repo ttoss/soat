@@ -781,8 +781,8 @@ components:
           example: 'doc_V1StGXR8Z5jdHi6B'
         role:
           type: string
-          # `system` stays in the READ enum only: rows written before
-          # SYSTEM_MESSAGE_NOT_ALLOWED may carry it. New writes refuse it.
+          # Wider than what writes accept: `system` is refused on write with
+          # SYSTEM_MESSAGE_NOT_ALLOWED.
           enum: [user, assistant, system]
           description: Role of the message sender
           example: 'user'

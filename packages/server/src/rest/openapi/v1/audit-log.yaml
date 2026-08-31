@@ -60,10 +60,9 @@ paths:
         - name: resource_srn
           in: query
           description: >-
-            SRN prefix match, e.g. `srn:{project}:secret:`. Entries written
-            before the `soat:` → `srn:` rename keep their original SRN (the
-            log is append-only), so an `srn:` prefix also matches the
-            equivalent `soat:` one and history stays reachable.
+            SRN prefix match, e.g. `srn:{project}:secret:`. The log is
+            append-only, so a stored SRN is never rewritten; the filter matches
+            it as stored.
           schema:
             type: string
         - name: from
@@ -160,10 +159,9 @@ paths:
         - name: resource_srn
           in: query
           description: >-
-            SRN prefix match, e.g. `srn:{project}:secret:`. Entries written
-            before the `soat:` → `srn:` rename keep their original SRN (the
-            log is append-only), so an `srn:` prefix also matches the
-            equivalent `soat:` one and history stays reachable.
+            SRN prefix match, e.g. `srn:{project}:secret:`. The log is
+            append-only, so a stored SRN is never rewritten; the filter matches
+            it as stored.
           schema:
             type: string
         - name: from
