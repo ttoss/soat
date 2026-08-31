@@ -202,11 +202,16 @@ The `tool_choice` field sets the **default** tool-selection strategy for every s
 
 `"required"` combined with a tool that has no `execute` configuration (a "done" tool) forces tool use at every step; the loop stops when the executor-less tool is called.
 
-The object form applies to the current model call only. When a generation pauses at `requires_action` for a [client tool](./tools.md#client) and resumes after `submit-tool-outputs`, the continuation runs with `"auto"` — the force is satisfied by the call that produced the pause. The resumed turn runs with the agent's **full** tool surface — the bound tools narrowed by `active_tool_ids`, plus the `write_memory` tool injected by `knowledge_config.write_memory_id` — whether or not the pause outlived a server restart.
+**Turn-scoped.** The agent's `tool_choice` governs the model calls of one turn. A *forcing* value — `"required"` or the object form — does not carry across a turn boundary; `"auto"` and `"none"` pass through unchanged. Two kinds of turn begin from an earlier one, and both start at `"auto"`:
 
-The same relaxation applies to every [continuation](#continuation-chains) — a turn spawned to carry an approval decision back to the agent. A continuation exists to report an outcome and conclude, and under a forcing `tool_choice` it cannot: it can only propose more calls, which a guardrail may hold, which expire, which continue again. Re-applying the author's forcing to each resumption is what turned one abandoned agent into a 17-day runaway. Only a *forcing* value is relaxed, and only on a continuation — `"auto"` and `"none"` pass through, and the turn that starts a chain keeps whatever the agent declares.
+- A generation that paused at `requires_action` for a [client tool](./tools.md#client) and resumed after `submit-tool-outputs` — the force is satisfied by the call that produced the pause. The resumed turn runs with the agent's **full** tool surface: the bound tools narrowed by `active_tool_ids`, plus the `write_memory` tool injected by `knowledge_config.write_memory_id`, whether or not the pause outlived a server restart.
+- A [continuation](#continuation-chains) carrying an approval decision back to the agent. It exists to report an outcome and finish, which a forcing value forbids — its only exits would be step exhaustion or another gated call.
 
-Two consequences of that relaxation are worth planning for. A continuation may **conclude in text without calling the "done" tool**, so a consumer that treats the done-tool call as the only terminal signal will come up empty on a turn that resumed from an approval — read the generation's `stop_reason` instead. And because an *expired* approval no longer continues at all by default (see [Approval Expiry](#approval-expiry)), the relaxed continuation is reached only for a decided approval, or for an agent that opted into reacting to staleness.
+[Step Rules](#step-rules) are the exception, and the escape hatch: they are numbered from the first step of *each* turn, so `{ "step": 1, "tool_choice": … }` forces step 1 of a resumed or continued turn as well.
+
+So a turn that resumed or continued another may **conclude in text without calling the "done" tool**. Read the generation's `stop_reason` rather than treating that call as the only terminal signal, or declare `{ "type": "hasToolCall", "tool_name": "done" }` in [`stop_conditions`](#stop-conditions) — enforced on every turn including resumed ones, it ends the loop on that call without forbidding text.
+
+> **Changed:** a forcing value used to be re-applied to every continuation of the turn that set it, which is what let one abandoned agent run for 17 days (#1161). What bounds that now is the [chain budget](./chains.md#bounding-a-chain) and the `terminate` default for [approval expiry](#approval-expiry); turn scoping is why a continuation starts from `"auto"` in the first place.
 
 ### Step Rules
 
@@ -275,8 +280,7 @@ where a continuation is *spawned*: once the chain has reached that many
 generations, further resumptions stop with `chain_limit` instead of extending it.
 The effective ceiling is the smaller of this and the deployment's
 `MAX_CONTINUATION_CHAIN_GENERATIONS`, so an agent can be stricter than the
-platform but never looser — see [Continuation chains](#continuation-chains) and
-the [Chains](./chains.md#bounding-a-chain) module.
+platform but never looser — see [Bounding a chain](./chains.md#bounding-a-chain).
 
 Conditions are validated on write: an unknown `type`, a `hasToolCall` with no
 `tool_name`, or a `maxChainGenerations` whose `max_generations` is not a positive
@@ -627,13 +631,12 @@ When the lapsed call was held by a generation inside an existing
 [chain](./chains.md), that chain's record moves to `expired` — a deadline ended
 it, which is a different thing to triage than a chain that finished on its own.
 
-The default is `terminate` because the reaction turn is what compounded the
-runaway the chain budget exists for: an expiry nobody was watching spawned a
-turn that, under a forcing [`tool_choice`](#tool-choice), could only propose
-more gated calls — which were held, expired, and continued again. Set `react`
-for an agent that genuinely handles staleness (retrying differently, notifying
-through an ungated tool); its continuation resumes with a relaxed `tool_choice`
-so it can conclude.
+The default is `terminate` because an unwatched expiry is where the chain used to
+compound: the reaction turn proposed more gated calls, which were held, expired
+and continued again (#1161). The [chain budget](./chains.md#bounding-a-chain)
+bounds that now, but the turn still costs a model call to tell an agent
+something nobody is waiting to hear. Set `react` for an agent that genuinely
+handles staleness — retrying differently, notifying through an ungated tool.
 
 Approved and rejected approvals are unaffected: both always continue, because a
 human decided and the agent has an outcome to act on.
@@ -642,21 +645,19 @@ human decided and the agent has an outcome to act on.
 
 A generation can be resumed long after the request that started it — an approval
 decided days later continues the turn that proposed the call. Each resumption is
-a new generation that declares the one it continues, so a chain is a linked tree
-rather than a series of unrelated roots, and it is bounded: once a chain has
-spawned `MAX_CONTINUATION_CHAIN_GENERATIONS` generations, further resumptions
-stop with `chain_limit` instead of extending it.
+a new generation that declares the one it continues, so the result is a linked
+tree rather than a series of unrelated roots. That tree is a readable record with
+its own [Chains](./chains.md) module, and every generation in one carries the
+chain's id.
+
+It is also **bounded**: once a chain reaches its
+[generation ceiling](./chains.md#bounding-a-chain), further resumptions stop with
+`stop_reason: "chain_limit"` and file a
+[`chain_limit` exception](./exceptions.md#producers) instead of extending it.
 
 The budget counts generations rather than hops because a chain fans out — a turn
 holding several gated calls seeds one continuation per call — so a limit on depth
 alone would still permit an exponential number of turns.
-
-The budget is a **pair** of ceilings, and the smaller wins: the deployment's
-`MAX_CONTINUATION_CHAIN_GENERATIONS`, and the agent's own
-`maxChainGenerations` [stop condition](#stop-conditions). Both are read from the
-current configuration each time a hop is spawned, so lowering either can stop a
-chain that is already running. An agent can be stricter than its deployment but
-never looser.
 
 A chain is identified by the generation it is rooted at, recorded on every hop
 when it is created and never rewritten afterwards. Deleting an agent rewrites the
@@ -664,21 +665,10 @@ trace lineage of everything left beneath it, so a chain identified by its traces
 could be re-rooted — and handed a fresh budget — by a cleanup elsewhere in the
 project.
 
-The chain itself is a readable record — its size, whether it is still alive, and
-why it stopped — with its own [Chains](./chains.md) module; every generation in
-one carries the chain's id.
-
 A chain also has to be *fed* to grow. By default an expiry ends it rather than
 resuming it ([Approval Expiry](#approval-expiry)), so an unattended chain stops
 on its own and the budget stays a backstop for a chain that keeps finding real
 work.
-
-Refusing a resumption also files a
-[`chain_limit` exception](./exceptions.md#producers), deduped on that root. A
-chain is usually resumed by a background sweep with no caller waiting on the
-answer, so the exception is what actually reaches someone: an agent that cannot
-terminate on its own is stopped by the budget, but the wiring behind it still
-needs a human.
 
 ## Configuration
 

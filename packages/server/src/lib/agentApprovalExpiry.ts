@@ -5,14 +5,15 @@
  * without a turn: the approval row reads `expired`, `approvals.expired` is
  * emitted to webhooks, and the exceptions listener files `approval_expired`.
  * A continuation adds no record — it only tells the agent, which is worth
- * paying for solely when the agent acts on staleness. Under a forcing
- * `tool_choice` it cannot even do that: it can only propose more calls, which
- * the gate holds, which expire, which continue again (#1161, 17 days and
+ * paying for solely when the agent acts on staleness. An unwatched expiry is
+ * also where the chain used to compound: the reaction turn proposed more calls,
+ * which the gate held, which expired, which continued again (#1161, 17 days and
  * ~US$424 on one abandoned fixture).
  *
  * `react` restores that continuation for an agent that genuinely handles the
- * news — retry differently, notify through an ungated tool. It resumes with a
- * relaxed `tool_choice` so it can conclude (#1163).
+ * news — retry differently, notify through an ungated tool. Like any
+ * continuation it starts at `auto` (#1163, `resolveTurnToolChoice`), so it can
+ * conclude.
  */
 import { DomainError } from '../errors';
 

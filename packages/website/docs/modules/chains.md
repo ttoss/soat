@@ -115,9 +115,8 @@ When a resumption is refused, three things happen: the chain moves to
 `stop_reason: "chain_limit"`, and a
 [`chain_limit` exception](./exceptions.md#producers) is filed against the chain's
 root. The exception is what actually reaches a human — a chain is usually resumed
-by a background sweep with nobody waiting on the answer — and its `detail`
-carries `limit` and `limit_source` (`agent` or `platform`), so the fix is
-unambiguous: raise the agent's number, or raise the deployment's.
+by a background sweep with nobody waiting on the answer — and it names which of
+the two ceilings refused the turn, so the fix is unambiguous.
 
 ## Examples
 
