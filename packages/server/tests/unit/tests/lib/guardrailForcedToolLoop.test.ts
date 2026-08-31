@@ -54,9 +54,18 @@ describe('guardrail-held tool calls under tool_choice: "required"', () => {
   let toolRequests: Array<Record<string, unknown>> = [];
   let proposalCount = 0;
 
-  // Answers every completion with a tool call and never with text — the
-  // observable behaviour `tool_choice: "required"` imposes. Each proposal
-  // carries distinct arguments, so no two approvals share a dedup key.
+  /** Whether a request's `tool_choice` forbids a final assistant message. */
+  const forcesATool = (toolChoice: unknown): boolean => {
+    return (
+      toolChoice === 'required' ||
+      (typeof toolChoice === 'object' && toolChoice !== null)
+    );
+  };
+
+  // Honors `tool_choice` the way a real provider does: forced, it can only
+  // answer with a tool call; unforced, this stub always finishes with text.
+  // That difference is what makes a relaxed turn observably terminal. Each
+  // proposal carries distinct arguments, so no two approvals share a dedup key.
   const startModelServer = async (): Promise<string> => {
     modelServer = createServer((req: IncomingMessage, res: ServerResponse) => {
       let raw = '';
@@ -64,8 +73,25 @@ describe('guardrail-held tool calls under tool_choice: "required"', () => {
         raw += chunk;
       });
       req.on('end', () => {
-        modelRequests.push(raw ? JSON.parse(raw) : {});
+        const body = raw ? JSON.parse(raw) : {};
+        modelRequests.push(body);
         proposalCount += 1;
+        const message = forcesATool(body.tool_choice)
+          ? {
+              role: 'assistant',
+              content: null,
+              tool_calls: [
+                {
+                  id: `call_forced_${proposalCount}`,
+                  type: 'function',
+                  function: {
+                    name: 'refund',
+                    arguments: JSON.stringify({ amount: proposalCount }),
+                  },
+                },
+              ],
+            }
+          : { role: 'assistant', content: 'The refund request is stale.' };
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(
           JSON.stringify({
@@ -76,21 +102,10 @@ describe('guardrail-held tool calls under tool_choice: "required"', () => {
             choices: [
               {
                 index: 0,
-                message: {
-                  role: 'assistant',
-                  content: null,
-                  tool_calls: [
-                    {
-                      id: `call_forced_${proposalCount}`,
-                      type: 'function',
-                      function: {
-                        name: 'refund',
-                        arguments: JSON.stringify({ amount: proposalCount }),
-                      },
-                    },
-                  ],
-                },
-                finish_reason: 'tool_calls',
+                message,
+                finish_reason: forcesATool(body.tool_choice)
+                  ? 'tool_calls'
+                  : 'stop',
               },
             ],
             usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
@@ -312,7 +327,7 @@ describe('guardrail-held tool calls under tool_choice: "required"', () => {
     );
   });
 
-  test('expiry — not an external caller — restarts the loop on a linked generation', async () => {
+  test('expiry — not an external caller — is what spawns the linked generation', async () => {
     const fixture = await createFixture('Forced Loop Expiry');
 
     const seed = await runGeneration(fixture);
@@ -333,11 +348,51 @@ describe('guardrail-held tool calls under tool_choice: "required"', () => {
     });
     expect(continuations).toHaveLength(MAX_STEPS);
 
-    // And each of those re-entered the forced-tool loop, so the next round of
-    // held calls is already filed: the state is self-perpetuating.
-    const pending = await pendingApprovals(fixture.projectId);
-    expect(pending).toHaveLength(MAX_STEPS * MAX_STEPS);
+    // Each of those used to re-enter the forced-tool loop and file the next,
+    // larger round of held calls — `MAX_STEPS * MAX_STEPS` of them, the
+    // compounding the incident ran on. They conclude instead, so expiry drives
+    // exactly one further round and the chain ends there.
+    expect(await pendingApprovals(fixture.projectId)).toHaveLength(0);
     expect(toolRequests).toHaveLength(0);
+  });
+
+  test('a continuation relaxes the forced tool choice so the turn can end', async () => {
+    const fixture = await createFixture('Forced Loop Relax');
+
+    const seed = await runGeneration(fixture);
+    const seedRow = await db.Generation.findOne({
+      where: { publicId: seed.id },
+    });
+    // The turn that started the chain keeps the author's forcing: relaxing it
+    // there would change what every ordinary generation does.
+    for (const body of modelRequests) {
+      expect(body.tool_choice).toBe('required');
+    }
+
+    modelRequests = [];
+    await expireHeldCallsAndSettle({
+      projectId: fixture.projectId,
+      expectedCompleted: 1 + MAX_STEPS,
+    });
+
+    // A continuation exists to report a decision and conclude, so it may write
+    // a final message — which under the author's `required` it never could.
+    expect(modelRequests).not.toHaveLength(0);
+    for (const body of modelRequests) {
+      expect(body.tool_choice).toBe('auto');
+    }
+
+    const continuations = await db.Generation.findAll({
+      where: { initiatorGenerationId: seedRow!.id },
+    });
+    expect(continuations).toHaveLength(MAX_STEPS);
+    for (const continuation of continuations) {
+      expect(continuation.stopReason).toBe('stop');
+    }
+
+    // The engine of the incident: a continuation that could only propose more
+    // gated calls filed the next, larger round of approvals. It ends instead.
+    expect(await pendingApprovals(fixture.projectId)).toHaveLength(0);
   });
 
   test('the chain is one linked tree, and it stops growing at its budget', async () => {
@@ -375,20 +430,20 @@ describe('guardrail-held tool calls under tool_choice: "required"', () => {
     }
 
     // Unbounded, this was 3 → 7 → 15 (and the incident's 6 → 29 → 401 → 1,416).
-    // The chain now stops at its budget and the third round adds nothing.
+    // Growth stops after the first round because each continuation concludes;
+    // the budget below it never has to be reached, and stays the backstop for a
+    // chain that keeps finding new work (`generationChain.test.ts` drives it).
     const generations = await generationsOf(fixture.projectId);
     expect(generations.length).toBeLessThanOrEqual(1 + CHAIN_BUDGET);
     expect(populationPerRound[ROUNDS - 1]).toBe(populationPerRound[ROUNDS - 2]);
 
-    // Every turn still spends its whole step budget on held calls — the loop is
-    // bounded, not fixed, and `max_steps` is what says so on the record.
-    const stopReasons = new Set(
-      generations.map((generation) => {
-        return generation.stopReason;
-      })
-    );
-    expect([...stopReasons]).toEqual(['max_steps']);
-    expect(stopReasons.has('depth_guard')).toBe(false);
+    // The seed spent its whole step budget on held calls under the author's
+    // forcing; every continuation was free to answer, and did.
+    const [seedGeneration, ...continuationRows] = generations;
+    expect(seedGeneration.stopReason).toBe('max_steps');
+    for (const continuation of continuationRows) {
+      expect(continuation.stopReason).toBe('stop');
+    }
     expect(toolRequests).toHaveLength(0);
 
     // Every continuation declared its parent, and the lineage follows from it:

@@ -14,6 +14,7 @@ import {
 } from './agentKnowledge';
 import { resolveAgentModel } from './agentModelResolution';
 import { resolveServedAgentVersion } from './agentServedVersion';
+import { resolveTurnToolChoice, type TurnToolChoice } from './agentStepRules';
 import { readAgentToolBindings, splitToolBindings } from './agentToolBindings';
 import { resolveAgentToolSurface } from './agentToolSurface';
 import { resolveServerToolContextIdentity } from './generationAttribution';
@@ -51,6 +52,12 @@ export type GenerationContext = {
    * after the fact.
    */
   agentVersion: number;
+  /**
+   * The tool choice this turn runs under, which is the agent's own except on a
+   * continuation — see `resolveTurnToolChoice`. Resolved once here so the
+   * stream and non-stream paths cannot disagree about it.
+   */
+  toolChoice: TurnToolChoice;
 };
 
 /**
@@ -127,7 +134,7 @@ const resolvePinnedToolContext = async (args: {
   });
 };
 
-export const buildGenerationContext = async (args: {
+export type BuildGenerationContextArgs = {
   agentId: string;
   projectIds?: number[];
   messages: GenerationInputMessage[];
@@ -143,7 +150,13 @@ export const buildGenerationContext = async (args: {
   sessionId?: string | null;
   /** Forces one archived agent version — see `resolveServedAgentVersion`. */
   pinnedAgentVersion?: number | null;
-}): Promise<GenerationContext> => {
+  /** Set when this turn continues an earlier one; see `resolveTurnToolChoice`. */
+  initiatorGenerationId?: string | null;
+};
+
+export const buildGenerationContext = async (
+  args: BuildGenerationContextArgs
+): Promise<GenerationContext> => {
   const toolContext = await resolvePinnedToolContext(args);
 
   const liveAgent = await resolveAgentForGeneration({
@@ -218,5 +231,9 @@ export const buildGenerationContext = async (args: {
     toolContext: toolContext ?? null,
     remainingDepth: args.remainingDepth ?? null,
     agentVersion,
+    toolChoice: resolveTurnToolChoice({
+      toolChoice: typedAgent.toolChoice,
+      isContinuation: Boolean(args.initiatorGenerationId),
+    }),
   };
 };

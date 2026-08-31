@@ -12,6 +12,7 @@ import {
 } from 'src/lib/agentGenerationHelpers';
 import { buildDepthGuardResult } from 'src/lib/agentGenerationRecovery';
 import type { TypedAgent } from 'src/lib/agentGenerationTypes';
+import { resolveTurnToolChoice } from 'src/lib/agentStepRules';
 import { runStreamGeneration } from 'src/lib/agentStreamGeneration';
 import * as generationsModule from 'src/lib/generations';
 import { CLIENT_TOOL_PRESETS } from 'src/lib/toolPresetParameters';
@@ -485,6 +486,7 @@ describe('runStreamGeneration', () => {
   test('evaluates default branch options before delegating to streamText', async () => {
     await expect(
       runStreamGeneration({
+        toolChoice: undefined,
         model: {} as never,
         allMessages: [{ role: 'user', content: 'Hello' }],
         resolvedTools: {},
@@ -508,6 +510,7 @@ describe('runStreamGeneration', () => {
 
     await expect(
       runStreamGeneration({
+        toolChoice: undefined,
         model: {} as never,
         allMessages: [
           { role: 'system', content: 'System prompt' },
@@ -724,7 +727,7 @@ describe('runStreamGeneration', () => {
       });
     });
 
-    test('normalizes a wire-shaped tool_choice before delegating to streamText', async () => {
+    test('passes the resolved tool_choice through to streamText', async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let capturedOpts: Record<string, any> | undefined;
       mockStreamTextFn.mockImplementation((opts: Record<string, unknown>) => {
@@ -736,10 +739,11 @@ describe('runStreamGeneration', () => {
         model: {},
         allMessages: [{ role: 'user', content: 'Hi' }],
         resolvedTools: {},
-        typedAgent: {
-          ...mockAgent,
+        toolChoice: resolveTurnToolChoice({
           toolChoice: { type: 'tool', tool_name: 'get_weather' },
-        },
+          isContinuation: false,
+        }),
+        typedAgent: mockAgent,
         generationId: 'gen_tc_wire',
         traceId: 'trc_tc_wire',
         agentId: 'agt_tc_wire',

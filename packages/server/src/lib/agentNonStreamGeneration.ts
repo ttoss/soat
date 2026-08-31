@@ -23,9 +23,9 @@ import {
 } from './agentGenerationTypes';
 import {
   buildPrepareStep,
-  normalizeToolChoice,
   resolveAgentStepRuleToolIdToName,
   resolveStepRuleToolIdToName,
+  type TurnToolChoice,
 } from './agentStepRules';
 import {
   fireCompletionSideEffects,
@@ -120,6 +120,7 @@ const callGenerateText = async (args: {
   nonSystemMessages: Array<{ role: string; content: unknown }>;
   resolvedTools: Record<string, Tool>;
   typedAgent: TypedAgent;
+  toolChoice: TurnToolChoice;
   prepareStep: ReturnType<typeof buildPrepareStep>;
   abortSignal?: AbortSignal;
 }) => {
@@ -131,7 +132,7 @@ const callGenerateText = async (args: {
       instructions: args.system,
       messages: args.nonSystemMessages as ModelMessage[],
       tools: hasTools ? args.resolvedTools : undefined,
-      toolChoice: normalizeToolChoice(args.typedAgent.toolChoice),
+      toolChoice: args.toolChoice,
       prepareStep: args.prepareStep,
       stopWhen: isStepCount(resolveMaxSteps(args.typedAgent.maxSteps)),
       temperature: (args.typedAgent.temperature as number) ?? undefined,
@@ -321,6 +322,7 @@ export const runNonStreamGeneration = async (args: {
   allMessages: Array<{ role: string; content: unknown }>;
   resolvedTools: Record<string, Tool>;
   typedAgent: TypedAgent;
+  toolChoice: TurnToolChoice;
   generationId: string;
   traceId: string;
   agentId: string;
@@ -350,6 +352,7 @@ export const runNonStreamGeneration = async (args: {
     system,
     nonSystemMessages,
     typedAgent: args.typedAgent,
+    toolChoice: args.toolChoice,
     prepareStep,
     abortSignal: args.abortSignal,
   };

@@ -59,6 +59,7 @@ const dispatchGeneration = (args: {
       allMessages: args.ctx.allMessages,
       resolvedTools: args.ctx.resolvedTools,
       typedAgent: args.ctx.typedAgent,
+      toolChoice: args.ctx.toolChoice,
       generationId: args.ctx.generationId,
       traceId: args.traceId,
       agentId: args.agentId,
@@ -71,6 +72,7 @@ const dispatchGeneration = (args: {
     allMessages: args.ctx.allMessages,
     resolvedTools: args.ctx.resolvedTools,
     typedAgent: args.ctx.typedAgent,
+    toolChoice: args.ctx.toolChoice,
     generationId: args.ctx.generationId,
     traceId: args.traceId,
     agentId: args.agentId,
@@ -125,6 +127,7 @@ const resolveContextAndRecord = async (args: {
     // same agent version across calls.
     sessionId: args.sessionId,
     pinnedAgentVersion: args.pinnedAgentVersion,
+    initiatorGenerationId: args.initiatorGenerationId,
   });
 
   // Persisted rather than left to the request: work resuming after the request

@@ -203,6 +203,8 @@ The `tool_choice` field sets the **default** tool-selection strategy for every s
 
 The object form applies to the current model call only. When a generation pauses at `requires_action` for a [client tool](./tools.md#client) and resumes after `submit-tool-outputs`, the continuation runs with `"auto"` — the force is satisfied by the call that produced the pause. The resumed turn runs with the agent's **full** tool surface — the bound tools narrowed by `active_tool_ids`, plus the `write_memory` tool injected by `knowledge_config.write_memory_id` — whether or not the pause outlived a server restart.
 
+The same relaxation applies to every [continuation](#continuation-chains) — a turn spawned to carry an approval decision back to the agent. A continuation exists to report an outcome and conclude, and under a forcing `tool_choice` it cannot: it can only propose more calls, which a guardrail may hold, which expire, which continue again. Re-applying the author's forcing to each resumption is what turned one abandoned agent into a 17-day runaway. Only a *forcing* value is relaxed, and only on a continuation — `"auto"` and `"none"` pass through, and the turn that starts a chain keeps whatever the agent declares.
+
 ### Step Rules
 
 The `step_rules` array overrides `tool_choice` and `active_tool_ids` on specific steps.
