@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 import type { LanguageModel, LanguageModelUsage, ModelMessage, Tool } from 'ai';
-import { generateText, isStepCount } from 'ai';
+import { generateText } from 'ai';
 import createDebug from 'debug';
 
 import { db } from '../db';
@@ -27,12 +27,12 @@ import {
   resolveStepRuleToolIdToName,
   type TurnToolChoice,
 } from './agentStepRules';
+import { resolveStopWhen } from './agentStopConditions';
 import {
   fireCompletionSideEffects,
   recordContinuationFailure,
   recordGenerationFailure,
 } from './generationLifecycle';
-import { resolveMaxSteps } from './generationStopReason';
 import { applyToolOutputMapping } from './jsonLogicMapping';
 import {
   collectSystemInstructions,
@@ -134,7 +134,7 @@ const callGenerateText = async (args: {
       tools: hasTools ? args.resolvedTools : undefined,
       toolChoice: args.toolChoice,
       prepareStep: args.prepareStep,
-      stopWhen: isStepCount(resolveMaxSteps(args.typedAgent.maxSteps)),
+      stopWhen: resolveStopWhen(args.typedAgent),
       temperature: (args.typedAgent.temperature as number) ?? undefined,
       abortSignal: args.abortSignal,
       // The route config is the only retry authority for a routed model; a
@@ -415,7 +415,7 @@ export const runToolOutputsGeneration = async (args: {
         logContext: 'non_stream',
         toolIdToName,
       }),
-      stopWhen: isStepCount(args.pending.agentConfig.maxSteps),
+      stopWhen: resolveStopWhen(args.pending.agentConfig),
       temperature: args.pending.agentConfig.temperature ?? undefined,
       maxRetries: routedMaxRetries(args.pending.resolvedModel),
       output: buildStructuredOutput(args.pending.agentConfig.outputSchema),

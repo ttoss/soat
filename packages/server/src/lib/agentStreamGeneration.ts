@@ -9,7 +9,7 @@
  * module, so it was re-implemented instead of shared.
  */
 import type { LanguageModel, LanguageModelUsage, ModelMessage, Tool } from 'ai';
-import { isStepCount, streamText } from 'ai';
+import { streamText } from 'ai';
 import createDebug from 'debug';
 
 import type { TypedAgent } from './agentGenerationTypes';
@@ -18,9 +18,10 @@ import {
   resolveAgentStepRuleToolIdToName,
   type TurnToolChoice,
 } from './agentStepRules';
+import { resolveStopWhen } from './agentStopConditions';
 import { recordGenerationFailure } from './generationLifecycle';
 import { updateGenerationRecord } from './generations';
-import { resolveMaxSteps, resolveStopReason } from './generationStopReason';
+import { resolveStopReason } from './generationStopReason';
 import {
   collectSystemInstructions,
   withoutSystemMessages,
@@ -263,7 +264,7 @@ export const runStreamGeneration = async (args: {
         : undefined,
     toolChoice: args.toolChoice,
     prepareStep,
-    stopWhen: isStepCount(resolveMaxSteps(args.typedAgent.maxSteps)),
+    stopWhen: resolveStopWhen(args.typedAgent),
     temperature: (args.typedAgent.temperature as number) ?? undefined,
     onError: ({ error }) => {
       streamError = error;

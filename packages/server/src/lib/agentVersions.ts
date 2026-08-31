@@ -139,6 +139,7 @@ const archivedConfigToUpdateArgs = (config: AgentConfigSnapshot) => {
     maxContextMessages: configNumber(config.max_context_messages),
     singleSessionPerActor: configBoolean(config.single_session_per_actor),
     guardrailIds: configArray<string>(config.guardrail_ids),
+    onApprovalExpiry: configString(config.on_approval_expiry),
   };
 };
 

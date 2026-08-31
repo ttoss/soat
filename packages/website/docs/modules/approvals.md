@@ -104,10 +104,15 @@ The two producers share the item lifecycle but suspend differently:
   via `initiator_generation_id` — feeding the decision output back into the
   agent's context. On approval the platform first executes the frozen (or
   edited) arguments and includes the tool's output as the decision's `result`;
-  on rejection or expiry nothing executes and the continuation carries the
-  decision (`{ "decision": "expired" }` is the exact counterpart of the node
-  path's `on_expired` edge). When the original generation ran in a session or
-  conversation, the continuation's messages append there.
+  on rejection nothing executes and the continuation carries the decision. An
+  **expiry ends the chain instead of continuing it**, unless the agent sets
+  `on_approval_expiry: "react"` — nobody was at the wheel, so there is nobody
+  to report to, and the `expired` row, the `approvals.expired` event and the
+  auto-filed exception are already the whole record. See
+  [Agents → Approval Expiry](./agents.md#approval-expiry); a reacting agent's
+  continuation carries `{ "decision": "expired" }`, the exact counterpart of
+  the node path's `on_expired` edge. When the original generation ran in a
+  session or conversation, the continuation's messages append there.
 
 ### Continuation identity
 

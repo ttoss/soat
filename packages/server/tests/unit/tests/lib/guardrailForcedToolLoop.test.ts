@@ -168,9 +168,19 @@ describe('guardrail-held tool calls under tool_choice: "required"', () => {
 
   type Fixture = { projectId: number; agentPublicId: string };
 
-  // The abandoned QA fixture from the report: forced tool choice, one bound
-  // tool, that tool gated by a guardrail that routes every call to approval.
-  const createFixture = async (name: string): Promise<Fixture> => {
+  /**
+   * The abandoned QA fixture from the report: forced tool choice, one bound
+   * tool, that tool gated by a guardrail that routes every call to approval.
+   *
+   * `onApprovalExpiry: 'react'` is what the incident's agent effectively ran
+   * with — an expiry reported back to the agent — and it is now opt-in, so the
+   * tests that exercise the continuation chain declare it.
+   */
+  const createFixture = async (args: {
+    name: string;
+    onApprovalExpiry?: 'terminate' | 'react';
+  }): Promise<Fixture> => {
+    const { name } = args;
     const project = await db.Project.create({ name: `${name} Project` });
     const projectId = project.id;
 
@@ -209,6 +219,7 @@ describe('guardrail-held tool calls under tool_choice: "required"', () => {
       toolBindings: [{ toolId: tool.publicId }],
       toolChoice: 'required',
       maxSteps: MAX_STEPS,
+      onApprovalExpiry: args.onApprovalExpiry ?? null,
     });
 
     return { projectId, agentPublicId: agent.publicId };
@@ -284,7 +295,7 @@ describe('guardrail-held tool calls under tool_choice: "required"', () => {
   };
 
   test('a forced-tool turn whose only tool is gated ends on tool-calls, never on stop', async () => {
-    const fixture = await createFixture('Forced Loop Seed');
+    const fixture = await createFixture({ name: 'Forced Loop Seed' });
 
     const result = await runGeneration(fixture);
 
@@ -327,8 +338,80 @@ describe('guardrail-held tool calls under tool_choice: "required"', () => {
     );
   });
 
-  test('expiry — not an external caller — is what spawns the linked generation', async () => {
-    const fixture = await createFixture('Forced Loop Expiry');
+  /**
+   * Expires every held call and awaits its continuation runner directly instead
+   * of going through the sweeper's fire-and-forget resume. When this returns,
+   * every resumption has finished — so "nothing was spawned" is an assertion
+   * rather than a race against work that had not started yet.
+   */
+  const expireHeldCallsAndResume = async (fixture: Fixture): Promise<void> => {
+    for (const item of await pendingApprovals(fixture.projectId)) {
+      await item.update({ expiresAt: new Date(Date.now() - 1000) });
+      await expireApprovalIfDue({ id: item.publicId });
+      await runToolCallContinuation({
+        item: await getApproval({ id: item.publicId }),
+        decision: {
+          decision: 'expired',
+          approvalId: item.publicId,
+          resolvedBy: null,
+          editedArgs: null,
+          reason: null,
+          result: null,
+        },
+      });
+    }
+  };
+
+  test('an expired approval ends the chain instead of spawning a continuation', async () => {
+    const fixture = await createFixture({ name: 'Forced Loop Terminal' });
+
+    const seed = await runGeneration(fixture);
+    const seedRow = await db.Generation.findOne({
+      where: { publicId: seed.id },
+    });
+    expect(await pendingApprovals(fixture.projectId)).toHaveLength(MAX_STEPS);
+
+    modelRequests = [];
+    await expireHeldCallsAndResume(fixture);
+
+    // Nobody was at the wheel, so there is nothing to report a decision to: the
+    // expiry itself is the outcome. No continuation, and no model call to pay
+    // for telling the agent about it.
+    const continuations = await db.Generation.findAll({
+      where: { initiatorGenerationId: seedRow!.id },
+    });
+    expect(continuations).toHaveLength(0);
+    expect(modelRequests).toHaveLength(0);
+    expect(await pendingApprovals(fixture.projectId)).toHaveLength(0);
+
+    // Terminating costs no observability: the record a human reads is the same
+    // one the reaction turn used to narrate — every held call reads `expired`,
+    // and the platform files the exception it always did.
+    const items = await db.ApprovalItem.findAll({
+      where: { projectId: fixture.projectId },
+    });
+    expect(
+      items.map((item) => {
+        return item.status;
+      })
+    ).toEqual(Array(MAX_STEPS).fill('expired'));
+    await waitFor({
+      until: async () => {
+        return (
+          (await db.ExceptionItem.count({
+            where: { projectId: fixture.projectId, kind: 'approval_expired' },
+          })) > 0
+        );
+      },
+      describe: 'an approval_expired exception to be filed',
+    });
+  });
+
+  test("expiry — not an external caller — is what spawns a reacting agent's linked generation", async () => {
+    const fixture = await createFixture({
+      name: 'Forced Loop Expiry',
+      onApprovalExpiry: 'react',
+    });
 
     const seed = await runGeneration(fixture);
     const seedRow = await db.Generation.findOne({
@@ -357,7 +440,10 @@ describe('guardrail-held tool calls under tool_choice: "required"', () => {
   });
 
   test('a continuation relaxes the forced tool choice so the turn can end', async () => {
-    const fixture = await createFixture('Forced Loop Relax');
+    const fixture = await createFixture({
+      name: 'Forced Loop Relax',
+      onApprovalExpiry: 'react',
+    });
 
     const seed = await runGeneration(fixture);
     const seedRow = await db.Generation.findOne({
@@ -399,7 +485,10 @@ describe('guardrail-held tool calls under tool_choice: "required"', () => {
     // Small enough to be reached in two rounds; the platform default is 100.
     process.env.MAX_CONTINUATION_CHAIN_GENERATIONS = String(CHAIN_BUDGET);
 
-    const fixture = await createFixture('Forced Loop Chain');
+    const fixture = await createFixture({
+      name: 'Forced Loop Chain',
+      onApprovalExpiry: 'react',
+    });
     const seed = await runGeneration(fixture);
     const seedRow = await db.Generation.findOne({
       where: { publicId: seed.id },

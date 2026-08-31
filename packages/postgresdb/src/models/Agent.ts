@@ -139,6 +139,16 @@ export class Agent extends Model {
   declare traceContentMode: string | null;
 
   /**
+   * What happens when one of this agent's held tool calls expires un-approved:
+   * `null` (the default) ends the chain there, `'react'` spawns the
+   * continuation that reports the staleness to the agent. See
+   * `agentApprovalExpiry.ts` in the server package for why terminating is the
+   * default.
+   */
+  @Column({ type: DataType.STRING(16), allowNull: true })
+  declare onApprovalExpiry: string | null;
+
+  /**
    * Current config version, starting at 1. Bumped by the shared lib update path
    * only when a write actually changes the config; each bump archives an
    * `AgentVersion` row.

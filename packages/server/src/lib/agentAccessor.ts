@@ -35,6 +35,8 @@ export type MappedAgent = {
   max_context_messages: number | null;
   single_session_per_actor: boolean;
   trace_content_mode: string | null;
+  /** `terminate` (the default when null) or `react` — see `agentApprovalExpiry`. */
+  on_approval_expiry: string | null;
   guardrail_ids: string[] | null;
   /** Current config version; starts at 1 and bumps on every config change. */
   version: number;

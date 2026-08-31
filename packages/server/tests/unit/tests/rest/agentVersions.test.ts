@@ -124,6 +124,10 @@ describe('Agent versions', () => {
           'model',
           'model_route_id',
           'name',
+          // Configuration for the same reason as `trace_content_mode` below:
+          // whether an expired approval continues the chain is part of how the
+          // agent behaved, so a restore has to bring it back.
+          'on_approval_expiry',
           'output_schema',
           'single_session_per_actor',
           'step_rules',
@@ -281,6 +285,24 @@ describe('Agent versions', () => {
       );
       expect(v2.status).toBe(200);
       expect(v2.body.config.instructions).toBe('regrettable edit');
+    });
+
+    test('restore brings back on_approval_expiry', async () => {
+      // The field decides whether an expired approval resumes the chain, so a
+      // rollback that dropped it would silently change how the agent behaves
+      // while reporting a restored config.
+      const agent = await createAgent({ on_approval_expiry: 'react' });
+
+      await authenticatedTestClient(userToken)
+        .patch(`/api/v1/agents/${agent.id}`)
+        .send({ on_approval_expiry: 'terminate' });
+
+      const restored = await authenticatedTestClient(userToken).post(
+        `/api/v1/agents/${agent.id}/versions/1/restore`
+      );
+
+      expect(restored.status).toBe(200);
+      expect(restored.body.on_approval_expiry).toBe('react');
     });
 
     test('restoring the current config is a no-op that creates no version', async () => {

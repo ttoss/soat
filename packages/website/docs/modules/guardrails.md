@@ -93,7 +93,7 @@ A `class` expression that returns anything other than `"A"` / `"B"` / `"C"` / `"
 
 The classes are also the platform's per-call **delegation dial** — how autonomy maturity grades map onto them is covered in [Layers are concerns, not autonomy levels](/docs/agent-system-layers#layers-are-concerns-not-autonomy-levels).
 
-Class-C interception uses the return-pending mechanics the [approvals queue](./approvals.md) defines: the call returns `{ "status": "pending_approval", "approval_id": …, "expires_at": … }` as the tool result, the turn completes normally, and resolution starts a continuation generation that executes the frozen (or edited) arguments.
+Class-C interception uses the return-pending mechanics the [approvals queue](./approvals.md) defines: the call returns `{ "status": "pending_approval", "approval_id": …, "expires_at": … }` as the tool result, and the turn completes normally. **Approval** then starts a continuation generation that executes the frozen (or edited) arguments; rejection executes nothing; and an expiry ends the chain without a continuation unless the agent opts in — see [Agents → Approval Expiry](./agents.md#approval-expiry).
 
 A guardrail may carry an optional **`expires_in`** (seconds) in its document — the sign-off window for a class-C approval it files (default 24h). When several guardrails apply, the governing (strictest-matching) guardrail's `expires_in` wins; it applies wherever a guardrail files an approval — agent tool-dispatch and the [orchestration tool node](#orchestration-tool-nodes) alike.
 

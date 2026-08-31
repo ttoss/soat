@@ -46,6 +46,7 @@ type CreateAgentBody = {
   single_session_per_actor?: unknown;
   guardrail_ids?: unknown;
   trace_content_mode?: unknown;
+  on_approval_expiry?: unknown;
   project_id?: string;
   /** Write-only tag for the version this write archives; never stored on the agent. */
   version_label?: unknown;
@@ -94,6 +95,10 @@ const parseUpdateAgentBody = (body: Record<string, unknown>) => {
     // Forwarded unvalidated so the lib rejects a bad value (or a loosening of
     // a zero-retention project) with a 400 rather than dropping it silently.
     traceContentMode: parseOptional<string | null>(body.trace_content_mode),
+    // Forwarded unvalidated for the same reason as `trace_content_mode`: the
+    // lib owns the vocabulary, so a bad value is a 400 rather than a silent
+    // fallback to the terminating default.
+    onApprovalExpiry: parseOptional<string | null>(body.on_approval_expiry),
     // Annotates the archived version, not the agent — deliberately absent from
     // the config snapshot, so labelling a change is not itself a change.
     versionLabel: parseNullableString(body.version_label),
@@ -153,9 +158,10 @@ const buildCreateAgentArgs = (args: {
     toolBindings: parseWireToolBindings(body.tool_bindings),
     maxSteps: parseNumber(body.max_steps),
     toolChoice: body.tool_choice as string | object | undefined,
-    stopConditions: Array.isArray(body.stop_conditions)
-      ? body.stop_conditions
-      : undefined,
+    // Forwarded whatever its shape, like the update path already does: the lib
+    // owns the vocabulary, so a non-array (or a malformed condition) is a 400
+    // instead of being dropped here and stored as "no conditions".
+    stopConditions: parseOptional<object[]>(body.stop_conditions),
     activeToolIds: Array.isArray(body.active_tool_ids)
       ? body.active_tool_ids
       : undefined,
@@ -172,6 +178,7 @@ const buildCreateAgentArgs = (args: {
         : undefined,
     guardrailIds: parseGuardrailIds(body.guardrail_ids),
     traceContentMode: body.trace_content_mode as string | null | undefined,
+    onApprovalExpiry: body.on_approval_expiry as string | null | undefined,
   };
 };
 

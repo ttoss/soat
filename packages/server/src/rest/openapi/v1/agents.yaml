@@ -963,7 +963,9 @@ components:
           nullable: true
           items:
             type: object
-          description: Stop conditions
+          description: >-
+            Conditions that end the generation loop early, on top of
+            `max_steps` — see the create request body for the accepted shape.
         active_tool_ids:
           x-soat-ref: tools
           type: array
@@ -1068,6 +1070,19 @@ components:
             and generation content is never persisted. An agent may tighten a
             storing project to `none` but cannot loosen a `none` project back
             to `full`.
+        on_approval_expiry:
+          type: string
+          nullable: true
+          # `null` is a real value here (the terminating default), so it belongs
+          # in the enum — otherwise the generated SDK type omits it (#861).
+          enum: [terminate, react, null]
+          description: >-
+            What happens when one of this agent's held tool calls expires
+            un-approved. `null` (the default) and `terminate` end the chain
+            there — the expired approval, its `approvals.expired` event and the
+            auto-filed `approval_expired` exception are the whole record.
+            `react` spawns a continuation that reports the staleness to the
+            agent, for an agent that acts on it.
         version:
           type: integer
           description: >-
@@ -1154,7 +1169,8 @@ components:
             `tool_bindings`, `max_steps`, `tool_choice`, `stop_conditions`,
             `active_tool_ids`, `step_rules`, `boundary_policy`, `temperature`,
             `knowledge_config`, `output_schema`, `max_context_messages`,
-            `single_session_per_actor`, `guardrail_ids`, `ai_provider_id`,
+            `single_session_per_actor`, `on_approval_expiry`,
+            `guardrail_ids`, `ai_provider_id`,
             `model_route_id`, `name`), and none of its identity or bookkeeping
             fields (`id`, `project_id`, `version`, `active_release`, timestamps).
 
@@ -1305,6 +1321,14 @@ components:
           type: array
           items:
             type: object
+          description: >-
+            Conditions that end the generation loop early, on top of
+            `max_steps`. Each entry is
+            `{"type": "hasToolCall", "tool_name": "<resolved tool name>"}`, and
+            the loop stops after the step that calls the named tool. A
+            condition narrows when the loop ends — it never lets it run past
+            `max_steps`. An unknown `type`, a `hasToolCall` without a
+            `tool_name`, or a non-object entry is rejected with 400.
         active_tool_ids:
           x-soat-ref: tools
           type: array
@@ -1395,6 +1419,19 @@ components:
             setting; `none` means trace and generation content is never
             written. Setting `full` under a project whose own mode is `none` is
             refused with 400 — the project is a floor an agent may only tighten.
+        on_approval_expiry:
+          type: string
+          nullable: true
+          # `null` is a real value here (the terminating default), so it belongs
+          # in the enum — otherwise the generated SDK type omits it (#861).
+          enum: [terminate, react, null]
+          description: >-
+            What happens when one of this agent's held tool calls expires
+            un-approved. `null` (the default) and `terminate` end the chain
+            there — the expired approval, its `approvals.expired` event and the
+            auto-filed `approval_expired` exception are the whole record.
+            `react` spawns a continuation that reports the staleness to the
+            agent, for an agent that acts on it.
         version_label:
           type: string
           nullable: true
@@ -1453,6 +1490,14 @@ components:
           nullable: true
           items:
             type: object
+          description: >-
+            Conditions that end the generation loop early, on top of
+            `max_steps`. Each entry is
+            `{"type": "hasToolCall", "tool_name": "<resolved tool name>"}`, and
+            the loop stops after the step that calls the named tool. A
+            condition narrows when the loop ends — it never lets it run past
+            `max_steps`. An unknown `type`, a `hasToolCall` without a
+            `tool_name`, or a non-object entry is rejected with 400.
         active_tool_ids:
           x-soat-ref: tools
           type: array
@@ -1550,6 +1595,19 @@ components:
             setting; `none` means trace and generation content is never
             written. Setting `full` under a project whose own mode is `none` is
             refused with 400.
+        on_approval_expiry:
+          type: string
+          nullable: true
+          # `null` is a real value here (the terminating default), so it belongs
+          # in the enum — otherwise the generated SDK type omits it (#861).
+          enum: [terminate, react, null]
+          description: >-
+            What happens when one of this agent's held tool calls expires
+            un-approved. `null` (the default) and `terminate` end the chain
+            there — the expired approval, its `approvals.expired` event and the
+            auto-filed `approval_expired` exception are the whole record.
+            `react` spawns a continuation that reports the staleness to the
+            agent, for an agent that acts on it.
         version_label:
           type: string
           nullable: true

@@ -115,6 +115,9 @@ const mapAgentProperties = (properties: Record<string, unknown>) => {
     activeToolIds: toOptional(
       toNullableArray<string>(properties.active_tool_ids)
     ),
+    onApprovalExpiry: toOptional(
+      toOptionalString(properties.on_approval_expiry)
+    ),
     guardrailIds: toOptional(toNullableArray<string>(properties.guardrail_ids)),
     stepRules: toOptional(toNullableArray<object>(properties.step_rules)),
     boundaryPolicy: toOptional(toNullableObject(properties.boundary_policy)),
@@ -205,6 +208,7 @@ export const agentsFormationModule = defineFormationModule({
       toolChoice: toNullableStringOrObject(properties.tool_choice),
       stopConditions: toNullableArray<object>(properties.stop_conditions),
       activeToolIds: toNullableArray<string>(properties.active_tool_ids),
+      onApprovalExpiry: toNullableString(properties.on_approval_expiry),
       guardrailIds: toNullableArray<string>(properties.guardrail_ids),
       stepRules: toNullableArray<object>(properties.step_rules),
       boundaryPolicy: toNullableObject(properties.boundary_policy),
@@ -248,6 +252,7 @@ export const agentsFormationModule = defineFormationModule({
       tool_choice: agent.tool_choice,
       stop_conditions: agent.stop_conditions,
       active_tool_ids: agent.active_tool_ids,
+      on_approval_expiry: agent.on_approval_expiry,
       guardrail_ids: agent.guardrail_ids,
       step_rules: agent.step_rules,
       boundary_policy: agent.boundary_policy,

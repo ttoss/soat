@@ -704,6 +704,13 @@ components:
             Agent-scope zero-retention setting (`full` or `none`). `null`
             inherits the project's setting. `full` is refused when the project's
             own mode is `none`.
+        on_approval_expiry:
+          type: string
+          nullable: true
+          description: >-
+            What happens when a held tool call expires un-approved:
+            `terminate` (the default when null) ends the chain, `react` spawns
+            a continuation that reports the staleness to the agent.
         knowledge_config:
           type: object
           nullable: true
