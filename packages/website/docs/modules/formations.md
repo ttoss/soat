@@ -123,6 +123,7 @@ A template has four top-level keys. For a complete worked template wiring 14 res
 The template is stored and returned **verbatim** — SOAT does not rewrite its keys:
 
 - **Resource `properties` keys** must be **snake_case**, matching the REST API body fields (`default_model`, `ai_provider_id`). A camelCase property key is rejected at validation time as an unknown field.
+- **A property with declared allowed values is checked at validation time**, not at deploy time. `validate-formation` and `plan-formation` both refuse `"provider": "openia"` before anything is created; the accepted values for every property are listed on its type's page under [Formations Types](/docs/formations-types).
 - **Logical IDs, parameter names, and output names** are **author-chosen identifiers**, preserved exactly as written — any case is accepted. A `--parameter` override (and any key in the deploy request's top-level `parameters` value bag) must match the declared parameter name exactly, including underscores (`--parameter aiProviderName=…` matches `aiProviderName`, not `ai_provider_name`).
 
 ### Parameters

@@ -16,7 +16,7 @@ const BASE_PATH = 'resources.<quota>.properties';
 const VALID_PROPERTIES = {
   scope: 'project',
   metric: 'tokens',
-  window: 'day',
+  window: 'rolling_24h',
   limit: 1000,
 };
 

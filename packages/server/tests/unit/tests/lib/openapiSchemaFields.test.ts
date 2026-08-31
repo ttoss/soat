@@ -47,6 +47,37 @@ describe('openapiSchemaFields', () => {
       expect([...fields.requiredFields]).toEqual(['project_id']);
     });
 
+    test('carries a declared enum through to the field spec', () => {
+      const fields = deriveSchemaFields({
+        schema: {
+          properties: {
+            mode: { type: 'string', enum: ['enforce', 'monitor'] },
+            name: { type: 'string' },
+            context_mode: { type: 'string', enum: ['merge', 'replace', null] },
+          },
+        },
+      });
+
+      expect(fields.fieldSpecs['mode']?.enumValues).toEqual([
+        'enforce',
+        'monitor',
+      ]);
+      // Absent, not empty: a field with no enum must not read as "nothing is
+      // allowed" to a validator that only checks for the key.
+      expect(fields.fieldSpecs['name']?.enumValues).toBeUndefined();
+      // `null` is a member, not a marker — the guardrail context mode really
+      // does accept it.
+      expect(fields.fieldSpecs['context_mode']?.enumValues).toContain(null);
+    });
+
+    test('ignores a non-array enum', () => {
+      const fields = deriveSchemaFields({
+        schema: { properties: { mode: { type: 'string', enum: 'enforce' } } },
+      });
+
+      expect(fields.fieldSpecs['mode']?.enumValues).toBeUndefined();
+    });
+
     test('keys every derived set by the spec name verbatim', () => {
       // There is deliberately no key-transform hook: a validator compares
       // against the spec's own names, so a field name can never be rewritten on
