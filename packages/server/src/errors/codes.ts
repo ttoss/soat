@@ -106,7 +106,7 @@ export const ERROR_CODES = {
   SECRET_NOT_DECRYPTABLE: {
     httpStatus: 500,
     description:
-      'A stored trigger or webhook secret could not be decrypted — it predates secret-at-rest encryption, or SECRETS_ENCRYPTION_KEY has changed since it was written. Rotating the secret replaces it; restoring the original key recovers every secret written under it.',
+      'A stored trigger or webhook secret could not be decrypted — SECRETS_ENCRYPTION_KEY has changed since it was written. Rotating the secret replaces it; restoring the original key recovers every secret written under it.',
   },
   SECRET_HAS_DEPENDENTS: {
     httpStatus: 409,

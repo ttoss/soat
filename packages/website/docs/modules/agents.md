@@ -217,7 +217,7 @@ The alternative is to stop forcing at the agent level: leave `tool_choice` at `"
 
 One resumption is the exception. When a generation pauses at `requires_action` for a [client tool](./tools.md#client) and resumes after `submit-tool-outputs`, it continues *the same turn* and runs with `"auto"`: the force is already satisfied by the call that produced the pause, and re-applying the object form there would demand the same tool again forever. That resumed turn gets the agent's **full** tool surface — the bound tools narrowed by `active_tool_ids`, plus the `write_memory` tool injected by `knowledge_config.write_memory_id` — whether or not the pause outlived a server restart.
 
-An agent already stored without the condition keeps running — the [chain budget](./chains.md#bounding-a-chain) is what bounds it — and is refused on its next write until it declares an exit, a [version restore](#versioning-and-staged-rollout) included, since restore re-validates the config it writes back.
+A [version restore](#versioning-and-staged-rollout) is validated like any other write, so restoring a config that forces a tool without declaring an exit is refused too.
 
 ### Step Rules
 
