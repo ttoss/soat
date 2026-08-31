@@ -180,6 +180,11 @@ export const ERROR_CODES = {
     httpStatus: 400,
     description: 'The request body failed validation.',
   },
+  FORCED_TOOL_CHOICE_CANNOT_STOP: {
+    httpStatus: 400,
+    description:
+      'The agent forces tool use on every step (`tool_choice: "required"`, or the `{ type: "tool" }` object form) but declares no `hasToolCall` stop condition, so no turn it runs could ever end by answering — only by exhausting `max_steps`. Declare the terminal condition, or drop the forcing to `"auto"` and force a specific step with `step_rules` instead.',
+  },
   SYSTEM_MESSAGE_NOT_ALLOWED: {
     httpStatus: 400,
     description:

@@ -246,11 +246,12 @@ echo "Tool: $TOOL_ID"
 
 ## Step 5 — Create the agent
 
-Attach the tool through [`tool_bindings`](/docs/modules/agents#tool-bindings), the canonical attachment field. Two settings make the pause-and-resume loop predictable:
+Attach the tool through [`tool_bindings`](/docs/modules/agents#tool-bindings), the canonical attachment field. Three settings make the pause-and-resume loop predictable:
 
 - [`tool_choice`](/docs/modules/agents#tool-choice) `{ "type": "tool", "tool_name": "get_order_status" }` forces the first model call to invoke the function; after you submit the output, the run continues with `"auto"`.
 
   Forcing is passed through to the provider, so it works only where the provider implements it. [Ollama's OpenAI-compatible API](https://docs.ollama.com/api/openai-compatibility) does **not** support `tool_choice` and ignores the field, so a local Ollama agent falls back to `"auto"`. OpenAI, Anthropic, and xAI all honor it.
+- [`stop_conditions`](/docs/modules/agents#stop-conditions) `{ "type": "hasToolCall", "tool_name": "get_order_status" }` names the call that ends the turn. A forcing `tool_choice` forbids a final text answer, so an agent that sets one must declare its exit — the write is refused otherwise.
 - `max_steps` bounds the agent loop.
 
 <Tabs groupId="client">
@@ -264,6 +265,7 @@ AGENT_ID=$(soat create-agent \
   --instructions "You are an order-support assistant. When the user asks about an order, call the get_order_status tool with the orderId argument, then answer using the tool result." \
   --tool-bindings '[{"tool_id":"'"$TOOL_ID"'"}]' \
   --tool-choice '{"type":"tool","tool_name":"get_order_status"}' \
+  --stop-conditions '[{"type":"hasToolCall","tool_name":"get_order_status"}]' \
   --max-steps 3 | jq -r '.id')
 echo "Agent: $AGENT_ID"
 ```
@@ -281,6 +283,7 @@ const { data: agent } = await adminSoat.agents.createAgent({
       'You are an order-support assistant. When the user asks about an order, call the get_order_status tool with the orderId argument, then answer using the tool result.',
     tool_bindings: [{ tool_id: toolId }],
     tool_choice: { type: 'tool', tool_name: 'get_order_status' },
+    stop_conditions: [{ type: 'hasToolCall', tool_name: 'get_order_status' }],
     max_steps: 3,
   },
 });
@@ -301,6 +304,7 @@ AGENT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents" \
     \"instructions\": \"You are an order-support assistant. When the user asks about an order, call the get_order_status tool with the orderId argument, then answer using the tool result.\",
     \"tool_bindings\": [{\"tool_id\": \"$TOOL_ID\"}],
     \"tool_choice\": {\"type\": \"tool\", \"tool_name\": \"get_order_status\"},
+    \"stop_conditions\": [{\"type\": \"hasToolCall\", \"tool_name\": \"get_order_status\"}],
     \"max_steps\": 3
   }" | jq -r '.id')
 echo "Agent: $AGENT_ID"

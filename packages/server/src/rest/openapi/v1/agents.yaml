@@ -957,7 +957,7 @@ components:
           description: Maximum agent loop steps before stopping
         tool_choice:
           nullable: true
-          description: 'Tool choice strategy. Accepts a string (`"auto"`, `"required"`) or an object (`{ "type": "tool", "tool_name": "my_tool" }`). Turn-scoped: a forcing value applies to the turn it is set on, so a resumed or continued turn starts from `"auto"`.'
+          description: 'Tool choice strategy. Accepts a string (`"auto"`, `"required"`) or an object (`{ "type": "tool", "tool_name": "my_tool" }`). A forcing value (`"required"` or the object form) forbids a final assistant message on every step of every turn, including a resumed or continued one, so it requires a `hasToolCall` entry in `stop_conditions` — otherwise the write is refused with `FORCED_TOOL_CHOICE_CANNOT_STOP`.'
         stop_conditions:
           type: array
           nullable: true
@@ -1318,7 +1318,7 @@ components:
         max_steps:
           type: integer
         tool_choice:
-          description: 'Tool choice strategy. Accepts a string (`"auto"`, `"required"`) or an object (`{ "type": "tool", "tool_name": "my_tool" }`). Turn-scoped: a forcing value applies to the turn it is set on, so a resumed or continued turn starts from `"auto"`.'
+          description: 'Tool choice strategy. Accepts a string (`"auto"`, `"required"`) or an object (`{ "type": "tool", "tool_name": "my_tool" }`). A forcing value (`"required"` or the object form) forbids a final assistant message on every step of every turn, including a resumed or continued one, so it requires a `hasToolCall` entry in `stop_conditions` — otherwise the write is refused with `FORCED_TOOL_CHOICE_CANNOT_STOP`.'
         stop_conditions:
           type: array
           items:
@@ -1500,7 +1500,7 @@ components:
           nullable: true
         tool_choice:
           nullable: true
-          description: 'Tool choice strategy. Accepts a string (`"auto"`, `"required"`) or an object (`{ "type": "tool", "tool_name": "my_tool" }`). Turn-scoped: a forcing value applies to the turn it is set on, so a resumed or continued turn starts from `"auto"`.'
+          description: 'Tool choice strategy. Accepts a string (`"auto"`, `"required"`) or an object (`{ "type": "tool", "tool_name": "my_tool" }`). A forcing value (`"required"` or the object form) forbids a final assistant message on every step of every turn, including a resumed or continued one, so it requires a `hasToolCall` entry in `stop_conditions` — otherwise the write is refused with `FORCED_TOOL_CHOICE_CANNOT_STOP`.'
         stop_conditions:
           type: array
           nullable: true

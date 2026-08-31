@@ -10,7 +10,7 @@ import { buildModel } from 'src/lib/agentModel';
 // Statically imported (real `ai`, real DB) for the stub-server test below;
 // the doMock('ai') tests use the dynamic loadNonStreamModule instead.
 import { runNonStreamGeneration as runNonStreamGenerationReal } from 'src/lib/agentNonStreamGeneration';
-import { resolveTurnToolChoice } from 'src/lib/agentStepRules';
+import { normalizeToolChoice } from 'src/lib/agentStepRules';
 
 const loadNonStreamModule = async () => {
   return import('src/lib/agentNonStreamGeneration');
@@ -98,11 +98,11 @@ describe('agentNonStreamGeneration', () => {
     const { runNonStreamGeneration } = await loadNonStreamModule();
 
     const result = await runNonStreamGeneration({
-      // Resolved by the caller now (`resolveTurnToolChoice`), so the wire→SDK
+      // Resolved by the caller now (`normalizeToolChoice`), so the wire→SDK
       // translation happens once for both the stream and non-stream paths.
-      toolChoice: resolveTurnToolChoice({
-        toolChoice: { type: 'tool', tool_name: 'forced_tool' },
-        isContinuation: false,
+      toolChoice: normalizeToolChoice({
+        type: 'tool',
+        tool_name: 'forced_tool',
       }),
       model: {} as never,
       allMessages: [{ role: 'user', content: 'hi' }],

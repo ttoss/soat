@@ -2125,6 +2125,127 @@ describe('Agents', () => {
     });
   });
 
+  describe('a forcing tool_choice requires a way to stop', () => {
+    const DONE: object = { type: 'hasToolCall', tool_name: 'done' };
+
+    const createAgentWith = (body: Record<string, unknown>) => {
+      return authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: `forced-${Math.random().toString(36).slice(2, 8)}`,
+          ...body,
+        });
+    };
+
+    // `"required"` forbids a final assistant message on every step, so an agent
+    // that declares no terminal condition can only ever end a turn by
+    // exhausting `max_steps` — including the continuation that carries an
+    // approval decision back to it, which then reports nothing.
+    test('rejects "required" with no stop condition', async () => {
+      const res = await createAgentWith({ tool_choice: 'required' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('FORCED_TOOL_CHOICE_CANNOT_STOP');
+    });
+
+    test('rejects a named tool with no stop condition', async () => {
+      const res = await createAgentWith({
+        tool_choice: { type: 'tool', tool_name: 'search' },
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('FORCED_TOOL_CHOICE_CANNOT_STOP');
+    });
+
+    // Chain-scoped: it caps how many generations a chain spawns, it never ends a
+    // turn, so it is not the exit this rule is about.
+    test('rejects "required" when only maxChainGenerations is declared', async () => {
+      const res = await createAgentWith({
+        tool_choice: 'required',
+        stop_conditions: [{ type: 'maxChainGenerations', max_generations: 20 }],
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('FORCED_TOOL_CHOICE_CANNOT_STOP');
+    });
+
+    test('accepts "required" with a hasToolCall condition', async () => {
+      const res = await createAgentWith({
+        tool_choice: 'required',
+        stop_conditions: [DONE],
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body.tool_choice).toBe('required');
+    });
+
+    test('leaves a non-forcing tool_choice alone', async () => {
+      for (const tool_choice of ['auto', 'none', null]) {
+        const res = await createAgentWith({ tool_choice });
+        expect(res.status).toBe(201);
+      }
+    });
+
+    test('rejects introducing forcing on an agent that cannot stop', async () => {
+      const created = await createAgentWith({ tool_choice: 'auto' });
+      expect(created.status).toBe(201);
+
+      const res = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/agents/${created.body.id}`)
+        .send({ tool_choice: 'required' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('FORCED_TOOL_CHOICE_CANNOT_STOP');
+    });
+
+    // The rule is evaluated against the config the write would *leave behind*,
+    // so removing the exit is refused just as introducing the forcing is. A
+    // per-field check would pass this: the body names no tool_choice at all.
+    test('rejects removing the stop condition from a forcing agent', async () => {
+      const created = await createAgentWith({
+        tool_choice: 'required',
+        stop_conditions: [DONE],
+      });
+      expect(created.status).toBe(201);
+
+      const res = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/agents/${created.body.id}`)
+        .send({ stop_conditions: [] });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('FORCED_TOOL_CHOICE_CANNOT_STOP');
+    });
+
+    test('accepts forcing added to an agent that already declares an exit', async () => {
+      const created = await createAgentWith({ stop_conditions: [DONE] });
+      expect(created.status).toBe(201);
+
+      const res = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/agents/${created.body.id}`)
+        .send({ tool_choice: 'required' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.tool_choice).toBe('required');
+    });
+
+    test('clearing a forcing tool_choice needs no stop condition', async () => {
+      const created = await createAgentWith({
+        tool_choice: 'required',
+        stop_conditions: [DONE],
+      });
+      expect(created.status).toBe(201);
+
+      const res = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/agents/${created.body.id}`)
+        .send({ tool_choice: null, stop_conditions: [] });
+
+      expect(res.status).toBe(200);
+      expect(res.body.tool_choice).toBeNull();
+    });
+  });
+
   describe('on_approval_expiry', () => {
     test('defaults to null — an expired approval ends the chain', async () => {
       const res = await authenticatedTestClient(userToken)

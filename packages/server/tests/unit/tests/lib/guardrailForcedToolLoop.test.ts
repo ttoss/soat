@@ -43,6 +43,7 @@ import { createGuardrail } from 'src/lib/guardrails';
 const MAX_STEPS = 2;
 const ROUNDS = 3;
 const CHAIN_BUDGET = 4;
+const DONE_TOOL = 'done';
 const WAIT_TIMEOUT_MS = 20_000;
 
 describe('guardrail-held tool calls under tool_choice: "required"', () => {
@@ -53,6 +54,12 @@ describe('guardrail-held tool calls under tool_choice: "required"', () => {
   let toolBaseUrl: string;
   let toolRequests: Array<Record<string, unknown>> = [];
   let proposalCount = 0;
+  /**
+   * The tool the stub calls while forced. A phase sets it to `DONE_TOOL` to act
+   * out the model reaching the terminal tool the agent declared, which is the
+   * only exit a forced turn has.
+   */
+  let forcedToolName = 'refund';
 
   /** Whether a request's `tool_choice` forbids a final assistant message. */
   const forcesATool = (toolChoice: unknown): boolean => {
@@ -85,7 +92,7 @@ describe('guardrail-held tool calls under tool_choice: "required"', () => {
                   id: `call_forced_${proposalCount}`,
                   type: 'function',
                   function: {
-                    name: 'refund',
+                    name: forcedToolName,
                     arguments: JSON.stringify({ amount: proposalCount }),
                   },
                 },
@@ -148,6 +155,7 @@ describe('guardrail-held tool calls under tool_choice: "required"', () => {
     modelRequests = [];
     toolRequests = [];
     delete process.env.MAX_CONTINUATION_CHAIN_GENERATIONS;
+    forcedToolName = 'refund';
     // Nothing may survive into the next test's sweep: `expireDueApprovals` is
     // process-wide, and a leftover item would seed a generation there.
     await db.ApprovalItem.destroy({ where: { status: 'pending' } });
@@ -179,6 +187,13 @@ describe('guardrail-held tool calls under tool_choice: "required"', () => {
   const createFixture = async (args: {
     name: string;
     onApprovalExpiry?: 'terminate' | 'react';
+    /**
+     * Binds an ungated `done` tool and declares
+     * `{ hasToolCall: done }` — the configuration
+     * `assertForcedToolChoiceCanStop` now requires of any forcing agent. Left
+     * off, the fixture is a row written before that rule existed.
+     */
+    declaresTerminalTool?: boolean;
   }): Promise<Fixture> => {
     const { name } = args;
     const project = await db.Project.create({ name: `${name} Project` });
@@ -211,13 +226,34 @@ describe('guardrail-held tool calls under tool_choice: "required"', () => {
       guardrailIds: [guardrail.id],
     });
 
+    // Ungated on purpose: the exit a forced turn reaches must not itself be
+    // held, or declaring it would buy nothing.
+    const doneTool = args.declaresTerminalTool
+      ? await db.Tool.create({
+          projectId,
+          type: 'http',
+          name: DONE_TOOL,
+          description: 'Report the outcome and stop',
+          parameters: { type: 'object', properties: {} },
+          execute: { url: `${toolBaseUrl}/done`, method: 'POST' },
+        })
+      : null;
+
+    // Written straight to the table, not through `createAgent`: a forcing agent
+    // with no terminal condition is exactly what the lib now refuses, and this
+    // suite still has to cover how one already stored behaves at runtime.
     const agent = await db.Agent.create({
       projectId,
       aiProviderId: aiProvider.id,
       name: `${name} Agent`,
       instructions: 'You must call the available tool to answer.',
-      toolBindings: [{ toolId: tool.publicId }],
+      toolBindings: doneTool
+        ? [{ toolId: tool.publicId }, { toolId: doneTool.publicId }]
+        : [{ toolId: tool.publicId }],
       toolChoice: 'required',
+      stopConditions: args.declaresTerminalTool
+        ? [{ type: 'hasToolCall', tool_name: DONE_TOOL }]
+        : null,
       maxSteps: MAX_STEPS,
       onApprovalExpiry: args.onApprovalExpiry ?? null,
     });
@@ -431,17 +467,20 @@ describe('guardrail-held tool calls under tool_choice: "required"', () => {
     });
     expect(continuations).toHaveLength(MAX_STEPS);
 
-    // Each of those used to re-enter the forced-tool loop and file the next,
-    // larger round of held calls — `MAX_STEPS * MAX_STEPS` of them, the
-    // compounding the incident ran on. They conclude instead, so expiry drives
-    // exactly one further round and the chain ends there.
-    expect(await pendingApprovals(fixture.projectId)).toHaveLength(0);
+    // Each continuation runs under the author's `required` — nothing relaxes it
+    // — so it can only propose more gated calls, and the next round is
+    // `MAX_STEPS * MAX_STEPS` held items. That compounding is why a forcing
+    // agent with no declared exit is refused on write; a row stored before that
+    // rule still grows here, bounded only by the chain budget.
+    expect(await pendingApprovals(fixture.projectId)).toHaveLength(
+      MAX_STEPS * MAX_STEPS
+    );
     expect(toolRequests).toHaveLength(0);
   });
 
-  test('a continuation relaxes the forced tool choice so the turn can end', async () => {
+  test('a continuation inherits the forced tool choice', async () => {
     const fixture = await createFixture({
-      name: 'Forced Loop Relax',
+      name: 'Forced Loop Inherit',
       onApprovalExpiry: 'react',
     });
 
@@ -449,8 +488,6 @@ describe('guardrail-held tool calls under tool_choice: "required"', () => {
     const seedRow = await db.Generation.findOne({
       where: { publicId: seed.id },
     });
-    // The turn that started the chain keeps the author's forcing: relaxing it
-    // there would change what every ordinary generation does.
     for (const body of modelRequests) {
       expect(body.tool_choice).toBe('required');
     }
@@ -461,11 +498,53 @@ describe('guardrail-held tool calls under tool_choice: "required"', () => {
       expectedCompleted: 1 + MAX_STEPS,
     });
 
-    // A continuation exists to report a decision and conclude, so it may write
-    // a final message — which under the author's `required` it never could.
+    // `tool_choice` is the agent's on every turn of the chain, not just the one
+    // the author wrote. The platform used to rewrite it to `auto` here so the
+    // continuation could answer; it no longer does, because a forcing agent now
+    // has to declare its own exit instead (`assertForcedToolChoiceCanStop`).
     expect(modelRequests).not.toHaveLength(0);
     for (const body of modelRequests) {
-      expect(body.tool_choice).toBe('auto');
+      expect(body.tool_choice).toBe('required');
+    }
+
+    const continuations = await db.Generation.findAll({
+      where: { initiatorGenerationId: seedRow!.id },
+    });
+    expect(continuations).toHaveLength(MAX_STEPS);
+    // Forbidden a final message and given no terminal condition, the only exit
+    // left is the step budget — which is what `max_steps` is for: it separates
+    // "this agent cannot terminate on its own" from ordinary tool use.
+    for (const continuation of continuations) {
+      expect(continuation.stopReason).toBe('max_steps');
+    }
+  });
+
+  test('a declared terminal condition lets a forced continuation conclude', async () => {
+    const fixture = await createFixture({
+      name: 'Forced Loop Terminal',
+      onApprovalExpiry: 'react',
+      declaresTerminalTool: true,
+    });
+
+    const seed = await runGeneration(fixture);
+    const seedRow = await db.Generation.findOne({
+      where: { publicId: seed.id },
+    });
+
+    // The model reaches the declared tool on the continuation — the exit the
+    // write-time rule exists to guarantee is available.
+    modelRequests = [];
+    toolRequests = [];
+    forcedToolName = DONE_TOOL;
+    await expireHeldCallsAndSettle({
+      projectId: fixture.projectId,
+      expectedCompleted: 1 + MAX_STEPS,
+    });
+
+    // Still forced — and it concludes anyway, on the condition rather than on
+    // the step budget.
+    for (const body of modelRequests) {
+      expect(body.tool_choice).toBe('required');
     }
 
     const continuations = await db.Generation.findAll({
@@ -473,11 +552,13 @@ describe('guardrail-held tool calls under tool_choice: "required"', () => {
     });
     expect(continuations).toHaveLength(MAX_STEPS);
     for (const continuation of continuations) {
-      expect(continuation.stopReason).toBe('stop');
+      expect(continuation.stopReason).toBe('tool-calls');
+      expect(continuation.status).toBe('completed');
     }
 
-    // The engine of the incident: a continuation that could only propose more
-    // gated calls filed the next, larger round of approvals. It ends instead.
+    // The ungated tool ran, and no further round of approvals was filed: the
+    // chain settles on a decision instead of buying another one.
+    expect(toolRequests).not.toHaveLength(0);
     expect(await pendingApprovals(fixture.projectId)).toHaveLength(0);
   });
 
@@ -531,7 +612,7 @@ describe('guardrail-held tool calls under tool_choice: "required"', () => {
     const [seedGeneration, ...continuationRows] = generations;
     expect(seedGeneration.stopReason).toBe('max_steps');
     for (const continuation of continuationRows) {
-      expect(continuation.stopReason).toBe('stop');
+      expect(continuation.stopReason).toBe('max_steps');
     }
     expect(toolRequests).toHaveLength(0);
 

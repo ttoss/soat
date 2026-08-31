@@ -46,28 +46,18 @@ export const normalizeToolChoice = (value: unknown): TurnToolChoice => {
 };
 
 /**
- * The tool choice a turn actually runs under.
+ * Whether a tool choice forbids a final assistant message — `required`, or a
+ * named tool. The only exit left to a turn running under one is exhausting its
+ * step budget or a declared stop condition, which is why
+ * `assertForcedToolChoiceCanStop` requires the latter on write.
  *
- * `tool_choice` is scoped to one turn, so a forcing value — `required`, or a
- * named tool — does not cross a turn boundary. A continuation is a new turn:
- * it carries a decision back to the agent to report and finish, which forcing
- * forbids, leaving step exhaustion or another gated call as its only exits.
- * Starting it at `auto` is that scope rule, not a safety valve — the bound on a
- * chain that will not settle is the generation budget in `generationChain.ts`.
- *
- * The client-tool resume path relaxes the same way by omitting `toolChoice`
- * altogether (`runToolOutputsGeneration`); keep the two consistent. `stepRules`
- * are deliberately not scoped this way — `buildPrepareStep` numbers them from
- * step 1 of every turn, so a rule is how an author keeps a call mandatory on a
- * continuation.
+ * The single definition of "forcing": the write-time gate and any runtime
+ * reader must agree on it, or an agent could pass validation and still be
+ * unable to stop.
  */
-export const resolveTurnToolChoice = (args: {
-  toolChoice: unknown;
-  isContinuation: boolean;
-}): TurnToolChoice => {
-  const normalized = normalizeToolChoice(args.toolChoice);
-  const forces = normalized === 'required' || typeof normalized === 'object';
-  return args.isContinuation && forces ? 'auto' : normalized;
+export const forcesATool = (toolChoice: unknown): boolean => {
+  const normalized = normalizeToolChoice(toolChoice);
+  return normalized === 'required' || typeof normalized === 'object';
 };
 
 /**

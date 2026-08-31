@@ -17,6 +17,7 @@ import { hasToolCall, isStepCount, type StopCondition, type ToolSet } from 'ai';
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
+import { forcesATool } from './agentStepRules';
 import { resolveMaxSteps } from './generationStopReason';
 import { isPlainObject } from './plainObject';
 
@@ -123,6 +124,53 @@ export const assertValidStopConditions = (value: unknown): void => {
   for (const entry of value) {
     assertValidCondition(entry);
   }
+};
+
+/**
+ * Whether a `stop_conditions` value declares a condition that can end a *turn*.
+ * Only `hasToolCall` can: `maxChainGenerations` caps how many generations a
+ * chain spawns and never shortens the turn it is evaluated on.
+ */
+const declaresTurnExit = (stopConditions: unknown): boolean => {
+  if (!Array.isArray(stopConditions)) return false;
+  return stopConditions.some((entry) => {
+    if (!isPlainObject(entry)) return false;
+    return readType(entry) === 'hasToolCall' && Boolean(readToolName(entry));
+  });
+};
+
+/**
+ * Refuses an agent that forces tool use on every step without declaring how a
+ * turn ends.
+ *
+ * A forcing `tool_choice` forbids a final assistant message, so the only exit
+ * left to any turn is exhausting `max_steps`. On the turn the author wrote that
+ * may be deliberate; on a continuation carrying an approval decision back to
+ * the agent it means the decision is never reported — the turn burns its steps
+ * proposing more calls, and where those calls are gated too, each approval buys
+ * another approval instead of an answer.
+ *
+ * Requiring the terminal condition makes that configuration unwritable rather
+ * than silently repaired, which is why a continuation no longer has its forcing
+ * rewritten to `auto` for it. It cannot *guarantee* the
+ * model calls the named tool — nothing can — but it guarantees an exit exists
+ * to be reached.
+ *
+ * Evaluated against the config a write leaves behind, never the fields it
+ * names: removing the exit and adding the forcing are the same violation
+ * arriving from opposite directions.
+ */
+export const assertForcedToolChoiceCanStop = (args: {
+  toolChoice: unknown;
+  stopConditions: unknown;
+}): void => {
+  if (!forcesATool(args.toolChoice)) return;
+  if (declaresTurnExit(args.stopConditions)) return;
+  throw new DomainError(
+    'FORCED_TOOL_CHOICE_CANNOT_STOP',
+    'An agent whose tool_choice forces a tool must declare a hasToolCall stop condition, or no turn it runs could end by answering.',
+    { toolChoice: args.toolChoice }
+  );
 };
 
 /**
