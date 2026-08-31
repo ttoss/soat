@@ -25,12 +25,11 @@ export type OnApprovalExpiry = (typeof ON_APPROVAL_EXPIRY_VALUES)[number];
  * safe default at resume time. `null`/absent inherits the default rather than
  * being a third mode.
  */
+const KNOWN_VALUES: ReadonlySet<string> = new Set(ON_APPROVAL_EXPIRY_VALUES);
+
 export const assertValidOnApprovalExpiry = (value: unknown): void => {
   if (value === undefined || value === null) return;
-  if (
-    typeof value !== 'string' ||
-    !ON_APPROVAL_EXPIRY_VALUES.includes(value as OnApprovalExpiry)
-  ) {
+  if (typeof value !== 'string' || !KNOWN_VALUES.has(value)) {
     throw new DomainError(
       'VALIDATION_FAILED',
       `on_approval_expiry must be one of: ${ON_APPROVAL_EXPIRY_VALUES.join(', ')}.`,

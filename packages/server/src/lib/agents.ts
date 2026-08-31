@@ -6,6 +6,7 @@ import {
   type MappedAgent,
 } from './agentAccessor';
 import { assertValidOnApprovalExpiry } from './agentApprovalExpiry';
+import { assertValidStopConditions } from './agentStopConditions';
 import {
   type AgentToolBinding,
   readAgentToolBindings,
@@ -187,6 +188,7 @@ export const createAgent = async (
   validateOutputSchema(args.outputSchema);
   assertBoundaryPolicyActionsKnown(args.boundaryPolicy);
   assertValidOnApprovalExpiry(args.onApprovalExpiry);
+  assertValidStopConditions(args.stopConditions);
 
   const { aiProviderId, modelRouteId } = await resolveCreateModelBinding(args);
 
@@ -350,6 +352,7 @@ export const updateAgent = async (
   validateOutputSchema(args.outputSchema);
   assertBoundaryPolicyActionsKnown(args.boundaryPolicy);
   assertValidOnApprovalExpiry(args.onApprovalExpiry);
+  assertValidStopConditions(args.stopConditions);
 
   // Loaded with its joins so the pre-write config can be snapshotted through
   // the same mapper that serializes the response — the diff is then between two

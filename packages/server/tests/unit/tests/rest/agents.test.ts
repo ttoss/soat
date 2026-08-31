@@ -2034,6 +2034,70 @@ describe('Agents', () => {
       expect(res.status).toBe(400);
     });
   });
+  describe('stop_conditions validation', () => {
+    const create = (stop_conditions: unknown) => {
+      return authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: `stopcond-${Math.random().toString(36).slice(2, 8)}`,
+          stop_conditions,
+        });
+    };
+
+    test('accepts the documented hasToolCall condition', async () => {
+      const res = await create([{ type: 'hasToolCall', tool_name: 'done' }]);
+
+      expect(res.status).toBe(201);
+      expect(res.body.stop_conditions).toEqual([
+        { type: 'hasToolCall', tool_name: 'done' },
+      ]);
+    });
+
+    test('rejects an unknown condition type', async () => {
+      // The field used to accept anything and enforce nothing. A typo now fails
+      // the write instead of reading as a condition that never fires.
+      const res = await create([{ type: 'hasToolcall', tool_name: 'done' }]);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('rejects a hasToolCall condition with no tool_name', async () => {
+      const res = await create([{ type: 'hasToolCall' }]);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('rejects a non-object entry', async () => {
+      const res = await create(['done']);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('rejects a value that is not an array', async () => {
+      const res = await create('done');
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('an update is validated on the same path', async () => {
+      const created = await create(null);
+      expect(created.status).toBe(201);
+
+      const res = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/agents/${created.body.id}`)
+        .send({ stop_conditions: [{ type: 'whenever' }] });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+  });
+
   describe('on_approval_expiry', () => {
     test('defaults to null — an expired approval ends the chain', async () => {
       const res = await authenticatedTestClient(userToken)
@@ -2091,6 +2155,20 @@ describe('Agents', () => {
 
       expect(cleared.status).toBe(200);
       expect(cleared.body.on_approval_expiry).toBeNull();
+    });
+
+    test('rejects a non-string value with 400', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: 'expiry-number',
+          on_approval_expiry: 5,
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
 
     test('rejects an unknown value with 400', async () => {

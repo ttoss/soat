@@ -257,6 +257,17 @@ Besides `max_steps`, the loop stops when **any** condition in `stop_conditions` 
 }
 ```
 
+`max_steps` always applies: a condition narrows when the loop ends, it never
+lets the loop run longer. `tool_name` is the tool's
+[resolved name](./tools.md#tool-name-resolution), and the condition is checked
+after the step that makes the call — so with the example above, a turn that
+calls `done` on step 3 ends there instead of continuing to 50.
+
+Conditions are enforced on every turn, including one resumed after
+[`submit-tool-outputs`](./tools.md#client), and are validated on write: an
+unknown `type`, or a `hasToolCall` with no `tool_name`, is refused with
+`400 VALIDATION_FAILED` rather than stored as a condition that never fires.
+
 ### Active Tools
 
 By default, all bound tools are available at every step. Use `active_tool_ids` to restrict which tools the model can see globally; for phased workflows use [Step Rules](#step-rules).
