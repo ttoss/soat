@@ -10,9 +10,8 @@ export const findOrchestrationForStartRun = async (args: {
   orchestrationPublicId: string;
   projectIds?: number[];
 }): Promise<InstanceType<typeof db.Orchestration>> => {
-  // `scopedWhere` makes an empty scope match nothing. This used to skip the
-  // filter for an empty `projectIds`, reading it as "no restriction" — the
-  // opposite of what every other module means by it.
+  // `scopedWhere` makes an empty scope match nothing, which is what every
+  // other module means by it — never "no restriction".
   const orchestration = await db.Orchestration.findOne({
     where: orchestrations.scopedWhere({
       id: args.orchestrationPublicId,

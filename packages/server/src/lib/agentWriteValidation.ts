@@ -86,10 +86,10 @@ const assertTraceContentModeAllowed = async (args: {
  * enforceable permissions.
  *
  * The rule lives in `validatePolicyActions` (`iam.ts`) and is shared with the
- * formation module (`.claude/rules/modules.md` — Shared Business Rules). Only
- * the formation path used to apply it, so a typo'd boundary written through
- * REST was stored unchecked — and a boundary is where that fails open: a
- * mis-named `Deny` matches nothing, leaving the agent permitted.
+ * formation module (`.claude/rules/modules.md` — Shared Business Rules), so
+ * neither path can store a typo'd boundary unchecked. A boundary is where that
+ * would fail open: a mis-named `Deny` matches nothing, leaving the agent
+ * permitted.
  *
  * Structural validation stays with the boundary evaluator at generation time.
  */

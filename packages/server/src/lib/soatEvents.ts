@@ -1,15 +1,15 @@
 /**
  * The registry of platform events, keyed by the resource type each belongs to.
  *
- * The single source of truth for three things that used to drift: the union
+ * The single source of truth for three things that must agree: the union
  * `emitResourceEvent` accepts, the set a subscriber may declare interest in,
  * and the webhooks documentation table (generated from here by
  * `packages/website/scripts/generateWebhookEventsPage.ts`).
  *
- * `type` and `resourceType` were both bare `string`s, so a renamed or
- * misspelled event compiled fine and simply never matched — a webhook
- * subscription stopped delivering with nothing failing. Pairing the name with
- * its resource type makes that a type error at the emit site. The description
+ * As bare `string`s, a renamed or misspelled event would compile fine and
+ * simply never match — a webhook subscription would stop delivering with
+ * nothing failing. Pairing the name with its resource type makes that a type
+ * error at the emit site. The description
  * lives in the entry because the generated reference reads it: a new event is
  * documented by the same edit that registers it.
  *

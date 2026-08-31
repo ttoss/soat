@@ -44,7 +44,7 @@ export const resolveRunAuth = async (
   requireAuth(ctx);
   // An empty array means "permitted in zero projects"; `undefined` means
   // unrestricted. Only the former is rejected — deferred to
-  // `requireProjectAccess` rather than restated, which is what #1029 forgot.
+  // `requireProjectAccess` rather than restated here.
   const projectIds = await requireProjectAccess({
     ctx,
     action,

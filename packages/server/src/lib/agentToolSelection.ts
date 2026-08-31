@@ -2,10 +2,9 @@
  * Which of an agent's bound tools a generation may use, and how their persisted
  * ids map to the names the AI SDK is keyed by.
  *
- * Both functions used to live in `agents.ts`, which meant the generation
- * modules had to import the CRUD module to reach them — three of the cluster's
- * import cycles ran through exactly that edge. Neither touches an agent row, so
- * neither belongs there.
+ * Their own module rather than `agents.ts`: neither touches an agent row, and
+ * reaching them there would make the generation modules import the CRUD module,
+ * which is an import-cycle edge.
  */
 import { db } from '../db';
 

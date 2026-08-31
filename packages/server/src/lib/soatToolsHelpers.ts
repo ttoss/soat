@@ -43,11 +43,10 @@ export interface ToolDefinition {
  * parameters substituted, followed by the query string its `in: query`
  * parameters build.
  *
- * Both halves live here rather than at each call site because keeping them
- * apart is exactly how #924 happened — the SOAT tool path built the path alone
- * and dropped every query parameter the action advertised, while the MCP
- * handler for the same registry appended both. There is now one way to address
- * an action, so a third caller cannot repeat the omission.
+ * Both halves live here rather than at each call site: kept apart, one caller
+ * builds the path alone and drops every query parameter the action advertises
+ * while another appends both. One way to address an action means a new caller
+ * cannot make that omission.
  */
 export const buildSoatActionTarget = (args: {
   def: ToolDefinition;

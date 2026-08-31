@@ -92,10 +92,10 @@ const readExtraction = (
  * wire casing — into the internal camelCase `KnowledgeConfig`, the inbound half
  * of the case convention applied at one boundary.
  *
- * Field by field on purpose: this used to be a recursive key transform, which
- * `.claude/rules/case-convention.md` bans after #651/#690/#729/#737. Only keys
- * actually present are assigned, so a per-generation override merges over the
- * stored config without an absent field clearing a set one.
+ * Field by field on purpose: a recursive key transform is what
+ * `.claude/rules/case-convention.md` bans. Only keys actually present are
+ * assigned, so a per-generation override merges over the stored config without
+ * an absent field clearing a set one.
  */
 export const readKnowledgeConfig = (
   value: unknown

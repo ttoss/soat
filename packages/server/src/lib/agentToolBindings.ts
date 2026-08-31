@@ -34,9 +34,8 @@ type AgentToolColumns = {
 /**
  * Reads an agent row's tool bindings.
  *
- * This used to normalize the pre-`toolBindings` `toolIds` / `tools` columns on
- * every read. Those columns are gone, so there is a single place bindings come
- * from.
+ * `toolBindings` is the only column bindings come from, so this is the single
+ * place they are read.
  */
 export const readAgentToolBindings = (
   row: AgentToolColumns

@@ -85,10 +85,10 @@ export type PendingAgentConfig = {
 export const DEFAULT_MAX_STEPS = 20;
 
 /**
- * Freezes an agent's config for a generation that is about to pause. This
- * literal used to be copy-pasted at three suspend points and read back at a
- * fourth; a field added to one copy and not the others would have silently
- * changed behavior between "paused on the initial turn" and "paused on a
+ * Freezes an agent's config for a generation that is about to pause. One
+ * literal for all three suspend points and the read back at the fourth: copied
+ * per site, a field added to one and not the others would silently change
+ * behavior between "paused on the initial turn" and "paused on a
  * continuation".
  */
 export const toAgentConfig = (typedAgent: TypedAgent): PendingAgentConfig => {

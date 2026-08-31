@@ -124,8 +124,8 @@ const recordRefusedFiring = async (args: {
  * fields are named here, and `data` is copied as a value with nothing reading a
  * key of it (`.claude/rules/case-convention.md`). Keys are snake_case because a
  * firing's `input` is a wire-visible field, and because the shape matches the
- * webhook delivery payload a loopback subscriber used to receive — so a trigger
- * migrated off the loopback keeps reading the same input.
+ * webhook delivery payload a loopback subscriber receives — so a trigger reads
+ * the same input either way.
  */
 const firingInputFor = (event: SoatEvent): Record<string, unknown> => {
   return {

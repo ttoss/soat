@@ -29,8 +29,8 @@ export const workflowsFormationModule = defineFormationModule({
       name: properties.name as string,
       description: toNullableString(properties.description),
       // Both are required and schema-checked before reaching here, so the
-      // converter cannot return undefined — the `?? []` these used to carry
-      // was an unreachable branch, not a default.
+      // converter cannot return undefined and a `?? []` default would be an
+      // unreachable branch.
       states: toCamelCollection<WorkflowState>(
         properties.states
       ) as WorkflowState[],

@@ -124,9 +124,8 @@ filesRouter.post(
       filename?: string;
     };
     const file = ctx.file as MulterFile | undefined;
-    // Multipart fields were the one surface the deleted caseTransform never
-    // reached, so this route used to accept `projectId` as well as `project_id`.
-    // With a single casing everywhere, the spec's `project_id` is the only name.
+    // The spec's `project_id` is the only name this route accepts, multipart
+    // included — one casing everywhere (`.claude/rules/case-convention.md`).
     const projectId = body.project_id;
 
     if (!file) {

@@ -5,8 +5,8 @@ import { isPlainObject } from './plainObject';
 // `case-convention.md`: every renamed key is named below at its exact position,
 // and anything unnamed — guards, JSON Logic bodies, `input_mapping`,
 // `payload_writes`, unrecognized author keys — is copied as an opaque value, so
-// its inner keys are never looked at. The key-blind recursive transform that
-// used to live here is the construct that rule bans (#852).
+// its inner keys are never looked at. A key-blind recursive transform is the
+// construct that rule bans.
 
 /**
  * Moves `from` to `to` in place when present. Values — including whole nested
