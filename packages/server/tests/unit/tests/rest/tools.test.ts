@@ -2644,4 +2644,230 @@ describe('Tools', () => {
       });
     });
   });
+
+  // #1151: `/call` is the direct path — the CLI's `call-tool`, the smoke tests,
+  // and anyone poking a tool to see whether it works. Without a bag on the
+  // request, a `{{context:}}` tool was unreachable through it and could only be
+  // exercised by binding it to an agent and driving a generation.
+  describe('tool_context on POST /tools/:tool_id/call', () => {
+    let ctxServer: http.Server;
+    let ctxServerUrl: string;
+    let lastCtxRequest: {
+      headers: http.IncomingHttpHeaders;
+      body: unknown;
+    };
+
+    beforeAll(async () => {
+      ctxServer = http.createServer((req, res) => {
+        const chunks: Buffer[] = [];
+        req.on('data', (chunk: Buffer) => {
+          chunks.push(chunk);
+        });
+        req.on('end', () => {
+          const raw = Buffer.concat(chunks).toString('utf-8');
+          lastCtxRequest = {
+            headers: req.headers,
+            body: raw ? JSON.parse(raw) : undefined,
+          };
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ ok: true }));
+        });
+      });
+      await new Promise<void>((resolve) => {
+        ctxServer.listen(0, '127.0.0.1', resolve);
+      });
+      const { port } = ctxServer.address() as AddressInfo;
+      ctxServerUrl = `http://127.0.0.1:${port}`;
+    });
+
+    afterAll(async () => {
+      await new Promise<void>((resolve) => {
+        ctxServer.close(() => {
+          resolve();
+        });
+      });
+    });
+
+    const createContextTool = async (name: string, extra?: object) => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name,
+          type: 'http',
+          execute: {
+            url: `${ctxServerUrl}/do`,
+            method: 'POST',
+            headers: { Authorization: 'Bearer {{context:ocaToken}}' },
+          },
+          ...extra,
+        });
+      expect(res.status).toBe(201);
+      return res.body.id as string;
+    };
+
+    test('resolves a {{context:...}} header from the call bag', async () => {
+      const id = await createContextTool('call-ctx-header-tool');
+
+      const res = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${id}/call`)
+        .send({
+          input: { q: 'hello' },
+          tool_context: { ocaToken: 'tok-abc123' },
+        });
+
+      expect(res.status).toBe(200);
+      expect(lastCtxRequest.headers.authorization).toBe('Bearer tok-abc123');
+    });
+
+    test('forwards every key as a prefixed context header', async () => {
+      const id = await createContextTool('call-ctx-forward-tool');
+
+      const res = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${id}/call`)
+        .send({
+          input: {},
+          tool_context: { ocaToken: 'tok-abc123', tenant: 'acme' },
+        });
+
+      expect(res.status).toBe(200);
+      // Header names arrive lowercased (RFC 9110 §5.1).
+      expect(lastCtxRequest.headers['x-soat-context-ocatoken']).toBe(
+        'tok-abc123'
+      );
+      expect(lastCtxRequest.headers['x-soat-context-tenant']).toBe('acme');
+    });
+
+    test('a {{context:...}} tool called with no bag still fails with MISSING_TOOL_CONTEXT_KEY', async () => {
+      const id = await createContextTool('call-ctx-missing-tool');
+
+      const res = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${id}/call`)
+        .send({ input: {} });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('MISSING_TOOL_CONTEXT_KEY');
+    });
+
+    // This route has no session, so there is no server-derived identity to
+    // stamp — which is exactly why the reserved keys must be stripped rather
+    // than forwarded. A caller reaching them here would forge the identity
+    // headers a downstream tool trusts (#843/#850/#851).
+    test('strips caller-supplied reserved identity keys', async () => {
+      const id = await createContextTool('call-ctx-reserved-tool');
+
+      const res = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${id}/call`)
+        .send({
+          input: {},
+          tool_context: {
+            ocaToken: 'tok-abc123',
+            sessionId: 'sess_forged',
+            actorId: 'actor_forged',
+            actorExternalId: 'ext_forged',
+          },
+        });
+
+      expect(res.status).toBe(200);
+      expect(
+        lastCtxRequest.headers['x-soat-context-sessionid']
+      ).toBeUndefined();
+      expect(lastCtxRequest.headers['x-soat-context-actorid']).toBeUndefined();
+      expect(
+        lastCtxRequest.headers['x-soat-context-actorexternalid']
+      ).toBeUndefined();
+      expect(lastCtxRequest.headers['x-soat-context-ocatoken']).toBe(
+        'tok-abc123'
+      );
+    });
+
+    // Casing is not a way around the strip: header names are case-insensitive,
+    // so `SESSIONID` would land on the same header as `sessionId`.
+    test('strips a reserved key supplied in a different casing', async () => {
+      const id = await createContextTool('call-ctx-reserved-casing-tool');
+
+      const res = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${id}/call`)
+        .send({
+          input: {},
+          tool_context: { ocaToken: 'tok-abc123', SESSIONID: 'sess_forged' },
+        });
+
+      expect(res.status).toBe(200);
+      expect(
+        lastCtxRequest.headers['x-soat-context-sessionid']
+      ).toBeUndefined();
+    });
+
+    test('rejects a key outside the header-name grammar', async () => {
+      const id = await createContextTool('call-ctx-bad-key-tool');
+
+      const res = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${id}/call`)
+        .send({ input: {}, tool_context: { 'oca Token': 'tok-abc123' } });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_TOOL_CONTEXT_KEY');
+    });
+
+    // The allowlist bounds egress wherever the bag comes from, so this entry
+    // point is narrowed by it exactly like a generation-driven call.
+    test("honors the tool's context_keys allowlist", async () => {
+      const id = await createContextTool('call-ctx-allowlist-tool', {
+        context_keys: ['ocaToken'],
+      });
+
+      const res = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${id}/call`)
+        .send({
+          input: {},
+          tool_context: { ocaToken: 'tok-abc123', tenant: 'acme' },
+        });
+
+      expect(res.status).toBe(200);
+      expect(lastCtxRequest.headers['x-soat-context-ocatoken']).toBe(
+        'tok-abc123'
+      );
+      expect(lastCtxRequest.headers['x-soat-context-tenant']).toBeUndefined();
+    });
+
+    // #1148 put `{{context:}}` in `preset_parameters`; the bag reaching this
+    // route has to resolve those too, or the route covers only half the surface.
+    test('resolves a {{context:...}} preset parameter from the call bag', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'call-ctx-preset-tool',
+          type: 'http',
+          execute: { url: `${ctxServerUrl}/charge`, method: 'POST' },
+          preset_parameters: { account_id: '{{context:accountId}}' },
+        });
+      expect(res.status).toBe(201);
+
+      const callRes = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${res.body.id}/call`)
+        .send({
+          input: { amount: 42 },
+          tool_context: { accountId: 'acct_from_context' },
+        });
+
+      expect(callRes.status).toBe(200);
+      expect(lastCtxRequest.body).toEqual({
+        account_id: 'acct_from_context',
+        amount: 42,
+      });
+    });
+
+    test('a non-object tool_context is ignored rather than rejected', async () => {
+      const id = await createContextTool('call-ctx-nonobject-tool');
+
+      const res = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${id}/call`)
+        .send({ input: {}, tool_context: 'nope' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('MISSING_TOOL_CONTEXT_KEY');
+    });
+  });
 });

@@ -1026,6 +1026,27 @@ components:
             tool's `preset_parameters` before execution; a preset value wins
             over the same key sent here.
           additionalProperties: true
+        tool_context:
+          type: object
+          additionalProperties:
+            type: string
+          description: >
+            Key/value context for this call, forwarded to the tool as
+            `X-Soat-Context-<key>` request headers and resolving any
+            `{{context:<key>}}` token in the tool's `execute.headers`,
+            `mcp.headers` or `preset_parameters`. Narrowed by the tool's
+            `context_keys` allowlist when it sets one.
+
+            This route has no session, so it stamps no server-derived identity:
+            the reserved keys `sessionId`, `actorId` and `actorExternalId` are
+            dropped from this bag (in any casing) rather than forwarded, so a
+            downstream tool can still trust that a context header naming one is
+            server-derived. Every other key becomes an HTTP header name and must
+            match that grammar, or the call fails with
+            `INVALID_TOOL_CONTEXT_KEY`.
+          example:
+            tenantId: acme
+            userToken: tok_abc123
 
     ErrorResponse:
       type: object

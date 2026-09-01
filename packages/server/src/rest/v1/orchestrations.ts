@@ -20,6 +20,7 @@ import {
 
 import {
   parsePagination,
+  parseToolContextBody,
   requestPrincipalFromCtx,
   requireAuth,
   requireProjectAccess,
@@ -32,7 +33,6 @@ import {
 } from './orchestrationAuth';
 import {
   parseRunInput,
-  parseRunToolContext,
   parseUpdateBody,
   parseVersionLabel,
   type RawCreateBody,
@@ -262,7 +262,7 @@ orchestrationsRouter.post('/orchestration-runs', async (ctx: Context) => {
   if (!scope) return;
 
   const input = parseRunInput(body.input);
-  const toolContext = parseRunToolContext(body.tool_context);
+  const toolContext = parseToolContextBody(body.tool_context);
   // Rejected before the run row is written: an async run answers 201 long
   // before it executes, so a bag the caller cannot be told about later has to
   // fail while the caller is still listening.
