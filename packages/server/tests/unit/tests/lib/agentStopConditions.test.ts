@@ -245,6 +245,77 @@ describe('stop_conditions', () => {
     expect(requestCount).toBe(1);
   });
 
+  const runResume = (args: {
+    generationId: string;
+    stepsAlreadySpent: number;
+  }) => {
+    return runToolOutputsGeneration({
+      generationId: args.generationId,
+      system: undefined,
+      nonSystemMessages: [{ role: 'user', content: 'resume the thing' }],
+      pending: {
+        agentId: agentPublicId,
+        projectId: projectDbId,
+        projectPublicId,
+        traceId: `trc_${args.generationId}`,
+        parentTraceId: null,
+        rootTraceId: null,
+        generationId: args.generationId,
+        initiatorGenerationId: null,
+        pendingToolCalls: [],
+        messages: [],
+        // What the paused turn already spent. Serialized steps are opaque here;
+        // only how many there are decides what budget is left.
+        steps: Array.from({ length: args.stepsAlreadySpent }, () => {
+          return {};
+        }),
+        resolvedModel: buildModel({
+          provider: 'ollama',
+          secretValue: null,
+          model: 'mock-model',
+          baseUrl: stubBaseUrl,
+        }),
+        resolvedTools: resolvedTools(),
+        agentConfig: {
+          instructions: null,
+          maxSteps: MAX_STEPS,
+          toolChoice: 'auto',
+          stopConditions: null,
+          activeToolIds: null,
+          stepRules: null,
+          temperature: null,
+          outputSchema: null,
+        },
+      },
+    });
+  };
+
+  test('the step budget spans the pause instead of restarting', async () => {
+    // `max_steps` bounds a *turn*, and a resumption after submit-tool-outputs
+    // continues the same turn. Restarting the count handed every resumption a
+    // fresh budget, so a turn could spend `max_steps` per submit forever.
+    const result = await runResume({
+      generationId: 'gen_stopcond_resume_budget',
+      stepsAlreadySpent: MAX_STEPS - 1,
+    });
+
+    expect(requestCount).toBe(1);
+    expect(result.steps).toHaveLength(1);
+  });
+
+  test('a resumption with the budget already spent calls no model', async () => {
+    // The turn is over on arrival: the pause and the last allowed step can
+    // coincide. One more provider call per submit is still an unbounded turn.
+    const result = await runResume({
+      generationId: 'gen_stopcond_resume_spent',
+      stepsAlreadySpent: MAX_STEPS,
+    });
+
+    expect(requestCount).toBe(0);
+    expect(result.steps).toHaveLength(0);
+    expect(result.finishReason).toBe('tool-calls');
+  });
+
   test('a chain-scoped condition does not bound the per-turn loop', async () => {
     // `maxChainGenerations` bounds the *chain*, evaluated when a continuation is
     // spawned (`generationChain.test.ts`). Treating it as a `stopWhen` predicate

@@ -23,11 +23,12 @@ import {
 } from './agentGenerationTypes';
 import {
   buildPrepareStep,
+  normalizeToolChoice,
   resolveAgentStepRuleToolIdToName,
   resolveStepRuleToolIdToName,
   type TurnToolChoice,
 } from './agentStepRules';
-import { resolveStopWhen } from './agentStopConditions';
+import { isTurnBudgetSpent, resolveStopWhen } from './agentStopConditions';
 import {
   fireCompletionSideEffects,
   recordContinuationFailure,
@@ -172,6 +173,8 @@ type SettleSaveArgs = {
     text: string;
     finishReason: string;
   };
+  /** Steps the turn spent before `result` — empty on its first segment. */
+  priorSteps?: unknown[];
   remainingDepth?: number | null;
 };
 
@@ -195,6 +198,7 @@ const settlePartition = (args: {
         syntheticToolResults: args.partition.synthesizedResults,
         allMessages: args.save.allMessages,
         result: args.save.result,
+        priorSteps: args.save.priorSteps,
         model: args.save.model,
         typedAgent: args.save.typedAgent,
         agentId: args.pending.agentId,
@@ -391,12 +395,45 @@ export const runNonStreamGeneration = async (args: {
   });
 };
 
+/**
+ * The result of a turn whose step budget ran out at the pause: no model call,
+ * nothing new to record. `tool-calls` is the finish reason the exhausted turn
+ * actually had — the steps it spent all ended in one — and it is what
+ * `resolveStopReason` reads as `max_steps` once the turn's whole step count is
+ * weighed against the budget.
+ */
+const exhaustedTurnResult = (): AgentRunResult => {
+  return {
+    steps: [],
+    response: { messages: [], modelId: '' },
+    text: '',
+    finishReason: 'tool-calls',
+  };
+};
+
 export const runToolOutputsGeneration = async (args: {
   generationId: string;
   pending: PendingGeneration;
   system: Instructions | undefined;
   nonSystemMessages: unknown[];
 }): Promise<AgentRunResult> => {
+  // A resume continues the turn that paused, so it inherits that turn's spent
+  // steps rather than starting a fresh budget.
+  const stepsAlreadySpent = args.pending.steps?.length ?? 0;
+  if (
+    isTurnBudgetSpent({
+      maxSteps: args.pending.agentConfig.maxSteps,
+      stepsAlreadySpent,
+    })
+  ) {
+    log(
+      'runToolOutputsGeneration: turn budget spent generationId=%s steps=%d',
+      args.generationId,
+      stepsAlreadySpent
+    );
+    return exhaustedTurnResult();
+  }
+
   const toolIdToName = await resolveStepRuleToolIdToName({
     stepRules: args.pending.agentConfig.stepRules,
     projectId: args.pending.projectId,
@@ -414,8 +451,16 @@ export const runToolOutputsGeneration = async (args: {
         stepRules: args.pending.agentConfig.stepRules,
         logContext: 'non_stream',
         toolIdToName,
+        stepsAlreadySpent,
       }),
-      stopWhen: resolveStopWhen(args.pending.agentConfig),
+      // The turn is the agent's on both sides of the pause. What keeps a
+      // forcing value from demanding the same tool forever is the budget above,
+      // not a rewrite of the choice the author declared.
+      toolChoice: normalizeToolChoice(args.pending.agentConfig.toolChoice),
+      stopWhen: resolveStopWhen({
+        ...args.pending.agentConfig,
+        stepsAlreadySpent,
+      }),
       temperature: args.pending.agentConfig.temperature ?? undefined,
       maxRetries: routedMaxRetries(args.pending.resolvedModel),
       output: buildStructuredOutput(args.pending.agentConfig.outputSchema),
@@ -500,6 +545,7 @@ export const resolveToolOutputsResult = async (args: {
   resumeCount?: number;
 }): Promise<GenerationResult> => {
   const resumeCount = args.resumeCount ?? 0;
+  const priorSteps = args.pending.steps ?? [];
   const partition = await partitionClientCalls({
     steps: args.result.steps,
     resolvedTools: args.pending.resolvedTools,
@@ -526,10 +572,7 @@ export const resolveToolOutputsResult = async (args: {
         ...(args.allMessages as Array<{ role: string; content: unknown }>),
         ...(args.result.response?.messages ?? []),
       ],
-      steps: [
-        ...(args.pending.steps ?? []),
-        ...serializeSteps(args.result.steps),
-      ],
+      steps: [...priorSteps, ...serializeSteps(args.result.steps)],
     };
     return settlePartition({
       pending: nextPending,
@@ -542,6 +585,7 @@ export const resolveToolOutputsResult = async (args: {
           content: unknown;
         }>,
         result: args.result as SettleSaveArgs['result'],
+        priorSteps,
         remainingDepth: null,
       },
       resumeCount,

@@ -142,6 +142,8 @@ const storePendingGenerationState = (args: {
   syntheticToolResults?: ClientToolResult[];
   allMessages: Array<{ role: string; content: unknown }>;
   result: { steps: unknown[]; response: { messages: unknown[] } };
+  /** Steps this turn spent before the segment `result` describes. */
+  priorSteps?: unknown[];
   model: LanguageModel;
   resolvedTools: Record<string, Tool>;
   toolContext?: Record<string, string> | null;
@@ -153,7 +155,12 @@ const storePendingGenerationState = (args: {
   const syntheticToolResults = args.syntheticToolResults ?? [];
   const pendingToolCalls = toPendingToolCalls(args.pendingToolCalls);
   const messages = [...args.allMessages, ...args.result.response.messages];
-  const steps = serializeSteps(args.result.steps);
+  // The whole turn's steps, not the last segment's: a turn can pause more than
+  // once, and both its step budget and its trace are counted across all of them.
+  const steps = [
+    ...(args.priorSteps ?? []),
+    ...serializeSteps(args.result.steps),
+  ];
 
   pendingGenerations.set(args.generationId, {
     agentId: args.agentId,
@@ -202,6 +209,7 @@ export const savePendingGeneration = (args: {
   syntheticToolResults?: ClientToolResult[];
   allMessages: Array<{ role: string; content: unknown }>;
   result: { steps: unknown[]; response: { messages: unknown[] } };
+  priorSteps?: unknown[];
   model: LanguageModel;
   typedAgent: TypedAgent;
   agentId: string;

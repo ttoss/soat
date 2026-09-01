@@ -198,6 +198,22 @@ type CompletionSideEffectsArgs = {
   completedResult: GenerationResult;
 };
 
+/**
+ * Meters the response that completed the turn — unless there was none. A
+ * segment that never called the model (a turn arriving at
+ * `submit-tool-outputs` with its step budget already spent) consumed nothing,
+ * and metering it would file a zero-token event against an unknown model, on
+ * the same generation as the calls that did consume tokens.
+ */
+const meterCompletion = (args: CompletionSideEffectsArgs): Promise<void> => {
+  if (args.result.usage === undefined) return Promise.resolve();
+  return recordGenerationUsage({
+    generationId: args.generationId,
+    model: args.result.response?.modelId ?? '',
+    usage: args.result.usage,
+  });
+};
+
 const runCompletionSideEffects = async (
   args: CompletionSideEffectsArgs
 ): Promise<void> => {
@@ -221,7 +237,9 @@ const runCompletionSideEffects = async (
       completedAt: new Date(),
       stopReason: resolveStopReason({
         finishReason: args.result.finishReason,
-        stepCount: args.result.steps.length,
+        // The turn's steps, not this segment's: a turn spends one budget
+        // across every pause it takes.
+        stepCount: allSteps.length,
         maxSteps: args.pending.agentConfig.maxSteps,
       }),
     }),
@@ -229,14 +247,10 @@ const runCompletionSideEffects = async (
       generationId: args.generationId,
       model: args.pending.resolvedModel,
     }),
-    // A separate completion path from the two that already meter usage. Without
-    // this, a generation that paused for a client tool never got a usage event
-    // despite the provider's response carrying real usage.
-    recordGenerationUsage({
-      generationId: args.generationId,
-      model: args.result.response?.modelId ?? '',
-      usage: args.result.usage,
-    }),
+    // A separate completion path from the two that already meter usage: a
+    // generation that paused for a client tool is metered here, on the response
+    // that finishes it.
+    meterCompletion(args),
   ]);
 
   try {

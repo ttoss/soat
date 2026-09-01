@@ -171,6 +171,26 @@ describe('buildPrepareStep', () => {
     expect(prepareStep!({ stepNumber: 1 })).toEqual({});
   });
 
+  test('buildPrepareStep numbers steps from the start of the turn, not the segment', () => {
+    // A resume after submit-tool-outputs continues the same turn, so its first
+    // model call is step N+1 of that turn. Numbering it 1 again re-applied
+    // every step-1 rule on every resumption — a step-1 force on a client tool
+    // would demand that tool for as long as the caller kept submitting.
+    const prepareStep = buildPrepareStep({
+      stepRules: [
+        { step: 1, tool_choice: { type: 'tool', tool_name: 'lookup' } },
+        { step: 3, tool_choice: 'required' },
+      ],
+      logContext: 'non_stream',
+      stepsAlreadySpent: 2,
+    });
+
+    expect(prepareStep).toBeDefined();
+    // The turn's step 3, which is this segment's first.
+    expect(prepareStep!({ stepNumber: 0 })).toEqual({ toolChoice: 'required' });
+    expect(prepareStep!({ stepNumber: 1 })).toEqual({});
+  });
+
   test('buildPrepareStep honors the wire-shaped (snake_case) step rule keys', () => {
     // step_rules are stored verbatim from the request body, and the wire is
     // snake_case: { step, tool_choice: { type, tool_name } } is the documented

@@ -1010,6 +1010,315 @@ describe('Agent Generation Routes', () => {
 
   // ── Streaming provider rejections (#1084) ─────────────────────────────────
 
+  /**
+   * A forced `tool_choice` used to be dropped on the resumed segment, so the
+   * config an author wrote and the request that went out disagreed. The turn
+   * is the agent's on both sides of the pause — which is only safe because the
+   * step budget is the turn's too, and the same one on both sides.
+   */
+  describe('a turn resumed after submit-tool-outputs (local stub server)', () => {
+    let stubServer: Server;
+    let stubBaseUrl: string;
+    let userToken: string;
+    let forcingAgentId: string;
+    let stepRuleAgentId: string;
+    let projectPublicId: string;
+    let aiProviderId: string;
+    let clientToolId: string;
+    let requestBodies: Array<Record<string, unknown>>;
+
+    /** Whether a request's `tool_choice` forbids a final assistant message. */
+    const forcesATool = (toolChoice: unknown): boolean => {
+      return (
+        toolChoice === 'required' ||
+        (typeof toolChoice === 'object' && toolChoice !== null)
+      );
+    };
+
+    // Honors `tool_choice` the way a real provider does: forced, it can only
+    // answer with the client-tool call (so the turn can only pause); unforced,
+    // it finishes with text. That difference is what makes the resumed
+    // segment's choice observable in the outcome, not just in the request.
+    const startStubServer = async (): Promise<string> => {
+      stubServer = createServer((req, res: ServerResponse) => {
+        let raw = '';
+        req.on('data', (chunk) => {
+          raw += chunk;
+        });
+        req.on('end', () => {
+          const body = JSON.parse(raw);
+          requestBodies.push(body);
+          const forced = forcesATool(body.tool_choice);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              id: 'chatcmpl-forced',
+              object: 'chat.completion',
+              created: 0,
+              model: 'stub-model',
+              choices: [
+                {
+                  index: 0,
+                  message: forced
+                    ? {
+                        role: 'assistant',
+                        content: null,
+                        tool_calls: [
+                          {
+                            id: `call_forced_${requestBodies.length}`,
+                            type: 'function',
+                            function: {
+                              name: 'confirm_dialog',
+                              arguments: '{"message":"ok?"}',
+                            },
+                          },
+                        ],
+                      }
+                    : { role: 'assistant', content: 'all set' },
+                  finish_reason: forced ? 'tool_calls' : 'stop',
+                },
+              ],
+              usage: {
+                prompt_tokens: 1,
+                completion_tokens: 1,
+                total_tokens: 2,
+              },
+            })
+          );
+        });
+      });
+      await new Promise<void>((resolve) => {
+        stubServer.listen(0, '127.0.0.1', resolve);
+      });
+      const { port } = stubServer.address() as AddressInfo;
+      return `http://127.0.0.1:${port}`;
+    };
+
+    beforeAll(async () => {
+      requestBodies = [];
+      stubBaseUrl = await startStubServer();
+
+      const bootstrapRes = await testClient
+        .post('/api/v1/users/bootstrap')
+        .send({ username: 'agentforcedadmin', password: 'supersecret' });
+      const adminToken =
+        bootstrapRes.status === 201
+          ? await loginAs('agentforcedadmin', 'supersecret')
+          : await loginAs('agentgeneradmin', 'supersecret');
+
+      const userRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/users')
+        .send({ username: 'agentforceduser', password: 'agentforcedpass' });
+      userToken = await loginAs('agentforceduser', 'agentforcedpass');
+
+      const policyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [
+              {
+                effect: 'Allow',
+                action: [
+                  'agents:CreateAgent',
+                  'agents:CreateAgentGeneration',
+                  'tools:CreateTool',
+                  'usage:ListUsageMeters',
+                ],
+              },
+            ],
+          },
+        });
+      await authenticatedTestClient(adminToken)
+        .put(`/api/v1/users/${userRes.body.id}/policies`)
+        .send({ policy_ids: [policyRes.body.id] });
+
+      const projectRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'AgentGeneration Forced Project' });
+      projectPublicId = projectRes.body.id;
+
+      const aiProvRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectRes.body.id,
+          name: 'Forced Stub Provider',
+          provider: 'ollama',
+          default_model: 'stub-model',
+          base_url: stubBaseUrl,
+        });
+
+      aiProviderId = aiProvRes.body.id;
+
+      const toolRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectRes.body.id,
+          name: 'confirm_dialog',
+          type: 'client',
+          description: 'Asks the caller to confirm',
+          parameters: {
+            type: 'object',
+            properties: { message: { type: 'string' } },
+          },
+        });
+
+      const agentRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProvRes.body.id,
+          project_id: projectRes.body.id,
+          name: 'Forced Client Tool Agent',
+          tool_bindings: [{ tool_id: toolRes.body.id }],
+          tool_choice: { type: 'tool', tool_name: 'confirm_dialog' },
+          stop_conditions: [
+            { type: 'hasToolCall', tool_name: 'confirm_dialog' },
+          ],
+          max_steps: 2,
+        });
+      forcingAgentId = agentRes.body.id;
+      clientToolId = toolRes.body.id;
+
+      const stepRuleAgentRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectPublicId,
+          name: 'Step Rule Client Tool Agent',
+          tool_bindings: [{ tool_id: clientToolId }],
+          step_rules: [
+            {
+              step: 1,
+              tool_choice: { type: 'tool', tool_name: 'confirm_dialog' },
+            },
+          ],
+          max_steps: 4,
+        });
+      stepRuleAgentId = stepRuleAgentRes.body.id;
+    });
+
+    afterAll(async () => {
+      await new Promise<void>((resolve, reject) => {
+        stubServer.close((err) => {
+          return err ? reject(err) : resolve();
+        });
+      });
+    });
+
+    const submit = (args: { generationId: string; toolCallId: string }) => {
+      return authenticatedTestClient(userToken)
+        .post(
+          `/api/v1/agents/${forcingAgentId}/generate/${args.generationId}/tool-outputs`
+        )
+        .send({
+          tool_outputs: [{ tool_call_id: args.toolCallId, output: 'yes' }],
+        });
+    };
+
+    const toolChoiceOf = (index: number) => {
+      return requestBodies[index]?.tool_choice;
+    };
+
+    test('the whole turn runs under the forced choice and ends on its budget', async () => {
+      const started = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${forcingAgentId}/generate?wait=true`)
+        .send({ messages: [{ role: 'user', content: 'confirm please' }] });
+
+      expect(started.status).toBe(200);
+      expect(started.body.status).toBe('requires_action');
+      const generationId = started.body.id;
+      expect(toolChoiceOf(0)).toEqual({
+        type: 'function',
+        function: { name: 'confirm_dialog' },
+      });
+
+      // Step 2 of 2: the resumed segment carries the agent's choice, not the
+      // SDK default.
+      const resumed = await submit({
+        generationId,
+        toolCallId: started.body.required_action.tool_calls[0].id,
+      });
+
+      expect(resumed.status).toBe(200);
+      expect(resumed.body.status).toBe('requires_action');
+      expect(requestBodies).toHaveLength(2);
+      expect(toolChoiceOf(1)).toEqual({
+        type: 'function',
+        function: { name: 'confirm_dialog' },
+      });
+
+      // The budget is spent, so the next submit ends the turn — a forced
+      // resumption cannot buy another model call by pausing again.
+      const exhausted = await submit({
+        generationId,
+        toolCallId: resumed.body.required_action.tool_calls[0].id,
+      });
+
+      expect(exhausted.status).toBe(200);
+      expect(exhausted.body.status).toBe('completed');
+      expect(requestBodies).toHaveLength(2);
+
+      // The terminal record write is fire-and-forget, so poll for it rather
+      // than racing the response.
+      let stopReason: string | null = null;
+      for (let attempt = 0; attempt < 20 && stopReason === null; attempt += 1) {
+        const row = await db.Generation.findOne({
+          where: { publicId: generationId },
+        });
+        stopReason = row?.stopReason ?? null;
+        if (stopReason === null) await sleep(50);
+      }
+      expect(stopReason).toBe('max_steps');
+
+      // The submit that ended the turn called no model, so it meters nothing —
+      // a zero-token event would land on the same generation and overwrite the
+      // row the turn's real calls recorded.
+      const metersRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/meters?generation_id=${generationId}`
+      );
+      expect(metersRes.status).toBe(200);
+      const models: string[] = metersRes.body.data.map(
+        (row: { model: string }) => {
+          return row.model;
+        }
+      );
+      expect(models).not.toContain('unknown');
+    });
+
+    test('a step rule forces the step it names, once per turn', async () => {
+      {
+        // The alternative to forcing at agent level. Rules are numbered from
+        // the first step of the turn, so step 1 forces the call that pauses and
+        // the resumed segment — step 2 of the same turn — is free to answer.
+        const started = await authenticatedTestClient(userToken)
+          .post(`/api/v1/agents/${stepRuleAgentId}/generate?wait=true`)
+          .send({ messages: [{ role: 'user', content: 'confirm please' }] });
+
+        expect(started.body.status).toBe('requires_action');
+        const before = requestBodies.length;
+
+        const resumed = await authenticatedTestClient(userToken)
+          .post(
+            `/api/v1/agents/${stepRuleAgentId}/generate/${started.body.id}/tool-outputs`
+          )
+          .send({
+            tool_outputs: [
+              {
+                tool_call_id: started.body.required_action.tool_calls[0].id,
+                output: 'yes',
+              },
+            ],
+          });
+
+        expect(requestBodies[before]?.tool_choice).not.toEqual({
+          type: 'function',
+          function: { name: 'confirm_dialog' },
+        });
+        expect(resumed.body.status).toBe('completed');
+        expect(resumed.body.output.content).toBe('all set');
+      }
+    });
+  });
+
   describe('POST /api/v1/agents/:id/generate - streaming provider rejection', () => {
     // Rejects every completion the way a provider rejects an unavailable model,
     // so the real `streamText` call raises a genuine `APICallError`. A mock
