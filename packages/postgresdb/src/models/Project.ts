@@ -41,6 +41,13 @@ export class Project extends Model {
   @Column({ type: DataType.INTEGER, allowNull: true })
   declare maxConcurrentRuns: number | null;
 
+  // Generations one continuation chain may hold before the platform stops
+  // resuming it, `null` to defer to the deployment-wide ceiling. Every ceiling
+  // (deployment, project, agent) can only make the budget smaller, so this is
+  // the operator's bound on chains an agent author cannot opt out of.
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare maxChainGenerations: number | null;
+
   // Inherited by consumers naming neither a route nor a provider; `null` forces
   // every consumer to bind explicitly. A public id rather than an
   // `@ForeignKey`, because `ModelRoute` already belongs to `Project` and the FK

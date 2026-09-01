@@ -115,7 +115,13 @@ type AgentVersionAuthorship = {
 
 // `toolBindings` is handled by the binding-normalization path, not copied
 // verbatim.
-const AGENT_SCALAR_FIELDS = [
+/**
+ * Every agent config column a write may set. Exported because it is also the
+ * contract `agentConfigEnforcement.test.ts` holds the runtime to: a field the
+ * API accepts and stores must reach a place that acts on it, which
+ * `active_tool_ids` (#811) and `stop_conditions` (#1167) both failed to do.
+ */
+export const AGENT_SCALAR_FIELDS = [
   'name',
   'instructions',
   'model',

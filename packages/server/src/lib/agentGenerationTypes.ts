@@ -56,7 +56,12 @@ export type TypedAgent = {
   version?: number;
   /** Staged rollout pointer, read by the served-version resolver. */
   activeRelease?: unknown;
-  project: { id: unknown; publicId: string; guardrailIds?: string[] | null };
+  project: {
+    id: unknown;
+    publicId: string;
+    guardrailIds?: string[] | null;
+    maxChainGenerations?: number | null;
+  };
   // Exactly one of these is set (enforced on every agent write path by
   // `validateModelRouteExclusivity`): a pinned provider, or a model route whose
   // ordered targets resolve the completion model with failover.

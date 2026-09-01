@@ -516,6 +516,55 @@ describe('Projects', () => {
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
+
+    test('defaults to null (no project ceiling) max_chain_generations', async () => {
+      const res = await authenticatedTestClient(adminToken).get(
+        `/api/v1/projects/${projectId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.max_chain_generations).toBeNull();
+    });
+
+    test('admin can set and clear max_chain_generations', async () => {
+      const set = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/projects/${projectId}`)
+        .send({ max_chain_generations: 25 });
+
+      expect(set.status).toBe(200);
+      expect(set.body.max_chain_generations).toBe(25);
+
+      const getRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/projects/${projectId}`
+      );
+      expect(getRes.body.max_chain_generations).toBe(25);
+
+      const cleared = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/projects/${projectId}`)
+        .send({ max_chain_generations: null });
+
+      expect(cleared.status).toBe(200);
+      expect(cleared.body.max_chain_generations).toBeNull();
+    });
+
+    test.each([0, -1, 2.5])(
+      'rejects max_chain_generations %p with 400',
+      async (value) => {
+        const response = await authenticatedTestClient(adminToken)
+          .patch(`/api/v1/projects/${projectId}`)
+          .send({ max_chain_generations: value });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      }
+    );
+
+    test('a non-admin cannot set max_chain_generations', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/projects/${projectId}`)
+        .send({ max_chain_generations: 5 });
+
+      expect(response.status).toBe(403);
+    });
   });
 
   describe('trace content lifecycle settings', () => {

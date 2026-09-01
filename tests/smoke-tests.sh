@@ -104,6 +104,32 @@ if [ "$(printf '%s\n' "$PROJECT_LIMIT_RESP" | jq -r '.max_concurrent_runs')" != 
 fi
 echo "Project concurrency limit: OK"
 
+# 3a-ii-a. Set the per-project continuation-chain ceiling. Defaults to null (no
+# project ceiling, leaving the deployment-wide one), and clears back to it — the
+# rest of the suite must not run under a chain budget it did not ask for.
+echo "--- Project continuation-chain ceiling ---"
+PROJECT_CHAIN_DEFAULT=$($SOAT_CLI get-project --project-id "$PROJECT_PUBLIC_ID")
+if [ "$(printf '%s\n' "$PROJECT_CHAIN_DEFAULT" | jq -r '.max_chain_generations')" != "null" ]; then
+  echo "ERROR: a new project did not default to no chain ceiling" >&2
+  echo "$PROJECT_CHAIN_DEFAULT" >&2
+  exit 1
+fi
+
+PROJECT_CHAIN_RESP=$($SOAT_CLI update-project --project-id "$PROJECT_PUBLIC_ID" --max_chain_generations 25)
+if [ "$(printf '%s\n' "$PROJECT_CHAIN_RESP" | jq -r '.max_chain_generations')" != "25" ]; then
+  echo "ERROR: update-project did not set max_chain_generations" >&2
+  echo "$PROJECT_CHAIN_RESP" >&2
+  exit 1
+fi
+
+PROJECT_CHAIN_CLEARED=$($SOAT_CLI update-project --project-id "$PROJECT_PUBLIC_ID" --max_chain_generations null)
+if [ "$(printf '%s\n' "$PROJECT_CHAIN_CLEARED" | jq -r '.max_chain_generations')" != "null" ]; then
+  echo "ERROR: update-project did not clear max_chain_generations" >&2
+  echo "$PROJECT_CHAIN_CLEARED" >&2
+  exit 1
+fi
+echo "Project chain ceiling set/cleared: OK"
+
 # 3a-ii-b. Trace-content lifecycle settings (#837/#838). Retention is opt-in,
 # so a fresh project must start with the window disabled and content stored.
 echo "--- Project trace-content lifecycle settings ---"

@@ -4,6 +4,7 @@ import { eventBus, type SoatEvent } from 'src/lib/eventBus';
 import {
   checkGenerationQuota,
   evaluateGenerationQuotas,
+  quotaBreachError,
 } from 'src/lib/quotaEnforcement';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
@@ -147,8 +148,9 @@ describe('evaluateGenerationQuotas', () => {
   };
 
   // An unpriced event contributes 0, so a `cost_usd` cap on a project with no
-  // price book can never breach — healthy-looking while protecting nothing.
-  // These cover the exception that surfaces the dead cap.
+  // price book can never breach on its limit. These cover both halves of the
+  // response: the triage item that names the dead cap, and the refusal that
+  // stops an `enforce` cap from waving through spend it cannot measure.
   describe('unpriced cost_usd quotas', () => {
     const unpricedExceptions = async (projectInternalId: number) => {
       return db.ExceptionItem.findAll({
@@ -156,7 +158,7 @@ describe('evaluateGenerationQuotas', () => {
       });
     };
 
-    test('files an exception when every event in the window is unpriced', async () => {
+    test('blocks and files an exception when every event in the window is unpriced', async () => {
       const ctx = await freshProjectAndAgent('genquota-unpriced-file');
       await seedUsageEvent({
         projectInternalId: ctx.projectInternalId,
@@ -171,13 +173,15 @@ describe('evaluateGenerationQuotas', () => {
         limit: 5,
       });
 
-      // The aggregate is 0 because nothing is priced, so nothing blocks...
+      // The aggregate is 0 because nothing is priced, so the limit comparison
+      // can never fire — the cap refuses the spend it cannot measure instead.
       const breach = await evaluateGenerationQuotas({
         agentId: ctx.agentPublicId,
       });
-      expect(breach).toBeNull();
+      expect(breach?.reason).toBe('unpriced_usage');
+      expect(breach?.quotaId).toBe(quota.publicId);
 
-      // ...but the cap is silently dead, which is what the exception reports.
+      // The triage item is filed alongside the refusal, not instead of it.
       const items = await unpricedExceptions(ctx.projectInternalId);
       expect(items).toHaveLength(1);
       expect(items[0].severity).toBe('warning');
@@ -267,6 +271,57 @@ describe('evaluateGenerationQuotas', () => {
       const items = await unpricedExceptions(ctx.projectInternalId);
       expect(items).toHaveLength(1);
       expect(items[0].occurrenceCount).toBe(3);
+    });
+
+    test('does not block a monitor quota over an unpriced window', async () => {
+      // `monitor` means observe, never block — including here. The exception
+      // still names the cap, which is the whole of what monitor mode owes.
+      const ctx = await freshProjectAndAgent('genquota-unpriced-monitor');
+      await seedUsageEvent({
+        projectInternalId: ctx.projectInternalId,
+        agentInternalId: ctx.agentInternalId,
+        costUsd: null,
+      });
+      await createQuotaRow({
+        projectInternalId: ctx.projectInternalId,
+        scope: 'project',
+        metric: 'cost_usd',
+        limit: 5,
+        mode: 'monitor',
+      });
+
+      const breach = await evaluateGenerationQuotas({
+        agentId: ctx.agentPublicId,
+      });
+      expect(breach).toBeNull();
+      expect(await unpricedExceptions(ctx.projectInternalId)).toHaveLength(1);
+    });
+
+    test('reports an unpriced refusal as QUOTA_UNENFORCEABLE, not a 429', async () => {
+      // The window resetting changes nothing here, so the `Retry-After`
+      // contract a 429 carries would be a lie: configuring pricing is the fix.
+      const ctx = await freshProjectAndAgent('genquota-unpriced-code');
+      await seedUsageEvent({
+        projectInternalId: ctx.projectInternalId,
+        agentInternalId: ctx.agentInternalId,
+        costUsd: null,
+      });
+      const quota = await createQuotaRow({
+        projectInternalId: ctx.projectInternalId,
+        scope: 'project',
+        metric: 'cost_usd',
+        limit: 5,
+      });
+
+      const breach = await evaluateGenerationQuotas({
+        agentId: ctx.agentPublicId,
+      });
+      const error = quotaBreachError(breach!);
+      expect(error.code).toBe('QUOTA_UNENFORCEABLE');
+      expect(error.meta).toMatchObject({
+        quota_id: quota.publicId,
+        metric: 'cost_usd',
+      });
     });
   });
 
@@ -560,6 +615,32 @@ describe('evaluateGenerationQuotas', () => {
     }
     return captured;
   };
+
+  test('an unpriced refusal fires no quota.exceeded — nothing exceeded', async () => {
+    const ctx = await freshProjectAndAgent('genquota-unpriced-nofire');
+    await seedUsageEvent({
+      projectInternalId: ctx.projectInternalId,
+      agentInternalId: ctx.agentInternalId,
+      costUsd: null,
+    });
+    await createQuotaRow({
+      projectInternalId: ctx.projectInternalId,
+      scope: 'project',
+      metric: 'cost_usd',
+      limit: 5,
+    });
+
+    const captured = await withCapture(async () => {
+      const breach = await evaluateGenerationQuotas({
+        agentId: ctx.agentPublicId,
+      });
+      expect(breach?.reason).toBe('unpriced_usage');
+    });
+
+    // The limit was never reached — it cannot be. Firing the breach webhook
+    // would report a spend figure the platform does not have.
+    expect(captured).toHaveLength(0);
+  });
 
   test('a monitor token/cost quota fires quota.exceeded without blocking', async () => {
     const ctx = await freshProjectAndAgent('genquota-monitor-fire');

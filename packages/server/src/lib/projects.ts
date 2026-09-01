@@ -29,6 +29,7 @@ const mapProject = (project: InstanceType<(typeof db)['Project']>) => {
     guardrail_ids: project.guardrailIds,
     default_model_route_id: project.defaultModelRouteId,
     max_concurrent_runs: project.maxConcurrentRuns,
+    max_chain_generations: project.maxChainGenerations,
     audit_reads_enabled: project.auditReadsEnabled,
     trace_content_retention_days: project.traceContentRetentionDays,
     trace_content_mode: project.traceContentMode,
@@ -46,6 +47,19 @@ const validateMaxConcurrentRuns = (value: unknown): string | null => {
   if (value === null) return null;
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
     return 'max_concurrent_runs must be an integer >= 1, or null to clear it.';
+  }
+  return null;
+};
+
+/**
+ * Validates a `maxChainGenerations` value. `null` clears the project's ceiling
+ * (the deployment-wide one still applies); otherwise it must be an integer ≥ 1.
+ * Returns an error message, or `null` when valid.
+ */
+const validateMaxChainGenerations = (value: unknown): string | null => {
+  if (value === null) return null;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
+    return 'max_chain_generations must be an integer >= 1, or null to clear it.';
   }
   return null;
 };
@@ -201,6 +215,7 @@ const PROJECT_UPDATABLE_FIELDS = [
   'guardrailIds',
   'defaultModelRouteId',
   'maxConcurrentRuns',
+  'maxChainGenerations',
   'auditReadsEnabled',
   'traceContentRetentionDays',
   'traceContentMode',
@@ -225,6 +240,7 @@ const PROJECT_SCALAR_VALIDATORS: Partial<
   Record<ProjectUpdatableField, (value: unknown) => string | null>
 > = {
   maxConcurrentRuns: validateMaxConcurrentRuns,
+  maxChainGenerations: validateMaxChainGenerations,
   traceContentRetentionDays: validateTraceContentRetentionDays,
   traceContentMode: validateTraceContentMode,
 };
@@ -244,6 +260,7 @@ export const updateProject = async (args: {
   guardrailIds?: string[] | null;
   defaultModelRouteId?: string | null;
   maxConcurrentRuns?: number | null;
+  maxChainGenerations?: number | null;
   auditReadsEnabled?: boolean;
   traceContentRetentionDays?: number | null;
   traceContentMode?: string;

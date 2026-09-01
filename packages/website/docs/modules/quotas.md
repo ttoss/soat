@@ -80,9 +80,28 @@ The exclusions follow from where each metric is measured. `requests` is counted 
 
 `tokens` and `cost_usd` quotas are checked **before a generation starts**. The current window's usage is aggregated directly from the [usage meter](./usage.md) — a `cost_usd` quota sums the priced event cost, a `tokens` quota sums the billable token components (uncached input + output + cached; the non-billable `reasoning_tokens` detail is excluded). If the aggregate is at or over the limit, the new generation is blocked with `429 QUOTA_EXCEEDED` and nothing is metered for it.
 
-A `cost_usd` quota is only as good as the project's pricing. Usage events carry `cost_usd: null` when no [price-book](./usage.md#pricing) row covers them, and an unpriced event contributes `0` to the aggregate — so on a project with no effective prices a `cost_usd` cap never breaches and never blocks. A `tokens` quota has no such dependency: it sums component quantities, which are always recorded.
+A `cost_usd` quota is only as good as the project's pricing. Usage events carry `cost_usd: null` when no [price-book](./usage.md#pricing) row covers them, and an unpriced event contributes `0` to the aggregate. A `tokens` quota has no such dependency: it sums component quantities, which are always recorded.
 
-Because that is the one case where a quota fails **open**, it is not left silent: when a `cost_usd` check finds the window held metered usage but nothing priced, a `quota_unpriced` [exception](./exceptions.md) is filed (severity `warning`) carrying the quota, its limit, and the unpriced event count. It is deduped on the quota, so one dead cap is one triage item and its `occurrence_count` is the number of generations that ran unprotected. Resolve it by configuring the [price book](./usage.md#pricing) — an empty window files nothing, since a zero aggregate with nothing metered is legitimately zero.
+So a window that metered usage and priced **none** of it aggregates to `0` however much was actually spent, and the limit comparison can never fire. An `enforce` quota does not pass that through — it refuses the generation with `409 QUOTA_UNENFORCEABLE`:
+
+```json
+{
+  "error": {
+    "code": "QUOTA_UNENFORCEABLE",
+    "message": "Cost quota qta_... cannot be enforced: the current window metered usage but priced none of it.",
+    "meta": { "quota_id": "qta_...", "metric": "cost_usd", "limit": 25, "window": "calendar_month" }
+  }
+}
+```
+
+Asking for a cost cap is asking for spend to be measurable, so the platform holds the project to it rather than reporting a cap that protects nothing. Two consequences worth knowing:
+
+- **No `Retry-After`, and no `quota.exceeded` webhook.** The window resetting changes nothing and no limit was reached. Configure the [price book](./usage.md#pricing) for the models in use, or switch the quota to `monitor`.
+- **`monitor` mode never blocks**, here as everywhere. A project that wants cost visibility without a price book uses `monitor` and gets the exception below and nothing else.
+
+A **partially** priced window is unaffected: the aggregate is real, if incomplete, so only a total pricing blackout refuses.
+
+Either way the dead cap is reported: when a `cost_usd` check finds the window held metered usage but nothing priced, a `quota_unpriced` [exception](./exceptions.md) is filed (severity `warning`) carrying the quota, its limit, and the unpriced event count. It is deduped on the quota, so one dead cap is one triage item and its `occurrence_count` is the number of generations that hit it. An empty window files nothing and refuses nothing, since a zero aggregate with nothing metered is legitimately zero.
 
 A generation already **in flight is never killed** — its tokens are already spent and will be billed — so a budget may overshoot by at most one generation. A `project`-scoped quota aggregates the whole project; an `agent`-scoped quota with a `scope_ref` aggregates only that agent; an `actor`-scoped quota aggregates only the end user behind the generation (see [Actor scope](#actor-scope)). Because the check reads the meter rather than a separate counter, quotas and usage can never disagree.
 
