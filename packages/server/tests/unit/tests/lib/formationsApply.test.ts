@@ -97,7 +97,7 @@ describe('formationsApply', () => {
     const resolvedIds = new Map<string, string>([['provider', 'aip_1']]);
 
     await expect(
-      resolveFormationOutputs(template, resolvedIds)
+      resolveFormationOutputs(template, resolvedIds, projectId)
     ).resolves.toEqual({
       providerId: 'aip_1',
       greeting: 'hello',
@@ -117,7 +117,7 @@ describe('formationsApply', () => {
     const resolvedIds = new Map<string, string>([['Ghost', 'whk_stale']]);
 
     await expect(
-      resolveFormationOutputs(template, resolvedIds)
+      resolveFormationOutputs(template, resolvedIds, projectId)
     ).resolves.toEqual({});
   });
 
@@ -145,7 +145,11 @@ describe('formationsApply', () => {
     };
     const resolvedIds = new Map<string, string>([['MyWebhook', webhook.id]]);
 
-    const result = await resolveFormationOutputs(template, resolvedIds);
+    const result = await resolveFormationOutputs(
+      template,
+      resolvedIds,
+      projectId
+    );
 
     expect(result.webhookSecret).toBe(webhook.secret);
   });
@@ -171,7 +175,11 @@ describe('formationsApply', () => {
     const resolvedIds = new Map<string, string>([['MyWebhook', 'whk_1']]);
 
     // getWebhookSecret returns null for a non-existent webhook, so webhookSecret is skipped
-    const result = await resolveFormationOutputs(template, resolvedIds);
+    const result = await resolveFormationOutputs(
+      template,
+      resolvedIds,
+      projectId
+    );
     // The ref_attr for an unknown resource should be skipped (physicalId not in resolvedIds)
     expect(result.unknownResource).toBeUndefined();
     // noDot ref_attr expression (no '.' separator) should be skipped
@@ -235,7 +243,10 @@ describe('formationsApply', () => {
       deletionPolicy: 'delete',
     });
 
-    const result = await performResourceDeletions([skipped, success, failure]);
+    const result = await performResourceDeletions({
+      orderedResources: [skipped, success, failure],
+      projectId,
+    });
 
     expect(
       result.events.map((event) => {
@@ -256,7 +267,10 @@ describe('formationsApply', () => {
   test('performResourceDeletions skips physical deletion for retain resources', async () => {
     const { memory, row: retained } = await createMemoryResource('retain');
 
-    const result = await performResourceDeletions([retained]);
+    const result = await performResourceDeletions({
+      orderedResources: [retained],
+      projectId,
+    });
 
     // The physical memory is preserved, but the tracking row is marked deleted.
     expect(await memoryExists(memory.id)).toBe(true);
@@ -280,7 +294,10 @@ describe('formationsApply', () => {
       deletionPolicy: 'delete',
     });
 
-    const result = await performResourceDeletions([alreadyGone]);
+    const result = await performResourceDeletions({
+      orderedResources: [alreadyGone],
+      projectId,
+    });
 
     await alreadyGone.reload();
     expect(alreadyGone.status).toBe('deleted');
@@ -303,7 +320,10 @@ describe('formationsApply', () => {
       deletionPolicy: 'delete',
     });
 
-    const result = await performResourceDeletions([alreadyGoneChat]);
+    const result = await performResourceDeletions({
+      orderedResources: [alreadyGoneChat],
+      projectId,
+    });
 
     await alreadyGoneChat.reload();
     expect(alreadyGoneChat.status).toBe('deleted');
@@ -334,6 +354,7 @@ describe('formationsApply', () => {
     const events: FormationEvent[] = [];
 
     await handleOrphanedDeletes({
+      projectId,
       // `retained` stays in the template, so it is not orphaned; the other two
       // are absent and therefore deleted.
       template: {
@@ -363,6 +384,7 @@ describe('formationsApply', () => {
     const events: FormationEvent[] = [];
 
     await handleOrphanedDeletes({
+      projectId,
       template: { resources: {} },
       existingResources: [retainedOrphan],
       events,
@@ -388,6 +410,7 @@ describe('formationsApply', () => {
     const events: FormationEvent[] = [];
 
     await handleOrphanedDeletes({
+      projectId,
       template: { resources: {} },
       existingResources: [alreadyGoneOrphan],
       events,
@@ -415,6 +438,7 @@ describe('formationsApply', () => {
     const events: FormationEvent[] = [];
 
     await handleOrphanedDeletes({
+      projectId,
       template: { resources: {} },
       existingResources: [tombstoned],
       events,

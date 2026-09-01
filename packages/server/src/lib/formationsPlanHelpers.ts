@@ -83,6 +83,7 @@ export const planResourceChange = async (args: {
   logicalId: string;
   decl: ResourceDeclaration;
   physicalResourceId: string | undefined;
+  projectId: number;
   resolvedParams: Map<string, string>;
   existingMap: Map<string, string>;
   templateResourceKeys: Set<string>;
@@ -117,7 +118,10 @@ export const planResourceChange = async (args: {
   const module = getFormationModule({ resourceType: decl.type });
   if (module?.read) {
     try {
-      const liveProperties = await module.read({ physicalResourceId });
+      const liveProperties = await module.read({
+        physicalResourceId,
+        projectId: args.projectId,
+      });
       if (liveProperties !== null) {
         return buildComparedChange({
           logicalId,

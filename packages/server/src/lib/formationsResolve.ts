@@ -9,7 +9,8 @@ const log = createDebug('soat:formations');
 const resolveRefAttrOutput = async (
   refAttrStr: string,
   template: FormationTemplate,
-  resolvedIds: Map<string, string>
+  resolvedIds: Map<string, string>,
+  projectId: number
 ): Promise<string | undefined> => {
   const parsed = parseRefAttr(refAttrStr);
   if (!parsed) {
@@ -42,6 +43,7 @@ const resolveRefAttrOutput = async (
   }
   const attrs = await mod.getAttributes({
     physicalResourceId: physicalId,
+    projectId,
   });
   if (typeof attrs[attrName] !== 'string') {
     log(
@@ -57,7 +59,8 @@ const resolveRefAttrOutput = async (
 
 export const resolveFormationOutputs = async (
   template: FormationTemplate,
-  resolvedIds: Map<string, string>
+  resolvedIds: Map<string, string>,
+  projectId: number
 ): Promise<Record<string, string>> => {
   const outputs: Record<string, string> = {};
   if (!template.outputs) return outputs;
@@ -67,7 +70,8 @@ export const resolveFormationOutputs = async (
         const value = await resolveRefAttrOutput(
           outputValue.ref_attr,
           template,
-          resolvedIds
+          resolvedIds,
+          projectId
         );
         if (value !== undefined) outputs[outputName] = value;
       } else {

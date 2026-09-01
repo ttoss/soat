@@ -30,6 +30,7 @@ describe('formationsPlanHelpers', () => {
   describe('planResourceChange', () => {
     test('reports create when there is no physical resource yet', async () => {
       const change = await planResourceChange({
+        projectId,
         logicalId: 'MyMemory',
         decl: { type: 'memory', properties: { name: 'unprovisioned' } },
         physicalResourceId: undefined,
@@ -48,6 +49,7 @@ describe('formationsPlanHelpers', () => {
 
     test('falls back to update when the resource type has no registered formation module', async () => {
       const change = await planResourceChange({
+        projectId,
         logicalId: 'Ghost',
         decl: { type: 'nonexistent_type', properties: {} },
         physicalResourceId: 'ghost_1',
@@ -66,6 +68,7 @@ describe('formationsPlanHelpers', () => {
       });
 
       const change = await planResourceChange({
+        projectId,
         logicalId: 'MyMemory',
         decl: { type: 'memory', properties: { name: memory.name } },
         physicalResourceId: memory.id,
@@ -93,6 +96,7 @@ describe('formationsPlanHelpers', () => {
       });
 
       const change = await planResourceChange({
+        projectId,
         logicalId: 'MyMemory',
         decl: { type: 'memory', properties: { name: 'a different name' } },
         physicalResourceId: memory.id,
@@ -114,6 +118,7 @@ describe('formationsPlanHelpers', () => {
       // internally, is caught, and the unresolved ref object never equals the
       // live string value, so the conservative 'update' is reported.
       const change = await planResourceChange({
+        projectId,
         logicalId: 'MyMemory',
         decl: {
           type: 'memory',
@@ -130,6 +135,7 @@ describe('formationsPlanHelpers', () => {
 
     test('reports update when the underlying resource was deleted externally (read returns null)', async () => {
       const change = await planResourceChange({
+        projectId,
         logicalId: 'MyMemory',
         decl: { type: 'memory', properties: { name: 'anything' } },
         physicalResourceId: 'mem_does_not_exist',
@@ -152,6 +158,7 @@ describe('formationsPlanHelpers', () => {
 
       try {
         const change = await planResourceChange({
+          projectId,
           logicalId: 'MyMemory',
           decl: { type: 'memory', properties: { name: memory.name } },
           physicalResourceId: memory.id,
@@ -180,6 +187,7 @@ describe('formationsPlanHelpers', () => {
       // lastAppliedProperties mirrors what sanitizeLastAppliedProperties
       // persists — the value is stripped, only `name` remains.
       const change = await planResourceChange({
+        projectId,
         logicalId: 'MySecret',
         decl: { type: 'secret', properties: { name: secretName } },
         physicalResourceId: secret.id,
@@ -201,6 +209,7 @@ describe('formationsPlanHelpers', () => {
       });
 
       const change = await planResourceChange({
+        projectId,
         logicalId: 'MySecret',
         decl: { type: 'secret', properties: { name: 'a different name' } },
         physicalResourceId: secret.id,
@@ -222,6 +231,7 @@ describe('formationsPlanHelpers', () => {
       });
 
       const change = await planResourceChange({
+        projectId,
         logicalId: 'MySecret',
         decl: { type: 'secret', properties: { name: secretName } },
         physicalResourceId: secret.id,

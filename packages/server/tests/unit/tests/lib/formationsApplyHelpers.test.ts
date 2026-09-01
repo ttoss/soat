@@ -105,6 +105,7 @@ describe('formationsApplyHelpers', () => {
     const events: FormationEvent[] = [];
 
     await applyUpdateChange({
+      projectId,
       resourceRow,
       existing: resourceRow as ResourceRowWithId,
       resourceType: 'memory',
@@ -147,6 +148,7 @@ describe('formationsApplyHelpers', () => {
     const events: FormationEvent[] = [];
 
     await applyUpdateChange({
+      projectId,
       resourceRow,
       existing: resourceRow as ResourceRowWithId,
       resourceType: 'memory',
@@ -195,6 +197,7 @@ describe('formationsApplyHelpers', () => {
       } as const;
 
       const plan = await planResourceChange({
+        projectId,
         logicalId: 'agree',
         decl,
         physicalResourceId: memory.id,
@@ -206,6 +209,7 @@ describe('formationsApplyHelpers', () => {
 
       const events: FormationEvent[] = [];
       await applyUpdateChange({
+        projectId,
         resourceRow,
         existing: resourceRow as ResourceRowWithId,
         resourceType: 'memory',
@@ -235,6 +239,7 @@ describe('formationsApplyHelpers', () => {
 
     const events: FormationEvent[] = [];
     await applyUpdateChange({
+      projectId,
       resourceRow,
       existing: resourceRow as ResourceRowWithId,
       resourceType: 'memory',
@@ -265,6 +270,7 @@ describe('formationsApplyHelpers', () => {
 
     const events: FormationEvent[] = [];
     await applyUpdateChange({
+      projectId,
       resourceRow,
       existing: resourceRow as ResourceRowWithId,
       resourceType: 'memory',
@@ -315,6 +321,7 @@ describe('formationsApplyHelpers', () => {
     });
 
     const events = await rollbackCreatedResources({
+      projectId,
       created: [deletable, blocked],
     });
 
@@ -358,6 +365,7 @@ describe('formationsApplyHelpers', () => {
     });
 
     const events = await rollbackCreatedResources({
+      projectId,
       created: [alreadyGone, noPhysicalId],
     });
 

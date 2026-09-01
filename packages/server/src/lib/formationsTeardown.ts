@@ -112,19 +112,21 @@ export const collectDeletionBlockers = async (
   return blocked;
 };
 
-export const performResourceDeletions = async (
-  orderedResources: ResourceRow[]
-): Promise<{ events: FormationEvent[]; hasError: boolean }> => {
+export const performResourceDeletions = async (args: {
+  orderedResources: ResourceRow[];
+  projectId: number;
+}): Promise<{ events: FormationEvent[]; hasError: boolean }> => {
   const events: FormationEvent[] = [];
   let hasError = false;
 
-  for (const resource of orderedResources) {
+  for (const resource of args.orderedResources) {
     if (!resource.physicalResourceId) continue;
     try {
       if (resource.deletionPolicy !== 'retain') {
         await applyDeleteResource({
           resourceType: resource.resourceType,
           physicalResourceId: resource.physicalResourceId,
+          projectId: args.projectId,
           logicalId: resource.logicalId,
           resourceKey: resource.publicId,
         });
@@ -264,7 +266,10 @@ export const deleteFormation = async (args: {
     error: null,
   });
 
-  const { events, hasError } = await performResourceDeletions(orderedResources);
+  const { events, hasError } = await performResourceDeletions({
+    orderedResources,
+    projectId: formation.projectId,
+  });
 
   if (hasError) {
     // A wedged stack answers `409` here, but the row survives the request — so

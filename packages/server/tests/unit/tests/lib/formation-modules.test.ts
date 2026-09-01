@@ -96,6 +96,7 @@ const applyUpdateRaw = (
   properties: unknown
 ) => {
   return applyUpdateResource({
+    projectId: internalProjectId,
     resourceType,
     physicalResourceId,
     resolvedProperties: properties as Record<string, unknown>,
@@ -668,6 +669,7 @@ describe('formation module create → read round-trips', () => {
     expect(typeof physicalId).toBe('string');
 
     const read = await readModule(testCase.resourceType).read?.({
+      projectId: internalProjectId,
       physicalResourceId: physicalId,
     });
     expect(read).toMatchObject(spec.expectRead);
@@ -688,6 +690,7 @@ describe('formation module create → read round-trips', () => {
       });
 
       const read = await readModule(testCase.resourceType).read?.({
+        projectId: internalProjectId,
         physicalResourceId: physicalId,
       });
       expect(read).toMatchObject(spec.camelExpectRead!);
@@ -707,12 +710,14 @@ describe('formation module create → read round-trips', () => {
     });
 
     await applyUpdateResource({
+      projectId: internalProjectId,
       resourceType: testCase.resourceType,
       physicalResourceId: physicalId,
       resolvedProperties: spec.update!,
     });
 
     const read = await readModule(testCase.resourceType).read?.({
+      projectId: internalProjectId,
       physicalResourceId: physicalId,
     });
     expect(read).toMatchObject(spec.expectAfterUpdate!);
@@ -729,11 +734,13 @@ describe('formation module create → read round-trips', () => {
       });
 
       await applyDeleteResource({
+        projectId: internalProjectId,
         resourceType: testCase.resourceType,
         physicalResourceId: physicalId,
       });
 
       const read = await readModule(testCase.resourceType).read?.({
+        projectId: internalProjectId,
         physicalResourceId: physicalId,
       });
       expect(read).toBeNull();
@@ -744,6 +751,7 @@ describe('formation module create → read round-trips', () => {
     '$resourceType read returns null for a missing id',
     async (testCase) => {
       const read = await readModule(testCase.resourceType).read?.({
+        projectId: internalProjectId,
         physicalResourceId: `${testCase.resourceType}_missing_zzz`,
       });
       expect(read).toBeNull();
@@ -763,6 +771,7 @@ describe('immutable update no-ops', () => {
 
     await expect(
       applyUpdateResource({
+        projectId: internalProjectId,
         resourceType: 'chat',
         physicalResourceId: chatId,
         resolvedProperties: {},
@@ -836,6 +845,7 @@ describe('documentsFormationModule chunking', () => {
     expect(await countChunks(physicalId)).toBe(3);
 
     await applyUpdateResource({
+      projectId: internalProjectId,
       resourceType: 'document',
       physicalResourceId: physicalId,
       resolvedProperties: {
@@ -869,6 +879,7 @@ describe('quotasFormationModule', () => {
     expect(quotaId).toMatch(/^quota_/);
 
     const read = await readModule('quota').read?.({
+      projectId: internalProjectId,
       physicalResourceId: quotaId,
     });
     expect(read).toMatchObject({
@@ -882,6 +893,7 @@ describe('quotasFormationModule', () => {
 
     // Only limit/mode are mutable; the immutable fields are re-sent verbatim.
     await applyUpdateResource({
+      projectId: internalProjectId,
       resourceType: 'quota',
       physicalResourceId: quotaId,
       resolvedProperties: {
@@ -893,16 +905,21 @@ describe('quotasFormationModule', () => {
       },
     });
     const afterUpdate = await readModule('quota').read?.({
+      projectId: internalProjectId,
       physicalResourceId: quotaId,
     });
     expect(afterUpdate).toMatchObject({ limit: 40, mode: 'enforce' });
 
     await applyDeleteResource({
+      projectId: internalProjectId,
       resourceType: 'quota',
       physicalResourceId: quotaId,
     });
     expect(
-      await readModule('quota').read?.({ physicalResourceId: quotaId })
+      await readModule('quota').read?.({
+        projectId: internalProjectId,
+        physicalResourceId: quotaId,
+      })
     ).toBeNull();
   });
 
@@ -919,6 +936,7 @@ describe('quotasFormationModule', () => {
       },
     });
     const read = await readModule('quota').read?.({
+      projectId: internalProjectId,
       physicalResourceId: quotaId,
     });
     expect(read).toMatchObject({
@@ -927,6 +945,7 @@ describe('quotasFormationModule', () => {
       metric: 'tokens',
     });
     await applyDeleteResource({
+      projectId: internalProjectId,
       resourceType: 'quota',
       physicalResourceId: quotaId,
     });
@@ -935,6 +954,7 @@ describe('quotasFormationModule', () => {
   test('read returns null for a missing quota', async () => {
     expect(
       await readModule('quota').read?.({
+        projectId: internalProjectId,
         physicalResourceId: 'quota_missing_zzz',
       })
     ).toBeNull();
@@ -976,6 +996,7 @@ describe('apiKeysFormationModule', () => {
     });
 
     const read = await readModule('api_key').read?.({
+      projectId: internalProjectId,
       physicalResourceId: keyId,
     });
     expect(read).toMatchObject({ name: 'Scoped Key' });
@@ -992,6 +1013,7 @@ describe('apiKeysFormationModule', () => {
     });
 
     const read = await readModule('api_key').read?.({
+      projectId: internalProjectId,
       physicalResourceId: keyId,
     });
     expect((read as { policy_ids: string[] }).policy_ids).toEqual([policyA]);
@@ -1005,12 +1027,14 @@ describe('apiKeysFormationModule', () => {
     });
 
     await applyUpdateResource({
+      projectId: internalProjectId,
       resourceType: 'api_key',
       physicalResourceId: keyId,
       resolvedProperties: { policy_ids: [policyB] },
     });
 
     const read = await readModule('api_key').read?.({
+      projectId: internalProjectId,
       physicalResourceId: keyId,
     });
     expect((read as { policy_ids: string[] }).policy_ids).toEqual([policyB]);
@@ -1033,6 +1057,7 @@ describe('triggersFormationModule', () => {
     });
 
     const attrs = await readModule('trigger').getAttributes?.({
+      projectId: internalProjectId,
       physicalResourceId: id,
     });
     expect(typeof attrs?.secret).toBe('string');
@@ -1052,6 +1077,7 @@ describe('triggersFormationModule', () => {
     });
 
     const attrs = await readModule('trigger').getAttributes?.({
+      projectId: internalProjectId,
       physicalResourceId: id,
     });
     expect(attrs).toEqual({});
@@ -1070,7 +1096,10 @@ describe('triggersFormationModule', () => {
       },
     });
 
-    const read = await readModule('trigger').read?.({ physicalResourceId: id });
+    const read = await readModule('trigger').read?.({
+      projectId: internalProjectId,
+      physicalResourceId: id,
+    });
     expect(read).toMatchObject({ type: 'schedule', cron: '0 8 * * *' });
   });
 
@@ -1099,7 +1128,10 @@ describe('triggersFormationModule', () => {
       },
     });
 
-    const read = await readModule('trigger').read?.({ physicalResourceId: id });
+    const read = await readModule('trigger').read?.({
+      projectId: internalProjectId,
+      physicalResourceId: id,
+    });
     expect(read).toMatchObject({ policy_id: policyId });
   });
 
@@ -1159,6 +1191,7 @@ describe('conversationsFormationModule', () => {
     });
 
     const read = await readModule('conversation').read?.({
+      projectId: internalProjectId,
       physicalResourceId: convId,
     });
     expect(read).toMatchObject({ name: 'Linked', actor_id: actorId });
@@ -1172,6 +1205,7 @@ describe('conversationsFormationModule', () => {
     });
 
     const read = await readModule('conversation').read?.({
+      projectId: internalProjectId,
       physicalResourceId: convId,
     });
     expect(read).toMatchObject({ actor_id: actorId });
@@ -1198,6 +1232,7 @@ describe('agentsFormationModule tool_bindings', () => {
     });
 
     const read = await readModule('agent').read?.({
+      projectId: internalProjectId,
       physicalResourceId: agentPhysId,
     });
     // Canonical view carries only the reference (any stray policy dropped).
@@ -1282,6 +1317,7 @@ describe('filesFormationModule', () => {
   test('delete is idempotent when the file is already gone', async () => {
     await expect(
       applyDeleteResource({
+        projectId: internalProjectId,
         resourceType: 'file',
         physicalResourceId: 'fil_missing_zzz',
       })
@@ -1316,6 +1352,7 @@ describe('policiesFormationModule', () => {
 
     await expect(
       applyUpdateResource({
+        projectId: internalProjectId,
         resourceType: 'policy',
         physicalResourceId: policyId,
         resolvedProperties: { document: { not: 'valid' } },
@@ -1370,6 +1407,7 @@ describe('guardrailsFormationModule', () => {
 
     await expect(
       applyUpdateResource({
+        projectId: internalProjectId,
         resourceType: 'guardrail',
         physicalResourceId: guardrailId,
         resolvedProperties: { class: 'Z' },
@@ -1409,7 +1447,10 @@ describe('secretsFormationModule', () => {
     });
 
     await expect(
-      readModule('secret').read?.({ physicalResourceId: secId })
+      readModule('secret').read?.({
+        projectId: internalProjectId,
+        physicalResourceId: secId,
+      })
     ).resolves.toBeNull();
   });
 
@@ -1422,6 +1463,7 @@ describe('secretsFormationModule', () => {
 
     await expect(
       applyUpdateResource({
+        projectId: internalProjectId,
         resourceType: 'secret',
         physicalResourceId: secId,
         resolvedProperties: { value: 'v2' },
@@ -1437,7 +1479,11 @@ describe('secretsFormationModule', () => {
     });
 
     await expect(
-      applyDeleteResource({ resourceType: 'secret', physicalResourceId: secId })
+      applyDeleteResource({
+        projectId: internalProjectId,
+        resourceType: 'secret',
+        physicalResourceId: secId,
+      })
     ).resolves.toBeUndefined();
   });
 
@@ -1490,6 +1536,7 @@ describe('projectPricesFormationModule', () => {
     expect(priceId).toMatch(/^price_/);
 
     const read = await readModule('project_price').read?.({
+      projectId: internalProjectId,
       physicalResourceId: priceId,
     });
     expect(read).toMatchObject({
@@ -1526,6 +1573,7 @@ describe('projectPricesFormationModule', () => {
     });
 
     await applyUpdateResource({
+      projectId: internalProjectId,
       resourceType: 'project_price',
       physicalResourceId: priceId,
       resolvedProperties: {
@@ -1536,6 +1584,7 @@ describe('projectPricesFormationModule', () => {
     });
 
     const read = await readModule('project_price').read?.({
+      projectId: internalProjectId,
       physicalResourceId: priceId,
     });
     expect((read as { unit_price: number }).unit_price).toBe(0.5);
@@ -1557,6 +1606,7 @@ describe('projectPricesFormationModule', () => {
     // forUpdate skips the required-field check, so a partial update (here only
     // meter_type) is valid; unit_price is undefined and left as-is.
     await applyUpdateResource({
+      projectId: internalProjectId,
       resourceType: 'project_price',
       physicalResourceId: priceId,
       resolvedProperties: {
@@ -1569,6 +1619,7 @@ describe('projectPricesFormationModule', () => {
     });
 
     const read = await readModule('project_price').read?.({
+      projectId: internalProjectId,
       physicalResourceId: priceId,
     });
     expect((read as { unit_price: number }).unit_price).toBe(0.00001);
@@ -1583,19 +1634,24 @@ describe('projectPricesFormationModule', () => {
 
     await expect(
       applyDeleteResource({
+        projectId: internalProjectId,
         resourceType: 'project_price',
         physicalResourceId: priceId,
       })
     ).resolves.toBeUndefined();
 
     await expect(
-      readModule('project_price').read?.({ physicalResourceId: priceId })
+      readModule('project_price').read?.({
+        projectId: internalProjectId,
+        physicalResourceId: priceId,
+      })
     ).resolves.toBeNull();
   });
 
   test('delete is a no-op for an already-absent row', async () => {
     await expect(
       applyDeleteResource({
+        projectId: internalProjectId,
         resourceType: 'project_price',
         physicalResourceId: 'price_does_not_exist',
       })
@@ -1629,6 +1685,7 @@ describe('aiProvidersFormationModule', () => {
     });
 
     const read = await readModule('ai_provider').read?.({
+      projectId: internalProjectId,
       physicalResourceId: providerId,
     });
     expect(read).toMatchObject({ name: 'Secret Provider' });
@@ -1642,6 +1699,7 @@ describe('sessionsFormationModule', () => {
   test('update throws when the session is not found', async () => {
     await expect(
       applyUpdateResource({
+        projectId: internalProjectId,
         resourceType: 'session',
         physicalResourceId: 'sess_missing',
         resolvedProperties: {},
@@ -1652,6 +1710,7 @@ describe('sessionsFormationModule', () => {
   test('delete throws when the session is not found', async () => {
     await expect(
       applyDeleteResource({
+        projectId: internalProjectId,
         resourceType: 'session',
         physicalResourceId: 'sess_missing',
       })
@@ -1714,7 +1773,10 @@ describe('modelRoutesFormationModule', () => {
     expect(routeId).toMatch(/^route_/);
 
     expect(
-      await readModule('model_route').read?.({ physicalResourceId: routeId })
+      await readModule('model_route').read?.({
+        projectId: internalProjectId,
+        physicalResourceId: routeId,
+      })
     ).toEqual({
       name: 'formation-declared-route',
       targets: [
@@ -1738,6 +1800,7 @@ describe('modelRoutesFormationModule', () => {
     });
 
     await applyUpdateResource({
+      projectId: internalProjectId,
       resourceType: 'model_route',
       physicalResourceId: routeId,
       resolvedProperties: {
@@ -1748,7 +1811,10 @@ describe('modelRoutesFormationModule', () => {
     });
 
     expect(
-      await readModule('model_route').read?.({ physicalResourceId: routeId })
+      await readModule('model_route').read?.({
+        projectId: internalProjectId,
+        physicalResourceId: routeId,
+      })
     ).toMatchObject({
       targets: [{ ai_provider_id: aiProviderId, model: 'gpt-4o-mini' }],
       retry_on: ['rate_limited'],
@@ -1849,7 +1915,10 @@ describe('modelRoutesFormationModule', () => {
     });
 
     expect(
-      await readModule('model_route').read?.({ physicalResourceId: routeId })
+      await readModule('model_route').read?.({
+        projectId: internalProjectId,
+        physicalResourceId: routeId,
+      })
     ).toMatchObject({ cooldown_seconds: 15, failure_threshold: 3 });
   });
 
@@ -1880,10 +1949,16 @@ describe('modelRoutesFormationModule', () => {
       },
     });
 
-    await readModule('model_route').delete?.({ physicalResourceId: routeId });
+    await readModule('model_route').delete?.({
+      projectId: internalProjectId,
+      physicalResourceId: routeId,
+    });
 
     expect(
-      await readModule('model_route').read?.({ physicalResourceId: routeId })
+      await readModule('model_route').read?.({
+        projectId: internalProjectId,
+        physicalResourceId: routeId,
+      })
     ).toBeNull();
   });
 });
@@ -1916,6 +1991,7 @@ describe('agentsFormationModule model binding', () => {
     });
 
     const read = await readModule('agent').read?.({
+      projectId: internalProjectId,
       physicalResourceId: agentId,
     });
     expect(read).toMatchObject({
@@ -1937,6 +2013,7 @@ describe('agentsFormationModule model binding', () => {
     });
 
     await applyUpdateResource({
+      projectId: internalProjectId,
       resourceType: 'agent',
       physicalResourceId: agentId,
       resolvedProperties: {
@@ -1947,7 +2024,10 @@ describe('agentsFormationModule model binding', () => {
     });
 
     expect(
-      await readModule('agent').read?.({ physicalResourceId: agentId })
+      await readModule('agent').read?.({
+        projectId: internalProjectId,
+        physicalResourceId: agentId,
+      })
     ).toMatchObject({ model_route_id: routeId, ai_provider_id: null });
   });
 
@@ -2011,6 +2091,7 @@ describe('ingestionRulesFormationModule', () => {
     });
 
     const read = await readModule('ingestion_rule').read?.({
+      projectId: internalProjectId,
       physicalResourceId: ruleId,
     });
     expect(read).toMatchObject({
@@ -2068,6 +2149,7 @@ describe('ingestionRulesFormationModule', () => {
 
     await expect(
       applyUpdateResource({
+        projectId: internalProjectId,
         resourceType: 'ingestion_rule',
         physicalResourceId: ruleId,
         resolvedProperties: { tool_id: converterToolId, agent_id: agentId },
@@ -2087,12 +2169,14 @@ describe('ingestionRulesFormationModule', () => {
     });
 
     await applyUpdateResource({
+      projectId: internalProjectId,
       resourceType: 'ingestion_rule',
       physicalResourceId: ruleId,
       resolvedProperties: { agent_id: agentId, tool_id: null },
     });
 
     const read = await readModule('ingestion_rule').read?.({
+      projectId: internalProjectId,
       physicalResourceId: ruleId,
     });
     expect(read).toMatchObject({ agent_id: agentId, tool_id: null });
@@ -2114,6 +2198,7 @@ describe('webhooksFormationModule', () => {
     });
 
     const attrs = await readModule('webhook').getAttributes?.({
+      projectId: internalProjectId,
       physicalResourceId: webhookId,
     });
     expect(typeof attrs?.secret).toBe('string');
@@ -2179,6 +2264,7 @@ describe('orchestrationsFormationModule', () => {
     });
 
     const read = await readModule('orchestration').read?.({
+      projectId: internalProjectId,
       physicalResourceId: orchId,
     });
     expect(read).toMatchObject({
@@ -2221,6 +2307,7 @@ describe('orchestrationsFormationModule', () => {
     });
 
     const read = await readModule('orchestration').read?.({
+      projectId: internalProjectId,
       physicalResourceId: orchId,
     });
     expect(read).toMatchObject({ state_schema: { type: 'object' } });
@@ -2234,12 +2321,14 @@ describe('orchestrationsFormationModule', () => {
     });
 
     await applyUpdateResource({
+      projectId: internalProjectId,
       resourceType: 'orchestration',
       physicalResourceId: orchId,
       resolvedProperties: { name: 'Renamed Squad' },
     });
 
     const read = await readModule('orchestration').read?.({
+      projectId: internalProjectId,
       physicalResourceId: orchId,
     });
     expect(read).toMatchObject({
@@ -2256,6 +2345,7 @@ describe('orchestrationsFormationModule', () => {
     });
 
     await applyUpdateResource({
+      projectId: internalProjectId,
       resourceType: 'orchestration',
       physicalResourceId: orchId,
       resolvedProperties: {
@@ -2266,6 +2356,7 @@ describe('orchestrationsFormationModule', () => {
     });
 
     const read = await readModule('orchestration').read?.({
+      projectId: internalProjectId,
       physicalResourceId: orchId,
     });
     expect(read).toMatchObject({
@@ -2316,7 +2407,10 @@ describe('evaluations formation modules', () => {
     });
     expect(datasetId).toMatch(/^dset_/);
     expect(
-      await readModule('dataset').read?.({ physicalResourceId: datasetId })
+      await readModule('dataset').read?.({
+        projectId: internalProjectId,
+        physicalResourceId: datasetId,
+      })
     ).toMatchObject({
       name: 'Formation Suite',
       description: 'billing questions',
@@ -2334,7 +2428,10 @@ describe('evaluations formation modules', () => {
     });
     expect(itemId).toMatch(/^dsit_/);
     expect(
-      await readModule('dataset_item').read?.({ physicalResourceId: itemId })
+      await readModule('dataset_item').read?.({
+        projectId: internalProjectId,
+        physicalResourceId: itemId,
+      })
     ).toMatchObject({
       dataset_id: datasetId,
       input: [{ role: 'user', content: 'capital of France?' }],
@@ -2355,7 +2452,10 @@ describe('evaluations formation modules', () => {
     });
     expect(evalId).toMatch(/^eval_/);
     expect(
-      await readModule('eval').read?.({ physicalResourceId: evalId })
+      await readModule('eval').read?.({
+        projectId: internalProjectId,
+        physicalResourceId: evalId,
+      })
     ).toMatchObject({
       name: 'Formation Eval',
       agent_id: agentId,
@@ -2367,6 +2467,7 @@ describe('evaluations formation modules', () => {
     // The PRD's round-trip criterion: changing `pass_threshold` updates the
     // eval in place rather than replacing it.
     await applyUpdateResource({
+      projectId: internalProjectId,
       resourceType: 'eval',
       physicalResourceId: evalId,
       resolvedProperties: {
@@ -2378,13 +2479,17 @@ describe('evaluations formation modules', () => {
       },
     });
     expect(
-      await readModule('eval').read?.({ physicalResourceId: evalId })
+      await readModule('eval').read?.({
+        projectId: internalProjectId,
+        physicalResourceId: evalId,
+      })
     ).toMatchObject({
       pass_threshold: 0.5,
       scorers: [{ type: 'contains', value: 'Paris' }],
     });
 
     await applyUpdateResource({
+      projectId: internalProjectId,
       resourceType: 'dataset_item',
       physicalResourceId: itemId,
       resolvedProperties: {
@@ -2394,43 +2499,62 @@ describe('evaluations formation modules', () => {
       },
     });
     expect(
-      await readModule('dataset_item').read?.({ physicalResourceId: itemId })
+      await readModule('dataset_item').read?.({
+        projectId: internalProjectId,
+        physicalResourceId: itemId,
+      })
     ).toMatchObject({
       input: [{ role: 'user', content: 'capital of Italy?' }],
       expected_output: 'Rome',
     });
 
     await applyUpdateResource({
+      projectId: internalProjectId,
       resourceType: 'dataset',
       physicalResourceId: datasetId,
       resolvedProperties: { name: 'Formation Suite v2', description: null },
     });
     expect(
-      await readModule('dataset').read?.({ physicalResourceId: datasetId })
+      await readModule('dataset').read?.({
+        projectId: internalProjectId,
+        physicalResourceId: datasetId,
+      })
     ).toMatchObject({ name: 'Formation Suite v2', description: null });
 
     await applyDeleteResource({
+      projectId: internalProjectId,
       resourceType: 'eval',
       physicalResourceId: evalId,
     });
     expect(
-      await readModule('eval').read?.({ physicalResourceId: evalId })
+      await readModule('eval').read?.({
+        projectId: internalProjectId,
+        physicalResourceId: evalId,
+      })
     ).toBeNull();
 
     await applyDeleteResource({
+      projectId: internalProjectId,
       resourceType: 'dataset_item',
       physicalResourceId: itemId,
     });
     expect(
-      await readModule('dataset_item').read?.({ physicalResourceId: itemId })
+      await readModule('dataset_item').read?.({
+        projectId: internalProjectId,
+        physicalResourceId: itemId,
+      })
     ).toBeNull();
 
     await applyDeleteResource({
+      projectId: internalProjectId,
       resourceType: 'dataset',
       physicalResourceId: datasetId,
     });
     expect(
-      await readModule('dataset').read?.({ physicalResourceId: datasetId })
+      await readModule('dataset').read?.({
+        projectId: internalProjectId,
+        physicalResourceId: datasetId,
+      })
     ).toBeNull();
   });
 
@@ -2505,15 +2629,20 @@ describe('evaluations formation modules', () => {
     });
 
     await applyUpdateResource({
+      projectId: internalProjectId,
       resourceType: 'dataset',
       physicalResourceId: datasetId,
       resolvedProperties: { name: 'Declared-Only Suite v2' },
     });
     expect(
-      await readModule('dataset').read?.({ physicalResourceId: datasetId })
+      await readModule('dataset').read?.({
+        projectId: internalProjectId,
+        physicalResourceId: datasetId,
+      })
     ).toMatchObject({ name: 'Declared-Only Suite v2', description: 'keep me' });
 
     await applyUpdateResource({
+      projectId: internalProjectId,
       resourceType: 'dataset_item',
       physicalResourceId: itemId,
       resolvedProperties: {
@@ -2522,7 +2651,10 @@ describe('evaluations formation modules', () => {
       },
     });
     expect(
-      await readModule('dataset_item').read?.({ physicalResourceId: itemId })
+      await readModule('dataset_item').read?.({
+        projectId: internalProjectId,
+        physicalResourceId: itemId,
+      })
     ).toMatchObject({
       input: [{ role: 'user', content: 'second' }],
       expected_output: 'Paris',
@@ -2530,6 +2662,7 @@ describe('evaluations formation modules', () => {
     });
 
     await applyUpdateResource({
+      projectId: internalProjectId,
       resourceType: 'eval',
       physicalResourceId: evalId,
       resolvedProperties: {
@@ -2540,11 +2673,15 @@ describe('evaluations formation modules', () => {
       },
     });
     expect(
-      await readModule('eval').read?.({ physicalResourceId: evalId })
+      await readModule('eval').read?.({
+        projectId: internalProjectId,
+        physicalResourceId: evalId,
+      })
     ).toMatchObject({ name: 'Declared-Only Eval v2', pass_threshold: 0.9 });
 
     // An explicit null does clear a declared field — the other half of the pair.
     await applyUpdateResource({
+      projectId: internalProjectId,
       resourceType: 'dataset_item',
       physicalResourceId: itemId,
       resolvedProperties: {
@@ -2554,10 +2691,14 @@ describe('evaluations formation modules', () => {
       },
     });
     expect(
-      await readModule('dataset_item').read?.({ physicalResourceId: itemId })
+      await readModule('dataset_item').read?.({
+        projectId: internalProjectId,
+        physicalResourceId: itemId,
+      })
     ).toMatchObject({ metadata: null, expected_output: 'Paris' });
 
     await applyUpdateResource({
+      projectId: internalProjectId,
       resourceType: 'eval',
       physicalResourceId: evalId,
       resolvedProperties: {
@@ -2569,10 +2710,14 @@ describe('evaluations formation modules', () => {
       },
     });
     expect(
-      await readModule('eval').read?.({ physicalResourceId: evalId })
+      await readModule('eval').read?.({
+        projectId: internalProjectId,
+        physicalResourceId: evalId,
+      })
     ).toMatchObject({ pass_threshold: null });
 
     await applyDeleteResource({
+      projectId: internalProjectId,
       resourceType: 'dataset',
       physicalResourceId: datasetId,
     });
@@ -2602,6 +2747,7 @@ describe('evaluations formation modules', () => {
     // the item in the dataset the template no longer names.
     await expect(
       applyUpdateResource({
+        projectId: internalProjectId,
         resourceType: 'dataset_item',
         physicalResourceId: itemId,
         resolvedProperties: {
@@ -2611,7 +2757,10 @@ describe('evaluations formation modules', () => {
       })
     ).rejects.toThrow(/dataset_id is immutable/);
     expect(
-      await readModule('dataset_item').read?.({ physicalResourceId: itemId })
+      await readModule('dataset_item').read?.({
+        projectId: internalProjectId,
+        physicalResourceId: itemId,
+      })
     ).toMatchObject({
       dataset_id: datasetId,
       input: [{ role: 'user', content: 'stays put' }],
@@ -2620,15 +2769,18 @@ describe('evaluations formation modules', () => {
     // Deleting the parent cascades to the item, so tearing the stack down must
     // still work when the item resource is deleted after its dataset.
     await applyDeleteResource({
+      projectId: internalProjectId,
       resourceType: 'dataset',
       physicalResourceId: datasetId,
     });
     await applyDeleteResource({
+      projectId: internalProjectId,
       resourceType: 'dataset_item',
       physicalResourceId: itemId,
     });
     await expect(
       applyUpdateResource({
+        projectId: internalProjectId,
         resourceType: 'dataset_item',
         physicalResourceId: itemId,
         resolvedProperties: {
@@ -2638,6 +2790,7 @@ describe('evaluations formation modules', () => {
       })
     ).rejects.toThrow(/not found/);
     await applyDeleteResource({
+      projectId: internalProjectId,
       resourceType: 'dataset',
       physicalResourceId: otherDatasetId,
     });
@@ -2645,15 +2798,22 @@ describe('evaluations formation modules', () => {
 
   test('read returns null for resources that no longer exist', async () => {
     expect(
-      await readModule('dataset').read?.({ physicalResourceId: 'dset_missing' })
+      await readModule('dataset').read?.({
+        projectId: internalProjectId,
+        physicalResourceId: 'dset_missing',
+      })
     ).toBeNull();
     expect(
       await readModule('dataset_item').read?.({
+        projectId: internalProjectId,
         physicalResourceId: 'dsit_missing',
       })
     ).toBeNull();
     expect(
-      await readModule('eval').read?.({ physicalResourceId: 'eval_missing' })
+      await readModule('eval').read?.({
+        projectId: internalProjectId,
+        physicalResourceId: 'eval_missing',
+      })
     ).toBeNull();
   });
 });

@@ -169,6 +169,7 @@ export const planFormation = async (args: {
         logicalId,
         decl: args.template.resources[logicalId],
         physicalResourceId: existingMap.get(logicalId),
+        projectId: args.projectId,
         resolvedParams,
         existingMap,
         templateResourceKeys,

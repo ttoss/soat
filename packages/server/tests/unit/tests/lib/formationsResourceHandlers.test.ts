@@ -37,7 +37,10 @@ describe('formationsResourceHandlers', () => {
     if (!formationModule?.read) {
       throw new Error(`No read handler for resource type: ${resourceType}`);
     }
-    return formationModule.read({ physicalResourceId });
+    return formationModule.read({
+      projectId: projectDbId,
+      physicalResourceId,
+    });
   };
 
   beforeAll(async () => {
@@ -339,6 +342,7 @@ describe('formationsResourceHandlers', () => {
 
       await expect(
         applyUpdateResource({
+          projectId: projectDbId,
           resourceType: 'ai_provider',
           physicalResourceId: id,
           resolvedProperties: {
@@ -373,6 +377,7 @@ describe('formationsResourceHandlers', () => {
 
       await expect(
         applyUpdateResource({
+          projectId: projectDbId,
           resourceType: 'tool',
           physicalResourceId: id,
           resolvedProperties: {
@@ -398,6 +403,7 @@ describe('formationsResourceHandlers', () => {
 
       await expect(
         applyUpdateResource({
+          projectId: projectDbId,
           resourceType: 'actor',
           physicalResourceId: id,
           resolvedProperties: {
@@ -428,6 +434,7 @@ describe('formationsResourceHandlers', () => {
 
       await expect(
         applyUpdateResource({
+          projectId: projectDbId,
           resourceType: 'agent',
           physicalResourceId: id,
           resolvedProperties: {
@@ -462,6 +469,7 @@ describe('formationsResourceHandlers', () => {
 
       await expect(
         applyUpdateResource({
+          projectId: projectDbId,
           resourceType: 'memory',
           physicalResourceId: id,
           resolvedProperties: {
@@ -489,6 +497,7 @@ describe('formationsResourceHandlers', () => {
 
       await expect(
         applyUpdateResource({
+          projectId: projectDbId,
           resourceType: 'memory_entry',
           physicalResourceId: id,
           resolvedProperties: { content: 'new content' },
@@ -512,6 +521,7 @@ describe('formationsResourceHandlers', () => {
 
       await expect(
         applyUpdateResource({
+          projectId: projectDbId,
           resourceType: 'webhook',
           physicalResourceId: id,
           resolvedProperties: {
@@ -541,6 +551,7 @@ describe('formationsResourceHandlers', () => {
 
       await expect(
         applyUpdateResource({
+          projectId: projectDbId,
           resourceType: 'document',
           physicalResourceId: id,
           resolvedProperties: { content: 'Updated body', title: 'Updated' },
@@ -557,6 +568,7 @@ describe('formationsResourceHandlers', () => {
     test('throws when agent to update is missing', async () => {
       await expect(
         applyUpdateResource({
+          projectId: projectDbId,
           resourceType: 'agent',
           physicalResourceId: 'agt_missing',
           resolvedProperties: { name: 'x' },
@@ -567,6 +579,7 @@ describe('formationsResourceHandlers', () => {
     test('throws when memory_entry to update is missing', async () => {
       await expect(
         applyUpdateResource({
+          projectId: projectDbId,
           resourceType: 'memory_entry',
           physicalResourceId: 'men_missing',
           resolvedProperties: { content: 'x' },
@@ -577,6 +590,7 @@ describe('formationsResourceHandlers', () => {
     test('throws for unsupported update resource type', async () => {
       await expect(
         applyUpdateResource({
+          projectId: projectDbId,
           resourceType: 'unsupported',
           physicalResourceId: 'res_1',
           resolvedProperties: {},
@@ -593,6 +607,7 @@ describe('formationsResourceHandlers', () => {
 
       await expect(
         applyUpdateResource({
+          projectId: projectDbId,
           resourceType: 'actor',
           physicalResourceId: id,
           resolvedProperties: {
@@ -618,6 +633,7 @@ describe('formationsResourceHandlers', () => {
       });
 
       await applyDeleteResource({
+        projectId: projectDbId,
         resourceType: 'ai_provider',
         physicalResourceId: id,
       });
@@ -636,6 +652,7 @@ describe('formationsResourceHandlers', () => {
       });
 
       await applyDeleteResource({
+        projectId: projectDbId,
         resourceType: 'tool',
         physicalResourceId: id,
       });
@@ -653,6 +670,7 @@ describe('formationsResourceHandlers', () => {
       });
 
       await applyDeleteResource({
+        projectId: projectDbId,
         resourceType: 'agent',
         physicalResourceId: id,
       });
@@ -667,6 +685,7 @@ describe('formationsResourceHandlers', () => {
       });
 
       await applyDeleteResource({
+        projectId: projectDbId,
         resourceType: 'actor',
         physicalResourceId: id,
       });
@@ -681,6 +700,7 @@ describe('formationsResourceHandlers', () => {
       });
 
       await applyDeleteResource({
+        projectId: projectDbId,
         resourceType: 'document',
         physicalResourceId: id,
       });
@@ -695,6 +715,7 @@ describe('formationsResourceHandlers', () => {
       });
 
       await applyDeleteResource({
+        projectId: projectDbId,
         resourceType: 'memory',
         physicalResourceId: id,
       });
@@ -709,6 +730,7 @@ describe('formationsResourceHandlers', () => {
       });
 
       await applyDeleteResource({
+        projectId: projectDbId,
         resourceType: 'memory_entry',
         physicalResourceId: id,
       });
@@ -727,6 +749,7 @@ describe('formationsResourceHandlers', () => {
       });
 
       await applyDeleteResource({
+        projectId: projectDbId,
         resourceType: 'webhook',
         physicalResourceId: id,
       });
@@ -736,6 +759,7 @@ describe('formationsResourceHandlers', () => {
     test('throws for unsupported delete resource type', async () => {
       await expect(
         applyDeleteResource({
+          projectId: projectDbId,
           resourceType: 'unsupported',
           physicalResourceId: 'res_1',
         })

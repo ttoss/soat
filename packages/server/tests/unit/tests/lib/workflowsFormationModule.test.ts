@@ -113,6 +113,7 @@ describe('workflowsFormationModule', () => {
     expect(created).toMatch(/^wfl_/);
 
     const read = await workflowsFormationModule.read!({
+      projectId: projectDbId,
       physicalResourceId: created,
     });
     expect(read?.name).toBe('Module workflow');
@@ -134,6 +135,7 @@ describe('workflowsFormationModule', () => {
     });
 
     await workflowsFormationModule.update!({
+      projectId: projectDbId,
       physicalResourceId: created,
       properties: {
         name: 'Module workflow v2',
@@ -142,13 +144,18 @@ describe('workflowsFormationModule', () => {
       },
     });
     const readAfter = await workflowsFormationModule.read!({
+      projectId: projectDbId,
       physicalResourceId: created,
     });
     expect(readAfter?.name).toBe('Module workflow v2');
     expect(readAfter?.states).toEqual([{ name: 'solo', initial: true }]);
 
-    await workflowsFormationModule.delete!({ physicalResourceId: created });
+    await workflowsFormationModule.delete!({
+      projectId: projectDbId,
+      physicalResourceId: created,
+    });
     const readGone = await workflowsFormationModule.read!({
+      projectId: projectDbId,
       physicalResourceId: created,
     });
     expect(readGone).toBeNull();
@@ -156,6 +163,7 @@ describe('workflowsFormationModule', () => {
 
   test('read returns null for a missing workflow (drift)', async () => {
     const read = await workflowsFormationModule.read!({
+      projectId: projectDbId,
       physicalResourceId: 'wfl_missing',
     });
     expect(read).toBeNull();
