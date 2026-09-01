@@ -931,6 +931,129 @@ describe('Evaluations', () => {
       });
     });
 
+
+    // #1150: an eval scores the agent you are about to ship. An agent whose
+    // tools authorize through `tool_context` could not be scored as it runs in
+    // production — every item failed with `MISSING_TOOL_CONTEXT_KEY`, or worse,
+    // a tool that tolerates a missing key evaluated a different configuration
+    // than production and reported a green score about the wrong scope.
+    describe('tool_context', () => {
+      const toolContextOf = (callIndex: number) => {
+        return (
+          mockCreateGeneration.mock.calls[callIndex]![0] as {
+            toolContext?: Record<string, string>;
+          }
+        ).toolContext;
+      };
+
+      test('reaches the item generation of a synchronous run', async () => {
+        mockCreateGeneration.mockResolvedValueOnce(
+          completedGeneration('gen_tc1', 'Paris')
+        );
+
+        const res = await asUser()
+          .post(`/api/v1/evals/${evalId}/runs`)
+          .send({
+            wait: true,
+            tool_context: { ocaToken: 'tok_eval', tenant: 'acme' },
+          });
+
+        expect(res.status).toBe(201);
+        expect(mockCreateGeneration).toHaveBeenCalledTimes(1);
+        expect(toolContextOf(0)).toEqual({
+          ocaToken: 'tok_eval',
+          tenant: 'acme',
+        });
+      });
+
+      // The bag is write-only: a run is a report other people read, and the
+      // credential in it is not theirs to see. `metadata` is readable for the
+      // opposite reason — a label is not a credential.
+      // Queued, so no generation runs and none is stubbed — an unconsumed
+      // `mockResolvedValueOnce` would survive `clearAllMocks` and be eaten by a
+      // later test, which is the leak the suite's afterEach warns about.
+      test('is never returned by a read of the run', async () => {
+        const res = await asUser()
+          .post(`/api/v1/evals/${evalId}/runs`)
+          .send({ tool_context: { ocaToken: 'tok_secret' } });
+        expect(res.status).toBe(201);
+        expect(res.body.tool_context).toBeUndefined();
+
+        const getRes = await asUser().get(
+          `/api/v1/evals/${evalId}/runs/${res.body.id}`
+        );
+        expect(getRes.status).toBe(200);
+        expect(getRes.body.tool_context).toBeUndefined();
+
+        const listRes = await asUser().get(`/api/v1/evals/${evalId}/runs`);
+        expect(listRes.status).toBe(200);
+        for (const run of listRes.body.data) {
+          expect(run.tool_context).toBeUndefined();
+        }
+      });
+
+      test('a run started without one passes no bag, as before', async () => {
+        mockCreateGeneration.mockResolvedValueOnce(
+          completedGeneration('gen_tc_none', 'Paris')
+        );
+
+        const res = await asUser()
+          .post(`/api/v1/evals/${evalId}/runs`)
+          .send({ wait: true, tool_context: undefined });
+        expect(res.status).toBe(201);
+        expect(toolContextOf(0)).toBeUndefined();
+      });
+
+      // Rejected at the start path, before the row exists: a queued run answers
+      // 201 long before its first item runs, so a key that could never become a
+      // header must not reach the queue.
+      test('a key that cannot become a header returns 400 and creates no run', async () => {
+        const before = await asUser().get(`/api/v1/evals/${evalId}/runs`);
+        const countBefore = before.body.total;
+
+        const res = await asUser()
+          .post(`/api/v1/evals/${evalId}/runs`)
+          .send({ tool_context: { 'bad key': 'value' } });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('INVALID_TOOL_CONTEXT_KEY');
+
+        const after = await asUser().get(`/api/v1/evals/${evalId}/runs`);
+        expect(after.body.total).toBe(countBefore);
+      });
+
+      test('two keys colliding on one header name return 400', async () => {
+        const res = await asUser()
+          .post(`/api/v1/evals/${evalId}/runs`)
+          .send({ tool_context: { ocaToken: 'a', ocatoken: 'b' } });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('INVALID_TOOL_CONTEXT_KEY');
+      });
+
+      // An eval generation has no session, so nothing downstream would overwrite
+      // a caller-supplied identity key.
+      test('strips the reserved identity keys', async () => {
+        mockCreateGeneration.mockResolvedValueOnce(
+          completedGeneration('gen_tc_res', 'Paris')
+        );
+
+        const res = await asUser()
+          .post(`/api/v1/evals/${evalId}/runs`)
+          .send({
+            wait: true,
+            tool_context: {
+              ocaToken: 'tok_eval',
+              sessionId: 'sess_forged',
+              actorId: 'actor_forged',
+            },
+          });
+
+        expect(res.status).toBe(201);
+        expect(toolContextOf(0)).toEqual({ ocaToken: 'tok_eval' });
+      });
+    });
+
     test('a baseline that is not a run of this eval is rejected with 400', async () => {
       const res = await asUser()
         .post(`/api/v1/evals/${evalId}/runs`)
@@ -1274,6 +1397,76 @@ describe('Evaluations', () => {
       expect(run.trigger_id).toBeNull();
       // Not a single generation yet — the response came back before any work.
       expect(mockCreateGeneration).not.toHaveBeenCalled();
+    });
+
+    // #1150: the queued path is why the bag lives on the run row rather than on
+    // the starting request. `wait: false` is the default and a trigger-fired run
+    // is always background, so the process that drives the items has no request
+    // to read a bag from.
+    describe('tool_context on a queued run', () => {
+      test('the worker re-reads it from the row for every item', async () => {
+        const res = await asUser()
+          .post(`/api/v1/evals/${evalId}/runs`)
+          .send({ wait: false, tool_context: { ocaToken: 'tok_queued' } });
+        expect(res.status).toBe(201);
+        expect(mockCreateGeneration).not.toHaveBeenCalled();
+
+        mockCreateGeneration
+          .mockResolvedValueOnce(completedGeneration('gen_qtc1', 'Paris'))
+          .mockResolvedValueOnce(completedGeneration('gen_qtc2', 'Paris'));
+
+        expect(await drainEvalQueueOnce()).toBe(2);
+        expect(mockCreateGeneration).toHaveBeenCalledTimes(2);
+
+        for (const call of mockCreateGeneration.mock.calls) {
+          expect(
+            (call[0] as { toolContext?: Record<string, string> }).toolContext
+          ).toEqual({ ocaToken: 'tok_queued' });
+        }
+      });
+
+      // A finished run is a report that outlives the work by a long way. The
+      // credential is only needed while items are executing, so it does not
+      // survive the run reaching a terminal state — the same treatment a task's
+      // bag gets.
+      test('is cleared from the row once the run settles', async () => {
+        const res = await asUser()
+          .post(`/api/v1/evals/${evalId}/runs`)
+          .send({ wait: false, tool_context: { ocaToken: 'tok_cleared' } });
+        expect(res.status).toBe(201);
+
+        const runRow = await db.EvalRun.findOne({
+          where: { publicId: res.body.id },
+        });
+        expect(runRow!.toolContext).toEqual({ ocaToken: 'tok_cleared' });
+
+        mockCreateGeneration
+          .mockResolvedValueOnce(completedGeneration('gen_ctc1', 'Paris'))
+          .mockResolvedValueOnce(completedGeneration('gen_ctc2', 'Paris'));
+        expect(await drainEvalQueueOnce()).toBe(2);
+
+        await runRow!.reload();
+        expect(runRow!.status).toBe('completed');
+        expect(runRow!.toolContext).toBeNull();
+      });
+
+      test('is cleared when a run is canceled before it settles', async () => {
+        const res = await asUser()
+          .post(`/api/v1/evals/${evalId}/runs`)
+          .send({ wait: false, tool_context: { ocaToken: 'tok_canceled' } });
+        expect(res.status).toBe(201);
+
+        const cancelRes = await asUser().post(
+          `/api/v1/evals/${evalId}/runs/${res.body.id}/cancel`
+        );
+        expect(cancelRes.status).toBe(200);
+
+        const runRow = await db.EvalRun.findOne({
+          where: { publicId: res.body.id },
+        });
+        expect(runRow!.status).toBe('canceled');
+        expect(runRow!.toolContext).toBeNull();
+      });
     });
 
     test('enqueues exactly one task per dataset item', async () => {

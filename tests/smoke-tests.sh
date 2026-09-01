@@ -6504,10 +6504,22 @@ fi
 echo "Eval id: $EVAL_ID"
 
 echo "--- Queuing an asynchronous run and polling to terminal ---"
-# `--metadata` rides along on the queued run: the worker that settles it reads
-# the label off the row, never from the request that started it.
+# `--metadata` and `--tool-context` ride along on the queued run: the worker
+# that settles it reads both off the row, never from the request that started
+# it. They differ on the way back — a label is readable, a credential is not
+# (#1150).
 EVAL_ASYNC_RESP=$($SOAT_CLI start-eval-run --eval_id "$EVAL_ID" --wait false \
-  --metadata '{"commit_sha":"smoke-9f2c1ab"}')
+  --metadata '{"commit_sha":"smoke-9f2c1ab"}' \
+  --tool-context '{"ocaToken":"smoke-eval-token"}')
+if [ "$(printf '%s\n' "$EVAL_ASYNC_RESP" | jq -r 'has("tool_context")')" != "false" ]; then
+  echo "ERROR: an eval run must not report its tool_context" >&2
+  printf '%s\n' "$EVAL_ASYNC_RESP" >&2
+  exit 1
+fi
+
+# A key that could never become a header is rejected before any run exists.
+expect_cli_error_status 400 start-eval-run --eval_id "$EVAL_ID" --wait false \
+  --tool-context '{"bad key":"value"}'
 EVAL_ASYNC_RUN_ID=$(printf '%s\n' "$EVAL_ASYNC_RESP" | jq -r '.id')
 if [ "$(printf '%s\n' "$EVAL_ASYNC_RESP" | jq -r '.metadata.commit_sha')" != "smoke-9f2c1ab" ]; then
   echo "ERROR: start-eval-run did not persist metadata" >&2
