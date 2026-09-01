@@ -2,14 +2,16 @@ import { DomainError } from '../errors';
 import { executeApprovalNode } from './orchestrationApprovalNode';
 import { executeEmitEventNode } from './orchestrationEmitEventNode';
 import {
+  executeLoopNode,
+  executeSubOrchestrationNode,
+} from './orchestrationNestedNodes';
+import {
   executeAgentNode,
   executeConditionNode,
   executeDelayNode,
   executeHumanNode,
   executeKnowledgeNode,
-  executeLoopNode,
   executeMemoryWriteNode,
-  executeSubOrchestrationNode,
   executeToolNode,
   executeTransformNode,
 } from './orchestrationNodeExecutors';

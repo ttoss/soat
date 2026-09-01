@@ -5,15 +5,17 @@ import { eventBus, type SoatEvent } from 'src/lib/eventBus';
 import { parseDuration } from 'src/lib/orchestrationDuration';
 import { executeEmitEventNode } from 'src/lib/orchestrationEmitEventNode';
 import {
+  executeLoopNode,
+  executeSubOrchestrationNode,
+} from 'src/lib/orchestrationNestedNodes';
+import {
   applyInputMapping,
   applyStateMapping,
   executeAgentNode,
   executeConditionNode,
   executeDelayNode,
   executeHumanNode,
-  executeLoopNode,
   executeMemoryWriteNode,
-  executeSubOrchestrationNode,
   executeToolNode,
   executeTransformNode,
 } from 'src/lib/orchestrationNodeExecutors';

@@ -1871,6 +1871,27 @@ NESTED_PARENT_RUN=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration
   --orchestration-id "$NESTED_PARENT_ORCH" \
   --wait true | jq -r '.id')
 
+# `context_keys` bounds what a child run inherits from the parent's bag. Asserted
+# here as a contract — that it round-trips on the node and that a typo'd entry is
+# a rejected write, not a key that never matches — while the unit suite pins
+# which keys actually reach the child's generations (#1153).
+NESTED_SCOPED_ORCH=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-orchestration-nested-scoped" \
+  --nodes "[{\"id\":\"delegate\",\"type\":\"sub_orchestration\",\"orchestration_id\":\"$NESTED_CHILD_ORCH\",\"context_keys\":[\"tenant\"]}]" \
+  --edges '[]')
+if ! printf '%s\n' "$NESTED_SCOPED_ORCH" | jq -e '.nodes[0].context_keys == ["tenant"]' >/dev/null 2>&1; then
+  echo "ERROR: a node's context_keys did not round-trip" >&2
+  printf '%s\n' "$NESTED_SCOPED_ORCH" >&2
+  exit 1
+fi
+
+SOAT_TOKEN="$ORCH_API_KEY_RAW" expect_cli_error_status 400 create-orchestration \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-orchestration-nested-bad-keys" \
+  --nodes "[{\"id\":\"delegate\",\"type\":\"sub_orchestration\",\"orchestration_id\":\"$NESTED_CHILD_ORCH\",\"context_keys\":[\"bad key\"]}]" \
+  --edges '[]'
+
 NESTED_CHILDREN=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestration-runs \
   --parent-orchestration-run-id "$NESTED_PARENT_RUN")
 if ! printf '%s\n' "$NESTED_CHILDREN" | jq -e --arg parent "$NESTED_PARENT_RUN" '(.data | length) == 1 and .data[0].parent_orchestration_run_id == $parent and .data[0].parent_node_id == "delegate"' >/dev/null 2>&1; then

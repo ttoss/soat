@@ -820,6 +820,26 @@ components:
         parallelism:
           type: integer
           description: For loop nodes — number of items to process in parallel.
+        context_keys:
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: >-
+            For loop and sub_orchestration nodes — allowlist of the run's
+            `tool_context` keys the child run inherits. When `null` (the
+            default), the child inherits the parent's whole bag — the behavior
+            of every graph authored before this field existed. When set, only
+            the listed keys are handed down, so a run holding a broad
+            credential can delegate one step to a shared sub-graph without
+            passing on what that sub-graph does not need; `[]` hands down
+            nothing. Matching is case-insensitive, since an entry names a key
+            that becomes an HTTP header name; an entry outside that grammar is
+            rejected at write time with `INVALID_TOOL_CONTEXT_KEY`. The
+            server-derived identity keys (`sessionId`, `actorId`,
+            `actorExternalId`) are unaffected — they are re-derived per
+            generation in the child regardless of this list. Ignored for other
+            node types.
         interval:
           type: string
           description: >

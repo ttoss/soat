@@ -14,6 +14,7 @@ import {
 } from './orchestrationNodesNamespace';
 import type { OrchestrationEdge, OrchestrationNode } from './orchestrations';
 import { collectVarRefs } from './orchestrationVarRefs';
+import { assertValidToolContextAllowlist } from './toolContext';
 
 const log = createDebug('soat:orchestrations');
 
@@ -442,6 +443,15 @@ export const assertOrchestrationValid = (args: {
   edges: OrchestrationEdge[];
   inputSchema?: object | null;
 }): void => {
+  // Throws `INVALID_TOOL_CONTEXT_KEY` rather than joining the graph issues
+  // below, so one mistake answers with one code whether it was made on a tool's
+  // allowlist or a node's (#1153). A typo'd entry has to be a rejected write:
+  // silently it would be a key that never matches, presenting later as a child
+  // run mysteriously missing its credential.
+  for (const node of args.nodes) {
+    assertValidToolContextAllowlist(node.contextKeys);
+  }
+
   const result = validateOrchestrationGraph(args);
   if (result.valid) return;
   const summary = result.errors
