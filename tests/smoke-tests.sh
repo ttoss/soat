@@ -3294,7 +3294,7 @@ CLIENT_AGENT_RESP=$($SOAT_CLI create-agent \
   --name weather-agent \
   --instructions "You are a weather assistant. When the user asks about the weather, call the get_weather tool with the cityName argument." \
   --tool_bindings "[{\"tool_id\":\"$CLIENT_TOOL_ID\"}]" \
-  --tool_choice '{"type":"tool","tool_name":"get_weather"}' \
+  --step_rules '[{"step":1,"tool_choice":{"type":"tool","tool_name":"get_weather"}}]' \
   --stop_conditions '[{"type":"hasToolCall","tool_name":"get_weather"}]' \
   --max_steps 3)
 CLIENT_AGENT_ID=$(printf '%s\n' "$CLIENT_AGENT_RESP" | jq -r '.id')
@@ -3305,10 +3305,13 @@ if [ -z "$CLIENT_AGENT_ID" ] || [ "$CLIENT_AGENT_ID" = "null" ]; then
 fi
 echo "Client Agent id: $CLIENT_AGENT_ID"
 
-# 33. Start a generation — expect requires_action with a tool call. The agent
-# forces `tool_choice`, which the compose stack's shim implements, so the pause
-# is deterministic: a failure here is a real regression in the client-tool pause
-# path rather than a model coin flip.
+# 33. Start a generation — expect requires_action with a tool call. A step rule
+# forces `tool_choice` on step 1, which the compose stack's shim implements, so
+# the pause is deterministic: a failure here is a real regression in the
+# client-tool pause path rather than a model coin flip. The force is on the step
+# rather than the agent because step numbering spans the pause: an agent-level
+# force would apply to the resumed step too and pause again instead of
+# answering.
 echo "--- Starting client-tool generation ---"
 CLIENT_GEN_RESP=$($SOAT_CLI create-agent-generation --wait true --agent-id "$CLIENT_AGENT_ID" \
   --messages '[{"role":"user","content":"Call get_weather with cityName Paris and wait for tool output. Do not answer directly."}]' | sanitize_json)

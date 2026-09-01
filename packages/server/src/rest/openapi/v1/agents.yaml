@@ -954,7 +954,12 @@ components:
         max_steps:
           type: integer
           nullable: true
-          description: Maximum agent loop steps before stopping
+          description: >-
+            Maximum agent loop steps before stopping. The budget bounds a
+            **turn**: a generation that pauses at `requires_action` and resumes
+            after `submit-tool-outputs` continues the same turn and spends what
+            is left of it, so a turn that arrives with nothing left completes
+            with `stop_reason: "max_steps"` instead of calling the model again.
         tool_choice:
           nullable: true
           description: 'Tool choice strategy. Accepts a string (`"auto"`, `"required"`) or an object (`{ "type": "tool", "tool_name": "my_tool" }`). A forcing value (`"required"` or the object form) forbids a final assistant message on every step of every turn, including a resumed or continued one, so it requires a `hasToolCall` entry in `stop_conditions` — otherwise the write is refused with `FORCED_TOOL_CHOICE_CANNOT_STOP`.'
@@ -989,7 +994,11 @@ components:
           nullable: true
           items:
             type: object
-          description: Per-step overrides
+          description: >-
+            Per-step overrides of `tool_choice` and `active_tool_ids`. Steps are
+            numbered from the first step of the **turn**, and that numbering
+            spans a `requires_action` pause — a rule fires once per turn, not
+            once per resumption.
         boundary_policy:
           type: object
           nullable: true

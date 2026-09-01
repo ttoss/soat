@@ -211,6 +211,8 @@ For `POST`, `PUT`, and `PATCH`, the request body defaults to JSON (`Content-Type
 
 Client tools have no server-side `execute`. When the model calls a `client` tool, the generation **pauses** — it suspends with `status: "requires_action"` and the pending tool calls. The caller executes the tool locally, then submits the results via [`POST /agents/{agent_id}/generate/{generation_id}/tool-outputs`](/docs/api/agents/submit-agent-tool-outputs) to resume the loop; the response is either a final result or another `requires_action` if the model calls more client tools.
 
+Resuming continues the paused turn rather than starting one: the agent's [`tool_choice`](./agents.md#tool-choice) still applies, [`step_rules`](./agents.md#step-rules) keep counting from the turn's first step, and what remains of [`max_steps`](./agents.md#stop-conditions) is what the resumed loop has to spend — so a caller cannot extend one turn indefinitely by submitting outputs.
+
 Example response when a client tool is called:
 
 ```json

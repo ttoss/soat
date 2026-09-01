@@ -173,10 +173,47 @@ export const assertForcedToolChoiceCanStop = (args: {
 };
 
 /**
+ * The steps a turn has already spent before the segment about to run — zero on
+ * a fresh turn, the paused turn's step count on a resume after
+ * `submit-tool-outputs`.
+ */
+const readStepsAlreadySpent = (value: unknown): number => {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0
+    ? value
+    : 0;
+};
+
+/**
+ * Whether the turn's step budget is gone before its next segment starts.
+ *
+ * A pause and the last allowed step can coincide — the step that calls the
+ * client tool may also be the one that spends the budget — so the caller must
+ * be able to end such a turn without a model call. Granting it "just one more
+ * step" instead would let a forced turn buy another call with every submit,
+ * which is the unbounded turn the budget exists to prevent.
+ */
+export const isTurnBudgetSpent = (config: {
+  maxSteps: unknown;
+  stepsAlreadySpent: unknown;
+}): boolean => {
+  return (
+    readStepsAlreadySpent(config.stepsAlreadySpent) >=
+    resolveMaxSteps(config.maxSteps)
+  );
+};
+
+/**
  * Every stop condition this turn runs under: the step budget, plus whatever the
  * agent declared. `max_steps` always stays in the list — a declared condition
  * narrows when the loop ends, it never lets the loop run longer — and it is
  * defaulted through `resolveMaxSteps` so every path agrees on the budget.
+ *
+ * `stepsAlreadySpent` is what makes that budget the *turn's* rather than one
+ * segment's: a resume after `submit-tool-outputs` continues the same turn, so
+ * counting from zero there would give every resumption a fresh `max_steps`.
+ * Callers must rule out a spent budget with {@link isTurnBudgetSpent} first —
+ * the remaining count is handed to `isStepCount`, which compares for equality
+ * and so would never fire on zero.
  *
  * `tool_name` is the tool's **resolved** name (`modules/agents.md` — Tool Name
  * Resolution), which is the key `resolvedTools` is already built under, so no
@@ -190,9 +227,16 @@ export const assertForcedToolChoiceCanStop = (args: {
 export const resolveStopWhen = (config: {
   maxSteps: unknown;
   stopConditions: unknown;
+  stepsAlreadySpent?: unknown;
 }): Array<StopCondition<ToolSet>> => {
   const conditions: Array<StopCondition<ToolSet>> = [
-    isStepCount(resolveMaxSteps(config.maxSteps)),
+    isStepCount(
+      Math.max(
+        1,
+        resolveMaxSteps(config.maxSteps) -
+          readStepsAlreadySpent(config.stepsAlreadySpent)
+      )
+    ),
   ];
 
   if (!Array.isArray(config.stopConditions)) return conditions;

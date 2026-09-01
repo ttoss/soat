@@ -340,46 +340,58 @@ describe('agentNonStreamGeneration', () => {
     };
   };
 
-  test('runToolOutputsGeneration never re-forces a forced tool_choice on resume', async () => {
-    // A forced tool is satisfied once called. Re-applying it on the
-    // continuation would force the call again and pause the generation
-    // forever, so the continuation must run with the SDK default.
-    const generateTextMock = jest.fn().mockResolvedValue({
-      text: 'The order shipped.',
-      finishReason: 'stop',
-      steps: [],
-      response: { modelId: 'mock-model', messages: [] },
-    });
-    jest.doMock('ai', () => {
-      const actual = jest.requireActual('ai');
-      return { ...actual, generateText: generateTextMock };
-    });
+  test.each([
+    [
+      'a named tool',
+      { type: 'tool', tool_name: 'send-reply' },
+      { type: 'tool', toolName: 'send-reply' },
+    ],
+    ['required', 'required', 'required'],
+    ['none', 'none', 'none'],
+  ])(
+    'runToolOutputsGeneration resumes under the agent tool_choice (%s)',
+    async (_label, stored, expected) => {
+      // The resumed segment is the same turn, and the turn is the agent's: the
+      // choice it declared is the one that reaches the provider. Omitting it
+      // here ran every resumption under the SDK default, so the stored config
+      // and what actually ran disagreed with nothing recording it.
+      const generateTextMock = jest.fn().mockResolvedValue({
+        text: 'The order shipped.',
+        finishReason: 'stop',
+        steps: [],
+        response: { modelId: 'mock-model', messages: [] },
+      });
+      jest.doMock('ai', () => {
+        const actual = jest.requireActual('ai');
+        return { ...actual, generateText: generateTextMock };
+      });
 
-    const { runToolOutputsGeneration } = await loadNonStreamModule();
+      const { runToolOutputsGeneration } = await loadNonStreamModule();
 
-    const pending = buildPending({
-      agentConfig: {
-        instructions: null,
-        maxSteps: 5,
-        toolChoice: { type: 'tool', tool_name: 'send-reply' },
-        stopConditions: null,
-        activeToolIds: null,
-        stepRules: null,
-        temperature: null,
-        outputSchema: null,
-      },
-    });
+      const pending = buildPending({
+        agentConfig: {
+          instructions: null,
+          maxSteps: 5,
+          toolChoice: stored,
+          stopConditions: null,
+          activeToolIds: null,
+          stepRules: null,
+          temperature: null,
+          outputSchema: null,
+        },
+      });
 
-    await runToolOutputsGeneration({
-      generationId: pending.generationId,
-      pending,
-      system: undefined,
-      nonSystemMessages: pending.messages,
-    });
+      await runToolOutputsGeneration({
+        generationId: pending.generationId,
+        pending,
+        system: undefined,
+        nonSystemMessages: pending.messages,
+      });
 
-    expect(generateTextMock).toHaveBeenCalledTimes(1);
-    expect(generateTextMock.mock.calls[0][0].toolChoice).toBeUndefined();
-  });
+      expect(generateTextMock).toHaveBeenCalledTimes(1);
+      expect(generateTextMock.mock.calls[0][0].toolChoice).toEqual(expected);
+    }
+  );
 
   test('runToolOutputsGeneration + resolveToolOutputsResult reports requires_action for a continuation tool call', async () => {
     jest.doMock('ai', () => {

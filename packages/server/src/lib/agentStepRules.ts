@@ -167,6 +167,12 @@ export const buildPrepareStep = (args: {
   stepRules: unknown;
   logContext: 'stream' | 'non_stream';
   toolIdToName?: Record<string, string>;
+  /**
+   * Steps the turn spent before this segment. Rules are numbered from the
+   * first step of the *turn*, and a resume after `submit-tool-outputs`
+   * continues one — the AI SDK's `stepNumber` restarts at 0 there regardless.
+   */
+  stepsAlreadySpent?: number;
 }):
   | ((opts: { stepNumber: number }) => {
       toolChoice?: ToolChoice<Record<string, Tool>>;
@@ -181,9 +187,12 @@ export const buildPrepareStep = (args: {
   const toolIdToName = args.toolIdToName ?? {};
   log('buildPrepareStep (%s): rules=%o', args.logContext, rules);
 
+  const stepsAlreadySpent = args.stepsAlreadySpent ?? 0;
+
   return ({ stepNumber }) => {
-    // stepNumber is 0-based (AI SDK), step_rules use 1-indexed steps.
-    const oneIndexedStep = stepNumber + 1;
+    // stepNumber is 0-based (AI SDK) and segment-local; step_rules are
+    // 1-indexed and turn-wide.
+    const oneIndexedStep = stepNumber + stepsAlreadySpent + 1;
     const rule = rules.find((candidate) => {
       return candidate.step === oneIndexedStep;
     });

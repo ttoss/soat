@@ -215,7 +215,7 @@ The alternative is to stop forcing at the agent level: leave `tool_choice` at `"
 
 **The choice is the agent's on every turn of the chain.** A [continuation](#continuation-chains) runs under the agent's own `tool_choice`, not a rewritten one, so a forcing agent reaches its declared tool or spends the turn's steps — and a turn that ends on the step budget reports `stop_reason: "max_steps"`, which is how "this agent could not terminate on its own" is told apart from ordinary tool use.
 
-One resumption is the exception. When a generation pauses at `requires_action` for a [client tool](./tools.md#client) and resumes after `submit-tool-outputs`, it continues *the same turn* and runs with `"auto"`: the force is already satisfied by the call that produced the pause, and re-applying the object form there would demand the same tool again forever. That resumed turn gets the agent's **full** tool surface — the bound tools narrowed by `active_tool_ids`, plus the `write_memory` tool injected by `knowledge_config.write_memory_id` — whether or not the pause outlived a server restart.
+**A resumption is part of the turn, not a new one.** When a generation pauses at `requires_action` for a [client tool](./tools.md#client) and resumes after `submit-tool-outputs`, it continues under the agent's `tool_choice` and against the *same* `max_steps` — the budget counts the steps the paused turn already spent. So an agent that forces its client tool by name proposes it again after every submit and pauses again, until the turn ends on its step budget with `stop_reason: "max_steps"`; a resumption never buys a fresh budget. To force only the call that pauses, name the step instead of the agent: `step_rules` are numbered from the first step of the turn, and that numbering spans the pause, so `{ "step": 1, … }` forces the first call and leaves the resumed step free to answer. The resumed turn gets the agent's **full** tool surface — the bound tools narrowed by `active_tool_ids`, plus the `write_memory` tool injected by `knowledge_config.write_memory_id` — whether or not the pause outlived a server restart.
 
 A [version restore](#versioning-and-staged-rollout) is validated like any other write, so restoring a config that forces a tool without declaring an exit is refused too.
 
@@ -241,6 +241,8 @@ Example — force `search` on step 1, then `analyze` on step 2:
 ```
 
 `tool_choice` also takes the string forms here. A rule of `"required"` on step 1 forces the model to call *some* tool before answering, without naming which — something agent-level `tool_choice: "required"` cannot express, since it applies to every step and would run the loop to `max_steps`.
+
+Steps are numbered from the first step of the **turn**, and a turn that pauses at `requires_action` keeps counting across the pause: if two steps ran before it, the first step after `submit-tool-outputs` is step 3. A rule therefore fires once per turn, not once per resumption.
 
 For **dynamic** per-step control (when you don't know the plan in advance), use `client` tools as pause points. When submitting tool outputs, you can pass overrides at multiple levels:
 
@@ -283,6 +285,12 @@ after the step that makes the call — so with the example above, a turn that
 calls `done` on step 3 ends there instead of continuing to 50. Turn conditions
 are enforced on every turn, including one resumed after
 [`submit-tool-outputs`](./tools.md#client).
+
+`max_steps` is turn-scoped in the same sense: a resumption continues the turn
+that paused and spends what is left of its budget, never a fresh one. A turn
+that arrives at `submit-tool-outputs` with nothing left ends there — the outputs
+are recorded, and the generation completes with `stop_reason: "max_steps"`
+without another model call.
 
 **Chain-scoped.** `maxChainGenerations` never shortens a turn. It is evaluated
 where a continuation is *spawned*: once the chain has reached that many
