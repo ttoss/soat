@@ -147,6 +147,21 @@ paths:
                     quota.exceeded webhook and writes a quotas:MonitorBreach
                     audit entry, but the request is let through.
                   example: enforce
+                on_unpriced:
+                  type: string
+                  enum: [block, allow]
+                  default: block
+                  description: >-
+                    Only for metric cost_usd (400 on any other metric). What an
+                    enforce quota does when the current window is a pricing
+                    blackout — several metered events, none of them priced, so
+                    the aggregate is 0 however much was actually spent. block
+                    (the default) refuses new generations with 409
+                    QUOTA_UNENFORCEABLE until pricing is configured; allow
+                    accepts the unmeasurable spend explicitly. Either way a
+                    quota_unpriced exception is filed. monitor-mode quotas
+                    never block regardless.
+                  example: block
       responses:
         '201':
           description: Quota created successfully
@@ -221,6 +236,14 @@ paths:
                   enum: [enforce, monitor]
                   description: New mode
                   example: monitor
+                on_unpriced:
+                  type: string
+                  enum: [block, allow]
+                  description: >-
+                    New pricing posture. Only for metric cost_usd (400 on any
+                    other metric); see the create operation for what block and
+                    allow mean.
+                  example: allow
       responses:
         '200':
           description: Quota updated successfully
@@ -291,6 +314,15 @@ components:
         mode:
           type: string
           enum: [enforce, monitor]
+        on_unpriced:
+          type: string
+          enum: [block, allow, null]
+          nullable: true
+          description: >-
+            Pricing posture of a cost_usd quota over an unpriced blackout —
+            block refuses generations, allow lets them through (the
+            quota_unpriced exception is filed either way). Null for metrics
+            with no pricing dependency.
         current_usage:
           type: object
           nullable: true

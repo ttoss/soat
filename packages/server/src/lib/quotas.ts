@@ -4,12 +4,16 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { paginatedList, type PaginatedResult } from './pagination';
 import { validateQuotaImmutableFields } from './quotaImmutability';
+import { resolveOnUnpriced, validateOnUnpriced } from './quotaPricingPosture';
 import {
-  QUOTA_WINDOWS,
-  type QuotaWindow,
-  windowKeyFor,
-  windowResetsAt,
-} from './quotaWindows';
+  isOneOf,
+  QUOTA_MODES,
+  type QuotaMetric,
+  type QuotaScope,
+  validateQuotaLimit,
+  validateQuotaShape,
+} from './quotaShape';
+import { type QuotaWindow, windowKeyFor, windowResetsAt } from './quotaWindows';
 import { makeResourceAccessor } from './resourceAccessor';
 
 const log = createDebug('soat:quotas');
@@ -31,14 +35,23 @@ export {
   QUOTA_IMMUTABLE_FIELDS,
   validateQuotaImmutableFields,
 } from './quotaImmutability';
-
-const QUOTA_SCOPES = ['project', 'api_key', 'agent', 'actor'] as const;
-const QUOTA_METRICS = ['requests', 'tokens', 'cost_usd'] as const;
-export const QUOTA_MODES = ['enforce', 'monitor'] as const;
-
-export type QuotaScope = (typeof QUOTA_SCOPES)[number];
-export type QuotaMetric = (typeof QUOTA_METRICS)[number];
-export type QuotaMode = (typeof QUOTA_MODES)[number];
+// The pricing posture lives in `quotaPricingPosture.ts`, same arrangement.
+export {
+  QUOTA_ON_UNPRICED,
+  type QuotaOnUnpriced,
+  resolveOnUnpriced,
+  validateOnUnpriced,
+} from './quotaPricingPosture';
+// The write-shape vocabulary and rules live in `quotaShape.ts`, same
+// arrangement.
+export {
+  QUOTA_MODES,
+  type QuotaMetric,
+  type QuotaMode,
+  type QuotaScope,
+  validateQuotaLimit,
+  validateQuotaShape,
+} from './quotaShape';
 
 type QuotaInstance = InstanceType<(typeof db)['Quota']>;
 
@@ -60,6 +73,10 @@ const mapQuota = (quota: QuotaInstance, currentUsage: CurrentUsage) => {
     window: quota.window,
     limit: Number(quota.limit),
     mode: quota.mode,
+    // Resolved for display so a pre-column row reads as the posture it is
+    // actually held to; metrics with no pricing dependency stay null.
+    on_unpriced:
+      quota.metric === 'cost_usd' ? resolveOnUnpriced(quota.onUnpriced) : null,
     current_usage: currentUsage
       ? {
           window_key: currentUsage.windowKey,
@@ -74,91 +91,6 @@ const mapQuota = (quota: QuotaInstance, currentUsage: CurrentUsage) => {
 
 const getQuotaIncludes = () => {
   return [{ model: db.Project, as: 'project' }];
-};
-
-// ── Validation ─────────────────────────────────────────────────────────────
-
-const isOneOf = <T extends readonly string[]>(
-  values: T,
-  value: unknown
-): value is T[number] => {
-  return (
-    typeof value === 'string' && (values as readonly string[]).includes(value)
-  );
-};
-
-/**
- * `limit` must be a number > 0. For `requests` and `tokens` it must be a
- * positive integer; fractional limits are valid only for `cost_usd`.
- */
-export const validateQuotaLimit = (args: {
-  metric: QuotaMetric;
-  limit: unknown;
-}): string | null => {
-  const value =
-    typeof args.limit === 'number'
-      ? args.limit
-      : typeof args.limit === 'string' && args.limit.trim() !== ''
-        ? Number(args.limit)
-        : NaN;
-  if (!Number.isFinite(value) || value <= 0) {
-    return 'limit must be a number greater than 0.';
-  }
-  if (args.metric !== 'cost_usd' && !Number.isInteger(value)) {
-    return `limit must be a positive integer for metric "${args.metric}".`;
-  }
-  return null;
-};
-
-/**
- * The scopes each metric can actually be enforced for. A combination outside
- * this table is rejected at create time rather than stored as a silent no-op:
- * enforcement aggregates real attribution, so a cap it cannot aggregate would
- * look healthy through the API while protecting nothing.
- *
- * - `requests` is counted by the request middleware, which sees the API key and
- *   the project — but not the agent or end user behind the call, so `agent` and
- *   `actor` are excluded.
- * - `tokens` / `cost_usd` aggregate the usage meter, which carries project,
- *   agent, and end-user (actor) attribution — but no API-key attribution, so
- *   `api_key` is excluded.
- *
- * Widening a row here is backward-compatible; narrowing one is not.
- */
-const SCOPES_BY_METRIC: Record<QuotaMetric, readonly QuotaScope[]> = {
-  requests: ['project', 'api_key'],
-  tokens: ['project', 'agent', 'actor'],
-  cost_usd: ['project', 'agent', 'actor'],
-};
-
-/**
- * Validates the immutable shape of a quota at create time. Returns a message on
- * the first problem, or `null` when valid. Pure — shared as the single source of
- * truth for the create/update rules.
- */
-export const validateQuotaShape = (args: {
-  scope: unknown;
-  metric: unknown;
-  window: unknown;
-  mode: unknown;
-  limit: unknown;
-}): string | null => {
-  if (!isOneOf(QUOTA_SCOPES, args.scope)) {
-    return `scope must be one of ${QUOTA_SCOPES.join(' / ')}.`;
-  }
-  if (!isOneOf(QUOTA_METRICS, args.metric)) {
-    return `metric must be one of ${QUOTA_METRICS.join(' / ')}.`;
-  }
-  if (!isOneOf(QUOTA_WINDOWS, args.window)) {
-    return `window must be one of ${QUOTA_WINDOWS.join(' / ')}.`;
-  }
-  if (!isOneOf(QUOTA_MODES, args.mode)) {
-    return `mode must be one of ${QUOTA_MODES.join(' / ')}.`;
-  }
-  if (!SCOPES_BY_METRIC[args.metric].includes(args.scope)) {
-    return `scope "${args.scope}" is not valid for metric "${args.metric}".`;
-  }
-  return validateQuotaLimit({ metric: args.metric, limit: args.limit });
 };
 
 /**
@@ -285,6 +217,7 @@ export const createQuota = async (args: {
   window: string;
   limit: unknown;
   mode?: string;
+  onUnpriced?: string;
 }): Promise<ReturnType<typeof mapQuota>> => {
   const mode = args.mode ?? 'enforce';
   log(
@@ -302,6 +235,7 @@ export const createQuota = async (args: {
     window: args.window,
     mode,
     limit: args.limit,
+    onUnpriced: args.onUnpriced,
   });
   if (shapeError) {
     throw new DomainError('VALIDATION_FAILED', shapeError);
@@ -341,6 +275,10 @@ export const createQuota = async (args: {
     window: args.window,
     limit: String(Number(args.limit)),
     mode,
+    // Stored resolved for cost caps so the posture is legible on the row
+    // itself; other metrics have no pricing dependency and stay null.
+    onUnpriced:
+      args.metric === 'cost_usd' ? resolveOnUnpriced(args.onUnpriced) : null,
   });
 
   log('createQuota: created id=%s', quota.publicId);
@@ -398,6 +336,7 @@ export const updateQuota = async (args: {
   id: string;
   limit?: unknown;
   mode?: string;
+  onUnpriced?: string;
   // Immutable fields are accepted, not dropped, so a caller carrying full
   // desired state is validated here — a differing value is an error. The REST
   // route rejects them earlier via its PATCH allowlist.
@@ -464,6 +403,17 @@ export const updateQuota = async (args: {
       );
     }
     updates.mode = args.mode;
+  }
+
+  if (args.onUnpriced !== undefined) {
+    const onUnpricedError = validateOnUnpriced({
+      metric: quota.metric as QuotaMetric,
+      onUnpriced: args.onUnpriced,
+    });
+    if (onUnpricedError) {
+      throw new DomainError('VALIDATION_FAILED', onUnpricedError);
+    }
+    updates.onUnpriced = args.onUnpriced;
   }
 
   await quota.update(updates);

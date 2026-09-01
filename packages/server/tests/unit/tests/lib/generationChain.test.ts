@@ -90,7 +90,20 @@ describe('continuation chain lineage and budget', () => {
     agentPublicId = agent.publicId;
   });
 
-  afterEach(() => {
+  // The project's own ceiling is stored, not an env var, so it has to be
+  // cleared as deliberately as the deployment's — the fixture project is
+  // shared by every test in this block.
+  const setProjectChainBudget = async (
+    maxChainGenerations: number | null
+  ): Promise<void> => {
+    await db.Project.update(
+      { maxChainGenerations },
+      { where: { id: projectId } }
+    );
+  };
+
+  afterEach(async () => {
+    await setProjectChainBudget(null);
     if (originalBudget === undefined) {
       delete process.env.MAX_CONTINUATION_CHAIN_GENERATIONS;
       return;
@@ -478,6 +491,96 @@ describe('continuation chain lineage and budget', () => {
     });
   });
 
+  test('a project may cap its chains below the platform budget', async () => {
+    // The operator's ceiling, which is the one an agent author cannot opt out
+    // of and the deployment-wide default is too coarse to express: a project
+    // owner bounds every chain in their project without touching either.
+    await setProjectChainBudget(2);
+    const agentId = await createAgentWithChainBudget({
+      name: 'Agent Under Project Budget',
+    });
+
+    const root = await generateAs({ agentId });
+    const first = await generateAs({
+      agentId,
+      initiatorGenerationId: root.id,
+    });
+    const second = await generateAs({
+      agentId,
+      initiatorGenerationId: first.id,
+    });
+    expect(second.output?.content).not.toBe('Continuation chain limit reached');
+
+    const refused = await generateAs({
+      agentId,
+      initiatorGenerationId: second.id,
+    });
+    expect(refused.output?.content).toBe('Continuation chain limit reached');
+
+    expect((await chainOf(root.id))?.status).toBe('budget_exhausted');
+    expect(await chainLimitDetail(root.id)).toMatchObject({
+      limit: 2,
+      limit_source: 'project',
+    });
+  });
+
+  test('an agent may cap its chain below its project budget', async () => {
+    await setProjectChainBudget(5);
+    const agentId = await createAgentWithChainBudget({
+      name: 'Agent Stricter Than Project',
+      maxGenerations: 2,
+    });
+
+    const root = await generateAs({ agentId });
+    const first = await generateAs({
+      agentId,
+      initiatorGenerationId: root.id,
+    });
+    const second = await generateAs({
+      agentId,
+      initiatorGenerationId: first.id,
+    });
+
+    const refused = await generateAs({
+      agentId,
+      initiatorGenerationId: second.id,
+    });
+    expect(refused.output?.content).toBe('Continuation chain limit reached');
+
+    expect(await chainLimitDetail(root.id)).toMatchObject({
+      limit: 2,
+      limit_source: 'agent',
+    });
+  });
+
+  test('an agent cannot raise its chain above its project budget', async () => {
+    // Same rule the platform ceiling already enforces, one level down: every
+    // ceiling can only make the budget smaller, so no author can opt their
+    // agent out of the number its project owner set.
+    await setProjectChainBudget(1);
+    const agentId = await createAgentWithChainBudget({
+      name: 'Agent Above Project Budget',
+      maxGenerations: 50,
+    });
+
+    const root = await generateAs({ agentId });
+    const first = await generateAs({
+      agentId,
+      initiatorGenerationId: root.id,
+    });
+
+    const refused = await generateAs({
+      agentId,
+      initiatorGenerationId: first.id,
+    });
+    expect(refused.output?.content).toBe('Continuation chain limit reached');
+
+    expect(await chainLimitDetail(root.id)).toMatchObject({
+      limit: 1,
+      limit_source: 'project',
+    });
+  });
+
   test('the budget counts continuations, not a turn own nested calls', async () => {
     process.env.MAX_CONTINUATION_CHAIN_GENERATIONS = '2';
 
@@ -579,7 +682,20 @@ describe('chain identity survives trace lineage rewrites', () => {
     ancestorAgentPublicId = ancestor.publicId;
   });
 
-  afterEach(() => {
+  // The project's own ceiling is stored, not an env var, so it has to be
+  // cleared as deliberately as the deployment's — the fixture project is
+  // shared by every test in this block.
+  const setProjectChainBudget = async (
+    maxChainGenerations: number | null
+  ): Promise<void> => {
+    await db.Project.update(
+      { maxChainGenerations },
+      { where: { id: projectId } }
+    );
+  };
+
+  afterEach(async () => {
+    await setProjectChainBudget(null);
     if (originalBudget === undefined) {
       delete process.env.MAX_CONTINUATION_CHAIN_GENERATIONS;
       return;

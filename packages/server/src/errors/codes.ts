@@ -573,6 +573,11 @@ export const ERROR_CODES = {
     description:
       'An enforced quota has been exceeded for the request scope. The response carries a `Retry-After` header (seconds until the window resets) and a `meta` block naming the breached quota, metric, limit, window, and reset time.',
   },
+  QUOTA_UNENFORCEABLE: {
+    httpStatus: 409,
+    description:
+      'An enforced `cost_usd` quota with `on_unpriced: "block"` (the default) cannot be evaluated: the current window holds a pricing blackout — several metered events, none of them priced — so the aggregate is `0` however much was actually spent. The cap refuses the generation rather than waving through spend it cannot measure. No `Retry-After` is sent — the window resetting changes nothing; configure pricing for the models in use, or set the quota\'s `on_unpriced` to `"allow"` to accept unmeasurable spend explicitly.',
+  },
   QUOTA_CONFLICT: {
     httpStatus: 409,
     description:

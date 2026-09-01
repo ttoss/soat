@@ -42,6 +42,20 @@ export const maxContinuationChainGenerations = (): number => {
     : DEFAULT_MAX_CONTINUATION_CHAIN_GENERATIONS;
 };
 
+/**
+ * The project's own chain ceiling, or `null` when it sets none. Guarded rather
+ * than trusted: the value reaches here on a row loaded through `TypedAgent`,
+ * and a config rebuilt from an archived version carries no project columns.
+ */
+const readProjectCeiling = (agent: TypedAgent | null): number | null => {
+  const declared = agent?.project?.maxChainGenerations;
+  return typeof declared === 'number' &&
+    Number.isInteger(declared) &&
+    declared > 0
+    ? declared
+    : null;
+};
+
 export type ChainContext = {
   /** The initiator's own trace — this hop's parent. */
   parentTraceId: string | null;
@@ -173,8 +187,8 @@ export const resolveChainLineage = async (args: {
   };
 };
 
-/** Which ceiling refused the hop — the agent's own, or the deployment's. */
-type LimitSource = 'agent' | 'platform';
+/** Which ceiling refused the hop — the agent's, its project's, or the deployment's. */
+type LimitSource = 'agent' | 'project' | 'platform';
 
 const refuseChain = async (args: {
   agentId: string;
@@ -256,25 +270,44 @@ const inheritedLineage = (args: {
 };
 
 /**
- * The budget this hop is actually held to: the smaller of the deployment's
- * ceiling and the agent's own declared one.
+ * The budget this hop is actually held to: the smallest of the deployment's
+ * ceiling, the project's, and the agent's own declared one.
  *
- * `min` rather than "the agent's if set": a per-agent number exists so an author
- * can be *stricter* than the deployment, and letting one raise its own ceiling
- * would make the platform backstop opt-out — which is the one thing it cannot
+ * `min` rather than "the innermost if set": each narrower scope exists so its
+ * owner can be *stricter* than the one above, and letting any of them raise a
+ * ceiling would make the outer bound opt-out — which is the one thing it cannot
  * be, since the agent that runs away is exactly the one whose config is wrong.
+ * So a project owner bounds every chain in the project without an agent author's
+ * cooperation, and an author can still be stricter than that.
+ *
+ * Ties go outward (`<`, not `<=`): where two scopes name the same number, the
+ * broader one is reported, because raising the inner one alone would not move
+ * the budget and saying otherwise would send the reader to the wrong knob.
  */
 const resolveEffectiveLimit = (
   agent: TypedAgent | null
 ): { limit: number; limitSource: LimitSource } => {
   const platform = maxContinuationChainGenerations();
+
+  // Read from the project row at spawn time, for the same reason the agent's
+  // own ceiling is: a chain can span days, and lowering the number has to be
+  // able to stop one that is already running away.
+  const project = readProjectCeiling(agent);
   const declared = agent
     ? resolveChainGenerationCeiling(agent.stopConditions)
     : null;
 
-  return declared !== null && declared < platform
-    ? { limit: declared, limitSource: 'agent' }
-    : { limit: platform, limitSource: 'platform' };
+  let limit = platform;
+  let limitSource: LimitSource = 'platform';
+  if (project !== null && project < limit) {
+    limit = project;
+    limitSource = 'project';
+  }
+  if (declared !== null && declared < limit) {
+    limit = declared;
+    limitSource = 'agent';
+  }
+  return { limit, limitSource };
 };
 
 /**

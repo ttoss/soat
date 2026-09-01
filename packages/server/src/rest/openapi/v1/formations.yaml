@@ -1689,8 +1689,8 @@ components:
         (`monitor`) when a windowed aggregate is exceeded. `requests` quotas are
         enforced by the request middleware; `tokens`/`cost_usd` quotas at the
         pre-generation check. Mirrors the quotas REST contract; `scope`,
-        `metric`, and `window` are immutable after creation (only `limit` and
-        `mode` update).
+        `metric`, and `window` are immutable after creation (only `limit`,
+        `mode`, and `on_unpriced` update).
       type: object
       additionalProperties: false
       required:
@@ -1728,6 +1728,14 @@ components:
           type: string
           enum: [enforce, monitor]
           description: enforce blocks with 429; monitor fires the webhook only
+        on_unpriced:
+          type: string
+          enum: [block, allow]
+          description: >-
+            Only for metric cost_usd. What an enforce quota does over a pricing
+            blackout — block (the default) refuses generations with 409
+            QUOTA_UNENFORCEABLE, allow accepts the unmeasurable spend. See the
+            quotas REST contract.
 
     GuardrailResourceProperties:
       description: >-

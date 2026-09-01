@@ -6,6 +6,7 @@ import { DomainError } from '../errors';
 import { fireQuotaExceeded, reportUnpricedCostQuota } from './quotaEvents';
 import type { QuotaWindow } from './quotas';
 import {
+  resolveOnUnpriced,
   retryAfterSeconds,
   windowKeyFor,
   windowResetsAt,
@@ -16,6 +17,17 @@ const log = createDebug('soat:quotas');
 
 type QuotaInstance = InstanceType<(typeof db)['Quota']>;
 
+/**
+ * Why the quota refused the work.
+ *
+ * `limit_exceeded` is the ordinary case: the window aggregate reached the cap.
+ * `unpriced_usage` is a `cost_usd` cap the platform cannot evaluate at all —
+ * the window metered usage and priced none of it, so the aggregate is 0 no
+ * matter what was actually spent. The two are not interchangeable: the first
+ * clears when the window rolls, the second only when pricing is configured.
+ */
+export type QuotaBreachReason = 'limit_exceeded' | 'unpriced_usage';
+
 export type QuotaBreach = {
   quotaId: string;
   scope: string;
@@ -25,6 +37,7 @@ export type QuotaBreach = {
   limit: number;
   resetsAt: Date;
   retryAfter: number;
+  reason: QuotaBreachReason;
 };
 
 // Which scope to report when several quotas breach at once — the most specific
@@ -38,12 +51,29 @@ const scopeRank = (scope: string): number => {
 };
 
 /**
- * The `QUOTA_EXCEEDED` DomainError for a breach — the shared source of the 429
- * body across every enforcement point (the request middleware and the
- * token/cost generation gate). Error meta keys are snake_case to match the
- * external REST contract.
+ * The DomainError for a breach — the shared source of the response body across
+ * every enforcement point (the request middleware and the token/cost generation
+ * gate). Error meta keys are snake_case to match the external REST contract.
+ *
+ * An `unpriced_usage` refusal is deliberately **not** a 429: waiting for the
+ * window to reset changes nothing, so the `Retry-After` contract a 429 carries
+ * would be a lie. It reports the unenforceable configuration instead, and omits
+ * `resets_at` for the same reason.
  */
 export const quotaBreachError = (breach: QuotaBreach): DomainError => {
+  if (breach.reason === 'unpriced_usage') {
+    return new DomainError(
+      'QUOTA_UNENFORCEABLE',
+      `Cost quota ${breach.quotaId} cannot be enforced: the current window metered usage but priced none of it.`,
+      {
+        quota_id: breach.quotaId,
+        metric: breach.metric,
+        limit: breach.limit,
+        window: breach.window,
+      }
+    );
+  }
+
   return new DomainError(
     'QUOTA_EXCEEDED',
     `Quota exceeded for ${breach.scope}${
@@ -112,6 +142,7 @@ const buildBreach = (args: {
   quota: QuotaInstance;
   window: QuotaWindow;
   now: Date;
+  reason: QuotaBreachReason;
 }): QuotaBreach => {
   const resetsAt = windowResetsAt({ window: args.window, now: args.now });
   return {
@@ -123,6 +154,7 @@ const buildBreach = (args: {
     limit: Number(args.quota.limit),
     resetsAt,
     retryAfter: retryAfterSeconds({ resetsAt, now: args.now }),
+    reason: args.reason,
   };
 };
 
@@ -145,7 +177,9 @@ const evaluateRequestQuota = async (args: {
   if (count <= Number(quota.limit)) return null;
 
   await fireQuotaExceeded({ quota, windowKey, observedValue: count, now });
-  return quota.mode === 'enforce' ? buildBreach({ quota, window, now }) : null;
+  return quota.mode === 'enforce'
+    ? buildBreach({ quota, window, now, reason: 'limit_exceeded' })
+    : null;
 };
 
 /**
@@ -202,6 +236,15 @@ export const evaluateRequestQuotas = async (args: {
 // token-unit component quantities (uncached input + output + cached), excluding
 // the non-billable `reasoning_tokens` detail so it is never double counted.
 const TOKEN_UNIT = 'token';
+
+/**
+ * Metered events a window must hold — all of them unpriced — before a `block`
+ * posture refuses. One or two all-unpriced events at the start of a window are
+ * indistinguishable from ordering noise in a mostly-priced project; three in a
+ * row with nothing priced is a blackout. The `quota_unpriced` exception is not
+ * gated on this, so the triage item always precedes the refusal.
+ */
+export const UNPRICED_BLACKOUT_MIN_EVENTS = 3;
 
 /**
  * The outcome of aggregating one window. `total` is the value compared to the
@@ -337,11 +380,27 @@ const evaluateGenerationQuota = async (args: {
     windowStart: windowStartsAt({ window, now }),
   });
 
-  // A cost cap over an entirely unpriced window aggregates to 0 and can never
-  // breach, so it protects nothing while looking healthy. Surface it for triage
-  // before the (always-passing) limit comparison below.
+  // A cost cap over an entirely unpriced window aggregates to 0, so the limit
+  // comparison below can never fire however much was actually spent. File the
+  // triage item from the first such event, then refuse only a real blackout:
+  // an `enforce` cap that cannot measure the spend it caps must not wave it
+  // through, which is the fail-open the cap exists to prevent — but a fresh
+  // window's first event landing on the one unpriced model must not stop a
+  // mostly-priced project at every window boundary, so the refusal waits for
+  // the threshold while the exception does not. `on_unpriced: "allow"` is the
+  // operator's opt-out, recorded on the quota itself; `monitor` observes and
+  // never blocks, here as everywhere. Below the threshold the aggregate is 0
+  // by construction, so falling through would pass anyway — returning here
+  // just says so explicitly.
   if (unpricedEventCount > 0) {
     await reportUnpricedCostQuota({ quota, unpricedEventCount });
+    const refuses =
+      quota.mode === 'enforce' &&
+      resolveOnUnpriced(quota.onUnpriced) === 'block' &&
+      unpricedEventCount >= UNPRICED_BLACKOUT_MIN_EVENTS;
+    return refuses
+      ? buildBreach({ quota, window, now, reason: 'unpriced_usage' })
+      : null;
   }
 
   if (total < Number(quota.limit)) return null;
@@ -352,7 +411,9 @@ const evaluateGenerationQuota = async (args: {
     observedValue: total,
     now,
   });
-  return quota.mode === 'enforce' ? buildBreach({ quota, window, now }) : null;
+  return quota.mode === 'enforce'
+    ? buildBreach({ quota, window, now, reason: 'limit_exceeded' })
+    : null;
 };
 
 /**

@@ -94,21 +94,27 @@ them.
 
 A chain is unbounded by construction — each hop is a fresh turn with a fresh step
 budget, so `max_call_depth`, which bounds recursion *within* a request, never
-sees it. Two ceilings apply, and the **smaller** wins:
+sees it. Three ceilings apply, and the **smallest** wins:
 
 | Ceiling | Set on | Scope |
 | --- | --- | --- |
 | `maxChainGenerations` | the agent's [`stop_conditions`](./agents.md#stop-conditions) | one agent |
+| `max_chain_generations` | the [project](./projects.md) | every chain in one project |
 | `MAX_CONTINUATION_CHAIN_GENERATIONS` | the deployment's environment | every chain |
 
-An agent can be stricter than its deployment but never looser: the platform
-ceiling stays a backstop, which is the one thing it cannot be if an agent could
-raise it — the agent that runs away is precisely the one whose configuration is
-wrong.
+Each narrower scope can be stricter than the one above it but never looser: an
+agent author can cap their own chains below their project's number, and a project
+owner can cap every chain in the project without that author's cooperation, but
+neither can raise a ceiling. The outer bound stays a backstop, which is the one
+thing it cannot be if an inner scope could raise it — the agent that runs away is
+precisely the one whose configuration is wrong.
 
-Both are read from the *current* configuration each time a hop is spawned, not
-captured when the chain started, so lowering either can stop a chain that is
-already running.
+Where two scopes name the same number the **broader** one is reported as the
+source, since raising the narrower one alone would not move the budget.
+
+All three are read from the *current* configuration each time a hop is spawned,
+not captured when the chain started, so lowering any of them can stop a chain
+that is already running.
 
 When a resumption is refused, three things happen: the chain moves to
 `budget_exhausted`, the refused turn is recorded on a [trace](./traces.md) with
@@ -116,7 +122,7 @@ When a resumption is refused, three things happen: the chain moves to
 [`chain_limit` exception](./exceptions.md#producers) is filed against the chain's
 root. The exception is what actually reaches a human — a chain is usually resumed
 by a background sweep with nobody waiting on the answer — and it names which of
-the two ceilings refused the turn, so the fix is unambiguous.
+the three ceilings refused the turn, so the fix is unambiguous.
 
 ## Examples
 
@@ -137,6 +143,9 @@ soat list-generations --chain-id chain_01
 # Cap an agent's chains at 20 generations
 soat update-agent --agent-id agent_01 \
   --stop-conditions '[{"type":"maxChainGenerations","max_generations":20}]'
+
+# Cap every chain in the project at 25, whatever its agents declare
+soat update-project --project-id proj_01 --max-chain-generations 25
 ```
 
 </TabItem>

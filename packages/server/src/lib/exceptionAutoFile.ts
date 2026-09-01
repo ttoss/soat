@@ -218,7 +218,7 @@ export const emitChainLimitEvent = (args: {
   initiatorGenerationId: string | null;
   chainSize: number;
   limit: number;
-  limitSource: 'agent' | 'platform';
+  limitSource: 'agent' | 'project' | 'platform';
 }): void => {
   emitResourceEvent({
     type: 'generations.chain_limit',

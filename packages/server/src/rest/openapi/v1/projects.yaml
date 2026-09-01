@@ -148,7 +148,8 @@ paths:
         Updates a project's name, its attached guardrails (`guardrail_ids` —
         the project-scope baseline governing every tool call by every agent in
         the project), its orchestration concurrency limit
-        (`max_concurrent_runs`), its inherited model route
+        (`max_concurrent_runs`), its continuation-chain ceiling
+        (`max_chain_generations`), its inherited model route
         (`default_model_route_id`), its read-auditing opt-in
         (`audit_reads_enabled`), its trace-content retention window
         (`trace_content_retention_days`), and/or its zero-retention setting
@@ -191,6 +192,20 @@ paths:
                     `null` clears the limit (unlimited); otherwise an integer
                     >= 1. Enforced at queue claim time — excess runs stay
                     queued until a slot frees.
+                max_chain_generations:
+                  type: integer
+                  nullable: true
+                  minimum: 1
+                  example: 25
+                  description: >-
+                    Generations one continuation chain in this project may hold
+                    before the platform stops resuming it. `null` clears the
+                    project's ceiling, leaving the deployment-wide
+                    `MAX_CONTINUATION_CHAIN_GENERATIONS`; otherwise an integer
+                    >= 1. The effective budget is the smallest of the
+                    deployment's ceiling, this one, and the agent's own
+                    `maxChainGenerations` stop condition, so an agent author can
+                    be stricter than this number but never exceed it.
                 default_model_route_id:
                   x-soat-ref: model-routes
                   type: string
@@ -410,6 +425,17 @@ components:
           description: >-
             Maximum orchestration runs of this project driven at once. `null`
             means unlimited (the default). Enforced at queue claim time.
+          example: null
+        max_chain_generations:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: >-
+            Generations one continuation chain in this project may hold before
+            the platform stops resuming it. `null` means no project ceiling (the
+            default), leaving the deployment-wide one. The effective budget is
+            the smallest of the deployment's ceiling, this one, and the agent's
+            own `maxChainGenerations` stop condition.
           example: null
         default_model_route_id:
           x-soat-ref: model-routes

@@ -184,8 +184,62 @@ describe('Quotas', () => {
       expect(res.body.metric).toBe('cost_usd');
       expect(res.body.limit).toBe(10.5);
       expect(res.body.mode).toBe('monitor');
+      // The pricing posture defaults to block and is visible on the row.
+      expect(res.body.on_unpriced).toBe('block');
       // Token/cost quotas have no counter table in Phase 1.
       expect(res.body.current_usage).toBeNull();
+    });
+
+    test('accepts an explicit on_unpriced "allow" on a cost quota', async () => {
+      const res = await createQuota(userToken, {
+        scope: 'project',
+        metric: 'cost_usd',
+        window: 'rolling_1h',
+        limit: 3,
+        on_unpriced: 'allow',
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body.on_unpriced).toBe('allow');
+    });
+
+    test('a non-cost quota carries no pricing posture', async () => {
+      const res = await createQuota(userToken, {
+        scope: 'project',
+        metric: 'requests',
+        window: 'rolling_1m',
+        limit: 9,
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body.on_unpriced).toBeNull();
+    });
+
+    test('rejects on_unpriced on a metric with no pricing dependency (400)', async () => {
+      const res = await createQuota(userToken, {
+        scope: 'project',
+        metric: 'tokens',
+        window: 'rolling_1m',
+        limit: 100,
+        on_unpriced: 'block',
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toContain('cost_usd');
+    });
+
+    test('rejects an on_unpriced outside the vocabulary (400)', async () => {
+      const res = await createQuota(userToken, {
+        scope: 'project',
+        metric: 'cost_usd',
+        window: 'rolling_1m',
+        limit: 1,
+        on_unpriced: 'explode',
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
 
     test('creates an agent/tokens quota with a null scope_ref (201)', async () => {
@@ -536,6 +590,34 @@ describe('Quotas', () => {
         .patch(`/api/v1/quotas/${quotaId}`)
         .send({ mode: 'nonsense' });
       expect(res.status).toBe(400);
+    });
+
+    test('updates on_unpriced on a cost quota', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/quotas/${quotaId}`)
+        .send({ on_unpriced: 'allow' });
+      expect(res.status).toBe(200);
+      expect(res.body.on_unpriced).toBe('allow');
+
+      const back = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/quotas/${quotaId}`)
+        .send({ on_unpriced: 'block' });
+      expect(back.status).toBe(200);
+      expect(back.body.on_unpriced).toBe('block');
+    });
+
+    test('rejects on_unpriced on a non-cost quota (400)', async () => {
+      const created = await createQuota(userToken, {
+        scope: 'project',
+        metric: 'requests',
+        window: 'rolling_24h',
+        limit: 50,
+      });
+      const res = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/quotas/${created.body.id}`)
+        .send({ on_unpriced: 'block' });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
 
     test('rejects a fractional limit on a requests quota (400)', async () => {

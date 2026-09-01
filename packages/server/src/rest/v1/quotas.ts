@@ -54,6 +54,7 @@ quotasRouter.post('/quotas', async (ctx: Context) => {
     window: body.window as string,
     limit: body.limit,
     mode: parseStringOrUndefined(body.mode),
+    onUnpriced: parseStringOrUndefined(body.on_unpriced),
   });
 
   ctx.status = 201;
@@ -115,6 +116,7 @@ quotasRouter.patch('/quotas/:quota_id', async (ctx: Context) => {
     id: ctx.params.quota_id,
     limit: body.limit,
     mode: parseStringOrUndefined(body.mode),
+    onUnpriced: parseStringOrUndefined(body.on_unpriced),
   });
 });
 

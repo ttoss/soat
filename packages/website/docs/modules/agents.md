@@ -295,9 +295,10 @@ without another model call.
 **Chain-scoped.** `maxChainGenerations` never shortens a turn. It is evaluated
 where a continuation is *spawned*: once the chain has reached that many
 generations, further resumptions stop with `chain_limit` instead of extending it.
-The effective ceiling is the smaller of this and the deployment's
-`MAX_CONTINUATION_CHAIN_GENERATIONS`, so an agent can be stricter than the
-platform but never looser — see [Bounding a chain](./chains.md#bounding-a-chain).
+The effective ceiling is the smallest of this, the project's
+[`max_chain_generations`](./projects.md), and the deployment's
+`MAX_CONTINUATION_CHAIN_GENERATIONS`, so an agent can be stricter than either
+but never looser — see [Bounding a chain](./chains.md#bounding-a-chain).
 
 Conditions are validated on write: an unknown `type`, a `hasToolCall` with no
 `tool_name`, or a `maxChainGenerations` whose `max_generations` is not a positive
