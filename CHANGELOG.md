@@ -3,6 +3,56 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.34.0](https://github.com/ttoss/soat/compare/v0.33.1...v0.34.0) (2026-09-01)
+
+* feat(server)!: tell a resource-type handler which project, on every request (#1183) ([90a44f5](https://github.com/ttoss/soat/commit/90a44f5faee9581583850ecccc88a38e1bb6c974)), closes [#1183](https://github.com/ttoss/soat/issues/1183) [#1078](https://github.com/ttoss/soat/issues/1078)
+* feat(server)!: refuse an unenforceable cost cap, and give a project its own chain budget (#1176) ([bd853d8](https://github.com/ttoss/soat/commit/bd853d8a0757e68871ce018accbf759130feb521)), closes [#1176](https://github.com/ttoss/soat/issues/1176) [#1164](https://github.com/ttoss/soat/issues/1164) [#811](https://github.com/ttoss/soat/issues/811) [#1167](https://github.com/ttoss/soat/issues/1167)
+* feat(server)!: run a resumed turn under the agent's tool_choice, and bound it (#1174), closes [#1174](https://github.com/ttoss/soat/issues/1174) [#1170](https://github.com/ttoss/soat/issues/1170)
+* feat(server)!: require a stop condition when tool_choice forces a tool (#1170) ([ed05e35](https://github.com/ttoss/soat/commit/ed05e356228370e31531c6db3d6a39bbdb3e7119)), closes [#1170](https://github.com/ttoss/soat/issues/1170)
+
+### Bug Fixes
+
+* **server:** enforce a formation property's declared enum ([#1166](https://github.com/ttoss/soat/issues/1166)) ([37c3dfb](https://github.com/ttoss/soat/commit/37c3dfb8c1f2c0247504b50bef020470410af296))
+* **server:** let a continuation conclude instead of re-entering the forced-tool loop ([#1163](https://github.com/ttoss/soat/issues/1163)) ([3a6a745](https://github.com/ttoss/soat/commit/3a6a745574c33ba8871f74897ea1c24b63b310f6)), closes [#1161](https://github.com/ttoss/soat/issues/1161)
+* **server:** terminate an unattended expiry, and make stop_conditions actually stop the loop ([#1167](https://github.com/ttoss/soat/issues/1167)) ([e2f1c3b](https://github.com/ttoss/soat/commit/e2f1c3bd0757b87dd35de03766b9a3585579f78e)), closes [#811](https://github.com/ttoss/soat/issues/811)
+
+### Features
+
+* **server:** bound continuation chains and name step exhaustion ([#1161](https://github.com/ttoss/soat/issues/1161)) ([08ac51d](https://github.com/ttoss/soat/commit/08ac51d31a9887b63a9166f7045dfbedfbe59164))
+* **server:** carry tool_context on direct tool calls, and bound what a child run inherits ([#1178](https://github.com/ttoss/soat/issues/1178)) ([1a0a17f](https://github.com/ttoss/soat/commit/1a0a17f4fa5a64013c7adb2596e0f76228211740)), closes [#1148](https://github.com/ttoss/soat/issues/1148) [#1148](https://github.com/ttoss/soat/issues/1148) [850/#851](https://github.com/ttoss/soat/issues/851) [#1148](https://github.com/ttoss/soat/issues/1148) [#1151](https://github.com/ttoss/soat/issues/1151) [#1153](https://github.com/ttoss/soat/issues/1153)
+* **server:** key the continuation budget on an identity nothing else rewrites ([#1162](https://github.com/ttoss/soat/issues/1162)) ([5aad198](https://github.com/ttoss/soat/commit/5aad1982fcb0ce8ae43b767410bd6c978feef596))
+* **server:** let an eval run carry a tool_context ([#1182](https://github.com/ttoss/soat/issues/1182)) ([fed3396](https://github.com/ttoss/soat/commit/fed33962f0fd1b58b5f946a3ceadaa11bafe2f33)), closes [#1150](https://github.com/ttoss/soat/issues/1150)
+* **server:** make the continuation chain a record, and let an agent bound it ([#1168](https://github.com/ttoss/soat/issues/1168)) ([611a67c](https://github.com/ttoss/soat/commit/611a67c342662102420395ff76fc3572bd969d46)), closes [#1161](https://github.com/ttoss/soat/issues/1161) [#1165](https://github.com/ttoss/soat/issues/1165) [#1165](https://github.com/ttoss/soat/issues/1165) [#1161](https://github.com/ttoss/soat/issues/1161)
+
+### BREAKING CHANGES
+
+* `FormationModule`'s `update`, `delete`, `read` and
+  `getAttributes` now require `projectId`, as does `performResourceDeletions`
+  (which also takes an object argument) and `resolveFormationOutputs`. A
+  registered type's handler now receives `project_id` on every request
+  except `validate`; a handler that ignores it is unaffected.
+* an `enforce`-mode `cost_usd` quota now refuses a generation
+  with `409 QUOTA_UNENFORCEABLE` when the current window holds at least 3 metered
+  events and none of them are priced, where it previously allowed the generation
+  and only filed a `quota_unpriced` exception. Configure the price book for the
+  models in use, or set `on_unpriced: "allow"` on the quota to accept
+  unmeasurable spend explicitly (`monitor` mode also never blocks).
+* an `enforce`-mode `cost_usd` quota now refuses a generation
+  with `409 QUOTA_UNENFORCEABLE` when the current window metered usage but priced
+  none of it, where it previously allowed the generation and only filed a
+  `quota_unpriced` exception. Configure the price book for the models in use, or
+  set the quota to `monitor` mode to keep the old behavior.
+* an agent whose `tool_choice` forces a tool now forces the
+  resumed turn too, and a resumption spends what is left of `max_steps` rather
+  than a fresh budget. An agent that forces a client tool by name pauses again
+  after each submit until the turn ends on its step budget; move the force into
+  `step_rules` to force only the first call.
+* creating or updating an agent with `tool_choice: "required"` (or
+  a named tool) now requires a `hasToolCall` stop condition. Stored agents keep
+  running — the chain budget is what bounds them — but are refused on their next
+  write until they declare an exit, a version restore included, since restore
+  re-validates the config it writes back.
+
 ## [0.33.1](https://github.com/ttoss/soat/compare/v0.33.0...v0.33.1) (2026-08-29)
 
 ### Bug Fixes

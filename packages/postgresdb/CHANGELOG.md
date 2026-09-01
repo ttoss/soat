@@ -3,6 +3,34 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.34.0](https://github.com/ttoss/soat/compare/v0.33.1...v0.34.0) (2026-09-01)
+
+* feat(server)!: refuse an unenforceable cost cap, and give a project its own chain budget (#1176) ([bd853d8](https://github.com/ttoss/soat/commit/bd853d8a0757e68871ce018accbf759130feb521)), closes [#1176](https://github.com/ttoss/soat/issues/1176) [#1164](https://github.com/ttoss/soat/issues/1164) [#811](https://github.com/ttoss/soat/issues/811) [#1167](https://github.com/ttoss/soat/issues/1167)
+
+### Bug Fixes
+
+* **server:** terminate an unattended expiry, and make stop_conditions actually stop the loop ([#1167](https://github.com/ttoss/soat/issues/1167)) ([e2f1c3b](https://github.com/ttoss/soat/commit/e2f1c3bd0757b87dd35de03766b9a3585579f78e)), closes [#811](https://github.com/ttoss/soat/issues/811)
+
+### Features
+
+* **server:** key the continuation budget on an identity nothing else rewrites ([#1162](https://github.com/ttoss/soat/issues/1162)) ([5aad198](https://github.com/ttoss/soat/commit/5aad1982fcb0ce8ae43b767410bd6c978feef596))
+* **server:** let an eval run carry a tool_context ([#1182](https://github.com/ttoss/soat/issues/1182)) ([fed3396](https://github.com/ttoss/soat/commit/fed33962f0fd1b58b5f946a3ceadaa11bafe2f33)), closes [#1150](https://github.com/ttoss/soat/issues/1150)
+* **server:** make the continuation chain a record, and let an agent bound it ([#1168](https://github.com/ttoss/soat/issues/1168)) ([611a67c](https://github.com/ttoss/soat/commit/611a67c342662102420395ff76fc3572bd969d46)), closes [#1161](https://github.com/ttoss/soat/issues/1161) [#1165](https://github.com/ttoss/soat/issues/1165) [#1165](https://github.com/ttoss/soat/issues/1165) [#1161](https://github.com/ttoss/soat/issues/1161)
+
+### BREAKING CHANGES
+
+* an `enforce`-mode `cost_usd` quota now refuses a generation
+  with `409 QUOTA_UNENFORCEABLE` when the current window holds at least 3 metered
+  events and none of them are priced, where it previously allowed the generation
+  and only filed a `quota_unpriced` exception. Configure the price book for the
+  models in use, or set `on_unpriced: "allow"` on the quota to accept
+  unmeasurable spend explicitly (`monitor` mode also never blocks).
+* an `enforce`-mode `cost_usd` quota now refuses a generation
+  with `409 QUOTA_UNENFORCEABLE` when the current window metered usage but priced
+  none of it, where it previously allowed the generation and only filed a
+  `quota_unpriced` exception. Configure the price book for the models in use, or
+  set the quota to `monitor` mode to keep the old behavior.
+
 ## [0.33.1](https://github.com/ttoss/soat/compare/v0.33.0...v0.33.1) (2026-08-29)
 
 **Note:** Version bump only for package @soat/postgresdb
