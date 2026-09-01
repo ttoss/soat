@@ -257,7 +257,7 @@ program
   .allowUnknownOption()
   .passThroughOptions()
 
-  // eslint-disable-next-line complexity, max-lines-per-function
+  // eslint-disable-next-line complexity, max-lines-per-function, sonarjs/cognitive-complexity
   .action(async (commandName) => {
     if (!commandName) {
       program.help();
