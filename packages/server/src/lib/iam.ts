@@ -449,6 +449,31 @@ export const evaluatePoliciesMultiResource = (args: {
  * Returns a (possibly empty) string[] of project publicIds when all patterns
  * are scoped to specific projects.
  */
+// Sentinel distinguishing "this statement grants access to all projects" from
+// a (possibly empty) list of specific project ids, without reusing `undefined`
+// (which already means something different one level up).
+const ALL_PROJECTS = Symbol('ALL_PROJECTS');
+
+// Parses the resource patterns of a single Allow statement into the project
+// ids they scope to, or ALL_PROJECTS as soon as any pattern is unscoped.
+const extractProjectIdsFromResourcePatterns = (
+  resources: string[]
+): string[] | typeof ALL_PROJECTS => {
+  const projectIds: string[] = [];
+
+  for (const resource of resources) {
+    if (resource === '*') return ALL_PROJECTS;
+    if (!resource.startsWith('srn:')) continue;
+    const parts = resource.split(':');
+    if (parts.length < 4) continue;
+    const projectId = parts[1];
+    if (projectId === '*') return ALL_PROJECTS;
+    projectIds.push(projectId);
+  }
+
+  return projectIds;
+};
+
 export const extractProjectIdsFromPolicies = (
   policies: PolicyDocument[]
 ): string[] | undefined => {
@@ -457,16 +482,11 @@ export const extractProjectIdsFromPolicies = (
   for (const policy of policies) {
     for (const statement of policy.statement) {
       if (statement.effect !== 'Allow') continue;
-      const resources = statement.resource ?? ['*'];
-      for (const resource of resources) {
-        if (resource === '*') return undefined;
-        if (!resource.startsWith('srn:')) continue;
-        const parts = resource.split(':');
-        if (parts.length < 4) continue;
-        const projectId = parts[1];
-        if (projectId === '*') return undefined;
-        projectIds.add(projectId);
-      }
+      const resourceIds = extractProjectIdsFromResourcePatterns(
+        statement.resource ?? ['*']
+      );
+      if (resourceIds === ALL_PROJECTS) return undefined;
+      for (const projectId of resourceIds) projectIds.add(projectId);
     }
   }
 
