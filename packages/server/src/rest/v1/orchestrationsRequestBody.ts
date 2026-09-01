@@ -82,23 +82,3 @@ export const parseRunInput = (
     ? (raw as Record<string, unknown>)
     : undefined;
 };
-
-/**
- * The run's `tool_context` bag. Values are stringified rather than rejected —
- * the same leniency every other `tool_context` entry point has — but the keys
- * are left exactly as the caller wrote them, for `assertValidToolContextKeys`
- * in the lib to accept or reject (`.claude/rules/case-convention.md`: a bag's
- * keys are never rewritten).
- */
-export const parseRunToolContext = (
-  raw: unknown
-): Record<string, string> | undefined => {
-  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
-    return undefined;
-  }
-  return Object.fromEntries(
-    Object.entries(raw as Record<string, unknown>).map(([key, value]) => {
-      return [key, String(value)];
-    })
-  );
-};

@@ -2,6 +2,7 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { buildSrn } from 'src/lib/iam';
+import { sanitizeCallerToolContext } from 'src/lib/toolContext';
 import {
   callTool,
   createTool,
@@ -18,6 +19,7 @@ import {
 } from './guardrailAttach';
 import {
   parsePagination,
+  parseToolContextBody,
   requireAuth,
   requireProjectAccess,
   resolveReadProjectIds,
@@ -355,9 +357,14 @@ toolsRouter.post('/tools/:tool_id/call', async (ctx: Context) => {
     resourceType: 'tool',
   });
 
-  const { action, input } = ctx.request.body as {
+  const {
+    action,
+    input,
+    tool_context: rawToolContext,
+  } = ctx.request.body as {
     action?: unknown;
     input?: unknown;
+    tool_context?: unknown;
   };
 
   const parsedInput =
@@ -376,6 +383,12 @@ toolsRouter.post('/tools/:tool_id/call', async (ctx: Context) => {
     action: typeof action === 'string' ? action : undefined,
     input: parsedInput,
     authHeader,
+    // No session here, so nothing downstream will overwrite a forged identity
+    // key — the sanitize is what keeps a caller off the `X-Soat-Context-*`
+    // headers a tool trusts (#1151).
+    toolContext: sanitizeCallerToolContext(
+      parseToolContextBody(rawToolContext)
+    ),
   });
 
   setCallToolResponseBody(ctx, result);

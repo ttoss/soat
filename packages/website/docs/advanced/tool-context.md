@@ -16,9 +16,10 @@ This page is the canonical contract. `tool_context` is **not** general templatin
 | [`POST /api/v1/sessions`](/docs/api/sessions/create-session) / [`PATCH /api/v1/sessions/{session_id}`](/docs/api/sessions/update-session) | `tool_context` — persisted on the session, applied to every generation in it |
 | [`POST /api/v1/sessions/{session_id}/messages`](/docs/api/sessions/add-session-message) and `.../generate` | `tool_context` — per-request, this generation only |
 | [`POST /api/v1/conversations/{conversation_id}/generate`](/docs/api/conversations/generate-conversation-message) | `tool_context` in the body |
-| [`POST /api/v1/orchestration-runs`](/docs/api/orchestrations/start-orchestration-run) | `tool_context` — persisted on the run, applied to the generation of every `agent` node it executes, to the tool call of every `tool` and `poll` node, and inherited by `loop`/`sub_orchestration` child runs (see [Run Tool Context](../modules/orchestrations.md#run-tool-context)) |
+| [`POST /api/v1/orchestration-runs`](/docs/api/orchestrations/start-orchestration-run) | `tool_context` — persisted on the run, applied to the generation of every `agent` node it executes, to the tool call of every `tool` and `poll` node, and inherited by `loop`/`sub_orchestration` child runs — narrowable per node with [`context_keys`](../modules/orchestrations.md#narrowing-what-a-child-run-inherits) (see [Run Tool Context](../modules/orchestrations.md#run-tool-context)) |
 | [`POST /api/v1/tasks`](/docs/api/tasks/create-task) | `tool_context` — persisted on the task, applied to the dispatches of the entry state's `on_enter` (all three kinds: `agent`, `tool`, `orchestration`) |
 | [`POST /api/v1/tasks/{task_id}/transitions`](/docs/api/tasks/transition-task) | `tool_context` — **replaces** the task's stored bag; omitting it keeps it (see [Dispatch tool context](../modules/workflows.md#dispatch-tool-context)) |
+| [`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool) | `tool_context` — this call only ([below](#calling-a-context-dependent-tool-directly)) |
 | Formation templates | `tool_context` on a `Session` resource |
 
 ## Which tools receive the headers
@@ -76,7 +77,7 @@ The authority is split on purpose: the tool knows the header shape its endpoint 
 | Missing key at call time | The tool call **fails** with `400 MISSING_TOOL_CONTEXT_KEY`, naming the key and header. An `Authorization: Bearer ` with no value would reach the endpoint and come back as an opaque upstream `401`, several steps from the actual mistake. |
 | Empty-string value | A value, not a missing key — the header is sent empty, because that is what the caller asked for. |
 | With `{{secret:...}}` | Both kinds may appear in the same header value and are substituted in a **single pass**, so a substituted value is never re-scanned as template source: a `tool_context` value containing `{{secret:sec_...}}` stays literal text, and so does a secret whose plaintext contains `{{context:...}}`. |
-| Calling paths with no context | [`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool) carries no `tool_context`, so a tool declaring `{{context:...}}` cannot be invoked through it — the call fails with `MISSING_TOOL_CONTEXT_KEY`. Orchestration `tool` and `poll` nodes **do** carry the run's bag; so does every step of a `pipeline` tool. |
+| Calling paths | Every dispatch surface carries a bag. [`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool) takes one in its body ([below](#calling-a-context-dependent-tool-directly)); orchestration `tool` and `poll` nodes carry the run's, and so does every step of a `pipeline` tool. A tool declaring `{{context:...}}` that is called without the key it needs fails with `MISSING_TOOL_CONTEXT_KEY`. |
 
 The token is resolved at the point of use. [`GET /tools`](/docs/api/tools/list-tools) echoes back the token, never the resolved value — the same as `{{secret:...}}`.
 
@@ -105,6 +106,21 @@ A preset is a **pin**: it wins over whatever the model (or a direct caller) supp
 | Nesting | Tokens are resolved at any depth — inside a nested object or an array element, not only at the top level. |
 | `{{secret:...}}` | **Not** resolved in a preset, and not an error: the token stays literal. A preset value travels into the request body, into guardrail evaluation and into the activity record, so secrets stay in headers. |
 | Guardrails | A guard sees the resolved value in `args.*`, and an approval item records it — the arguments the call will actually carry. |
+
+## Calling a context-dependent tool directly
+
+[`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool) takes a `tool_context` of its own, so a tool that authorizes through the bag can be exercised without an agent in between — which is how you smoke-test one:
+
+```bash
+soat call-tool \
+  --tool-id tool_01 \
+  --input '{"order_id":"ord_42"}' \
+  --tool-context '{"ocaToken":"tok_abc123","tenant":"acme"}'
+```
+
+The bag behaves as it does anywhere else: it resolves `{{context:...}}` in `execute.headers`, `mcp.headers` and `preset_parameters`, it is forwarded as `X-Soat-Context-*` headers, and the tool's [`context_keys`](../modules/tools.md#scoping-which-context-keys-reach-a-tool) narrows it.
+
+One difference, and it is the reason this route was the last one to get a bag. There is no session here, so there is no server-derived identity to stamp — and therefore nothing that would overwrite a caller-supplied `sessionId`. The [auto-populated keys](#auto-populated-keys-sessions) are dropped from this bag rather than forwarded, in any casing, so a tool endpoint can still read `X-Soat-Context-sessionId` as a value SOAT derived rather than one a caller chose.
 
 ## Key → header name
 

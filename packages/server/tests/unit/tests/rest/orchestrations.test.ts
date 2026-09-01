@@ -1740,6 +1740,319 @@ describe('Orchestrations', () => {
 
         await expectNoRuns(orchId);
       });
+
+      // #1153: `context_keys` exists on a tool because a tool should not
+      // receive credentials it has no business seeing. A child run had no
+      // equivalent — it took the parent's whole bag — so the same delegation
+      // was contained or not depending on whether it was spelled as a
+      // `sub_orchestration` node or as an agent calling a `builtin` tool bound
+      // to `start-orchestration-run`, which the tool's allowlist does filter.
+      describe('context_keys on a child run', () => {
+        const createChild = async (name: string) => {
+          const res = await authenticatedTestClient(userToken)
+            .post('/api/v1/orchestrations')
+            .send({
+              name,
+              nodes: [agentNode('ask')],
+              edges: [],
+              project_id: projectId,
+            });
+          expect(res.status).toBe(201);
+          return res.body.id as string;
+        };
+
+        const createParent = async (args: {
+          name: string;
+          node: Record<string, unknown>;
+        }) => {
+          const res = await authenticatedTestClient(userToken)
+            .post('/api/v1/orchestrations')
+            .send({
+              name: args.name,
+              nodes: [args.node],
+              edges: [],
+              project_id: projectId,
+            });
+          return res;
+        };
+
+        const runWithContext = async (args: {
+          orchestrationId: string;
+          toolContext: Record<string, string>;
+        }) => {
+          const res = await authenticatedTestClient(userToken)
+            .post('/api/v1/orchestration-runs')
+            .send({
+              wait: true,
+              orchestration_id: args.orchestrationId,
+              input: { question: 'hello' },
+              tool_context: args.toolContext,
+            });
+          expect(res.status).toBe(201);
+          expect(res.body.status).toBe('succeeded');
+          return res;
+        };
+
+        test('narrows what a sub_orchestration child inherits', async () => {
+          const childId = await createChild('Child Ctx Keys Sub');
+          const parentRes = await createParent({
+            name: 'Parent Ctx Keys Sub',
+            node: {
+              id: 'child',
+              type: 'sub_orchestration',
+              orchestration_id: childId,
+              input_mapping: { question: { var: 'input.question' } },
+              context_keys: ['tenant'],
+            },
+          });
+          expect(parentRes.status).toBe(201);
+          expect(parentRes.body.nodes[0].context_keys).toEqual(['tenant']);
+
+          const generationSpy = stubGeneration();
+          try {
+            await runWithContext({
+              orchestrationId: parentRes.body.id,
+              toolContext: { ocaToken: 'tok_secret', tenant: 'acme' },
+            });
+
+            expect(generationSpy).toHaveBeenCalledTimes(1);
+            expect(generationSpy.mock.calls[0]![0].toolContext).toEqual({
+              tenant: 'acme',
+            });
+          } finally {
+            generationSpy.mockRestore();
+          }
+        });
+
+        test('narrows what a loop child inherits', async () => {
+          const childId = await createChild('Child Ctx Keys Loop');
+          const parentRes = await createParent({
+            name: 'Parent Ctx Keys Loop',
+            node: {
+              id: 'fanout',
+              type: 'loop',
+              orchestration_id: childId,
+              collection: 'input.questions',
+              item_variable: 'question',
+              context_keys: ['tenant'],
+            },
+          });
+          expect(parentRes.status).toBe(201);
+
+          const generationSpy = stubGeneration();
+          try {
+            const res = await authenticatedTestClient(userToken)
+              .post('/api/v1/orchestration-runs')
+              .send({
+                wait: true,
+                orchestration_id: parentRes.body.id,
+                input: { questions: ['a', 'b'] },
+                tool_context: { ocaToken: 'tok_secret', tenant: 'acme' },
+              });
+            expect(res.status).toBe(201);
+            expect(res.body.status).toBe('succeeded');
+
+            expect(generationSpy).toHaveBeenCalledTimes(2);
+            for (const call of generationSpy.mock.calls) {
+              expect(call[0].toolContext).toEqual({ tenant: 'acme' });
+            }
+          } finally {
+            generationSpy.mockRestore();
+          }
+        });
+
+        // The default has to be "forward everything" or every graph authored
+        // before this field changes behavior on upgrade.
+        test('omitting it forwards the whole bag, as before', async () => {
+          const childId = await createChild('Child Ctx Keys Absent');
+          const parentRes = await createParent({
+            name: 'Parent Ctx Keys Absent',
+            node: {
+              id: 'child',
+              type: 'sub_orchestration',
+              orchestration_id: childId,
+              input_mapping: { question: { var: 'input.question' } },
+            },
+          });
+          expect(parentRes.status).toBe(201);
+          expect(parentRes.body.nodes[0].context_keys).toBeUndefined();
+
+          const generationSpy = stubGeneration();
+          try {
+            await runWithContext({
+              orchestrationId: parentRes.body.id,
+              toolContext: { ocaToken: 'tok_secret', tenant: 'acme' },
+            });
+
+            expect(generationSpy.mock.calls[0]![0].toolContext).toEqual({
+              ocaToken: 'tok_secret',
+              tenant: 'acme',
+            });
+          } finally {
+            generationSpy.mockRestore();
+          }
+        });
+
+        // An empty list is meaningful and distinct from omitting the field:
+        // hand the child nothing.
+        test('an empty list forwards nothing', async () => {
+          const childId = await createChild('Child Ctx Keys Empty');
+          const parentRes = await createParent({
+            name: 'Parent Ctx Keys Empty',
+            node: {
+              id: 'child',
+              type: 'sub_orchestration',
+              orchestration_id: childId,
+              input_mapping: { question: { var: 'input.question' } },
+              context_keys: [],
+            },
+          });
+          expect(parentRes.status).toBe(201);
+          expect(parentRes.body.nodes[0].context_keys).toEqual([]);
+
+          const generationSpy = stubGeneration();
+          try {
+            await runWithContext({
+              orchestrationId: parentRes.body.id,
+              toolContext: { ocaToken: 'tok_secret', tenant: 'acme' },
+            });
+
+            expect(generationSpy.mock.calls[0]![0].toolContext).toEqual({});
+          } finally {
+            generationSpy.mockRestore();
+          }
+        });
+
+        // Matching is case-insensitive because an entry names a header, so an
+        // entry cannot allow or deny depending on how it was typed.
+        test('matches an entry case-insensitively', async () => {
+          const childId = await createChild('Child Ctx Keys Casing');
+          const parentRes = await createParent({
+            name: 'Parent Ctx Keys Casing',
+            node: {
+              id: 'child',
+              type: 'sub_orchestration',
+              orchestration_id: childId,
+              input_mapping: { question: { var: 'input.question' } },
+              context_keys: ['TENANT'],
+            },
+          });
+          expect(parentRes.status).toBe(201);
+
+          const generationSpy = stubGeneration();
+          try {
+            await runWithContext({
+              orchestrationId: parentRes.body.id,
+              toolContext: { ocaToken: 'tok_secret', tenant: 'acme' },
+            });
+
+            expect(generationSpy.mock.calls[0]![0].toolContext).toEqual({
+              tenant: 'acme',
+            });
+          } finally {
+            generationSpy.mockRestore();
+          }
+        });
+
+        // A typo'd entry must be a rejected write, not a key that silently
+        // never matches — the same reason `tools` validates its allowlist at
+        // write time.
+        test('rejects an entry outside the header-name grammar at create', async () => {
+          const childId = await createChild('Child Ctx Keys Invalid');
+          const res = await createParent({
+            name: 'Parent Ctx Keys Invalid',
+            node: {
+              id: 'child',
+              type: 'sub_orchestration',
+              orchestration_id: childId,
+              context_keys: ['tenant', 'bad key'],
+            },
+          });
+
+          expect(res.status).toBe(400);
+          expect(res.body.error.code).toBe('INVALID_TOOL_CONTEXT_KEY');
+          expect(res.body.error.message).toMatch(/bad key/);
+        });
+
+        test('rejects a non-array value at create', async () => {
+          const childId = await createChild('Child Ctx Keys Nonarray');
+          const res = await createParent({
+            name: 'Parent Ctx Keys Nonarray',
+            node: {
+              id: 'child',
+              type: 'sub_orchestration',
+              orchestration_id: childId,
+              context_keys: 'tenant',
+            },
+          });
+
+          expect(res.status).toBe(400);
+          expect(res.body.error.code).toBe('INVALID_TOOL_CONTEXT_KEY');
+        });
+
+        test('rejects an invalid entry on update', async () => {
+          const childId = await createChild('Child Ctx Keys Patch');
+          const created = await createParent({
+            name: 'Parent Ctx Keys Patch',
+            node: {
+              id: 'child',
+              type: 'sub_orchestration',
+              orchestration_id: childId,
+              context_keys: ['tenant'],
+            },
+          });
+          expect(created.status).toBe(201);
+
+          const res = await authenticatedTestClient(userToken)
+            .patch(`/api/v1/orchestrations/${created.body.id}`)
+            .send({
+              nodes: [
+                {
+                  id: 'child',
+                  type: 'sub_orchestration',
+                  orchestration_id: childId,
+                  context_keys: ['bad(key)'],
+                },
+              ],
+              edges: [],
+            });
+
+          expect(res.status).toBe(400);
+          expect(res.body.error.code).toBe('INVALID_TOOL_CONTEXT_KEY');
+        });
+
+        // The reserved keys are re-derived per generation downstream, so the
+        // allowlist governs caller data only — narrowing must not be able to
+        // strip a child's identity.
+        test('does not strip the reserved identity keys', async () => {
+          const childId = await createChild('Child Ctx Keys Reserved');
+          const parentRes = await createParent({
+            name: 'Parent Ctx Keys Reserved',
+            node: {
+              id: 'child',
+              type: 'sub_orchestration',
+              orchestration_id: childId,
+              input_mapping: { question: { var: 'input.question' } },
+              context_keys: [],
+            },
+          });
+          expect(parentRes.status).toBe(201);
+
+          const generationSpy = stubGeneration();
+          try {
+            await runWithContext({
+              orchestrationId: parentRes.body.id,
+              toolContext: { ocaToken: 'tok_secret' },
+            });
+
+            // Nothing caller-supplied survives `[]`, and the identity keys are
+            // stamped downstream rather than carried here.
+            expect(generationSpy.mock.calls[0]![0].toolContext).toEqual({});
+          } finally {
+            generationSpy.mockRestore();
+          }
+        });
+      });
     });
 
     // A run is the one long-lived resumable object and had nowhere to record

@@ -92,6 +92,29 @@ export const assertCredentialProjectScope = (args: {
  *
  * Intersect it into the resource shape a permission helper accepts.
  */
+/**
+ * A `tool_context` bag off a request body. Values are stringified rather than
+ * rejected — the leniency every `tool_context` entry point has — but the keys
+ * are left exactly as the caller wrote them, for `assertValidToolContextKeys`
+ * to accept or reject (`.claude/rules/case-convention.md`: a bag's keys are
+ * never rewritten).
+ *
+ * Shared rather than per-route: two entry points that disagree about what a
+ * malformed bag means is how one of them ends up failing open.
+ */
+export const parseToolContextBody = (
+  raw: unknown
+): Record<string, string> | undefined => {
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
+    return undefined;
+  }
+  return Object.fromEntries(
+    Object.entries(raw as Record<string, unknown>).map(([key, value]) => {
+      return [key, String(value)];
+    })
+  );
+};
+
 export type ProjectOwned = { project_id: string | undefined };
 
 /**

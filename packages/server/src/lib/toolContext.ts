@@ -244,6 +244,35 @@ export const pinServerIdentityToolContext = (args: {
 };
 
 /**
+ * A caller-supplied bag on an entry point that has **no session**, turned into
+ * the bag to forward: keys validated against the header-name grammar, and the
+ * reserved identity keys stripped in any casing.
+ *
+ * The strip is the whole point. Where a generation runs, `buildGenerationContext`
+ * stamps the trusted identity over the caller's; where nothing does — a task row,
+ * a direct `POST /tools/{id}/call` — there is nothing to overwrite a forged
+ * `sessionId` with, so it must be removed rather than trusted (#843/#850/#851).
+ * That is also why this cannot live inside `callTool`: a generation-driven call
+ * arrives with identity already pinned, and stripping it there would delete the
+ * server's own keys.
+ *
+ * Returns `undefined` when nothing survives, so "no context" has one
+ * representation.
+ */
+export const sanitizeCallerToolContext = (
+  toolContext?: Record<string, string> | null
+): Record<string, string> | undefined => {
+  if (!toolContext) return undefined;
+  assertValidToolContextKeys(toolContext);
+  const stripped = pinServerIdentityToolContext({
+    toolContext,
+    identity: null,
+  });
+  if (!stripped || Object.keys(stripped).length === 0) return undefined;
+  return stripped;
+};
+
+/**
  * Narrows a `tool_context` bag to what one tool may receive (#945 item 3).
  * `undefined`/`null` `contextKeys` forwards everything, so every tool authored
  * before the allowlist keeps its behavior; an empty list forwards nothing but

@@ -133,7 +133,7 @@ A `{{context:<key>}}` token in `execute.headers` or `mcp.headers` is substituted
 | Valid in | `execute.headers` and `mcp.headers` only. In `execute.url`, `mcp.url`, `execute.auth` or a body it is rejected with `400 INVALID_TEMPLATE_TOKEN` — a caller-supplied value must not be able to steer the outbound URL. |
 | Missing key at call time | The call fails with `400 MISSING_TOOL_CONTEXT_KEY`, naming the key and header, rather than sending an empty credential. |
 | Read back | `GET`/`LIST` echo the token, never the resolved value — same as `{{secret:...}}`. |
-| Calling paths without context | [`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool) and an orchestration `tool` node carry no `tool_context`, so a tool declaring this token cannot be invoked through them. Reach it through an agent generation, a session, or an orchestration `agent` node. |
+| Calling paths | Every dispatch surface carries a bag: an agent generation, a session, an orchestration `agent`, `tool` or `poll` node, a `pipeline` step, and [`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool) via its own `tool_context` field. |
 
 #### Scoping which context keys reach a tool
 
@@ -397,13 +397,13 @@ and never leaves the network.
 
 ### Calling a Tool Directly
 
-Tools can be invoked independently of an agent via [`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool). The body accepts `action` (required for `builtin` and `mcp` types) and `input`. For `pipeline` tools, `input` is the pipeline input and `action` is ignored. When the tool has an `output_mapping`, the response is that mapping's result — see [Output Mapping](#output-mapping).
+Tools can be invoked independently of an agent via [`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool). The body accepts `action` (required for `builtin` and `mcp` types), `input`, and `tool_context`. For `pipeline` tools, `input` is the pipeline input and `action` is ignored. When the tool has an `output_mapping`, the response is that mapping's result — see [Output Mapping](#output-mapping).
 
 - A target that is not publicly routable, and not listed in the deployment's `TOOL_EGRESS_ALLOWED_HOSTS`, fails with `403 TOOL_EGRESS_BLOCKED` before any connection is opened — see [Where a Tool May Reach](#where-a-tool-may-reach-egress).
 - A non-2xx target response fails with `502 TOOL_HTTP_ERROR`; the error `meta` carries `tool_status_code`, `tool_response_body`, `tool_url`, and `tool_method`.
 - If [`execute.auth`](#computed-credentials-executeauth) cannot produce the credential, the call fails with `502 TOOL_AUTH_FAILED` instead.
 - A 2xx response whose body isn't valid JSON is returned as raw text; an empty result (e.g. a `builtin` action answering `204`) responds `200` with a JSON `null` body.
-- This endpoint carries no [`tool_context`](../advanced/tool-context.md), so a tool declaring a [`{{context:<key>}}` token](#context-references-in-headers) fails here with `400 MISSING_TOOL_CONTEXT_KEY` — reach it through an agent.
+- `tool_context` in the body reaches a tool declaring a [`{{context:<key>}}` token](#context-references-in-headers), so a context-dependent tool can be exercised here without an agent in between. There is no session on this route, so the auto-populated `sessionId`, `actorId` and `actorExternalId` are dropped from that bag rather than forwarded — see [Calling a context-dependent tool directly](../advanced/tool-context.md#calling-a-context-dependent-tool-directly).
 
 ## Examples
 

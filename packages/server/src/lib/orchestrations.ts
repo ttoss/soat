@@ -95,6 +95,10 @@ export type OrchestrationNode = {
   collection?: string;
   itemVariable?: string;
   parallelism?: number;
+  // loop / sub_orchestration node — narrows the run's `tool_context` before it
+  // is handed to the child run, the way a tool's `contextKeys` narrows what
+  // egresses to it (#1153). `undefined`/`null` inherits everything.
+  contextKeys?: string[] | null;
   // poll node — reuses the tool fields above; `exitCondition` is JSON Logic,
   // truthy to stop.
   exitCondition?: unknown;

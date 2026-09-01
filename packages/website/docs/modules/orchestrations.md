@@ -107,7 +107,7 @@ A node execution records the node's **external I/O** — the input it resolved a
 | `condition`    | Evaluates a JSON Logic rule and emits a string label. Downstream edges use `condition: "<label>"` to select the active branch.      |
 | `human`        | Pauses the run and waits for external input. The run enters `awaiting_input` status with `required_action`.                         |
 | `approval`     | Proposes a guarded tool call and pauses for a human decision via the [Approvals](./approvals.md) queue. Uses `tool_id`, `arguments`, and `expires_in`. See [Approval Nodes](#approval-nodes).                         |
-| `loop`         | Iterates a state collection, running a sub-orchestration per item. Uses `orchestration_id`, `collection`, `item_variable`, and `parallelism`. See [Loops](#loops-collection-iteration). |
+| `loop`         | Iterates a state collection, running a sub-orchestration per item. Uses `orchestration_id`, `collection`, `item_variable`, `parallelism`, and `context_keys`. See [Loops](#loops-collection-iteration). |
 | `poll`         | Calls a tool on an interval until a JSON Logic exit condition on the response holds. Uses `tool_id`, `exit_condition`, and `interval`. See [Polling](#polling). |
 | `delay`        | Waits for a fixed `duration`, then continues. Accepts `5s`/`5m`/`2h`/`500ms` or ISO 8601 (`PT5S`).                                   |
 | `emit_event`   | Emits an internal event of type `event_type` carrying the `input_mapping` result as the event `data`. See [Emitting events](#emitting-events). |
@@ -164,6 +164,7 @@ A `loop` node iterates an array in the run state and runs a **sub-orchestration 
 | `collection` | `state.items` | State path to the array to iterate; a path without the `state.` prefix is normalised to one. A missing or non-array value yields zero iterations |
 | `item_variable` | `item` | Each element is passed as the sub-run's **input** under this key; run input is seeded under the `input` namespace, so the sub-graph reads it with `{"var": "input.item"}` |
 | `parallelism` | `5` | Items are processed in batches of this size |
+| `context_keys` | `null` | Allowlist of the run's `tool_context` keys each child inherits; `null` hands down the whole bag, `[]` none. See [Narrowing what a child run inherits](#narrowing-what-a-child-run-inherits) |
 
 The node completes with an artifact `{ results: [...] }` — one entry per item, in order, holding that sub-run's `output`. A graph containing a `loop` node is exempt from [cycle detection](#static-validation) (loops introduce intentional cycles).
 
@@ -482,7 +483,7 @@ Each generation returned carries its own `trace_id`, which opens the full [trace
 
 `start-orchestration-run` accepts a `tool_context` bag, the same contract as an [agent generation or session](../advanced/tool-context.md): each key/value pair is forwarded as one prefixed context header on every `http`, `mcp` and `builtin` tool call the run makes. This is how a scheduled or orchestrated flow hands a per-user credential to the tools it calls, without embedding it in the graph.
 
-The bag is stored **on the run** and re-read at every step, so it survives every way a run gets driven — queued starts, scheduler wakes, human/approval resumes, crash redrives — and is inherited by `loop` / `sub_orchestration` child runs. Rules that carry over from the shared contract: the header name is the deployment's [context prefix](../advanced/tool-context.md#configuring-the-header-prefix) plus the key **verbatim**; an invalid or colliding key is rejected with `400 INVALID_TOOL_CONTEXT_KEY` at start time, before any run is created; the reserved identity keys (`sessionId`, `actorId`, `actorExternalId`) are stripped. `tool_context` reaches every node that calls a tool: an `agent` node's generation, and a `tool` or `poll` node's direct call — the latter being the run acting on its own behalf, which is as much the run's work as a generation is. A tool reached that way resolves its `{{context:}}` headers and [`preset_parameters`](../advanced/tool-context.md#pinning-a-parameter-to-the-runs-value) from the run's bag, which is how a run's own boundary — the one account it may act on — reaches the call with no model in between.
+The bag is stored **on the run** and re-read at every step, so it survives every way a run gets driven — queued starts, scheduler wakes, human/approval resumes, crash redrives — and is inherited by `loop` / `sub_orchestration` child runs, in full unless the node sets [`context_keys`](#narrowing-what-a-child-run-inherits). Rules that carry over from the shared contract: the header name is the deployment's [context prefix](../advanced/tool-context.md#configuring-the-header-prefix) plus the key **verbatim**; an invalid or colliding key is rejected with `400 INVALID_TOOL_CONTEXT_KEY` at start time, before any run is created; the reserved identity keys (`sessionId`, `actorId`, `actorExternalId`) are stripped. `tool_context` reaches every node that calls a tool: an `agent` node's generation, and a `tool` or `poll` node's direct call — the latter being the run acting on its own behalf, which is as much the run's work as a generation is. A tool reached that way resolves its `{{context:}}` headers and [`preset_parameters`](../advanced/tool-context.md#pinning-a-parameter-to-the-runs-value) from the run's bag, which is how a run's own boundary — the one account it may act on — reaches the call with no model in between.
 
 ```bash
 soat start-orchestration-run \
@@ -490,6 +491,23 @@ soat start-orchestration-run \
   --tool-context '{"ocaToken":"eyJhbGciOiJIUzI1NiJ9.abc"}' \
   --input '{"question":"what is my balance?"}'
 ```
+
+#### Narrowing what a child run inherits
+
+A child run inherits the parent's whole bag by default, which is right when the sub-graph is the same team's next step and wrong when it is a shared component. `context_keys` on a `loop` or `sub_orchestration` node bounds that edge, exactly as [the field of the same name on a tool](tools.md#scoping-which-context-keys-reach-a-tool) bounds what egresses to that tool:
+
+```json
+{
+  "id": "enrich",
+  "type": "sub_orchestration",
+  "orchestration_id": "orch_shared_enrichment",
+  "context_keys": ["tenant"]
+}
+```
+
+A run carrying `{"ocaToken": "…", "tenant": "acme"}` hands that child `tenant` and nothing else. The rules match the tool-level allowlist because it is the same primitive: omitting the field inherits everything (so every graph authored before it keeps its behavior), `[]` inherits nothing, matching is case-insensitive since an entry names a header, and an entry outside the header-name grammar is rejected at write time with `400 INVALID_TOOL_CONTEXT_KEY` rather than becoming a key that silently never matches. The identity keys are unaffected — a child re-derives `sessionId`, `actorId` and `actorExternalId` per generation regardless of the list, so narrowing cannot strip a child's identity.
+
+Worth knowing why this exists: the same delegation spelled as an agent calling a `builtin` tool bound to `start-orchestration-run` was already filtered by that tool's `context_keys`. Without this field, one logical operation had two different containment outcomes chosen by graph-authoring style rather than by intent.
 
 ### Run Metadata
 

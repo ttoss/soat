@@ -8,10 +8,7 @@ import type { RequestPrincipal } from './principals';
 import { emitTaskEvent } from './taskEvents';
 import { runStateAutomation } from './tasksAutomation';
 import { resolveTaskDefinition } from './taskWorkflowDefinition';
-import {
-  assertValidToolContextKeys,
-  pinServerIdentityToolContext,
-} from './toolContext';
+import { sanitizeCallerToolContext } from './toolContext';
 import { validatePayload, type WorkflowState } from './workflowsValidation';
 
 export { transitionTask } from './tasksTransition';
@@ -82,14 +79,9 @@ export const mapTask = (instance: TaskInstance) => {
 };
 
 /**
- * Turns a caller-supplied `tool_context` into the bag to persist: validated
- * against the header-name grammar every other entry point uses, with the
- * reserved identity keys stripped in any casing.
- *
- * The strip is belt-and-braces — `buildGenerationContext` re-pins identity at
- * the generation chokepoint (#850) — but a task row is long-lived and read by
- * operators, so storing a key the server will overwrite would make the record
- * lie about what the dispatch sends.
+ * {@link sanitizeCallerToolContext} in the shape a task row stores. A task is
+ * long-lived and read by operators, so a key the server would overwrite must
+ * not be persisted — the record would lie about what the dispatch sends.
  *
  * An empty bag persists as `null`, so "no context" has one representation and a
  * caller can drop a credential from an open task with `tool_context: {}`.
@@ -97,14 +89,7 @@ export const mapTask = (instance: TaskInstance) => {
 export const sanitizeTaskToolContext = (
   toolContext: Record<string, string> | null | undefined
 ): Record<string, string> | null => {
-  if (!toolContext) return null;
-  assertValidToolContextKeys(toolContext);
-  const stripped = pinServerIdentityToolContext({
-    toolContext,
-    identity: null,
-  });
-  if (!stripped || Object.keys(stripped).length === 0) return null;
-  return stripped;
+  return sanitizeCallerToolContext(toolContext) ?? null;
 };
 
 /**

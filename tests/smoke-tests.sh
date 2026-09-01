@@ -364,9 +364,9 @@ $SOAT_CLI delete-tool --tool-id "$SECRET_REF_TOOL_ID"
 echo "Secret reference coverage: OK"
 
 # Context references are accepted in `headers`, echoed verbatim, and rejected
-# elsewhere. Through `/tools/{id}/call`, which carries no tool_context, the call
-# must fail closed rather than put the literal token on the wire. Resolution
-# against a real context is covered by the server suite's echo server.
+# elsewhere. Through `/tools/{id}/call` the token resolves from the call's own
+# `--tool-context`, and a call that supplies none must fail closed rather than
+# put the literal token on the wire.
 CONTEXT_REF_TOKEN="Bearer {{context:ocaToken}}"
 CONTEXT_REF_TOOL_RESP=$($SOAT_CLI create-tool \
   --project-id "$PROJECT_PUBLIC_ID" \
@@ -388,8 +388,30 @@ if [ "$STORED_CONTEXT_HEADER" != "$CONTEXT_REF_TOKEN" ]; then
   exit 1
 fi
 
-# No tool_context on this path — the call must fail, not send `Bearer ` empty.
+# Without a bag the key is unresolvable — the call must fail, not send `Bearer `
+# empty.
 expect_cli_error_status 400 call-tool --tool-id "$CONTEXT_REF_TOOL_ID"
+
+# With one, the value lands in the header the tool declared: the tool calls the
+# server's own projects route, which answers 200 only for a real bearer token
+# (#1151).
+CONTEXT_CALL_RESP=$($SOAT_CLI call-tool \
+  --tool-id "$CONTEXT_REF_TOOL_ID" \
+  --tool-context "{\"ocaToken\":\"$TOKEN\"}")
+CONTEXT_CALL_OK=$(printf '%s\n' "$CONTEXT_CALL_RESP" | jq -r 'has("data")')
+if [ "$CONTEXT_CALL_OK" != "true" ]; then
+  echo "ERROR: Expected the {{context:...}} header to resolve from --tool-context" >&2
+  echo "$CONTEXT_CALL_RESP" >&2
+  exit 1
+fi
+
+# The reserved identity keys are the server's, and this route has no session to
+# derive them from, so a caller-supplied one is dropped rather than forwarded.
+# Passing only `sessionId` leaves `ocaToken` unresolvable, which is the
+# observable proof it never became a header.
+expect_cli_error_status 400 call-tool \
+  --tool-id "$CONTEXT_REF_TOOL_ID" \
+  --tool-context '{"sessionId":"sess_forged"}'
 
 # Outside `headers`, the token is a write-time error: a caller-supplied value
 # must not be able to steer the outbound URL.
@@ -1848,6 +1870,27 @@ NESTED_PARENT_ORCH=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestrati
 NESTED_PARENT_RUN=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
   --orchestration-id "$NESTED_PARENT_ORCH" \
   --wait true | jq -r '.id')
+
+# `context_keys` bounds what a child run inherits from the parent's bag. Asserted
+# here as a contract — that it round-trips on the node and that a typo'd entry is
+# a rejected write, not a key that never matches — while the unit suite pins
+# which keys actually reach the child's generations (#1153).
+NESTED_SCOPED_ORCH=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-orchestration-nested-scoped" \
+  --nodes "[{\"id\":\"delegate\",\"type\":\"sub_orchestration\",\"orchestration_id\":\"$NESTED_CHILD_ORCH\",\"context_keys\":[\"tenant\"]}]" \
+  --edges '[]')
+if ! printf '%s\n' "$NESTED_SCOPED_ORCH" | jq -e '.nodes[0].context_keys == ["tenant"]' >/dev/null 2>&1; then
+  echo "ERROR: a node's context_keys did not round-trip" >&2
+  printf '%s\n' "$NESTED_SCOPED_ORCH" >&2
+  exit 1
+fi
+
+SOAT_TOKEN="$ORCH_API_KEY_RAW" expect_cli_error_status 400 create-orchestration \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-orchestration-nested-bad-keys" \
+  --nodes "[{\"id\":\"delegate\",\"type\":\"sub_orchestration\",\"orchestration_id\":\"$NESTED_CHILD_ORCH\",\"context_keys\":[\"bad key\"]}]" \
+  --edges '[]'
 
 NESTED_CHILDREN=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestration-runs \
   --parent-orchestration-run-id "$NESTED_PARENT_RUN")
