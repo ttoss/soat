@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.34.0](https://github.com/ttoss/soat/compare/v0.33.1...v0.34.0) (2026-09-01)
+
+### Features
+
+* **server:** make the continuation chain a record, and let an agent bound it ([#1168](https://github.com/ttoss/soat/issues/1168)) ([611a67c](https://github.com/ttoss/soat/commit/611a67c342662102420395ff76fc3572bd969d46)), closes [#1161](https://github.com/ttoss/soat/issues/1161) [#1165](https://github.com/ttoss/soat/issues/1165) [#1165](https://github.com/ttoss/soat/issues/1165) [#1161](https://github.com/ttoss/soat/issues/1161)
+
 ## [0.33.1](https://github.com/ttoss/soat/compare/v0.33.0...v0.33.1) (2026-08-29)
 
 **Note:** Version bump only for package @soat/sdk
