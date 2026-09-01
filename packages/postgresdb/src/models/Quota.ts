@@ -75,6 +75,15 @@ export class Quota extends Model {
   @Column({ type: DataType.STRING, allowNull: false, defaultValue: 'enforce' })
   declare mode: string;
 
+  /**
+   * `block` | `allow` — whether an `enforce` cap refuses generations over an
+   * unpriced blackout (a window whose metered events none are priced). Only
+   * `cost_usd` has the pricing dependency, so other metrics keep NULL; a NULL
+   * on a `cost_usd` row (pre-column rows included) means `block`.
+   */
+  @Column({ type: DataType.STRING, allowNull: true })
+  declare onUnpriced: string | null;
+
   /** Webhook fire state (once per window) — Phase 3. */
   @Column({ type: DataType.STRING, allowNull: true })
   declare firedWindowKey: string | null;

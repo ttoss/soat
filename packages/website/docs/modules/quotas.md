@@ -56,6 +56,7 @@ Counting scope mirrors [API-request metering](./usage.md#api-request-metering) e
 | `window`        | string  | `rolling_1m` \| `rolling_1h` \| `rolling_24h` \| `calendar_month`                 |
 | `limit`         | number  | The cap (> 0)                                                                      |
 | `mode`          | string  | `enforce` (block with `429`) \| `monitor` (observe and report, never block — see [Monitor mode](#monitor-mode)) |
+| `on_unpriced`   | string  | `block` \| `allow` — what an `enforce` `cost_usd` quota does over a pricing blackout (see [Unpriced usage](#unpriced-usage)). Defaults to `block`; `null` for metrics with no pricing dependency |
 | `current_usage` | object  | Current fixed-window usage for `requests` (`window_key`, `count`, `resets_at`); `null` for token/cost quotas (they aggregate the meter at check time) and in list responses |
 | `created_at`    | string  | ISO 8601 creation timestamp                                                       |
 | `updated_at`    | string  | ISO 8601 last-updated timestamp                                                   |
@@ -80,9 +81,14 @@ The exclusions follow from where each metric is measured. `requests` is counted 
 
 `tokens` and `cost_usd` quotas are checked **before a generation starts**. The current window's usage is aggregated directly from the [usage meter](./usage.md) — a `cost_usd` quota sums the priced event cost, a `tokens` quota sums the billable token components (uncached input + output + cached; the non-billable `reasoning_tokens` detail is excluded). If the aggregate is at or over the limit, the new generation is blocked with `429 QUOTA_EXCEEDED` and nothing is metered for it.
 
+### Unpriced usage
+
 A `cost_usd` quota is only as good as the project's pricing. Usage events carry `cost_usd: null` when no [price-book](./usage.md#pricing) row covers them, and an unpriced event contributes `0` to the aggregate. A `tokens` quota has no such dependency: it sums component quantities, which are always recorded.
 
-So a window that metered usage and priced **none** of it aggregates to `0` however much was actually spent, and the limit comparison can never fire. An `enforce` quota does not pass that through — it refuses the generation with `409 QUOTA_UNENFORCEABLE`:
+So a window that metered usage and priced **none** of it aggregates to `0` however much was actually spent, and the limit comparison can never fire. What an `enforce` quota does then is the quota's own declared posture, `on_unpriced`:
+
+- **`block`** (the default) refuses new generations with `409 QUOTA_UNENFORCEABLE`. Asking for a cost cap is asking for spend to be measurable, so the platform holds the project to it rather than reporting a cap that protects nothing.
+- **`allow`** lets them through — the operator's explicit choice of availability over containment, recorded on the quota where the next reader can see it.
 
 ```json
 {
@@ -94,14 +100,15 @@ So a window that metered usage and priced **none** of it aggregates to `0` howev
 }
 ```
 
-Asking for a cost cap is asking for spend to be measurable, so the platform holds the project to it rather than reporting a cap that protects nothing. Two consequences worth knowing:
+The refusal waits for a real **blackout** — at least 3 metered events in the window, none of them priced. A fresh window's first event can land on the one unpriced model of a mostly-priced project; ordering noise like that must not stop a project at every window boundary, so one or two all-unpriced events pass (the exception below still files) and three with nothing priced refuse. A **partially** priced window never refuses: the aggregate is real, if incomplete.
 
-- **No `Retry-After`, and no `quota.exceeded` webhook.** The window resetting changes nothing and no limit was reached. Configure the [price book](./usage.md#pricing) for the models in use, or switch the quota to `monitor`.
-- **`monitor` mode never blocks**, here as everywhere. A project that wants cost visibility without a price book uses `monitor` and gets the exception below and nothing else.
+Worth knowing about the refusal:
 
-A **partially** priced window is unaffected: the aggregate is real, if incomplete, so only a total pricing blackout refuses.
+- **No `Retry-After`, and no `quota.exceeded` webhook.** The window resetting changes nothing and no limit was reached. Configure the [price book](./usage.md#pricing) for the models in use, or set the quota's `on_unpriced` to `allow`.
+- **`monitor` mode never blocks**, here as everywhere, whatever `on_unpriced` says. A project that wants cost visibility without a price book uses `monitor` and gets the exception below and nothing else.
+- `on_unpriced` is only storable on `cost_usd` quotas — on any other metric it would be accepted-but-inert, so the write is refused with `400`.
 
-Either way the dead cap is reported: when a `cost_usd` check finds the window held metered usage but nothing priced, a `quota_unpriced` [exception](./exceptions.md) is filed (severity `warning`) carrying the quota, its limit, and the unpriced event count. It is deduped on the quota, so one dead cap is one triage item and its `occurrence_count` is the number of generations that hit it. An empty window files nothing and refuses nothing, since a zero aggregate with nothing metered is legitimately zero.
+Whatever the posture, the dead cap is reported: when a `cost_usd` check finds the window held metered usage but nothing priced, a `quota_unpriced` [exception](./exceptions.md) is filed (severity `warning`) carrying the quota, its limit, and the unpriced event count — from the **first** such event, not the third, so the triage item always precedes any refusal. It is deduped on the quota, so one dead cap is one triage item and its `occurrence_count` is the number of generations that hit it. An empty window files nothing and refuses nothing, since a zero aggregate with nothing metered is legitimately zero.
 
 A generation already **in flight is never killed** — its tokens are already spent and will be billed — so a budget may overshoot by at most one generation. A `project`-scoped quota aggregates the whole project; an `agent`-scoped quota with a `scope_ref` aggregates only that agent; an `actor`-scoped quota aggregates only the end user behind the generation (see [Actor scope](#actor-scope)). Because the check reads the meter rather than a separate counter, quotas and usage can never disagree.
 

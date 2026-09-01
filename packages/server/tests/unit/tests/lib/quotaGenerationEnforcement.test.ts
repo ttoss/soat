@@ -134,6 +134,9 @@ describe('evaluateGenerationQuotas', () => {
     window?: string;
     limit: number;
     mode?: string;
+    // Left null when absent — which is also what every quota row stored before
+    // the column existed carries, so the default here doubles as the legacy case.
+    onUnpriced?: string;
   }) => {
     const quota = await db.Quota.create({
       projectId: opts.projectInternalId,
@@ -143,6 +146,7 @@ describe('evaluateGenerationQuotas', () => {
       window: opts.window ?? 'calendar_month',
       limit: String(opts.limit),
       mode: opts.mode ?? 'enforce',
+      onUnpriced: opts.onUnpriced ?? null,
     });
     return quota;
   };
@@ -150,22 +154,35 @@ describe('evaluateGenerationQuotas', () => {
   // An unpriced event contributes 0, so a `cost_usd` cap on a project with no
   // price book can never breach on its limit. These cover both halves of the
   // response: the triage item that names the dead cap, and the refusal that
-  // stops an `enforce` cap from waving through spend it cannot measure.
+  // stops an `enforce` cap from waving through spend it cannot measure. The
+  // refusal needs a *blackout* — at least UNPRICED_BLACKOUT_MIN_EVENTS metered
+  // events, none priced — so a window's first event landing on an unpriced
+  // model cannot stop a mostly-priced project at every window boundary.
   describe('unpriced cost_usd quotas', () => {
+    const seedUnpricedEvents = async (
+      ctx: { projectInternalId: number; agentInternalId: number },
+      count: number
+    ) => {
+      for (let i = 0; i < count; i += 1) {
+        await seedUsageEvent({
+          projectInternalId: ctx.projectInternalId,
+          agentInternalId: ctx.agentInternalId,
+          tokens: { input: 100, output: 50 },
+          costUsd: null,
+        });
+      }
+    };
     const unpricedExceptions = async (projectInternalId: number) => {
       return db.ExceptionItem.findAll({
         where: { projectId: projectInternalId, kind: 'quota_unpriced' },
       });
     };
 
-    test('blocks and files an exception when every event in the window is unpriced', async () => {
+    test('blocks and files an exception once a blackout reaches the threshold', async () => {
       const ctx = await freshProjectAndAgent('genquota-unpriced-file');
-      await seedUsageEvent({
-        projectInternalId: ctx.projectInternalId,
-        agentInternalId: ctx.agentInternalId,
-        tokens: { input: 100, output: 50 },
-        costUsd: null,
-      });
+      await seedUnpricedEvents(ctx, 3);
+      // No on_unpriced stored — the row a pre-column deployment left behind —
+      // so this also pins that legacy quotas default to blocking.
       const quota = await createQuotaRow({
         projectInternalId: ctx.projectInternalId,
         scope: 'project',
@@ -190,7 +207,49 @@ describe('evaluateGenerationQuotas', () => {
       expect(detail.quotaId).toBe(quota.publicId);
       expect(detail.metric).toBe('cost_usd');
       expect(detail.limit).toBe(5);
-      expect(detail.unpricedEventCount).toBe(1);
+      expect(detail.unpricedEventCount).toBe(3);
+    });
+
+    test('does not block below the blackout threshold, but still files', async () => {
+      // A fresh window's first metered event can land on the one unpriced
+      // model of a mostly-priced project. Ordering noise must not stop the
+      // project at every window boundary — the exception is the early signal,
+      // the refusal waits for a real blackout.
+      const ctx = await freshProjectAndAgent('genquota-unpriced-below');
+      await seedUnpricedEvents(ctx, 2);
+      await createQuotaRow({
+        projectInternalId: ctx.projectInternalId,
+        scope: 'project',
+        metric: 'cost_usd',
+        limit: 5,
+      });
+
+      const breach = await evaluateGenerationQuotas({
+        agentId: ctx.agentPublicId,
+      });
+      expect(breach).toBeNull();
+      expect(await unpricedExceptions(ctx.projectInternalId)).toHaveLength(1);
+    });
+
+    test('on_unpriced "allow" never blocks, whatever the blackout size', async () => {
+      // The explicit opt-out: the operator chose availability over containment,
+      // on the quota itself where the next reader can see it. The exception
+      // still files — allow means unblocked, not unwatched.
+      const ctx = await freshProjectAndAgent('genquota-unpriced-allow');
+      await seedUnpricedEvents(ctx, 5);
+      await createQuotaRow({
+        projectInternalId: ctx.projectInternalId,
+        scope: 'project',
+        metric: 'cost_usd',
+        limit: 5,
+        onUnpriced: 'allow',
+      });
+
+      const breach = await evaluateGenerationQuotas({
+        agentId: ctx.agentPublicId,
+      });
+      expect(breach).toBeNull();
+      expect(await unpricedExceptions(ctx.projectInternalId)).toHaveLength(1);
     });
 
     test('files nothing when the window has priced events', async () => {
@@ -277,11 +336,7 @@ describe('evaluateGenerationQuotas', () => {
       // `monitor` means observe, never block — including here. The exception
       // still names the cap, which is the whole of what monitor mode owes.
       const ctx = await freshProjectAndAgent('genquota-unpriced-monitor');
-      await seedUsageEvent({
-        projectInternalId: ctx.projectInternalId,
-        agentInternalId: ctx.agentInternalId,
-        costUsd: null,
-      });
+      await seedUnpricedEvents(ctx, 3);
       await createQuotaRow({
         projectInternalId: ctx.projectInternalId,
         scope: 'project',
@@ -301,11 +356,7 @@ describe('evaluateGenerationQuotas', () => {
       // The window resetting changes nothing here, so the `Retry-After`
       // contract a 429 carries would be a lie: configuring pricing is the fix.
       const ctx = await freshProjectAndAgent('genquota-unpriced-code');
-      await seedUsageEvent({
-        projectInternalId: ctx.projectInternalId,
-        agentInternalId: ctx.agentInternalId,
-        costUsd: null,
-      });
+      await seedUnpricedEvents(ctx, 3);
       const quota = await createQuotaRow({
         projectInternalId: ctx.projectInternalId,
         scope: 'project',
@@ -618,11 +669,13 @@ describe('evaluateGenerationQuotas', () => {
 
   test('an unpriced refusal fires no quota.exceeded — nothing exceeded', async () => {
     const ctx = await freshProjectAndAgent('genquota-unpriced-nofire');
-    await seedUsageEvent({
-      projectInternalId: ctx.projectInternalId,
-      agentInternalId: ctx.agentInternalId,
-      costUsd: null,
-    });
+    for (let i = 0; i < 3; i += 1) {
+      await seedUsageEvent({
+        projectInternalId: ctx.projectInternalId,
+        agentInternalId: ctx.agentInternalId,
+        costUsd: null,
+      });
+    }
     await createQuotaRow({
       projectInternalId: ctx.projectInternalId,
       scope: 'project',

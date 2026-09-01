@@ -18,6 +18,57 @@ import { AGENT_SCALAR_FIELDS } from 'src/lib/agents';
 const LIB_DIR = path.resolve(__dirname, '../../../../src/lib');
 
 /**
+ * Source with comments removed, so the check below matches only code. A stale
+ * doc comment naming a field must not keep this contract green after the code
+ * that read the field is gone. String and template literals are kept — they
+ * are live code here (`readType(entry) === 'hasToolCall'` is exactly how a
+ * stop condition is matched) — which is also why the scanner tracks them: a
+ * comment opener inside one is content, not a comment.
+ */
+const stripComments = (source: string): string => {
+  let out = '';
+  let i = 0;
+  let mode: 'code' | 'line' | 'block' | "'" | '"' | '`' = 'code';
+  while (i < source.length) {
+    const pair = source.slice(i, i + 2);
+    const char = source[i];
+    if (mode === 'code') {
+      if (pair === '//') {
+        mode = 'line';
+        i += 2;
+      } else if (pair === '/*') {
+        mode = 'block';
+        i += 2;
+      } else {
+        if (char === "'" || char === '"' || char === '`') mode = char;
+        out += char;
+        i += 1;
+      }
+    } else if (mode === 'line') {
+      if (char === '\n') {
+        mode = 'code';
+        out += char;
+      }
+      i += 1;
+    } else if (mode === 'block') {
+      if (pair === '*/') mode = 'code';
+      i += pair === '*/' ? 2 : 1;
+    } else {
+      // Inside a string or template literal: copy verbatim, honor escapes.
+      if (char === '\\') {
+        out += source.slice(i, i + 2);
+        i += 2;
+      } else {
+        if (char === mode) mode = 'code';
+        out += char;
+        i += 1;
+      }
+    }
+  }
+  return out;
+};
+
+/**
  * Where a field is acted on. `modules` are `src/lib` filenames that must each
  * mention the field; a field enforced in several places lists all of them, so
  * dropping one is a failure rather than a silent narrowing.
@@ -148,9 +199,12 @@ describe('agent config field enforcement contract', () => {
     for (const moduleName of declaration.modules) {
       const modulePath = path.join(LIB_DIR, moduleName);
       expect(fs.existsSync(modulePath)).toBe(true);
-      // A claim checked against the source: a field dropped from the module
-      // that enforces it fails here rather than going quietly inert.
-      expect(fs.readFileSync(modulePath, 'utf-8')).toContain(field);
+      // A claim checked against the source, with comments stripped: a field
+      // dropped from the module that enforces it fails here rather than going
+      // quietly inert behind a doc comment that still names it.
+      expect(stripComments(fs.readFileSync(modulePath, 'utf-8'))).toContain(
+        field
+      );
     }
   });
 

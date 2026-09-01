@@ -44,7 +44,7 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   QUOTA_EXCEEDED:
     'Wait until the window resets — `Retry-After` (seconds) and `meta.resets_at` both carry the time — or raise the quota with `PATCH /api/v1/quotas/{quota_id}`.',
   QUOTA_UNENFORCEABLE:
-    'Add price book entries covering the models this project runs (`POST /api/v1/prices`), so the cost quota has something to aggregate. To accept unmeasurable spend instead, switch the quota to `monitor` mode with `PATCH /api/v1/quotas/{quota_id}`.',
+    'Add price book entries covering the models this project runs (`POST /api/v1/prices`), so the cost quota has something to aggregate. To accept unmeasurable spend instead, set `on_unpriced: "allow"` on the quota with `PATCH /api/v1/quotas/{quota_id}` (or switch it to `monitor` mode to stop blocking entirely).',
   AI_PROVIDER_ERROR:
     'The upstream model provider failed, not this server. Check the provider credential and the account behind it (credits, rate limits, model access), then retry with backoff.',
   AI_PROVIDER_MISCONFIGURED:

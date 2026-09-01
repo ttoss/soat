@@ -6,6 +6,7 @@ import { DomainError } from '../errors';
 import { fireQuotaExceeded, reportUnpricedCostQuota } from './quotaEvents';
 import type { QuotaWindow } from './quotas';
 import {
+  resolveOnUnpriced,
   retryAfterSeconds,
   windowKeyFor,
   windowResetsAt,
@@ -237,6 +238,15 @@ export const evaluateRequestQuotas = async (args: {
 const TOKEN_UNIT = 'token';
 
 /**
+ * Metered events a window must hold — all of them unpriced — before a `block`
+ * posture refuses. One or two all-unpriced events at the start of a window are
+ * indistinguishable from ordering noise in a mostly-priced project; three in a
+ * row with nothing priced is a blackout. The `quota_unpriced` exception is not
+ * gated on this, so the triage item always precedes the refusal.
+ */
+export const UNPRICED_BLACKOUT_MIN_EVENTS = 3;
+
+/**
  * The outcome of aggregating one window. `total` is the value compared to the
  * limit; `unpricedEventCount` is meaningful only for `cost_usd` and is non-zero
  * only when the window held events and **none** of them were priced — the
@@ -372,12 +382,23 @@ const evaluateGenerationQuota = async (args: {
 
   // A cost cap over an entirely unpriced window aggregates to 0, so the limit
   // comparison below can never fire however much was actually spent. File the
-  // triage item, then refuse: an `enforce` cap that cannot measure the spend it
-  // caps must not wave it through, which is the fail-open the cap exists to
-  // prevent. `monitor` observes and never blocks, here as everywhere.
+  // triage item from the first such event, then refuse only a real blackout:
+  // an `enforce` cap that cannot measure the spend it caps must not wave it
+  // through, which is the fail-open the cap exists to prevent — but a fresh
+  // window's first event landing on the one unpriced model must not stop a
+  // mostly-priced project at every window boundary, so the refusal waits for
+  // the threshold while the exception does not. `on_unpriced: "allow"` is the
+  // operator's opt-out, recorded on the quota itself; `monitor` observes and
+  // never blocks, here as everywhere. Below the threshold the aggregate is 0
+  // by construction, so falling through would pass anyway — returning here
+  // just says so explicitly.
   if (unpricedEventCount > 0) {
     await reportUnpricedCostQuota({ quota, unpricedEventCount });
-    return quota.mode === 'enforce'
+    const refuses =
+      quota.mode === 'enforce' &&
+      resolveOnUnpriced(quota.onUnpriced) === 'block' &&
+      unpricedEventCount >= UNPRICED_BLACKOUT_MIN_EVENTS;
+    return refuses
       ? buildBreach({ quota, window, now, reason: 'unpriced_usage' })
       : null;
   }

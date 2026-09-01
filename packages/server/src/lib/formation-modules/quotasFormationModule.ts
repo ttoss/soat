@@ -18,6 +18,7 @@ export const quotasFormationModule = defineFormationModule({
       window: properties.window as string,
       limit: properties.limit,
       mode: toOptionalString(properties.mode) ?? undefined,
+      onUnpriced: toOptionalString(properties.on_unpriced) ?? undefined,
     });
   },
 
@@ -32,6 +33,7 @@ export const quotasFormationModule = defineFormationModule({
       // fallback (adding one would only leave an unreachable branch behind).
       limit: toNullableNumber(properties.limit) ?? undefined,
       mode: toOptionalString(properties.mode),
+      onUnpriced: toOptionalString(properties.on_unpriced),
       scope: toOptionalString(properties.scope),
       metric: toOptionalString(properties.metric),
       window: toOptionalString(properties.window),
