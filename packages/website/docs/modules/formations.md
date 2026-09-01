@@ -584,7 +584,16 @@ One signed `POST` to the registration's URL per operation, with a JSON body:
 ```
 
 `physical_resource_id` replaces `properties` on `delete`, and accompanies it on
-`update` and `read`. Two headers travel with every call:
+`update` and `read`.
+
+`project_id` is on **every** request type except `validate`, which is not bound
+to a deploy. A handler whose resources live in its own database can ignore it
+and resolve the project from its own row; one that fronts a system where the
+resource actually lives — the case this mechanism exists for — needs it to know
+whose resource it is being asked about, and a `physical_resource_id` alone does
+not say.
+
+Two headers travel with every call:
 
 | Header | Meaning |
 | --- | --- |

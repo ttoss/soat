@@ -54,17 +54,26 @@ export type ValidationResult = {
 /**
  * Where a resource sits in the formation being applied.
  *
- * Every built-in module ignores it — it provisions through a lib call that
- * needs nothing beyond the properties. An operator-registered type (#1078)
+ * Every built-in module ignores all of it — it provisions through a lib call
+ * that needs nothing beyond the properties. An operator-registered type (#1078)
  * forwards it to its handler: `logicalId` is the name the template author gave
  * the resource, and `resourceKey` is the `formation_resources` row's public id,
  * which is unique per (formation, logical id) and therefore stable across
  * re-applies — the anchor the handler's idempotency key is derived from.
  *
- * Optional because the module contract does not require a caller to be inside
- * an apply; the apply pipeline always supplies it.
+ * Those two are optional because the module contract does not require a caller
+ * to be inside an apply; the apply pipeline always supplies them.
+ *
+ * `projectId` is **required**, and deliberately so (#1179). A handler for a
+ * resource that lives in the system SOAT is fronted by — rather than in the
+ * handler's own database — has no way to reach that resource without knowing
+ * whose project it belongs to, and a project it is never told is not a failure
+ * it can report: the call simply goes out without one. Requiring it here is what
+ * makes a call site that forgets a type error rather than a deployment that
+ * half-works.
  */
 export type FormationResourceContext = {
+  projectId: number;
   logicalId?: string;
   resourceKey?: string;
 };
@@ -104,10 +113,7 @@ export type FormationModule = {
     basePath: string;
   }) => ValidationError[];
   create: (
-    args: {
-      properties: Record<string, unknown>;
-      projectId: number;
-    } & FormationResourceContext
+    args: { properties: Record<string, unknown> } & FormationResourceContext
   ) => Promise<string>;
   update: (
     args: {
@@ -136,9 +142,9 @@ export type FormationModule = {
    * the same snake_case format used by the formation template. Returns null
    * if the resource no longer exists (drift).
    */
-  read?: (args: {
-    physicalResourceId: string;
-  }) => Promise<Record<string, unknown> | null>;
+  read?: (
+    args: { physicalResourceId: string } & FormationResourceContext
+  ) => Promise<Record<string, unknown> | null>;
   /**
    * Strip sensitive fields before the resolved properties are persisted in
    * `lastAppliedProperties`. Implement this for resources whose properties
@@ -160,9 +166,9 @@ export type FormationModule = {
    * Return named attributes for a resource beyond its physical resource ID.
    * Used to resolve `ref_attr` expressions in formation outputs.
    */
-  getAttributes?: (args: {
-    physicalResourceId: string;
-  }) => Promise<Record<string, string>>;
+  getAttributes?: (
+    args: { physicalResourceId: string } & FormationResourceContext
+  ) => Promise<Record<string, string>>;
 };
 
 export type PlanChange = {

@@ -14,7 +14,6 @@ import type {
 export type ApplyArgs = {
   resourceType: string;
   resolvedProperties: Record<string, unknown>;
-  projectId: number;
 } & FormationResourceContext;
 
 export const applyCreateResource = async (args: ApplyArgs): Promise<string> => {
@@ -48,6 +47,7 @@ export const applyUpdateResource = async (
   return formationModule.update({
     physicalResourceId: args.physicalResourceId,
     properties: normalizeDeclaredProperties(args.resolvedProperties),
+    projectId: args.projectId,
     logicalId: args.logicalId,
     resourceKey: args.resourceKey,
   });
@@ -98,6 +98,7 @@ export const applyDeleteResource = async (
     );
   return formationModule.delete({
     physicalResourceId: args.physicalResourceId,
+    projectId: args.projectId,
     logicalId: args.logicalId,
     resourceKey: args.resourceKey,
   });

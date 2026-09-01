@@ -189,6 +189,7 @@ describe('defineFormationModule — update', () => {
     });
 
     await module.update({
+      projectId: 1,
       properties: { limit: 5 },
       physicalResourceId: 'qta_1',
     });
@@ -203,7 +204,11 @@ describe('defineFormationModule — update', () => {
     });
 
     await expect(
-      module.update({ properties: { limit: 5 }, physicalResourceId: 'qta_1' })
+      module.update({
+        projectId: 1,
+        properties: { limit: 5 },
+        physicalResourceId: 'qta_1',
+      })
     ).rejects.toThrow('`scope` is required');
   });
 
@@ -216,7 +221,11 @@ describe('defineFormationModule — update', () => {
       update: async () => {},
     });
 
-    await module.update({ properties: {}, physicalResourceId: 'qta_1' });
+    await module.update({
+      projectId: 1,
+      properties: {},
+      physicalResourceId: 'qta_1',
+    });
     expect(seen).toEqual([true]);
   });
 
@@ -224,11 +233,19 @@ describe('defineFormationModule — update', () => {
     const module = buildModule();
 
     await expect(
-      module.update({ properties: { nope: 1 }, physicalResourceId: 'qta_1' })
+      module.update({
+        projectId: 1,
+        properties: { nope: 1 },
+        physicalResourceId: 'qta_1',
+      })
     ).rejects.toThrow(/^Unknown quota field 'nope'\./);
 
     await expect(
-      module.update({ properties: { limit: 5 }, physicalResourceId: 'qta_1' })
+      module.update({
+        projectId: 1,
+        properties: { limit: 5 },
+        physicalResourceId: 'qta_1',
+      })
     ).resolves.toBeUndefined();
   });
 });
@@ -236,7 +253,10 @@ describe('defineFormationModule — update', () => {
 describe('defineFormationModule — delete', () => {
   test('delegates to remove', async () => {
     const remove = jest.fn(async () => {});
-    await buildModule({ remove }).delete({ physicalResourceId: 'qta_1' });
+    await buildModule({ remove }).delete({
+      projectId: 1,
+      physicalResourceId: 'qta_1',
+    });
     expect(remove).toHaveBeenCalledWith({ physicalResourceId: 'qta_1' });
   });
 });
@@ -249,7 +269,12 @@ describe('defineFormationModule — read', () => {
       },
     });
 
-    expect(await module.read!({ physicalResourceId: 'qta_1' })).toEqual({
+    expect(
+      await module.read!({
+        projectId: 1,
+        physicalResourceId: 'qta_1',
+      })
+    ).toEqual({
       scope: 'project',
       metric: 'tokens',
     });
@@ -265,7 +290,12 @@ describe('defineFormationModule — read', () => {
       },
     });
 
-    expect(await module.read!({ physicalResourceId: 'qta_1' })).toEqual({
+    expect(
+      await module.read!({
+        projectId: 1,
+        physicalResourceId: 'qta_1',
+      })
+    ).toEqual({
       scope: 'project',
       mode: 'kept',
     });
@@ -277,7 +307,12 @@ describe('defineFormationModule — read', () => {
         return null;
       },
     });
-    expect(await module.read!({ physicalResourceId: 'qta_1' })).toBeNull();
+    expect(
+      await module.read!({
+        projectId: 1,
+        physicalResourceId: 'qta_1',
+      })
+    ).toBeNull();
   });
 
   test('reports drift as null when the fetch throws', async () => {
@@ -286,13 +321,23 @@ describe('defineFormationModule — read', () => {
         throw new Error('RESOURCE_NOT_FOUND');
       },
     });
-    expect(await module.read!({ physicalResourceId: 'qta_1' })).toBeNull();
+    expect(
+      await module.read!({
+        projectId: 1,
+        physicalResourceId: 'qta_1',
+      })
+    ).toBeNull();
   });
 
   test('a write-only module reads null and declares writeOnly', async () => {
     const module = buildModule({ writeOnly: true });
     expect(module.writeOnly).toBe(true);
-    expect(await module.read!({ physicalResourceId: 'qta_1' })).toBeNull();
+    expect(
+      await module.read!({
+        projectId: 1,
+        physicalResourceId: 'qta_1',
+      })
+    ).toBeNull();
   });
 
   test('writeOnly and getAttributes are absent unless declared', () => {
@@ -313,7 +358,10 @@ describe('defineFormationModule — read', () => {
     });
 
     expect(
-      await module.getAttributes!({ physicalResourceId: 'qta_1' })
+      await module.getAttributes!({
+        projectId: 1,
+        physicalResourceId: 'qta_1',
+      })
     ).toEqual({ secret: 'shh' });
     expect(
       module.sanitizeLastAppliedProperties!({ name: 'n', value: 'v' })

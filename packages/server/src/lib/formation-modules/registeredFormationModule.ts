@@ -113,6 +113,7 @@ const parseValidationErrors = (
 const readLiveProperties = async (args: {
   registration: FormationResourceTypeRegistration;
   physicalResourceId: string;
+  projectPublicId: string;
 }): Promise<Record<string, unknown> | null> => {
   const body = await callFormationHandler({
     registration: args.registration,
@@ -120,6 +121,7 @@ const readLiveProperties = async (args: {
       requestType: 'read',
       logicalId: '',
       resourceKey: args.physicalResourceId,
+      projectPublicId: args.projectPublicId,
       physicalResourceId: args.physicalResourceId,
     },
   });
@@ -134,6 +136,55 @@ type AssertValid = (args: {
   properties: unknown;
   forUpdate: boolean;
 }) => Record<string, unknown>;
+
+const buildUpdate = (args: {
+  registration: FormationResourceTypeRegistration;
+  assertValid: AssertValid;
+  log: createDebug.Debugger;
+}): FormationModule['update'] => {
+  const { registration, assertValid, log } = args;
+  const resourceType = registration.name;
+
+  return async ({
+    properties: raw,
+    physicalResourceId,
+    projectId,
+    logicalId,
+    resourceKey,
+  }): Promise<UpdateOutcome | void> => {
+    const properties = assertValid({ properties: raw, forUpdate: true });
+    const projectPublicId = await findProjectPublicId({ id: projectId });
+    const body = await callFormationHandler({
+      registration,
+      request: {
+        requestType: 'update',
+        logicalId: logicalId ?? '',
+        resourceKey: resourceKey ?? physicalResourceId,
+        projectPublicId,
+        physicalResourceId,
+        properties,
+      },
+    });
+    const returnedId = requirePhysicalResourceId({
+      body,
+      resourceType,
+      requestType: 'update',
+    });
+    log('updated %s via handler: id=%s', resourceType, physicalResourceId);
+    if (returnedId === physicalResourceId) return;
+
+    // A different id back means the handler could not change this resource in
+    // place and made a new one; the engine re-points the record and disposes
+    // of the old resource under its `deletion_policy`.
+    log(
+      'handler replaced %s: %s -> %s',
+      resourceType,
+      physicalResourceId,
+      returnedId
+    );
+    return { replacedWithPhysicalResourceId: returnedId };
+  };
+};
 
 const buildOperations = (args: {
   registration: FormationResourceTypeRegistration;
@@ -173,50 +224,22 @@ const buildOperations = (args: {
       return physicalResourceId;
     },
 
-    update: async ({
-      properties: raw,
+    update: buildUpdate({ registration, assertValid, log }),
+
+    delete: async ({
       physicalResourceId,
+      projectId,
       logicalId,
       resourceKey,
-    }): Promise<UpdateOutcome | void> => {
-      const properties = assertValid({ properties: raw, forUpdate: true });
-      const body = await callFormationHandler({
-        registration,
-        request: {
-          requestType: 'update',
-          logicalId: logicalId ?? '',
-          resourceKey: resourceKey ?? physicalResourceId,
-          physicalResourceId,
-          properties,
-        },
-      });
-      const returnedId = requirePhysicalResourceId({
-        body,
-        resourceType,
-        requestType: 'update',
-      });
-      log('updated %s via handler: id=%s', resourceType, physicalResourceId);
-      if (returnedId === physicalResourceId) return;
-
-      // A different id back means the handler could not change this resource in
-      // place and made a new one; the engine re-points the record and disposes
-      // of the old resource under its `deletion_policy`.
-      log(
-        'handler replaced %s: %s -> %s',
-        resourceType,
-        physicalResourceId,
-        returnedId
-      );
-      return { replacedWithPhysicalResourceId: returnedId };
-    },
-
-    delete: async ({ physicalResourceId, logicalId, resourceKey }) => {
+    }) => {
+      const projectPublicId = await findProjectPublicId({ id: projectId });
       await callFormationHandler({
         registration,
         request: {
           requestType: 'delete',
           logicalId: logicalId ?? '',
           resourceKey: resourceKey ?? physicalResourceId,
+          projectPublicId,
           physicalResourceId,
         },
       });
@@ -282,9 +305,13 @@ const buildCapabilityMembers = (args: {
     ...validateMember,
     ...writeOnlyMember,
 
-    read: async ({ physicalResourceId }) => {
+    read: async ({ physicalResourceId, projectId }) => {
       try {
-        return await readLiveProperties({ registration, physicalResourceId });
+        return await readLiveProperties({
+          registration,
+          physicalResourceId,
+          projectPublicId: await findProjectPublicId({ id: projectId }),
+        });
       } catch {
         // The drift contract every built-in `read` honours: a read that cannot
         // answer reports "gone", it does not fail the plan.
@@ -292,7 +319,7 @@ const buildCapabilityMembers = (args: {
       }
     },
 
-    getAttributes: async ({ physicalResourceId }) => {
+    getAttributes: async ({ physicalResourceId, projectId }) => {
       const attributes: Record<string, string> = {};
       let body: Record<string, unknown>;
       try {
@@ -302,6 +329,7 @@ const buildCapabilityMembers = (args: {
             requestType: 'read',
             logicalId: '',
             resourceKey: physicalResourceId,
+            projectPublicId: await findProjectPublicId({ id: projectId }),
             physicalResourceId,
           },
         });

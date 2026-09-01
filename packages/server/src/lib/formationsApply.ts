@@ -34,6 +34,7 @@ const log = createDebug('soat:formations');
 export const handleOrphanedDeletes = async (args: {
   template: FormationTemplate;
   existingResources: InstanceType<(typeof db)['FormationResource']>[];
+  projectId: number;
   events: FormationEvent[];
 }): Promise<void> => {
   const { template, existingResources, events } = args;
@@ -51,6 +52,7 @@ export const handleOrphanedDeletes = async (args: {
         await applyDeleteResource({
           resourceType: resource.resourceType,
           physicalResourceId: resource.physicalResourceId!,
+          projectId: args.projectId,
           logicalId: resource.logicalId,
           resourceKey: resource.publicId,
         });
@@ -151,6 +153,7 @@ export const processResourceChange = async (args: {
         resourceType: decl.type,
         resolvedProperties,
         logicalId,
+        projectId: args.projectId,
         resolvedIds,
         events,
       });
@@ -208,7 +211,10 @@ const runResourceChanges = async (args: {
         logicalId,
         errorMsg
       );
-      const rollbackEvents = await rollbackCreatedResources({ created });
+      const rollbackEvents = await rollbackCreatedResources({
+        created,
+        projectId: args.projectId,
+      });
       await failFormationOperation({
         operation: args.operation,
         formation: args.formation,
@@ -236,6 +242,7 @@ const finalizeSucceededFormation = async (args: {
   operation: InstanceType<(typeof db)['FormationOperation']>;
   events: FormationEvent[];
   resolvedIds: Map<string, string>;
+  projectId: number;
 }): Promise<void> => {
   const {
     formation,
@@ -247,7 +254,8 @@ const finalizeSucceededFormation = async (args: {
   } = args;
   const outputs = await resolveFormationOutputs(
     workingTemplate,
-    args.resolvedIds
+    args.resolvedIds,
+    args.projectId
   );
   await operation.update({ status: 'succeeded', events });
   await formation.update({
@@ -315,6 +323,7 @@ export const applyFormationTemplate = async (args: {
   await handleOrphanedDeletes({
     template: workingTemplate,
     existingResources,
+    projectId: args.projectId,
     events,
   });
 
@@ -326,6 +335,7 @@ export const applyFormationTemplate = async (args: {
     operation,
     events,
     resolvedIds,
+    projectId: args.projectId,
   });
   log('applyFormationTemplate: succeeded formationId=%s', formation.publicId);
 };

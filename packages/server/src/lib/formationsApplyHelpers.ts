@@ -119,6 +119,7 @@ const disposeReplacedResource = async (args: {
   logicalId: string;
   replacedPhysicalResourceId: string;
   resourceKey: string;
+  projectId: number;
   deletionPolicy: string;
   events: FormationEvent[];
 }): Promise<void> => {
@@ -143,6 +144,7 @@ const disposeReplacedResource = async (args: {
     await applyDeleteResource({
       resourceType: args.resourceType,
       physicalResourceId: args.replacedPhysicalResourceId,
+      projectId: args.projectId,
       logicalId: args.logicalId,
       resourceKey: args.resourceKey,
     });
@@ -181,6 +183,7 @@ export const applyUpdateChange = async (args: {
   resourceType: string;
   resolvedProperties: Record<string, unknown>;
   logicalId: string;
+  projectId: number;
   resolvedIds: Map<string, string>;
   events: FormationEvent[];
 }): Promise<void> => {
@@ -190,6 +193,7 @@ export const applyUpdateChange = async (args: {
     resourceType,
     resolvedProperties,
     logicalId,
+    projectId,
     resolvedIds,
     events,
   } = args;
@@ -212,6 +216,7 @@ export const applyUpdateChange = async (args: {
       resourceType,
       physicalResourceId: previousPhysicalResourceId,
       resolvedProperties: mergedProperties,
+      projectId,
       logicalId,
       resourceKey: resourceRow.publicId,
     });
@@ -244,6 +249,7 @@ export const applyUpdateChange = async (args: {
       await disposeReplacedResource({
         resourceType,
         logicalId,
+        projectId,
         replacedPhysicalResourceId: previousPhysicalResourceId,
         resourceKey: resourceRow.publicId,
         deletionPolicy: resourceRow.deletionPolicy ?? 'delete',
@@ -277,6 +283,7 @@ export const applyUpdateChange = async (args: {
  */
 export const rollbackCreatedResources = async (args: {
   created: ResourceRow[];
+  projectId: number;
 }): Promise<FormationEvent[]> => {
   const events: FormationEvent[] = [];
 
@@ -297,6 +304,7 @@ export const rollbackCreatedResources = async (args: {
       await applyDeleteResource({
         resourceType: resource.resourceType,
         physicalResourceId: resource.physicalResourceId,
+        projectId: args.projectId,
         logicalId: resource.logicalId,
         resourceKey: resource.publicId,
       });

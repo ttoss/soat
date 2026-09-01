@@ -254,6 +254,7 @@ describe('a registered resource type calls its handler', () => {
     const outcome = await module.update({
       properties: { name: 'Renamed', kind: 'whatsapp' },
       physicalResourceId: 'chn_42',
+      projectId,
       logicalId: 'MainChannel',
       resourceKey: 'fres_01',
     });
@@ -264,6 +265,7 @@ describe('a registered resource type calls its handler', () => {
       request_type: 'update',
       resource_type: 'test_channel',
       logical_id: 'MainChannel',
+      project_id: projectPublicId,
       physical_resource_id: 'chn_42',
       properties: { name: 'Renamed', kind: 'whatsapp' },
     });
@@ -278,6 +280,7 @@ describe('a registered resource type calls its handler', () => {
     const outcome = await module.update({
       properties: { name: 'A', kind: 'discord' },
       physicalResourceId: 'chn_42',
+      projectId,
       logicalId: 'MainChannel',
       resourceKey: 'fres_01',
     });
@@ -293,6 +296,7 @@ describe('a registered resource type calls its handler', () => {
 
     await module.delete({
       physicalResourceId: 'chn_42',
+      projectId,
       logicalId: 'MainChannel',
       resourceKey: 'fres_01',
     });
@@ -301,6 +305,7 @@ describe('a registered resource type calls its handler', () => {
       request_type: 'delete',
       resource_type: 'test_channel',
       logical_id: 'MainChannel',
+      project_id: projectPublicId,
       physical_resource_id: 'chn_42',
     });
   });
@@ -332,10 +337,14 @@ describe('capabilities are what the registration declares', () => {
       registration: buildRegistration({ capabilities: ['read'] }),
     });
 
-    const properties = await module.read?.({ physicalResourceId: 'chn_42' });
+    const properties = await module.read?.({
+      physicalResourceId: 'chn_42',
+      projectId,
+    });
 
     expect(properties).toEqual({ name: 'Support', kind: 'whatsapp' });
     expect(recorded[0].body.request_type).toBe('read');
+    expect(recorded[0].body.project_id).toBe(projectPublicId);
   });
 
   test('a resource the handler says is gone reads as drift, not a failure', async () => {
@@ -345,7 +354,7 @@ describe('capabilities are what the registration declares', () => {
     });
 
     await expect(
-      module.read?.({ physicalResourceId: 'chn_42' })
+      module.read?.({ physicalResourceId: 'chn_42', projectId })
     ).resolves.toBeNull();
   });
 
@@ -361,7 +370,7 @@ describe('capabilities are what the registration declares', () => {
     });
 
     await expect(
-      module.read?.({ physicalResourceId: 'chn_42' })
+      module.read?.({ physicalResourceId: 'chn_42', projectId })
     ).resolves.toBeNull();
   });
 
@@ -381,7 +390,10 @@ describe('capabilities are what the registration declares', () => {
 
     const attributes = await module.getAttributes?.({
       physicalResourceId: 'chn_42',
+      projectId,
     });
+
+    expect(recorded[0].body.project_id).toBe(projectPublicId);
 
     // Only string-valued outputs are addressable — `ref_attr` resolves to a
     // string. A non-string is skipped, never coerced.
@@ -876,10 +888,14 @@ describe('the module contract holds for a direct caller too', () => {
       projectId,
     });
     await built.update({
+      projectId,
       properties: { name: 'B', kind: 'whatsapp' },
       physicalResourceId: 'chn_500',
     });
-    await built.delete({ physicalResourceId: 'chn_500' });
+    await built.delete({
+      projectId,
+      physicalResourceId: 'chn_500',
+    });
 
     expect(
       recorded.map((request) => {
@@ -914,7 +930,10 @@ describe('the module contract holds for a direct caller too', () => {
     };
 
     await expect(
-      module().getAttributes?.({ physicalResourceId: 'chn_1' })
+      module().getAttributes?.({
+        projectId,
+        physicalResourceId: 'chn_1',
+      })
     ).resolves.toEqual({});
   });
 
@@ -925,7 +944,10 @@ describe('the module contract holds for a direct caller too', () => {
     };
 
     await expect(
-      module().read?.({ physicalResourceId: 'chn_1' })
+      module().read?.({
+        projectId,
+        physicalResourceId: 'chn_1',
+      })
     ).resolves.toBeNull();
   });
 
