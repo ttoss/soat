@@ -135,6 +135,7 @@ export const runEvalItem = async (args: {
   input: unknown;
   expectedOutput: string | null;
   itemMetadata: unknown;
+  toolContext?: Record<string, string>;
 }): Promise<ItemOutcome> => {
   let generation: GenerationResult | ReadableStream;
   try {
@@ -147,6 +148,11 @@ export const runEvalItem = async (args: {
       stream: false,
       pinnedAgentVersion: args.agentVersion,
       source: EVAL_USAGE_SOURCE,
+      // The run's bag, so the item is scored against the configuration the
+      // agent runs in production (#1150). An eval generation has no session, so
+      // `buildGenerationContext` stamps no identity over it — the reserved keys
+      // were already stripped when the run was started.
+      toolContext: args.toolContext,
     });
   } catch (error) {
     return erroredOutcome(errorMessage(error), null);
@@ -226,6 +232,7 @@ export const executeAndRecordItem = async (args: {
   agentVersion: number;
   scorers: unknown[];
   item: DatasetItemRow;
+  toolContext?: Record<string, string>;
 }): Promise<ItemOutcome> => {
   const outcome = await runEvalItem({
     projectIds: args.projectIds,
@@ -237,6 +244,7 @@ export const executeAndRecordItem = async (args: {
     input: args.item.input,
     expectedOutput: args.item.expectedOutput,
     itemMetadata: args.item.metadata,
+    toolContext: args.toolContext,
   });
 
   const columns = {
@@ -390,6 +398,9 @@ export const finalizeEvalRun = async (args: {
     status: 'completed',
     aggregateScores: aggregate,
     passed,
+    // The bag is only needed while items execute, and a finished run is a
+    // report that outlives the work (#1150).
+    toolContext: null,
     completedCount: results.length - erroredCount,
     erroredCount,
     finishedAt: new Date(),
@@ -429,7 +440,11 @@ export const failEvalRun = async (args: {
 }): Promise<void> => {
   log('failEvalRun: run=%s reason=%s', args.run.publicId, args.reason);
 
-  await args.run.update({ status: 'failed', finishedAt: new Date() });
+  await args.run.update({
+    status: 'failed',
+    finishedAt: new Date(),
+    toolContext: null,
+  });
 
   emitEvalRunEvent({
     event: 'eval_run.failed',

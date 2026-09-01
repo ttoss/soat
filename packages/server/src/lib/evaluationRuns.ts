@@ -31,6 +31,7 @@ import { validateToolScorerRefs } from './evaluationToolScorer';
 import { kickEvalWorker } from './evaluationWorker';
 import { isPlainObject } from './plainObject';
 import { parseActiveRelease } from './releaseAssignment';
+import { sanitizeCallerToolContext } from './toolContext';
 
 const log = createDebug('soat:evaluations');
 
@@ -255,6 +256,7 @@ const executeSyncRun = async (args: {
   projectIds?: number[];
   plan: RunPlan;
   run: InstanceType<(typeof db)['EvalRun']>;
+  toolContext?: Record<string, string>;
 }): Promise<void> => {
   const { plan, run } = args;
   const projectId = plan.evaluation.projectId as number;
@@ -272,6 +274,7 @@ const executeSyncRun = async (args: {
         agentVersion: plan.agentVersion,
         scorers: scorerList(plan.evaluation.scorers),
         item,
+        toolContext: args.toolContext,
       });
     }
   } catch (error) {
@@ -316,9 +319,20 @@ export const startEvalRun = async (args: {
    * can say what this measurement was of.
    */
   metadata?: Record<string, unknown>;
+  /**
+   * Forwarded to every item's generation, so an agent whose tools authorize
+   * through `tool_context` is scored against the configuration it runs in
+   * production rather than one with an empty bag (#1150). Stored on the run,
+   * since the worker driving a queued run has no request to read it from.
+   */
+  toolContext?: Record<string, string>;
 }): Promise<ReturnType<typeof mapEvalRun>> => {
   const wait = parseWait(args.wait);
   log('startEvalRun: evalId=%s wait=%s', args.evalId, wait);
+
+  // Before `planRun`, so an unusable key is a 400 with no run row behind it: a
+  // queued run answers 201 long before its first item would hit the bad key.
+  const toolContext = sanitizeCallerToolContext(args.toolContext);
 
   const plan = await planRun({ ...args, wait });
 
@@ -331,6 +345,7 @@ export const startEvalRun = async (args: {
     baselineRunId: plan.baselineRunDbId,
     triggerId: args.triggerId ?? null,
     metadata: args.metadata ?? null,
+    toolContext: toolContext ?? null,
     itemCount: plan.items.length,
     startedAt: wait ? new Date() : null,
   });
@@ -344,7 +359,12 @@ export const startEvalRun = async (args: {
   );
 
   if (wait) {
-    await executeSyncRun({ projectIds: args.projectIds, plan, run });
+    await executeSyncRun({
+      projectIds: args.projectIds,
+      plan,
+      run,
+      toolContext,
+    });
   } else {
     await enqueueEvalItemTasks({
       evalRunId: run.id as number,
@@ -402,7 +422,11 @@ export const cancelEvalRun = async (args: {
 
   await discardEvalItemTasks({ evalRunId: run.id as number });
 
-  await run.update({ status: 'canceled', finishedAt: new Date() });
+  await run.update({
+    status: 'canceled',
+    finishedAt: new Date(),
+    toolContext: null,
+  });
 
   // Items already claimed are past their liveness check and keep writing after
   // this point; each late write recounts, so the numbers converge on what

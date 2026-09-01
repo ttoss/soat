@@ -911,6 +911,37 @@ paths:
                   example:
                     commit_sha: 9f2c1ab
                     ci_job: nightly-evals
+                tool_context:
+                  type: object
+                  additionalProperties:
+                    type: string
+                  description: >-
+                    Key/value context forwarded to every item's generation, so an
+                    agent whose tools authorize through `tool_context` is scored
+                    against the configuration it runs in production rather than
+                    with an empty bag. Each key is forwarded as one
+                    `X-Soat-Context-<key>` header and resolves any
+                    `{{context:<key>}}` token in a bound tool's headers or
+                    `preset_parameters`.
+
+
+                    Stored on the run and re-read per item, since a queued run
+                    (the default) is driven by a worker with no request behind
+                    it. **Write-only**: no read of the run returns it, unlike
+                    `metadata` — a run is a report other people read, and a
+                    credential in it is not theirs to see. Cleared once the run
+                    reaches a terminal state.
+
+
+                    An eval generation has no session, so the reserved keys
+                    `sessionId`, `actorId` and `actorExternalId` are dropped
+                    (in any casing) rather than forwarded. Every other key
+                    becomes an HTTP header name and must match that grammar, or
+                    the request is rejected with `400 INVALID_TOOL_CONTEXT_KEY`
+                    and no run is created.
+                  example:
+                    ocaToken: eyJhbGciOiJIUzI1NiJ9.abc
+                    tenant: acme
       responses:
         '201':
           description: >-
@@ -923,7 +954,7 @@ paths:
           description: >-
             Bad request (non-boolean wait, dataset empty or over the synchronous
             cap, unknown agent_version, invalid baseline, scorers no longer valid
-            against the agent)
+            against the agent, a `tool_context` key that cannot become a header)
         '401':
           description: Unauthorized
         '403':

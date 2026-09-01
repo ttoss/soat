@@ -19,6 +19,7 @@ This page is the canonical contract. `tool_context` is **not** general templatin
 | [`POST /api/v1/orchestration-runs`](/docs/api/orchestrations/start-orchestration-run) | `tool_context` — persisted on the run, applied to the generation of every `agent` node it executes, to the tool call of every `tool` and `poll` node, and inherited by `loop`/`sub_orchestration` child runs — narrowable per node with [`context_keys`](../modules/orchestrations.md#narrowing-what-a-child-run-inherits) (see [Run Tool Context](../modules/orchestrations.md#run-tool-context)) |
 | [`POST /api/v1/tasks`](/docs/api/tasks/create-task) | `tool_context` — persisted on the task, applied to the dispatches of the entry state's `on_enter` (all three kinds: `agent`, `tool`, `orchestration`) |
 | [`POST /api/v1/tasks/{task_id}/transitions`](/docs/api/tasks/transition-task) | `tool_context` — **replaces** the task's stored bag; omitting it keeps it (see [Dispatch tool context](../modules/workflows.md#dispatch-tool-context)) |
+| [`POST /api/v1/evals/{eval_id}/runs`](/docs/api/evaluations/start-eval-run) | `tool_context` — persisted on the run and applied to every item's generation, so an agent is scored as it runs in production. Write-only, and cleared when the run settles (see [Run tool context](../modules/evaluations.md#run-tool-context)) |
 | [`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool) | `tool_context` — this call only ([below](#calling-a-context-dependent-tool-directly)) |
 | Formation templates | `tool_context` on a `Session` resource |
 

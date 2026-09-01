@@ -31,6 +31,7 @@ import { setAuditResourceHint } from 'src/middleware/audit';
 
 import {
   parsePagination,
+  parseToolContextBody,
   requireProjectAccess,
   resolveReadProjectIds,
   resolveWriteProjectId,
@@ -427,6 +428,7 @@ evaluationsRouter.post('/evals/:eval_id/runs', async (ctx: Context) => {
     // Rejected here, before the run row exists: a queued run answers 201 long
     // before it scores anything.
     metadata: parseMetadataBag(body.metadata),
+    toolContext: parseToolContextBody(body.tool_context),
   });
 });
 

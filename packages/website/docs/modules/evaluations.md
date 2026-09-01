@@ -403,6 +403,27 @@ soat start-eval-run \
 
 Filtering runs by a metadata key is not supported — fetch and filter client-side.
 
+### Run tool context
+
+An eval scores the agent you are about to ship. An agent whose tools authorize through [`tool_context`](../advanced/tool-context.md) cannot be scored that way with an empty bag: a tool declaring `Authorization: Bearer {{context:...}}` fails every item with `MISSING_TOOL_CONTEXT_KEY`, and — worse — a tool that *tolerates* a missing key evaluates a different configuration than production, so the score is quietly about a different account, tenant or scope. A green eval on the wrong scope is more dangerous than a red one.
+
+`start-eval-run` accepts a `tool_context` bag, forwarded to every item's generation:
+
+```bash
+soat start-eval-run \
+  --eval-id "$EVAL_ID" \
+  --wait true \
+  --tool-context '{"ocaToken":"eyJhbGciOiJIUzI1NiJ9.abc","tenant":"acme"}'
+```
+
+Three properties distinguish it from `metadata`:
+
+- **It lives on the run, not the request.** A queued run — the default, and the only shape a [scheduled](#scheduled-runs) one has — is driven by a worker with no request behind it, so the bag is stored on the run row and re-read for every item.
+- **It is write-only.** No read of the run returns it. A run is a report other people read, and a credential in it is not theirs to see; `metadata` is readable for the opposite reason — a label is not a credential.
+- **It does not outlive the work.** The bag is cleared once the run reaches a terminal state, so a finished run — which is kept as a historical measurement — holds no credential.
+
+The usual `tool_context` rules apply: each key is forwarded as one `X-Soat-Context-<key>` header and resolves any `{{context:}}` token in a bound tool's headers or [`preset_parameters`](../advanced/tool-context.md#pinning-a-parameter-to-the-runs-value), a tool's [`context_keys`](./tools.md#scoping-which-context-keys-reach-a-tool) narrows what reaches it, and a key that could not become a header name is rejected with `400 INVALID_TOOL_CONTEXT_KEY` before any run is created. An eval generation has no session, so the reserved identity keys (`sessionId`, `actorId`, `actorExternalId`) are dropped rather than forwarded.
+
 ### Canceling a run
 
 [`POST /evals/{eval_id}/runs/{eval_run_id}/cancel`](/docs/api/evaluations/cancel-eval-run) drops a queued or running run's
@@ -410,7 +431,8 @@ outstanding tasks and settles it `canceled`; a run that has already finished is 
 with `400`. Results already written are **kept**, and `completed_count` /
 `errored_count` report what ran — an item a worker had already claimed runs to completion
 and recounts the run after it settles. `aggregate_scores` is deliberately left `null` (a
-partial roll-up would read as a whole-dataset verdict), and no lifecycle event fires.
+partial roll-up would read as a whole-dataset verdict), and no lifecycle event fires. The
+run's [`tool_context`](#run-tool-context) is cleared, as on any terminal transition.
 
 ### Scheduled runs
 
@@ -424,6 +446,10 @@ at fire time, so a nightly schedule naming a version that no longer exists fails
 **firing** (with the reason on the firing record) instead of creating a run that could
 never execute. Creating an eval-target trigger requires `evaluations:RunEval` on top of
 `triggers:CreateTrigger`.
+
+A trigger carries no [`tool_context`](#run-tool-context) of its own, so a scheduled run of
+an eval whose agent needs one starts with an empty bag. Until a trigger can attach one,
+such a suite has to be started through the API.
 
 ```bash
 soat create-trigger \

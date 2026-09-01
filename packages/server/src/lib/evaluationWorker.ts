@@ -212,6 +212,10 @@ const handleEvalItemTask = async (args: {
     agentVersion: run.agentVersion as number,
     scorers,
     item,
+    // Re-read from the row per item: this process has no request behind it, and
+    // the bag is what makes the item's generation match production (#1150).
+    toolContext:
+      (run.toolContext as Record<string, string> | null) ?? undefined,
   });
 
   // The run may have been canceled while this item was in flight. A canceled

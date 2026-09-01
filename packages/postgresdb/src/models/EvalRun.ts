@@ -129,6 +129,23 @@ export class EvalRun extends Model {
   @Column({ type: DataType.JSONB, allowNull: true, defaultValue: null })
   declare metadata: Record<string, unknown> | null;
 
+  /**
+   * The `tool_context` the run's item generations carry, so an agent whose
+   * tools authorize through it is scored against the configuration it actually
+   * runs in production (#1150).
+   *
+   * On the row rather than the starting request because a run outlives its
+   * request: `wait: false` is the default and a trigger-fired run is always
+   * background, so the worker driving the items re-reads it here.
+   *
+   * **Write-only**, unlike `metadata`: a run is a report other people read, and
+   * a credential in it is not theirs to see. Cleared on reaching a terminal
+   * state — a finished run outlives the work by a long way and nothing reads
+   * the bag once the last item has run.
+   */
+  @Column({ type: DataType.JSONB, allowNull: true, defaultValue: null })
+  declare toolContext: Record<string, string> | null;
+
   @Column({ type: DataType.DATE, allowNull: true })
   declare startedAt: Date | null;
 
