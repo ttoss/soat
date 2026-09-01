@@ -340,9 +340,11 @@ export const statementMatches = (args: {
   if (!resourceMatch) return false;
 
   // Check condition
-  if (statement.condition) {
-    if (!evaluateCondition({ condition: statement.condition, context }))
-      return false;
+  if (
+    statement.condition &&
+    !evaluateCondition({ condition: statement.condition, context })
+  ) {
+    return false;
   }
 
   return true;
