@@ -41,27 +41,27 @@ export const parseFormationTemplateInput = (input: unknown): unknown => {
 
 // ── Resource Declaration Validation ──────────────────────────────────────
 
+const singleError = (path: string, message: string): ValidationError[] => {
+  return [{ path, message }];
+};
+
 const validateResourceType = (args: {
   type: unknown;
   basePath: string;
 }): ValidationError[] => {
   const { type, basePath } = args;
   if (!type || typeof type !== 'string') {
-    return [
-      {
-        path: `${basePath}.type`,
-        message: '`type` is required and must be a string',
-      },
-    ];
+    return singleError(
+      `${basePath}.type`,
+      '`type` is required and must be a string'
+    );
   }
   const supported = supportedResourceTypes();
   if (!supported.has(type)) {
-    return [
-      {
-        path: `${basePath}.type`,
-        message: `Unsupported resource type: ${type}. Supported: ${[...supported].join(', ')}`,
-      },
-    ];
+    return singleError(
+      `${basePath}.type`,
+      `Unsupported resource type: ${type}. Supported: ${[...supported].join(', ')}`
+    );
   }
   return [];
 };
@@ -74,12 +74,10 @@ const validateDependsOn = (args: {
   const { dependsOn, logicalIds, basePath } = args;
   const errors: ValidationError[] = [];
   if (!Array.isArray(dependsOn)) {
-    return [
-      {
-        path: `${basePath}.depends_on`,
-        message: '`depends_on` must be an array',
-      },
-    ];
+    return singleError(
+      `${basePath}.depends_on`,
+      '`depends_on` must be an array'
+    );
   }
   for (const dep of dependsOn as unknown[]) {
     if (typeof dep !== 'string') {
@@ -97,6 +95,56 @@ const validateDependsOn = (args: {
   return errors;
 };
 
+// ── Ref / Param Token Validation ──────────────────────────────────────────
+
+// Validates `ref` and `param`/`sub` tokens anywhere within `value`, attributing
+// every error to `path`. Shared by resource `properties`, the top-level
+// `outputs`, and `metadata` substitution sites.
+const validateRefAndParamTokens = (
+  value: unknown,
+  path: string,
+  logicalIds: Set<string>,
+  paramNames: Set<string>
+): ValidationError[] => {
+  const errors: ValidationError[] = [];
+  for (const ref of collectRefs(value)) {
+    if (!logicalIds.has(ref)) {
+      errors.push({
+        path,
+        message: `Referenced resource '${ref}' does not exist in template`,
+      });
+    }
+  }
+  for (const ref of collectParamRefs(value)) {
+    // body.xxx refs are runtime tool-argument interpolations, not formation params
+    if (ref.startsWith('body.')) continue;
+    // A sub token may also name a resource logical id (resolved to the
+    // physical id at apply time).
+    if (logicalIds.has(ref)) continue;
+    if (!paramNames.has(ref)) {
+      errors.push({
+        path,
+        message: `'${ref}' is neither a parameter nor a resource logical id`,
+      });
+    }
+  }
+  return errors;
+};
+
+const validateDeletionPolicy = (args: {
+  deletionPolicy: unknown;
+  basePath: string;
+}): ValidationError[] => {
+  const { deletionPolicy, basePath } = args;
+  if (['delete', 'retain'].includes(deletionPolicy as string)) {
+    return [];
+  }
+  return singleError(
+    `${basePath}.deletion_policy`,
+    '`deletion_policy` must be one of: delete, retain'
+  );
+};
+
 // ── Resource Properties Validation ───────────────────────────────────────
 
 const validateResourceProperties = (args: {
@@ -106,44 +154,24 @@ const validateResourceProperties = (args: {
   basePath: string;
 }): ValidationError[] => {
   const { properties, logicalIds, paramNames, basePath } = args;
-  const errors: ValidationError[] = [];
 
   if (
     !properties ||
     typeof properties !== 'object' ||
     Array.isArray(properties)
   ) {
-    errors.push({
-      path: `${basePath}.properties`,
-      message: '`properties` is required and must be an object',
-    });
-    return errors;
+    return singleError(
+      `${basePath}.properties`,
+      '`properties` is required and must be an object'
+    );
   }
 
-  for (const ref of collectRefs(properties)) {
-    if (!logicalIds.has(ref)) {
-      errors.push({
-        path: `${basePath}.properties`,
-        message: `Referenced resource '${ref}' does not exist in template`,
-      });
-    }
-  }
-
-  for (const ref of collectParamRefs(properties)) {
-    // body.xxx refs are runtime tool-argument interpolations, not formation params
-    if (ref.startsWith('body.')) continue;
-    // A sub token may also name a resource logical id (resolved to the
-    // physical id at apply time).
-    if (logicalIds.has(ref)) continue;
-    if (!paramNames.has(ref)) {
-      errors.push({
-        path: `${basePath}.properties`,
-        message: `'${ref}' is neither a parameter nor a resource logical id`,
-      });
-    }
-  }
-
-  return errors;
+  return validateRefAndParamTokens(
+    properties,
+    `${basePath}.properties`,
+    logicalIds,
+    paramNames
+  );
 };
 
 /**
@@ -225,49 +253,18 @@ const validateResourceDeclaration = (args: {
   }
 
   if (decl.deletion_policy !== undefined) {
-    if (!['delete', 'retain'].includes(decl.deletion_policy as string)) {
-      errors.push({
-        path: `${basePath}.deletion_policy`,
-        message: '`deletion_policy` must be one of: delete, retain',
-      });
-    }
+    errors.push(
+      ...validateDeletionPolicy({
+        deletionPolicy: decl.deletion_policy,
+        basePath,
+      })
+    );
   }
 
   return { errors, warnings };
 };
 
-// ── Ref / Param Token Validation ──────────────────────────────────────────
-
-// Validates `ref` and `param`/`sub` tokens anywhere within `value`, attributing
-// every error to `path`. Shared by the top-level `outputs` and `metadata`
-// substitution sites.
-const validateRefAndParamTokens = (
-  value: unknown,
-  path: string,
-  logicalIds: Set<string>,
-  paramNames: Set<string>
-): ValidationError[] => {
-  const errors: ValidationError[] = [];
-  for (const ref of collectRefs(value)) {
-    if (!logicalIds.has(ref)) {
-      errors.push({
-        path,
-        message: `Referenced resource '${ref}' does not exist in template`,
-      });
-    }
-  }
-  for (const ref of collectParamRefs(value)) {
-    if (ref.startsWith('body.')) continue;
-    if (logicalIds.has(ref)) continue;
-    if (!paramNames.has(ref)) {
-      errors.push({
-        path,
-        message: `'${ref}' is neither a parameter nor a resource logical id`,
-      });
-    }
-  }
-  return errors;
-};
+// ── Output Ref Validation ─────────────────────────────────────────────────
 
 const validateOutputRefs = (
   outputs: Record<string, unknown>,

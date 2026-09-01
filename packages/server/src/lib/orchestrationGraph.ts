@@ -32,9 +32,11 @@ export const detectCycle = (
   const inStack = new Set<string>();
 
   for (const node of nodes) {
-    if (!visited.has(node.id)) {
-      if (detectCycleDfs({ nodeId: node.id, edges, visited, inStack }))
-        return true;
+    if (
+      !visited.has(node.id) &&
+      detectCycleDfs({ nodeId: node.id, edges, visited, inStack })
+    ) {
+      return true;
     }
   }
 
