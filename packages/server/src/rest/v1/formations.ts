@@ -212,6 +212,7 @@ formationsRouter.post('/formations', async (ctx: Context) => {
         projectPublicId: body.project_id,
       }),
     }),
+    actingUserId: ctx.authUser.id,
   });
 
   ctx.status = 201;
@@ -309,6 +310,7 @@ formationsRouter.put('/formations/:formation_id', async (ctx: Context) => {
       ctx,
       projectPublicId: formation.project_id,
     }),
+    actingUserId: ctx.authUser.id,
   });
 
   ctx.body = updated;
@@ -338,6 +340,7 @@ formationsRouter.delete('/formations/:formation_id', async (ctx: Context) => {
       ctx,
       projectPublicId: formation.project_id,
     }),
+    actingUserId: ctx.authUser.id,
   });
   ctx.status = 200;
   ctx.body = result;

@@ -460,21 +460,6 @@ export const lookupToolInternalId = (
   return lookupInternalId({ model: db.Tool, label: 'Tool', ...args });
 };
 
-export const lookupProjectOwnerUserId = async (
-  projectId: number
-): Promise<number> => {
-  // Projects do not have a direct owner. Look for an existing API key for
-  // this project to reuse its userId, or fall back to the first user in
-  // the system (the bootstrap admin).
-  const existingKey = await db.ApiKey.findOne({ where: { projectId } });
-  if (existingKey) {
-    return existingKey.userId;
-  }
-  const adminUser = await db.User.findOne({ order: [['id', 'ASC']] });
-  if (!adminUser) throw new Error('No users found in the system.');
-  return adminUser.id;
-};
-
 export const lookupPolicyInternalIds = async (
   publicIds: string[]
 ): Promise<number[]> => {

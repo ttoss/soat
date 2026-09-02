@@ -79,6 +79,7 @@ export const applyCreateChange = async (args: {
   resourceType: string;
   resolvedProperties: Record<string, unknown>;
   projectId: number;
+  actingUserId: number;
   logicalId: string;
   resolvedIds: Map<string, string>;
   events: FormationEvent[];
@@ -88,6 +89,7 @@ export const applyCreateChange = async (args: {
     resourceType,
     resolvedProperties,
     projectId,
+    actingUserId,
     logicalId,
     resolvedIds,
     events,
@@ -96,6 +98,7 @@ export const applyCreateChange = async (args: {
     resourceType,
     resolvedProperties,
     projectId,
+    actingUserId,
     logicalId,
     resourceKey: resourceRow.publicId,
   });
@@ -134,6 +137,7 @@ const disposeReplacedResource = async (args: {
   replacedPhysicalResourceId: string;
   resourceKey: string;
   projectId: number;
+  actingUserId: number;
   deletionPolicy: string;
   events: FormationEvent[];
 }): Promise<void> => {
@@ -159,6 +163,7 @@ const disposeReplacedResource = async (args: {
       resourceType: args.resourceType,
       physicalResourceId: args.replacedPhysicalResourceId,
       projectId: args.projectId,
+      actingUserId: args.actingUserId,
       logicalId: args.logicalId,
       resourceKey: args.resourceKey,
     });
@@ -191,6 +196,32 @@ const disposeReplacedResource = async (args: {
   }
 };
 
+/** Persists a successful update on the ledger row and records its event. */
+const recordAppliedUpdate = async (args: {
+  resourceRow: ResourceRow;
+  resourceType: string;
+  logicalId: string;
+  mergedProperties: Record<string, unknown>;
+  physicalResourceId: string;
+  replaced: boolean;
+  events: FormationEvent[];
+}): Promise<void> => {
+  const { resourceRow, resourceType, logicalId, replaced } = args;
+  await resourceRow.update({
+    status: 'updated',
+    ...(replaced ? { physicalResourceId: args.physicalResourceId } : {}),
+    lastAppliedProperties: sanitize(resourceType, args.mergedProperties),
+  });
+  args.events.push({
+    timestamp: new Date().toISOString(),
+    logicalId,
+    resourceType,
+    action: replaced ? 'replace' : 'update',
+    status: 'succeeded',
+    physicalResourceId: args.physicalResourceId,
+  });
+};
+
 export const applyUpdateChange = async (args: {
   resourceRow: ResourceRow;
   existing: ResourceRow & { physicalResourceId: string };
@@ -198,6 +229,7 @@ export const applyUpdateChange = async (args: {
   resolvedProperties: Record<string, unknown>;
   logicalId: string;
   projectId: number;
+  actingUserId: number;
   resolvedIds: Map<string, string>;
   events: FormationEvent[];
 }): Promise<void> => {
@@ -208,6 +240,7 @@ export const applyUpdateChange = async (args: {
     resolvedProperties,
     logicalId,
     projectId,
+    actingUserId,
     resolvedIds,
     events,
   } = args;
@@ -231,6 +264,7 @@ export const applyUpdateChange = async (args: {
       physicalResourceId: previousPhysicalResourceId,
       resolvedProperties: mergedProperties,
       projectId,
+      actingUserId,
       logicalId,
       resourceKey: resourceRow.publicId,
     });
@@ -245,18 +279,14 @@ export const applyUpdateChange = async (args: {
       resolvedIds.set(logicalId, physicalResourceId);
     }
 
-    await resourceRow.update({
-      status: 'updated',
-      ...(replaced ? { physicalResourceId } : {}),
-      lastAppliedProperties: sanitize(resourceType, mergedProperties),
-    });
-    events.push({
-      timestamp: new Date().toISOString(),
-      logicalId,
+    await recordAppliedUpdate({
+      resourceRow,
       resourceType,
-      action: replaced ? 'replace' : 'update',
-      status: 'succeeded',
+      logicalId,
+      mergedProperties,
       physicalResourceId,
+      replaced,
+      events,
     });
 
     if (replaced) {
@@ -264,6 +294,7 @@ export const applyUpdateChange = async (args: {
         resourceType,
         logicalId,
         projectId,
+        actingUserId,
         replacedPhysicalResourceId: previousPhysicalResourceId,
         resourceKey: resourceRow.publicId,
         deletionPolicy: resourceRow.deletionPolicy ?? 'delete',
@@ -298,6 +329,7 @@ export const applyUpdateChange = async (args: {
 export const rollbackCreatedResources = async (args: {
   created: ResourceRow[];
   projectId: number;
+  actingUserId: number;
 }): Promise<FormationEvent[]> => {
   const events: FormationEvent[] = [];
 
@@ -319,6 +351,7 @@ export const rollbackCreatedResources = async (args: {
         resourceType: resource.resourceType,
         physicalResourceId: resource.physicalResourceId,
         projectId: args.projectId,
+        actingUserId: args.actingUserId,
         logicalId: resource.logicalId,
         resourceKey: resource.publicId,
       });

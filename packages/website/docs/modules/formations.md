@@ -552,13 +552,21 @@ nothing, so it **reports** the same list under `unauthorized_actions` instead of
 refusing — the way to see what a deploy would reject without attempting it. The
 field is absent when the caller may perform every action the plan implies.
 
-Two resource types need the `admin` role rather than an action, because the
-route each mirrors is not action-gated either:
+One resource type needs the `admin` role rather than an action: a `policy`,
+because the policies routes gate on the role too, so a grantable action would
+make the formation path the weaker of the two.
 
-| Type | Why |
-| --- | --- |
-| `policy` | The policies routes gate on the `admin` role, so a grantable action would make the formation path the weaker of the two. |
-| `api_key` | A deploy has no request user, so the key is minted under the project owner — an identity no route lets a non-admin borrow. |
+An `api_key` resource is minted **under the caller who deployed the formation**,
+exactly as [`POST /api/v1/api-keys`](/docs/api/api-keys/create-api-key) mints
+under the requesting user. A key inherits its owner's permissions as a ceiling,
+so a key a template creates can never carry more access than whoever deployed
+it — which is what makes the type safe to declare with only
+`api-keys:CreateApiKey`.
+
+A `trigger` resource follows the same rule for a different reason: its
+`created_by` is the [run-as identity](./triggers.md#run-as-identity) a firing
+mints a token for, so it is the deploying caller too — a scheduled firing can
+never exceed the caller who declared it.
 
 A [custom resource type](#custom-resource-types) has no SOAT action to check, so
 it stays gated on the request's `formations:*` action alone.

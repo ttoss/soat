@@ -120,6 +120,7 @@ export const collectDeletionBlockers = async (
 export const performResourceDeletions = async (args: {
   orderedResources: ResourceRow[];
   projectId: number;
+  actingUserId: number;
 }): Promise<{ events: FormationEvent[]; hasError: boolean }> => {
   const events: FormationEvent[] = [];
   let hasError = false;
@@ -132,6 +133,7 @@ export const performResourceDeletions = async (args: {
           resourceType: resource.resourceType,
           physicalResourceId: resource.physicalResourceId,
           projectId: args.projectId,
+          actingUserId: args.actingUserId,
           logicalId: resource.logicalId,
           resourceKey: resource.publicId,
         });
@@ -231,6 +233,7 @@ export const throwDeletionFailure = (args: {
 export const deleteFormation = async (args: {
   id: string;
   authorize: FormationAuthorizer;
+  actingUserId: number;
 }): Promise<{ success: true }> => {
   const formation = await db.Formation.findOne({
     where: { publicId: args.id, status: { [Op.ne]: 'deleted' } },
@@ -283,6 +286,7 @@ export const deleteFormation = async (args: {
   const { events, hasError } = await performResourceDeletions({
     orderedResources,
     projectId: formation.projectId,
+    actingUserId: args.actingUserId,
   });
 
   if (hasError) {

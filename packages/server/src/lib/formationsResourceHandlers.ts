@@ -1,6 +1,7 @@
 import { normalizeDeclaredProperties } from './formationsProperties';
 import { getFormationModule } from './formationsRegistry';
 import type {
+  FormationActingPrincipal,
   FormationResourceContext,
   UpdateOutcome,
 } from './formationsTypes';
@@ -14,7 +15,8 @@ import type {
 export type ApplyArgs = {
   resourceType: string;
   resolvedProperties: Record<string, unknown>;
-} & FormationResourceContext;
+} & FormationResourceContext &
+  FormationActingPrincipal;
 
 export const applyCreateResource = async (args: ApplyArgs): Promise<string> => {
   const formationModule = getFormationModule({
@@ -25,6 +27,7 @@ export const applyCreateResource = async (args: ApplyArgs): Promise<string> => {
   return formationModule.create({
     properties: normalizeDeclaredProperties(args.resolvedProperties),
     projectId: args.projectId,
+    actingUserId: args.actingUserId,
     logicalId: args.logicalId,
     resourceKey: args.resourceKey,
   });
@@ -35,7 +38,8 @@ export const applyUpdateResource = async (
     resourceType: string;
     physicalResourceId: string;
     resolvedProperties: Record<string, unknown>;
-  } & FormationResourceContext
+  } & FormationResourceContext &
+    FormationActingPrincipal
 ): Promise<UpdateOutcome | void> => {
   const formationModule = getFormationModule({
     resourceType: args.resourceType,
@@ -48,6 +52,7 @@ export const applyUpdateResource = async (
     physicalResourceId: args.physicalResourceId,
     properties: normalizeDeclaredProperties(args.resolvedProperties),
     projectId: args.projectId,
+    actingUserId: args.actingUserId,
     logicalId: args.logicalId,
     resourceKey: args.resourceKey,
   });
@@ -87,7 +92,8 @@ export const applyDeleteResource = async (
   args: {
     resourceType: string;
     physicalResourceId: string;
-  } & FormationResourceContext
+  } & FormationResourceContext &
+    FormationActingPrincipal
 ): Promise<void> => {
   const formationModule = getFormationModule({
     resourceType: args.resourceType,
@@ -99,6 +105,7 @@ export const applyDeleteResource = async (
   return formationModule.delete({
     physicalResourceId: args.physicalResourceId,
     projectId: args.projectId,
+    actingUserId: args.actingUserId,
     logicalId: args.logicalId,
     resourceKey: args.resourceKey,
   });

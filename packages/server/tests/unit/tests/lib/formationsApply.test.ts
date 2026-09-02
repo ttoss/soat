@@ -20,6 +20,7 @@ import { createWebhook } from 'src/lib/webhooks';
 // stubbing.
 
 let projectId: number;
+let actingUserId: number;
 let formationId: number;
 let memoryCounter = 0;
 
@@ -73,6 +74,14 @@ describe('formationsApply', () => {
       name: 'Formations Apply Test Project',
     });
     projectId = project.id as number;
+
+    // The apply pipeline attributes every write to a caller; these tests only
+    // need a real one to exist.
+    const user = await db.User.create({
+      username: 'formations-apply-actor',
+      passwordHash: 'not-a-real-hash',
+    });
+    actingUserId = user.id as number;
 
     const formation = await db.Formation.create({
       projectId,
@@ -244,6 +253,7 @@ describe('formationsApply', () => {
     });
 
     const result = await performResourceDeletions({
+      actingUserId,
       orderedResources: [skipped, success, failure],
       projectId,
     });
@@ -268,6 +278,7 @@ describe('formationsApply', () => {
     const { memory, row: retained } = await createMemoryResource('retain');
 
     const result = await performResourceDeletions({
+      actingUserId,
       orderedResources: [retained],
       projectId,
     });
@@ -295,6 +306,7 @@ describe('formationsApply', () => {
     });
 
     const result = await performResourceDeletions({
+      actingUserId,
       orderedResources: [alreadyGone],
       projectId,
     });
@@ -321,6 +333,7 @@ describe('formationsApply', () => {
     });
 
     const result = await performResourceDeletions({
+      actingUserId,
       orderedResources: [alreadyGoneChat],
       projectId,
     });
@@ -354,6 +367,7 @@ describe('formationsApply', () => {
     const events: FormationEvent[] = [];
 
     await handleOrphanedDeletes({
+      actingUserId,
       projectId,
       // `retained` stays in the template, so it is not orphaned; the other two
       // are absent and therefore deleted.
@@ -384,6 +398,7 @@ describe('formationsApply', () => {
     const events: FormationEvent[] = [];
 
     await handleOrphanedDeletes({
+      actingUserId,
       projectId,
       template: { resources: {} },
       existingResources: [retainedOrphan],
@@ -410,6 +425,7 @@ describe('formationsApply', () => {
     const events: FormationEvent[] = [];
 
     await handleOrphanedDeletes({
+      actingUserId,
       projectId,
       template: { resources: {} },
       existingResources: [alreadyGoneOrphan],
@@ -438,6 +454,7 @@ describe('formationsApply', () => {
     const events: FormationEvent[] = [];
 
     await handleOrphanedDeletes({
+      actingUserId,
       projectId,
       template: { resources: {} },
       existingResources: [tombstoned],
@@ -454,6 +471,7 @@ describe('formationsApply', () => {
     // memories formation module, so `applyCreateResource` throws.
     await expect(
       processResourceChange({
+        actingUserId,
         logicalId,
         decl: {
           type: 'memory',
@@ -490,6 +508,7 @@ describe('formationsApply', () => {
     const events: FormationEvent[] = [];
 
     await processResourceChange({
+      actingUserId,
       logicalId,
       decl: {
         type: 'memory',

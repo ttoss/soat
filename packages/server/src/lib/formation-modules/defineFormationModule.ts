@@ -99,6 +99,7 @@ export type FormationModuleDefinition<TResource> = {
   create: (args: {
     properties: Record<string, unknown>;
     projectId: number;
+    actingUserId: number;
   }) => Promise<{ id: string }>;
   /**
    * Omit for a resource that cannot be updated — the apply becomes a no-op.
@@ -109,6 +110,7 @@ export type FormationModuleDefinition<TResource> = {
     properties: Record<string, unknown>;
     physicalResourceId: string;
     projectId: number;
+    actingUserId: number;
   }) => Promise<unknown>;
   remove: (args: { physicalResourceId: string }) => Promise<unknown>;
   /**
@@ -252,9 +254,13 @@ const buildOperations = <TResource>(args: {
   const type = definition.resourceType;
 
   return {
-    create: async ({ properties: raw, projectId }) => {
+    create: async ({ properties: raw, projectId, actingUserId }) => {
       const properties = assertValid({ properties: raw, forUpdate: false });
-      const created = await definition.create({ properties, projectId });
+      const created = await definition.create({
+        properties,
+        projectId,
+        actingUserId,
+      });
       log(
         'created %s from formation: projectId=%d id=%s',
         type,
@@ -264,7 +270,12 @@ const buildOperations = <TResource>(args: {
       return created.id;
     },
 
-    update: async ({ properties: raw, physicalResourceId, projectId }) => {
+    update: async ({
+      properties: raw,
+      physicalResourceId,
+      projectId,
+      actingUserId,
+    }) => {
       const properties = assertValid({ properties: raw, forUpdate: true });
       if (!definition.update) {
         log(
@@ -274,7 +285,12 @@ const buildOperations = <TResource>(args: {
         );
         return;
       }
-      await definition.update({ properties, physicalResourceId, projectId });
+      await definition.update({
+        properties,
+        physicalResourceId,
+        projectId,
+        actingUserId,
+      });
       log('updated %s from formation: id=%s', type, physicalResourceId);
     },
 

@@ -6,6 +6,7 @@ import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 describe('workflowsFormationModule', () => {
   let adminToken: string;
   let projectId: string;
+  let actingUserId: number;
   let projectDbId: number;
   let agentId: string;
 
@@ -24,6 +25,11 @@ describe('workflowsFormationModule', () => {
       where: { publicId: projectId },
     });
     projectDbId = project?.id as number;
+
+    const adminUser = await db.User.findOne({
+      where: { username: 'wfformadmin' },
+    });
+    actingUserId = adminUser?.id as number;
 
     const providerRes = await admin.post('/api/v1/ai-providers').send({
       project_id: projectId,
@@ -76,6 +82,7 @@ describe('workflowsFormationModule', () => {
   test('create resolves nested on_enter dispatch + guard, then read/update/delete', async () => {
     const created = await workflowsFormationModule.create!({
       projectId: projectDbId,
+      actingUserId,
       properties: {
         name: 'Module workflow',
         description: 'via module',
@@ -136,6 +143,7 @@ describe('workflowsFormationModule', () => {
 
     await workflowsFormationModule.update!({
       projectId: projectDbId,
+      actingUserId,
       physicalResourceId: created,
       properties: {
         name: 'Module workflow v2',
@@ -152,6 +160,7 @@ describe('workflowsFormationModule', () => {
 
     await workflowsFormationModule.delete!({
       projectId: projectDbId,
+      actingUserId,
       physicalResourceId: created,
     });
     const readGone = await workflowsFormationModule.read!({
@@ -173,6 +182,7 @@ describe('workflowsFormationModule', () => {
     await expect(
       workflowsFormationModule.create!({
         projectId: projectDbId,
+        actingUserId,
         properties: {
           name: 'bad workflow',
           states: [

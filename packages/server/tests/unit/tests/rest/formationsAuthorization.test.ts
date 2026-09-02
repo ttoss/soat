@@ -9,6 +9,9 @@ import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 describe('Formation resource authorization', () => {
   let adminToken: string;
   let deployToken: string;
+  let deployUserId: string;
+  let noKeyToken: string;
+  let ownerUserId: string;
   let projectId: string;
   let otherProjectId: string;
 
@@ -16,7 +19,7 @@ describe('Formation resource authorization', () => {
     username: string;
     password: string;
     actions: string[];
-  }): Promise<string> => {
+  }): Promise<{ token: string; userId: string }> => {
     const userRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/users')
       .send({ username: args.username, password: args.password });
@@ -33,7 +36,10 @@ describe('Formation resource authorization', () => {
       .put(`/api/v1/users/${userRes.body.id}/policies`)
       .send({ policy_ids: [policyRes.body.id] });
 
-    return loginAs(args.username, args.password);
+    return {
+      token: await loginAs(args.username, args.password),
+      userId: userRes.body.id,
+    };
   };
 
   const FORMATION_ACTIONS = [
@@ -51,6 +57,12 @@ describe('Formation resource authorization', () => {
       .send({ username: 'fraadmin', password: 'supersecret' });
     adminToken = await loginAs('fraadmin', 'supersecret');
 
+    const me =
+      await authenticatedTestClient(adminToken).get('/api/v1/users/me');
+    // The bootstrap admin creates the projects, so it is the billing owner an
+    // `api_key` resource used to be minted under.
+    ownerUserId = me.body.id;
+
     const projectRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/projects')
       .send({ name: 'Formation Authorization Project' });
@@ -62,7 +74,7 @@ describe('Formation resource authorization', () => {
     otherProjectId = otherProjectRes.body.id;
 
     // Everything a memory needs, and deliberately nothing a guardrail does.
-    deployToken = await grant({
+    const deploy = await grant({
       username: 'fradeploy',
       password: 'deploypass',
       actions: [
@@ -75,6 +87,16 @@ describe('Formation resource authorization', () => {
         'api-keys:CreateApiKey',
       ],
     });
+    deployToken = deploy.token;
+    deployUserId = deploy.userId;
+
+    noKeyToken = (
+      await grant({
+        username: 'franokey',
+        password: 'nokeypass',
+        actions: FORMATION_ACTIONS,
+      })
+    ).token;
   });
 
   describe('POST /api/v1/formations', () => {
@@ -171,7 +193,10 @@ describe('Formation resource authorization', () => {
       ]);
     });
 
-    test('an api_key resource is refused for a non-admin even with the action granted', async () => {
+    // An `api_key` resource mints under the caller, as `POST /api-keys` does,
+    // so the key it produces can never exceed the permissions of whoever
+    // deployed it — that is what makes the type safe to declare (#1181).
+    test('an api_key resource is minted under the caller, not the project owner', async () => {
       const res = await authenticatedTestClient(deployToken)
         .post('/api/v1/formations')
         .send({
@@ -180,6 +205,58 @@ describe('Formation resource authorization', () => {
           template: {
             resources: {
               Key: { type: 'api_key', properties: { name: 'fra-key' } },
+            },
+          },
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('active');
+
+      const keyId = res.body.resources[0].physical_resource_id;
+      const key = await authenticatedTestClient(adminToken).get(
+        `/api/v1/api-keys/${keyId}`
+      );
+      expect(key.body.user_id).toBe(deployUserId);
+      expect(key.body.user_id).not.toBe(ownerUserId);
+    });
+
+    // The common deploy path is a CI credential, not a JWT. An API key's acting
+    // user is the key's owner, so the minted key cannot outrank the key that
+    // deployed it either.
+    test('an api_key resource deployed with an API key is minted under that key owner', async () => {
+      const deployKey = await authenticatedTestClient(deployToken)
+        .post('/api/v1/api-keys')
+        .send({ name: 'fra-deploy-key', project_id: projectId });
+      expect(deployKey.status).toBe(201);
+
+      const res = await authenticatedTestClient(deployKey.body.key)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: 'api-key-via-key-stack',
+          template: {
+            resources: {
+              Key: { type: 'api_key', properties: { name: 'fra-nested-key' } },
+            },
+          },
+        });
+
+      expect(res.status).toBe(201);
+      const minted = await authenticatedTestClient(adminToken).get(
+        `/api/v1/api-keys/${res.body.resources[0].physical_resource_id}`
+      );
+      expect(minted.body.user_id).toBe(deployUserId);
+    });
+
+    test('an api_key resource is refused without the create action', async () => {
+      const res = await authenticatedTestClient(noKeyToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: 'api-key-denied-stack',
+          template: {
+            resources: {
+              Key: { type: 'api_key', properties: { name: 'fra-denied-key' } },
             },
           },
         });
@@ -290,7 +367,7 @@ describe('Formation resource authorization', () => {
 
   describe('DELETE /api/v1/formations/:formation_id', () => {
     test('a teardown the caller may not perform is refused and the stack survives', async () => {
-      const noDeleteToken = await grant({
+      const { token: noDeleteToken } = await grant({
         username: 'franodelete',
         password: 'nodeletepass',
         actions: [...FORMATION_ACTIONS, 'memories:CreateMemory'],

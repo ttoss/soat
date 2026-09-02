@@ -4902,6 +4902,24 @@ if $SOAT_CLI list-formations --project_id "$PROJECT_PUBLIC_ID" \
 fi
 echo "Formation authorization enforced per resource."
 
+# An `api_key` resource mints under the caller, not the project owner, so the
+# key a template creates can never carry more access than whoever deployed it.
+echo "--- Formation api_key minted under the caller ---"
+FORMATION_KEY_FORMATION_ID=$($SOAT_CLI create-formation \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-formation-api-key" \
+  --template '{"resources":{"myKey":{"type":"api_key","properties":{"name":"smoke-formation-minted-key"}}},"outputs":{"keyId":{"ref":"myKey"}}}' \
+  | jq -r '.id')
+MINTED_KEY_ID=$($SOAT_CLI get-formation --formation_id "$FORMATION_KEY_FORMATION_ID" \
+  | jq -r '.resources[] | select(.logical_id == "myKey") | .physical_resource_id')
+MINTED_KEY_OWNER=$($SOAT_CLI get-api-key --api_key_id "$MINTED_KEY_ID" | jq -r '.user_id')
+if [ "$MINTED_KEY_OWNER" != "$ADMIN_USER_ID" ]; then
+  echo "ERROR: formation-minted api_key owner is '$MINTED_KEY_OWNER', expected the deploying caller '$ADMIN_USER_ID'" >&2
+  exit 1
+fi
+$SOAT_CLI delete-formation --formation_id "$FORMATION_KEY_FORMATION_ID" >/dev/null
+echo "Formation api_key owned by the deploying caller."
+
 # Metadata substitution (F-16): top-level `metadata` resolves `sub`/`param`/`ref`
 # at deploy, exposed on `resolved_metadata`; deploy parameter values are recorded
 # on `resolved_parameters`.

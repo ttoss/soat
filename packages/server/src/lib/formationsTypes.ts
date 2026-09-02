@@ -79,6 +79,23 @@ export type FormationResourceContext = {
 };
 
 /**
+ * The caller a mutation is performed for — what the REST routes take from the
+ * request, and what a formation deploy had no way to name.
+ *
+ * Three modules need it, and for two of them it is what bounds the resource's
+ * authority rather than merely labelling it (#1181): an `api_key` mints under
+ * it, so the key can never exceed whoever deployed it, and a `trigger`'s
+ * `created_by` is the run-as identity a firing mints a token for. An `agent`
+ * version uses it as authorship.
+ *
+ * Carried by the three **write** operations only, and required there: every path
+ * that mutates comes from an authenticated route, so a call site that cannot
+ * name its caller is a mistake rather than a case to handle. A `read` is
+ * attributed to nobody, and the plan path never writes, so neither invents one.
+ */
+export type FormationActingPrincipal = { actingUserId: number };
+
+/**
  * What an `update` did, when it did more than mutate in place.
  *
  * A resource type whose backing system cannot change some property without
@@ -126,9 +143,7 @@ export type FormationModuleAuthorization =
       /**
        * True where the REST equivalent gates on the `admin` role rather than a
        * policy-grantable action, so a granted action alone would make the
-       * formation path weaker than the route it mirrors (`policy`), or where
-       * the formation path acts under an identity a route never lets a
-       * non-admin borrow — `api_key` mints under the project owner.
+       * formation path weaker than the route it mirrors (`policy`).
        */
       adminOnly?: true;
     }
@@ -215,16 +230,19 @@ export type FormationModule = {
     basePath: string;
   }) => ValidationError[];
   create: (
-    args: { properties: Record<string, unknown> } & FormationResourceContext
+    args: { properties: Record<string, unknown> } & FormationResourceContext &
+      FormationActingPrincipal
   ) => Promise<string>;
   update: (
     args: {
       properties: Record<string, unknown>;
       physicalResourceId: string;
-    } & FormationResourceContext
+    } & FormationResourceContext &
+      FormationActingPrincipal
   ) => Promise<UpdateOutcome | void>;
   delete: (
-    args: { physicalResourceId: string } & FormationResourceContext
+    args: { physicalResourceId: string } & FormationResourceContext &
+      FormationActingPrincipal
   ) => Promise<void>;
   /**
    * Why `delete` would refuse for this resource, or `null` when it would

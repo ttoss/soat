@@ -17,6 +17,7 @@ type ResourceRowWithId = InstanceType<(typeof db)['FormationResource']> & {
 };
 
 let projectId: number;
+let actingUserId: number;
 let formationId: number;
 let counter = 0;
 
@@ -36,6 +37,12 @@ describe('formationsApplyHelpers', () => {
       name: 'Formations Apply Helpers Test Project',
     });
     projectId = project.id as number;
+
+    const user = await db.User.create({
+      username: 'formations-apply-helpers-actor',
+      passwordHash: 'not-a-real-hash',
+    });
+    actingUserId = user.id as number;
 
     const formation = await db.Formation.create({
       projectId,
@@ -61,6 +68,7 @@ describe('formationsApplyHelpers', () => {
     const events: FormationEvent[] = [];
 
     await applyCreateChange({
+      actingUserId,
       resourceRow,
       resourceType: 'memory',
       resolvedProperties: { name: memoryName },
@@ -105,6 +113,7 @@ describe('formationsApplyHelpers', () => {
     const events: FormationEvent[] = [];
 
     await applyUpdateChange({
+      actingUserId,
       projectId,
       resourceRow,
       existing: resourceRow as ResourceRowWithId,
@@ -148,6 +157,7 @@ describe('formationsApplyHelpers', () => {
     const events: FormationEvent[] = [];
 
     await applyUpdateChange({
+      actingUserId,
       projectId,
       resourceRow,
       existing: resourceRow as ResourceRowWithId,
@@ -209,6 +219,7 @@ describe('formationsApplyHelpers', () => {
 
       const events: FormationEvent[] = [];
       await applyUpdateChange({
+        actingUserId,
         projectId,
         resourceRow,
         existing: resourceRow as ResourceRowWithId,
@@ -239,6 +250,7 @@ describe('formationsApplyHelpers', () => {
 
     const events: FormationEvent[] = [];
     await applyUpdateChange({
+      actingUserId,
       projectId,
       resourceRow,
       existing: resourceRow as ResourceRowWithId,
@@ -270,6 +282,7 @@ describe('formationsApplyHelpers', () => {
 
     const events: FormationEvent[] = [];
     await applyUpdateChange({
+      actingUserId,
       projectId,
       resourceRow,
       existing: resourceRow as ResourceRowWithId,
@@ -321,6 +334,7 @@ describe('formationsApplyHelpers', () => {
     });
 
     const events = await rollbackCreatedResources({
+      actingUserId,
       projectId,
       created: [deletable, blocked],
     });
@@ -365,6 +379,7 @@ describe('formationsApplyHelpers', () => {
     });
 
     const events = await rollbackCreatedResources({
+      actingUserId,
       projectId,
       created: [alreadyGone, noPhysicalId],
     });

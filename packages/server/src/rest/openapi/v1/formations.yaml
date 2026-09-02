@@ -1261,7 +1261,8 @@ components:
       description: >-
         Binds a starter (manual, webhook, schedule, or event) to an executable
         target (orchestration, agent, tool, or eval). Firings run under the
-        project owner's confined run-as identity.
+        confined run-as identity of the caller who deployed the formation, so a
+        firing never exceeds what that caller could do directly.
       type: object
       additionalProperties: false
       required:
@@ -1330,7 +1331,9 @@ components:
     ApiKeyResourceProperties:
       description: >-
         Creates an API key scoped to the formation's project and optionally
-        restricted by a set of policies. The key is owned by the project owner.
+        restricted by a set of policies. The key is owned by the caller who
+        deployed the formation, exactly as one created through the API is, so it
+        never carries more access than they already have.
       type: object
       additionalProperties: false
       required:

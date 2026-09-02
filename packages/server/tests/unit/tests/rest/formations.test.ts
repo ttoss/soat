@@ -96,8 +96,11 @@ describe('Formations', () => {
                 'memories:GetMemory',
                 // Per-resource actions: a formation may only do what the caller
                 // could do directly (#1181), so deploying these types needs the
-                // same actions a direct call would. `api_key` and `policy` are
-                // deliberately absent — both gate on the admin role.
+                // same actions a direct call would. `policy` is deliberately
+                // absent — it gates on the admin role.
+                'api-keys:CreateApiKey',
+                'api-keys:UpdateApiKey',
+                'api-keys:DeleteApiKey',
                 'agents:CreateAgent',
                 'agents:UpdateAgent',
                 'agents:DeleteAgent',
@@ -3717,9 +3720,6 @@ resources:
     });
   });
 
-  // An `api_key` resource is minted under the project owner, an identity no
-  // route lets a non-admin borrow, so applying one needs the admin role (#1181)
-  // — hence `adminToken` where the rest of this file deploys as `userToken`.
   describe('Formation with api_key resources', () => {
     let apiKeyFormationId: string;
 
@@ -3735,7 +3735,7 @@ resources:
     };
 
     test('creates a formation with an api_key resource', async () => {
-      const res = await authenticatedTestClient(adminToken)
+      const res = await authenticatedTestClient(userToken)
         .post('/api/v1/formations')
         .send({
           project_id: projectId,
@@ -3765,7 +3765,7 @@ resources:
         },
       };
 
-      const res = await authenticatedTestClient(adminToken)
+      const res = await authenticatedTestClient(userToken)
         .put(`/api/v1/formations/${apiKeyFormationId}`)
         .send({ template: updatedTemplate });
 
@@ -3802,7 +3802,7 @@ resources:
     });
 
     test('deletes formation and cleans up api_key resource', async () => {
-      const res = await authenticatedTestClient(adminToken).delete(
+      const res = await authenticatedTestClient(userToken).delete(
         `/api/v1/formations/${apiKeyFormationId}`
       );
       expect(res.status).toBe(200);
