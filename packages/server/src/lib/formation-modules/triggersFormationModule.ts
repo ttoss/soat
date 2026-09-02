@@ -95,6 +95,12 @@ const pushShapeRuleErrors = (args: {
 
 export const triggersFormationModule = defineFormationModule({
   resourceType: 'trigger',
+  authorization: {
+    srnResourceType: 'trigger',
+    create: 'triggers:CreateTrigger',
+    update: 'triggers:UpdateTrigger',
+    delete: 'triggers:DeleteTrigger',
+  },
 
   extraChecks: pushShapeRuleErrors,
 

@@ -13,11 +13,17 @@ import { defineFormationModule } from './defineFormationModule';
 
 export const conversationsFormationModule = defineFormationModule({
   resourceType: 'conversation',
+  authorization: {
+    srnResourceType: 'conversation',
+    create: 'conversations:CreateConversation',
+    update: 'conversations:UpdateConversation',
+    delete: 'conversations:DeleteConversation',
+  },
 
   create: async ({ properties, projectId }) => {
     const actorPublicId = toNullableString(properties.actor_id);
     const actorId = actorPublicId
-      ? await lookupActorInternalId(actorPublicId)
+      ? await lookupActorInternalId({ publicId: actorPublicId, projectId })
       : null;
 
     return createConversation({

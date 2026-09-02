@@ -4857,6 +4857,51 @@ if [ -z "$FORMATION_ID" ] || [ "$FORMATION_ID" = "null" ]; then
 fi
 echo "Formation created: $FORMATION_ID"
 
+# A formation may only do what the caller could do directly (#1181): the deploy
+# path authorizes every resource a template declares, and a plan reports the
+# refusals instead of becoming one. Driven through an API key whose boundary
+# policy allows the formation actions and nothing else — the key boundary
+# applies even to an admin's key, so it is the one way to exercise a refusal
+# without a second user.
+echo "--- Formation per-resource authorization ---"
+FORMATION_SCOPED_POLICY_ID=$($SOAT_CLI create-policy \
+  --document '{"statement":[{"effect":"Allow","action":["formations:PlanFormation","formations:CreateFormation","memories:CreateMemory"]}]}' \
+  | jq -r '.id')
+FORMATION_SCOPED_KEY_RAW=$($SOAT_CLI create-api-key \
+  --name smoke-formation-scoped-key \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --policy_ids "[\"$FORMATION_SCOPED_POLICY_ID\"]" \
+  | jq -r '.key')
+
+FORMATION_DENIED_TEMPLATE='{"resources":{"myMemory":{"type":"memory","properties":{"name":"Smoke Authorized Memory"}},"myGuardrail":{"type":"guardrail","properties":{"name":"smoke-denied-guardrail","class":"A"}}}}'
+
+PLAN_DENIED_RESP=$(SOAT_TOKEN="$FORMATION_SCOPED_KEY_RAW" $SOAT_CLI plan-formation \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --template "$FORMATION_DENIED_TEMPLATE")
+if ! printf '%s\n' "$PLAN_DENIED_RESP" | jq -e '[.unauthorized_actions[].action] | index("guardrails:CreateGuardrail")' >/dev/null 2>&1; then
+  echo "ERROR: plan-formation did not report the unauthorized guardrail action" >&2
+  echo "$PLAN_DENIED_RESP" >&2
+  exit 1
+fi
+
+set +e
+CREATE_DENIED_RESP=$(SOAT_TOKEN="$FORMATION_SCOPED_KEY_RAW" $SOAT_CLI create-formation \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-denied-formation" \
+  --template "$FORMATION_DENIED_TEMPLATE" 2>&1)
+set -e
+if ! printf '%s\n' "$CREATE_DENIED_RESP" | jq -e '.status == 403 and ([.error.meta.denied_actions[].action] | index("guardrails:CreateGuardrail") != null)' >/dev/null 2>&1; then
+  echo "ERROR: create-formation did not refuse the unauthorized guardrail resource" >&2
+  echo "$CREATE_DENIED_RESP" >&2
+  exit 1
+fi
+if $SOAT_CLI list-formations --project_id "$PROJECT_PUBLIC_ID" \
+  | jq -e '[.data[].name] | index("smoke-denied-formation")' >/dev/null 2>&1; then
+  echo "ERROR: a refused create-formation left a formation behind" >&2
+  exit 1
+fi
+echo "Formation authorization enforced per resource."
+
 # Metadata substitution (F-16): top-level `metadata` resolves `sub`/`param`/`ref`
 # at deploy, exposed on `resolved_metadata`; deploy parameter values are recorded
 # on `resolved_parameters`.

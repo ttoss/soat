@@ -27,9 +27,18 @@ const getSessionAgentInternalId = async (
 
 export const sessionsFormationModule = defineFormationModule({
   resourceType: 'session',
+  authorization: {
+    srnResourceType: 'session',
+    create: 'agents:CreateSession',
+    update: 'agents:UpdateSession',
+    delete: 'agents:DeleteSession',
+  },
 
   create: async ({ properties, projectId }) => {
-    const agentId = await lookupAgentInternalId(properties.agent_id as string);
+    const agentId = await lookupAgentInternalId({
+      publicId: properties.agent_id as string,
+      projectId,
+    });
 
     return createSession({
       projectId,

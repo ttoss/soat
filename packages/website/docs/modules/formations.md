@@ -513,6 +513,65 @@ apply it previews:
 - A property resolving to `undefined` (a kept `use_previous_value` parameter)
   reuses the previous value, or is dropped entirely when there is none.
 
+### A Formation Only Does What the Caller Could Do Directly
+
+A formation is authorized twice: once for the request
+(`formations:CreateFormation`, `formations:UpdateFormation`,
+`formations:DeleteFormation`, `formations:PlanFormation`) and then **once per
+resource the template declares**, as the action a direct call would need.
+Declaring a guardrail needs `guardrails:CreateGuardrail`; removing one from the
+template needs `guardrails:DeleteGuardrail`. Handing a template to a constrained
+principal is therefore safe: a `Deny` on a resource action applies to the
+formation path exactly as it applies to the route.
+
+The check runs over the whole template **before anything is applied**, so a
+refusal changes nothing — no formation is created, and a refused update or
+teardown leaves the stack `active`. The `403` names every action the caller
+lacks at once:
+
+```json
+{
+  "error": {
+    "code": "FORBIDDEN",
+    "message": "Not permitted to apply 1 resource(s) this template declares: MyGuardrail (guardrails:CreateGuardrail). A formation may only do what the caller could do directly.",
+    "meta": {
+      "denied_actions": [
+        {
+          "logical_id": "MyGuardrail",
+          "resource_type": "guardrail",
+          "action": "guardrails:CreateGuardrail"
+        }
+      ]
+    }
+  }
+}
+```
+
+[`POST /api/v1/formations/plan`](/docs/api/formations/plan-formation) changes
+nothing, so it **reports** the same list under `unauthorized_actions` instead of
+refusing — the way to see what a deploy would reject without attempting it. The
+field is absent when the caller may perform every action the plan implies.
+
+Two resource types need the `admin` role rather than an action, because the
+route each mirrors is not action-gated either:
+
+| Type | Why |
+| --- | --- |
+| `policy` | The policies routes gate on the `admin` role, so a grantable action would make the formation path the weaker of the two. |
+| `api_key` | A deploy has no request user, so the key is minted under the project owner — an identity no route lets a non-admin borrow. |
+
+A [custom resource type](#custom-resource-types) has no SOAT action to check, so
+it stays gated on the request's `formations:*` action alone.
+
+### Ids a Template Names Are Resolved Within Its Own Project
+
+A property naming an existing resource by id — an `ai_provider`'s `secret_id`,
+a `session`'s `agent_id`, an `ingestion_rule`'s `tool_id` — resolves only within
+the project the formation is deployed into. An id belonging to another project
+fails the apply as though it did not exist, which is also all the error says: a
+distinguishable "exists, but elsewhere" would make the lookup a way to probe for
+ids in other projects.
+
 ### Custom Resource Types
 
 A deployment that builds its own product on top of SOAT usually has resources

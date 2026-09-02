@@ -22,6 +22,12 @@ import { defineFormationModule } from './defineFormationModule';
 
 export const workflowsFormationModule = defineFormationModule({
   resourceType: 'workflow',
+  authorization: {
+    srnResourceType: 'workflow',
+    create: 'workflows:CreateWorkflow',
+    update: 'workflows:UpdateWorkflow',
+    delete: 'workflows:DeleteWorkflow',
+  },
 
   create: ({ properties, projectId }) => {
     return createWorkflow({

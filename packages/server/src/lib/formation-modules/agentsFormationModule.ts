@@ -1,4 +1,3 @@
-import { db } from '../../db';
 import { deleteAgent, findAgentDeletionBlocker } from '../agentDelete';
 import { toStoredKnowledgeConfig } from '../agentKnowledge';
 import { createAgent, getAgent, updateAgent } from '../agents';
@@ -150,23 +149,14 @@ const resolveApplyingPrincipal = async (args: {
   return lookupProjectOwnerUserId(args.projectId);
 };
 
-/**
- * `update` receives only the physical resource id, so the project has to be
- * resolved from the agent itself before its owner can be looked up.
- */
-const resolveApplyingPrincipalForAgent = async (
-  agentPublicId: string
-): Promise<number | undefined> => {
-  const agent = await db.Agent.findOne({
-    where: { publicId: agentPublicId },
-    attributes: ['projectId'],
-  });
-  if (!agent) return undefined;
-  return resolveApplyingPrincipal({ projectId: agent.projectId });
-};
-
 export const agentsFormationModule = defineFormationModule({
   resourceType: 'agent',
+  authorization: {
+    srnResourceType: 'agent',
+    create: 'agents:CreateAgent',
+    update: 'agents:UpdateAgent',
+    delete: 'agents:DeleteAgent',
+  },
 
   extraChecks: ({ properties, basePath, forUpdate, errors }) => {
     // A mis-named `Deny` would silently no-op and fail the boundary open, so
@@ -191,11 +181,10 @@ export const agentsFormationModule = defineFormationModule({
     });
   },
 
-  update: async ({ properties, physicalResourceId }) => {
+  update: async ({ properties, physicalResourceId, projectId }) => {
     await updateAgent({
       id: physicalResourceId,
-      createdByUserId:
-        await resolveApplyingPrincipalForAgent(physicalResourceId),
+      createdByUserId: await resolveApplyingPrincipal({ projectId }),
       // REST PATCH semantics: an explicit `null` clears the binding, an
       // undeclared field leaves it alone.
       aiProviderId: toNullableString(properties.ai_provider_id),

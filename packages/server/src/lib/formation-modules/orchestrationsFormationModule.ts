@@ -39,6 +39,12 @@ const convertCollectionKeys = (
 
 export const orchestrationsFormationModule = defineFormationModule({
   resourceType: 'orchestration',
+  authorization: {
+    srnResourceType: 'orchestration',
+    create: 'orchestrations:CreateOrchestration',
+    update: 'orchestrations:UpdateOrchestration',
+    delete: 'orchestrations:DeleteOrchestration',
+  },
 
   create: ({ properties, projectId }) => {
     return createOrchestration({

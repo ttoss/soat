@@ -12,6 +12,18 @@ import { isObjectRecord } from './formationSpecLoader';
 
 export const policiesFormationModule = defineFormationModule({
   resourceType: 'policy',
+  // The policies routes gate on the `admin` role, not on a policy-grantable
+  // action — a policy that granted `policies:CreatePolicy` to a non-admin would
+  // otherwise make the formation path the weaker of the two, and a template
+  // declaring a `*` policy plus an `api_key` carrying it is the escalation
+  // #1181 reports.
+  authorization: {
+    srnResourceType: 'policy',
+    create: 'policies:CreatePolicy',
+    update: 'policies:UpdatePolicy',
+    delete: 'policies:DeletePolicy',
+    adminOnly: true,
+  },
 
   // Only the semantic action-name check — structure is validated downstream.
   // A typo'd action rejected here fails at `validate-formation` time rather

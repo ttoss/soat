@@ -89,8 +89,110 @@ export type FormationResourceContext = {
  */
 export type UpdateOutcome = { replacedWithPhysicalResourceId: string };
 
+/**
+ * How a formation resource type is authorized, per operation.
+ *
+ * A formation used to be authorized once, as `formations:CreateFormation` on the
+ * request, and every resource it declared was then applied by calling the
+ * module's lib function directly — so the per-action check the REST routes
+ * perform never ran for anything a template declared (#1181). A principal
+ * denied `guardrails:CreateGuardrail` created a guardrail by declaring one, and
+ * the `policy` + `api_key` pair turned that into privilege escalation.
+ *
+ * Declaring it here, required, is what makes the check impossible to forget: a
+ * new module does not compile without saying which action each of its
+ * operations is, and `defineFormationModule` refuses a module whose declared
+ * operations and declared actions disagree.
+ *
+ * `update` is optional **only** for a type that has no update operation at all
+ * (`chat`): an apply then validates the properties and no-ops, so there is no
+ * mutation to authorize and demanding a permission for it would refuse a
+ * request that changes nothing.
+ */
+export type FormationModuleAuthorization =
+  | {
+      /**
+       * The SRN resource type the module's resources are addressed by — the
+       * segment the REST routes pass as `resourceType`, verbatim, so a
+       * resource-scoped policy statement grants a formation exactly what it
+       * grants a direct call. Deliberately not derived from `resourceType`:
+       * the two differ (`ai_provider` → `aiProvider`, `memory_entry` →
+       * `memory`) and a derivation would silently probe the wrong SRN.
+       */
+      srnResourceType: string;
+      create: string;
+      update?: string;
+      delete: string;
+      /**
+       * True where the REST equivalent gates on the `admin` role rather than a
+       * policy-grantable action, so a granted action alone would make the
+       * formation path weaker than the route it mirrors (`policy`), or where
+       * the formation path acts under an identity a route never lets a
+       * non-admin borrow — `api_key` mints under the project owner.
+       */
+      adminOnly?: true;
+    }
+  | {
+      /**
+       * An operator-registered type (#1078) has no SOAT action to check: its
+       * actions are not in the permission catalog, so no policy could grant
+       * them and every apply would be denied. Such a type stays gated on the
+       * request's own `formations:*` action, as before.
+       */
+      operatorRegistered: true;
+    };
+
+export type FormationResourceOperation = 'create' | 'update' | 'delete';
+
+/** One per-resource authorization question the apply/teardown path must ask. */
+export type FormationAuthorizationRequest = {
+  logicalId: string;
+  resourceType: string;
+  operation: FormationResourceOperation;
+  action: string;
+  srnResourceType: string;
+  /** The resource's physical id, or `*` for a create — nothing exists yet. */
+  resourceId: string;
+  adminOnly: boolean;
+};
+
+/**
+ * Answers one per-resource authorization question.
+ *
+ * A callback rather than a `Context`: the answer needs the request's principal,
+ * which the lib layer has no access to, and threading the whole context through
+ * the deploy engine would make every module principal-aware for no gain.
+ */
+export type FormationAuthorizer = (
+  request: FormationAuthorizationRequest
+) => Promise<boolean>;
+
+/** A refused per-resource action, as reported to the caller. */
+export type FormationAuthorizationDenial = {
+  logicalId: string;
+  resourceType: string;
+  action: string;
+};
+
+export type FormationAuthorizationDenialWire = {
+  logical_id: string;
+  resource_type: string;
+  action: string;
+};
+
+export const authorizationDenialToWire = (
+  denial: FormationAuthorizationDenial
+): FormationAuthorizationDenialWire => {
+  return {
+    logical_id: denial.logicalId,
+    resource_type: denial.resourceType,
+    action: denial.action,
+  };
+};
+
 export type FormationModule = {
   resourceType: string;
+  authorization: FormationModuleAuthorization;
   validateProperties?: (args: {
     properties: unknown;
     basePath: string;
@@ -191,6 +293,13 @@ export type PlanChange = {
 
 export type PlanResult = {
   changes: PlanChange[];
+  /**
+   * The per-resource actions the caller may not perform, so a plan says up
+   * front what an apply would refuse (#1181). Omitted when the caller may
+   * perform every action the plan implies — a plan is read-only, so it reports
+   * the refusals rather than becoming one.
+   */
+  unauthorizedActions?: FormationAuthorizationDenial[];
 };
 
 export type FormationEvent = {
@@ -259,6 +368,7 @@ export type PlanChangeWire = {
 
 export type PlanResultWire = {
   changes: PlanChangeWire[];
+  unauthorized_actions?: FormationAuthorizationDenialWire[];
 };
 
 export type FormationEventWire = {
@@ -286,7 +396,16 @@ export const planChangeToWire = (change: PlanChange): PlanChangeWire => {
 
 /** Converts an internal `PlanResult` to its snake_case wire shape. */
 export const planResultToWire = (plan: PlanResult): PlanResultWire => {
-  return { changes: plan.changes.map(planChangeToWire) };
+  return {
+    changes: plan.changes.map(planChangeToWire),
+    ...(plan.unauthorizedActions && plan.unauthorizedActions.length > 0
+      ? {
+          unauthorized_actions: plan.unauthorizedActions.map(
+            authorizationDenialToWire
+          ),
+        }
+      : {}),
+  };
 };
 
 /** Converts an internal `FormationEvent` to its snake_case wire shape. */

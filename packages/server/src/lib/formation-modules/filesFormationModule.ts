@@ -4,6 +4,12 @@ import { defineFormationModule } from './defineFormationModule';
 
 export const filesFormationModule = defineFormationModule({
   resourceType: 'file',
+  authorization: {
+    srnResourceType: 'file',
+    create: 'files:CreateFile',
+    update: 'files:UpdateFileMetadata',
+    delete: 'files:DeleteFile',
+  },
 
   // storage_type / storage_path are not part of the file resource schema —
   // storage is system-managed (see FILES_STORAGE_DIR).

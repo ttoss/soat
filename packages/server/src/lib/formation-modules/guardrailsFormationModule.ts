@@ -52,6 +52,12 @@ const buildGuardrailDocument = (
 
 export const guardrailsFormationModule = defineFormationModule({
   resourceType: 'guardrail',
+  authorization: {
+    srnResourceType: 'guardrail',
+    create: 'guardrails:CreateGuardrail',
+    update: 'guardrails:UpdateGuardrail',
+    delete: 'guardrails:DeleteGuardrail',
+  },
 
   // Skipped when a field is still an unresolved `{ ref / param / sub }`
   // expression, which cannot be validated in isolation; the lib re-validates

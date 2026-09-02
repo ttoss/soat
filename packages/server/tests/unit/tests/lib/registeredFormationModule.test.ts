@@ -8,6 +8,7 @@ import type { FormationResourceTypeRegistration } from 'src/lib/formationResourc
 import {
   createFormation,
   deleteFormation,
+  type FormationAuthorizer,
   updateFormation,
 } from 'src/lib/formations';
 import {
@@ -19,6 +20,14 @@ import { validateFormationTemplate } from 'src/lib/formationsValidation';
 import { validateFormationTemplateAsync } from 'src/lib/formationsValidationAsync';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+
+// An operator-registered type has no SOAT action to authorize (#1181), so the
+// deploy path must never consult the authorizer for one.
+const neverAsked: FormationAuthorizer = (request) => {
+  throw new Error(
+    `unexpected authorization request for ${request.resourceType}`
+  );
+};
 
 // The seam is the HTTP boundary to an operator's handler (#1078), so a real
 // handler runs on localhost: the request is genuinely serialized and signed, and
@@ -667,6 +676,7 @@ describe('a registered type inside a real formation deploy', () => {
     replies.create = { status: 200, body: { physical_resource_id: 'chn_100' } };
 
     const created = await createFormation({
+      authorize: neverAsked,
       projectId,
       name: 'registered-lifecycle',
       template: template({ name: 'Support', kind: 'whatsapp' }),
@@ -683,6 +693,7 @@ describe('a registered type inside a real formation deploy', () => {
 
     replies.update = { status: 200, body: { physical_resource_id: 'chn_100' } };
     const updated = await updateFormation({
+      authorize: neverAsked,
       id: created.id,
       template: template({ name: 'Support Renamed', kind: 'whatsapp' }),
     });
@@ -691,7 +702,7 @@ describe('a registered type inside a real formation deploy', () => {
     expect(updated.resources?.[0].physical_resource_id).toBe('chn_100');
 
     replies.delete = { status: 200, body: {} };
-    await deleteFormation({ id: created.id });
+    await deleteFormation({ id: created.id, authorize: neverAsked });
     expect(
       recorded.some((request) => {
         return request.body.request_type === 'delete';
@@ -702,6 +713,7 @@ describe('a registered type inside a real formation deploy', () => {
   test('an update answering with a new id replaces the resource', async () => {
     replies.create = { status: 200, body: { physical_resource_id: 'chn_200' } };
     const created = await createFormation({
+      authorize: neverAsked,
       projectId,
       name: 'registered-replacement',
       template: template({ name: 'A', kind: 'whatsapp' }),
@@ -711,6 +723,7 @@ describe('a registered type inside a real formation deploy', () => {
     replies.delete = { status: 200, body: {} };
 
     const updated = await updateFormation({
+      authorize: neverAsked,
       id: created.id,
       template: template({ name: 'A', kind: 'discord' }),
     });
@@ -726,12 +739,13 @@ describe('a registered type inside a real formation deploy', () => {
     expect(deleted).toHaveLength(1);
     expect(deleted[0].body.physical_resource_id).toBe('chn_200');
 
-    await deleteFormation({ id: created.id });
+    await deleteFormation({ id: created.id, authorize: neverAsked });
   });
 
   test('a failed disposal leaks the old resource but does not fail the deploy', async () => {
     replies.create = { status: 200, body: { physical_resource_id: 'chn_300' } };
     const created = await createFormation({
+      authorize: neverAsked,
       projectId,
       name: 'registered-replacement-cleanup-fails',
       template: template({ name: 'A', kind: 'whatsapp' }),
@@ -741,6 +755,7 @@ describe('a registered type inside a real formation deploy', () => {
     replies.delete = { status: 500, body: { message: 'cannot delete' } };
 
     const updated = await updateFormation({
+      authorize: neverAsked,
       id: created.id,
       template: template({ name: 'A', kind: 'discord' }),
     });
@@ -763,6 +778,7 @@ describe('a registered type inside a real formation deploy', () => {
       },
     };
     const created = await createFormation({
+      authorize: neverAsked,
       projectId,
       name: 'registered-replacement-retain',
       template: retained,
@@ -770,6 +786,7 @@ describe('a registered type inside a real formation deploy', () => {
 
     replies.update = { status: 200, body: { physical_resource_id: 'chn_401' } };
     await updateFormation({
+      authorize: neverAsked,
       id: created.id,
       template: {
         resources: {
@@ -792,6 +809,7 @@ describe('a registered type inside a real formation deploy', () => {
     replies.create = { status: 422, body: { message: 'number not verified' } };
 
     const created = await createFormation({
+      authorize: neverAsked,
       projectId,
       name: 'registered-handler-refusal',
       template: template({ name: 'A', kind: 'whatsapp' }),

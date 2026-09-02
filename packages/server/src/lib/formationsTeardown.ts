@@ -16,6 +16,10 @@ import {
   isResourceAlreadyGone,
   markResourceDeleted,
 } from './formationsApplyHelpers';
+import {
+  assertResourceActionsAuthorized,
+  collectTeardownAuthorizationRequests,
+} from './formationsAuthorization';
 import { buildDependencyGraph, topologicalSort } from './formationsHelpers';
 import {
   applyDeleteResource,
@@ -23,6 +27,7 @@ import {
 } from './formationsResourceHandlers';
 import {
   buildFormationError,
+  type FormationAuthorizer,
   type FormationEvent,
   type FormationTemplate,
 } from './formationsTypes';
@@ -225,6 +230,7 @@ export const throwDeletionFailure = (args: {
  */
 export const deleteFormation = async (args: {
   id: string;
+  authorize: FormationAuthorizer;
 }): Promise<{ success: true }> => {
   const formation = await db.Formation.findOne({
     where: { publicId: args.id, status: { [Op.ne]: 'deleted' } },
@@ -243,6 +249,14 @@ export const deleteFormation = async (args: {
     formation.template as FormationTemplate | null,
     existingResources
   );
+
+  // A teardown is a delete per resource, so it needs the delete action for each
+  // — the same per-resource check an apply runs (#1181). Ahead of the deletion
+  // pre-flight, since a refusal here is about the caller, not the stack.
+  await assertResourceActionsAuthorized({
+    authorize: args.authorize,
+    requests: collectTeardownAuthorizationRequests({ existingResources }),
+  });
 
   // Before anything is destroyed: teardown is ordered and not transactional, so
   // a blocker found mid-way leaves the resources ahead of it gone for good.

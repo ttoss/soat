@@ -372,6 +372,11 @@ export const buildRegisteredFormationModule = (args: {
   return {
     resourceType,
 
+    // An operator-registered type's operations are not in the permission
+    // catalog, so no policy could grant them; it stays gated on the request's
+    // own `formations:*` action. See `FormationModuleAuthorization`.
+    authorization: { operatorRegistered: true },
+
     validateProperties: ({ properties, basePath }) => {
       return validate({ properties, basePath, forUpdate: false });
     },

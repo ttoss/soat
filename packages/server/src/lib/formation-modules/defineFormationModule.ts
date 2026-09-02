@@ -18,7 +18,11 @@
 import createDebug from 'debug';
 
 import { normalizeDeclaredProperties } from '../formationsProperties';
-import type { FormationModule, ValidationError } from '../formationsTypes';
+import type {
+  FormationModule,
+  FormationModuleAuthorization,
+  ValidationError,
+} from '../formationsTypes';
 import type { ModuleOpenApiSpec } from './formationSpecLoader';
 import {
   isObjectRecord,
@@ -57,6 +61,12 @@ const capitalize = (value: string): string => {
 export type FormationModuleDefinition<TResource> = {
   /** The type a template declares, e.g. `model_route`. */
   resourceType: string;
+  /**
+   * The action each operation is authorized as, before the module runs. Required
+   * so a new module cannot be reachable from a template without saying what
+   * permission applying it needs (#1181).
+   */
+  authorization: FormationModuleAuthorization;
   /**
    * Noun used in the "Unknown <label> field" message. Defaults to
    * `resourceType`; declare it only where the prose differs (`ingestion rule`).
@@ -98,6 +108,7 @@ export type FormationModuleDefinition<TResource> = {
   update?: (args: {
     properties: Record<string, unknown>;
     physicalResourceId: string;
+    projectId: number;
   }) => Promise<unknown>;
   remove: (args: { physicalResourceId: string }) => Promise<unknown>;
   /**
@@ -253,7 +264,7 @@ const buildOperations = <TResource>(args: {
       return created.id;
     },
 
-    update: async ({ properties: raw, physicalResourceId }) => {
+    update: async ({ properties: raw, physicalResourceId, projectId }) => {
       const properties = assertValid({ properties: raw, forUpdate: true });
       if (!definition.update) {
         log(
@@ -263,7 +274,7 @@ const buildOperations = <TResource>(args: {
         );
         return;
       }
-      await definition.update({ properties, physicalResourceId });
+      await definition.update({ properties, physicalResourceId, projectId });
       log('updated %s from formation: id=%s', type, physicalResourceId);
     },
 
@@ -308,6 +319,31 @@ const buildOptionalMembers = <TResource>(
   };
 };
 
+/**
+ * An `update` operation and an `update` action have to exist together: a module
+ * that mutates without a declared action would apply an update no permission was
+ * ever checked for, and a declared action with nothing to update would refuse a
+ * request that changes nothing. Neither is expressible in the type — the
+ * operation and the action are separate fields — so it is asserted at
+ * definition time, which makes it a boot failure rather than a runtime surprise.
+ */
+const assertAuthorizationMatchesOperations = <TResource>(
+  definition: FormationModuleDefinition<TResource>
+): void => {
+  const { authorization, resourceType } = definition;
+  if ('operatorRegistered' in authorization) return;
+
+  const hasUpdateAction = authorization.update !== undefined;
+  const hasUpdateOperation = definition.update !== undefined;
+  if (hasUpdateAction === hasUpdateOperation) return;
+
+  throw new Error(
+    hasUpdateOperation
+      ? `Formation module '${resourceType}' declares an update operation but no authorization.update action`
+      : `Formation module '${resourceType}' declares an authorization.update action but no update operation`
+  );
+};
+
 export const defineFormationModule = <TResource>(
   definition: FormationModuleDefinition<TResource>
 ): FormationModule => {
@@ -341,8 +377,11 @@ export const defineFormationModule = <TResource>(
     );
   };
 
+  assertAuthorizationMatchesOperations(definition);
+
   return {
     resourceType,
+    authorization: definition.authorization,
 
     validateProperties: ({ properties, basePath: hookBasePath }) => {
       return validate({ properties, basePath: hookBasePath, forUpdate: false });

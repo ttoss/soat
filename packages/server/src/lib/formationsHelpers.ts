@@ -399,37 +399,65 @@ export const topologicalSort = (
 const lookupInternalId = async (args: {
   model: {
     findOne: (options: {
-      where: { publicId: string };
+      where: { publicId: string; projectId: number };
     }) => Promise<{ id: number } | null>;
   };
   label: string;
   publicId: string;
+  projectId: number;
 }): Promise<number> => {
   const row = await args.model.findOne({
-    where: { publicId: args.publicId },
+    where: { publicId: args.publicId, projectId: args.projectId },
   });
+  // The same error a public id that does not exist at all raises, deliberately:
+  // a distinguishable "exists, but elsewhere" would make this an oracle for ids
+  // in other projects (#1180).
   if (!row) throw new Error(`${args.label} not found: ${args.publicId}`);
   return row.id;
 };
 
-export const lookupSecretInternalId = (publicId: string): Promise<number> => {
-  return lookupInternalId({ model: db.Secret, label: 'Secret', publicId });
+/**
+ * The project a lookup is confined to.
+ *
+ * `projectId` is **required** on every one of these: the REST routes resolve a
+ * caller-supplied id with the project in the `where`, and the formation modules
+ * resolved it on the public id alone — so a template deployed into project A
+ * could name project B's `sec_…` and get a provider in A holding B's credential
+ * (#1180). Public ids appear in responses, traces and deploy logs, so they are
+ * not an access boundary. Every call site is a module `create`/`update`, which
+ * runs under a known project, so there is no case where the value is genuinely
+ * unavailable.
+ */
+export type ScopedLookupArgs = { publicId: string; projectId: number };
+
+export const lookupSecretInternalId = (
+  args: ScopedLookupArgs
+): Promise<number> => {
+  return lookupInternalId({ model: db.Secret, label: 'Secret', ...args });
 };
 
-export const lookupMemoryInternalId = (publicId: string): Promise<number> => {
-  return lookupInternalId({ model: db.Memory, label: 'Memory', publicId });
+export const lookupMemoryInternalId = (
+  args: ScopedLookupArgs
+): Promise<number> => {
+  return lookupInternalId({ model: db.Memory, label: 'Memory', ...args });
 };
 
-export const lookupActorInternalId = (publicId: string): Promise<number> => {
-  return lookupInternalId({ model: db.Actor, label: 'Actor', publicId });
+export const lookupActorInternalId = (
+  args: ScopedLookupArgs
+): Promise<number> => {
+  return lookupInternalId({ model: db.Actor, label: 'Actor', ...args });
 };
 
-export const lookupAgentInternalId = (publicId: string): Promise<number> => {
-  return lookupInternalId({ model: db.Agent, label: 'Agent', publicId });
+export const lookupAgentInternalId = (
+  args: ScopedLookupArgs
+): Promise<number> => {
+  return lookupInternalId({ model: db.Agent, label: 'Agent', ...args });
 };
 
-export const lookupToolInternalId = (publicId: string): Promise<number> => {
-  return lookupInternalId({ model: db.Tool, label: 'Tool', publicId });
+export const lookupToolInternalId = (
+  args: ScopedLookupArgs
+): Promise<number> => {
+  return lookupInternalId({ model: db.Tool, label: 'Tool', ...args });
 };
 
 export const lookupProjectOwnerUserId = async (

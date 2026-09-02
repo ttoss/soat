@@ -244,7 +244,11 @@ paths:
         '401':
           description: Unauthorized
         '403':
-          description: Forbidden
+          description: >-
+            Forbidden — either the caller may not operate on formations in the
+            project, or it lacks an action a resource this template declares
+            requires. `error.meta.denied_actions` names every missing action;
+            nothing is applied.
         '409':
           description: Formation with this name already exists
 
@@ -342,7 +346,11 @@ paths:
         '401':
           description: Unauthorized
         '403':
-          description: Forbidden
+          description: >-
+            Forbidden — either the caller may not operate on formations in the
+            project, or it lacks an action a resource this template declares
+            requires. `error.meta.denied_actions` names every missing action;
+            nothing is applied.
         '404':
           description: Not Found
 
@@ -393,7 +401,11 @@ paths:
         '401':
           description: Unauthorized
         '403':
-          description: Forbidden
+          description: >-
+            Forbidden — either the caller may not operate on formations in the
+            project, or it lacks an action a resource this template declares
+            requires. `error.meta.denied_actions` names every missing action;
+            nothing is applied.
         '404':
           description: Not Found
         '409':
@@ -2032,6 +2044,36 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PlanChange'
+        unauthorized_actions:
+          type: array
+          description: >-
+            The per-resource actions the caller may not perform. A formation may
+            only do what the caller could do directly, so applying this template
+            would be refused while any of these remain. Absent when the caller
+            may perform every action the plan implies. A plan itself changes
+            nothing, so it reports them rather than failing.
+          items:
+            $ref: '#/components/schemas/UnauthorizedFormationAction'
+
+    UnauthorizedFormationAction:
+      type: object
+      required:
+        - logical_id
+        - resource_type
+        - action
+      properties:
+        logical_id:
+          type: string
+          description: The template's own name for the resource.
+          example: MyGuardrail
+        resource_type:
+          type: string
+          description: The declared resource type.
+          example: guardrail
+        action:
+          type: string
+          description: The action the caller lacks.
+          example: guardrails:CreateGuardrail
 
     FormationError:
       type: object

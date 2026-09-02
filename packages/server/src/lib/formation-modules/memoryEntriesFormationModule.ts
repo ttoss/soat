@@ -13,12 +13,19 @@ import { isObjectRecord } from './formationSpecLoader';
 
 export const memoryEntriesFormationModule = defineFormationModule({
   resourceType: 'memory_entry',
+  authorization: {
+    srnResourceType: 'memory',
+    create: 'memories:CreateMemoryEntry',
+    update: 'memories:UpdateMemoryEntry',
+    delete: 'memories:DeleteMemoryEntry',
+  },
   propertiesLabel: 'MemoryEntry',
 
-  create: async ({ properties }) => {
-    const memoryId = await lookupMemoryInternalId(
-      properties.memory_id as string
-    );
+  create: async ({ properties, projectId }) => {
+    const memoryId = await lookupMemoryInternalId({
+      publicId: properties.memory_id as string,
+      projectId,
+    });
 
     return createMemoryEntry({
       memoryId,

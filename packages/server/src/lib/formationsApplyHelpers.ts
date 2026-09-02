@@ -18,6 +18,22 @@ import { buildFormationError, type FormationEvent } from './formationsTypes';
 
 const log = createDebug('soat:formations');
 
+type ResourceRow = InstanceType<(typeof db)['FormationResource']>;
+
+/**
+ * Whether applying this logical id creates a resource rather than updating one.
+ *
+ * A previously deleted logical id keeps its row and a stale
+ * `physicalResourceId`, so without this it would diff as an update against a
+ * resource that is gone. Shared with the authorization pre-flight, which has to
+ * ask for the same action the engine is about to perform.
+ */
+export const isCreateChange = (existing: ResourceRow | undefined): boolean => {
+  return (
+    !existing || existing.status === 'deleted' || !existing.physicalResourceId
+  );
+};
+
 /**
  * A resource the platform was asked to remove but that is already gone counts
  * as removed — both teardown and the apply unwind treat it as an idempotent
@@ -57,8 +73,6 @@ const sanitize = (
     ? mod.sanitizeLastAppliedProperties(properties)
     : properties;
 };
-
-type ResourceRow = InstanceType<(typeof db)['FormationResource']>;
 
 export const applyCreateChange = async (args: {
   resourceRow: ResourceRow;

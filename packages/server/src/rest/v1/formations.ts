@@ -1,10 +1,11 @@
 import { Router } from '@ttoss/http-server';
-import type { Context } from 'src/Context';
+import type { AuthUser, Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import {
   createFormation,
   deleteFormation,
   detectStaticMetadataViolations,
+  type FormationAuthorizer,
   type FormationTemplate,
   getFormation,
   getMissingParams,
@@ -17,15 +18,53 @@ import {
   validateFormationTemplateAsync,
 } from 'src/lib/formations';
 import { buildSrn } from 'src/lib/iam';
+import { recordAuthorizationDecision } from 'src/middleware/audit';
 
 import {
   parsePagination,
   requireAuth,
   resolveReadProjectIds,
   resolveWriteProjectId,
+  resolveWriteProjectPublicId,
 } from './helpers';
 
 export const formationsRouter = new Router<Context>();
+
+/**
+ * Answers the per-resource authorization questions the deploy path asks
+ * (#1181), for one request and one project.
+ *
+ * A closure rather than a threaded `Context`: the lib layer stays free of the
+ * request, and every decision is recorded here — a Deny that silently failed to
+ * apply left no audit entry distinguishing it from a Deny that was honoured,
+ * which is what made the gap invisible.
+ *
+ * `adminOnly` short-circuits the IAM probe rather than being ANDed with it: an
+ * admin satisfies every `isAllowed` by definition, so the role check is the only
+ * discriminating half.
+ */
+const formationAuthorizer = (args: {
+  ctx: Context & { authUser: AuthUser };
+  projectPublicId: string;
+}): FormationAuthorizer => {
+  return async (request) => {
+    const allowed = request.adminOnly
+      ? args.ctx.authUser.role === 'admin'
+      : await args.ctx.authUser.isAllowed({
+          projectPublicId: args.projectPublicId,
+          action: request.action,
+          resource: buildSrn({
+            projectPublicId: args.projectPublicId,
+            resourceType: request.srnResourceType,
+            resourceId: request.resourceId,
+          }),
+        });
+
+    recordAuthorizationDecision(args.ctx, { action: request.action, allowed });
+
+    return allowed;
+  };
+};
 
 const missingParamsToErrors = (
   missing: string[]
@@ -122,6 +161,13 @@ formationsRouter.post('/formations/plan', async (ctx: Context) => {
     template: parsedTemplate as FormationTemplate,
     formationId: body.formation_id,
     parameters: body.parameters,
+    authorize: formationAuthorizer({
+      ctx,
+      projectPublicId: resolveWriteProjectPublicId({
+        ctx,
+        projectPublicId: body.project_id,
+      }),
+    }),
   });
   ctx.body = planResultToWire(plan);
 });
@@ -159,6 +205,13 @@ formationsRouter.post('/formations', async (ctx: Context) => {
     template: parsedTemplate as FormationTemplate,
     metadata: body.metadata,
     parameters: body.parameters,
+    authorize: formationAuthorizer({
+      ctx,
+      projectPublicId: resolveWriteProjectPublicId({
+        ctx,
+        projectPublicId: body.project_id,
+      }),
+    }),
   });
 
   ctx.status = 201;
@@ -252,6 +305,10 @@ formationsRouter.put('/formations/:formation_id', async (ctx: Context) => {
     template: parsedTemplate as FormationTemplate | undefined,
     metadata: body.metadata,
     parameters: body.parameters,
+    authorize: formationAuthorizer({
+      ctx,
+      projectPublicId: formation.project_id,
+    }),
   });
 
   ctx.body = updated;
@@ -275,7 +332,13 @@ formationsRouter.delete('/formations/:formation_id', async (ctx: Context) => {
     throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
-  const result = await deleteFormation({ id: ctx.params.formation_id });
+  const result = await deleteFormation({
+    id: ctx.params.formation_id,
+    authorize: formationAuthorizer({
+      ctx,
+      projectPublicId: formation.project_id,
+    }),
+  });
   ctx.status = 200;
   ctx.body = result;
 });

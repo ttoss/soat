@@ -27,6 +27,14 @@ const buildModule = (
 ) => {
   return defineFormationModule<QuotaRow>({
     resourceType: 'quota',
+    authorization: {
+      srnResourceType: 'quota',
+      create: 'quotas:CreateQuota',
+      delete: 'quotas:DeleteQuota',
+      // The factory refuses an update operation with no action to authorize it,
+      // so the declaration follows whatever the override supplies.
+      ...('update' in overrides ? { update: 'quotas:UpdateQuota' } : {}),
+    },
     create: async () => {
       return { id: 'qta_created' };
     },
@@ -366,5 +374,45 @@ describe('defineFormationModule — read', () => {
     expect(
       module.sanitizeLastAppliedProperties!({ name: 'n', value: 'v' })
     ).toEqual({ name: 'n' });
+  });
+});
+
+describe('defineFormationModule — authorization', () => {
+  test('an update operation with no declared action is refused', () => {
+    expect(() => {
+      return defineFormationModule<QuotaRow>({
+        resourceType: 'quota',
+        authorization: {
+          srnResourceType: 'quota',
+          create: 'quotas:CreateQuota',
+          delete: 'quotas:DeleteQuota',
+        },
+        create: async () => {
+          return { id: 'qta_created' };
+        },
+        update: async () => {},
+        remove: async () => {},
+      });
+    }).toThrow(/declares an update operation but no authorization.update/);
+  });
+
+  test('a declared update action with no update operation is refused', () => {
+    expect(() => {
+      return defineFormationModule<QuotaRow>({
+        resourceType: 'quota',
+        authorization: {
+          srnResourceType: 'quota',
+          create: 'quotas:CreateQuota',
+          update: 'quotas:UpdateQuota',
+          delete: 'quotas:DeleteQuota',
+        },
+        create: async () => {
+          return { id: 'qta_created' };
+        },
+        remove: async () => {},
+      });
+    }).toThrow(
+      /declares an authorization.update action but no update operation/
+    );
   });
 });

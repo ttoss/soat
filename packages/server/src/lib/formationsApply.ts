@@ -5,6 +5,7 @@ import {
   applyCreateChange,
   applyUpdateChange,
   failFormationOperation,
+  isCreateChange,
   isResourceAlreadyGone,
   markResourceDeleted,
   rollbackCreatedResources,
@@ -77,14 +78,6 @@ export const handleOrphanedDeletes = async (args: {
 };
 
 type ResourceRow = InstanceType<(typeof db)['FormationResource']>;
-
-// A previously deleted logical id keeps its row and stale physicalResourceId,
-// so without this it would diff as an update against a resource that is gone.
-const isCreateChange = (existing: ResourceRow | undefined): boolean => {
-  return (
-    !existing || existing.status === 'deleted' || !existing.physicalResourceId
-  );
-};
 
 export const processResourceChange = async (args: {
   logicalId: string;
