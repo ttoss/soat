@@ -26,7 +26,7 @@ import {
   collectSystemInstructions,
   withoutSystemMessages,
 } from './modelMessages';
-import { routedMaxRetries } from './modelRouteExecutor';
+import { routedAiProviderId, routedMaxRetries } from './modelRouteExecutor';
 import { saveRoutingMetadata } from './modelRouteMetadata';
 import { isPlainObject } from './plainObject';
 import {
@@ -155,6 +155,7 @@ const fireStreamEndSideEffects = (args: {
     generationId: args.generationId,
     model: args.typedAgent.model ?? '',
     usage: args.usage,
+    aiProviderId: routedAiProviderId(args.model),
   });
 };
 

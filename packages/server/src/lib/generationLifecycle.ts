@@ -9,6 +9,7 @@ import type {
 import { emitResourceEvent, resolveProjectPublicId } from './eventBus';
 import { updateGenerationRecord } from './generations';
 import { resolveStopReason } from './generationStopReason';
+import { routedAiProviderId } from './modelRouteExecutor';
 import { saveRoutingMetadata } from './modelRouteMetadata';
 import { buildGenerationErrorPayload, usageFromFailure } from './providerError';
 import { recordTraceError, saveTrace, serializeSteps } from './traces';
@@ -90,6 +91,7 @@ export const recordGenerationFailure = async (args: {
             generationId: args.generationId,
             model: modelIdOf(args.model),
             usage,
+            aiProviderId: args.model ? routedAiProviderId(args.model) : null,
           }),
         ]
       : []),
@@ -211,6 +213,7 @@ const meterCompletion = (args: CompletionSideEffectsArgs): Promise<void> => {
     generationId: args.generationId,
     model: args.result.response?.modelId ?? '',
     usage: args.result.usage,
+    aiProviderId: routedAiProviderId(args.pending.resolvedModel),
   });
 };
 

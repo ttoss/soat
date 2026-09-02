@@ -22,6 +22,7 @@ const ACTIONS = [
   'agents:CreateAgent',
   'agents:CreateAgentGeneration',
   'generations:GetGeneration',
+  'usage:ListUsageMeters',
 ];
 
 type StubReply = {
@@ -266,6 +267,11 @@ describe('Model route failover through agent generation', () => {
       })
     );
 
+    const healthyProviderId = await createProvider({
+      name: 'mrfail-basic-healthy',
+      baseUrl: healthy.baseUrl,
+      defaultModel: 'healthy-model',
+    });
     const routeId = await createRoute({
       name: 'failover-basic',
       targets: [
@@ -277,14 +283,7 @@ describe('Model route failover through agent generation', () => {
           }),
           model: 'failing-model',
         },
-        {
-          ai_provider_id: await createProvider({
-            name: 'mrfail-basic-healthy',
-            baseUrl: healthy.baseUrl,
-            defaultModel: 'healthy-model',
-          }),
-          model: 'healthy-model',
-        },
+        { ai_provider_id: healthyProviderId, model: 'healthy-model' },
       ],
     });
     const agentId = await createRoutedAgent({
@@ -299,6 +298,9 @@ describe('Model route failover through agent generation', () => {
     expect(res.body.output.content).toBe('served by the fallback');
     // The record names the target that actually answered.
     expect(res.body.output.model).toBe('healthy-model');
+    // And the result attributes that model to the provider that served it,
+    // never the dead primary the route abandoned.
+    expect(res.body.ai_provider_id).toBe(healthyProviderId);
     expect(failing.requests()).toBe(1);
     expect(healthy.requests()).toBe(1);
 
@@ -317,6 +319,60 @@ describe('Model route failover through agent generation', () => {
     expect(record.body.routing.attempts[0].error_class).toBe('provider_error');
     expect(record.body.routing.attempts[1].error_class).toBeUndefined();
     expect(record.body.routing.attempts[1].model).toBe('healthy-model');
+  });
+
+  test('meters a routed generation against the provider that served it', async () => {
+    const failing = track(
+      await startLlmStub(() => {
+        return { status: 500, body: { error: 'provider on fire' } };
+      })
+    );
+    const healthy = track(
+      await startLlmStub(() => {
+        return chatCompletion({
+          model: 'metered-healthy-model',
+          content: 'served by the fallback',
+        });
+      })
+    );
+
+    const healthyProviderId = await createProvider({
+      name: 'mrfail-meter-healthy',
+      baseUrl: healthy.baseUrl,
+      defaultModel: 'metered-healthy-model',
+    });
+    const routeId = await createRoute({
+      name: 'failover-metering',
+      targets: [
+        {
+          ai_provider_id: await createProvider({
+            name: 'mrfail-meter-failing',
+            baseUrl: failing.baseUrl,
+            defaultModel: 'metered-failing-model',
+          }),
+          model: 'metered-failing-model',
+        },
+        { ai_provider_id: healthyProviderId, model: 'metered-healthy-model' },
+      ],
+    });
+    const agentId = await createRoutedAgent({
+      name: 'Metered Failover Agent',
+      routeId,
+    });
+
+    const res = await generate(agentId);
+    expect(res.status).toBe(200);
+
+    // A routed agent pins no provider, so the usage event can only be
+    // attributed from what the route did — otherwise the spend meters against
+    // no provider and the billing rollup cannot name the model's vendor.
+    const meters = await authenticatedTestClient(userToken).get(
+      `/api/v1/usage/meters?generation_id=${res.body.id}`
+    );
+    expect(meters.status).toBe(200);
+    expect(meters.body.data).toHaveLength(1);
+    expect(meters.body.data[0].ai_provider_id).toBe(healthyProviderId);
+    expect(meters.body.data[0].provider).toBe('ollama');
   });
 
   test('a streaming generation fails over before the first token', async () => {

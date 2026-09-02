@@ -338,6 +338,8 @@ The generation record exists before the response is written, so `generation_id` 
 
 Pass `?wait=true` to block and receive the result inline. Waiting is required to observe `requires_action` (client tools) in the response, so a client-tool flow should always pass it. See [Synchronous & Asynchronous Execution](../advanced/sync-and-async.md) for the platform-wide `wait` contract — including how `stream` and `builtin` tool calls interact with it (both always wait).
 
+The inline result carries `ai_provider_id` — the [AI provider](./ai-providers.md) that served `output.model`: the target a [model route](./model-routes.md) picked, or the agent's pinned provider. `output.model` is the provider's own model string and does not identify its provider on its own, since two providers in one project can serve byte-identical model names; `ai_provider_id` is what lets a caller map the value back to whatever name it publishes. It is `null` when the generation resolved no serving provider. The same field appears on the result of [`POST /agents/{agent_id}/generate/{generation_id}/tool-outputs`](/docs/api/agents/submit-agent-tool-outputs), where it names the provider the paused turn resolved.
+
 #### Tool Output Message Content
 
 `messages[].content` can be a plain string, a `tool_output` object, or a `document` object.

@@ -342,7 +342,9 @@ curl -s "$SOAT_URL/api/v1/usage?project_id=$PROJECT_ID&group_by=model" \
 </Tabs>
 
 Each group and the grand `totals` carry summed token counts and `cost_usd`
-(still `null` until you price the SKU next).
+(still `null` until you price the SKU next). Under `group_by=model` a group also
+carries the `ai_provider_id` that served it — two providers in one project can
+serve the same model name, so the model dimension buckets on both.
 
 ---
 

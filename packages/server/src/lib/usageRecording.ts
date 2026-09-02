@@ -38,12 +38,40 @@ type Attribution = {
   nodeAttempt: number | null;
 };
 
+/**
+ * The provider the event bills against: the route's serving target where the
+ * turn was routed, the agent's pinned provider otherwise.
+ *
+ * A routed agent pins nothing, so without the served target its spend meters
+ * against no provider and under the `unknown` slug — unpriced, and unnameable
+ * in a rollup that groups by model.
+ */
+const resolveBillingProvider = async (args: {
+  generation: GenerationWithAgent;
+  servedAiProviderId?: string | null;
+}): Promise<{ id: number; provider: string } | null> => {
+  if (args.servedAiProviderId) {
+    const served = await db.AiProvider.findOne({
+      where: {
+        publicId: args.servedAiProviderId,
+        projectId: args.generation.projectId,
+      },
+    });
+    // Falls through to the pin when the row is gone (a delete racing the turn),
+    // rather than dropping the attribution the pin would still have given.
+    if (served) return { id: served.id, provider: served.provider };
+  }
+  const pinned = args.generation.agent?.aiProvider ?? null;
+  return pinned ? { id: pinned.id, provider: pinned.provider } : null;
+};
+
 // Read off typed generation columns, so a caller cannot bill another action,
 // trigger or run.
-const resolveEventAttribution = (
-  generation: GenerationWithAgent
-): Attribution => {
-  const aiProvider = generation.agent?.aiProvider ?? null;
+const resolveEventAttribution = (args: {
+  generation: GenerationWithAgent;
+  aiProvider: { id: number; provider: string } | null;
+}): Attribution => {
+  const { generation, aiProvider } = args;
   return {
     aiProviderId: aiProvider?.id ?? null,
     provider: aiProvider?.provider ?? 'unknown',
@@ -90,6 +118,7 @@ const writeGenerationEvent = async (args: {
   generationId: string;
   model: string;
   usage: LanguageModelUsage | undefined;
+  aiProviderId?: string | null;
 }): Promise<void> => {
   const generation = await db.Generation.findOne({
     where: { publicId: args.generationId },
@@ -107,7 +136,13 @@ const writeGenerationEvent = async (args: {
     return;
   }
 
-  const attribution = resolveEventAttribution(generation);
+  const attribution = resolveEventAttribution({
+    generation,
+    aiProvider: await resolveBillingProvider({
+      generation,
+      servedAiProviderId: args.aiProviderId,
+    }),
+  });
   const model = args.model || 'unknown';
   const priced = await priceTokenComponents({
     tokens: extractUsageTokens(args.usage),
@@ -289,6 +324,11 @@ export const recordGenerationUsage = async (args: {
   generationId: string;
   model: string;
   usage: LanguageModelUsage | undefined;
+  /**
+   * Public ID of the provider a model route picked for this turn. Omitted (or
+   * null) on a non-routed turn, where the agent's pin is the answer.
+   */
+  aiProviderId?: string | null;
 }): Promise<void> => {
   log(
     'recordGenerationUsage: generationId=%s model=%s',

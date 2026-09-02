@@ -242,6 +242,10 @@ describe('savePendingGeneration', () => {
     expect(result.requiredAction?.type).toBe('submit_tool_outputs');
     expect(result.requiredAction?.toolCalls).toHaveLength(1);
     expect(result.requiredAction?.toolCalls[0].toolName).toBe('myTool');
+    expect(result.aiProviderId).toBe('aip_test123');
+    expect(pendingGenerations.get('gen_test001')?.aiProviderId).toBe(
+      'aip_test123'
+    );
     expect(pendingGenerations.has('gen_test001')).toBe(true);
   });
 
@@ -397,6 +401,8 @@ describe('buildCompletedGenerationResult', () => {
     expect(result.output?.content).toBe('Hello world');
     expect(result.output?.finishReason).toBe('stop');
     expect(result.output?.model).toBe('gpt-4');
+    // The model string alone does not name its provider; the agent's pin does.
+    expect(result.aiProviderId).toBe('aip_test123');
   });
 
   test('uses typedAgent model when response has no modelId', async () => {

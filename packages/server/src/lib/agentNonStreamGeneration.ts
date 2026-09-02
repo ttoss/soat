@@ -10,6 +10,7 @@ import {
   buildCompletedGenerationResult,
   findPendingClientTools,
   savePendingGeneration,
+  servedAiProviderId,
 } from './agentGenerationHelpers';
 import {
   type AgentRunResult,
@@ -40,7 +41,7 @@ import {
   type Instructions,
   withoutSystemMessages,
 } from './modelMessages';
-import { routedMaxRetries } from './modelRouteExecutor';
+import { routedAiProviderId, routedMaxRetries } from './modelRouteExecutor';
 import { buildStructuredOutput } from './outputSchema';
 import { toProviderDomainError, usageFromFailure } from './providerError';
 import {
@@ -245,6 +246,10 @@ const buildInitialResumePending = (args: {
     messages: [...args.allMessages, ...args.responseMessages],
     steps: serializeSteps(args.initialSteps),
     resolvedModel: args.model,
+    aiProviderId: servedAiProviderId({
+      model: args.model,
+      typedAgent: args.typedAgent,
+    }),
     agentConfig: toAgentConfig(args.typedAgent),
     resolvedTools: args.resolvedTools,
     initiatorGenerationId: null,
@@ -509,6 +514,13 @@ const completeContinuation = async (args: {
     id: args.generationId,
     traceId: args.pending.traceId,
     status: 'completed',
+    // The route's chosen target where this turn was routed; otherwise the pin
+    // frozen when the turn paused, so a continuation reports the provider the
+    // paused turn resolved rather than whatever the agent points at now.
+    aiProviderId:
+      routedAiProviderId(args.pending.resolvedModel) ??
+      args.pending.aiProviderId ??
+      null,
     output: {
       model: args.result.response?.modelId ?? '',
       content: args.result.text,
