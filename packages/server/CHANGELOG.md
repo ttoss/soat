@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.35.0](https://github.com/ttoss/soat/compare/v0.34.0...v0.35.0) (2026-09-02)
+
+**Note:** Version bump only for package @soat/server
+
 # [0.34.0](https://github.com/ttoss/soat/compare/v0.33.1...v0.34.0) (2026-09-01)
 
 * feat(server)!: tell a resource-type handler which project, on every request (#1183) ([90a44f5](https://github.com/ttoss/soat/commit/90a44f5faee9581583850ecccc88a38e1bb6c974)), closes [#1183](https://github.com/ttoss/soat/issues/1183) [#1078](https://github.com/ttoss/soat/issues/1078)

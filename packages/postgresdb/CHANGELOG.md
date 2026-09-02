@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.35.0](https://github.com/ttoss/soat/compare/v0.34.0...v0.35.0) (2026-09-02)
+
+**Note:** Version bump only for package @soat/postgresdb
+
 # [0.34.0](https://github.com/ttoss/soat/compare/v0.33.1...v0.34.0) (2026-09-01)
 
 * feat(server)!: refuse an unenforceable cost cap, and give a project its own chain budget (#1176) ([bd853d8](https://github.com/ttoss/soat/commit/bd853d8a0757e68871ce018accbf759130feb521)), closes [#1176](https://github.com/ttoss/soat/issues/1176) [#1164](https://github.com/ttoss/soat/issues/1164) [#811](https://github.com/ttoss/soat/issues/811) [#1167](https://github.com/ttoss/soat/issues/1167)
