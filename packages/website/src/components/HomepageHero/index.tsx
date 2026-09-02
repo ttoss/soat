@@ -62,7 +62,7 @@ const Constellation = () => {
       className={styles.constellation}
       viewBox="0 0 640 600"
       role="img"
-      aria-label="SOAT modules drawn as a constellation around the agent: sessions, knowledge, tools, guardrails, traces and IAM on the inner ring; orchestrations, memories, approvals, evaluations, formations and workflows on the outer ring."
+      aria-label="SOAT modules drawn as a constellation around the Vector Galaxy logo, which stands for the agent: sessions, knowledge, tools, guardrails, traces and IAM on the inner ring; orchestrations, memories, approvals, evaluations, formations and workflows on the outer ring."
     >
       <defs>
         <radialGradient id="soat-core" cx="50%" cy="50%" r="50%">
@@ -112,8 +112,15 @@ const Constellation = () => {
             key={`pulse-${node.id}`}
             className={styles.pulse}
             r="2.5"
-            style={{ animationDelay: `${index * 1.3}s` }}
+            visibility={index === 0 ? 'visible' : 'hidden'}
           >
+            {index > 0 && (
+              <set
+                attributeName="visibility"
+                to="visible"
+                begin={`${index * 1.3}s`}
+              />
+            )}
             <animateMotion
               dur="4.2s"
               repeatCount="indefinite"
@@ -127,16 +134,32 @@ const Constellation = () => {
       <circle
         cx={CORE.x}
         cy={CORE.y}
-        r="46"
+        r="80"
         fill="url(#soat-core)"
-        opacity="0.55"
+        opacity="0.35"
         filter="url(#soat-glow)"
       />
-      <circle cx={CORE.x} cy={CORE.y} r="18" fill="url(#soat-core)" />
+      <image
+        className={styles.galaxy}
+        href="/img/soat-logo-no-bg.png"
+        x={CORE.x - 140}
+        y={CORE.y - 105}
+        width="280"
+        height="210"
+        preserveAspectRatio="xMidYMid meet"
+      />
+      <rect
+        className={styles.coreLabelBacking}
+        x={CORE.x - 27}
+        y={CORE.y + 104}
+        width="54"
+        height="20"
+        rx="4"
+      />
       <text
         className={styles.coreLabel}
         x={CORE.x}
-        y={CORE.y + 4}
+        y={CORE.y + 118}
         textAnchor="middle"
       >
         agent
