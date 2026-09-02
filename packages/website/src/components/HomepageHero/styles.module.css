@@ -145,57 +145,48 @@
   color: #f0f8ff;
 }
 
-.orbit {
-  fill: none;
-  stroke: rgba(0, 229, 255, 0.2);
+.galaxy {
+  filter: drop-shadow(0 0 28px rgba(0, 229, 255, 0.35));
+}
+
+.halo {
+  fill: rgba(0, 229, 255, 0.16);
+  stroke: rgba(0, 229, 255, 0.45);
   stroke-width: 1;
-  stroke-dasharray: 1 7;
-  stroke-linecap: round;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: breathe 4.2s ease-in-out infinite alternate;
 }
 
-.orbitFaint {
-  stroke: rgba(142, 68, 173, 0.28);
-}
-
-.edge {
-  fill: none;
-  stroke: rgba(0, 229, 255, 0.4);
-  stroke-width: 1.1;
-  stroke-linecap: round;
-}
-
-.edgeFaint {
-  stroke: rgba(168, 85, 199, 0.5);
-}
-
-.pulse {
+.dot {
   fill: #ffffff;
-  filter: drop-shadow(0 0 6px rgba(0, 229, 255, 0.9));
+  stroke: #00e5ff;
+  stroke-width: 2;
+  filter: drop-shadow(0 0 8px rgba(0, 229, 255, 0.9));
 }
 
-.dotInner {
-  fill: #00e5ff;
-  filter: drop-shadow(0 0 8px rgba(0, 229, 255, 0.8));
+@keyframes breathe {
+  from {
+    transform: scale(0.85);
+    opacity: 0.55;
+  }
+  to {
+    transform: scale(1.15);
+    opacity: 1;
+  }
 }
 
-.dotOuter {
-  fill: #a855c7;
-  filter: drop-shadow(0 0 8px rgba(168, 85, 199, 0.8));
-}
-
-.node {
-  animation: drift 9s ease-in-out infinite alternate;
+.labelBacking {
+  fill: rgba(8, 12, 20, 0.78);
+  stroke: rgba(0, 229, 255, 0.18);
+  stroke-width: 1;
 }
 
 .label {
-  fill: rgba(240, 248, 255, 0.78);
+  fill: rgba(240, 248, 255, 0.92);
   font-family: var(--ifm-font-family-monospace);
   font-size: 12.5px;
   letter-spacing: 0.02em;
-}
-
-.galaxy {
-  filter: drop-shadow(0 0 24px rgba(0, 229, 255, 0.45));
 }
 
 .coreLabelBacking {
@@ -210,15 +201,6 @@
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
-}
-
-@keyframes drift {
-  from {
-    transform: translate(0, 0);
-  }
-  to {
-    transform: translate(0, -5px);
-  }
 }
 
 .facts {
@@ -256,12 +238,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .node {
+  .halo {
     animation: none;
-  }
-
-  .pulse {
-    display: none;
   }
 }
 
