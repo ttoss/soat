@@ -139,7 +139,7 @@
 
 .constellation {
   width: 100%;
-  max-width: 620px;
+  max-width: 660px;
   height: auto;
   overflow: visible;
   color: #f0f8ff;
@@ -147,18 +147,25 @@
 
 .orbit {
   fill: none;
-  stroke: rgba(0, 229, 255, 0.14);
+  stroke: rgba(0, 229, 255, 0.2);
   stroke-width: 1;
-  stroke-dasharray: 2 6;
+  stroke-dasharray: 1 7;
+  stroke-linecap: round;
+}
+
+.orbitFaint {
+  stroke: rgba(142, 68, 173, 0.28);
 }
 
 .edge {
-  stroke: rgba(0, 229, 255, 0.32);
-  stroke-width: 1;
+  fill: none;
+  stroke: rgba(0, 229, 255, 0.4);
+  stroke-width: 1.1;
+  stroke-linecap: round;
 }
 
 .edgeFaint {
-  stroke: rgba(142, 68, 173, 0.45);
+  stroke: rgba(168, 85, 199, 0.5);
 }
 
 .pulse {
