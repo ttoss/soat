@@ -365,6 +365,70 @@ describe('Formation resource authorization', () => {
     });
   });
 
+  describe('a type with no update operation', () => {
+    // `chat` declares no `update`, so an apply validates and no-ops. There is no
+    // mutation to authorize, and demanding a permission for one would refuse a
+    // request that changes nothing.
+    test('re-applying a chat resource needs no update action', async () => {
+      const chatDeployToken = (
+        await grant({
+          username: 'frachat',
+          password: 'chatpass',
+          actions: [...FORMATION_ACTIONS, 'chats:CreateChat'],
+        })
+      ).token;
+
+      // A chat that pins no provider inherits the project's default model
+      // route, which this project has none of.
+      const provider = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: 'fra-chat-provider',
+          provider: 'openai',
+          default_model: 'gpt-4o',
+        });
+      expect(provider.status).toBe(201);
+
+      const template = {
+        resources: {
+          MyChat: {
+            type: 'chat',
+            properties: {
+              name: 'fra-chat',
+              ai_provider_id: provider.body.id,
+            },
+          },
+        },
+      };
+
+      const created = await authenticatedTestClient(chatDeployToken)
+        .post('/api/v1/formations')
+        .send({ project_id: projectId, name: 'chat-stack', template });
+      expect(created.status).toBe(201);
+      expect(created.body.status).toBe('active');
+
+      const updated = await authenticatedTestClient(chatDeployToken)
+        .put(`/api/v1/formations/${created.body.id}`)
+        .send({
+          template: {
+            resources: {
+              MyChat: {
+                type: 'chat',
+                properties: {
+                  name: 'fra-chat-2',
+                  ai_provider_id: provider.body.id,
+                },
+              },
+            },
+          },
+        });
+
+      expect(updated.status).toBe(200);
+      expect(updated.body.status).toBe('active');
+    });
+  });
+
   describe('DELETE /api/v1/formations/:formation_id', () => {
     test('a teardown the caller may not perform is refused and the stack survives', async () => {
       const { token: noDeleteToken } = await grant({
@@ -448,7 +512,11 @@ describe('Formation resource authorization', () => {
       const providers = await authenticatedTestClient(adminToken).get(
         `/api/v1/ai-providers?project_id=${projectId}`
       );
-      expect(providers.body.data).toHaveLength(0);
+      expect(
+        providers.body.data.some((provider: { name: string }) => {
+          return provider.name === 'fra-borrowed-provider';
+        })
+      ).toBe(false);
     });
 
     test('a template links a secret in its own project', async () => {

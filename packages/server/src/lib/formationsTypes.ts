@@ -416,7 +416,7 @@ export const planChangeToWire = (change: PlanChange): PlanChangeWire => {
 export const planResultToWire = (plan: PlanResult): PlanResultWire => {
   return {
     changes: plan.changes.map(planChangeToWire),
-    ...(plan.unauthorizedActions && plan.unauthorizedActions.length > 0
+    ...(plan.unauthorizedActions
       ? {
           unauthorized_actions: plan.unauthorizedActions.map(
             authorizationDenialToWire

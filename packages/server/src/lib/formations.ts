@@ -206,6 +206,8 @@ export const planFormation = async (args: {
     }),
   });
 
+  // Omitted rather than empty, so a plan a caller may fully apply is byte
+  // identical to what it was before this field existed.
   return {
     changes: [...changes, ...orphanedChanges],
     ...(unauthorizedActions.length > 0 ? { unauthorizedActions } : {}),
