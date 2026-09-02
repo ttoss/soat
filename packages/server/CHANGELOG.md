@@ -3,6 +3,23 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.36.0](https://github.com/ttoss/soat/compare/v0.35.0...v0.36.0) (2026-09-02)
+
+* fix(server)!: authorize every formation resource, and scope template id lookups to the project (#1190) ([c856519](https://github.com/ttoss/soat/commit/c856519bd97c2534f08c30db2fdb144f13ec0f59)), closes [#1190](https://github.com/ttoss/soat/issues/1190) [#1181](https://github.com/ttoss/soat/issues/1181) [#1180](https://github.com/ttoss/soat/issues/1180)
+
+### Features
+
+* **generations,usage:** name the provider that served each model value ([#1189](https://github.com/ttoss/soat/issues/1189)) ([4638071](https://github.com/ttoss/soat/commit/463807183cf6bab9995ef9c668ab7f911273bb91)), closes [#1188](https://github.com/ttoss/soat/issues/1188)
+
+### BREAKING CHANGES
+
+* a trigger declared in a formation template now fires as the
+  caller who deployed it rather than the project owner. A firing can no longer
+  exceed that caller's permissions, and — as for any trigger whose creator is gone
+  — deleting them leaves firings failing `409 TRIGGER_CREATOR_UNAVAILABLE` instead
+  of running as the owner. Re-deploying as a different caller re-points the run-as
+  identity at them.
+
 # [0.35.0](https://github.com/ttoss/soat/compare/v0.34.0...v0.35.0) (2026-09-02)
 
 **Note:** Version bump only for package @soat/server
