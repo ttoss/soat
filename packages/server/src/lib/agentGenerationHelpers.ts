@@ -379,6 +379,7 @@ export const buildCompletedGenerationResult = async (args: {
     generationId: args.generationId,
     model,
     usage: args.result.usage,
+    aiProviderId: args.model ? routedAiProviderId(args.model) : null,
   });
 
   emitResourceEvent({

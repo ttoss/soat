@@ -174,7 +174,10 @@ paths:
           required: true
           description: >
             Dimension to bucket by. `day` buckets on the event's UTC calendar
-            day; the others bucket on the matching column. `model` buckets on the
+            day; the others bucket on the matching column. `ai_provider` buckets
+            on the provider the spend was billed against — a routed
+            generation's serving target, or the agent's pinned provider.
+            `model` buckets on the
             model id *and* the provider that served it, so one model name served
             by two providers is two groups (see `ai_provider_id`). `source` buckets by
             what the spend was incurred for (`eval`, `eval_judge`), which is how
@@ -182,7 +185,18 @@ paths:
             users; unlabelled traffic collapses into the single `null` bucket.
           schema:
             type: string
-            enum: [model, agent, run, day, meter_type, actor, session, source]
+            enum:
+              [
+                model,
+                ai_provider,
+                agent,
+                run,
+                day,
+                meter_type,
+                actor,
+                session,
+                source,
+              ]
         - name: from
           in: query
           required: false
@@ -607,9 +621,10 @@ components:
           type: string
           nullable: true
           description: >
-            Public ID of the AI provider instance billed. Null if the provider
-            was later deleted; the `provider`/`model` snapshot still records
-            what was billed.
+            Public ID of the AI provider instance billed — the target a model
+            route picked for the turn, or the agent's pinned provider. Null if
+            the provider was later deleted; the `provider`/`model` snapshot
+            still records what was billed.
         trigger_id:
           x-soat-ref: triggers
           type: string
@@ -741,7 +756,18 @@ components:
           description: Upper bound applied, echoed back; null when unbounded
         group_by:
           type: string
-          enum: [model, agent, run, day, meter_type, actor, session, source]
+          enum:
+            [
+              model,
+              ai_provider,
+              agent,
+              run,
+              day,
+              meter_type,
+              actor,
+              session,
+              source,
+            ]
         meter_type:
           type: string
           nullable: true
@@ -758,8 +784,8 @@ components:
                     nullable: true
                     description: >
                       The bucket's value in the chosen dimension (a model id,
-                      meter type, agent/run/actor/session public id, or
-                      `YYYY-MM-DD` UTC day). Null when the dimension does not
+                      meter type, AI provider / agent / run / actor / session
+                      public id, or `YYYY-MM-DD` UTC day). Null when the dimension does not
                       apply to an event — under `actor`/`session` this is the
                       bucket holding everything with no end user behind it.
                   ai_provider_id:

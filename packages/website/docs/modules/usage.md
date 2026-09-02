@@ -35,7 +35,7 @@ Every metered occurrence writes one **usage event** plus its **component** rows:
 | `trace_id`       | string \| null  | Trace this usage belongs to (reconcile against the trace tree)                               |
 | `actor_id`       | string \| null  | Actor (end user) the occurrence was produced for; `null` when no end user is behind the work |
 | `session_id`     | string \| null  | Session the occurrence ran in; `null` when not dispatched through a session                  |
-| `ai_provider_id` | string \| null  | AI provider instance billed; correlates the event to the price book                          |
+| `ai_provider_id` | string \| null  | AI provider instance billed; correlates the event to the price book. On a [routed](./model-routes.md) generation this is the target the route actually picked, not the agent's binding (a routed agent pins no provider) |
 | `trigger_id`     | string \| null  | Trigger that initiated the generation (agent-target triggers); null otherwise                |
 | `action_id`      | string \| null  | Caller-supplied logical action label, for rolling spend up per action                        |
 | `source`         | string \| null  | The workload behind the spend when it is not ordinary agent traffic; see [Workload source](#workload-source) |
@@ -151,6 +151,10 @@ Requests are counted in memory per (project, API key) and a periodic flush write
 
 `source` is set by the platform at the metering choke point — a caller cannot bill eval spend as production. It both filters ([`GET /api/v1/usage/meters?source=eval`](/docs/api/usage/list-usage-meters)) and groups (`group_by=source`); ordinary traffic collapses into the `null` bucket, so groups still sum to the project total.
 
+### Provider attribution
+
+An event bills against the provider that served it: the target a [model route](./model-routes.md) picked for the turn, or the agent's pinned provider when it has one. The route's choice is read from what the turn actually did, so a generation that failed over meters against the target that answered rather than the one it abandoned. Because a routed agent pins nothing, this is also what keeps routed spend priced at all — an event with no provider resolves no price row and reports the `unknown` provider slug.
+
 ### End-user attribution
 
 An event carries the [actor](./actors.md) and [session](./sessions.md) it was produced for, copied from the generation at write time and **frozen** — renaming or deleting either never rewrites recorded spend. Attribution is set on the session path only; direct agent generations, trigger-initiated work, orchestration nodes, and standalone completions record `null` for both. The actor is **derived from the session**, never taken from the request (`tool_context` is caller-writable and is not read for attribution). Both dimensions filter (`?actor_id=` / `?session_id=`) and group (`group_by=actor` / `group_by=session`). Events recorded before this shipped carry `null`.
@@ -182,7 +186,7 @@ A run whose graph contains a `loop` or `sub_orchestration` node is covered by th
 
 ### Aggregation
 
-[`GET /api/v1/usage?project_id=…&group_by=…`](/docs/api/usage/get-usage) rolls a project's usage up over an optional `[from, to]` window (inclusive ISO-8601 bounds on `created_at`), bucketed by one dimension — `model`, `agent`, `run`, `day`, `meter_type`, `actor`, `session`, or [`source`](#workload-source). Each group and the grand `totals` carry summed token counts and `cost_usd` (`null` when no event in the bucket was priced). An event a dimension does not apply to collapses into a `null`-keyed group, so groups always sum to the project total. Requires `usage:GetUsage` on the project.
+[`GET /api/v1/usage?project_id=…&group_by=…`](/docs/api/usage/get-usage) rolls a project's usage up over an optional `[from, to]` window (inclusive ISO-8601 bounds on `created_at`), bucketed by one dimension — `model`, `ai_provider`, `agent`, `run`, `day`, `meter_type`, `actor`, `session`, or [`source`](#workload-source). `ai_provider` buckets on the provider the spend was billed against (see [Provider attribution](#provider-attribution)). Each group and the grand `totals` carry summed token counts and `cost_usd` (`null` when no event in the bucket was priced). An event a dimension does not apply to collapses into a `null`-keyed group, so groups always sum to the project total. Requires `usage:GetUsage` on the project.
 
 Every group also carries a `components` array — the measured dimensions summed over the bucket — so an infra meter aggregates to what it measured rather than reading as all-zero tokens. Entries are keyed by `component` **and** `unit` and sorted, and quantities are summed as exact decimals (no float drift).
 

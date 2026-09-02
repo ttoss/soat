@@ -178,6 +178,21 @@ describe('Model provenance', () => {
     expect(res.body.totals.input_tokens).toBe(summed);
   });
 
+  test('groups by ai_provider', async () => {
+    const res = await authenticatedTestClient(userToken).get(
+      `/api/v1/usage?project_id=${projectId}&group_by=ai_provider`
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.group_by).toBe('ai_provider');
+    expect(
+      res.body.groups
+        .map((g: { key: string }) => {
+          return g.key;
+        })
+        .sort()
+    ).toEqual([firstProviderId, secondProviderId].sort());
+  });
+
   test('a dimension other than model carries a null provider', async () => {
     const res = await authenticatedTestClient(userToken).get(
       `/api/v1/usage?project_id=${projectId}&group_by=agent`

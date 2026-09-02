@@ -12,6 +12,7 @@ const log = createDebug('soat:usage');
 // dropped, so the groups still sum to the project total.
 export const USAGE_GROUP_BY = [
   'model',
+  'ai_provider',
   'agent',
   'run',
   'day',
@@ -128,6 +129,11 @@ const GROUP_KEY_EXTRACTORS: {
   // Ordinary traffic carries no source and buckets under the single null key.
   source: (event) => {
     return event.source;
+  },
+  // The provider instance the spend was billed against — a routed generation's
+  // serving target, or the agent's pinned provider.
+  ai_provider: (event) => {
+    return event.aiProvider?.publicId ?? null;
   },
   agent: (event) => {
     return event.agent?.publicId ?? null;
@@ -361,8 +367,9 @@ const eventsWhere = (args: {
 
 /**
  * Rolls a project's usage up over an optional `[from, to]` window, bucketed by
- * one dimension (`model` | `agent` | `run` | `day` | `meter_type` | `actor` |
- * `session`), optionally narrowed to a single `meterType`. Each group and the
+ * one dimension (`model` | `ai_provider` | `agent` | `run` | `day` |
+ * `meter_type` | `actor` | `session` | `source`), optionally narrowed to a
+ * single `meterType`. Each group and the
  * grand total carry summed token counts, a measured `quantity` per component,
  * and `cost_usd` (null when no event in the bucket was priced). Scans the
  * `(project_id, created_at)`-indexed events with their component rows and
