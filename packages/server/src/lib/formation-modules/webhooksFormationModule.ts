@@ -14,6 +14,12 @@ import { defineFormationModule } from './defineFormationModule';
 
 export const webhooksFormationModule = defineFormationModule({
   resourceType: 'webhook',
+  authorization: {
+    srnResourceType: 'webhook',
+    create: 'webhooks:CreateWebhook',
+    update: 'webhooks:UpdateWebhook',
+    delete: 'webhooks:DeleteWebhook',
+  },
 
   create: ({ properties, projectId }) => {
     return createWebhook({

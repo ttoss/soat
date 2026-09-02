@@ -12,6 +12,14 @@ import { defineFormationModule } from './defineFormationModule';
 
 export const datasetsFormationModule = defineFormationModule({
   resourceType: 'dataset',
+  // `PUT /datasets/{id}` authorizes `CreateDataset`; there is no
+  // `UpdateDataset` action to mirror.
+  authorization: {
+    srnResourceType: 'dataset',
+    create: 'evaluations:CreateDataset',
+    update: 'evaluations:CreateDataset',
+    delete: 'evaluations:DeleteDataset',
+  },
 
   create: ({ properties, projectId }) => {
     return createDataset({

@@ -1,7 +1,4 @@
-import {
-  lookupPolicyInternalIds,
-  lookupProjectOwnerUserId,
-} from '../formationsHelpers';
+import { lookupPolicyInternalIds } from '../formationsHelpers';
 import type { ValidationError } from '../formationsTypes';
 import {
   toNullableString,
@@ -95,13 +92,19 @@ const pushShapeRuleErrors = (args: {
 
 export const triggersFormationModule = defineFormationModule({
   resourceType: 'trigger',
+  authorization: {
+    srnResourceType: 'trigger',
+    create: 'triggers:CreateTrigger',
+    update: 'triggers:UpdateTrigger',
+    delete: 'triggers:DeleteTrigger',
+  },
 
   extraChecks: pushShapeRuleErrors,
 
-  create: async ({ properties, projectId }) => {
-    // Firings run as the project owner (there is no request user in a
-    // formation deploy); this is the run-as identity re-checked at fire time.
-    const createdByUserId = await lookupProjectOwnerUserId(projectId);
+  create: async ({ properties, projectId, actingUserId }) => {
+    // `createdByUserId` is the run-as identity a firing mints a token for, not
+    // attribution: the deploying caller, so a firing can never exceed whoever
+    // declared the trigger (#1181).
     const policyPublicId = toOptionalString(properties.policy_id);
     const policyId = policyPublicId
       ? (await lookupPolicyInternalIds([policyPublicId]))[0]
@@ -109,7 +112,7 @@ export const triggersFormationModule = defineFormationModule({
 
     return createTrigger({
       projectId,
-      createdByUserId,
+      createdByUserId: actingUserId,
       policyId,
       name: properties.name as string,
       description: toOptionalString(properties.description) ?? undefined,

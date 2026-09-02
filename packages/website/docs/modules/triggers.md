@@ -132,6 +132,11 @@ that identity. Permissions are resolved as:
 Because the check runs against the creator's _current_ policies at every fire,
 revoking the creator's access takes effect immediately.
 
+A trigger declared in a [formation](./formations.md) template is no exception:
+its creator is the caller who deployed the formation, so a firing can never
+exceed what that caller could do directly. Re-deploying as a different caller
+re-points the run-as identity at them.
+
 Security invariants:
 
 - **No privilege escalation.** Creating a trigger (or changing its target) also

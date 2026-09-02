@@ -27,6 +27,14 @@ const buildModule = (
 ) => {
   return defineFormationModule<QuotaRow>({
     resourceType: 'quota',
+    authorization: {
+      srnResourceType: 'quota',
+      create: 'quotas:CreateQuota',
+      delete: 'quotas:DeleteQuota',
+      // The factory refuses an update operation with no action to authorize it,
+      // so the declaration follows whatever the override supplies.
+      ...('update' in overrides ? { update: 'quotas:UpdateQuota' } : {}),
+    },
     create: async () => {
       return { id: 'qta_created' };
     },
@@ -149,8 +157,8 @@ describe('defineFormationModule — create', () => {
   test('passes the normalized bag through and returns the new id', async () => {
     let received: Record<string, unknown> | undefined;
     const module = buildModule({
-      create: async ({ properties, projectId }) => {
-        received = { ...properties, projectId };
+      create: async ({ properties, projectId, actingUserId }) => {
+        received = { ...properties, projectId, actingUserId };
         return { id: 'qta_1' };
       },
     });
@@ -158,6 +166,7 @@ describe('defineFormationModule — create', () => {
     const id = await module.create({
       properties: { ...VALID_PROPERTIES, scopeRef: 'proj_1' },
       projectId: 42,
+      actingUserId: 7,
     });
 
     expect(id).toBe('qta_1');
@@ -165,6 +174,7 @@ describe('defineFormationModule — create', () => {
       ...VALID_PROPERTIES,
       scope_ref: 'proj_1',
       projectId: 42,
+      actingUserId: 7,
     });
   });
 
@@ -173,7 +183,11 @@ describe('defineFormationModule — create', () => {
     const module = buildModule({ create });
 
     await expect(
-      module.create({ properties: { scope: 'project' }, projectId: 1 })
+      module.create({
+        properties: { scope: 'project' },
+        projectId: 1,
+        actingUserId: 7,
+      })
     ).rejects.toThrow('`metric` is required');
     expect(create).not.toHaveBeenCalled();
   });
@@ -190,6 +204,7 @@ describe('defineFormationModule — update', () => {
 
     await module.update({
       projectId: 1,
+      actingUserId: 7,
       properties: { limit: 5 },
       physicalResourceId: 'qta_1',
     });
@@ -206,6 +221,7 @@ describe('defineFormationModule — update', () => {
     await expect(
       module.update({
         projectId: 1,
+        actingUserId: 7,
         properties: { limit: 5 },
         physicalResourceId: 'qta_1',
       })
@@ -223,6 +239,7 @@ describe('defineFormationModule — update', () => {
 
     await module.update({
       projectId: 1,
+      actingUserId: 7,
       properties: {},
       physicalResourceId: 'qta_1',
     });
@@ -235,6 +252,7 @@ describe('defineFormationModule — update', () => {
     await expect(
       module.update({
         projectId: 1,
+        actingUserId: 7,
         properties: { nope: 1 },
         physicalResourceId: 'qta_1',
       })
@@ -243,6 +261,7 @@ describe('defineFormationModule — update', () => {
     await expect(
       module.update({
         projectId: 1,
+        actingUserId: 7,
         properties: { limit: 5 },
         physicalResourceId: 'qta_1',
       })
@@ -255,6 +274,7 @@ describe('defineFormationModule — delete', () => {
     const remove = jest.fn(async () => {});
     await buildModule({ remove }).delete({
       projectId: 1,
+      actingUserId: 7,
       physicalResourceId: 'qta_1',
     });
     expect(remove).toHaveBeenCalledWith({ physicalResourceId: 'qta_1' });
@@ -366,5 +386,45 @@ describe('defineFormationModule — read', () => {
     expect(
       module.sanitizeLastAppliedProperties!({ name: 'n', value: 'v' })
     ).toEqual({ name: 'n' });
+  });
+});
+
+describe('defineFormationModule — authorization', () => {
+  test('an update operation with no declared action is refused', () => {
+    expect(() => {
+      return defineFormationModule<QuotaRow>({
+        resourceType: 'quota',
+        authorization: {
+          srnResourceType: 'quota',
+          create: 'quotas:CreateQuota',
+          delete: 'quotas:DeleteQuota',
+        },
+        create: async () => {
+          return { id: 'qta_created' };
+        },
+        update: async () => {},
+        remove: async () => {},
+      });
+    }).toThrow(/declares an update operation but no authorization.update/);
+  });
+
+  test('a declared update action with no update operation is refused', () => {
+    expect(() => {
+      return defineFormationModule<QuotaRow>({
+        resourceType: 'quota',
+        authorization: {
+          srnResourceType: 'quota',
+          create: 'quotas:CreateQuota',
+          update: 'quotas:UpdateQuota',
+          delete: 'quotas:DeleteQuota',
+        },
+        create: async () => {
+          return { id: 'qta_created' };
+        },
+        remove: async () => {},
+      });
+    }).toThrow(
+      /declares an authorization.update action but no update operation/
+    );
   });
 });

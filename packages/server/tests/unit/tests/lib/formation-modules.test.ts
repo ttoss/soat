@@ -16,6 +16,7 @@ import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 let adminToken: string;
 let projectId: string; // public id
 let internalProjectId: number; // db primary key — what apply* expects
+let internalUserId: number; // the caller apply* attributes writes to
 let aiProviderId: string;
 let secretId: string;
 let agentId: string;
@@ -37,6 +38,9 @@ beforeAll(async () => {
 
   const project = await db.Project.findOne({ where: { publicId: projectId } });
   internalProjectId = project!.id as number;
+
+  const adminUser = await db.User.findOne({ where: { username: 'fmadmin' } });
+  internalUserId = adminUser!.id as number;
 
   const secretRes = await admin
     .post('/api/v1/secrets')
@@ -86,6 +90,7 @@ const applyCreateRaw = (resourceType: string, properties: unknown) => {
   return applyCreateResource({
     resourceType,
     projectId: internalProjectId,
+    actingUserId: internalUserId,
     resolvedProperties: properties as Record<string, unknown>,
   });
 };
@@ -97,6 +102,7 @@ const applyUpdateRaw = (
 ) => {
   return applyUpdateResource({
     projectId: internalProjectId,
+    actingUserId: internalUserId,
     resourceType,
     physicalResourceId,
     resolvedProperties: properties as Record<string, unknown>,
@@ -662,6 +668,7 @@ describe('formation module create → read round-trips', () => {
   test.each(CASES)('$resourceType create + read', async (testCase) => {
     const spec = testCase.build(nextSeed());
     const physicalId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: testCase.resourceType,
       projectId: internalProjectId,
       resolvedProperties: spec.create,
@@ -684,6 +691,7 @@ describe('formation module create → read round-trips', () => {
     async (testCase) => {
       const spec = testCase.build(nextSeed());
       const physicalId = await applyCreateResource({
+        actingUserId: internalUserId,
         resourceType: testCase.resourceType,
         projectId: internalProjectId,
         resolvedProperties: spec.camel!,
@@ -704,12 +712,14 @@ describe('formation module create → read round-trips', () => {
   test.each(updateCases)('$resourceType update + read', async (testCase) => {
     const spec = testCase.build(nextSeed());
     const physicalId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: testCase.resourceType,
       projectId: internalProjectId,
       resolvedProperties: spec.create,
     });
 
     await applyUpdateResource({
+      actingUserId: internalUserId,
       projectId: internalProjectId,
       resourceType: testCase.resourceType,
       physicalResourceId: physicalId,
@@ -728,12 +738,14 @@ describe('formation module create → read round-trips', () => {
     async (testCase) => {
       const spec = testCase.build(nextSeed());
       const physicalId = await applyCreateResource({
+        actingUserId: internalUserId,
         resourceType: testCase.resourceType,
         projectId: internalProjectId,
         resolvedProperties: spec.create,
       });
 
       await applyDeleteResource({
+        actingUserId: internalUserId,
         projectId: internalProjectId,
         resourceType: testCase.resourceType,
         physicalResourceId: physicalId,
@@ -764,6 +776,7 @@ describe('formation module create → read round-trips', () => {
 describe('immutable update no-ops', () => {
   test('chat update validates but performs no operation', async () => {
     const chatId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'chat',
       projectId: internalProjectId,
       resolvedProperties: { ai_provider_id: aiProviderId },
@@ -771,6 +784,7 @@ describe('immutable update no-ops', () => {
 
     await expect(
       applyUpdateResource({
+        actingUserId: internalUserId,
         projectId: internalProjectId,
         resourceType: 'chat',
         physicalResourceId: chatId,
@@ -790,6 +804,7 @@ describe('documentsFormationModule chunking', () => {
 
   test('create passes snake_case chunk_strategy/size/overlap to the documents API', async () => {
     const physicalId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'document',
       projectId: internalProjectId,
       resolvedProperties: {
@@ -807,6 +822,7 @@ describe('documentsFormationModule chunking', () => {
 
   test('create normalizes camelCase chunk keys', async () => {
     const physicalId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'document',
       projectId: internalProjectId,
       resolvedProperties: {
@@ -822,6 +838,7 @@ describe('documentsFormationModule chunking', () => {
 
   test('defaults to the whole strategy (one chunk) when omitted', async () => {
     const physicalId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'document',
       projectId: internalProjectId,
       resolvedProperties: { content: 'c'.repeat(2500) },
@@ -832,6 +849,7 @@ describe('documentsFormationModule chunking', () => {
 
   test('update re-chunks when chunk_strategy changes', async () => {
     const physicalId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'document',
       projectId: internalProjectId,
       resolvedProperties: {
@@ -845,6 +863,7 @@ describe('documentsFormationModule chunking', () => {
     expect(await countChunks(physicalId)).toBe(3);
 
     await applyUpdateResource({
+      actingUserId: internalUserId,
       projectId: internalProjectId,
       resourceType: 'document',
       physicalResourceId: physicalId,
@@ -866,6 +885,7 @@ describe('documentsFormationModule chunking', () => {
 describe('quotasFormationModule', () => {
   test('create → read → update → delete lifecycle (project scope)', async () => {
     const quotaId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'quota',
       projectId: internalProjectId,
       resolvedProperties: {
@@ -893,6 +913,7 @@ describe('quotasFormationModule', () => {
 
     // Only limit/mode are mutable; the immutable fields are re-sent verbatim.
     await applyUpdateResource({
+      actingUserId: internalUserId,
       projectId: internalProjectId,
       resourceType: 'quota',
       physicalResourceId: quotaId,
@@ -911,6 +932,7 @@ describe('quotasFormationModule', () => {
     expect(afterUpdate).toMatchObject({ limit: 40, mode: 'enforce' });
 
     await applyDeleteResource({
+      actingUserId: internalUserId,
       projectId: internalProjectId,
       resourceType: 'quota',
       physicalResourceId: quotaId,
@@ -925,6 +947,7 @@ describe('quotasFormationModule', () => {
 
   test('create resolves an agent scope_ref', async () => {
     const quotaId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'quota',
       projectId: internalProjectId,
       resolvedProperties: {
@@ -945,6 +968,7 @@ describe('quotasFormationModule', () => {
       metric: 'tokens',
     });
     await applyDeleteResource({
+      actingUserId: internalUserId,
       projectId: internalProjectId,
       resourceType: 'quota',
       physicalResourceId: quotaId,
@@ -987,6 +1011,7 @@ describe('apiKeysFormationModule', () => {
 
   test('create resolves policy_ids and read returns them', async () => {
     const keyId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'api_key',
       projectId: internalProjectId,
       resolvedProperties: {
@@ -1007,6 +1032,7 @@ describe('apiKeysFormationModule', () => {
 
   test('create normalizes a camelCase policyIds key', async () => {
     const keyId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'api_key',
       projectId: internalProjectId,
       resolvedProperties: { name: 'Camel Key', policyIds: [policyA] },
@@ -1021,12 +1047,14 @@ describe('apiKeysFormationModule', () => {
 
   test('update replaces the policy set', async () => {
     const keyId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'api_key',
       projectId: internalProjectId,
       resolvedProperties: { name: 'Rescoped Key', policy_ids: [policyA] },
     });
 
     await applyUpdateResource({
+      actingUserId: internalUserId,
       projectId: internalProjectId,
       resourceType: 'api_key',
       physicalResourceId: keyId,
@@ -1046,6 +1074,7 @@ describe('apiKeysFormationModule', () => {
 describe('triggersFormationModule', () => {
   test('webhook trigger exposes its signing secret via getAttributes', async () => {
     const id = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'trigger',
       projectId: internalProjectId,
       resolvedProperties: {
@@ -1066,6 +1095,7 @@ describe('triggersFormationModule', () => {
 
   test('a non-webhook trigger exposes no secret attribute', async () => {
     const id = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'trigger',
       projectId: internalProjectId,
       resolvedProperties: {
@@ -1085,6 +1115,7 @@ describe('triggersFormationModule', () => {
 
   test('schedule trigger create computes next_fire_at and reads back cron', async () => {
     const id = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'trigger',
       projectId: internalProjectId,
       resolvedProperties: {
@@ -1117,6 +1148,7 @@ describe('triggersFormationModule', () => {
     ).body.id;
 
     const id = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'trigger',
       projectId: internalProjectId,
       resolvedProperties: {
@@ -1185,6 +1217,7 @@ describe('triggersFormationModule', () => {
 describe('conversationsFormationModule', () => {
   test('create links an actor_id and read returns it', async () => {
     const convId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'conversation',
       projectId: internalProjectId,
       resolvedProperties: { name: 'Linked', actor_id: actorId },
@@ -1199,6 +1232,7 @@ describe('conversationsFormationModule', () => {
 
   test('create normalizes a camelCase actorId key', async () => {
     const convId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'conversation',
       projectId: internalProjectId,
       resolvedProperties: { actorId },
@@ -1217,6 +1251,7 @@ describe('conversationsFormationModule', () => {
 describe('agentsFormationModule tool_bindings', () => {
   test('create with tool_bindings persists references and read returns them', async () => {
     const agentPhysId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'agent',
       projectId: internalProjectId,
       resolvedProperties: {
@@ -1304,6 +1339,7 @@ describe('filesFormationModule', () => {
   test('rejects storage_type / storage_path as unknown fields', async () => {
     await expect(
       applyCreateResource({
+        actingUserId: internalUserId,
         resourceType: 'file',
         projectId: internalProjectId,
         resolvedProperties: { storage_type: 'local', filename: 'file.txt' },
@@ -1317,6 +1353,7 @@ describe('filesFormationModule', () => {
   test('delete is idempotent when the file is already gone', async () => {
     await expect(
       applyDeleteResource({
+        actingUserId: internalUserId,
         projectId: internalProjectId,
         resourceType: 'file',
         physicalResourceId: 'fil_missing_zzz',
@@ -1331,6 +1368,7 @@ describe('policiesFormationModule', () => {
   test('create rejects an invalid policy document', async () => {
     await expect(
       applyCreateResource({
+        actingUserId: internalUserId,
         resourceType: 'policy',
         projectId: internalProjectId,
         resolvedProperties: { document: { not: 'a valid document' } },
@@ -1340,6 +1378,7 @@ describe('policiesFormationModule', () => {
 
   test('update rejects an invalid policy document', async () => {
     const policyId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'policy',
       projectId: internalProjectId,
       resolvedProperties: {
@@ -1352,6 +1391,7 @@ describe('policiesFormationModule', () => {
 
     await expect(
       applyUpdateResource({
+        actingUserId: internalUserId,
         projectId: internalProjectId,
         resourceType: 'policy',
         physicalResourceId: policyId,
@@ -1363,6 +1403,7 @@ describe('policiesFormationModule', () => {
   test('rejects an unknown camelCase property key after normalization', async () => {
     await expect(
       applyCreateResource({
+        actingUserId: internalUserId,
         resourceType: 'policy',
         projectId: internalProjectId,
         resolvedProperties: { document: {}, someUnknownKey: 'y' },
@@ -1377,6 +1418,7 @@ describe('guardrailsFormationModule', () => {
   test('create rejects an invalid class literal', async () => {
     await expect(
       applyCreateResource({
+        actingUserId: internalUserId,
         resourceType: 'guardrail',
         projectId: internalProjectId,
         resolvedProperties: { name: 'Bad Class', class: 'Z' },
@@ -1387,6 +1429,7 @@ describe('guardrailsFormationModule', () => {
   test('create rejects an escalate that is not a boolean', async () => {
     await expect(
       applyCreateResource({
+        actingUserId: internalUserId,
         resourceType: 'guardrail',
         projectId: internalProjectId,
         resolvedProperties: {
@@ -1400,6 +1443,7 @@ describe('guardrailsFormationModule', () => {
 
   test('update rejects an invalid class literal', async () => {
     const guardrailId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'guardrail',
       projectId: internalProjectId,
       resolvedProperties: { name: 'Valid Guardrail', class: 'A' },
@@ -1407,6 +1451,7 @@ describe('guardrailsFormationModule', () => {
 
     await expect(
       applyUpdateResource({
+        actingUserId: internalUserId,
         projectId: internalProjectId,
         resourceType: 'guardrail',
         physicalResourceId: guardrailId,
@@ -1418,6 +1463,7 @@ describe('guardrailsFormationModule', () => {
   test('rejects an unknown camelCase property key after normalization', async () => {
     await expect(
       applyCreateResource({
+        actingUserId: internalUserId,
         resourceType: 'guardrail',
         projectId: internalProjectId,
         resolvedProperties: { name: 'X', class: 'A', someUnknownKey: 'y' },
@@ -1432,6 +1478,7 @@ describe('secretsFormationModule', () => {
   test('create requires a value', async () => {
     await expect(
       applyCreateResource({
+        actingUserId: internalUserId,
         resourceType: 'secret',
         projectId: internalProjectId,
         resolvedProperties: { name: 'no_value' },
@@ -1441,6 +1488,7 @@ describe('secretsFormationModule', () => {
 
   test('read is always null (secrets are write-only)', async () => {
     const secId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'secret',
       projectId: internalProjectId,
       resolvedProperties: { name: 'wo_secret', value: 'v1' },
@@ -1456,6 +1504,7 @@ describe('secretsFormationModule', () => {
 
   test('update changes the stored value without exposing it', async () => {
     const secId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'secret',
       projectId: internalProjectId,
       resolvedProperties: { name: 'upd_secret', value: 'v1' },
@@ -1463,6 +1512,7 @@ describe('secretsFormationModule', () => {
 
     await expect(
       applyUpdateResource({
+        actingUserId: internalUserId,
         projectId: internalProjectId,
         resourceType: 'secret',
         physicalResourceId: secId,
@@ -1473,6 +1523,7 @@ describe('secretsFormationModule', () => {
 
   test('delete removes the secret', async () => {
     const secId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'secret',
       projectId: internalProjectId,
       resolvedProperties: { name: 'del_secret', value: 'v1' },
@@ -1480,6 +1531,7 @@ describe('secretsFormationModule', () => {
 
     await expect(
       applyDeleteResource({
+        actingUserId: internalUserId,
         projectId: internalProjectId,
         resourceType: 'secret',
         physicalResourceId: secId,
@@ -1497,6 +1549,7 @@ describe('secretsFormationModule', () => {
   test('rejects an unknown camelCase property key after normalization', async () => {
     await expect(
       applyCreateResource({
+        actingUserId: internalUserId,
         resourceType: 'secret',
         projectId: internalProjectId,
         resolvedProperties: { value: 'x', someUnknownKey: 'y' },
@@ -1520,6 +1573,7 @@ describe('projectPricesFormationModule', () => {
     const { unit_price: _omit, ...withoutPrice } = baseProps;
     await expect(
       applyCreateResource({
+        actingUserId: internalUserId,
         resourceType: 'project_price',
         projectId: internalProjectId,
         resolvedProperties: withoutPrice,
@@ -1529,6 +1583,7 @@ describe('projectPricesFormationModule', () => {
 
   test('create then read round-trips the priced fields', async () => {
     const priceId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'project_price',
       projectId: internalProjectId,
       resolvedProperties: { ...baseProps, model: 'gpt-4o-read' },
@@ -1555,6 +1610,7 @@ describe('projectPricesFormationModule', () => {
 
   test('create scopes the row to the project (project + provider-slug tier)', async () => {
     const priceId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'project_price',
       projectId: internalProjectId,
       resolvedProperties: { ...baseProps, model: 'gpt-4o-scope' },
@@ -1567,12 +1623,14 @@ describe('projectPricesFormationModule', () => {
 
   test('update changes the unit_price in place on the same row', async () => {
     const priceId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'project_price',
       projectId: internalProjectId,
       resolvedProperties: { ...baseProps, model: 'gpt-4o-upd' },
     });
 
     await applyUpdateResource({
+      actingUserId: internalUserId,
       projectId: internalProjectId,
       resourceType: 'project_price',
       physicalResourceId: priceId,
@@ -1598,6 +1656,7 @@ describe('projectPricesFormationModule', () => {
 
   test('update omitting unit_price leaves the price untouched', async () => {
     const priceId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'project_price',
       projectId: internalProjectId,
       resolvedProperties: { ...baseProps, model: 'gpt-4o-partial' },
@@ -1606,6 +1665,7 @@ describe('projectPricesFormationModule', () => {
     // forUpdate skips the required-field check, so a partial update (here only
     // meter_type) is valid; unit_price is undefined and left as-is.
     await applyUpdateResource({
+      actingUserId: internalUserId,
       projectId: internalProjectId,
       resourceType: 'project_price',
       physicalResourceId: priceId,
@@ -1627,6 +1687,7 @@ describe('projectPricesFormationModule', () => {
 
   test('delete removes the price row', async () => {
     const priceId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'project_price',
       projectId: internalProjectId,
       resolvedProperties: { ...baseProps, model: 'gpt-4o-del' },
@@ -1634,6 +1695,7 @@ describe('projectPricesFormationModule', () => {
 
     await expect(
       applyDeleteResource({
+        actingUserId: internalUserId,
         projectId: internalProjectId,
         resourceType: 'project_price',
         physicalResourceId: priceId,
@@ -1651,6 +1713,7 @@ describe('projectPricesFormationModule', () => {
   test('delete is a no-op for an already-absent row', async () => {
     await expect(
       applyDeleteResource({
+        actingUserId: internalUserId,
         projectId: internalProjectId,
         resourceType: 'project_price',
         physicalResourceId: 'price_does_not_exist',
@@ -1661,6 +1724,7 @@ describe('projectPricesFormationModule', () => {
   test('rejects an unknown camelCase property key after normalization', async () => {
     await expect(
       applyCreateResource({
+        actingUserId: internalUserId,
         resourceType: 'project_price',
         projectId: internalProjectId,
         resolvedProperties: { ...baseProps, someUnknownKey: 'y' },
@@ -1674,6 +1738,7 @@ describe('projectPricesFormationModule', () => {
 describe('aiProvidersFormationModule', () => {
   test('create links a secret_id and read returns it', async () => {
     const providerId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'ai_provider',
       projectId: internalProjectId,
       resolvedProperties: {
@@ -1699,6 +1764,7 @@ describe('sessionsFormationModule', () => {
   test('update throws when the session is not found', async () => {
     await expect(
       applyUpdateResource({
+        actingUserId: internalUserId,
         projectId: internalProjectId,
         resourceType: 'session',
         physicalResourceId: 'sess_missing',
@@ -1710,6 +1776,7 @@ describe('sessionsFormationModule', () => {
   test('delete throws when the session is not found', async () => {
     await expect(
       applyDeleteResource({
+        actingUserId: internalUserId,
         projectId: internalProjectId,
         resourceType: 'session',
         physicalResourceId: 'sess_missing',
@@ -1739,6 +1806,7 @@ describe('camelCase unknown-key normalization', () => {
     async (resourceType, properties) => {
       await expect(
         applyCreateResource({
+          actingUserId: internalUserId,
           resourceType,
           projectId: internalProjectId,
           resolvedProperties: properties(),
@@ -1753,6 +1821,7 @@ describe('camelCase unknown-key normalization', () => {
 describe('modelRoutesFormationModule', () => {
   test('plans, applies, and reads back targets in snake_case', async () => {
     const routeId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'model_route',
       projectId: internalProjectId,
       resolvedProperties: {
@@ -1791,6 +1860,7 @@ describe('modelRoutesFormationModule', () => {
 
   test('updates a declared route in place', async () => {
     const routeId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'model_route',
       projectId: internalProjectId,
       resolvedProperties: {
@@ -1800,6 +1870,7 @@ describe('modelRoutesFormationModule', () => {
     });
 
     await applyUpdateResource({
+      actingUserId: internalUserId,
       projectId: internalProjectId,
       resourceType: 'model_route',
       physicalResourceId: routeId,
@@ -1824,6 +1895,7 @@ describe('modelRoutesFormationModule', () => {
   test('rejects an unknown field', async () => {
     await expect(
       applyCreateResource({
+        actingUserId: internalUserId,
         resourceType: 'model_route',
         projectId: internalProjectId,
         resolvedProperties: {
@@ -1838,6 +1910,7 @@ describe('modelRoutesFormationModule', () => {
   test('requires a non-empty target list', async () => {
     await expect(
       applyCreateResource({
+        actingUserId: internalUserId,
         resourceType: 'model_route',
         projectId: internalProjectId,
         resolvedProperties: { name: 'formation-empty-route', targets: [] },
@@ -1848,6 +1921,7 @@ describe('modelRoutesFormationModule', () => {
   test('enforces the same attempt cap as the REST surface', async () => {
     await expect(
       applyCreateResource({
+        actingUserId: internalUserId,
         resourceType: 'model_route',
         projectId: internalProjectId,
         resolvedProperties: {
@@ -1864,6 +1938,7 @@ describe('modelRoutesFormationModule', () => {
   test('rejects an unknown retry_on class', async () => {
     await expect(
       applyCreateResource({
+        actingUserId: internalUserId,
         resourceType: 'model_route',
         projectId: internalProjectId,
         resolvedProperties: {
@@ -1878,6 +1953,7 @@ describe('modelRoutesFormationModule', () => {
   test("rejects a target naming another project's provider", async () => {
     await expect(
       applyCreateResource({
+        actingUserId: internalUserId,
         resourceType: 'model_route',
         projectId: internalProjectId,
         resolvedProperties: {
@@ -1891,6 +1967,7 @@ describe('modelRoutesFormationModule', () => {
   test('rejects a non-positive failure_threshold', async () => {
     await expect(
       applyCreateResource({
+        actingUserId: internalUserId,
         resourceType: 'model_route',
         projectId: internalProjectId,
         resolvedProperties: {
@@ -1905,6 +1982,7 @@ describe('modelRoutesFormationModule', () => {
   // Declaring only one breaker value is valid — the lib defaults the other.
   test('accepts a declared cooldown_seconds without a failure_threshold', async () => {
     const routeId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'model_route',
       projectId: internalProjectId,
       resolvedProperties: {
@@ -1941,6 +2019,7 @@ describe('modelRoutesFormationModule', () => {
 
   test('read returns null for a deleted route', async () => {
     const routeId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'model_route',
       projectId: internalProjectId,
       resolvedProperties: {
@@ -1951,6 +2030,7 @@ describe('modelRoutesFormationModule', () => {
 
     await readModule('model_route').delete?.({
       projectId: internalProjectId,
+      actingUserId: internalUserId,
       physicalResourceId: routeId,
     });
 
@@ -1982,6 +2062,7 @@ describe('agentsFormationModule model binding', () => {
     const routeId = await createRoute('formation-route-a');
 
     const agentId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'agent',
       projectId: internalProjectId,
       resolvedProperties: {
@@ -2004,6 +2085,7 @@ describe('agentsFormationModule model binding', () => {
     const routeId = await createRoute('formation-route-b');
 
     const agentId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'agent',
       projectId: internalProjectId,
       resolvedProperties: {
@@ -2013,6 +2095,7 @@ describe('agentsFormationModule model binding', () => {
     });
 
     await applyUpdateResource({
+      actingUserId: internalUserId,
       projectId: internalProjectId,
       resourceType: 'agent',
       physicalResourceId: agentId,
@@ -2036,6 +2119,7 @@ describe('agentsFormationModule model binding', () => {
 
     await expect(
       applyCreateResource({
+        actingUserId: internalUserId,
         resourceType: 'agent',
         projectId: internalProjectId,
         resolvedProperties: {
@@ -2050,6 +2134,7 @@ describe('agentsFormationModule model binding', () => {
   test('rejects a template declaring neither when the project has no default', async () => {
     await expect(
       applyCreateResource({
+        actingUserId: internalUserId,
         resourceType: 'agent',
         projectId: internalProjectId,
         resolvedProperties: { name: 'Unbound Agent' },
@@ -2062,6 +2147,7 @@ describe('agentsFormationModule model binding', () => {
 
     await expect(
       applyCreateResource({
+        actingUserId: internalUserId,
         resourceType: 'agent',
         projectId: internalProjectId,
         resolvedProperties: {
@@ -2079,6 +2165,7 @@ describe('agentsFormationModule model binding', () => {
 describe('ingestionRulesFormationModule', () => {
   test('create with a tool_id converter resolves the tool and read returns it', async () => {
     const ruleId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'ingestion_rule',
       projectId: internalProjectId,
       resolvedProperties: {
@@ -2105,6 +2192,7 @@ describe('ingestionRulesFormationModule', () => {
   test('rejects when both tool_id and agent_id are set', async () => {
     await expect(
       applyCreateResource({
+        actingUserId: internalUserId,
         resourceType: 'ingestion_rule',
         projectId: internalProjectId,
         resolvedProperties: {
@@ -2119,6 +2207,7 @@ describe('ingestionRulesFormationModule', () => {
   test('rejects when neither tool_id nor agent_id is set', async () => {
     await expect(
       applyCreateResource({
+        actingUserId: internalUserId,
         resourceType: 'ingestion_rule',
         projectId: internalProjectId,
         resolvedProperties: { content_type_glob: 'image/*' },
@@ -2129,6 +2218,7 @@ describe('ingestionRulesFormationModule', () => {
   test('rejects an unknown field', async () => {
     await expect(
       applyCreateResource({
+        actingUserId: internalUserId,
         resourceType: 'ingestion_rule',
         projectId: internalProjectId,
         resolvedProperties: {
@@ -2142,6 +2232,7 @@ describe('ingestionRulesFormationModule', () => {
 
   test('update rejects setting both tool_id and agent_id', async () => {
     const ruleId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'ingestion_rule',
       projectId: internalProjectId,
       resolvedProperties: { content_type_glob: 'text/*', agent_id: agentId },
@@ -2149,6 +2240,7 @@ describe('ingestionRulesFormationModule', () => {
 
     await expect(
       applyUpdateResource({
+        actingUserId: internalUserId,
         projectId: internalProjectId,
         resourceType: 'ingestion_rule',
         physicalResourceId: ruleId,
@@ -2159,6 +2251,7 @@ describe('ingestionRulesFormationModule', () => {
 
   test('update can switch the converter from tool to agent (clearing tool_id)', async () => {
     const ruleId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'ingestion_rule',
       projectId: internalProjectId,
       resolvedProperties: {
@@ -2169,6 +2262,7 @@ describe('ingestionRulesFormationModule', () => {
     });
 
     await applyUpdateResource({
+      actingUserId: internalUserId,
       projectId: internalProjectId,
       resourceType: 'ingestion_rule',
       physicalResourceId: ruleId,
@@ -2188,6 +2282,7 @@ describe('ingestionRulesFormationModule', () => {
 describe('webhooksFormationModule', () => {
   test('getAttributes returns the generated signing secret', async () => {
     const webhookId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'webhook',
       projectId: internalProjectId,
       resolvedProperties: {
@@ -2258,6 +2353,7 @@ describe('orchestrationsFormationModule', () => {
 
   test('create converts snake_case node/edge keys and read converts them back', async () => {
     const orchId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'orchestration',
       projectId: internalProjectId,
       resolvedProperties: orchestrationProperties(),
@@ -2296,6 +2392,7 @@ describe('orchestrationsFormationModule', () => {
 
   test('create normalizes a camelCase top-level key (stateSchema)', async () => {
     const orchId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'orchestration',
       projectId: internalProjectId,
       resolvedProperties: {
@@ -2315,12 +2412,14 @@ describe('orchestrationsFormationModule', () => {
 
   test('update applies only the provided fields', async () => {
     const orchId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'orchestration',
       projectId: internalProjectId,
       resolvedProperties: orchestrationProperties(),
     });
 
     await applyUpdateResource({
+      actingUserId: internalUserId,
       projectId: internalProjectId,
       resourceType: 'orchestration',
       physicalResourceId: orchId,
@@ -2339,12 +2438,14 @@ describe('orchestrationsFormationModule', () => {
 
   test('update replaces nodes and edges, converting their keys to camelCase', async () => {
     const orchId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'orchestration',
       projectId: internalProjectId,
       resolvedProperties: orchestrationProperties(),
     });
 
     await applyUpdateResource({
+      actingUserId: internalUserId,
       projectId: internalProjectId,
       resourceType: 'orchestration',
       physicalResourceId: orchId,
@@ -2369,6 +2470,7 @@ describe('orchestrationsFormationModule', () => {
   test('rejects an unknown field', async () => {
     await expect(
       applyCreateResource({
+        actingUserId: internalUserId,
         resourceType: 'orchestration',
         projectId: internalProjectId,
         resolvedProperties: {
@@ -2384,6 +2486,7 @@ describe('orchestrationsFormationModule', () => {
   test('requires nodes', async () => {
     await expect(
       applyCreateResource({
+        actingUserId: internalUserId,
         resourceType: 'orchestration',
         projectId: internalProjectId,
         resolvedProperties: { name: 'X' },
@@ -2398,6 +2501,7 @@ describe('orchestrationsFormationModule', () => {
 describe('evaluations formation modules', () => {
   test('dataset → dataset_item → eval create/read/update/delete lifecycle', async () => {
     const datasetId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'dataset',
       projectId: internalProjectId,
       resolvedProperties: {
@@ -2417,6 +2521,7 @@ describe('evaluations formation modules', () => {
     });
 
     const itemId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'dataset_item',
       projectId: internalProjectId,
       resolvedProperties: {
@@ -2440,6 +2545,7 @@ describe('evaluations formation modules', () => {
     });
 
     const evalId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'eval',
       projectId: internalProjectId,
       resolvedProperties: {
@@ -2467,6 +2573,7 @@ describe('evaluations formation modules', () => {
     // The PRD's round-trip criterion: changing `pass_threshold` updates the
     // eval in place rather than replacing it.
     await applyUpdateResource({
+      actingUserId: internalUserId,
       projectId: internalProjectId,
       resourceType: 'eval',
       physicalResourceId: evalId,
@@ -2489,6 +2596,7 @@ describe('evaluations formation modules', () => {
     });
 
     await applyUpdateResource({
+      actingUserId: internalUserId,
       projectId: internalProjectId,
       resourceType: 'dataset_item',
       physicalResourceId: itemId,
@@ -2509,6 +2617,7 @@ describe('evaluations formation modules', () => {
     });
 
     await applyUpdateResource({
+      actingUserId: internalUserId,
       projectId: internalProjectId,
       resourceType: 'dataset',
       physicalResourceId: datasetId,
@@ -2522,6 +2631,7 @@ describe('evaluations formation modules', () => {
     ).toMatchObject({ name: 'Formation Suite v2', description: null });
 
     await applyDeleteResource({
+      actingUserId: internalUserId,
       projectId: internalProjectId,
       resourceType: 'eval',
       physicalResourceId: evalId,
@@ -2534,6 +2644,7 @@ describe('evaluations formation modules', () => {
     ).toBeNull();
 
     await applyDeleteResource({
+      actingUserId: internalUserId,
       projectId: internalProjectId,
       resourceType: 'dataset_item',
       physicalResourceId: itemId,
@@ -2546,6 +2657,7 @@ describe('evaluations formation modules', () => {
     ).toBeNull();
 
     await applyDeleteResource({
+      actingUserId: internalUserId,
       projectId: internalProjectId,
       resourceType: 'dataset',
       physicalResourceId: datasetId,
@@ -2561,6 +2673,7 @@ describe('evaluations formation modules', () => {
   test('an eval rejects an unknown field and a missing required field', async () => {
     await expect(
       applyCreateResource({
+        actingUserId: internalUserId,
         resourceType: 'eval',
         projectId: internalProjectId,
         resolvedProperties: {
@@ -2575,6 +2688,7 @@ describe('evaluations formation modules', () => {
 
     await expect(
       applyCreateResource({
+        actingUserId: internalUserId,
         resourceType: 'eval',
         projectId: internalProjectId,
         resolvedProperties: { name: 'Incomplete Eval', agent_id: agentId },
@@ -2585,6 +2699,7 @@ describe('evaluations formation modules', () => {
   test('a dataset_item requires its parent dataset', async () => {
     await expect(
       applyCreateResource({
+        actingUserId: internalUserId,
         resourceType: 'dataset_item',
         projectId: internalProjectId,
         resolvedProperties: {
@@ -2599,6 +2714,7 @@ describe('evaluations formation modules', () => {
   // would silently drop the reference answer scorers compare against.
   test('an omitted nullable field is left alone, not cleared', async () => {
     const datasetId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'dataset',
       projectId: internalProjectId,
       resolvedProperties: {
@@ -2607,6 +2723,7 @@ describe('evaluations formation modules', () => {
       },
     });
     const itemId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'dataset_item',
       projectId: internalProjectId,
       resolvedProperties: {
@@ -2617,6 +2734,7 @@ describe('evaluations formation modules', () => {
       },
     });
     const evalId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'eval',
       projectId: internalProjectId,
       resolvedProperties: {
@@ -2629,6 +2747,7 @@ describe('evaluations formation modules', () => {
     });
 
     await applyUpdateResource({
+      actingUserId: internalUserId,
       projectId: internalProjectId,
       resourceType: 'dataset',
       physicalResourceId: datasetId,
@@ -2642,6 +2761,7 @@ describe('evaluations formation modules', () => {
     ).toMatchObject({ name: 'Declared-Only Suite v2', description: 'keep me' });
 
     await applyUpdateResource({
+      actingUserId: internalUserId,
       projectId: internalProjectId,
       resourceType: 'dataset_item',
       physicalResourceId: itemId,
@@ -2662,6 +2782,7 @@ describe('evaluations formation modules', () => {
     });
 
     await applyUpdateResource({
+      actingUserId: internalUserId,
       projectId: internalProjectId,
       resourceType: 'eval',
       physicalResourceId: evalId,
@@ -2681,6 +2802,7 @@ describe('evaluations formation modules', () => {
 
     // An explicit null does clear a declared field — the other half of the pair.
     await applyUpdateResource({
+      actingUserId: internalUserId,
       projectId: internalProjectId,
       resourceType: 'dataset_item',
       physicalResourceId: itemId,
@@ -2698,6 +2820,7 @@ describe('evaluations formation modules', () => {
     ).toMatchObject({ metadata: null, expected_output: 'Paris' });
 
     await applyUpdateResource({
+      actingUserId: internalUserId,
       projectId: internalProjectId,
       resourceType: 'eval',
       physicalResourceId: evalId,
@@ -2717,6 +2840,7 @@ describe('evaluations formation modules', () => {
     ).toMatchObject({ pass_threshold: null });
 
     await applyDeleteResource({
+      actingUserId: internalUserId,
       projectId: internalProjectId,
       resourceType: 'dataset',
       physicalResourceId: datasetId,
@@ -2725,16 +2849,19 @@ describe('evaluations formation modules', () => {
 
   test('moving a dataset_item to another dataset is rejected', async () => {
     const datasetId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'dataset',
       projectId: internalProjectId,
       resolvedProperties: { name: 'Immutable Parent Suite' },
     });
     const otherDatasetId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'dataset',
       projectId: internalProjectId,
       resolvedProperties: { name: 'Immutable Other Suite' },
     });
     const itemId = await applyCreateResource({
+      actingUserId: internalUserId,
       resourceType: 'dataset_item',
       projectId: internalProjectId,
       resolvedProperties: {
@@ -2747,6 +2874,7 @@ describe('evaluations formation modules', () => {
     // the item in the dataset the template no longer names.
     await expect(
       applyUpdateResource({
+        actingUserId: internalUserId,
         projectId: internalProjectId,
         resourceType: 'dataset_item',
         physicalResourceId: itemId,
@@ -2769,17 +2897,20 @@ describe('evaluations formation modules', () => {
     // Deleting the parent cascades to the item, so tearing the stack down must
     // still work when the item resource is deleted after its dataset.
     await applyDeleteResource({
+      actingUserId: internalUserId,
       projectId: internalProjectId,
       resourceType: 'dataset',
       physicalResourceId: datasetId,
     });
     await applyDeleteResource({
+      actingUserId: internalUserId,
       projectId: internalProjectId,
       resourceType: 'dataset_item',
       physicalResourceId: itemId,
     });
     await expect(
       applyUpdateResource({
+        actingUserId: internalUserId,
         projectId: internalProjectId,
         resourceType: 'dataset_item',
         physicalResourceId: itemId,
@@ -2790,6 +2921,7 @@ describe('evaluations formation modules', () => {
       })
     ).rejects.toThrow(/not found/);
     await applyDeleteResource({
+      actingUserId: internalUserId,
       projectId: internalProjectId,
       resourceType: 'dataset',
       physicalResourceId: otherDatasetId,

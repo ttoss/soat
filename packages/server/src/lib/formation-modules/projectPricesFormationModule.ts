@@ -15,6 +15,14 @@ const toOptionalNumber = (value: unknown): number | undefined => {
 
 export const projectPricesFormationModule = defineFormationModule({
   resourceType: 'project_price',
+  // Prices are the project's own resource, so the probe is the project
+  // wildcard SRN the price routes use rather than a per-price one.
+  authorization: {
+    srnResourceType: '*',
+    create: 'projects:ManageProjectPrices',
+    update: 'projects:ManageProjectPrices',
+    delete: 'projects:ManageProjectPrices',
+  },
   resourceLabel: 'project price',
 
   create: ({ properties, projectId }) => {

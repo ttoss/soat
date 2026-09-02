@@ -1,9 +1,7 @@
-import { db } from '../../db';
 import { deleteAgent, findAgentDeletionBlocker } from '../agentDelete';
 import { toStoredKnowledgeConfig } from '../agentKnowledge';
 import { createAgent, getAgent, updateAgent } from '../agents';
 import type { AgentToolBinding } from '../agentToolBindings';
-import { lookupProjectOwnerUserId } from '../formationsHelpers';
 import type { ValidationError } from '../formationsTypes';
 import { validatePolicyActions } from '../iam';
 import { validateModelRouteExclusivity } from '../modelRoutes';
@@ -138,35 +136,14 @@ const mapAgentProperties = (properties: Record<string, unknown>) => {
   };
 };
 
-/**
- * The principal an apply is attributed to. A formation deploy has no request
- * user, so — exactly as trigger firings do — it resolves to the project's owning
- * identity, which keeps a formation-authored version indistinguishable in shape
- * from a REST-authored one rather than leaving history anonymous.
- */
-const resolveApplyingPrincipal = async (args: {
-  projectId: number;
-}): Promise<number> => {
-  return lookupProjectOwnerUserId(args.projectId);
-};
-
-/**
- * `update` receives only the physical resource id, so the project has to be
- * resolved from the agent itself before its owner can be looked up.
- */
-const resolveApplyingPrincipalForAgent = async (
-  agentPublicId: string
-): Promise<number | undefined> => {
-  const agent = await db.Agent.findOne({
-    where: { publicId: agentPublicId },
-    attributes: ['projectId'],
-  });
-  if (!agent) return undefined;
-  return resolveApplyingPrincipal({ projectId: agent.projectId });
-};
-
 export const agentsFormationModule = defineFormationModule({
   resourceType: 'agent',
+  authorization: {
+    srnResourceType: 'agent',
+    create: 'agents:CreateAgent',
+    update: 'agents:UpdateAgent',
+    delete: 'agents:DeleteAgent',
+  },
 
   extraChecks: ({ properties, basePath, forUpdate, errors }) => {
     // A mis-named `Deny` would silently no-op and fail the boundary open, so
@@ -183,19 +160,18 @@ export const agentsFormationModule = defineFormationModule({
     pushModelBindingErrors({ properties, basePath, errors, forUpdate });
   },
 
-  create: async ({ properties, projectId }) => {
+  create: async ({ properties, projectId, actingUserId }) => {
     return createAgent({
       projectId,
-      createdByUserId: await resolveApplyingPrincipal({ projectId }),
+      createdByUserId: actingUserId,
       ...mapAgentProperties(properties),
     });
   },
 
-  update: async ({ properties, physicalResourceId }) => {
+  update: async ({ properties, physicalResourceId, actingUserId }) => {
     await updateAgent({
       id: physicalResourceId,
-      createdByUserId:
-        await resolveApplyingPrincipalForAgent(physicalResourceId),
+      createdByUserId: actingUserId,
       // REST PATCH semantics: an explicit `null` clears the binding, an
       // undeclared field leaves it alone.
       aiProviderId: toNullableString(properties.ai_provider_id),

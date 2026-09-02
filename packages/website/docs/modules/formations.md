@@ -513,6 +513,73 @@ apply it previews:
 - A property resolving to `undefined` (a kept `use_previous_value` parameter)
   reuses the previous value, or is dropped entirely when there is none.
 
+### A Formation Only Does What the Caller Could Do Directly
+
+A formation is authorized twice: once for the request
+(`formations:CreateFormation`, `formations:UpdateFormation`,
+`formations:DeleteFormation`, `formations:PlanFormation`) and then **once per
+resource the template declares**, as the action a direct call would need.
+Declaring a guardrail needs `guardrails:CreateGuardrail`; removing one from the
+template needs `guardrails:DeleteGuardrail`. Handing a template to a constrained
+principal is therefore safe: a `Deny` on a resource action applies to the
+formation path exactly as it applies to the route.
+
+The check runs over the whole template **before anything is applied**, so a
+refusal changes nothing — no formation is created, and a refused update or
+teardown leaves the stack `active`. The `403` names every action the caller
+lacks at once:
+
+```json
+{
+  "error": {
+    "code": "FORBIDDEN",
+    "message": "Not permitted to apply 1 resource(s) this template declares: MyGuardrail (guardrails:CreateGuardrail). A formation may only do what the caller could do directly.",
+    "meta": {
+      "denied_actions": [
+        {
+          "logical_id": "MyGuardrail",
+          "resource_type": "guardrail",
+          "action": "guardrails:CreateGuardrail"
+        }
+      ]
+    }
+  }
+}
+```
+
+[`POST /api/v1/formations/plan`](/docs/api/formations/plan-formation) changes
+nothing, so it **reports** the same list under `unauthorized_actions` instead of
+refusing — the way to see what a deploy would reject without attempting it. The
+field is absent when the caller may perform every action the plan implies.
+
+One resource type needs the `admin` role rather than an action: a `policy`,
+because the policies routes gate on the role too, so a grantable action would
+make the formation path the weaker of the two.
+
+An `api_key` resource is minted **under the caller who deployed the formation**,
+exactly as [`POST /api/v1/api-keys`](/docs/api/api-keys/create-api-key) mints
+under the requesting user. A key inherits its owner's permissions as a ceiling,
+so a key a template creates can never carry more access than whoever deployed
+it — which is what makes the type safe to declare with only
+`api-keys:CreateApiKey`.
+
+A `trigger` resource follows the same rule for a different reason: its
+`created_by` is the [run-as identity](./triggers.md#run-as-identity) a firing
+mints a token for, so it is the deploying caller too — a scheduled firing can
+never exceed the caller who declared it.
+
+A [custom resource type](#custom-resource-types) has no SOAT action to check, so
+it stays gated on the request's `formations:*` action alone.
+
+### Ids a Template Names Are Resolved Within Its Own Project
+
+A property naming an existing resource by id — an `ai_provider`'s `secret_id`,
+a `session`'s `agent_id`, an `ingestion_rule`'s `tool_id` — resolves only within
+the project the formation is deployed into. An id belonging to another project
+fails the apply as though it did not exist, which is also all the error says: a
+distinguishable "exists, but elsewhere" would make the lookup a way to probe for
+ids in other projects.
+
 ### Custom Resource Types
 
 A deployment that builds its own product on top of SOAT usually has resources

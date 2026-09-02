@@ -159,20 +159,25 @@ describe('event delivery resilience', () => {
 
       emitFileCreated('fil_write_blip');
 
+      // Waiting for the row to merely exist races the status asserted below: it
+      // is written `pending` and flipped once the POST settles, so a loaded
+      // runner read `pending`. The one-row property moves to an assertion after
+      // the wait, so a duplicate from the retry still fails.
       await waitFor(async () => {
-        const count = await db.WebhookDelivery.count({
-          where: { webhookId: webhook!.id },
+        const settled = await db.WebhookDelivery.count({
+          where: { webhookId: webhook!.id, status: 'success' },
         });
-        return count === 1;
+        return settled === 1;
       });
 
       // The row the first `create` failed to write exists, and the sweep-free
       // happy path ran to completion on it — the blip cost nothing but a retry.
-      const [delivery] = await db.WebhookDelivery.findAll({
+      const deliveries = await db.WebhookDelivery.findAll({
         where: { webhookId: webhook!.id },
       });
-      expect(delivery.eventType).toBe('files.created');
-      expect(delivery.status).toBe('success');
+      expect(deliveries).toHaveLength(1);
+      expect(deliveries[0].eventType).toBe('files.created');
+      expect(deliveries[0].status).toBe('success');
     });
 
     test('an unrecoverable failure is counted, not swallowed', async () => {

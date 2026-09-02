@@ -16,12 +16,18 @@ import { defineFormationModule } from './defineFormationModule';
 
 export const aiProvidersFormationModule = defineFormationModule({
   resourceType: 'ai_provider',
+  authorization: {
+    srnResourceType: 'aiProvider',
+    create: 'ai-providers:CreateAiProvider',
+    update: 'ai-providers:UpdateAiProvider',
+    delete: 'ai-providers:DeleteAiProvider',
+  },
   propertiesLabel: 'AI provider',
 
   create: async ({ properties, projectId }) => {
     const secretPublicId = toNullableString(properties.secret_id);
     const secretId = secretPublicId
-      ? await lookupSecretInternalId(secretPublicId)
+      ? await lookupSecretInternalId({ publicId: secretPublicId, projectId })
       : undefined;
 
     return createAiProvider({
@@ -37,13 +43,16 @@ export const aiProvidersFormationModule = defineFormationModule({
     });
   },
 
-  update: async ({ properties, physicalResourceId }) => {
+  update: async ({ properties, physicalResourceId, projectId }) => {
     let secretId: number | undefined;
     const rawSecretId = properties.secret_id;
     if (rawSecretId !== undefined) {
       const secretPublicId = toNullableString(rawSecretId);
       if (secretPublicId) {
-        secretId = await lookupSecretInternalId(secretPublicId);
+        secretId = await lookupSecretInternalId({
+          publicId: secretPublicId,
+          projectId,
+        });
       }
     }
 

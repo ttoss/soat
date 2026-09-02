@@ -13,6 +13,12 @@ import { defineFormationModule } from './defineFormationModule';
 
 export const memoriesFormationModule = defineFormationModule({
   resourceType: 'memory',
+  authorization: {
+    srnResourceType: 'memory',
+    create: 'memories:CreateMemory',
+    update: 'memories:UpdateMemory',
+    delete: 'memories:DeleteMemory',
+  },
 
   create: ({ properties, projectId }) => {
     return createMemory({

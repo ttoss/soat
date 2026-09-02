@@ -10,6 +10,11 @@ import {
 import { DomainError } from '../errors';
 import { applyFormationTemplate } from './formationsApply';
 import {
+  assertResourceActionsAuthorized,
+  collectApplyAuthorizationRequests,
+  collectAuthorizationDenials,
+} from './formationsAuthorization';
+import {
   buildDependencyGraph,
   buildResolvedParamsMap,
   topologicalSort,
@@ -19,6 +24,7 @@ import {
   planResourceChange,
 } from './formationsPlanHelpers';
 import {
+  type FormationAuthorizer,
   type FormationError,
   type FormationEvent,
   formationEventToWire,
@@ -41,6 +47,8 @@ export { getMissingParams } from './formationsHelpers';
 export { detectStaticMetadataViolations } from './formationsMetadata';
 export { deleteFormation } from './formationsTeardown';
 export type {
+  FormationAuthorizationDenial,
+  FormationAuthorizer,
   FormationError,
   FormationEvent,
   FormationTemplate,
@@ -132,6 +140,7 @@ export const planFormation = async (args: {
   template: FormationTemplate;
   formationId?: string;
   parameters?: Record<string, string>;
+  authorize: FormationAuthorizer;
 }): Promise<PlanResult> => {
   const graph = buildDependencyGraph(args.template);
   const sortedOrder = topologicalSort(graph) ?? [];
@@ -186,7 +195,47 @@ export const planFormation = async (args: {
     existingResources,
   });
 
-  return { changes: [...changes, ...orphanedChanges] };
+  // A plan is read-only, so it *reports* what an apply would refuse rather than
+  // becoming a refusal itself (#1181) — naming every action at once beats an
+  // apply that fails at resource seven and rolls the rest back.
+  const unauthorizedActions = await collectAuthorizationDenials({
+    authorize: args.authorize,
+    requests: collectApplyAuthorizationRequests({
+      template: args.template,
+      existingResources,
+    }),
+  });
+
+  // Omitted rather than empty, so a plan a caller may fully apply is byte
+  // identical to what it was before this field existed.
+  return {
+    changes: [...changes, ...orphanedChanges],
+    ...(unauthorizedActions.length > 0 ? { unauthorizedActions } : {}),
+  };
+};
+
+const assertNameAvailable = async (args: {
+  projectId: number;
+  name: string;
+}): Promise<void> => {
+  const existing = await db.Formation.findOne({
+    where: {
+      projectId: args.projectId,
+      name: args.name,
+      status: { [Op.ne]: 'deleted' },
+    },
+  });
+  if (!existing) return;
+
+  log(
+    'createFormation: name conflict projectId=%d name=%s',
+    args.projectId,
+    args.name
+  );
+  throw new DomainError(
+    'NAME_CONFLICT',
+    `A formation with the name '${args.name}' already exists.`
+  );
 };
 
 export const createFormation = async (args: {
@@ -195,6 +244,8 @@ export const createFormation = async (args: {
   template: FormationTemplate;
   metadata?: Record<string, unknown>;
   parameters?: Record<string, string>;
+  authorize: FormationAuthorizer;
+  actingUserId: number;
 }): Promise<MappedFormation> => {
   log(
     'createFormation: projectId=%d name=%s resources=%d',
@@ -202,24 +253,17 @@ export const createFormation = async (args: {
     args.name,
     Object.keys(args.template.resources).length
   );
-  const existing = await db.Formation.findOne({
-    where: {
-      projectId: args.projectId,
-      name: args.name,
-      status: { [Op.ne]: 'deleted' },
-    },
+  // Before the formation row exists: a refusal must leave nothing behind, not a
+  // `failed` stack the caller then has to clean up (#1181).
+  await assertResourceActionsAuthorized({
+    authorize: args.authorize,
+    requests: collectApplyAuthorizationRequests({
+      template: args.template,
+      existingResources: [],
+    }),
   });
-  if (existing) {
-    log(
-      'createFormation: name conflict projectId=%d name=%s',
-      args.projectId,
-      args.name
-    );
-    throw new DomainError(
-      'NAME_CONFLICT',
-      `A formation with the name '${args.name}' already exists.`
-    );
-  }
+
+  await assertNameAvailable({ projectId: args.projectId, name: args.name });
 
   const formation = await db.Formation.create({
     projectId: args.projectId,
@@ -256,6 +300,7 @@ export const createFormation = async (args: {
     template: args.template,
     existingResources: [],
     projectId: args.projectId,
+    actingUserId: args.actingUserId,
     operation,
     parameters: args.parameters,
   });
@@ -310,6 +355,8 @@ export const updateFormation = async (args: {
   template?: FormationTemplate;
   metadata?: Record<string, unknown> | null;
   parameters?: Record<string, string>;
+  authorize: FormationAuthorizer;
+  actingUserId: number;
 }): Promise<MappedFormation> => {
   log(
     'updateFormation: formationId=%s updateTemplate=%s',
@@ -330,6 +377,20 @@ export const updateFormation = async (args: {
   const newTemplate =
     args.template ?? (formation.template as FormationTemplate);
 
+  const existingResources = await db.FormationResource.findAll({
+    where: { formationId: formation.id as number },
+  });
+
+  // Ahead of the operation row and the `updating` status, so a refused update
+  // leaves the stack exactly as it was.
+  await assertResourceActionsAuthorized({
+    authorize: args.authorize,
+    requests: collectApplyAuthorizationRequests({
+      template: newTemplate,
+      existingResources,
+    }),
+  });
+
   const operation = await db.FormationOperation.create({
     formationId: formation.id as number,
     operationType: 'update',
@@ -346,15 +407,12 @@ export const updateFormation = async (args: {
     await formation.update({ metadata: args.metadata });
   }
 
-  const existingResources = await db.FormationResource.findAll({
-    where: { formationId: formation.id as number },
-  });
-
   await applyFormationTemplate({
     formation,
     template: newTemplate,
     existingResources,
     projectId: formation.projectId,
+    actingUserId: args.actingUserId,
     operation,
     parameters: args.parameters,
   });

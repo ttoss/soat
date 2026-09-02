@@ -751,15 +751,34 @@ describe('formationsHelpers', () => {
         name: 'Lookup Test Actor',
       });
 
-      await expect(lookupActorInternalId(actor.publicId)).resolves.toBe(
-        actor.id
-      );
+      await expect(
+        lookupActorInternalId({ publicId: actor.publicId, projectId })
+      ).resolves.toBe(actor.id);
     });
 
     test('lookupActorInternalId throws for an unknown public id', async () => {
       await expect(
-        lookupActorInternalId('actor_doesnotexist000')
+        lookupActorInternalId({
+          publicId: 'actor_doesnotexist000',
+          projectId,
+        })
       ).rejects.toThrow('Actor not found: actor_doesnotexist000');
+    });
+
+    // #1180: a template deployed into one project could name another
+    // project's resource, and the lookup resolved it on the public id alone.
+    test('lookupActorInternalId refuses an actor in another project', async () => {
+      const otherProject = await db.Project.create({
+        name: 'Lookup Other Project',
+      });
+      const actor = await db.Actor.create({
+        projectId: otherProject.id,
+        name: 'Lookup Foreign Actor',
+      });
+
+      await expect(
+        lookupActorInternalId({ publicId: actor.publicId, projectId })
+      ).rejects.toThrow(`Actor not found: ${actor.publicId}`);
     });
 
     test('lookupAgentInternalId resolves a public id to its internal id', async () => {
@@ -769,9 +788,9 @@ describe('formationsHelpers', () => {
         name: 'Lookup Test Agent',
       });
 
-      await expect(lookupAgentInternalId(agent.publicId)).resolves.toBe(
-        agent.id
-      );
+      await expect(
+        lookupAgentInternalId({ publicId: agent.publicId, projectId })
+      ).resolves.toBe(agent.id);
     });
 
     test('lookupToolInternalId resolves a public id to its internal id', async () => {
@@ -781,7 +800,9 @@ describe('formationsHelpers', () => {
         name: 'lookup-test-tool',
       });
 
-      await expect(lookupToolInternalId(tool.publicId)).resolves.toBe(tool.id);
+      await expect(
+        lookupToolInternalId({ publicId: tool.publicId, projectId })
+      ).resolves.toBe(tool.id);
     });
 
     test('lookupPolicyInternalIds resolves multiple public ids to internal ids', async () => {

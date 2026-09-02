@@ -8,6 +8,7 @@ import type { FormationResourceTypeRegistration } from 'src/lib/formationResourc
 import {
   createFormation,
   deleteFormation,
+  type FormationAuthorizer,
   updateFormation,
 } from 'src/lib/formations';
 import {
@@ -19,6 +20,14 @@ import { validateFormationTemplate } from 'src/lib/formationsValidation';
 import { validateFormationTemplateAsync } from 'src/lib/formationsValidationAsync';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+
+// An operator-registered type has no SOAT action to authorize (#1181), so the
+// deploy path must never consult the authorizer for one.
+const neverAsked: FormationAuthorizer = (request) => {
+  throw new Error(
+    `unexpected authorization request for ${request.resourceType}`
+  );
+};
 
 // The seam is the HTTP boundary to an operator's handler (#1078), so a real
 // handler runs on localhost: the request is genuinely serialized and signed, and
@@ -124,6 +133,7 @@ const buildRegistration = (args: {
 /** A real project, so the `project_id` the handler receives is a real public id. */
 let projectPublicId: string;
 let projectId: number;
+let actingUserId: number;
 
 beforeAll(async () => {
   await startHandler();
@@ -138,6 +148,9 @@ beforeAll(async () => {
     where: { publicId: projectPublicId },
   });
   projectId = project!.id;
+
+  const user = await db.User.findOne({ where: { publicId: setup.userId } });
+  actingUserId = user!.id as number;
 });
 
 afterAll(async () => {
@@ -169,6 +182,7 @@ describe('a registered resource type calls its handler', () => {
     const physicalId = await module.create({
       properties: { name: 'Support', kind: 'whatsapp' },
       projectId,
+      actingUserId,
       logicalId: 'MainChannel',
       resourceKey: 'fres_01',
     });
@@ -193,6 +207,7 @@ describe('a registered resource type calls its handler', () => {
     await module.create({
       properties: { name: 'A', kind: 'whatsapp' },
       projectId,
+      actingUserId,
       logicalId: 'C',
       resourceKey: 'fres_01',
     });
@@ -221,6 +236,7 @@ describe('a registered resource type calls its handler', () => {
       return module.create({
         properties: { name: 'A', kind: 'whatsapp' },
         projectId,
+        actingUserId,
         logicalId: 'C',
         resourceKey: 'fres_01',
       });
@@ -239,6 +255,7 @@ describe('a registered resource type calls its handler', () => {
     await module.create({
       properties: { name: 'B', kind: 'whatsapp' },
       projectId,
+      actingUserId,
       logicalId: 'D',
       resourceKey: 'fres_02',
     });
@@ -255,6 +272,7 @@ describe('a registered resource type calls its handler', () => {
       properties: { name: 'Renamed', kind: 'whatsapp' },
       physicalResourceId: 'chn_42',
       projectId,
+      actingUserId,
       logicalId: 'MainChannel',
       resourceKey: 'fres_01',
     });
@@ -281,6 +299,7 @@ describe('a registered resource type calls its handler', () => {
       properties: { name: 'A', kind: 'discord' },
       physicalResourceId: 'chn_42',
       projectId,
+      actingUserId,
       logicalId: 'MainChannel',
       resourceKey: 'fres_01',
     });
@@ -297,6 +316,7 @@ describe('a registered resource type calls its handler', () => {
     await module.delete({
       physicalResourceId: 'chn_42',
       projectId,
+      actingUserId,
       logicalId: 'MainChannel',
       resourceKey: 'fres_01',
     });
@@ -458,6 +478,7 @@ describe('handler failures fail the deploy', () => {
     return module().create({
       properties: { name: 'A', kind: 'whatsapp' },
       projectId,
+      actingUserId,
       logicalId: 'C',
       resourceKey: 'fres_01',
     });
@@ -499,6 +520,7 @@ describe('handler failures fail the deploy', () => {
       }).create({
         properties: { name: 'A', kind: 'whatsapp' },
         projectId,
+        actingUserId,
         logicalId: 'C',
         resourceKey: 'fres_01',
       })
@@ -513,6 +535,7 @@ describe('handler failures fail the deploy', () => {
       buildRegisteredFormationModule({ registration }).create({
         properties: { name: 'A', kind: 'whatsapp' },
         projectId,
+        actingUserId,
         logicalId: 'C',
         resourceKey: 'fres_01',
       })
@@ -558,6 +581,7 @@ describe('write-only properties', () => {
     }).create({
       properties: { name: 'A', kind: 'whatsapp', config: { token: 'sk_live' } },
       projectId,
+      actingUserId,
       logicalId: 'C',
       resourceKey: 'fres_01',
     });
@@ -667,6 +691,8 @@ describe('a registered type inside a real formation deploy', () => {
     replies.create = { status: 200, body: { physical_resource_id: 'chn_100' } };
 
     const created = await createFormation({
+      authorize: neverAsked,
+      actingUserId,
       projectId,
       name: 'registered-lifecycle',
       template: template({ name: 'Support', kind: 'whatsapp' }),
@@ -683,6 +709,8 @@ describe('a registered type inside a real formation deploy', () => {
 
     replies.update = { status: 200, body: { physical_resource_id: 'chn_100' } };
     const updated = await updateFormation({
+      authorize: neverAsked,
+      actingUserId,
       id: created.id,
       template: template({ name: 'Support Renamed', kind: 'whatsapp' }),
     });
@@ -691,7 +719,11 @@ describe('a registered type inside a real formation deploy', () => {
     expect(updated.resources?.[0].physical_resource_id).toBe('chn_100');
 
     replies.delete = { status: 200, body: {} };
-    await deleteFormation({ id: created.id });
+    await deleteFormation({
+      id: created.id,
+      authorize: neverAsked,
+      actingUserId,
+    });
     expect(
       recorded.some((request) => {
         return request.body.request_type === 'delete';
@@ -702,6 +734,8 @@ describe('a registered type inside a real formation deploy', () => {
   test('an update answering with a new id replaces the resource', async () => {
     replies.create = { status: 200, body: { physical_resource_id: 'chn_200' } };
     const created = await createFormation({
+      authorize: neverAsked,
+      actingUserId,
       projectId,
       name: 'registered-replacement',
       template: template({ name: 'A', kind: 'whatsapp' }),
@@ -711,6 +745,8 @@ describe('a registered type inside a real formation deploy', () => {
     replies.delete = { status: 200, body: {} };
 
     const updated = await updateFormation({
+      authorize: neverAsked,
+      actingUserId,
       id: created.id,
       template: template({ name: 'A', kind: 'discord' }),
     });
@@ -726,12 +762,18 @@ describe('a registered type inside a real formation deploy', () => {
     expect(deleted).toHaveLength(1);
     expect(deleted[0].body.physical_resource_id).toBe('chn_200');
 
-    await deleteFormation({ id: created.id });
+    await deleteFormation({
+      id: created.id,
+      authorize: neverAsked,
+      actingUserId,
+    });
   });
 
   test('a failed disposal leaks the old resource but does not fail the deploy', async () => {
     replies.create = { status: 200, body: { physical_resource_id: 'chn_300' } };
     const created = await createFormation({
+      authorize: neverAsked,
+      actingUserId,
       projectId,
       name: 'registered-replacement-cleanup-fails',
       template: template({ name: 'A', kind: 'whatsapp' }),
@@ -741,6 +783,8 @@ describe('a registered type inside a real formation deploy', () => {
     replies.delete = { status: 500, body: { message: 'cannot delete' } };
 
     const updated = await updateFormation({
+      authorize: neverAsked,
+      actingUserId,
       id: created.id,
       template: template({ name: 'A', kind: 'discord' }),
     });
@@ -763,6 +807,8 @@ describe('a registered type inside a real formation deploy', () => {
       },
     };
     const created = await createFormation({
+      authorize: neverAsked,
+      actingUserId,
       projectId,
       name: 'registered-replacement-retain',
       template: retained,
@@ -770,6 +816,8 @@ describe('a registered type inside a real formation deploy', () => {
 
     replies.update = { status: 200, body: { physical_resource_id: 'chn_401' } };
     await updateFormation({
+      authorize: neverAsked,
+      actingUserId,
       id: created.id,
       template: {
         resources: {
@@ -792,6 +840,8 @@ describe('a registered type inside a real formation deploy', () => {
     replies.create = { status: 422, body: { message: 'number not verified' } };
 
     const created = await createFormation({
+      authorize: neverAsked,
+      actingUserId,
       projectId,
       name: 'registered-handler-refusal',
       template: template({ name: 'A', kind: 'whatsapp' }),
@@ -886,14 +936,17 @@ describe('the module contract holds for a direct caller too', () => {
     await built.create({
       properties: { name: 'A', kind: 'whatsapp' },
       projectId,
+      actingUserId,
     });
     await built.update({
       projectId,
+      actingUserId,
       properties: { name: 'B', kind: 'whatsapp' },
       physicalResourceId: 'chn_500',
     });
     await built.delete({
       projectId,
+      actingUserId,
       physicalResourceId: 'chn_500',
     });
 
@@ -916,6 +969,7 @@ describe('the module contract holds for a direct caller too', () => {
     await built.create({
       properties: { name: 'A', kind: 'whatsapp' },
       projectId,
+      actingUserId,
       logicalId: 'OnlyLogicalId',
     });
 

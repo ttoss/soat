@@ -304,6 +304,33 @@ export const requireProjectAccess = async (args: {
  * Returns the numeric project id; throws `UNAUTHORIZED` / `VALIDATION_FAILED` /
  * `API_KEY_PROJECT_SCOPE` / `FORBIDDEN` otherwise.
  */
+/**
+ * The public id of the project a write targets: the explicit one, else the
+ * project a scoped credential supplies.
+ *
+ * Exported because a route that also needs the *public* id — to authorize
+ * against an SRN, say — must derive it the same way `resolveWriteProjectId`
+ * does; a second copy of the implicit-project rule is how the two would drift.
+ */
+export const resolveWriteProjectPublicId = (args: {
+  ctx: Context;
+  projectPublicId?: string;
+}): string => {
+  const { ctx } = args;
+  requireAuth(ctx);
+
+  const projectPublicId =
+    args.projectPublicId ??
+    ctx.authUser.apiKeyProjectPublicId ??
+    ctx.authUser.oauthProjectPublicId;
+
+  if (!projectPublicId) {
+    throw new DomainError('VALIDATION_FAILED', 'project_id is required');
+  }
+
+  return projectPublicId;
+};
+
 export const resolveWriteProjectId = async (args: {
   ctx: Context;
   projectPublicId?: string;
@@ -313,15 +340,10 @@ export const resolveWriteProjectId = async (args: {
   const { ctx, action } = args;
   requireAuth(ctx);
 
-  // Without an explicit project id, a project-scoped API key or OAuth token supplies a default.
-  const projectPublicId =
-    args.projectPublicId ??
-    ctx.authUser.apiKeyProjectPublicId ??
-    ctx.authUser.oauthProjectPublicId;
-
-  if (!projectPublicId) {
-    throw new DomainError('VALIDATION_FAILED', 'project_id is required');
-  }
+  const projectPublicId = resolveWriteProjectPublicId({
+    ctx,
+    projectPublicId: args.projectPublicId,
+  });
 
   // An actionable error rather than the opaque `Forbidden` `resolveProjectIds`
   // would yield. `projectPublicId` already defaulted to the credential's own

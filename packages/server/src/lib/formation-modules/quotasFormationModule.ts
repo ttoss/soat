@@ -8,6 +8,12 @@ import { defineFormationModule } from './defineFormationModule';
 
 export const quotasFormationModule = defineFormationModule({
   resourceType: 'quota',
+  authorization: {
+    srnResourceType: 'quota',
+    create: 'quotas:CreateQuota',
+    update: 'quotas:UpdateQuota',
+    delete: 'quotas:DeleteQuota',
+  },
 
   create: ({ properties, projectId }) => {
     return createQuota({

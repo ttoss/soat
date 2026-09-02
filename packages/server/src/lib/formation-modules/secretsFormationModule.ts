@@ -7,6 +7,12 @@ import { defineFormationModule } from './defineFormationModule';
 // externally".
 export const secretsFormationModule = defineFormationModule({
   resourceType: 'secret',
+  authorization: {
+    srnResourceType: 'secret',
+    create: 'secrets:CreateSecret',
+    update: 'secrets:UpdateSecret',
+    delete: 'secrets:DeleteSecret',
+  },
 
   create: ({ properties, projectId }) => {
     return createSecret({

@@ -24,6 +24,12 @@ const toChunkStrategy = (value: unknown): ChunkStrategy | undefined => {
 
 export const documentsFormationModule = defineFormationModule({
   resourceType: 'document',
+  authorization: {
+    srnResourceType: 'document',
+    create: 'documents:CreateDocument',
+    update: 'documents:UpdateDocument',
+    delete: 'documents:DeleteDocument',
+  },
 
   create: ({ properties, projectId }) => {
     return createDocument({

@@ -7,6 +7,12 @@ import { defineFormationModule } from './defineFormationModule';
 
 export const evalsFormationModule = defineFormationModule({
   resourceType: 'eval',
+  authorization: {
+    srnResourceType: 'eval',
+    create: 'evaluations:CreateEval',
+    update: 'evaluations:CreateEval',
+    delete: 'evaluations:DeleteEval',
+  },
 
   create: ({ properties, projectId }) => {
     return createEval({

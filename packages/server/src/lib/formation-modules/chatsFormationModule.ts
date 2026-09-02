@@ -9,6 +9,13 @@ import { defineFormationModule } from './defineFormationModule';
 // the properties and then no-op, rather than reporting a change it never made.
 export const chatsFormationModule = defineFormationModule({
   resourceType: 'chat',
+  // No `update` action: chats declare no `update`, so an apply validates and
+  // no-ops — there is no mutation to authorize.
+  authorization: {
+    srnResourceType: 'chat',
+    create: 'chats:CreateChat',
+    delete: 'chats:DeleteChat',
+  },
 
   create: ({ properties, projectId }) => {
     return createChat({

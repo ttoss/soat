@@ -51,6 +51,14 @@ const resolveParentDatasetId = async (args: {
 
 export const datasetItemsFormationModule = defineFormationModule({
   resourceType: 'dataset_item',
+  // Items are authorized as writes to their dataset, exactly as the
+  // `/datasets/{id}/items` routes are.
+  authorization: {
+    srnResourceType: 'dataset',
+    create: 'evaluations:CreateDataset',
+    update: 'evaluations:CreateDataset',
+    delete: 'evaluations:CreateDataset',
+  },
   propertiesLabel: 'DatasetItem',
 
   create: ({ properties }) => {

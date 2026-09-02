@@ -42,6 +42,12 @@ const pushBreakerErrors = (args: {
 
 export const modelRoutesFormationModule = defineFormationModule({
   resourceType: 'model_route',
+  authorization: {
+    srnResourceType: 'model_route',
+    create: 'model-routes:CreateModelRoute',
+    update: 'model-routes:UpdateModelRoute',
+    delete: 'model-routes:DeleteModelRoute',
+  },
   resourceLabel: 'model route',
 
   /**

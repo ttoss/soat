@@ -29,22 +29,24 @@ const asRefPresence = (value: unknown): string | undefined => {
 
 // ── Ref resolution ────────────────────────────────────────────────────────
 
-const resolveToolId = async (
-  value: unknown
-): Promise<number | null | undefined> => {
-  if (value === null) return null;
-  const publicId = toNullableString(value);
+const resolveToolId = async (args: {
+  value: unknown;
+  projectId: number;
+}): Promise<number | null | undefined> => {
+  if (args.value === null) return null;
+  const publicId = toNullableString(args.value);
   if (!publicId) return undefined;
-  return lookupToolInternalId(publicId);
+  return lookupToolInternalId({ publicId, projectId: args.projectId });
 };
 
-const resolveAgentId = async (
-  value: unknown
-): Promise<number | null | undefined> => {
-  if (value === null) return null;
-  const publicId = toNullableString(value);
+const resolveAgentId = async (args: {
+  value: unknown;
+  projectId: number;
+}): Promise<number | null | undefined> => {
+  if (args.value === null) return null;
+  const publicId = toNullableString(args.value);
   if (!publicId) return undefined;
-  return lookupAgentInternalId(publicId);
+  return lookupAgentInternalId({ publicId, projectId: args.projectId });
 };
 
 // ── Normalizers ──────────────────────────────────────────────────────────
@@ -70,6 +72,12 @@ const asFileDelivery = (value: unknown): FileDelivery | undefined => {
 
 export const ingestionRulesFormationModule = defineFormationModule({
   resourceType: 'ingestion_rule',
+  authorization: {
+    srnResourceType: 'ingestionRule',
+    create: 'ingestion-rules:CreateIngestionRule',
+    update: 'ingestion-rules:UpdateIngestionRule',
+    delete: 'ingestion-rules:DeleteIngestionRule',
+  },
   resourceLabel: 'ingestion rule',
 
   extraChecks: ({ properties, basePath, forUpdate, errors }) => {
@@ -109,8 +117,8 @@ export const ingestionRulesFormationModule = defineFormationModule({
     });
 
     const [toolId, agentId] = await Promise.all([
-      resolveToolId(properties.tool_id),
-      resolveAgentId(properties.agent_id),
+      resolveToolId({ value: properties.tool_id, projectId }),
+      resolveAgentId({ value: properties.agent_id, projectId }),
     ]);
 
     return createIngestionRule({
@@ -129,10 +137,10 @@ export const ingestionRulesFormationModule = defineFormationModule({
     });
   },
 
-  update: async ({ properties, physicalResourceId }) => {
+  update: async ({ properties, physicalResourceId, projectId }) => {
     const [toolId, agentId] = await Promise.all([
-      resolveToolId(properties.tool_id),
-      resolveAgentId(properties.agent_id),
+      resolveToolId({ value: properties.tool_id, projectId }),
+      resolveAgentId({ value: properties.agent_id, projectId }),
     ]);
 
     await updateIngestionRule({

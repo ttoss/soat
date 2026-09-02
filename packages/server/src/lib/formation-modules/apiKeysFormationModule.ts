@@ -4,20 +4,25 @@ import {
   getApiKey,
   updateApiKey,
 } from '../apiKeys';
-import {
-  lookupPolicyInternalIds,
-  lookupProjectOwnerUserId,
-} from '../formationsHelpers';
+import { lookupPolicyInternalIds } from '../formationsHelpers';
 import { toOptionalString } from '../resource-inputs/normalizers';
 import { defineFormationModule } from './defineFormationModule';
 
 export const apiKeysFormationModule = defineFormationModule({
   resourceType: 'api_key',
+  authorization: {
+    srnResourceType: 'apiKey',
+    create: 'api-keys:CreateApiKey',
+    update: 'api-keys:UpdateApiKey',
+    delete: 'api-keys:DeleteApiKey',
+  },
   propertiesLabel: 'API key',
 
-  create: async ({ properties, projectId }) => {
-    const userId = await lookupProjectOwnerUserId(projectId);
-
+  // Minted under the caller, as `POST /api-keys` is: a key inherits its owner's
+  // permissions as a ceiling, so one minted under the *project owner* would let
+  // any caller who can deploy a formation escalate to the owner's access
+  // (#1181). Owning it themselves, they gain nothing they did not already have.
+  create: async ({ properties, projectId, actingUserId }) => {
     const rawPolicyIds = properties.policy_ids;
     const policyPublicIds = Array.isArray(rawPolicyIds)
       ? (rawPolicyIds as string[])
@@ -28,7 +33,7 @@ export const apiKeysFormationModule = defineFormationModule({
         : undefined;
 
     return createApiKey({
-      userId,
+      userId: actingUserId,
       projectId,
       name: properties.name as string,
       policyIds,

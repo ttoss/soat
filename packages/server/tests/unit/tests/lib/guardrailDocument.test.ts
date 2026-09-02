@@ -134,7 +134,10 @@ describe('validateGuardrailDocument', () => {
 
     test('rejects a guard referencing a runtime key outside the catalog', () => {
       expectValidationError(
-        { class: 'B', guard: { '<': [{ var: 'runtime.usage.cost_usd_90d' }, 1] } },
+        {
+          class: 'B',
+          guard: { '<': [{ var: 'runtime.usage.cost_usd_90d' }, 1] },
+        },
         /not in the runtime\.\* catalog/
       );
     });

@@ -700,6 +700,7 @@ describe('buildKnowledgeTools — formation-deployed agent casing', () => {
   let adminToken: string;
   let projectId: string;
   let internalProjectId: number;
+  let internalUserId: number;
   let aiProviderId: string;
   let memoryId: string;
 
@@ -720,6 +721,11 @@ describe('buildKnowledgeTools — formation-deployed agent casing', () => {
       where: { publicId: projectId },
     });
     internalProjectId = project!.id as number;
+
+    // `applyCreateResource` attributes the write to a caller, as the apply
+    // pipeline does; the bootstrap admin stands in for it here.
+    const admin = await db.User.findOne({ where: { username: 'admin' } });
+    internalUserId = admin!.id as number;
 
     const providerRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/ai-providers')
@@ -763,6 +769,7 @@ describe('buildKnowledgeTools — formation-deployed agent casing', () => {
     const agentId = await applyCreateResource({
       resourceType: 'agent',
       projectId: internalProjectId,
+      actingUserId: internalUserId,
       resolvedProperties: {
         ai_provider_id: aiProviderId,
         name: 'Formation Write Memory Agent',
@@ -787,6 +794,7 @@ describe('buildKnowledgeTools — formation-deployed agent casing', () => {
     const agentId = await applyCreateResource({
       resourceType: 'agent',
       projectId: internalProjectId,
+      actingUserId: internalUserId,
       resolvedProperties: {
         ai_provider_id: aiProviderId,
         name: 'Formation No Write Memory Agent',

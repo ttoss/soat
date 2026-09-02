@@ -23,6 +23,12 @@ const requireString = (args: { value: unknown; fieldName: string }): string => {
 
 export const actorsFormationModule = defineFormationModule({
   resourceType: 'actor',
+  authorization: {
+    srnResourceType: 'actor',
+    create: 'actors:CreateActor',
+    update: 'actors:UpdateActor',
+    delete: 'actors:DeleteActor',
+  },
   // An actor's `name` is required on update too: `updateActor` cannot infer a
   // linkage from a bag that names neither the actor nor its target.
   requiredOnUpdate: true,

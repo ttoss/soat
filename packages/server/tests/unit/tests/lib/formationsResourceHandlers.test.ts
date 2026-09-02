@@ -21,6 +21,7 @@ import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 describe('formationsResourceHandlers', () => {
   let adminToken: string;
   let projectId: string;
+  let actingUserId: number;
   let projectDbId: number;
 
   // Prerequisite resources created once, referenced by the per-resource tests.
@@ -59,6 +60,11 @@ describe('formationsResourceHandlers', () => {
     });
     projectDbId = project?.id as number;
 
+    // The write handlers attribute the mutation to a caller; the bootstrap
+    // admin is the one these tests act as.
+    const admin = await db.User.findOne({ where: { username: 'frhadmin' } });
+    actingUserId = admin?.id as number;
+
     const secretRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/secrets')
       .send({ project_id: projectId, name: 'frh-secret', value: 'sk-secret' });
@@ -92,6 +98,7 @@ describe('formationsResourceHandlers', () => {
   describe('applyCreateResource', () => {
     test('creates ai_provider with resolved secret', async () => {
       const id = await applyCreateResource({
+        actingUserId,
         resourceType: 'ai_provider',
         projectId: projectDbId,
         resolvedProperties: {
@@ -118,6 +125,7 @@ describe('formationsResourceHandlers', () => {
 
     test('creates tool', async () => {
       const id = await applyCreateResource({
+        actingUserId,
         resourceType: 'tool',
         projectId: projectDbId,
         resolvedProperties: {
@@ -146,6 +154,7 @@ describe('formationsResourceHandlers', () => {
 
     test('creates actor with resolved linked ids', async () => {
       const id = await applyCreateResource({
+        actingUserId,
         resourceType: 'actor',
         projectId: projectDbId,
         resolvedProperties: {
@@ -168,6 +177,7 @@ describe('formationsResourceHandlers', () => {
 
     test('creates agent', async () => {
       const id = await applyCreateResource({
+        actingUserId,
         resourceType: 'agent',
         projectId: projectDbId,
         resolvedProperties: {
@@ -194,6 +204,7 @@ describe('formationsResourceHandlers', () => {
 
     test('creates document', async () => {
       const id = await applyCreateResource({
+        actingUserId,
         resourceType: 'document',
         projectId: projectDbId,
         resolvedProperties: {
@@ -218,6 +229,7 @@ describe('formationsResourceHandlers', () => {
 
     test('creates memory', async () => {
       const id = await applyCreateResource({
+        actingUserId,
         resourceType: 'memory',
         projectId: projectDbId,
         resolvedProperties: {
@@ -238,6 +250,7 @@ describe('formationsResourceHandlers', () => {
 
     test('creates memory_entry with resolved memory internal id', async () => {
       const id = await applyCreateResource({
+        actingUserId,
         resourceType: 'memory_entry',
         projectId: projectDbId,
         resolvedProperties: {
@@ -258,6 +271,7 @@ describe('formationsResourceHandlers', () => {
 
     test('creates webhook', async () => {
       const id = await applyCreateResource({
+        actingUserId,
         resourceType: 'webhook',
         projectId: projectDbId,
         resolvedProperties: {
@@ -281,6 +295,7 @@ describe('formationsResourceHandlers', () => {
     test('throws when agent creation references a missing ai provider', async () => {
       await expect(
         applyCreateResource({
+          actingUserId,
           resourceType: 'agent',
           projectId: projectDbId,
           resolvedProperties: {
@@ -294,6 +309,7 @@ describe('formationsResourceHandlers', () => {
     test('throws for unsupported create resource type', async () => {
       await expect(
         applyCreateResource({
+          actingUserId,
           resourceType: 'unsupported',
           projectId: projectDbId,
           resolvedProperties: {},
@@ -304,6 +320,7 @@ describe('formationsResourceHandlers', () => {
     test('throws when actor create has both agent_id and chat_id', async () => {
       await expect(
         applyCreateResource({
+          actingUserId,
           resourceType: 'actor',
           projectId: projectDbId,
           resolvedProperties: {
@@ -318,6 +335,7 @@ describe('formationsResourceHandlers', () => {
     test('throws when actor create name is empty string', async () => {
       await expect(
         applyCreateResource({
+          actingUserId,
           resourceType: 'actor',
           projectId: projectDbId,
           resolvedProperties: {
@@ -331,6 +349,7 @@ describe('formationsResourceHandlers', () => {
   describe('applyUpdateResource', () => {
     test('updates ai_provider with resolved secret', async () => {
       const id = await applyCreateResource({
+        actingUserId,
         resourceType: 'ai_provider',
         projectId: projectDbId,
         resolvedProperties: {
@@ -342,6 +361,7 @@ describe('formationsResourceHandlers', () => {
 
       await expect(
         applyUpdateResource({
+          actingUserId,
           projectId: projectDbId,
           resourceType: 'ai_provider',
           physicalResourceId: id,
@@ -366,6 +386,7 @@ describe('formationsResourceHandlers', () => {
 
     test('updates tool', async () => {
       const id = await applyCreateResource({
+        actingUserId,
         resourceType: 'tool',
         projectId: projectDbId,
         resolvedProperties: {
@@ -377,6 +398,7 @@ describe('formationsResourceHandlers', () => {
 
       await expect(
         applyUpdateResource({
+          actingUserId,
           projectId: projectDbId,
           resourceType: 'tool',
           physicalResourceId: id,
@@ -396,6 +418,7 @@ describe('formationsResourceHandlers', () => {
 
     test('updates actor', async () => {
       const id = await applyCreateResource({
+        actingUserId,
         resourceType: 'actor',
         projectId: projectDbId,
         resolvedProperties: { name: 'frh-update-actor' },
@@ -403,6 +426,7 @@ describe('formationsResourceHandlers', () => {
 
       await expect(
         applyUpdateResource({
+          actingUserId,
           projectId: projectDbId,
           resourceType: 'actor',
           physicalResourceId: id,
@@ -424,6 +448,7 @@ describe('formationsResourceHandlers', () => {
 
     test('updates agent', async () => {
       const id = await applyCreateResource({
+        actingUserId,
         resourceType: 'agent',
         projectId: projectDbId,
         resolvedProperties: {
@@ -434,6 +459,7 @@ describe('formationsResourceHandlers', () => {
 
       await expect(
         applyUpdateResource({
+          actingUserId,
           projectId: projectDbId,
           resourceType: 'agent',
           physicalResourceId: id,
@@ -459,6 +485,7 @@ describe('formationsResourceHandlers', () => {
 
     test('updates memory', async () => {
       const id = await applyCreateResource({
+        actingUserId,
         resourceType: 'memory',
         projectId: projectDbId,
         resolvedProperties: {
@@ -469,6 +496,7 @@ describe('formationsResourceHandlers', () => {
 
       await expect(
         applyUpdateResource({
+          actingUserId,
           projectId: projectDbId,
           resourceType: 'memory',
           physicalResourceId: id,
@@ -486,6 +514,7 @@ describe('formationsResourceHandlers', () => {
 
     test('updates memory_entry', async () => {
       const id = await applyCreateResource({
+        actingUserId,
         resourceType: 'memory_entry',
         projectId: projectDbId,
         resolvedProperties: {
@@ -497,6 +526,7 @@ describe('formationsResourceHandlers', () => {
 
       await expect(
         applyUpdateResource({
+          actingUserId,
           projectId: projectDbId,
           resourceType: 'memory_entry',
           physicalResourceId: id,
@@ -510,6 +540,7 @@ describe('formationsResourceHandlers', () => {
 
     test('updates webhook', async () => {
       const id = await applyCreateResource({
+        actingUserId,
         resourceType: 'webhook',
         projectId: projectDbId,
         resolvedProperties: {
@@ -521,6 +552,7 @@ describe('formationsResourceHandlers', () => {
 
       await expect(
         applyUpdateResource({
+          actingUserId,
           projectId: projectDbId,
           resourceType: 'webhook',
           physicalResourceId: id,
@@ -544,6 +576,7 @@ describe('formationsResourceHandlers', () => {
 
     test('applies document update (content + title)', async () => {
       const id = await applyCreateResource({
+        actingUserId,
         resourceType: 'document',
         projectId: projectDbId,
         resolvedProperties: { content: 'Original body', title: 'Original' },
@@ -551,6 +584,7 @@ describe('formationsResourceHandlers', () => {
 
       await expect(
         applyUpdateResource({
+          actingUserId,
           projectId: projectDbId,
           resourceType: 'document',
           physicalResourceId: id,
@@ -568,6 +602,7 @@ describe('formationsResourceHandlers', () => {
     test('throws when agent to update is missing', async () => {
       await expect(
         applyUpdateResource({
+          actingUserId,
           projectId: projectDbId,
           resourceType: 'agent',
           physicalResourceId: 'agt_missing',
@@ -579,6 +614,7 @@ describe('formationsResourceHandlers', () => {
     test('throws when memory_entry to update is missing', async () => {
       await expect(
         applyUpdateResource({
+          actingUserId,
           projectId: projectDbId,
           resourceType: 'memory_entry',
           physicalResourceId: 'men_missing',
@@ -590,6 +626,7 @@ describe('formationsResourceHandlers', () => {
     test('throws for unsupported update resource type', async () => {
       await expect(
         applyUpdateResource({
+          actingUserId,
           projectId: projectDbId,
           resourceType: 'unsupported',
           physicalResourceId: 'res_1',
@@ -600,6 +637,7 @@ describe('formationsResourceHandlers', () => {
 
     test('throws when actor update has both agent_id and chat_id', async () => {
       const id = await applyCreateResource({
+        actingUserId,
         resourceType: 'actor',
         projectId: projectDbId,
         resolvedProperties: { name: 'frh-update-exclusive-actor' },
@@ -607,6 +645,7 @@ describe('formationsResourceHandlers', () => {
 
       await expect(
         applyUpdateResource({
+          actingUserId,
           projectId: projectDbId,
           resourceType: 'actor',
           physicalResourceId: id,
@@ -623,6 +662,7 @@ describe('formationsResourceHandlers', () => {
   describe('applyDeleteResource', () => {
     test('deletes ai_provider', async () => {
       const id = await applyCreateResource({
+        actingUserId,
         resourceType: 'ai_provider',
         projectId: projectDbId,
         resolvedProperties: {
@@ -633,6 +673,7 @@ describe('formationsResourceHandlers', () => {
       });
 
       await applyDeleteResource({
+        actingUserId,
         projectId: projectDbId,
         resourceType: 'ai_provider',
         physicalResourceId: id,
@@ -642,6 +683,7 @@ describe('formationsResourceHandlers', () => {
 
     test('deletes tool', async () => {
       const id = await applyCreateResource({
+        actingUserId,
         resourceType: 'tool',
         projectId: projectDbId,
         resolvedProperties: {
@@ -652,6 +694,7 @@ describe('formationsResourceHandlers', () => {
       });
 
       await applyDeleteResource({
+        actingUserId,
         projectId: projectDbId,
         resourceType: 'tool',
         physicalResourceId: id,
@@ -661,6 +704,7 @@ describe('formationsResourceHandlers', () => {
 
     test('deletes agent', async () => {
       const id = await applyCreateResource({
+        actingUserId,
         resourceType: 'agent',
         projectId: projectDbId,
         resolvedProperties: {
@@ -670,6 +714,7 @@ describe('formationsResourceHandlers', () => {
       });
 
       await applyDeleteResource({
+        actingUserId,
         projectId: projectDbId,
         resourceType: 'agent',
         physicalResourceId: id,
@@ -679,12 +724,14 @@ describe('formationsResourceHandlers', () => {
 
     test('deletes actor', async () => {
       const id = await applyCreateResource({
+        actingUserId,
         resourceType: 'actor',
         projectId: projectDbId,
         resolvedProperties: { name: 'frh-delete-actor' },
       });
 
       await applyDeleteResource({
+        actingUserId,
         projectId: projectDbId,
         resourceType: 'actor',
         physicalResourceId: id,
@@ -694,12 +741,14 @@ describe('formationsResourceHandlers', () => {
 
     test('deletes document', async () => {
       const id = await applyCreateResource({
+        actingUserId,
         resourceType: 'document',
         projectId: projectDbId,
         resolvedProperties: { content: 'delete me' },
       });
 
       await applyDeleteResource({
+        actingUserId,
         projectId: projectDbId,
         resourceType: 'document',
         physicalResourceId: id,
@@ -709,12 +758,14 @@ describe('formationsResourceHandlers', () => {
 
     test('deletes memory', async () => {
       const id = await applyCreateResource({
+        actingUserId,
         resourceType: 'memory',
         projectId: projectDbId,
         resolvedProperties: { name: 'frh-delete-memory' },
       });
 
       await applyDeleteResource({
+        actingUserId,
         projectId: projectDbId,
         resourceType: 'memory',
         physicalResourceId: id,
@@ -724,12 +775,14 @@ describe('formationsResourceHandlers', () => {
 
     test('deletes memory_entry', async () => {
       const id = await applyCreateResource({
+        actingUserId,
         resourceType: 'memory_entry',
         projectId: projectDbId,
         resolvedProperties: { memory_id: memoryId, content: 'delete me' },
       });
 
       await applyDeleteResource({
+        actingUserId,
         projectId: projectDbId,
         resourceType: 'memory_entry',
         physicalResourceId: id,
@@ -739,6 +792,7 @@ describe('formationsResourceHandlers', () => {
 
     test('deletes webhook', async () => {
       const id = await applyCreateResource({
+        actingUserId,
         resourceType: 'webhook',
         projectId: projectDbId,
         resolvedProperties: {
@@ -749,6 +803,7 @@ describe('formationsResourceHandlers', () => {
       });
 
       await applyDeleteResource({
+        actingUserId,
         projectId: projectDbId,
         resourceType: 'webhook',
         physicalResourceId: id,
@@ -759,6 +814,7 @@ describe('formationsResourceHandlers', () => {
     test('throws for unsupported delete resource type', async () => {
       await expect(
         applyDeleteResource({
+          actingUserId,
           projectId: projectDbId,
           resourceType: 'unsupported',
           physicalResourceId: 'res_1',

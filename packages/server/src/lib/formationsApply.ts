@@ -5,6 +5,7 @@ import {
   applyCreateChange,
   applyUpdateChange,
   failFormationOperation,
+  isCreateChange,
   isResourceAlreadyGone,
   markResourceDeleted,
   rollbackCreatedResources,
@@ -35,6 +36,7 @@ export const handleOrphanedDeletes = async (args: {
   template: FormationTemplate;
   existingResources: InstanceType<(typeof db)['FormationResource']>[];
   projectId: number;
+  actingUserId: number;
   events: FormationEvent[];
 }): Promise<void> => {
   const { template, existingResources, events } = args;
@@ -53,6 +55,7 @@ export const handleOrphanedDeletes = async (args: {
           resourceType: resource.resourceType,
           physicalResourceId: resource.physicalResourceId!,
           projectId: args.projectId,
+          actingUserId: args.actingUserId,
           logicalId: resource.logicalId,
           resourceKey: resource.publicId,
         });
@@ -78,12 +81,33 @@ export const handleOrphanedDeletes = async (args: {
 
 type ResourceRow = InstanceType<(typeof db)['FormationResource']>;
 
-// A previously deleted logical id keeps its row and stale physicalResourceId,
-// so without this it would diff as an update against a resource that is gone.
-const isCreateChange = (existing: ResourceRow | undefined): boolean => {
-  return (
-    !existing || existing.status === 'deleted' || !existing.physicalResourceId
-  );
+/**
+ * The ledger row this logical id writes through — created on first sight, and
+ * otherwise the existing one with its `deletion_policy` brought up to date.
+ */
+const ensureResourceRow = async (args: {
+  existing: ResourceRow | undefined;
+  formationId: number;
+  logicalId: string;
+  resourceType: string;
+  deletionPolicy: string;
+}): Promise<ResourceRow> => {
+  const { existing, deletionPolicy } = args;
+  if (!existing) {
+    return db.FormationResource.create({
+      formationId: args.formationId,
+      logicalId: args.logicalId,
+      resourceType: args.resourceType,
+      status: 'pending',
+      physicalResourceId: null,
+      lastAppliedProperties: null,
+      deletionPolicy,
+    });
+  }
+  if ((existing.deletionPolicy ?? 'delete') !== deletionPolicy) {
+    await existing.update({ deletionPolicy });
+  }
+  return existing;
 };
 
 export const processResourceChange = async (args: {
@@ -93,6 +117,7 @@ export const processResourceChange = async (args: {
   resolvedIds: Map<string, string>;
   events: FormationEvent[];
   projectId: number;
+  actingUserId: number;
   formationId: number;
 }): Promise<ResourceRow> => {
   const {
@@ -102,6 +127,7 @@ export const processResourceChange = async (args: {
     resolvedIds,
     events,
     projectId,
+    actingUserId,
     formationId,
   } = args;
   // At the top of the pipeline, so the diff and the `lastAppliedProperties`
@@ -114,23 +140,13 @@ export const processResourceChange = async (args: {
 
   const deletionPolicy = decl.deletion_policy ?? 'delete';
 
-  let resourceRow: ResourceRow;
-  if (!existing) {
-    resourceRow = await db.FormationResource.create({
-      formationId,
-      logicalId,
-      resourceType: decl.type,
-      status: 'pending',
-      physicalResourceId: null,
-      lastAppliedProperties: null,
-      deletionPolicy,
-    });
-  } else {
-    if ((existing.deletionPolicy ?? 'delete') !== deletionPolicy) {
-      await existing.update({ deletionPolicy });
-    }
-    resourceRow = existing;
-  }
+  const resourceRow = await ensureResourceRow({
+    existing,
+    formationId,
+    logicalId,
+    resourceType: decl.type,
+    deletionPolicy,
+  });
 
   try {
     if (isCreateChange(existing)) {
@@ -139,6 +155,7 @@ export const processResourceChange = async (args: {
         resourceType: decl.type,
         resolvedProperties,
         projectId,
+        actingUserId,
         logicalId,
         resolvedIds,
         events,
@@ -154,6 +171,7 @@ export const processResourceChange = async (args: {
         resolvedProperties,
         logicalId,
         projectId: args.projectId,
+        actingUserId: args.actingUserId,
         resolvedIds,
         events,
       });
@@ -183,6 +201,7 @@ const runResourceChanges = async (args: {
   resolvedIds: Map<string, string>;
   events: FormationEvent[];
   projectId: number;
+  actingUserId: number;
   formationId: number;
   formation: InstanceType<(typeof db)['Formation']>;
   operation: InstanceType<(typeof db)['FormationOperation']>;
@@ -201,6 +220,7 @@ const runResourceChanges = async (args: {
         resolvedIds: args.resolvedIds,
         events,
         projectId: args.projectId,
+        actingUserId: args.actingUserId,
         formationId: args.formationId,
       });
       if (isCreate) created.push(resourceRow);
@@ -214,6 +234,7 @@ const runResourceChanges = async (args: {
       const rollbackEvents = await rollbackCreatedResources({
         created,
         projectId: args.projectId,
+        actingUserId: args.actingUserId,
       });
       await failFormationOperation({
         operation: args.operation,
@@ -243,6 +264,7 @@ const finalizeSucceededFormation = async (args: {
   events: FormationEvent[];
   resolvedIds: Map<string, string>;
   projectId: number;
+  actingUserId: number;
 }): Promise<void> => {
   const {
     formation,
@@ -279,6 +301,7 @@ export const applyFormationTemplate = async (args: {
   template: FormationTemplate;
   existingResources: InstanceType<(typeof db)['FormationResource']>[];
   projectId: number;
+  actingUserId: number;
   operation: InstanceType<(typeof db)['FormationOperation']>;
   parameters?: Record<string, string>;
 }): Promise<void> => {
@@ -314,6 +337,7 @@ export const applyFormationTemplate = async (args: {
     resolvedIds,
     events,
     projectId: args.projectId,
+    actingUserId: args.actingUserId,
     formationId,
     formation,
     operation,
@@ -324,6 +348,7 @@ export const applyFormationTemplate = async (args: {
     template: workingTemplate,
     existingResources,
     projectId: args.projectId,
+    actingUserId: args.actingUserId,
     events,
   });
 
@@ -336,6 +361,7 @@ export const applyFormationTemplate = async (args: {
     events,
     resolvedIds,
     projectId: args.projectId,
+    actingUserId: args.actingUserId,
   });
   log('applyFormationTemplate: succeeded formationId=%s', formation.publicId);
 };

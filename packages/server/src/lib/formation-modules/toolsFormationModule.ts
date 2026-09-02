@@ -74,6 +74,12 @@ const pushExecuteAuthErrors = (args: {
 
 export const toolsFormationModule = defineFormationModule({
   resourceType: 'tool',
+  authorization: {
+    srnResourceType: 'tool',
+    create: 'tools:CreateTool',
+    update: 'tools:UpdateTool',
+    delete: 'tools:DeleteTool',
+  },
 
   extraChecks: ({ properties, basePath, errors }) => {
     if (properties.type === 'pipeline' && properties.pipeline !== undefined) {
