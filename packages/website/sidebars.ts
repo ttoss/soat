@@ -139,6 +139,7 @@ const sidebars: SidebarsConfig = {
       label: 'Advanced',
       items: [
         'advanced/choosing-an-automation-model',
+        'advanced/debugging-a-run',
         'advanced/engines-and-algorithms',
         'advanced/building-on-soat',
         'advanced/expressions-and-templating',
