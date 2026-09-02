@@ -1,0 +1,217 @@
+.section {
+  border-top: 1px solid rgba(0, 229, 255, 0.08);
+  background:
+    radial-gradient(
+      ellipse at 12% 10%,
+      rgba(142, 68, 173, 0.22) 0%,
+      transparent 40%
+    ),
+    radial-gradient(
+      ellipse at 92% 92%,
+      rgba(0, 229, 255, 0.12) 0%,
+      transparent 40%
+    ),
+    #080c14;
+}
+
+.header {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  gap: 2rem 4rem;
+  align-items: end;
+  margin-bottom: 3.5rem;
+}
+
+.strata {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Each stratum steps in a little further than the one above it, so the four
+   read as a staircase toward the ratchet rather than as a stack of cards. */
+.stratum {
+  --hue-start: #8e44ad;
+  --hue-end: #a855c7;
+  position: relative;
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 1.5rem 2rem;
+  align-items: start;
+  padding: 1.6rem 2rem 1.6rem 0;
+  border-top: 1px solid rgba(0, 229, 255, 0.1);
+  transition: background 250ms ease;
+}
+
+.stratum::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 0;
+  width: 4.5rem;
+  height: 2px;
+  background: linear-gradient(90deg, var(--hue-start), var(--hue-end));
+  box-shadow: 0 0 14px var(--hue-end);
+}
+
+.stratum:nth-child(2) {
+  --hue-start: #a855c7;
+  --hue-end: #1a73e8;
+  margin-left: 4%;
+}
+
+.stratum:nth-child(3) {
+  --hue-start: #1a73e8;
+  --hue-end: #00e5ff;
+  margin-left: 8%;
+}
+
+.stratum:nth-child(4) {
+  --hue-start: #00e5ff;
+  --hue-end: #ffffff;
+  margin-left: 12%;
+}
+
+.stratum:hover {
+  background: linear-gradient(
+    90deg,
+    rgba(0, 229, 255, 0.05) 0%,
+    transparent 70%
+  );
+}
+
+.stratumRatchet {
+  border-top-color: rgba(0, 229, 255, 0.35);
+  background: linear-gradient(
+    90deg,
+    rgba(0, 229, 255, 0.07) 0%,
+    transparent 80%
+  );
+}
+
+.stratumRatchet::before {
+  width: 100%;
+  box-shadow: 0 0 24px rgba(0, 229, 255, 0.45);
+}
+
+.index {
+  padding-top: 0.15rem;
+  color: rgba(240, 248, 255, 0.32);
+  font-family: var(--ifm-heading-font-family);
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.stratumRatchet .index {
+  color: #00e5ff;
+  text-shadow: 0 0 18px rgba(0, 229, 255, 0.6);
+}
+
+.body {
+  min-width: 0;
+}
+
+.name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0 0 0.4rem;
+  font-size: 1.55rem;
+}
+
+.badge {
+  padding: 0.15rem 0.55rem;
+  border: 1px solid rgba(0, 229, 255, 0.4);
+  border-radius: 999px;
+  color: #00e5ff;
+  font-family: var(--ifm-font-family-base);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.question {
+  margin: 0 0 0.6rem;
+  color: #f0f8ff;
+  font-size: 1.05rem;
+  font-weight: 500;
+  text-wrap: balance;
+}
+
+.summary {
+  margin: 0;
+  color: rgba(240, 248, 255, 0.68);
+  font-size: 0.95rem;
+  line-height: 1.65;
+}
+
+.modules {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 0.4rem;
+  margin: 0.3rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.module {
+  display: inline-block;
+  padding: 0.25rem 0.6rem;
+  border: 1px solid rgba(0, 229, 255, 0.16);
+  border-radius: 0.3rem;
+  color: rgba(240, 248, 255, 0.85);
+  font-size: 0.76rem;
+  text-decoration: none;
+  transition:
+    border-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.module:hover {
+  color: #00e5ff;
+  text-decoration: none;
+  border-color: rgba(0, 229, 255, 0.55);
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.25);
+}
+
+@media screen and (max-width: 996px) {
+  .header {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+    margin-bottom: 2.5rem;
+  }
+
+  .stratum,
+  .stratum:nth-child(2),
+  .stratum:nth-child(3),
+  .stratum:nth-child(4) {
+    margin-left: 0;
+    grid-template-columns: 3rem minmax(0, 1fr);
+    padding-right: 0;
+  }
+
+  .stratum::before {
+    width: 3rem;
+  }
+
+  .stratumRatchet::before {
+    width: 100%;
+  }
+
+  .index {
+    font-size: 1.4rem;
+  }
+
+  .modules {
+    grid-column: 2;
+  }
+}

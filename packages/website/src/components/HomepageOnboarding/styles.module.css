@@ -1,106 +1,131 @@
-/* The onboarding band, styled as the Formations band is: an agent's first
-   question after "should I use this" is "can I start now". */
 .section {
-  width: 100vw;
-  position: relative;
-  left: 50%;
-  margin-left: -50vw;
-  padding: 5rem 0;
   border-top: 1px solid rgba(0, 229, 255, 0.08);
   background:
     radial-gradient(
-      circle at 80% 18%,
-      rgba(142, 68, 173, 0.2) 0%,
-      transparent 34%
+      ellipse at 20% 30%,
+      rgba(0, 229, 255, 0.12) 0%,
+      transparent 40%
     ),
     radial-gradient(
-      circle at 20% 32%,
-      rgba(0, 229, 255, 0.14) 0%,
-      transparent 32%
+      ellipse at 85% 80%,
+      rgba(142, 68, 173, 0.22) 0%,
+      transparent 42%
     ),
     #080c14;
-  color: #f0f8ff;
 }
 
-.eyebrow {
-  margin-bottom: 0.75rem;
-  color: var(--ifm-color-primary);
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.header {
-  max-width: 820px;
-  margin-bottom: 2.25rem;
-}
-
-.header h2 {
-  color: #f0f8ff;
-}
-
-.header p:not(.eyebrow) {
-  color: rgba(240, 248, 255, 0.78);
-  font-size: 1.05rem;
-  line-height: 1.7;
-}
-
-.steps {
+.layout {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 4rem;
+  align-items: start;
 }
 
-.step {
-  padding: 1.4rem;
-  border: 1px solid rgba(0, 229, 255, 0.12);
-  border-radius: 0.75rem;
-  background: rgba(22, 27, 34, 0.68);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  transition:
-    transform 300ms cubic-bezier(0.16, 1, 0.3, 1),
-    box-shadow 300ms ease,
-    border-color 300ms ease;
+.copy {
+  position: sticky;
+  top: calc(var(--ifm-navbar-height) + 2rem);
 }
 
-.step:hover {
-  transform: translateY(-4px);
-  box-shadow:
-    0 16px 48px rgba(0, 0, 0, 0.6),
-    0 0 24px rgba(0, 229, 255, 0.12);
-  border-color: rgba(0, 229, 255, 0.28);
+.cta {
+  margin-top: 2rem;
 }
 
-.stepNumber {
-  display: block;
-  margin-bottom: 1.2rem;
-  color: var(--ifm-color-primary);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.8rem;
-  font-weight: 700;
-}
-
-.step h3 {
-  margin-bottom: 0.5rem;
-  color: #f0f8ff;
-  font-size: 1.15rem;
-}
-
-.step p {
+/* A vertical rail with numbered checkpoints; the line between them is the
+   thing that says "in this order, and nothing in between". */
+.rail {
+  position: relative;
   margin: 0;
-  color: rgba(240, 248, 255, 0.72);
+  padding: 0 0 0 3.5rem;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2.25rem;
+}
+
+.rail::before {
+  content: '';
+  position: absolute;
+  top: 1rem;
+  bottom: 1rem;
+  left: 1.1rem;
+  width: 1px;
+  background: linear-gradient(
+    180deg,
+    rgba(0, 229, 255, 0.05) 0%,
+    rgba(0, 229, 255, 0.5) 20%,
+    rgba(0, 229, 255, 0.5) 80%,
+    rgba(0, 229, 255, 0.05) 100%
+  );
+}
+
+.checkpoint {
+  position: relative;
+}
+
+.node {
+  position: absolute;
+  top: 0.1rem;
+  left: -3.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  border: 1px solid rgba(0, 229, 255, 0.5);
+  border-radius: 50%;
+  background: #080c14;
+  color: #00e5ff;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+  font-weight: 700;
+  box-shadow: 0 0 16px rgba(0, 229, 255, 0.25);
+  transition:
+    box-shadow 200ms ease,
+    background 200ms ease,
+    color 200ms ease;
+}
+
+.checkpoint:hover .node {
+  background: #00e5ff;
+  color: #080c14;
+  box-shadow: 0 0 24px rgba(0, 229, 255, 0.6);
+}
+
+.checkpointTitle {
+  margin: 0 0 0.4rem;
+  font-size: 1.2rem;
+}
+
+.checkpointDetail {
+  margin: 0;
+  color: rgba(240, 248, 255, 0.7);
   font-size: 0.95rem;
-  line-height: 1.6;
+  line-height: 1.65;
 }
 
 @media screen and (max-width: 996px) {
-  .section {
-    padding: 3.5rem 0;
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2.5rem;
   }
 
-  .steps {
-    grid-template-columns: 1fr;
+  .copy {
+    position: static;
+  }
+
+  .rail {
+    padding-left: 3rem;
+    gap: 1.75rem;
+  }
+
+  .rail::before {
+    left: 0.9rem;
+  }
+
+  .node {
+    left: -3rem;
+    width: 1.85rem;
+    height: 1.85rem;
+    font-size: 0.66rem;
   }
 }

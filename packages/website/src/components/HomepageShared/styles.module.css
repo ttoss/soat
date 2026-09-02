@@ -1,0 +1,118 @@
+/* Building blocks every homepage band shares, so a band file holds only what
+   makes that band different from the others. */
+
+.band {
+  position: relative;
+  padding: 6rem 0;
+}
+
+/* `.main-wrapper` is capped at 1440px, so a band that paints its own
+   background has to break out of it to reach the viewport edges. */
+.bleed {
+  width: 100vw;
+  position: relative;
+  left: 50%;
+  margin-left: -50vw;
+}
+
+.dark {
+  background: #080c14;
+  color: #f0f8ff;
+}
+
+.dark h2,
+.dark h3,
+.dark h4 {
+  color: #f0f8ff;
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 0 1rem;
+  color: var(--ifm-color-primary);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.eyebrow::before {
+  content: '';
+  width: 1.5rem;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.7;
+}
+
+.dark .eyebrow {
+  color: #00e5ff;
+}
+
+.title {
+  margin-bottom: 1rem;
+  font-size: clamp(1.75rem, 2.2vw + 1rem, 2.6rem);
+  line-height: 1.12;
+  letter-spacing: 0.01em;
+  text-wrap: balance;
+}
+
+.lead {
+  max-width: 720px;
+  margin: 0;
+  color: var(--ifm-font-color-secondary);
+  font-size: 1.08rem;
+  line-height: 1.7;
+  text-wrap: pretty;
+}
+
+.dark .lead {
+  color: rgba(240, 248, 255, 0.74);
+}
+
+.header {
+  max-width: 820px;
+  margin-bottom: 3rem;
+}
+
+.mono {
+  font-family: var(--ifm-font-family-monospace);
+}
+
+.ghostButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.85rem 1.4rem;
+  border: 1px solid rgba(0, 229, 255, 0.28);
+  border-radius: 0.5rem;
+  background: rgba(0, 229, 255, 0.04);
+  color: #f0f8ff;
+  font-weight: 600;
+  text-decoration: none;
+  transition:
+    border-color 200ms ease,
+    background 200ms ease,
+    box-shadow 200ms ease,
+    transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ghostButton:hover {
+  color: #f0f8ff;
+  text-decoration: none;
+  border-color: rgba(0, 229, 255, 0.6);
+  background: rgba(0, 229, 255, 0.08);
+  box-shadow: 0 0 24px rgba(0, 229, 255, 0.18);
+  transform: translateY(-2px);
+}
+
+@media screen and (max-width: 996px) {
+  .band {
+    padding: 4rem 0;
+  }
+
+  .header {
+    margin-bottom: 2rem;
+  }
+}

@@ -226,111 +226,6 @@ h6 {
 }
 
 /* ===================================================================
-   HERO SECTION
-   =================================================================== */
-.hero.hero--primary {
-  background:
-    linear-gradient(
-      90deg,
-      rgba(8, 12, 20, 0.78) 0%,
-      rgba(8, 12, 20, 0.5) 40%,
-      rgba(8, 12, 20, 0.12) 72%,
-      rgba(8, 12, 20, 0.02) 100%
-    ),
-    url('/img/hero.png');
-  background-size: cover;
-  background-position: center;
-  border-bottom: 1px solid var(--ifm-border-color);
-  margin-left: calc(-50vw + 50%);
-  margin-right: calc(-50vw + 50%);
-  width: 100vw;
-}
-
-.hero.hero--primary .hero__title,
-.hero.hero--primary .hero__subtitle {
-  color: #ffffff;
-  text-shadow:
-    0 1px 8px rgba(0, 0, 0, 0.6),
-    0 2px 24px rgba(0, 0, 0, 0.45);
-}
-
-html[data-theme='dark'] .hero.hero--primary {
-  background:
-    linear-gradient(
-      90deg,
-      rgba(8, 12, 20, 0.92) 0%,
-      rgba(8, 12, 20, 0.6) 40%,
-      rgba(8, 12, 20, 0.12) 72%,
-      rgba(8, 12, 20, 0.02) 100%
-    ),
-    url('/img/hero.png');
-  background-size: cover;
-  background-position: center;
-  border-bottom: 1px solid rgba(0, 229, 255, 0.08);
-  position: relative;
-  overflow: hidden;
-}
-
-html[data-theme='dark'] .hero.hero--primary::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 100%;
-  background: radial-gradient(
-    circle at 70% 30%,
-    rgba(142, 68, 173, 0.25) 0%,
-    transparent 50%
-  );
-  z-index: 0;
-}
-
-html[data-theme='dark'] .hero.hero--primary .hero__title {
-  background: linear-gradient(
-    135deg,
-    #ffffff 0%,
-    var(--ifm-color-primary) 45%,
-    var(--soat-violet-light) 100%
-  );
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  text-shadow: none;
-  filter: drop-shadow(0 0 20px rgba(0, 229, 255, 0.3));
-  position: relative;
-  z-index: 1;
-}
-
-@media screen and (max-width: 996px) {
-  .hero.hero--primary {
-    background:
-      linear-gradient(
-        90deg,
-        rgba(8, 12, 20, 0.98) 0%,
-        rgba(8, 12, 20, 0.9) 52%,
-        rgba(8, 12, 20, 0.46) 100%
-      ),
-      url('/img/hero.png');
-    background-position: 28% center;
-    background-size: cover;
-  }
-
-  html[data-theme='dark'] .hero.hero--primary {
-    background:
-      linear-gradient(
-        90deg,
-        rgba(8, 12, 20, 0.99) 0%,
-        rgba(8, 12, 20, 0.92) 52%,
-        rgba(8, 12, 20, 0.52) 100%
-      ),
-      url('/img/hero.png');
-    background-position: 28% center;
-    background-size: cover;
-  }
-}
-
-/* ===================================================================
    NAVBAR & SIDEBAR
    =================================================================== */
 
@@ -390,7 +285,9 @@ html[data-theme='dark']
   border: none;
   color: #ffffff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 200ms ease;
+  transition:
+    transform 200ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 200ms ease;
 }
 
 html[data-theme='dark'] .button--primary {

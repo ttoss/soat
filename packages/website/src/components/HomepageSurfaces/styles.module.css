@@ -1,79 +1,196 @@
-.surfaces {
-  padding: 4rem 0;
-  border-top: 1px solid var(--ifm-color-emphasis-300);
-  background: var(--ifm-color-emphasis-100);
+.section {
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+  background: var(--ifm-background-surface-color);
   width: 100vw;
   position: relative;
   left: 50%;
   margin-left: -50vw;
 }
 
-.surfacesLead {
-  max-width: 720px;
-  margin: 0.5rem auto 2.5rem;
-  opacity: 0.85;
+html[data-theme='dark'] .section {
+  background: linear-gradient(180deg, #0b1019 0%, #080c14 100%);
 }
 
-.surfaceCard {
-  text-align: center;
-  padding: 1.5rem;
-  background: var(--ifm-background-color);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+.header {
+  margin-bottom: 2.5rem;
+}
+
+.switcher {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(0, 2.2fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  width: 100%;
+  padding: 0.9rem 1rem;
   border: 1px solid var(--ifm-color-emphasis-300);
-  border-radius: 1rem;
-  box-shadow: 0 2px 8px rgba(26, 31, 44, 0.06);
+  border-radius: 0.6rem;
+  background: var(--ifm-background-color);
+  color: var(--ifm-font-color-base);
+  text-align: left;
+  cursor: pointer;
   transition:
-    transform 300ms cubic-bezier(0.16, 1, 0.3, 1),
-    border-color 300ms ease,
-    box-shadow 300ms ease;
+    border-color 200ms ease,
+    box-shadow 200ms ease,
+    transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-html[data-theme='dark'] .surfaceCard {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(0, 229, 255, 0.1);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-}
-
-.surfaceCard:hover {
-  transform: translateY(-4px);
+.tab:hover {
   border-color: var(--ifm-color-primary);
+  transform: translateX(3px);
+}
+
+.tabActive {
+  border-color: var(--ifm-color-primary);
+  box-shadow: inset 3px 0 0 var(--ifm-color-primary);
+}
+
+html[data-theme='dark'] .tab {
+  background: rgba(22, 27, 34, 0.7);
+  border-color: rgba(0, 229, 255, 0.12);
+}
+
+html[data-theme='dark'] .tabActive {
+  border-color: rgba(0, 229, 255, 0.5);
   box-shadow:
-    0 12px 32px rgba(26, 31, 44, 0.1),
-    0 0 0 1px rgba(26, 115, 232, 0.12);
+    inset 3px 0 0 var(--ifm-color-primary),
+    0 0 20px rgba(0, 229, 255, 0.12);
 }
 
-html[data-theme='dark'] .surfaceCard:hover {
-  border-color: rgba(0, 229, 255, 0.4);
-  box-shadow:
-    0 16px 48px rgba(0, 0, 0, 0.5),
-    0 0 24px rgba(0, 229, 255, 0.15);
-}
-
-.surfaceCard h3 {
-  margin-bottom: 0.5rem;
-}
-
-.surfacesRow {
-  justify-content: center;
-  row-gap: 1.25rem;
-  column-gap: 0.5rem;
-}
-
-.surfaceIcon {
-  width: 48px;
-  height: 48px;
-  margin-bottom: 0.75rem;
+.icon {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
   color: var(--ifm-color-primary);
 }
 
-.surfaceLink {
-  display: block;
-  text-decoration: none;
-  color: inherit;
+.tabText {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
 }
 
-.surfaceLink:hover {
-  text-decoration: none;
-  color: inherit;
+.tabName {
+  font-family: var(--ifm-heading-font-family);
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ifm-heading-color);
+}
+
+.tabBestFor {
+  color: var(--ifm-font-color-secondary);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.panels {
+  min-width: 0;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* `display: flex` above would otherwise beat the user-agent rule for the
+   `hidden` attribute and show every panel at once. */
+.panel[hidden] {
+  display: none;
+}
+
+.panel > :global(.theme-code-block) {
+  margin-bottom: 0;
+}
+
+.panelLink {
+  align-self: flex-end;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.identical {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  margin: 2.5rem 0 0;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 0.6rem;
+  overflow: hidden;
+}
+
+html[data-theme='dark'] .identical {
+  border-color: rgba(0, 229, 255, 0.14);
+}
+
+.identicalItem {
+  padding: 0.9rem 1.1rem;
+  border-left: 1px solid var(--ifm-color-emphasis-300);
+}
+
+.identicalItem:first-child {
+  border-left: 0;
+}
+
+html[data-theme='dark'] .identicalItem {
+  border-left-color: rgba(0, 229, 255, 0.14);
+}
+
+.identicalItem dt {
+  color: var(--ifm-font-color-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.identicalItem dd {
+  margin: 0.2rem 0 0;
+  color: var(--ifm-color-primary);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+@media screen and (max-width: 996px) {
+  .switcher {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tabs {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .tab {
+    flex: 1 1 200px;
+  }
+
+  .tab:hover {
+    transform: none;
+  }
+
+  .identical {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .identicalItem:nth-child(odd) {
+    border-left: 0;
+  }
+
+  .identicalItem:nth-child(n + 3) {
+    border-top: 1px solid var(--ifm-color-emphasis-300);
+  }
 }

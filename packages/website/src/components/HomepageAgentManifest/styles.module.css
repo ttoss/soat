@@ -1,0 +1,170 @@
+.section {
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+  background: var(--ifm-background-surface-color);
+  width: 100vw;
+  position: relative;
+  left: 50%;
+  margin-left: -50vw;
+}
+
+html[data-theme='dark'] .section {
+  background: linear-gradient(180deg, #080c14 0%, #0b1019 100%);
+}
+
+/* A directory listing, because the content is a directory: one row per
+   machine-readable file this site serves. */
+.listing {
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 0.75rem;
+  background: var(--ifm-background-color);
+  overflow: hidden;
+}
+
+html[data-theme='dark'] .listing {
+  border-color: rgba(0, 229, 255, 0.14);
+  background: #0d1117;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+}
+
+.listingHead {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding: 0.7rem 1.1rem;
+  border-bottom: 1px solid var(--ifm-color-emphasis-300);
+  background: var(--ifm-color-emphasis-100);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.8rem;
+}
+
+html[data-theme='dark'] .listingHead {
+  border-bottom-color: rgba(0, 229, 255, 0.12);
+  background: rgba(0, 229, 255, 0.05);
+}
+
+.listingCommand {
+  color: var(--ifm-font-color-base);
+  overflow-wrap: anywhere;
+}
+
+.prompt {
+  margin-right: 0.6rem;
+  color: var(--ifm-color-primary);
+  font-weight: 700;
+}
+
+.listingCount {
+  color: var(--ifm-font-color-secondary);
+}
+
+.table {
+  display: table;
+  width: 100%;
+  margin: 0;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.table thead th {
+  padding: 0.6rem 1.1rem;
+  border-bottom: 1px solid var(--ifm-color-emphasis-300);
+  background: transparent;
+  color: var(--ifm-font-color-secondary);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+html[data-theme='dark'] .table thead th {
+  border-bottom-color: rgba(0, 229, 255, 0.12);
+}
+
+.table tbody tr {
+  background: transparent;
+  transition: background 150ms ease;
+}
+
+.table tbody tr:hover {
+  background: color-mix(in srgb, var(--ifm-color-primary) 6%, transparent);
+}
+
+.table td {
+  padding: 0.8rem 1.1rem;
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+  vertical-align: top;
+}
+
+html[data-theme='dark'] .table td {
+  border-top-color: rgba(0, 229, 255, 0.08);
+}
+
+.pathCell {
+  white-space: nowrap;
+}
+
+.pathCell a {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.typeCell {
+  white-space: nowrap;
+}
+
+.type {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 0.25rem;
+  color: var(--ifm-font-color-secondary);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+}
+
+.descriptionCell {
+  color: var(--ifm-font-color-secondary);
+  line-height: 1.55;
+}
+
+.note {
+  max-width: 820px;
+  margin: 2rem 0 0;
+  color: var(--ifm-font-color-secondary);
+  font-size: 0.95rem;
+  line-height: 1.7;
+}
+
+@media screen and (max-width: 768px) {
+  .table thead {
+    display: none;
+  }
+
+  .table,
+  .table tbody,
+  .table tr,
+  .table td {
+    display: block;
+    width: 100%;
+  }
+
+  .table tr {
+    padding: 0.8rem 1.1rem;
+    border-top: 1px solid var(--ifm-color-emphasis-200);
+  }
+
+  .table td {
+    padding: 0.15rem 0;
+    border-top: 0;
+  }
+
+  .pathCell,
+  .typeCell {
+    white-space: normal;
+  }
+}
