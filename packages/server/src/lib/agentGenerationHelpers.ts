@@ -11,6 +11,7 @@ import {
 import { emitResourceEvent } from './eventBus';
 import { updateGenerationRecord } from './generations';
 import { resolveStopReason } from './generationStopReason';
+import { routedAiProviderId } from './modelRouteExecutor';
 import { saveRoutingMetadata } from './modelRouteMetadata';
 import { assertNoTextEncodedToolCall } from './textEncodedToolCall';
 import {
@@ -55,6 +56,10 @@ export const mapGenerationResult = (result: GenerationResult) => {
     id: result.id,
     trace_id: result.traceId,
     status: result.status,
+    // Always present, never omitted on a null: a consumer translating
+    // `output.model` reads provenance off one field, and an absent key would
+    // be indistinguishable from an older server that never sent it.
+    ai_provider_id: result.aiProviderId ?? null,
     ...(result.output
       ? {
           output: {
@@ -148,6 +153,7 @@ const storePendingGenerationState = (args: {
   resolvedTools: Record<string, Tool>;
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
+  aiProviderId: string | null;
 }): void => {
   // Computed once rather than twice below, so a change to how a turn is frozen
   // cannot land on only one copy and leave a recovered generation resuming from
@@ -174,6 +180,7 @@ const storePendingGenerationState = (args: {
     messages,
     steps,
     resolvedModel: args.model,
+    aiProviderId: args.aiProviderId,
     agentConfig: toAgentConfig(args.typedAgent),
     resolvedTools: args.resolvedTools,
     initiatorGenerationId: null,
@@ -200,6 +207,22 @@ const storePendingGenerationState = (args: {
   }).catch(() => {});
 };
 
+/**
+ * The provider that served the turn: the target a route picked where one ran,
+ * the agent's pinned provider otherwise. A routed agent has no pin, so the two
+ * cases never compete.
+ */
+export const servedAiProviderId = (args: {
+  model?: LanguageModel;
+  typedAgent: TypedAgent;
+}): string | null => {
+  return (
+    (args.model ? routedAiProviderId(args.model) : null) ??
+    args.typedAgent.aiProvider?.publicId ??
+    null
+  );
+};
+
 export const savePendingGeneration = (args: {
   generationId: string;
   traceId: string;
@@ -223,12 +246,18 @@ export const savePendingGeneration = (args: {
     lastActivityAt: new Date(),
   }).catch(() => {});
 
-  storePendingGenerationState(args);
+  const aiProviderId = servedAiProviderId({
+    model: args.model,
+    typedAgent: args.typedAgent,
+  });
+
+  storePendingGenerationState({ ...args, aiProviderId });
 
   const requiresActionResult: GenerationResult = {
     id: args.generationId,
     traceId: args.traceId,
     status: 'requires_action',
+    aiProviderId,
     requiredAction: {
       type: 'submit_tool_outputs',
       toolCalls: args.pendingToolCalls.map((tc) => {
@@ -334,6 +363,7 @@ export const buildCompletedGenerationResult = async (args: {
     id: args.generationId,
     traceId: args.traceId,
     status: 'completed',
+    aiProviderId: servedAiProviderId(args),
     output: {
       model,
       content: args.result.text,

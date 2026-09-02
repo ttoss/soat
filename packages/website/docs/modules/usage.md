@@ -188,6 +188,8 @@ Every group also carries a `components` array — the measured dimensions summed
 
 For platform meter types `group_by=model` mixes model ids with SKUs; add `meter_type=llm_tokens` (or another meter type) to narrow to one meter. The applied filter is echoed back as `meter_type` on the response; an unrecognized value yields an empty rollup rather than an error.
 
+Under `group_by=model` every group also carries `ai_provider_id` — the [AI provider](./ai-providers.md) that served the bucket's model, `null` on every other dimension. A model id does not identify its provider on its own: one project can hold two providers serving byte-identical model names, so a consumer that presents its own model names cannot translate a bucket it cannot attribute. The model dimension therefore buckets on the model id **and** its provider, so one model name served by two providers is two groups repeating the same `key` with different `ai_provider_id`. The groups still sum to `totals`.
+
 ### Spend guards
 
 Metered usage feeds the [guardrail](./guardrails.md) evaluator's `runtime.usage.*` context, so a spend limit is enforced deterministically at the tool boundary:

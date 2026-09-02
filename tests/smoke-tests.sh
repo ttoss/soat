@@ -2241,6 +2241,14 @@ if [ "$ROUTED_GEN_STATUS" != "completed" ]; then
   printf '%s\n' "$ROUTED_GEN_RESP" >&2
   exit 1
 fi
+ROUTED_GEN_PROVIDER=$(printf '%s\n' "$ROUTED_GEN_RESP" | jq -r '.ai_provider_id')
+# The result names the target that actually served, not the dead primary — the
+# only thing that makes `output.model` translatable by a caller downstream.
+if [ "$ROUTED_GEN_PROVIDER" != "$AI_PROVIDER_ID" ]; then
+  echo "ERROR: Expected routed generation ai_provider_id '$AI_PROVIDER_ID', got '$ROUTED_GEN_PROVIDER'" >&2
+  printf '%s\n' "$ROUTED_GEN_RESP" >&2
+  exit 1
+fi
 echo "Routed generation completed via the fallback target."
 
 # A route referenced by an agent cannot be deleted.

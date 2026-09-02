@@ -53,6 +53,9 @@ export type UsageAggregateGroup = UsageAggregateTotals & {
   // run public id, or a `YYYY-MM-DD` UTC day. Null when the dimension does not
   // apply to an event (e.g. a standalone generation grouped by `run`).
   key: string | null;
+  // The provider that served the bucket's model, under `group_by=model` only;
+  // null on every other dimension. See `providerForEvent`.
+  ai_provider_id: string | null;
 };
 
 /** The wire shape of an aggregate — this value is a response body, not internal state. */
@@ -69,6 +72,7 @@ export type UsageAggregate = {
 
 type EventWithComponents = InstanceType<(typeof db)['UsageEvent']> & {
   agent?: InstanceType<(typeof db)['Agent']> | null;
+  aiProvider?: InstanceType<(typeof db)['AiProvider']> | null;
   run?: InstanceType<(typeof db)['OrchestrationRun']> | null;
   actor?: InstanceType<(typeof db)['Actor']> | null;
   session?: InstanceType<(typeof db)['Session']> | null;
@@ -141,6 +145,25 @@ const GROUP_KEY_EXTRACTORS: {
   day: (event) => {
     return event.createdAt.toISOString().slice(0, 10);
   },
+};
+
+/**
+ * The provider whose model the event names, under `group_by=model` only.
+ *
+ * A model id does not identify the model on its own: one project can hold two
+ * providers serving byte-identical strings (a resold model and a tenant's own
+ * credential for the same vendor), and a consumer that presents its own model
+ * names cannot translate a bucket it cannot attribute. So the model dimension
+ * buckets on (model, ai_provider_id) — `key` keeps its shape and this sibling
+ * names the provider, instead of one merged bucket whose provider is
+ * unanswerable. Events with no provider (a compute or storage meter) keep
+ * collapsing into a single null-provider bucket.
+ */
+const providerForEvent = (
+  event: EventWithComponents,
+  groupBy: UsageGroupBy
+): string | null => {
+  return groupBy === 'model' ? (event.aiProvider?.publicId ?? null) : null;
 };
 
 // The event's value in the chosen dimension. Null when the column is not set on
@@ -275,15 +298,19 @@ const bucketEvents = (
   events: EventWithComponents[],
   groupBy: UsageGroupBy
 ): { groups: UsageAggregateGroup[]; totals: UsageAggregateTotals } => {
-  const buckets = new Map<string, { key: string | null; acc: Accumulator }>();
+  const buckets = new Map<
+    string,
+    { key: string | null; aiProviderId: string | null; acc: Accumulator }
+  >();
   const total = emptyAccumulator();
 
   for (const event of events) {
     const key = groupKeyForEvent(event, groupBy);
-    const bucketKey = key ?? '__null__';
+    const aiProviderId = providerForEvent(event, groupBy);
+    const bucketKey = JSON.stringify([key, aiProviderId]);
     let bucket = buckets.get(bucketKey);
     if (!bucket) {
-      bucket = { key, acc: emptyAccumulator() };
+      bucket = { key, aiProviderId, acc: emptyAccumulator() };
       buckets.set(bucketKey, bucket);
     }
     addEvent(bucket.acc, event);
@@ -292,7 +319,11 @@ const bucketEvents = (
 
   return {
     groups: [...buckets.values()].map((bucket) => {
-      return { key: bucket.key, ...finalizeTotals(bucket.acc) };
+      return {
+        key: bucket.key,
+        ai_provider_id: bucket.aiProviderId,
+        ...finalizeTotals(bucket.acc),
+      };
     }),
     totals: finalizeTotals(total),
   };
@@ -368,6 +399,7 @@ export const aggregateUsage = async (args: {
     }),
     include: [
       { model: db.Agent, as: 'agent' },
+      { model: db.AiProvider, as: 'aiProvider' },
       { model: db.OrchestrationRun, as: 'run' },
       { model: db.Actor, as: 'actor' },
       { model: db.Session, as: 'session' },

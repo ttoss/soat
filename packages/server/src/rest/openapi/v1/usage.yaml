@@ -174,7 +174,9 @@ paths:
           required: true
           description: >
             Dimension to bucket by. `day` buckets on the event's UTC calendar
-            day; the others bucket on the matching column. `source` buckets by
+            day; the others bucket on the matching column. `model` buckets on the
+            model id *and* the provider that served it, so one model name served
+            by two providers is two groups (see `ai_provider_id`). `source` buckets by
             what the spend was incurred for (`eval`, `eval_judge`), which is how
             verification spend is priced apart from the traffic serving real
             users; unlabelled traffic collapses into the single `null` bucket.
@@ -760,6 +762,19 @@ components:
                       `YYYY-MM-DD` UTC day). Null when the dimension does not
                       apply to an event — under `actor`/`session` this is the
                       bucket holding everything with no end user behind it.
+                  ai_provider_id:
+                    type: string
+                    x-soat-ref: ai-providers
+                    nullable: true
+                    description: >
+                      Under `group_by=model`, the provider that served the
+                      bucket's model; null on every other dimension. A model id
+                      does not identify its provider on its own — one project
+                      can hold two providers serving byte-identical model names
+                      — so the model dimension buckets on (model,
+                      `ai_provider_id`) and two groups may repeat one `key`
+                      with different providers. The groups still sum to
+                      `totals`.
               - $ref: '#/components/schemas/UsageAggregateTotals'
         totals:
           $ref: '#/components/schemas/UsageAggregateTotals'

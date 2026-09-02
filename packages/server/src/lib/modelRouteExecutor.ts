@@ -101,6 +101,24 @@ export const readRoutingMetadata = (
 };
 
 /**
+ * The AI provider that served the model's last call, for a routed model — the
+ * target `target_index` names, read off its successful attempt. Null for a
+ * model no route composed (the caller falls back to the agent's pinned
+ * provider) and for a route that succeeded on no target.
+ */
+export const routedAiProviderId = (model: LanguageModel): string | null => {
+  const routing = readRoutingMetadata(model);
+  if (!routing) return null;
+  const served = [...routing.attempts].reverse().find((attempt) => {
+    return (
+      attempt.target_index === routing.target_index &&
+      attempt.error_class === undefined
+    );
+  });
+  return served?.ai_provider_id ?? null;
+};
+
+/**
  * A per-attempt signal: the target's own timeout composed with the caller's
  * signal. The generation paths already thread `abortSignal` end-to-end, so both
  * must be able to cancel the attempt — but only the timeout is a failover

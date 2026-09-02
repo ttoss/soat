@@ -5,6 +5,7 @@ import {
   createRoutedModel,
   isRoutedModel,
   readRoutingMetadata,
+  routedAiProviderId,
   routedMaxRetries,
   type RoutedTarget,
 } from 'src/lib/modelRouteExecutor';
@@ -443,6 +444,41 @@ describe('createRoutedModel', () => {
     expect(result.stream).toBeInstanceOf(ReadableStream);
     expect(fallback.calls()).toBe(1);
     expect(readRoutingMetadata(model)?.target_index).toBe(1);
+  });
+});
+
+describe('routedAiProviderId', () => {
+  test('names the target that served, not the one that failed over', async () => {
+    const primary = fakeTarget({
+      index: 0,
+      behaviors: [apiError({ statusCode: 500 })],
+    });
+    const fallback = fakeTarget({ index: 1, behaviors: ['ok'] });
+    const model = buildRoute({ targets: [primary.target, fallback.target] });
+
+    await generate(model);
+
+    expect(routedAiProviderId(model)).toBe('aip_fake_1');
+  });
+
+  test('is null when every target failed', async () => {
+    const primary = fakeTarget({
+      index: 0,
+      behaviors: [apiError({ statusCode: 500 })],
+    });
+    const fallback = fakeTarget({
+      index: 1,
+      behaviors: [apiError({ statusCode: 503 })],
+    });
+    const model = buildRoute({ targets: [primary.target, fallback.target] });
+
+    await expect(generate(model)).rejects.toThrow(/provider said 503/);
+
+    expect(routedAiProviderId(model)).toBeNull();
+  });
+
+  test('is null for a model no route composed', () => {
+    expect(routedAiProviderId('openai/gpt-4o')).toBeNull();
   });
 });
 

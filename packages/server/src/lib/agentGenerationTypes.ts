@@ -155,6 +155,8 @@ export type PendingGeneration = {
   messages: Array<unknown>;
   steps: unknown[];
   resolvedModel: LanguageModel;
+  /** Provider serving the frozen model, so the continuation reports it too. */
+  aiProviderId?: string | null;
   agentConfig: PendingAgentConfig;
   resolvedTools: Record<string, Tool>;
   toolContext?: Record<string, string>;
@@ -164,6 +166,14 @@ export type GenerationResult = {
   id: string;
   traceId: string;
   status: 'completed' | 'requires_action';
+  /**
+   * The AI provider that served `output.model`. A model string alone is not
+   * translatable back to whatever public name a gateway in front of SOAT
+   * presents: two providers in one project can serve byte-identical strings,
+   * so the value is only safe to rewrite once the provider behind it is known.
+   * Null when the route that ran named no serving target.
+   */
+  aiProviderId?: string | null;
   output?: {
     model: string;
     content: string;

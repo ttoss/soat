@@ -1913,6 +1913,18 @@ components:
             - completed
             - requires_action
           description: Generation status
+        ai_provider_id:
+          type: string
+          x-soat-ref: ai-providers
+          nullable: true
+          description: >
+            Public ID of the AI provider that served `output.model` — the target
+            a model route picked, or the agent's pinned provider. A model string
+            alone does not identify its provider: two providers in one project
+            can serve byte-identical model names, so this is what makes the
+            value safe to map back to a name a gateway in front of this runtime
+            publishes. Null when the generation resolved no serving provider.
+          example: aip_V1StGXR8Z5jdHi6B
         output:
           type: object
           nullable: true

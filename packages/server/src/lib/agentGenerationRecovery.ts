@@ -164,6 +164,7 @@ const buildPendingFromState = async (args: {
     messages: args.pendingState.messages,
     steps: args.pendingState.steps ?? [],
     resolvedModel: resolution.model,
+    aiProviderId: args.typedAgent.aiProvider?.publicId ?? null,
     agentConfig: toAgentConfig(args.typedAgent),
     resolvedTools,
     initiatorGenerationId: null,

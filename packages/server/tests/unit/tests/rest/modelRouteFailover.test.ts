@@ -266,6 +266,11 @@ describe('Model route failover through agent generation', () => {
       })
     );
 
+    const healthyProviderId = await createProvider({
+      name: 'mrfail-basic-healthy',
+      baseUrl: healthy.baseUrl,
+      defaultModel: 'healthy-model',
+    });
     const routeId = await createRoute({
       name: 'failover-basic',
       targets: [
@@ -277,14 +282,7 @@ describe('Model route failover through agent generation', () => {
           }),
           model: 'failing-model',
         },
-        {
-          ai_provider_id: await createProvider({
-            name: 'mrfail-basic-healthy',
-            baseUrl: healthy.baseUrl,
-            defaultModel: 'healthy-model',
-          }),
-          model: 'healthy-model',
-        },
+        { ai_provider_id: healthyProviderId, model: 'healthy-model' },
       ],
     });
     const agentId = await createRoutedAgent({
@@ -299,6 +297,9 @@ describe('Model route failover through agent generation', () => {
     expect(res.body.output.content).toBe('served by the fallback');
     // The record names the target that actually answered.
     expect(res.body.output.model).toBe('healthy-model');
+    // And the result attributes that model to the provider that served it,
+    // never the dead primary the route abandoned.
+    expect(res.body.ai_provider_id).toBe(healthyProviderId);
     expect(failing.requests()).toBe(1);
     expect(healthy.requests()).toBe(1);
 
