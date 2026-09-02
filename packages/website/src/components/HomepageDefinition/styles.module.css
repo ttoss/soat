@@ -1,0 +1,350 @@
+.section {
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 3.5rem;
+  align-items: start;
+}
+
+.intro {
+  position: sticky;
+  top: calc(var(--ifm-navbar-height) + 2rem);
+}
+
+.leadSecond {
+  margin-top: 1.25rem;
+}
+
+.notWired {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  margin: 2rem 0 0;
+  font-size: 0.92rem;
+}
+
+.notWiredLabel {
+  color: var(--ifm-font-color-secondary);
+  font-weight: 600;
+}
+
+.struck {
+  color: var(--ifm-color-emphasis-600);
+  text-decoration-color: var(--ifm-color-primary);
+  text-decoration-thickness: 1.5px;
+}
+
+/* The diagram: callers on the left, one server box in the middle, one
+   database on the right, tied together by the lanes' pseudo-element lines. */
+.diagram {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) minmax(0, 2.6fr) minmax(140px, 1fr);
+  gap: 0;
+  align-items: center;
+}
+
+.laneTitle {
+  margin: 0 0 0.6rem;
+  color: var(--ifm-color-emphasis-600);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.callers {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding-right: 1.5rem;
+}
+
+.caller {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 0.5rem;
+  background: var(--ifm-background-color);
+}
+
+.caller::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: -1.5rem;
+  width: 1.5rem;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    var(--ifm-color-emphasis-400),
+    var(--ifm-color-primary)
+  );
+}
+
+.callerLabel {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ifm-heading-color);
+}
+
+.callerVia {
+  color: var(--ifm-color-primary);
+  font-size: 0.72rem;
+}
+
+.server {
+  position: relative;
+  padding: 1.1rem 1.2rem 1.2rem;
+  border: 1px solid var(--ifm-color-primary);
+  border-radius: 0.75rem;
+  background: var(--ifm-background-color);
+  box-shadow: 0 12px 40px rgba(26, 31, 44, 0.1);
+}
+
+html[data-theme='dark'] .server {
+  border-color: rgba(0, 229, 255, 0.45);
+  background: rgba(22, 27, 34, 0.75);
+  box-shadow:
+    0 16px 48px rgba(0, 0, 0, 0.5),
+    0 0 32px rgba(0, 229, 255, 0.12);
+}
+
+.serverHead {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-bottom: 0.9rem;
+}
+
+.serverName {
+  font-family: var(--ifm-heading-font-family);
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ifm-heading-color);
+}
+
+.serverMeta {
+  color: var(--ifm-font-color-secondary);
+  font-size: 0.75rem;
+}
+
+.ports {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+
+.port {
+  padding: 0.45rem 0.7rem;
+  border: 1px dashed var(--ifm-color-primary);
+  border-radius: 0.4rem;
+  color: var(--ifm-color-primary);
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.engine {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.6rem 0 0.9rem;
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.4rem;
+  background: linear-gradient(
+    135deg,
+    var(--soat-violet) 0%,
+    var(--ifm-color-primary) 100%
+  );
+  color: #ffffff;
+  font-family: var(--ifm-heading-font-family);
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+html[data-theme='dark'] .engine {
+  color: #080c14;
+}
+
+.enginePlus {
+  opacity: 0.7;
+}
+
+.groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem 1rem;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.groupName {
+  color: var(--ifm-font-color-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.chip {
+  padding: 0.1rem 0.45rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 0.25rem;
+  color: var(--ifm-font-color-base);
+  font-size: 0.7rem;
+  text-decoration: none;
+  transition:
+    border-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.chip:hover {
+  color: var(--ifm-color-primary);
+  border-color: var(--ifm-color-primary);
+  text-decoration: none;
+}
+
+html[data-theme='dark'] .chip:hover {
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.35);
+}
+
+.store {
+  position: relative;
+  padding-left: 1.5rem;
+}
+
+.store::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 1.5rem;
+  height: 1px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--ifm-color-primary) 0 4px,
+    transparent 4px 8px
+  );
+  animation: flow 1.2s linear infinite;
+}
+
+@keyframes flow {
+  to {
+    background-position: 8px 0;
+  }
+}
+
+.database {
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 0.5rem;
+  background: var(--ifm-background-surface-color);
+}
+
+.databaseName {
+  display: block;
+  font-family: var(--ifm-heading-font-family);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ifm-heading-color);
+}
+
+.databaseTag {
+  display: inline-block;
+  margin: 0.15rem 0 0.6rem;
+  color: var(--ifm-color-primary);
+  font-size: 0.72rem;
+}
+
+.databaseList {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+  color: var(--ifm-font-color-secondary);
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+.databaseList li::before {
+  content: '';
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  margin-right: 0.5rem;
+  border-radius: 50%;
+  background: var(--ifm-color-primary);
+  vertical-align: middle;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .store::before {
+    animation: none;
+  }
+}
+
+@media screen and (max-width: 1200px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2.5rem;
+  }
+
+  .intro {
+    position: static;
+  }
+}
+
+@media screen and (max-width: 768px) {
+  .diagram {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.5rem;
+  }
+
+  .callers {
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding-right: 0;
+  }
+
+  .callers .laneTitle {
+    flex: 1 1 100%;
+    margin-bottom: 0;
+  }
+
+  .caller {
+    flex: 1 1 140px;
+  }
+
+  .caller::after,
+  .store::before {
+    display: none;
+  }
+
+  .store {
+    padding-left: 0;
+  }
+
+  .groups {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -1,125 +1,163 @@
-/* The decision band. A light surface on purpose: it sits between two dark
-   bands (Formations, Getting access) and keeps the page's alternating rhythm. */
 .section {
-  padding: 4rem 0;
-  border-top: 1px solid rgba(0, 229, 255, 0.08);
+  border-top: 1px solid var(--ifm-color-emphasis-200);
 }
 
-.eyebrow {
-  margin-bottom: 0.75rem;
-  color: var(--ifm-color-primary);
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.header {
-  max-width: 780px;
-  margin-bottom: 2.25rem;
-}
-
-.header h2 {
-  margin-bottom: 0.75rem;
-}
-
-.header p:not(.eyebrow) {
-  font-size: 1.05rem;
-  line-height: 1.7;
-}
-
-.list {
+.layout {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1rem;
+  grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+  gap: 3rem;
+  align-items: start;
 }
 
-.card {
-  display: flex;
-  flex-direction: column;
-  padding: 1.4rem;
-  border: 1px solid var(--ifm-color-emphasis-200);
-  border-radius: 0.75rem;
-  background: var(--ifm-background-surface-color);
-  transition:
-    transform 300ms cubic-bezier(0.16, 1, 0.3, 1),
-    border-color 300ms ease,
-    box-shadow 300ms ease;
-}
-
-.card:hover {
-  transform: translateY(-4px);
-  border-color: rgba(0, 229, 255, 0.28);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.12);
-}
-
-.card h3 {
-  margin-bottom: 0.5rem;
-  font-size: 1.05rem;
-}
-
-.card p {
+/* An index, not a grid of cards: one row per job, hairline-separated. */
+.ledger {
   margin: 0;
-  color: var(--ifm-color-emphasis-700);
-  font-size: 0.95rem;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--ifm-color-emphasis-300);
+}
+
+.row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 3rem minmax(0, 1fr) auto;
+  gap: 1.25rem;
+  align-items: baseline;
+  padding: 1.35rem 0.75rem 1.35rem 0;
+  border-bottom: 1px solid var(--ifm-color-emphasis-300);
+  transition: background 200ms ease;
+}
+
+.row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: -1px;
+  left: -1.25rem;
+  width: 2px;
+  background: var(--ifm-color-primary);
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+
+.row:hover::before {
+  opacity: 1;
+}
+
+html[data-theme='dark'] .row:hover::before {
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.6);
+}
+
+.rowIndex {
+  color: var(--ifm-color-primary);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.rowBody {
+  min-width: 0;
+}
+
+.job {
+  margin: 0 0 0.35rem;
+  font-size: 1.15rem;
+  line-height: 1.3;
+  text-wrap: balance;
+}
+
+.how {
+  margin: 0;
+  color: var(--ifm-font-color-secondary);
+  font-size: 0.93rem;
   line-height: 1.6;
 }
 
-/* Pins the module-doc link to the bottom of the card, so cards with a
-   one-line description and cards with two align on the same baseline. */
 .moduleLink {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  margin-top: auto;
-  padding-top: 1rem;
+  white-space: nowrap;
   color: var(--ifm-color-primary);
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   font-weight: 600;
   text-decoration: none;
 }
 
-.moduleLink span {
+.moduleLink span:last-child {
   transition: transform 200ms ease;
 }
 
 .moduleLink:hover {
-  color: var(--ifm-color-primary);
-  text-decoration: underline;
+  text-decoration: none;
 }
 
-.moduleLink:hover span {
+.moduleLink:hover span:last-child {
   transform: translateX(3px);
 }
 
+/* The one place on the page that says no, so it looks different: a dashed
+   outline, no fill, sticky beside the list. */
 .notFor {
-  max-width: 860px;
-  margin-top: 2rem;
-  padding: 1.4rem 1.6rem;
-  border-left: 3px solid var(--ifm-color-primary);
-  border-radius: 0.5rem;
-  background: var(--ifm-color-emphasis-100);
+  position: sticky;
+  top: calc(var(--ifm-navbar-height) + 2rem);
+  padding: 1.5rem 1.6rem;
+  border: 1px dashed var(--ifm-color-emphasis-400);
+  border-radius: 0.75rem;
 }
 
-.notFor h3 {
-  margin-bottom: 0.6rem;
+.notForTitle {
+  margin: 0 0 1rem;
   font-size: 1.05rem;
 }
 
-.notFor ul {
+.notForList {
   margin: 0;
-  padding-left: 1.2rem;
-  color: var(--ifm-color-emphasis-700);
-  font-size: 0.95rem;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  color: var(--ifm-font-color-secondary);
+  font-size: 0.92rem;
   line-height: 1.6;
 }
 
+.notForList li {
+  position: relative;
+  padding-left: 1.4rem;
+}
+
+.notForList li::before {
+  content: '';
+  position: absolute;
+  top: 0.7em;
+  left: 0;
+  width: 0.8rem;
+  height: 1px;
+  background: var(--ifm-color-emphasis-500);
+}
+
 @media screen and (max-width: 996px) {
-  .section {
-    padding: 3rem 0;
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2rem;
   }
 
-  .list {
-    grid-template-columns: 1fr;
+  .row {
+    grid-template-columns: 2.25rem minmax(0, 1fr);
+    padding-right: 0;
+  }
+
+  .row::before {
+    display: none;
+  }
+
+  .moduleLink {
+    grid-column: 2;
+  }
+
+  .notFor {
+    position: static;
   }
 }
