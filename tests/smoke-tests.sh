@@ -6418,6 +6418,23 @@ if [ "$($SOAT_CLI get-quota --quota-id "$COST_QUOTA_ID" | jq -r '.current_usage'
   echo "ERROR: Expected null current_usage on a cost_usd quota" >&2
   exit 1
 fi
+
+# The pricing-blackout verdict reads the llm_tokens meter alone. No prices ship
+# by default, so the orchestration runs above left this project a window of
+# unpriced compute_execution events — which must not make an enforcing cost cap
+# unenforceable, or the cap could never recover: the refusal would block the
+# very generation that would land the first priced AI event.
+BLACKOUT_GEN_RESP=$($SOAT_CLI create-agent-generation --wait true \
+  --agent-id "$AGENT_ID" \
+  --messages '[{"role":"user","content":"Say ok."}]' | sanitize_json)
+BLACKOUT_GEN_STATUS=$(printf '%s\n' "$BLACKOUT_GEN_RESP" | jq -r '.status // empty')
+if [ "$BLACKOUT_GEN_STATUS" != "completed" ]; then
+  echo "ERROR: a live cost cap refused a generation over unpriced platform usage" >&2
+  printf '%s\n' "$BLACKOUT_GEN_RESP" >&2
+  exit 1
+fi
+echo "Cost cap over unpriced platform usage: OK"
+
 $SOAT_CLI delete-quota --quota-id "$COST_QUOTA_ID"
 
 # scope=api_key + metric=tokens/cost_usd is rejected (400) — no attribution.
