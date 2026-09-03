@@ -3,17 +3,19 @@ import { db } from 'src/db';
 
 import {
   applyCreateChange,
-  applyUpdateChange,
-  type CleanupFailure,
-  collectRecordedPendingCleanups,
   failFormationOperation,
   isCreateChange,
   isResourceAlreadyGone,
   markResourceDeleted,
-  type PendingCleanup,
   rollbackCreatedResources,
-  runPendingCleanups,
 } from './formationsApplyHelpers';
+import {
+  applyUpdateChange,
+  type CleanupFailure,
+  collectRecordedPendingCleanups,
+  type PendingCleanup,
+  runPendingCleanups,
+} from './formationsApplyUpdate';
 import {
   buildAuditableParameters,
   buildDependencyGraph,

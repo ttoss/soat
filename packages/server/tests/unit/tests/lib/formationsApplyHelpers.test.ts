@@ -1,10 +1,10 @@
 import { db } from 'src/db';
 import {
   applyCreateChange,
-  applyUpdateChange,
   failFormationOperation,
   rollbackCreatedResources,
 } from 'src/lib/formationsApplyHelpers';
+import { applyUpdateChange } from 'src/lib/formationsApplyUpdate';
 import { planResourceChange } from 'src/lib/formationsPlanHelpers';
 import type { FormationEvent } from 'src/lib/formationsTypes';
 import { createMemory, getMemory } from 'src/lib/memories';

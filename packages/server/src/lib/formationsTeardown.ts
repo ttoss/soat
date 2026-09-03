@@ -13,11 +13,13 @@ import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 
 import {
-  collectRecordedPendingCleanups,
   isResourceAlreadyGone,
   markResourceDeleted,
-  runPendingCleanups,
 } from './formationsApplyHelpers';
+import {
+  collectRecordedPendingCleanups,
+  runPendingCleanups,
+} from './formationsApplyUpdate';
 import {
   assertResourceActionsAuthorized,
   collectTeardownAuthorizationRequests,

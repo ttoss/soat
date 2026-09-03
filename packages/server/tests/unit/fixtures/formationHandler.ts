@@ -7,7 +7,7 @@
  * a fake at the module level would test nothing of the protocol.
  */
 
-import { createServer, type Server } from 'node:http';
+import { createServer, type RequestListener } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 import type { FormationResourceTypeRegistration } from 'src/lib/formationResourceTypeConfig';
@@ -45,49 +45,92 @@ export type FakeFormationHandler = {
   close: () => Promise<void>;
 };
 
+const buildRegistration = (args: {
+  baseUrl: string;
+  capabilities?: Array<'validate' | 'read'>;
+  timeoutMs?: number;
+  writeOnlyProperties?: string[];
+}): FormationResourceTypeRegistration => {
+  // Held in a variable rather than inlined: as a literal in the return, `type`
+  // trips the excess-property check against `SchemaWithProperties`.
+  const schema = {
+    type: 'object',
+    properties: {
+      name: { type: 'string' },
+      kind: { type: 'string' },
+      agent_id: { type: 'string' },
+      config: { type: 'object' },
+    },
+    required: ['name', 'kind'],
+  };
+
+  return {
+    name: 'test_channel',
+    description: 'A test channel.',
+    handler: {
+      url: `${args.baseUrl}/formation-resources`,
+      secret: HANDLER_SECRET,
+      timeoutMs: args.timeoutMs ?? 5_000,
+    },
+    capabilities: new Set(args.capabilities ?? []),
+    writeOnlyProperties: new Set(args.writeOnlyProperties ?? []),
+    schema,
+    schemaFields: {
+      allowedFields: new Set(['name', 'kind', 'agent_id', 'config']),
+      requiredFields: new Set(['name', 'kind']),
+      fieldSpecs: {
+        name: { type: 'string', nullable: false },
+        kind: { type: 'string', nullable: false },
+        agent_id: { type: 'string', nullable: false },
+        config: { type: 'object', nullable: false },
+      },
+    },
+  };
+};
+
+const listenerFor = (handler: FakeFormationHandler): RequestListener => {
+  return (req, res) => {
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk: Buffer) => {
+      chunks.push(chunk);
+    });
+    req.on('end', () => {
+      const raw = Buffer.concat(chunks).toString('utf-8');
+      const body = JSON.parse(raw) as Record<string, unknown>;
+      handler.recorded.push({ headers: req.headers, body });
+
+      const configured = handler.replies[String(body.request_type)];
+      const reply =
+        typeof configured === 'function'
+          ? configured(body)
+          : (configured ?? {
+              status: 200,
+              body: { physical_resource_id: 'ext_default' },
+            });
+
+      const respond = () => {
+        res.writeHead(reply.status, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(reply.body));
+      };
+
+      if (handler.holdMs > 0) {
+        setTimeout(respond, handler.holdMs);
+        return;
+      }
+      respond();
+    });
+  };
+};
+
 export const startFakeFormationHandler =
   async (): Promise<FakeFormationHandler> => {
-    let server: Server;
-
     const handler: FakeFormationHandler = {
       baseUrl: '',
       recorded: [],
       replies: {},
       holdMs: 0,
       registration: (args) => {
-        const schema = {
-          type: 'object',
-          properties: {
-            name: { type: 'string' },
-            kind: { type: 'string' },
-            agent_id: { type: 'string' },
-            config: { type: 'object' },
-          },
-          required: ['name', 'kind'],
-        };
-
-        return {
-          name: 'test_channel',
-          description: 'A test channel.',
-          handler: {
-            url: `${handler.baseUrl}/formation-resources`,
-            secret: HANDLER_SECRET,
-            timeoutMs: args.timeoutMs ?? 5_000,
-          },
-          capabilities: new Set(args.capabilities ?? []),
-          writeOnlyProperties: new Set(args.writeOnlyProperties ?? []),
-          schema,
-          schemaFields: {
-            allowedFields: new Set(['name', 'kind', 'agent_id', 'config']),
-            requiredFields: new Set(['name', 'kind']),
-            fieldSpecs: {
-              name: { type: 'string', nullable: false },
-              kind: { type: 'string', nullable: false },
-              agent_id: { type: 'string', nullable: false },
-              config: { type: 'object', nullable: false },
-            },
-          },
-        };
+        return buildRegistration({ ...args, baseUrl: handler.baseUrl });
       },
       reset: () => {
         handler.recorded.length = 0;
@@ -95,52 +138,24 @@ export const startFakeFormationHandler =
         handler.holdMs = 0;
       },
       close: async () => {
-        await new Promise<void>((resolve) => {
-          server.close(() => {
-            return resolve();
-          });
-        });
+        return;
       },
     };
 
-    server = createServer((req, res) => {
-      const chunks: Buffer[] = [];
-      req.on('data', (chunk: Buffer) => {
-        chunks.push(chunk);
-      });
-      req.on('end', () => {
-        const raw = Buffer.concat(chunks).toString('utf-8');
-        const body = JSON.parse(raw) as Record<string, unknown>;
-        handler.recorded.push({ headers: req.headers, body });
-
-        const requestType = String(body.request_type);
-        const configured = handler.replies[requestType];
-        const reply =
-          typeof configured === 'function'
-            ? configured(body)
-            : (configured ?? {
-                status: 200,
-                body: { physical_resource_id: 'ext_default' },
-              });
-
-        const respond = () => {
-          res.writeHead(reply.status, { 'content-type': 'application/json' });
-          res.end(JSON.stringify(reply.body));
-        };
-
-        if (handler.holdMs > 0) {
-          setTimeout(respond, handler.holdMs);
-          return;
-        }
-        respond();
-      });
-    });
-
+    const server = createServer(listenerFor(handler));
     await new Promise<void>((resolve) => {
       server.listen(0, '127.0.0.1', resolve);
     });
+
     const { port } = server.address() as AddressInfo;
     handler.baseUrl = `http://127.0.0.1:${String(port)}`;
+    handler.close = async () => {
+      await new Promise<void>((resolve) => {
+        server.close(() => {
+          return resolve();
+        });
+      });
+    };
 
     return handler;
   };
