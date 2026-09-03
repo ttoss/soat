@@ -71,6 +71,8 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'The orchestration graph is not runnable as declared. `meta` names the failing node or edge; `POST /api/v1/orchestrations/{orchestration_id}/validate` reports every problem at once.',
   ORCHESTRATION_CYCLE_DETECTED:
     'The graph has a cycle, so no topological order exists. Break the cycle named in `meta` — a loop belongs in a workflow, not a DAG.',
+  ORCHESTRATION_RUN_DEPTH_LIMIT:
+    'Nesting is recursing: follow `parent_orchestration_run_id` up from the failed run to find the `sub_orchestration` (or `loop`) node that names a graph already in the chain, and repoint it. If the composition is legitimately this deep, raise the project bound with `PATCH /api/v1/projects/{project_id}` (`max_run_depth`) — `meta.limit_source` says whether the project or the deployment set the number that refused it.',
   UPLOAD_TOKEN_EXPIRED:
     'Request a fresh upload token; tokens are single-use and short-lived by design.',
   UPLOAD_TOKEN_USED:

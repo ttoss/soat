@@ -109,6 +109,11 @@ const parseProjectPatchFields = (body: Record<string, unknown>) => {
     )
       ? (body.max_chain_generations as number | null)
       : undefined,
+    // An explicit `null` clears the project's run-depth bound, leaving the
+    // deployment-wide one. Forwarded unvalidated for the same reason as above.
+    maxRunDepth: Object.prototype.hasOwnProperty.call(body, 'max_run_depth')
+      ? (body.max_run_depth as number | null)
+      : undefined,
     // An explicit `null` clears the project default route; absent leaves it.
     defaultModelRouteId: Object.prototype.hasOwnProperty.call(
       body,
@@ -147,6 +152,7 @@ projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
     guardrailIds,
     maxConcurrentRuns,
     maxChainGenerations,
+    maxRunDepth,
     defaultModelRouteId,
     auditReadsEnabled,
     traceContentRetentionDays,
@@ -160,7 +166,7 @@ projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
   ) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      'name, guardrail_ids, max_concurrent_runs, max_chain_generations, default_model_route_id, audit_reads_enabled, trace_content_retention_days, or trace_content_mode is required'
+      'name, guardrail_ids, max_concurrent_runs, max_chain_generations, max_run_depth, default_model_route_id, audit_reads_enabled, trace_content_retention_days, or trace_content_mode is required'
     );
   }
 
@@ -183,6 +189,7 @@ projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
     guardrailIds,
     maxConcurrentRuns,
     maxChainGenerations,
+    maxRunDepth,
     defaultModelRouteId,
     auditReadsEnabled,
     traceContentRetentionDays,

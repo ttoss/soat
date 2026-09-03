@@ -126,6 +126,16 @@ export class OrchestrationRun extends Model {
   @Column({ type: DataType.STRING(128), allowNull: true })
   declare parentNodeId: string | null;
 
+  // How many `loop` / `sub_orchestration` edges separate this run from the one
+  // a caller started: 0 for a caller-started run, parent + 1 for a child.
+  // Bounds a graph that names itself, directly or through a cycle of two, which
+  // no intra-graph validator can see — `detectCycleExcludingLoopNodes` is
+  // intra-graph by construction and excludes loop nodes deliberately (#1185).
+  // A stored counter rather than an ancestor walk, so the check costs nothing
+  // at the depth where it matters most.
+  @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 0 })
+  declare runDepth: number;
+
   // Denormalized (not an FK) so it survives trigger deletion and can be copied
   // onto the usage events of the run's generations for trigger attribution.
   @Column({ type: DataType.STRING(32), allowNull: true })

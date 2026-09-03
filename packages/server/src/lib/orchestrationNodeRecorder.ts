@@ -288,6 +288,7 @@ const runNodeAndRecord = async (
     projectIds: ctx.projectIds,
     projectId: ctx.runRecord.projectId as number,
     runPublicId: ctx.runRecord.publicId as string,
+    runDepth: ctx.runRecord.runDepth,
     triggerId: ctx.runRecord.triggerId ?? undefined,
     // Read off the run row like `triggerId` above, so every drive of the run
     // carries the same context without having to thread it (#945).

@@ -20,7 +20,18 @@
  * Declared here, in the seam both sides already depend on, so neither the
  * engine nor the executors have to import the other for it.
  */
-export type NestedRunParent = { runId?: string; nodeId: string };
+export type NestedRunParent = {
+  runId?: string;
+  nodeId: string;
+  /**
+   * The parent run's own `run_depth`, so the child's is one more than it. Read
+   * off the parent's row by the engine driving it rather than looked up from
+   * `runId` here: the row is already in hand there, and a child started by a
+   * parent whose row had since been deleted would otherwise restart the count
+   * from zero — the unbounded case by another route (#1185).
+   */
+  runDepth: number;
+};
 
 export type NestedRunStarter = (args: {
   orchestrationPublicId: string;
@@ -36,7 +47,12 @@ export type NestedRunStarter = (args: {
   // (#1135). Deliberately outside the public contract: parentage is recorded by
   // the engine executing the parent, never claimed by a caller.
   parent: NestedRunParent;
-}) => Promise<{ output: Record<string, unknown> | null }>;
+}) => Promise<{
+  id: string;
+  status: string;
+  output: Record<string, unknown> | null;
+  error: object | null;
+}>;
 
 export const startNestedRun: NestedRunStarter = async (args) => {
   const { startOrchestrationRun } = await import('./orchestrationEngine');

@@ -1254,6 +1254,20 @@ components:
           description: >-
             The node within `parent_orchestration_run_id` that started this run.
             Null when `parent_orchestration_run_id` is null.
+        run_depth:
+          type: integer
+          minimum: 0
+          description: >-
+            `loop` / `sub_orchestration` edges between this run and the run a
+            caller started: `0` for a caller-started run, one more than its
+            parent's for a child. Starting a child past the effective bound —
+            the smaller of the deployment's `MAX_ORCHESTRATION_RUN_DEPTH`
+            (default 10) and the project's `max_run_depth` — is refused with
+            `ORCHESTRATION_RUN_DEPTH_LIMIT`, which fails the run that tried to
+            descend. That bounds a graph whose `sub_orchestration` node names
+            itself, directly or through a cycle of two graphs, which the
+            intra-graph cycle check cannot see.
+          example: 0
         output:
           type: object
           nullable: true

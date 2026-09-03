@@ -786,6 +786,7 @@ describe('executeLoopNode', () => {
         state: {},
         projectIds: [1],
         traceId: null,
+        runDepth: 0,
       })
     ).rejects.toThrow(DomainError);
   });
@@ -799,6 +800,7 @@ describe('executeSubOrchestrationNode', () => {
         state: {},
         projectIds: [1],
         traceId: null,
+        runDepth: 0,
       })
     ).rejects.toThrow(DomainError);
   });

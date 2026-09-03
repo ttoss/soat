@@ -40,6 +40,9 @@ type DispatchArgs = {
   // The run's public id — used as the resourceId of an emit_event node's event
   // and stamped onto in-run generations' usage events for per-run roll-up.
   runPublicId?: string;
+  // The run's own nesting depth, so a `loop`/`sub_orchestration` child is
+  // started one deeper and the bound is checked before it exists (#1185).
+  runDepth?: number;
   // The trigger firing (if any) that started the run — propagated onto in-run
   // generations' usage events for in-run trigger attribution.
   triggerId?: string;
@@ -111,6 +114,10 @@ const dispatchNestedRunNode = (
     toolContext,
     // The parent run, so each child it starts records where it came from.
     runPublicId,
+    // A run reached without one is not nested, so it counts as the root: this
+    // is only absent where `runPublicId` is, and a child of an unidentified
+    // parent has nothing to descend from.
+    runDepth: args.runDepth ?? 0,
   };
   return nodeDefn.type === 'loop'
     ? executeLoopNode(nested)
@@ -197,6 +204,7 @@ export const executeNodeById = async (args: {
   projectIds: number[];
   projectId?: number;
   runPublicId?: string;
+  runDepth?: number;
   triggerId?: string;
   toolContext?: Record<string, string>;
   traceId: string | null;
@@ -216,6 +224,7 @@ export const executeNodeById = async (args: {
     projectIds,
     projectId,
     runPublicId,
+    runDepth,
     triggerId,
     toolContext,
     traceId,
@@ -239,6 +248,7 @@ export const executeNodeById = async (args: {
     projectIds,
     projectId,
     runPublicId,
+    runDepth,
     triggerId,
     toolContext,
     traceId,
