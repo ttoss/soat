@@ -359,8 +359,10 @@ paths:
         Upserts project + provider-slug price rows, keyed on
         (provider, model, effective_from). A row covers all of the project's
         instances of that provider slug. Authorized by the caller's access to
-        the project. `effective_from` must be in the future — past prices are
-        immutable, so ship corrections as new future-dated rows.
+        the project. `effective_from` must be in the future once the
+        (provider, model, component) is priced — past prices are immutable, so
+        corrections ship as new future-dated rows. A first price, with no row for
+        the project or the global default, may be dated now or earlier.
       operationId: updateProjectPrices
       parameters:
         - name: project_id

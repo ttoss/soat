@@ -661,7 +661,7 @@ describe('AI Providers', () => {
         expect(res.status).toBe(403);
       });
 
-      test('rejects a non-future effective_from with 400', async () => {
+      test('rejects an unparseable effective_from with 400', async () => {
         const res = await authenticatedTestClient(userToken)
           .put(`/api/v1/ai-providers/${pricedProviderId}/prices`)
           .send({
@@ -671,7 +671,7 @@ describe('AI Providers', () => {
                 component: 'input_tokens',
                 unit: 'token',
                 unit_price: 0.000001,
-                effective_from: '2020-01-01T00:00:00.000Z',
+                effective_from: 'not-a-timestamp',
               },
             ],
           });
@@ -740,6 +740,83 @@ describe('AI Providers', () => {
           })
         ).toHaveLength(1);
       });
+    });
+  });
+
+  // A price for a (model, component) nothing has priced yet may take effect
+  // immediately: there is no row to rewrite and no frozen cost to protect, and
+  // a mandatory future date leaves the provider live and unpriced until it
+  // lands — a generation in that window is metered at zero forever (#1196).
+  describe('first-write prices take effect immediately', () => {
+    let providerId: string;
+
+    beforeAll(async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: 'First Write Provider',
+          provider: 'openai',
+          default_model: 'gpt-4o',
+        });
+      providerId = res.body.id;
+    });
+
+    test('accepts a past effective_from on a component with no rows', async () => {
+      const effectiveFrom = new Date(Date.now() - 1000).toISOString();
+      const res = await authenticatedTestClient(userToken)
+        .put(`/api/v1/ai-providers/${providerId}/prices`)
+        .send({
+          prices: [
+            {
+              model: 'first-write-model',
+              component: 'input_tokens',
+              unit: 'token',
+              unit_price: 0.000001,
+              effective_from: effectiveFrom,
+            },
+          ],
+        });
+      expect(res.status).toBe(200);
+      expect(new Date(res.body.prices[0].effective_from).toISOString()).toBe(
+        effectiveFrom
+      );
+    });
+
+    test('rejects a back-dated write once the component has a row', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .put(`/api/v1/ai-providers/${providerId}/prices`)
+        .send({
+          prices: [
+            {
+              model: 'first-write-model',
+              component: 'input_tokens',
+              unit: 'token',
+              unit_price: 0.000002,
+              effective_from: new Date(Date.now() - 500).toISOString(),
+            },
+          ],
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('another component on the same model is still a first write', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .put(`/api/v1/ai-providers/${providerId}/prices`)
+        .send({
+          prices: [
+            {
+              model: 'first-write-model',
+              component: 'output_tokens',
+              unit: 'token',
+              unit_price: 0.000003,
+              effective_from: new Date(Date.now() - 1000).toISOString(),
+            },
+          ],
+        });
+      expect(res.status).toBe(200);
+      expect(res.body.prices[0].component).toBe('output_tokens');
     });
   });
 

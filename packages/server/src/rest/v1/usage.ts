@@ -362,8 +362,9 @@ usageRouter.get('/usage/prices', async (ctx: Context) => {
  * PUT /api/v1/usage/prices
  * operationId: upsertPriceBook
  * Upserts price rows keyed on (provider, model, effective_from). Admin only.
- * effective_from must be in the future — past prices are immutable so recorded
- * costs stay explainable.
+ * effective_from must be in the future once the (provider, model, component) is
+ * priced — past prices are immutable so recorded costs stay explainable. A
+ * first price may be dated now or earlier.
  */
 usageRouter.put('/usage/prices', async (ctx: Context) => {
   requireAdmin(ctx, 'usage:ManagePriceBook');

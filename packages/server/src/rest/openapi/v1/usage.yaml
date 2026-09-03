@@ -480,9 +480,11 @@ paths:
       summary: Upsert price-book rows
       description: >
         Upserts price rows keyed on (provider, model, effective_from). Admin
-        only. `effective_from` must be in the future — past prices are immutable
-        so recorded costs stay explainable; ship corrections as new
-        future-dated rows.
+        only. `effective_from` must be in the future once the
+        (provider, model, component) is priced — past prices are immutable so
+        recorded costs stay explainable; ship corrections as new future-dated
+        rows. A first price, with no row in this scope or any broader one, may
+        be dated now or earlier.
       operationId: upsertPriceBook
       requestBody:
         required: true

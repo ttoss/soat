@@ -449,8 +449,11 @@ paths:
         (model, effective_from). The provider slug is taken from the AI provider
         itself, so only the model, rates, and effective_from are supplied.
         Authorized by the caller's access to the provider's project.
-        `effective_from` must be in the future — past prices are immutable, so
-        ship corrections as new future-dated rows.
+        `effective_from` must be in the future once the (model, component) has a
+        price row — past prices are immutable, so corrections ship as new
+        future-dated rows. A first price for a (model, component) nothing prices
+        yet may be dated now or earlier, so a new provider is never live and
+        unpriced.
       operationId: updateAiProviderPrices
       parameters:
         - name: ai_provider_id
