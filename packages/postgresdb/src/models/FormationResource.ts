@@ -73,6 +73,15 @@ export class FormationResource extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare lastAppliedProperties: Record<string, unknown> | null;
 
+  /**
+   * Physical resources this logical id superseded by replacement and could not
+   * delete. Kept so a later operation retries the disposal instead of leaving
+   * the resource live and owned by nothing (#1193) — the ledger has already
+   * moved to the replacement, so nothing else would ever name it again.
+   */
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare pendingCleanupPhysicalResourceIds: string[] | null;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

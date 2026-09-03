@@ -119,81 +119,172 @@ export const applyCreateChange = async (args: {
 };
 
 /**
- * Removes the resource a replacement superseded.
- *
- * The replacement already succeeded and the row already points at the new
- * resource, so this is cleanup, not part of the update: a failure here is
- * recorded as a failed event and the deploy carries on. Throwing instead would
- * fail a deploy whose desired state is fully realised, and roll back a
- * replacement that worked — leaving the caller worse off than the leaked
- * resource does.
- *
- * `deletion_policy: retain` is honoured exactly as it is on a teardown: the
- * author asked for the old resource to outlive the formation's control of it.
+ * A physical resource a replacement superseded and that is still to be
+ * disposed of.
  */
-const disposeReplacedResource = async (args: {
-  resourceType: string;
+export type PendingCleanup = {
+  resourceRow: ResourceRow;
   logicalId: string;
-  replacedPhysicalResourceId: string;
-  resourceKey: string;
+  resourceType: string;
+  physicalResourceId: string;
+};
+
+const pendingCleanupIds = (resource: ResourceRow): string[] => {
+  const recorded = resource.pendingCleanupPhysicalResourceIds;
+  return Array.isArray(recorded) ? recorded : [];
+};
+
+/**
+ * Writes the superseded id to the ledger *before* the disposal is attempted.
+ *
+ * The row already points at the replacement, so an id only this operation
+ * remembers is one nothing can name again — a crash, a later failure in the
+ * same apply, or a handler that refuses the delete would each leave the
+ * resource live and unowned (#1193). Recorded first, it is retried by the next
+ * operation instead.
+ */
+export const recordPendingCleanup = async (args: {
+  resourceRow: ResourceRow;
+  physicalResourceId: string;
+}): Promise<void> => {
+  const recorded = pendingCleanupIds(args.resourceRow);
+  if (recorded.includes(args.physicalResourceId)) return;
+  await args.resourceRow.update({
+    pendingCleanupPhysicalResourceIds: [...recorded, args.physicalResourceId],
+  });
+};
+
+const clearPendingCleanup = async (args: {
+  resourceRow: ResourceRow;
+  physicalResourceId: string;
+}): Promise<void> => {
+  const remaining = pendingCleanupIds(args.resourceRow).filter((id) => {
+    return id !== args.physicalResourceId;
+  });
+  await args.resourceRow.update({
+    pendingCleanupPhysicalResourceIds: remaining.length > 0 ? remaining : null,
+  });
+};
+
+/** The disposals a previous operation recorded and could not complete. */
+export const collectRecordedPendingCleanups = (args: {
+  existingResources: ResourceRow[];
+}): PendingCleanup[] => {
+  const pending: PendingCleanup[] = [];
+  for (const resource of args.existingResources) {
+    for (const physicalResourceId of pendingCleanupIds(resource)) {
+      pending.push({
+        resourceRow: resource,
+        logicalId: resource.logicalId,
+        resourceType: resource.resourceType,
+        physicalResourceId,
+      });
+    }
+  }
+  return pending;
+};
+
+export type CleanupFailure = {
+  logical_id: string;
+  resource_type: string;
+  physical_resource_id: string;
+  error: string;
+};
+
+/**
+ * Disposes of every resource a replacement superseded, once the rest of the
+ * operation has been applied.
+ *
+ * Deferred to the end on purpose (#1194): the dependents that reference the old
+ * resource are re-pointed by their own update, and a type whose delete refuses
+ * over live references (`ai_provider` answers `409` while an agent names it, and
+ * `force` does not override that) could never be cleaned up while a reference
+ * was still standing.
+ *
+ * A failure is reported and never thrown — the desired state is already
+ * realised, so failing the deploy would roll back a replacement that worked. The
+ * id stays on the ledger, so the next operation retries it.
+ *
+ * `deletion_policy: retain` is honoured exactly as on a teardown: the author
+ * asked for the old resource to outlive the formation's control of it. It is
+ * read from the row at disposal time, so a policy changed by this very operation
+ * decides its own replacement.
+ */
+export const runPendingCleanups = async (args: {
+  pendingCleanups: PendingCleanup[];
   projectId: number;
   actingUserId: number;
-  deletionPolicy: string;
   events: FormationEvent[];
-}): Promise<void> => {
+}): Promise<CleanupFailure[]> => {
   const { events } = args;
-  const timestamp = () => {
-    return new Date().toISOString();
-  };
+  const failures: CleanupFailure[] = [];
 
-  if (args.deletionPolicy === 'retain') {
-    events.push({
-      timestamp: timestamp(),
-      logicalId: args.logicalId,
-      resourceType: args.resourceType,
-      action: 'replace-retained',
-      status: 'succeeded',
-      physicalResourceId: args.replacedPhysicalResourceId,
-    });
-    return;
-  }
+  for (const cleanup of args.pendingCleanups) {
+    const { resourceRow, logicalId, resourceType, physicalResourceId } =
+      cleanup;
 
-  try {
-    await applyDeleteResource({
-      resourceType: args.resourceType,
-      physicalResourceId: args.replacedPhysicalResourceId,
-      projectId: args.projectId,
-      actingUserId: args.actingUserId,
-      logicalId: args.logicalId,
-      resourceKey: args.resourceKey,
-    });
+    if ((resourceRow.deletionPolicy ?? 'delete') === 'retain') {
+      await clearPendingCleanup({ resourceRow, physicalResourceId });
+      events.push({
+        timestamp: new Date().toISOString(),
+        logicalId,
+        resourceType,
+        action: 'replace-retained',
+        status: 'succeeded',
+        physicalResourceId,
+      });
+      continue;
+    }
+
+    try {
+      await applyDeleteResource({
+        resourceType,
+        physicalResourceId,
+        projectId: args.projectId,
+        actingUserId: args.actingUserId,
+        logicalId,
+        resourceKey: resourceRow.publicId,
+      });
+    } catch (error) {
+      if (!isResourceAlreadyGone(error)) {
+        const message = error instanceof Error ? error.message : String(error);
+        log(
+          'runPendingCleanups: leaked %s id=%s error=%s',
+          resourceType,
+          physicalResourceId,
+          message
+        );
+        events.push({
+          timestamp: new Date().toISOString(),
+          logicalId,
+          resourceType,
+          action: 'replace-cleanup',
+          status: 'failed',
+          physicalResourceId,
+          error: message,
+        });
+        failures.push({
+          logical_id: logicalId,
+          resource_type: resourceType,
+          physical_resource_id: physicalResourceId,
+          error: message,
+        });
+        continue;
+      }
+    }
+
+    await clearPendingCleanup({ resourceRow, physicalResourceId });
     events.push({
-      timestamp: timestamp(),
-      logicalId: args.logicalId,
-      resourceType: args.resourceType,
+      timestamp: new Date().toISOString(),
+      logicalId,
+      resourceType,
       action: 'replace-cleanup',
       status: 'succeeded',
-      physicalResourceId: args.replacedPhysicalResourceId,
-    });
-  } catch (error) {
-    if (isResourceAlreadyGone(error)) return;
-    const message = error instanceof Error ? error.message : String(error);
-    log(
-      'disposeReplacedResource: leaked %s id=%s error=%s',
-      args.resourceType,
-      args.replacedPhysicalResourceId,
-      message
-    );
-    events.push({
-      timestamp: timestamp(),
-      logicalId: args.logicalId,
-      resourceType: args.resourceType,
-      action: 'replace-cleanup',
-      status: 'failed',
-      physicalResourceId: args.replacedPhysicalResourceId,
-      error: message,
+      physicalResourceId,
     });
   }
+
+  return failures;
 };
 
 /** Persists a successful update on the ledger row and records its event. */
@@ -232,6 +323,8 @@ export const applyUpdateChange = async (args: {
   actingUserId: number;
   resolvedIds: Map<string, string>;
   events: FormationEvent[];
+  /** Collects the disposal a replacement here defers to the end of the apply. */
+  pendingCleanups: PendingCleanup[];
 }): Promise<void> => {
   const {
     resourceRow,
@@ -290,15 +383,15 @@ export const applyUpdateChange = async (args: {
     });
 
     if (replaced) {
-      await disposeReplacedResource({
-        resourceType,
+      await recordPendingCleanup({
+        resourceRow,
+        physicalResourceId: previousPhysicalResourceId,
+      });
+      args.pendingCleanups.push({
+        resourceRow,
         logicalId,
-        projectId,
-        actingUserId,
-        replacedPhysicalResourceId: previousPhysicalResourceId,
-        resourceKey: resourceRow.publicId,
-        deletionPolicy: resourceRow.deletionPolicy ?? 'delete',
-        events,
+        resourceType,
+        physicalResourceId: previousPhysicalResourceId,
       });
     }
   } else {

@@ -222,6 +222,11 @@ export const ERROR_CODES = {
     description:
       "One or more of the formation's resources could not be deleted, so the stack is left in `delete_failed`. `meta.failures` names each blocking resource (its logical id, type, and the underlying error) — the common case is a resource the platform refuses to delete on its own, such as an agent that has generation or trace history. Resolve those, then delete the formation again.",
   },
+  FORMATION_REPLACE_CLEANUP_FAILED: {
+    httpStatus: 500,
+    description:
+      "A deploy replaced a resource — the handler answered a new `physical_resource_id` — and the superseded resource could not be deleted, so it is still live while the formation's ledger already points at the replacement. The deploy itself succeeded: the desired state is realised, and this is carried on the formation (and on its operation) rather than thrown, so it never appears as a response status. `meta.failures` names each un-deleted resource as `{ logical_id, resource_type, physical_resource_id, error }`. Each one stays on the formation as pending cleanup and is retried on the next deploy and on teardown; resolve whatever refused the delete and deploy again.",
+  },
   FORMATION_HANDLER_FAILED: {
     httpStatus: 502,
     description:

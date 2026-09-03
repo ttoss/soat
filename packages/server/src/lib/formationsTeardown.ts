@@ -13,8 +13,10 @@ import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 
 import {
+  collectRecordedPendingCleanups,
   isResourceAlreadyGone,
   markResourceDeleted,
+  runPendingCleanups,
 } from './formationsApplyHelpers';
 import {
   assertResourceActionsAuthorized,
@@ -124,6 +126,20 @@ export const performResourceDeletions = async (args: {
 }): Promise<{ events: FormationEvent[]; hasError: boolean }> => {
   const events: FormationEvent[] = [];
   let hasError = false;
+
+  // A replacement whose disposal failed earlier is swept with the stack (#1193)
+  // — it is the last operation that will ever name it. Its failure is recorded
+  // but never fails the teardown: the resource is already outside the ledger's
+  // current state, and wedging the stack in `delete_failed` over one would
+  // leave the caller unable to remove anything at all.
+  await runPendingCleanups({
+    pendingCleanups: collectRecordedPendingCleanups({
+      existingResources: args.orderedResources,
+    }),
+    projectId: args.projectId,
+    actingUserId: args.actingUserId,
+    events,
+  });
 
   for (const resource of args.orderedResources) {
     if (!resource.physicalResourceId) continue;

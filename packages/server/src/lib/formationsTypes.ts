@@ -464,8 +464,9 @@ export type MappedFormation = {
   resolved_metadata: Record<string, unknown> | null;
   resolved_parameters: Record<string, string> | null;
   /**
-   * Why the formation is `failed` / `delete_failed`. Null in every other
-   * status — a successful apply clears it.
+   * Why the formation is `failed` / `delete_failed`, or — while the formation is
+   * `active` — a replaced resource a succeeded deploy could not delete (#1193).
+   * Null otherwise; a successful apply with nothing outstanding clears it.
    */
   error: FormationError | null;
   resources?: MappedFormationResource[];

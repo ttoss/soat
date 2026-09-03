@@ -368,8 +368,9 @@ Each resource in a formation goes through these statuses:
 A resource that a deploy **replaced** — see
 [Custom Resource Types](#custom-resource-types) — stays `updated`, with its
 `physical_resource_id` re-pointed at the replacement. The deploy records a
-`replace` event, followed by a `replace-cleanup` event for the disposal of the
-old resource (or `replace-retained` when `deletion_policy` is `retain`).
+`replace` event, and a `replace-cleanup` event for the disposal of the old
+resource (or `replace-retained` when `deletion_policy` is `retain`) once every
+other change in the operation has been applied.
 
 Once a resource reaches `deleted`, it is a tombstone kept for audit history —
 `get-formation` continues to list it, but `plan-formation` and
@@ -744,10 +745,31 @@ Some properties cannot be changed in place. When an `update` answers with a
 `physical_resource_id` different from the one it was given, the engine treats it
 as a replacement: the resource record is re-pointed at the new resource, every
 `ref` to it resolves to the new id, and the old resource is then disposed of
-under the resource's own `deletion_policy` (`retain` leaves it alive). Cleanup
-runs *after* the replacement has succeeded and never fails the deploy — the
-desired state is already realised, so a leaked old resource is recorded as a
-failed `replace-cleanup` event rather than rolled back.
+under the resource's own `deletion_policy` (`retain` leaves it alive).
+
+Cleanup is **deferred to the end of the operation**, after every other resource
+change and every orphan removal. A dependent that referenced the old resource
+has been re-pointed at the replacement by then, so a type whose delete refuses
+while a reference is live — an `ai_provider` answers `409` while an agent, chat
+or model route names it, and `force` does not override that — is deletable at
+the moment the disposal runs.
+
+A disposal that still fails never fails the deploy: the desired state is already
+realised, so rolling back a replacement that worked would leave the caller worse
+off. Instead it is reported twice and retried:
+
+- a failed `replace-cleanup` event on the operation, and
+- `error.code: "FORMATION_REPLACE_CLEANUP_FAILED"` on the formation itself while
+  the resource is still live, with `error.meta.failures` naming each
+  `{ logical_id, resource_type, physical_resource_id, error }`. The formation
+  stays `active` and the operation stays `succeeded` — only the leak is
+  outstanding.
+
+The un-deleted id stays on the resource record as pending cleanup, so the next
+deploy — and the teardown, which is the last operation that will ever name it —
+attempts the disposal again and clears the error once it succeeds. A pending
+cleanup that fails during teardown is recorded but never leaves the formation in
+`delete_failed`.
 
 ## Configuration
 

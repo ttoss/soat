@@ -480,6 +480,7 @@ describe('formationsApply', () => {
         existing: undefined,
         resolvedIds: new Map<string, string>(),
         events: [],
+        pendingCleanups: [],
         projectId,
         formationId,
       })
@@ -517,6 +518,7 @@ describe('formationsApply', () => {
       existing,
       resolvedIds: new Map<string, string>(),
       events,
+      pendingCleanups: [],
       projectId,
       formationId,
     });

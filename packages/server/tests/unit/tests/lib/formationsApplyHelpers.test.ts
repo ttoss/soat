@@ -122,6 +122,7 @@ describe('formationsApplyHelpers', () => {
       logicalId: 'memory',
       resolvedIds,
       events,
+      pendingCleanups: [],
     });
 
     expect(resolvedIds.get('memory')).toBe(memory.id);
@@ -166,6 +167,7 @@ describe('formationsApplyHelpers', () => {
       logicalId: 'noop',
       resolvedIds,
       events,
+      pendingCleanups: [],
     });
 
     expect(resolvedIds.get('noop')).toBe(memory.id);
@@ -228,6 +230,7 @@ describe('formationsApplyHelpers', () => {
         logicalId: 'agree',
         resolvedIds: new Map<string, string>(),
         events,
+        pendingCleanups: [],
       });
 
       expect(plan.action).toBe('no-op');
@@ -259,6 +262,7 @@ describe('formationsApplyHelpers', () => {
       logicalId: 'dropped',
       resolvedIds: new Map<string, string>(),
       events,
+      pendingCleanups: [],
     });
 
     expect(events[0]).toMatchObject({ action: 'no-op' });
@@ -293,6 +297,7 @@ describe('formationsApplyHelpers', () => {
       logicalId: 'merge',
       resolvedIds: new Map<string, string>(),
       events,
+      pendingCleanups: [],
     });
 
     const updated = await getMemory({ id: memory.id });
