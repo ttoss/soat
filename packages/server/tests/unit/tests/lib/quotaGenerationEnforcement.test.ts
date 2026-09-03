@@ -78,12 +78,13 @@ describe('evaluateGenerationQuotas', () => {
     };
     costUsd?: string | null;
     createdAt?: Date;
+    meterType?: string;
   }) => {
     const event = await db.UsageEvent.create({
       projectId: opts.projectInternalId,
       agentId: opts.agentInternalId ?? null,
       actorId: opts.actorInternalId ?? null,
-      meterType: 'llm_tokens',
+      meterType: opts.meterType ?? 'llm_tokens',
       provider: 'ollama',
       model: 'stub-model',
       costUsd: opts.costUsd ?? null,
@@ -249,6 +250,63 @@ describe('evaluateGenerationQuotas', () => {
         agentId: ctx.agentPublicId,
       });
       expect(breach).toBeNull();
+      expect(await unpricedExceptions(ctx.projectInternalId)).toHaveLength(1);
+    });
+
+    /**
+     * A platform meter is priced by the operator, not by a tenant's provider,
+     * so a deployment that prices no compute has not lost the ability to
+     * measure AI spend. Counting it also deadlocks the cap: a window holding
+     * only unpriced platform events refuses the very generation that would land
+     * the first priced AI event, so the blackout could never clear.
+     */
+    test('a window of only unpriced platform events is not a blackout', async () => {
+      const ctx = await freshProjectAndAgent('genquota-unpriced-compute');
+      for (let i = 0; i < 4; i += 1) {
+        await seedUsageEvent({
+          projectInternalId: ctx.projectInternalId,
+          meterType: 'compute_execution',
+          costUsd: null,
+        });
+      }
+      await createQuotaRow({
+        projectInternalId: ctx.projectInternalId,
+        scope: 'project',
+        metric: 'cost_usd',
+        limit: 5,
+      });
+
+      const breach = await evaluateGenerationQuotas({
+        agentId: ctx.agentPublicId,
+      });
+      expect(breach).toBeNull();
+      expect(await unpricedExceptions(ctx.projectInternalId)).toHaveLength(0);
+    });
+
+    /**
+     * The other half of reading the AI meter alone: a priced platform event
+     * must not mask a genuine AI blackout, which is what a verdict taken over
+     * every meter together would do.
+     */
+    test('a priced platform event does not mask an unpriced AI blackout', async () => {
+      const ctx = await freshProjectAndAgent('genquota-unpriced-masked');
+      await seedUnpricedEvents(ctx, 3);
+      await seedUsageEvent({
+        projectInternalId: ctx.projectInternalId,
+        meterType: 'compute_execution',
+        costUsd: '0.01',
+      });
+      await createQuotaRow({
+        projectInternalId: ctx.projectInternalId,
+        scope: 'project',
+        metric: 'cost_usd',
+        limit: 5,
+      });
+
+      const breach = await evaluateGenerationQuotas({
+        agentId: ctx.agentPublicId,
+      });
+      expect(breach?.reason).toBe('unpriced_usage');
       expect(await unpricedExceptions(ctx.projectInternalId)).toHaveLength(1);
     });
 

@@ -6418,6 +6418,18 @@ if [ "$($SOAT_CLI get-quota --quota-id "$COST_QUOTA_ID" | jq -r '.current_usage'
   echo "ERROR: Expected null current_usage on a cost_usd quota" >&2
   exit 1
 fi
+
+# The blackout refusal, end to end. Every price this stack writes is dated 2099,
+# so no llm_tokens event here is ever priced and this project's window is a
+# genuine AI blackout — which an enforcing cost cap must still refuse. Scoping
+# the verdict to the AI meter is what keeps an unpriced platform meter from
+# tripping it; narrowing it far enough to never fire would be the other failure,
+# and this is what catches that.
+expect_cli_error_status 409 create-agent-generation --wait true \
+  --agent-id "$AGENT_ID" \
+  --messages '[{"role":"user","content":"Say ok."}]'
+echo "Cost cap over an unpriced AI window refuses: OK"
+
 $SOAT_CLI delete-quota --quota-id "$COST_QUOTA_ID"
 
 # scope=api_key + metric=tokens/cost_usd is rejected (400) — no attribution.

@@ -3,6 +3,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { DEFAULT_METER_TYPE } from './priceCompute';
 import { fireQuotaExceeded, reportUnpricedCostQuota } from './quotaEvents';
 import type { QuotaWindow } from './quotas';
 import {
@@ -280,12 +281,27 @@ const aggregateGenerationMetric = async (args: {
   if (args.metric === 'cost_usd') {
     const events = await db.UsageEvent.findAll({
       where,
-      attributes: ['costUsd'],
+      attributes: ['costUsd', 'meterType'],
     });
     const priced = events.filter((event) => {
       return event.costUsd != null;
     });
+    // The verdict reads the AI meter alone. A platform meter is priced by the
+    // operator rather than by a tenant's provider, so a deployment that prices
+    // no compute has not lost the ability to measure AI spend — and counting it
+    // deadlocks the cap, because a window holding only unpriced platform events
+    // refuses the very generation that would land the first priced AI event, so
+    // the blackout could never clear. Reading it alone also stops a priced
+    // platform event from masking a genuine AI blackout.
+    const aiEvents = events.filter((event) => {
+      return event.meterType === DEFAULT_METER_TYPE;
+    });
+    const pricedAiEvents = aiEvents.filter((event) => {
+      return event.costUsd != null;
+    });
     return {
+      // Every priced meter is real spend and belongs under the cap, platform
+      // included; only the blackout verdict is meter-specific.
       total: priced.reduce((sum, event) => {
         return sum + Number(event.costUsd);
       }, 0),
@@ -293,7 +309,9 @@ const aggregateGenerationMetric = async (args: {
       // pricing gap. An empty window aggregates to a legitimate 0 — reporting
       // it would cry wolf on every idle project.
       unpricedEventCount:
-        events.length > 0 && priced.length === 0 ? events.length : 0,
+        aiEvents.length > 0 && pricedAiEvents.length === 0
+          ? aiEvents.length
+          : 0,
     };
   }
 

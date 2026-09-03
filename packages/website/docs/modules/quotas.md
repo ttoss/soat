@@ -102,6 +102,8 @@ So a window that metered usage and priced **none** of it aggregates to `0` howev
 
 The refusal waits for a real **blackout** — at least 3 metered events in the window, none of them priced. A fresh window's first event can land on the one unpriced model of a mostly-priced project; ordering noise like that must not stop a project at every window boundary, so one or two all-unpriced events pass (the exception below still files) and three with nothing priced refuse. A **partially** priced window never refuses: the aggregate is real, if incomplete.
 
+The verdict reads the [`llm_tokens`](./usage.md#meter-types-and-components) meter alone, while the aggregate it guards sums **every** priced meter. A platform meter such as `compute_execution` is priced by the operator from a `soat` SKU rather than by a tenant's provider, so a deployment that prices no compute has not lost the ability to measure AI spend — and counting it would make the cap unrecoverable, because a window holding only unpriced platform events would refuse the very generation that would land the first priced AI event. Reading the AI meter alone also stops a priced platform event from masking a genuine AI blackout.
+
 Worth knowing about the refusal:
 
 - **No `Retry-After`, and no `quota.exceeded` webhook.** The window resetting changes nothing and no limit was reached. Configure the [price book](./usage.md#pricing) for the models in use, or set the quota's `on_unpriced` to `allow`.
