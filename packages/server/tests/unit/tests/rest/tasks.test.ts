@@ -4063,9 +4063,9 @@ describe('Tasks', () => {
       const created = await startCtxTask({
         state: 'working',
         toolContext: {
-          sessionId: 'ses_forged',
-          actorId: 'act_forged',
-          actorExternalId: 'ext_forged',
+          session_id: 'ses_forged',
+          actor_id: 'act_forged',
+          actor_external_id: 'ext_forged',
           ocaToken: 'tok_keep',
         },
       });
@@ -4082,7 +4082,7 @@ describe('Tasks', () => {
 
     test('a bag of nothing but reserved keys persists nothing', async () => {
       const created = await startCtxTask({
-        toolContext: { sessionId: 'ses_forged' },
+        toolContext: { session_id: 'ses_forged' },
       });
       expect(created.status).toBe(201);
       expect(await storedContext(created.body.id)).toBeNull();

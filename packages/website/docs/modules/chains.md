@@ -98,7 +98,7 @@ sees it. Three ceilings apply, and the **smallest** wins:
 
 | Ceiling | Set on | Scope |
 | --- | --- | --- |
-| `maxChainGenerations` | the agent's [`stop_conditions`](./agents.md#stop-conditions) | one agent |
+| `max_chain_generations` | the agent's [`stop_conditions`](./agents.md#stop-conditions) | one agent |
 | `max_chain_generations` | the [project](./projects.md) | every chain in one project |
 | `MAX_CONTINUATION_CHAIN_GENERATIONS` | the deployment's environment | every chain |
 
@@ -142,7 +142,7 @@ soat list-generations --chain-id chain_01
 
 # Cap an agent's chains at 20 generations
 soat update-agent --agent-id agent_01 \
-  --stop-conditions '[{"type":"maxChainGenerations","max_generations":20}]'
+  --stop-conditions '[{"type":"max_chain_generations","max_generations":20}]'
 
 # Cap every chain in the project at 25, whatever its agents declare
 soat update-project --project-id proj_01 --max-chain-generations 25

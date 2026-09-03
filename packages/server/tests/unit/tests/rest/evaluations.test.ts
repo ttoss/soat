@@ -907,16 +907,16 @@ describe('Evaluations', () => {
 
         const listRes = await asUser().get(`/api/v1/evals/${evalId}/runs`);
         expect(listRes.status).toBe(200);
-        const listed = listRes.body.data.find(
-          (run: { id: string }) => {
-            return run.id === res.body.id;
-          }
-        );
+        const listed = listRes.body.data.find((run: { id: string }) => {
+          return run.id === res.body.id;
+        });
         expect(listed.metadata).toEqual(metadata);
       });
 
       test('a run started without metadata reports null', async () => {
-        const res = await asUser().post(`/api/v1/evals/${evalId}/runs`).send({});
+        const res = await asUser()
+          .post(`/api/v1/evals/${evalId}/runs`)
+          .send({});
         expect(res.status).toBe(201);
         expect(res.body.metadata).toBeNull();
       });
@@ -930,7 +930,6 @@ describe('Evaluations', () => {
         expect(res.body.error.code).toBe('VALIDATION_FAILED');
       });
     });
-
 
     // #1150: an eval scores the agent you are about to ship. An agent whose
     // tools authorize through `tool_context` could not be scored as it runs in
@@ -1044,8 +1043,8 @@ describe('Evaluations', () => {
             wait: true,
             tool_context: {
               ocaToken: 'tok_eval',
-              sessionId: 'sess_forged',
-              actorId: 'actor_forged',
+              session_id: 'sess_forged',
+              actor_id: 'actor_forged',
             },
           });
 

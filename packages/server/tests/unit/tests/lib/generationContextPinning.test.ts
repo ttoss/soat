@@ -60,9 +60,9 @@ describe('buildGenerationContext — server identity pinning', () => {
       agentId,
       messages: [{ role: 'user', content: 'hello' }],
       toolContext: {
-        sessionId: 'ses_forged',
-        actorId: 'act_forged',
-        actorExternalId: 'forged-external',
+        session_id: 'ses_forged',
+        actor_id: 'act_forged',
+        actor_external_id: 'forged-external',
         userId: 'usr_legit',
       },
     });
@@ -76,18 +76,18 @@ describe('buildGenerationContext — server identity pinning', () => {
       messages: [{ role: 'user', content: 'hello' }],
       sessionId,
       toolContext: {
-        sessionId: 'ses_forged',
-        actorId: 'act_forged',
-        actorExternalId: 'forged-external',
+        session_id: 'ses_forged',
+        actor_id: 'act_forged',
+        actor_external_id: 'forged-external',
         userId: 'usr_legit',
       },
     });
 
     expect(ctx.toolContext).toEqual({
       userId: 'usr_legit',
-      sessionId,
-      actorId,
-      actorExternalId,
+      session_id: sessionId,
+      actor_id: actorId,
+      actor_external_id: actorExternalId,
     });
   });
 
@@ -95,7 +95,7 @@ describe('buildGenerationContext — server identity pinning', () => {
     const ctx = await buildGenerationContext({
       agentId,
       messages: [{ role: 'user', content: 'hello' }],
-      toolContext: { sessionID: 'ses_forged', ACTORID: 'act_forged' },
+      toolContext: { Session_ID: 'ses_forged', ACTOR_ID: 'act_forged' },
     });
 
     expect(ctx.toolContext).toEqual({});

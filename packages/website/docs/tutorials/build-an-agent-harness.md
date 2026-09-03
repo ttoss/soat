@@ -232,7 +232,7 @@ Attach the tool through [`tool_bindings`](/docs/modules/agents#tool-bindings). T
   Forcing at agent level instead ([`tool_choice`](/docs/modules/agents#tool-choice)) would apply to *every* step of the turn, the resumed one included — the run would propose the same client tool again on each submit until `max_steps` ended it.
 
   Forcing is passed through to the provider, so it works only where the provider implements it. [Ollama's OpenAI-compatible API](https://docs.ollama.com/api/openai-compatibility) does **not** support `tool_choice` and ignores the field, so a local Ollama agent falls back to `"auto"`. OpenAI, Anthropic, and xAI all honor it.
-- [`stop_conditions`](/docs/modules/agents#stop-conditions) `{ "type": "hasToolCall", "tool_name": "read_local_file" }` names the call that ends the turn. It is required only when the agent's own `tool_choice` forces a tool — a step rule leaves the agent at `"auto"`, so here it is documentation of the intended exit.
+- [`stop_conditions`](/docs/modules/agents#stop-conditions) `{ "type": "has_tool_call", "tool_name": "read_local_file" }` names the call that ends the turn. It is required only when the agent's own `tool_choice` forces a tool — a step rule leaves the agent at `"auto"`, so here it is documentation of the intended exit.
 - `max_steps` bounds the agent loop, counted across the pause: the resumed turn spends what is left of it, never a fresh budget.
 
 <Tabs groupId="client">
@@ -246,7 +246,7 @@ AGENT_ID=$(soat create-agent \
   --instructions "You are a file assistant. When the user asks about a file, call the read_local_file tool with the path argument, then answer using the tool result." \
   --tool-bindings '[{"tool_id":"'"$TOOL_ID"'"}]' \
   --step-rules '[{"step":1,"tool_choice":{"type":"tool","tool_name":"read_local_file"}}]' \
-  --stop-conditions '[{"type":"hasToolCall","tool_name":"read_local_file"}]' \
+  --stop-conditions '[{"type":"has_tool_call","tool_name":"read_local_file"}]' \
   --max-steps 3 | jq -r '.id')
 echo "Agent: $AGENT_ID"
 ```
@@ -266,7 +266,7 @@ const { data: agent } = await adminSoat.agents.createAgent({
     step_rules: [
       { step: 1, tool_choice: { type: 'tool', tool_name: 'read_local_file' } },
     ],
-    stop_conditions: [{ type: 'hasToolCall', tool_name: 'read_local_file' }],
+    stop_conditions: [{ type: 'has_tool_call', tool_name: 'read_local_file' }],
     max_steps: 3,
   },
 });
@@ -287,7 +287,7 @@ AGENT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents" \
     \"instructions\": \"You are a file assistant. When the user asks about a file, call the read_local_file tool with the path argument, then answer using the tool result.\",
     \"tool_bindings\": [{\"tool_id\": \"$TOOL_ID\"}],
     \"step_rules\": [{\"step\": 1, \"tool_choice\": {\"type\": \"tool\", \"tool_name\": \"read_local_file\"}}],
-    \"stop_conditions\": [{\"type\": \"hasToolCall\", \"tool_name\": \"read_local_file\"}],
+    \"stop_conditions\": [{\"type\": \"has_tool_call\", \"tool_name\": \"read_local_file\"}],
     \"max_steps\": 3
   }" | jq -r '.id')
 echo "Agent: $AGENT_ID"

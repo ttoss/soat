@@ -2046,35 +2046,35 @@ describe('Agents', () => {
         });
     };
 
-    test('accepts the documented hasToolCall condition', async () => {
-      const res = await create([{ type: 'hasToolCall', tool_name: 'done' }]);
+    test('accepts the documented has_tool_call condition', async () => {
+      const res = await create([{ type: 'has_tool_call', tool_name: 'done' }]);
 
       expect(res.status).toBe(201);
       expect(res.body.stop_conditions).toEqual([
-        { type: 'hasToolCall', tool_name: 'done' },
+        { type: 'has_tool_call', tool_name: 'done' },
       ]);
     });
 
-    test('accepts the chain-scoped maxChainGenerations condition', async () => {
+    test('accepts the chain-scoped max_chain_generations condition', async () => {
       const res = await create([
-        { type: 'maxChainGenerations', max_generations: 20 },
+        { type: 'max_chain_generations', max_generations: 20 },
       ]);
 
       expect(res.status).toBe(201);
       expect(res.body.stop_conditions).toEqual([
-        { type: 'maxChainGenerations', max_generations: 20 },
+        { type: 'max_chain_generations', max_generations: 20 },
       ]);
     });
 
-    test('rejects maxChainGenerations without a positive max_generations', async () => {
+    test('rejects max_chain_generations without a positive max_generations', async () => {
       // A ceiling of 0 or a missing number would be stored and then read as "no
       // agent ceiling", i.e. silently fall back to the platform's — which is the
       // opposite of what the author asked for.
       for (const condition of [
-        { type: 'maxChainGenerations' },
-        { type: 'maxChainGenerations', max_generations: 0 },
-        { type: 'maxChainGenerations', max_generations: 1.5 },
-        { type: 'maxChainGenerations', max_generations: '10' },
+        { type: 'max_chain_generations' },
+        { type: 'max_chain_generations', max_generations: 0 },
+        { type: 'max_chain_generations', max_generations: 1.5 },
+        { type: 'max_chain_generations', max_generations: '10' },
       ]) {
         const res = await create([condition]);
         expect(res.status).toBe(400);
@@ -2091,8 +2091,8 @@ describe('Agents', () => {
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
 
-    test('rejects a hasToolCall condition with no tool_name', async () => {
-      const res = await create([{ type: 'hasToolCall' }]);
+    test('rejects a has_tool_call condition with no tool_name', async () => {
+      const res = await create([{ type: 'has_tool_call' }]);
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
@@ -2126,7 +2126,7 @@ describe('Agents', () => {
   });
 
   describe('a forcing tool_choice requires a way to stop', () => {
-    const DONE: object = { type: 'hasToolCall', tool_name: 'done' };
+    const DONE: object = { type: 'has_tool_call', tool_name: 'done' };
 
     const createAgentWith = (body: Record<string, unknown>) => {
       return authenticatedTestClient(userToken)
@@ -2161,17 +2161,19 @@ describe('Agents', () => {
 
     // Chain-scoped: it caps how many generations a chain spawns, it never ends a
     // turn, so it is not the exit this rule is about.
-    test('rejects "required" when only maxChainGenerations is declared', async () => {
+    test('rejects "required" when only max_chain_generations is declared', async () => {
       const res = await createAgentWith({
         tool_choice: 'required',
-        stop_conditions: [{ type: 'maxChainGenerations', max_generations: 20 }],
+        stop_conditions: [
+          { type: 'max_chain_generations', max_generations: 20 },
+        ],
       });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('FORCED_TOOL_CHOICE_CANNOT_STOP');
     });
 
-    test('accepts "required" with a hasToolCall condition', async () => {
+    test('accepts "required" with a has_tool_call condition', async () => {
       const res = await createAgentWith({
         tool_choice: 'required',
         stop_conditions: [DONE],

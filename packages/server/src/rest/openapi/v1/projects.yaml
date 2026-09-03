@@ -204,7 +204,7 @@ paths:
                     `MAX_CONTINUATION_CHAIN_GENERATIONS`; otherwise an integer
                     >= 1. The effective budget is the smallest of the
                     deployment's ceiling, this one, and the agent's own
-                    `maxChainGenerations` stop condition, so an agent author can
+                    `max_chain_generations` stop condition, so an agent author can
                     be stricter than this number but never exceed it.
                 default_model_route_id:
                   x-soat-ref: model-routes
@@ -435,7 +435,7 @@ components:
             the platform stops resuming it. `null` means no project ceiling (the
             default), leaving the deployment-wide one. The effective budget is
             the smallest of the deployment's ceiling, this one, and the agent's
-            own `maxChainGenerations` stop condition.
+            own `max_chain_generations` stop condition.
           example: null
         default_model_route_id:
           x-soat-ref: model-routes

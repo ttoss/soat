@@ -13,18 +13,18 @@ import {
 describe('pinServerIdentityToolContext', () => {
   test('reserves exactly the three identity keys', () => {
     expect([...RESERVED_TOOL_CONTEXT_KEYS]).toEqual([
-      'sessionId',
-      'actorId',
-      'actorExternalId',
+      'session_id',
+      'actor_id',
+      'actor_external_id',
     ]);
   });
 
   test('strips caller-supplied reserved keys when there is no server identity', () => {
     const result = pinServerIdentityToolContext({
       toolContext: {
-        sessionId: 'ses_forged',
-        actorId: 'act_forged',
-        actorExternalId: '+15550000000',
+        session_id: 'ses_forged',
+        actor_id: 'act_forged',
+        actor_external_id: '+15550000000',
         userId: 'usr_legit',
       },
       identity: null,
@@ -35,9 +35,9 @@ describe('pinServerIdentityToolContext', () => {
   test('strips reserved keys case-insensitively — header names are case-insensitive, so a casing variant lands on the same outbound header', () => {
     const result = pinServerIdentityToolContext({
       toolContext: {
-        sessionID: 'ses_forged',
-        ActorId: 'act_forged',
-        actorexternalid: 'forged',
+        Session_ID: 'ses_forged',
+        Actor_Id: 'act_forged',
+        ACTOR_EXTERNAL_ID: 'forged',
         tenant: 't1',
       },
       identity: null,
@@ -48,8 +48,8 @@ describe('pinServerIdentityToolContext', () => {
   test('stamps the server identity over anything the caller supplied', () => {
     const result = pinServerIdentityToolContext({
       toolContext: {
-        sessionId: 'ses_forged',
-        actorId: 'act_forged',
+        session_id: 'ses_forged',
+        actor_id: 'act_forged',
         userId: 'usr_legit',
       },
       identity: {
@@ -60,18 +60,18 @@ describe('pinServerIdentityToolContext', () => {
     });
     expect(result).toEqual({
       userId: 'usr_legit',
-      sessionId: 'ses_real',
-      actorId: 'act_real',
-      actorExternalId: '+15559876543',
+      session_id: 'ses_real',
+      actor_id: 'act_real',
+      actor_external_id: '+15559876543',
     });
   });
 
   test('omits actor keys entirely when the identity has no actor', () => {
     const result = pinServerIdentityToolContext({
-      toolContext: { actorId: 'act_forged' },
+      toolContext: { actor_id: 'act_forged' },
       identity: { sessionId: 'ses_real' },
     });
-    expect(result).toEqual({ sessionId: 'ses_real' });
+    expect(result).toEqual({ session_id: 'ses_real' });
   });
 
   test('returns undefined when there is nothing to carry', () => {
@@ -80,7 +80,7 @@ describe('pinServerIdentityToolContext', () => {
     ).toBeUndefined();
     expect(
       pinServerIdentityToolContext({
-        toolContext: { sessionId: 'ses_forged' },
+        toolContext: { session_id: 'ses_forged' },
         identity: null,
       })
     ).toEqual({});
@@ -91,7 +91,7 @@ describe('pinServerIdentityToolContext', () => {
       toolContext: undefined,
       identity: { sessionId: 'ses_real', actorId: 'act_real' },
     });
-    expect(result).toEqual({ sessionId: 'ses_real', actorId: 'act_real' });
+    expect(result).toEqual({ session_id: 'ses_real', actor_id: 'act_real' });
   });
 });
 

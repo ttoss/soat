@@ -2762,19 +2762,19 @@ describe('Tools', () => {
           input: {},
           tool_context: {
             ocaToken: 'tok-abc123',
-            sessionId: 'sess_forged',
-            actorId: 'actor_forged',
-            actorExternalId: 'ext_forged',
+            session_id: 'sess_forged',
+            actor_id: 'actor_forged',
+            actor_external_id: 'ext_forged',
           },
         });
 
       expect(res.status).toBe(200);
       expect(
-        lastCtxRequest.headers['x-soat-context-sessionid']
+        lastCtxRequest.headers['x-soat-context-session_id']
       ).toBeUndefined();
-      expect(lastCtxRequest.headers['x-soat-context-actorid']).toBeUndefined();
+      expect(lastCtxRequest.headers['x-soat-context-actor_id']).toBeUndefined();
       expect(
-        lastCtxRequest.headers['x-soat-context-actorexternalid']
+        lastCtxRequest.headers['x-soat-context-actor_external_id']
       ).toBeUndefined();
       expect(lastCtxRequest.headers['x-soat-context-ocatoken']).toBe(
         'tok-abc123'
@@ -2782,7 +2782,7 @@ describe('Tools', () => {
     });
 
     // Casing is not a way around the strip: header names are case-insensitive,
-    // so `SESSIONID` would land on the same header as `sessionId`.
+    // so `SESSION_ID` would land on the same header as `session_id`.
     test('strips a reserved key supplied in a different casing', async () => {
       const id = await createContextTool('call-ctx-reserved-casing-tool');
 
@@ -2790,12 +2790,12 @@ describe('Tools', () => {
         .post(`/api/v1/tools/${id}/call`)
         .send({
           input: {},
-          tool_context: { ocaToken: 'tok-abc123', SESSIONID: 'sess_forged' },
+          tool_context: { ocaToken: 'tok-abc123', SESSION_ID: 'sess_forged' },
         });
 
       expect(res.status).toBe(200);
       expect(
-        lastCtxRequest.headers['x-soat-context-sessionid']
+        lastCtxRequest.headers['x-soat-context-session_id']
       ).toBeUndefined();
     });
 

@@ -1307,14 +1307,14 @@ describe('Conversations', () => {
         ][0].messages;
 
       // The full tool chain must be present in the LLM input
-      const hasToolCall = secondCallMessages.some((m) => {
+      const has_tool_call = secondCallMessages.some((m) => {
         return m.role === 'assistant' && Array.isArray(m.content);
       });
       const hasToolResult = secondCallMessages.some((m) => {
         return m.role === 'tool';
       });
 
-      expect(hasToolCall).toBe(true);
+      expect(has_tool_call).toBe(true);
       expect(hasToolResult).toBe(true);
     });
 

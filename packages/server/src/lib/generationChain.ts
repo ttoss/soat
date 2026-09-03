@@ -32,7 +32,7 @@ const DEFAULT_MAX_CONTINUATION_CHAIN_GENERATIONS = 100;
 
 /**
  * The deployment-wide ceiling. An agent may declare a smaller one of its own
- * (`stop_conditions`: `maxChainGenerations`); the effective budget is the
+ * (`stop_conditions`: `max_chain_generations`); the effective budget is the
  * smaller of the two, so this stays a backstop rather than a target.
  */
 export const maxContinuationChainGenerations = (): number => {

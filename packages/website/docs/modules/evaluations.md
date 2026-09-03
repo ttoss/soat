@@ -422,7 +422,7 @@ Three properties distinguish it from `metadata`:
 - **It is write-only.** No read of the run returns it. A run is a report other people read, and a credential in it is not theirs to see; `metadata` is readable for the opposite reason — a label is not a credential.
 - **It does not outlive the work.** The bag is cleared once the run reaches a terminal state, so a finished run — which is kept as a historical measurement — holds no credential.
 
-The usual `tool_context` rules apply: each key is forwarded as one `X-Soat-Context-<key>` header and resolves any `{{context:}}` token in a bound tool's headers or [`preset_parameters`](../advanced/tool-context.md#pinning-a-parameter-to-the-runs-value), a tool's [`context_keys`](./tools.md#scoping-which-context-keys-reach-a-tool) narrows what reaches it, and a key that could not become a header name is rejected with `400 INVALID_TOOL_CONTEXT_KEY` before any run is created. An eval generation has no session, so the reserved identity keys (`sessionId`, `actorId`, `actorExternalId`) are dropped rather than forwarded.
+The usual `tool_context` rules apply: each key is forwarded as one `X-Soat-Context-<key>` header and resolves any `{{context:}}` token in a bound tool's headers or [`preset_parameters`](../advanced/tool-context.md#pinning-a-parameter-to-the-runs-value), a tool's [`context_keys`](./tools.md#scoping-which-context-keys-reach-a-tool) narrows what reaches it, and a key that could not become a header name is rejected with `400 INVALID_TOOL_CONTEXT_KEY` before any run is created. An eval generation has no session, so the reserved identity keys (`session_id`, `actor_id`, `actor_external_id`) are dropped rather than forwarded.
 
 ### Canceling a run
 

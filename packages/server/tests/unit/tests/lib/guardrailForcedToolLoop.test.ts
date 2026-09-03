@@ -189,7 +189,7 @@ describe('guardrail-held tool calls under tool_choice: "required"', () => {
     onApprovalExpiry?: 'terminate' | 'react';
     /**
      * Binds an ungated `done` tool and declares
-     * `{ hasToolCall: done }` — the configuration
+     * `{ has_tool_call: done }` — the configuration
      * `assertForcedToolChoiceCanStop` now requires of any forcing agent. Left
      * off, the fixture is a row written before that rule existed.
      */
@@ -252,7 +252,7 @@ describe('guardrail-held tool calls under tool_choice: "required"', () => {
         : [{ toolId: tool.publicId }],
       toolChoice: 'required',
       stopConditions: args.declaresTerminalTool
-        ? [{ type: 'hasToolCall', tool_name: DONE_TOOL }]
+        ? [{ type: 'has_tool_call', tool_name: DONE_TOOL }]
         : null,
       maxSteps: MAX_STEPS,
       onApprovalExpiry: args.onApprovalExpiry ?? null,

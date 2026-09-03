@@ -633,21 +633,21 @@ components:
         stop_conditions:
           type: array
           nullable: true
-          description: Conditions that stop the agent's work early — turn-scoped (`hasToolCall`) or chain-scoped (`maxChainGenerations`).
+          description: Conditions that stop the agent's work early — turn-scoped (`has_tool_call`) or chain-scoped (`max_chain_generations`).
           items:
             type: object
             properties:
               type:
                 type: string
-                description: 'Condition type — `hasToolCall` or `maxChainGenerations`'
+                description: 'Condition type — `has_tool_call` or `max_chain_generations`'
               tool_name:
                 type: string
                 nullable: true
-                description: Tool name to match when type is `hasToolCall`
+                description: Tool name to match when type is `has_tool_call`
               max_generations:
                 type: integer
                 nullable: true
-                description: Generations the continuation chain may reach when type is `maxChainGenerations`
+                description: Generations the continuation chain may reach when type is `max_chain_generations`
         active_tool_ids:
           x-soat-ref: tools
           type: array
@@ -968,8 +968,8 @@ components:
           description: >-
             Optional allowlist of `tool_context` keys forwarded to this tool as
             prefixed context headers. `null` or omitted forwards every key;
-            `[]` forwards none. The server-pinned identity keys (`sessionId`,
-            `actorId`, `actorExternalId`) are always forwarded, and a key
+            `[]` forwards none. The server-pinned identity keys (`session_id`,
+            `actor_id`, `actor_external_id`) are always forwarded, and a key
             consumed by a `{{context:<key>}}` token in this tool's own headers
             is substituted regardless of this list.
         preset_parameters:

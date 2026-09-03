@@ -44,7 +44,7 @@ the graph layer would otherwise sequence for you, and three dials bound it:
 | Dial | What it does |
 | --- | --- |
 | [`max_steps`](/docs/modules/agents#generation-loop) | Caps how many reasoning steps the loop may take (default `20`) |
-| [`stop_conditions`](/docs/modules/agents#stop-conditions) | Ends the loop as soon as the model calls a named tool — the `hasToolCall` condition, enforced alongside `max_steps` |
+| [`stop_conditions`](/docs/modules/agents#stop-conditions) | Ends the loop as soon as the model calls a named tool — the `has_tool_call` condition, enforced alongside `max_steps` |
 | [`output_schema`](/docs/modules/agents#structured-output) | Makes the result a checked object rather than prose a downstream step must parse |
 
 Escalate to a graph when — and only when — the work needs something an agent loop cannot

@@ -511,8 +511,8 @@ components:
             state's `on_enter` runs with. Each transition may replace it (see
             `TransitionTaskRequest.tool_context`).
 
-            The reserved identity keys (`sessionId`, `actorId`,
-            `actorExternalId`) are stripped in any casing and re-derived
+            The reserved identity keys (`session_id`, `actor_id`,
+            `actor_external_id`) are stripped in any casing and re-derived
             server-side, so a task-dispatched generation cannot forge them. A key
             outside the HTTP header-name grammar is rejected with
             `INVALID_TOOL_CONTEXT_KEY` (400).
@@ -585,8 +585,8 @@ components:
             including an approval gate, a retry, and an automation hop. Send an
             empty object to clear it without closing the task.
 
-            The reserved identity keys (`sessionId`, `actorId`,
-            `actorExternalId`) are stripped in any casing and re-derived
+            The reserved identity keys (`session_id`, `actor_id`,
+            `actor_external_id`) are stripped in any casing and re-derived
             server-side. A key outside the HTTP header-name grammar is rejected
             with `INVALID_TOOL_CONTEXT_KEY` (400).
 

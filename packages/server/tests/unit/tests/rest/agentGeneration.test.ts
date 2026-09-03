@@ -1171,7 +1171,7 @@ describe('Agent Generation Routes', () => {
           tool_bindings: [{ tool_id: toolRes.body.id }],
           tool_choice: { type: 'tool', tool_name: 'confirm_dialog' },
           stop_conditions: [
-            { type: 'hasToolCall', tool_name: 'confirm_dialog' },
+            { type: 'has_tool_call', tool_name: 'confirm_dialog' },
           ],
           max_steps: 2,
         });

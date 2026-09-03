@@ -188,9 +188,9 @@ export const assertValidToolContextAllowlist = (
  * orchestration or nested `soat` tool call (#843, #850, #851).
  */
 export const RESERVED_TOOL_CONTEXT_KEYS = [
-  'sessionId',
-  'actorId',
-  'actorExternalId',
+  'session_id',
+  'actor_id',
+  'actor_external_id',
 ] as const;
 
 export type ServerToolContextIdentity = {
@@ -199,8 +199,8 @@ export type ServerToolContextIdentity = {
   actorExternalId?: string;
 };
 
-// Header names are case-insensitive (RFC 9110 §5.1), so `sessionID` lands on
-// the same outbound header as `sessionId` — the strip must match by lowercased
+// Header names are case-insensitive (RFC 9110 §5.1), so `Session_ID` lands on
+// the same outbound header as `session_id` — the strip must match by lowercased
 // key or a casing variant smuggles the forged header through.
 const RESERVED_LOWER = new Set(
   RESERVED_TOOL_CONTEXT_KEYS.map((key) => {
@@ -213,7 +213,7 @@ const RESERVED_LOWER = new Set(
  * key (in any casing) is dropped from the caller bag, then the server-derived
  * identity — when the generation runs for a session — is stamped on top. A
  * generation with no session carries no identity keys at all, so a downstream
- * tool can trust that a `<prefix>sessionId` context header is always
+ * tool can trust that a `<prefix>session_id` context header is always
  * server-derived.
  */
 export const pinServerIdentityToolContext = (args: {
@@ -231,13 +231,13 @@ export const pinServerIdentityToolContext = (args: {
   if (!args.identity) return stripped;
 
   const identity: Record<string, string> = {
-    sessionId: args.identity.sessionId,
+    session_id: args.identity.sessionId,
   };
   if (args.identity.actorId) {
-    identity.actorId = args.identity.actorId;
+    identity.actor_id = args.identity.actorId;
   }
   if (args.identity.actorExternalId) {
-    identity.actorExternalId = args.identity.actorExternalId;
+    identity.actor_external_id = args.identity.actorExternalId;
   }
 
   return { ...stripped, ...identity };
@@ -251,7 +251,7 @@ export const pinServerIdentityToolContext = (args: {
  * The strip is the whole point. Where a generation runs, `buildGenerationContext`
  * stamps the trusted identity over the caller's; where nothing does — a task row,
  * a direct `POST /tools/{id}/call` — there is nothing to overwrite a forged
- * `sessionId` with, so it must be removed rather than trusted (#843/#850/#851).
+ * `session_id` with, so it must be removed rather than trusted (#843/#850/#851).
  * That is also why this cannot live inside `callTool`: a generation-driven call
  * arrives with identity already pinned, and stripping it there would delete the
  * server's own keys.

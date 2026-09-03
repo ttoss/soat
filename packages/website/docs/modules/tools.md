@@ -65,7 +65,7 @@ HTTP header names in `execute.headers` and `mcp.headers` are opaque and preserve
 
 ### Context Headers (`X-Soat-Context-*`)
 
-On every `http` and `mcp` tool call, the server injects the generation's [`tool_context`](../advanced/tool-context.md) as `X-Soat-Context-*` request headers — including the auto-populated `sessionId`, `actorId` and `actorExternalId` — in addition to, and after, the headers you configure. This is how a tool endpoint learns who the agent is acting for without trusting the prompt; the prefix is deployment configuration ([`TOOL_CONTEXT_HEADER_PREFIX`](../self-hosting/configuration.md#agent-generation)), so a caller can never overwrite a tool's own credential. When a target needs a context value in a header of its own, declare it with a [`{{context:<key>}}` token](#context-references-in-headers). See the [Tool Context reference](../advanced/tool-context.md) for the key→header rule and security notes.
+On every `http` and `mcp` tool call, the server injects the generation's [`tool_context`](../advanced/tool-context.md) as `X-Soat-Context-*` request headers — including the auto-populated `session_id`, `actor_id` and `actor_external_id` — in addition to, and after, the headers you configure. This is how a tool endpoint learns who the agent is acting for without trusting the prompt; the prefix is deployment configuration ([`TOOL_CONTEXT_HEADER_PREFIX`](../self-hosting/configuration.md#agent-generation)), so a caller can never overwrite a tool's own credential. When a target needs a context value in a header of its own, declare it with a [`{{context:<key>}}` token](#context-references-in-headers). See the [Tool Context reference](../advanced/tool-context.md) for the key→header rule and security notes.
 
 By default every context key reaches every `http`, `mcp` and `builtin` tool; set [`context_keys`](#scoping-which-context-keys-reach-a-tool) to bound that.
 
@@ -143,7 +143,7 @@ A generation's `tool_context` is forwarded, in full, to every `http`, `mcp` and 
 | --- | --- |
 | Omitted or `null` | Every key is forwarded. This is the default. |
 | `[]` | No caller key is forwarded. |
-| Identity keys | `sessionId`, `actorId` and `actorExternalId` are server-derived and always forwarded regardless of the list. |
+| Identity keys | `session_id`, `actor_id` and `actor_external_id` are server-derived and always forwarded regardless of the list. |
 | `{{context:<key>}}` tokens | Substituted regardless of the list: the tool declared that header itself. A key used only in a token need not be listed. |
 | `builtin` tools | The list also bounds the `tool_context` propagated in the action's request body, so a nested generation inherits only the listed keys. |
 | Matching | Case-insensitive (a key names a header). |
@@ -403,7 +403,7 @@ Tools can be invoked independently of an agent via [`POST /api/v1/tools/{tool_id
 - A non-2xx target response fails with `502 TOOL_HTTP_ERROR`; the error `meta` carries `tool_status_code`, `tool_response_body`, `tool_url`, and `tool_method`.
 - If [`execute.auth`](#computed-credentials-executeauth) cannot produce the credential, the call fails with `502 TOOL_AUTH_FAILED` instead.
 - A 2xx response whose body isn't valid JSON is returned as raw text; an empty result (e.g. a `builtin` action answering `204`) responds `200` with a JSON `null` body.
-- `tool_context` in the body reaches a tool declaring a [`{{context:<key>}}` token](#context-references-in-headers), so a context-dependent tool can be exercised here without an agent in between. There is no session on this route, so the auto-populated `sessionId`, `actorId` and `actorExternalId` are dropped from that bag rather than forwarded — see [Calling a context-dependent tool directly](../advanced/tool-context.md#calling-a-context-dependent-tool-directly).
+- `tool_context` in the body reaches a tool declaring a [`{{context:<key>}}` token](#context-references-in-headers), so a context-dependent tool can be exercised here without an agent in between. There is no session on this route, so the auto-populated `session_id`, `actor_id` and `actor_external_id` are dropped from that bag rather than forwarded — see [Calling a context-dependent tool directly](../advanced/tool-context.md#calling-a-context-dependent-tool-directly).
 
 ## Examples
 

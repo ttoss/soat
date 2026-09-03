@@ -350,8 +350,8 @@ describe('resolveAgentTools', () => {
     const tools = await resolveAgentTools({
       toolIds: [contextToolRes.body.id],
       toolContext: {
-        sessionId: 'ses_01',
-        actor_external_id: 'snake',
+        session_id: 'ses_01',
+        tenant_external_id: 'snake',
         TenantId: 'pascal',
       },
     });
@@ -373,13 +373,13 @@ describe('resolveAgentTools', () => {
     // Every key reached the wire under `X-Soat-Context-` + itself, with its
     // own spelling preserved through the prefix — and Node hands it back
     // lowercased regardless of the case the caller chose.
-    expect(headers?.['x-soat-context-sessionid']).toBe('ses_01');
-    expect(headers?.['x-soat-context-actor_external_id']).toBe('snake');
+    expect(headers?.['x-soat-context-session_id']).toBe('ses_01');
+    expect(headers?.['x-soat-context-tenant_external_id']).toBe('snake');
     expect(headers?.['x-soat-context-tenantid']).toBe('pascal');
 
     // Separators are part of the key and are NOT collapsed: the snake_case key
-    // did not become `actorexternalid`.
-    expect(headers?.['x-soat-context-actorexternalid']).toBeUndefined();
+    // did not become `tenantexternalid`.
+    expect(headers?.['x-soat-context-tenantexternalid']).toBeUndefined();
   });
 
   // #945 item 2: `{{context:<key>}}` in a tool's headers. `tool_context` alone
@@ -758,16 +758,16 @@ describe('resolveAgentTools', () => {
             toolContext: {
               tenant: 'acme',
               ocaToken: 'tok_abc',
-              sessionId: 'ses_1',
-              actorId: 'act_1',
-              actorExternalId: 'ext_1',
+              session_id: 'ses_1',
+              actor_id: 'act_1',
+              actor_external_id: 'ext_1',
             },
           });
 
           const headers = srv.requests[0]!;
-          expect(headers['x-soat-context-sessionid']).toBe('ses_1');
-          expect(headers['x-soat-context-actorid']).toBe('act_1');
-          expect(headers['x-soat-context-actorexternalid']).toBe('ext_1');
+          expect(headers['x-soat-context-session_id']).toBe('ses_1');
+          expect(headers['x-soat-context-actor_id']).toBe('act_1');
+          expect(headers['x-soat-context-actor_external_id']).toBe('ext_1');
           expect(headers['x-soat-context-ocatoken']).toBeUndefined();
         } finally {
           await srv.close();
@@ -1524,17 +1524,17 @@ describe('buildContextHeaders', () => {
     expect(
       buildContextHeaders({
         toolContext: {
-          sessionId: 'ses_1',
-          actorId: 'act_1',
-          actorExternalId: 'ext_1',
+          session_id: 'ses_1',
+          actor_id: 'act_1',
+          actor_external_id: 'ext_1',
           ocaToken: 'tok',
         },
         contextKeys: [],
       })
     ).toEqual({
-      'X-Soat-Context-sessionId': 'ses_1',
-      'X-Soat-Context-actorId': 'act_1',
-      'X-Soat-Context-actorExternalId': 'ext_1',
+      'X-Soat-Context-session_id': 'ses_1',
+      'X-Soat-Context-actor_id': 'act_1',
+      'X-Soat-Context-actor_external_id': 'ext_1',
     });
   });
 
@@ -1546,19 +1546,19 @@ describe('buildContextHeaders', () => {
     expect(
       buildContextHeaders({
         toolContext: {
-          actor_external_id: 'snake',
-          'actor-external-id': 'kebab',
-          actorExternalId: 'camel',
-          ActorExternalId: 'pascal',
-          'actor.external.id': 'dotted',
+          tenant_external_id: 'snake',
+          'tenant-external-id': 'kebab',
+          tenantExternalId: 'camel',
+          TenantExternalId: 'pascal',
+          'tenant.external.id': 'dotted',
         },
       })
     ).toEqual({
-      'X-Soat-Context-actor_external_id': 'snake',
-      'X-Soat-Context-actor-external-id': 'kebab',
-      'X-Soat-Context-actorExternalId': 'camel',
-      'X-Soat-Context-ActorExternalId': 'pascal',
-      'X-Soat-Context-actor.external.id': 'dotted',
+      'X-Soat-Context-tenant_external_id': 'snake',
+      'X-Soat-Context-tenant-external-id': 'kebab',
+      'X-Soat-Context-tenantExternalId': 'camel',
+      'X-Soat-Context-TenantExternalId': 'pascal',
+      'X-Soat-Context-tenant.external.id': 'dotted',
     });
   });
 
@@ -1569,7 +1569,7 @@ describe('buildContextHeaders', () => {
     ['user_id', 'X-Soat-Context-user_id'],
     ['env', 'X-Soat-Context-env'],
     ['ENV', 'X-Soat-Context-ENV'],
-    ['sessionId', 'X-Soat-Context-sessionId'],
+    ['session_id', 'X-Soat-Context-session_id'],
   ])('key %s maps to %s', (key, header) => {
     expect(buildContextHeaders({ toolContext: { [key]: 'v' } })).toEqual({
       [header]: 'v',
@@ -1596,9 +1596,9 @@ describe('assertValidToolContextKeys', () => {
   test('accepts the keys the session path auto-populates', () => {
     expect(() => {
       return assertValidToolContextKeys({
-        sessionId: 'ses_01',
-        actorId: 'actor_01',
-        actorExternalId: '+5511999999999',
+        session_id: 'ses_01',
+        actor_id: 'actor_01',
+        actor_external_id: '+5511999999999',
       });
     }).not.toThrow();
   });
@@ -1609,8 +1609,8 @@ describe('assertValidToolContextKeys', () => {
   test('accepts snake_case, kebab-case and dotted keys', () => {
     expect(() => {
       return assertValidToolContextKeys({
-        actor_external_id: 'a',
-        'actor-external-id': 'b',
+        tenant_external_id: 'a',
+        'tenant-external-id': 'b',
         'actor.external.id': 'c',
         "weird!#$%&'*+^_`|~1": 'd',
       });
@@ -1689,9 +1689,9 @@ describe('assertValidToolContextKeys', () => {
   // must survive `new Headers()`, which is what fails at call time today.
   test('every accepted key produces a constructible Headers object', () => {
     const context = {
-      sessionId: 'ses_01',
-      actor_external_id: 'a',
-      'actor-external-id': 'b',
+      session_id: 'ses_01',
+      tenant_external_id: 'a',
+      'tenant-external-id': 'b',
       'actor.external.id': 'c',
     };
     assertValidToolContextKeys(context);
@@ -3046,13 +3046,13 @@ describe('buildSoatRequestBody - trace field injection scoping (issue #371)', ()
     const body = buildSoatRequestBody({
       def: soatDef('create-agent-generation'),
       rawArgs: { agent_id: 'agt_1', messages: [] },
-      toolContext: { env: 'test', ocaToken: 'tok_abc', sessionId: 'ses_1' },
+      toolContext: { env: 'test', ocaToken: 'tok_abc', session_id: 'ses_1' },
       contextKeys: ['env'],
     });
 
     expect(body).toMatchObject({
       // The identity key survives the allowlist; the credential does not.
-      tool_context: { env: 'test', sessionId: 'ses_1' },
+      tool_context: { env: 'test', session_id: 'ses_1' },
     });
     expect(body).toHaveProperty('tool_context');
     expect(
