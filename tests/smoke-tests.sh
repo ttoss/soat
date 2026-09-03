@@ -130,6 +130,33 @@ if [ "$(printf '%s\n' "$PROJECT_CHAIN_CLEARED" | jq -r '.max_chain_generations')
 fi
 echo "Project chain ceiling set/cleared: OK"
 
+# 3a-ii-a-bis. Set the per-project orchestration nesting bound (#1185). Same
+# shape as the chain ceiling: null by default, and cleared back to it so the
+# nested-run steps later in the suite are not run under a bound they did not ask
+# for.
+echo "--- Project orchestration nesting bound ---"
+PROJECT_DEPTH_DEFAULT=$($SOAT_CLI get-project --project-id "$PROJECT_PUBLIC_ID")
+if [ "$(printf '%s\n' "$PROJECT_DEPTH_DEFAULT" | jq -r '.max_run_depth')" != "null" ]; then
+  echo "ERROR: a new project did not default to no run-depth bound" >&2
+  echo "$PROJECT_DEPTH_DEFAULT" >&2
+  exit 1
+fi
+
+PROJECT_DEPTH_RESP=$($SOAT_CLI update-project --project-id "$PROJECT_PUBLIC_ID" --max_run_depth 4)
+if [ "$(printf '%s\n' "$PROJECT_DEPTH_RESP" | jq -r '.max_run_depth')" != "4" ]; then
+  echo "ERROR: update-project did not set max_run_depth" >&2
+  echo "$PROJECT_DEPTH_RESP" >&2
+  exit 1
+fi
+
+PROJECT_DEPTH_CLEARED=$($SOAT_CLI update-project --project-id "$PROJECT_PUBLIC_ID" --max_run_depth null)
+if [ "$(printf '%s\n' "$PROJECT_DEPTH_CLEARED" | jq -r '.max_run_depth')" != "null" ]; then
+  echo "ERROR: update-project did not clear max_run_depth" >&2
+  echo "$PROJECT_DEPTH_CLEARED" >&2
+  exit 1
+fi
+echo "Project run-depth bound set/cleared: OK"
+
 # 3a-ii-b. Trace-content lifecycle settings (#837/#838). Retention is opt-in,
 # so a fresh project must start with the window disabled and content stored.
 echo "--- Project trace-content lifecycle settings ---"
@@ -1894,11 +1921,34 @@ SOAT_TOKEN="$ORCH_API_KEY_RAW" expect_cli_error_status 400 create-orchestration 
 
 NESTED_CHILDREN=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestration-runs \
   --parent-orchestration-run-id "$NESTED_PARENT_RUN")
-if ! printf '%s\n' "$NESTED_CHILDREN" | jq -e --arg parent "$NESTED_PARENT_RUN" '(.data | length) == 1 and .data[0].parent_orchestration_run_id == $parent and .data[0].parent_node_id == "delegate"' >/dev/null 2>&1; then
+if ! printf '%s\n' "$NESTED_CHILDREN" | jq -e --arg parent "$NESTED_PARENT_RUN" '(.data | length) == 1 and .data[0].parent_orchestration_run_id == $parent and .data[0].parent_node_id == "delegate" and .data[0].run_depth == 1' >/dev/null 2>&1; then
   echo "a sub_orchestration child did not name the run and node that started it"
   printf '%s\n' "$NESTED_CHILDREN"
   exit 1
 fi
+
+# A graph naming itself is a cycle no intra-graph validator can see, so the run
+# tree is bounded by depth instead (#1185). The refusal must fail the run a
+# caller started, naming the bound — not time out or exhaust the queue. The
+# self-reference needs an update: at create time the graph has no id to name.
+SELF_REF_ORCH=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-orchestration-self-referencing" \
+  --nodes '[{"id":"echo","type":"transform","expression":1}]' \
+  --edges '[]' | jq -r '.id')
+SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI update-orchestration \
+  --orchestration-id "$SELF_REF_ORCH" \
+  --nodes "[{\"id\":\"recurse\",\"type\":\"sub_orchestration\",\"orchestration_id\":\"$SELF_REF_ORCH\"}]" \
+  --edges '[]' >/dev/null
+SELF_REF_RUN=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
+  --orchestration-id "$SELF_REF_ORCH" \
+  --wait true)
+if ! printf '%s\n' "$SELF_REF_RUN" | jq -e '.status == "failed" and .run_depth == 0 and .error.code == "ORCHESTRATION_RUN_DEPTH_LIMIT"' >/dev/null 2>&1; then
+  echo "a self-referencing sub_orchestration graph did not terminate on the depth bound"
+  printf '%s\n' "$SELF_REF_RUN"
+  exit 1
+fi
+echo "Run depth bound: OK"
 
 NESTED_PARENT_GET=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI get-orchestration-run \
   --orchestration-run-id "$NESTED_PARENT_RUN")

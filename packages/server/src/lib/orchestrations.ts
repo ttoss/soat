@@ -211,6 +211,9 @@ export type MappedOrchestrationRun = {
   // run concepts, so a bare `parent_run_id` invites pasting into the wrong flag.
   parent_orchestration_run_id: string | null;
   parent_node_id: string | null;
+  // `loop` / `sub_orchestration` edges between this run and the one a caller
+  // started; 0 for a caller-started run. What the depth bound counts (#1185).
+  run_depth: number;
   node_executions: MappedNodeExecution[];
   // Usage roll-up (tokens + cost_usd) summed across every metered generation the
   // run produced. Populated on the single-run read; omitted from list responses.
@@ -342,6 +345,7 @@ export const mapOrchestrationRun = (
     output: run.output as Record<string, unknown> | null,
     parent_orchestration_run_id: run.parentRunId,
     parent_node_id: run.parentNodeId,
+    run_depth: run.runDepth,
     node_executions: (run.nodeExecutions ?? []).map(mapNodeExecution),
     ...(usage
       ? {

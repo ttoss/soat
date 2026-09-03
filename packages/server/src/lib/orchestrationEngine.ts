@@ -25,6 +25,7 @@ import {
 import { writeNodeArtifact } from './orchestrationNodesNamespace';
 import type { RequiredAction, ScheduledWait } from './orchestrationNodeTypes';
 import { recordHumanInputResumption } from './orchestrationPauseRecords';
+import { nextRunDepthOrRefuse } from './orchestrationRunDepth';
 import { resolveRunGraph } from './orchestrationRunGraph';
 import type { PersistedWakeContext } from './orchestrationRunHelpers';
 import {
@@ -409,6 +410,26 @@ const resolveRunParent = (
   };
 };
 
+/**
+ * The nesting depth a new run starts at, resolved before its row exists — so a
+ * descent past the bound leaves nothing queued behind and the throw fails the
+ * run that chose to descend (#1185). A caller-started run declares no parent and
+ * is the root of its own tree.
+ */
+const resolveNewRunDepth = async (args: {
+  projectId: number;
+  orchestrationPublicId: string;
+  parent?: NestedRunParent;
+}): Promise<number> => {
+  if (!args.parent) return 0;
+  return nextRunDepthOrRefuse({
+    projectId: args.projectId,
+    parentRunDepth: args.parent.runDepth,
+    parentRunId: args.parent.runId,
+    orchestrationPublicId: args.orchestrationPublicId,
+  });
+};
+
 /** Writes the run row a `start-orchestration-run` produces. */
 const createRunRecord = async (args: {
   orchestration: InstanceType<typeof db.Orchestration>;
@@ -424,6 +445,12 @@ const createRunRecord = async (args: {
   wait?: boolean;
   parent?: NestedRunParent;
 }): Promise<InstanceType<typeof db.OrchestrationRun>> => {
+  const runDepth = await resolveNewRunDepth({
+    projectId: args.projectId,
+    orchestrationPublicId: args.orchestration.publicId,
+    parent: args.parent,
+  });
+
   return db.OrchestrationRun.create({
     orchestrationId: args.orchestration.id as number,
     // Pin the run to the graph it starts on, so an `update-orchestration` that
@@ -446,6 +473,7 @@ const createRunRecord = async (args: {
     // `sub_orchestration` child. What makes a parent's spend reachable from the
     // parent instead of only from the project's aggregate (#1135).
     ...resolveRunParent(args.parent),
+    runDepth,
     ...resolveRunPrincipal({
       principal: args.principal,
       authHeader: args.authHeader,

@@ -149,7 +149,8 @@ paths:
         the project-scope baseline governing every tool call by every agent in
         the project), its orchestration concurrency limit
         (`max_concurrent_runs`), its continuation-chain ceiling
-        (`max_chain_generations`), its inherited model route
+        (`max_chain_generations`), its orchestration nesting bound
+        (`max_run_depth`), its inherited model route
         (`default_model_route_id`), its read-auditing opt-in
         (`audit_reads_enabled`), its trace-content retention window
         (`trace_content_retention_days`), and/or its zero-retention setting
@@ -206,6 +207,21 @@ paths:
                     deployment's ceiling, this one, and the agent's own
                     `maxChainGenerations` stop condition, so an agent author can
                     be stricter than this number but never exceed it.
+                max_run_depth:
+                  type: integer
+                  nullable: true
+                  minimum: 1
+                  example: 5
+                  description: >-
+                    `loop` / `sub_orchestration` nesting levels a run tree in
+                    this project may reach before the engine refuses to start
+                    the next child. `null` clears the project's bound, leaving
+                    the deployment-wide `MAX_ORCHESTRATION_RUN_DEPTH` (default
+                    10); otherwise an integer >= 1. The effective bound is the
+                    smaller of the two, so this can only be stricter than the
+                    deployment's — which is what makes it a bound a graph
+                    author cannot opt out of. A refused child fails its parent
+                    run with `ORCHESTRATION_RUN_DEPTH_LIMIT`.
                 default_model_route_id:
                   x-soat-ref: model-routes
                   type: string
@@ -436,6 +452,16 @@ components:
             default), leaving the deployment-wide one. The effective budget is
             the smallest of the deployment's ceiling, this one, and the agent's
             own `maxChainGenerations` stop condition.
+          example: null
+        max_run_depth:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: >-
+            `loop` / `sub_orchestration` nesting levels a run tree in this
+            project may reach before the engine refuses to start the next child.
+            `null` means no project bound (the default), leaving the
+            deployment-wide one. The effective bound is the smaller of the two.
           example: null
         default_model_route_id:
           x-soat-ref: model-routes

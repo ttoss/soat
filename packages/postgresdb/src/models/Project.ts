@@ -48,6 +48,14 @@ export class Project extends Model {
   @Column({ type: DataType.INTEGER, allowNull: true })
   declare maxChainGenerations: number | null;
 
+  // `loop` / `sub_orchestration` nesting levels a run tree may reach before the
+  // engine refuses to start the next child, `null` to defer to the
+  // deployment-wide ceiling. Like `maxChainGenerations`, every ceiling can only
+  // make the bound smaller, so this is the operator's bound on a self-
+  // referencing graph that a graph author cannot opt out of (#1185).
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare maxRunDepth: number | null;
+
   // Inherited by consumers naming neither a route nor a provider; `null` forces
   // every consumer to bind explicitly. A public id rather than an
   // `@ForeignKey`, because `ModelRoute` already belongs to `Project` and the FK

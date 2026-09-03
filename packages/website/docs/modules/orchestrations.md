@@ -69,6 +69,7 @@ An orchestration is a pipeline that _ends_; a [workflow](./workflows.md) is a st
 | `output`           | object \| null | Terminal node artifact(s) when the run has `succeeded`            |
 | `parent_orchestration_run_id` | string \| null | The run whose node started this one — set only on a `loop` / `sub_orchestration` child, null for a run a caller started |
 | `parent_node_id`   | string \| null | The node within `parent_orchestration_run_id` that started this run |
+| `run_depth`        | integer        | `loop` / `sub_orchestration` edges between this run and the one a caller started: `0` for a caller-started run, one more than its parent's for a child (see [Nesting depth](#nesting-depth)) |
 | `started_at`       | string \| null | ISO 8601 execution start timestamp                                |
 | `completed_at`     | string \| null | ISO 8601 terminal timestamp (`succeeded`/`failed`/`cancelled`/`expired`) |
 | `created_at`       | string         | ISO 8601 creation timestamp                                       |
@@ -377,6 +378,54 @@ Edges without an `activation_group` always pass through unconditionally.
 
 A DFS-based cycle check runs both at create/update time (see [Static Validation](#static-validation)) and again before a run begins. Orchestrations that contain a `loop` node are exempt — loops introduce intentional cycles. If a cycle reaches execution anyway, the run is created, set to `failed`, and the `error` field contains `code: "ORCHESTRATION_CYCLE_DETECTED"`.
 
+### Nesting depth
+
+Cycle detection is **intra-graph** and exempts `loop` nodes, so it cannot see the
+cycle a graph makes by naming *itself* in a `sub_orchestration` node — directly,
+or through two graphs that name each other. Each level is a separate run, so an
+accidental self-reference recursed until something incidental ran out.
+
+Every run therefore carries a `run_depth`: `0` for a run a caller started, one
+more than its parent's for a `loop` / `sub_orchestration` child. Starting a child
+past the effective bound is refused, and the refusal **fails the run that tried
+to descend** with `ORCHESTRATION_RUN_DEPTH_LIMIT` — before the child's record
+exists, so nothing is left queued behind it. The `error.meta` names the depth
+reached, the limit, and `limit_source`.
+
+The effective bound is the **smaller** of two numbers, so a project owner can be
+stricter than the deployment but never looser:
+
+| Bound | Where | Default |
+| --- | --- | --- |
+| `MAX_ORCHESTRATION_RUN_DEPTH` | deployment env var | 10 |
+| [`max_run_depth`](./projects.md) | the project | `null` (defer to the deployment's) |
+
+Both are read when the child is about to start, not pinned on the tree's root, so
+lowering the number stops a tree that is already recursing.
+
+This is a bound on **recursion**, not on total work: a `loop` node fans out, so
+`N` children per level still permits `N^depth` runs. Width is bounded by the
+node's `parallelism` and the project's
+[`max_concurrent_runs`](#concurrency-limits).
+
+Because the bound fails the parent, and a child's failure now fails the node that
+started it (below), the error reaches the run a caller actually reads rather than
+stopping at the run that noticed it.
+
+### A child run's failure fails its parent
+
+A `loop` or `sub_orchestration` child that settles in a **non-success terminal
+status** (`failed`, `cancelled`, `expired`) fails the node that started it, and
+so the parent run — the same rule a
+[workflow `on_enter` dispatch](./workflows.md) already follows. The parent's
+`error.code` is the **child's own code** where it has one, so the cause survives
+the whole chain instead of being replaced at every level; `error.meta` names the
+child run and the node, so `parent_orchestration_run_id` still walks you down to
+the failure.
+
+A child that has merely **parked** (`awaiting_input`, `sleeping`) has not settled
+and is unaffected.
+
 ### Static Validation
 
 Orchestration graphs are validated **before** they are persisted. `create-orchestration` and `update-orchestration` reject an invalid graph with HTTP `400` (`code: "ORCHESTRATION_VALIDATION_FAILED"`); the `error.meta` field carries the full `errors` and `warnings` arrays. The same checks are available without persisting through `validate-orchestration`, which returns a `{ valid, errors, warnings }` result.
@@ -566,6 +615,8 @@ Expiry is enforced server-side (see [Approvals — Expiry is a hard gate](./appr
 | `ORCHESTRATION_NODE_FAILED`        | `422`  | A node could not execute as declared — a missing required field (an `agent` node without `agent_id`, a `delay` without `duration`), or an unsupported result (an `agent` node whose response streamed) | Inspect the failing node's entry in `node_executions` for the exact `error` — see [Node Executions](#node-executions) |
 | _the underlying code_              | varies | A node threw while executing. The originating error propagates **unchanged** rather than being wrapped — a referenced `agent_id`/`tool_id` that no longer exists surfaces `RESOURCE_NOT_FOUND`, and a failing `http` tool surfaces that tool's own error | Do not key error handling on `ORCHESTRATION_NODE_FAILED` for these; read the failing node's `error.code` from `node_executions` |
 | `ORCHESTRATION_POLL_EXHAUSTED`     | —      | A `poll` node's `max_iterations` was reached with `failOnTimeout: true`                       | Raise `max_iterations`/`interval`, or handle `conditionMet: false` downstream instead of setting `failOnTimeout` — see [Polling](#polling) |
+| `ORCHESTRATION_RUN_DEPTH_LIMIT`    | `409`  | Starting the next `loop` / `sub_orchestration` child would nest past the effective bound — usually a graph naming itself, directly or through a cycle of two graphs | Walk `parent_orchestration_run_id` up from the failed run to find the node that re-enters a graph already in the chain; raise the project's `max_run_depth` only if the composition is legitimately that deep — see [Nesting depth](#nesting-depth) |
+| `ORCHESTRATION_NESTED_RUN_FAILED`  | `422`  | A `loop` / `sub_orchestration` child settled `failed`/`cancelled`/`expired` carrying no code of its own | Read the child run (`parent_orchestration_run_id` points back at this one) — a child that *does* carry a code fails its parent under that code instead — see [A child run's failure fails its parent](#a-child-runs-failure-fails-its-parent) |
 
 **A run appears stuck in a non-terminal state:** `queued` means no worker has claimed its task yet — confirm a worker is running (the API process runs one unless `ORCHESTRATION_WORKER_DISABLED=true`). `sleeping` is a parked `delay`/`poll` wait or retry backoff (`active_nodes` names the node) and resumes on its own. `awaiting_input` waits for `submit-human-input`. `running` for far longer than expected self-heals: the reaper reclaims any run whose lease has expired within `ORCHESTRATION_RUN_LEASE_TTL_MS` — see [Durable Background Execution](#durable-background-execution).
 
@@ -574,6 +625,7 @@ Expiry is enforced server-side (see [Approvals — Expiry is a hard gate](./appr
 | Environment Variable | Required | Description |
 | --- | --- | --- |
 | `SOAT_RUN_TOKEN_TTL` | No | Lifetime of the run-as token minted for each background drive segment (default `1h`). It covers one drive, not the whole run, so a run sleeping for days never holds a long-lived credential. See [Run identity](#durable-background-execution). |
+| `MAX_ORCHESTRATION_RUN_DEPTH` | No | `loop` / `sub_orchestration` nesting levels a run tree may reach before the next child is refused (default `10`). A project's `max_run_depth` can be stricter, never looser. See [Nesting depth](#nesting-depth). |
 | `ORCHESTRATION_SCHEDULER_INTERVAL_MS` | No | Scheduler tick interval in ms (default `5000`). |
 | `ORCHESTRATION_RUN_LEASE_TTL_MS` | No | How long a `running` run's lease is valid before the reaper may reclaim it, in ms (default `600000`). Must exceed the longest single round of node execution. |
 | `ORCHESTRATION_WORKER_INTERVAL_MS` | No | Worker loop tick interval in ms (default `5000`). |

@@ -10,6 +10,7 @@
  */
 import { applyInputMapping } from './jsonLogicMapping';
 import { type NestedRunParent, startNestedRun } from './orchestrationNestedRun';
+import { assertNestedRunCompleted } from './orchestrationNestedRunOutcome';
 import { requireNodeField } from './orchestrationNodeFields';
 import type { NodeExecutionResult } from './orchestrationNodeTypes';
 import type { OrchestrationNode } from './orchestrations';
@@ -76,8 +77,9 @@ const runLoopBatches = async (args: {
       })
     );
     results.push(
-      ...batchResults.map((r) => {
-        return r.output;
+      ...batchResults.map((run) => {
+        assertNestedRunCompleted({ run, nodeId: parent.nodeId });
+        return run.output;
       })
     );
   }
@@ -92,6 +94,7 @@ export const executeLoopNode = async (args: {
   authHeader?: string;
   toolContext?: Record<string, string>;
   runPublicId?: string;
+  runDepth: number;
 }): Promise<NodeExecutionResult> => {
   const { node, state, projectIds, authHeader, toolContext, runPublicId } =
     args;
@@ -112,7 +115,7 @@ export const executeLoopNode = async (args: {
       toolContext,
       contextKeys: node.contextKeys,
     }),
-    parent: { runId: runPublicId, nodeId: node.id },
+    parent: { runId: runPublicId, nodeId: node.id, runDepth: args.runDepth },
   });
 
   return { kind: 'artifact', artifact: { results } };
@@ -126,6 +129,7 @@ export const executeSubOrchestrationNode = async (args: {
   authHeader?: string;
   toolContext?: Record<string, string>;
   runPublicId?: string;
+  runDepth: number;
 }): Promise<NodeExecutionResult> => {
   const { node, state, projectIds, authHeader, toolContext, runPublicId } =
     args;
@@ -146,11 +150,13 @@ export const executeSubOrchestrationNode = async (args: {
       contextKeys: node.contextKeys,
     }),
     // The child is this node's work: its spend rolls up to this run (#1135).
-    parent: { runId: runPublicId, nodeId: node.id },
+    parent: { runId: runPublicId, nodeId: node.id, runDepth: args.runDepth },
     // A sub-orchestration is a synchronous child: its terminal output feeds this
     // node's artifact, so it must run to completion before continuing.
     wait: true,
   });
+
+  assertNestedRunCompleted({ run, nodeId: node.id });
 
   return { kind: 'artifact', artifact: run.output ?? {} };
 };
