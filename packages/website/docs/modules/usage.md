@@ -169,7 +169,7 @@ SOAT ships **no default prices**. Prices are managed where their scope lives:
 - **Project + provider-slug** — project members via [`PUT /api/v1/projects/{project_id}/prices`](./projects.md).
 - **Per-provider override** — project members via [`PUT /api/v1/ai-providers/{ai_provider_id}/prices`](./ai-providers.md#price-overrides).
 
-Past-effective prices are immutable — corrections ship as new future-dated rows. Prices can also be **declared in a formation** with the `project_price` resource type, keyed on `(provider, model, component, effective_from)`; there `effective_from` is optional and defaults to deploy time. See [Formations Types → Project Price](/docs/formations-types/project-price).
+Past-effective prices are immutable — corrections ship as new future-dated rows. A **first** price is the exception: when nothing prices a `(provider, model, component)` yet, in the scope being written or any broader one it resolves through, `effective_from` may be now or earlier. There is no row to rewrite and no cost frozen against one, and forcing a future date would leave the scope live and unpriced until it lands — a component metered in that window is charged `null` permanently, since cost is frozen when the event is written. Prices can also be **declared in a formation** with the `project_price` resource type, keyed on `(provider, model, component, effective_from)`; there `effective_from` is optional and defaults to deploy time. See [Formations Types → Project Price](/docs/formations-types/project-price).
 
 ### Receipts and reconciliation
 

@@ -4036,6 +4036,25 @@ if [ "$OVERRIDE_GET_OK" != "true" ]; then
 fi
 echo "Per-provider price override: OK"
 
+# 34d-quater. First-write pricing — a (model, component) nothing prices yet may
+# take effect immediately, so a provider is never live and unpriced; back-dating
+# it afterwards is still refused.
+NOW_ISO=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+FIRST_WRITE_PUT=$($SOAT_CLI update-ai-provider-prices \
+  --ai_provider_id "$AI_PROVIDER_ID" \
+  --prices "[{\"model\":\"smoke-first-write-model\",\"component\":\"input_tokens\",\"unit\":\"token\",\"unit_price\":0.000011,\"effective_from\":\"$NOW_ISO\"}]" \
+  | sanitize_json)
+FIRST_WRITE_OK=$(printf '%s\n' "$FIRST_WRITE_PUT" | jq -r '(.prices[0].model == "smoke-first-write-model") and (.prices[0].unit_price == 0.000011)')
+if [ "$FIRST_WRITE_OK" != "true" ]; then
+  echo "ERROR: update-ai-provider-prices refused an immediately-effective first price" >&2
+  echo "$FIRST_WRITE_PUT" >&2
+  exit 1
+fi
+expect_cli_error_status 400 update-ai-provider-prices \
+  --ai_provider_id "$AI_PROVIDER_ID" \
+  --prices "[{\"model\":\"smoke-first-write-model\",\"component\":\"input_tokens\",\"unit\":\"token\",\"unit_price\":0.000012,\"effective_from\":\"2020-01-01T00:00:00.000Z\"}]"
+echo "First-write price effective immediately, back-dating refused: OK"
+
 # 34d-ter. Model listing — the smoke stack's provider is `ollama`, whose model
 # list is whatever that host pulled rather than what the provider can run, so
 # the documented 400 is the correct end-to-end answer here. This still exercises

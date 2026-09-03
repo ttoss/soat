@@ -1479,7 +1479,7 @@ describe('Projects', () => {
         expect(res.status).toBe(403);
       });
 
-      test('rejects a non-future effective_from with 400', async () => {
+      test('rejects an unparseable effective_from with 400', async () => {
         const res = await authenticatedTestClient(priceUserToken)
           .put(`/api/v1/projects/${priceProjectId}/prices`)
           .send({
@@ -1490,7 +1490,7 @@ describe('Projects', () => {
                 component: 'input_tokens',
                 unit: 'token',
                 unit_price: 0.000001,
-                effective_from: '2020-01-01T00:00:00.000Z',
+                effective_from: 'not-a-timestamp',
               },
             ],
           });
@@ -1559,6 +1559,48 @@ describe('Projects', () => {
             return p.model === 'gpt-4o';
           })
         ).toHaveLength(1);
+      });
+
+      // Nothing has been priced against a (provider, model, component) with no
+      // rows, so a first write may take effect now rather than leaving the
+      // project unpriced until a future timestamp lands (#1196).
+      test('accepts a past effective_from on a first write, then refuses to back-date it', async () => {
+        const effectiveFrom = new Date(Date.now() - 1000).toISOString();
+        const first = await authenticatedTestClient(priceUserToken)
+          .put(`/api/v1/projects/${priceProjectId}/prices`)
+          .send({
+            prices: [
+              {
+                provider: 'openai',
+                model: 'project-first-write-model',
+                component: 'input_tokens',
+                unit: 'token',
+                unit_price: 0.000001,
+                effective_from: effectiveFrom,
+              },
+            ],
+          });
+        expect(first.status).toBe(200);
+        expect(
+          new Date(first.body.prices[0].effective_from).toISOString()
+        ).toBe(effectiveFrom);
+
+        const second = await authenticatedTestClient(priceUserToken)
+          .put(`/api/v1/projects/${priceProjectId}/prices`)
+          .send({
+            prices: [
+              {
+                provider: 'openai',
+                model: 'project-first-write-model',
+                component: 'input_tokens',
+                unit: 'token',
+                unit_price: 0.000002,
+                effective_from: new Date(Date.now() - 500).toISOString(),
+              },
+            ],
+          });
+        expect(second.status).toBe(400);
+        expect(second.body.error.code).toBe('VALIDATION_FAILED');
       });
     });
   });

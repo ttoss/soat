@@ -726,8 +726,12 @@ describe('Usage', () => {
       expect(price.unit_price).toBe(0.0001);
     });
 
-    test('rejects a past-dated price (immutable history)', async () => {
-      const res = await authenticatedTestClient(adminToken)
+    // A (provider, model, component) with no rows has priced nothing, so its
+    // first price may take effect now; back-dating it afterwards would rewrite
+    // history a recorded cost has to stay explainable by (#1196).
+    test('accepts a past-dated first price, then rejects back-dating it (immutable history)', async () => {
+      const effectiveFrom = new Date(Date.now() - 1000).toISOString();
+      const first = await authenticatedTestClient(adminToken)
         .put('/api/v1/usage/prices')
         .send({
           prices: [
@@ -737,12 +741,94 @@ describe('Usage', () => {
               component: 'input_tokens',
               unit: 'token',
               unit_price: 0.000001,
+              effective_from: effectiveFrom,
+            },
+          ],
+        });
+      expect(first.status).toBe(200);
+      expect(new Date(first.body.prices[0].effective_from).toISOString()).toBe(
+        effectiveFrom
+      );
+
+      const second = await authenticatedTestClient(adminToken)
+        .put('/api/v1/usage/prices')
+        .send({
+          prices: [
+            {
+              provider: 'openai',
+              model: 'usage-test-past',
+              component: 'input_tokens',
+              unit: 'token',
+              unit_price: 0.000002,
               effective_from: '2020-01-01T00:00:00.000Z',
             },
           ],
         });
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(second.status).toBe(400);
+      expect(second.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    // A per-provider override resolves above the global default, so a generation
+    // on that provider may already have been priced from the global row. The
+    // override is a first row for its own scope but still may not back-date.
+    test('rejects a back-dated provider override once a global row prices the same component', async () => {
+      const globalRes = await authenticatedTestClient(adminToken)
+        .put('/api/v1/usage/prices')
+        .send({
+          prices: [
+            {
+              provider: 'openai',
+              model: 'usage-tier-model',
+              component: 'input_tokens',
+              unit: 'token',
+              unit_price: 0.000001,
+              effective_from: new Date(Date.now() - 1000).toISOString(),
+            },
+          ],
+        });
+      expect(globalRes.status).toBe(200);
+
+      const overrideRes = await authenticatedTestClient(adminToken)
+        .put('/api/v1/usage/prices')
+        .send({
+          prices: [
+            {
+              ai_provider_id: aiProviderId,
+              provider: 'openai',
+              model: 'usage-tier-model',
+              component: 'input_tokens',
+              unit: 'token',
+              unit_price: 0.0000005,
+              effective_from: new Date(Date.now() - 500).toISOString(),
+            },
+          ],
+        });
+      expect(overrideRes.status).toBe(400);
+      expect(overrideRes.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('accepts a back-dated provider override for a component nothing prices', async () => {
+      const effectiveFrom = new Date(Date.now() - 1000).toISOString();
+      const res = await authenticatedTestClient(adminToken)
+        .put('/api/v1/usage/prices')
+        .send({
+          prices: [
+            {
+              ai_provider_id: aiProviderId,
+              provider: 'openai',
+              model: 'usage-tier-model',
+              component: 'output_tokens',
+              unit: 'token',
+              unit_price: 0.0000015,
+              effective_from: effectiveFrom,
+            },
+          ],
+        });
+      expect(res.status).toBe(200);
+      expect(res.body.prices[0].ai_provider_id).toBe(aiProviderId);
+      expect(new Date(res.body.prices[0].effective_from).toISOString()).toBe(
+        effectiveFrom
+      );
     });
 
     test('rejects an invalid effective_from', async () => {

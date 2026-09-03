@@ -3,6 +3,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { createEffectiveFromResolver } from './priceBookEffectiveFrom';
 import { DEFAULT_METER_TYPE, validatePriceInput } from './priceCompute';
 
 export { DEFAULT_METER_TYPE } from './priceCompute';
@@ -119,12 +120,13 @@ type PriceInput = {
   effectiveFrom: string;
 };
 
-// Resolves an optional AI provider public ID to its internal id. Null (a global
-// default row) passes through; an unknown provider is a bad request.
-const resolveAiProviderId = async (
+// Resolves an optional AI provider public ID to its internal id and the project
+// it belongs to. Null (a global default row) passes through; an unknown
+// provider is a bad request.
+const resolveAiProvider = async (
   publicId: string | null | undefined
-): Promise<number | null> => {
-  if (!publicId) return null;
+): Promise<{ id: number | null; projectId: number | null }> => {
+  if (!publicId) return { id: null, projectId: null };
   const provider = await db.AiProvider.findOne({ where: { publicId } });
   if (!provider) {
     throw new DomainError(
@@ -132,7 +134,7 @@ const resolveAiProviderId = async (
       `AI provider '${publicId}' not found.`
     );
   }
-  return provider.id as number;
+  return { id: provider.id as number, projectId: provider.projectId };
 };
 
 // Throws VALIDATION_FAILED when required price fields are missing/invalid.
@@ -143,19 +145,6 @@ const assertPriceInput = (args: {
 }): void => {
   const error = validatePriceInput(args);
   if (error) throw new DomainError('VALIDATION_FAILED', error);
-};
-
-// Past-effective prices are immutable, so only a valid future timestamp is
-// accepted; anything else is a bad request.
-const parseFutureEffectiveFrom = (value: string, now: Date): Date => {
-  const effectiveFrom = new Date(value);
-  if (Number.isNaN(effectiveFrom.getTime()) || effectiveFrom <= now) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      `effective_from must be a valid future timestamp (got '${value}').`
-    );
-  }
-  return effectiveFrom;
 };
 
 // Shared by every write path. Takes an already-resolved `effectiveFrom` so each
@@ -208,25 +197,6 @@ export const persistPriceRow = async (args: {
   return row.id as number;
 };
 
-// Past-effective prices are immutable: a recorded cost must always be
-// explainable by the row that produced it, so corrections ship as new
-// future-dated rows rather than edits.
-const writePriceRow = async (args: {
-  aiProviderId: number | null;
-  projectId: number | null;
-  meterType?: string;
-  provider: string;
-  model: string;
-  component: string;
-  unit: string;
-  unitPrice: number;
-  effectiveFrom: string;
-  now: Date;
-}): Promise<number> => {
-  const effectiveFrom = parseFutureEffectiveFrom(args.effectiveFrom, args.now);
-  return persistPriceRow({ ...args, effectiveFrom });
-};
-
 const loadPrices = async (ids: number[]): Promise<PersistedPrice[]> => {
   const rows = await db.PriceBook.findAll({
     where: { id: ids },
@@ -241,13 +211,17 @@ const loadPrices = async (ids: number[]): Promise<PersistedPrice[]> => {
 export const upsertPrices = async (args: {
   prices: PriceInput[];
 }): Promise<{ prices: PersistedPrice[] }> => {
-  const now = new Date();
+  const resolveEffectiveFrom = createEffectiveFromResolver({
+    aiProviderId: null,
+    projectId: null,
+    now: new Date(),
+  });
   const ids: number[] = [];
   for (const price of args.prices) {
-    const aiProviderId = await resolveAiProviderId(price.aiProviderId);
+    const provider = await resolveAiProvider(price.aiProviderId);
     ids.push(
-      await writePriceRow({
-        aiProviderId,
+      await persistPriceRow({
+        aiProviderId: provider.id,
         projectId: null,
         meterType: price.meterType,
         provider: price.provider,
@@ -255,8 +229,11 @@ export const upsertPrices = async (args: {
         component: price.component,
         unit: price.unit,
         unitPrice: price.unitPrice,
-        effectiveFrom: price.effectiveFrom,
-        now,
+        effectiveFrom: await resolveEffectiveFrom({
+          ...price,
+          aiProviderId: provider.id,
+          providerProjectId: provider.projectId,
+        }),
       })
     );
   }
@@ -276,7 +253,7 @@ export type ProviderPriceInput = {
 // throws when it does not exist.
 const getProviderForPricing = async (
   aiProviderId: string
-): Promise<{ id: number; provider: string }> => {
+): Promise<{ id: number; provider: string; projectId: number }> => {
   const provider = await db.AiProvider.findOne({
     where: { publicId: aiProviderId },
   });
@@ -286,7 +263,11 @@ const getProviderForPricing = async (
       `AI provider '${aiProviderId}' not found.`
     );
   }
-  return { id: provider.id as number, provider: provider.provider };
+  return {
+    id: provider.id as number,
+    provider: provider.provider,
+    projectId: provider.projectId,
+  };
 };
 
 /**
@@ -315,7 +296,8 @@ export const listProviderPrices = async (args: {
  * Upserts per-provider price overrides for one AI provider instance. The
  * override's `provider` slug is taken from the AI provider itself — an override
  * only wins at cost time when its slug equals the provider's — so callers supply
- * just the model, component, unit, price, and `effectiveFrom`. Future-date-only.
+ * just the model, component, unit, price, and `effectiveFrom`, which must be in
+ * the future unless the `(model, component)` has no price row yet.
  */
 export const upsertProviderPrices = async (args: {
   aiProviderId: string;
@@ -326,12 +308,19 @@ export const upsertProviderPrices = async (args: {
     args.aiProviderId,
     args.prices.length
   );
-  const { id, provider } = await getProviderForPricing(args.aiProviderId);
-  const now = new Date();
+  const { id, provider, projectId } = await getProviderForPricing(
+    args.aiProviderId
+  );
+  const resolveEffectiveFrom = createEffectiveFromResolver({
+    aiProviderId: id,
+    projectId: null,
+    providerProjectId: projectId,
+    now: new Date(),
+  });
   const ids: number[] = [];
   for (const price of args.prices) {
     ids.push(
-      await writePriceRow({
+      await persistPriceRow({
         aiProviderId: id,
         projectId: null,
         meterType: price.meterType,
@@ -340,8 +329,7 @@ export const upsertProviderPrices = async (args: {
         component: price.component,
         unit: price.unit,
         unitPrice: price.unitPrice,
-        effectiveFrom: price.effectiveFrom,
-        now,
+        effectiveFrom: await resolveEffectiveFrom({ ...price, provider }),
       })
     );
   }
@@ -397,7 +385,8 @@ export const listProjectPrices = async (args: {
  * Upserts project + provider-slug price rows, keyed on
  * `(project, provider, model, component, effectiveFrom)`. Unlike the
  * per-provider path the caller supplies `provider` explicitly — the price
- * covers all of the project's instances of that slug. Future-date-only.
+ * covers all of the project's instances of that slug. `effectiveFrom` must be in
+ * the future unless the `(provider, model, component)` has no price row yet.
  */
 export const upsertProjectPrices = async (args: {
   projectId: string;
@@ -409,11 +398,15 @@ export const upsertProjectPrices = async (args: {
     args.prices.length
   );
   const id = await getProjectForPricing(args.projectId);
-  const now = new Date();
+  const resolveEffectiveFrom = createEffectiveFromResolver({
+    aiProviderId: null,
+    projectId: id,
+    now: new Date(),
+  });
   const ids: number[] = [];
   for (const price of args.prices) {
     ids.push(
-      await writePriceRow({
+      await persistPriceRow({
         aiProviderId: null,
         projectId: id,
         meterType: price.meterType,
@@ -422,8 +415,7 @@ export const upsertProjectPrices = async (args: {
         component: price.component,
         unit: price.unit,
         unitPrice: price.unitPrice,
-        effectiveFrom: price.effectiveFrom,
-        now,
+        effectiveFrom: await resolveEffectiveFrom(price),
       })
     );
   }
