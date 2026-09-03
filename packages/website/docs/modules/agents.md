@@ -434,7 +434,7 @@ Each source tag identifies the exact row the text came from: a memory result
 carries its entry id, and a document chunk carries its page when the document
 has one (a chunk with no page renders as `[Document: /reports/q1.txt]`). That is
 what makes an injected claim traceable — the entry id resolves through
-[`GET /api/v1/memory-entries/{entry_id}`](/docs/api/memoryEntries/get-memory-entry), including for an entry that was later
+[`GET /api/v1/memory-entries/{entry_id}`](/docs/api/memory-entries/get-memory-entry), including for an entry that was later
 [superseded](./memories.md#temporal-invalidation).
 
 | Field            | Type       | Description                                                                                 |

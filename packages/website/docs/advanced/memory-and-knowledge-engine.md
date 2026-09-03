@@ -58,7 +58,7 @@ Every memory write in SOAT — no matter where it originates — flows through t
 
 | Path | `source_type` | LLM merge? | Provenance recorded |
 | --- | --- | --- | --- |
-| [`POST /api/v1/memory-entries`](/docs/api/memoryEntries/create-memory-entry) (manual) | `manual` | No — similar facts create | none |
+| [`POST /api/v1/memory-entries`](/docs/api/memory-entries/create-memory-entry) (manual) | `manual` | No — similar facts create | none |
 | `write_memory` agent tool | `agent` | Yes (agent's provider) | source generation |
 | [Automatic extraction](../modules/memories.md#automatic-extraction) | `extraction` | Yes (extraction's provider) | source generation + conversation |
 | Orchestration `memory_write` node | `orchestration` | No — similar facts create | none |
@@ -78,7 +78,7 @@ The caller-facing contract is documented in [Memories — Write Algorithm](../mo
    - everything else → **create** a new entry.
 4. **Return** `{ action, ...entry }` where `action` is `created`, `updated`, or `skipped`. The enum also reserves `superseded` — the contradiction-arbitration outcome — so clients can handle it before the write path that produces it ships (see [Design headroom](#design-headroom--where-the-engine-is-going)).
 
-`duplicate_threshold` is a **per-request field** on [`POST /api/v1/memory-entries`](/docs/api/memoryEntries/create-memory-entry) only; the tool, extraction, and orchestration paths always use the default. Because cosine cutoffs are coupled to the embedding model, re-tune a custom threshold when you change `EMBEDDING_MODEL`.
+`duplicate_threshold` is a **per-request field** on [`POST /api/v1/memory-entries`](/docs/api/memory-entries/create-memory-entry) only; the tool, extraction, and orchestration paths always use the default. Because cosine cutoffs are coupled to the embedding model, re-tune a custom threshold when you change `EMBEDDING_MODEL`.
 
 ### The merge (consolidation) algorithm
 
@@ -192,7 +192,7 @@ Orchestrations read knowledge mid-flow with the `knowledge` node and write memor
 
 | Knob | Wire location | Default | Governs |
 | --- | --- | --- | --- |
-| `duplicate_threshold` | [`POST /api/v1/memory-entries`](/docs/api/memoryEntries/create-memory-entry) body | `0.95` | skip band of the write algorithm |
+| `duplicate_threshold` | [`POST /api/v1/memory-entries`](/docs/api/memory-entries/create-memory-entry) body | `0.95` | skip band of the write algorithm |
 | `chunk_strategy` / `chunk_size` / `chunk_overlap` | document create/ingest bodies; ingestion rules | `page` (ingest) / `whole` (create); `1000`; `200` | chunking |
 | `native_extraction` | ingestion rule | `first` | run native extraction before the converter (`skip` to always convert) |
 | `file_delivery` | ingestion rule | `base64` | how the converter receives the file (`download_url` for large files) |
@@ -201,7 +201,7 @@ Orchestrations read knowledge mid-flow with the `knowledge` node and write memor
 | `knowledge_config.write_memory_id` | agent record | — | injects the `write_memory` tool; extraction target |
 | `knowledge_config.extraction` (`enabled`, `ai_provider_id`, `model`, `prompt`) | agent record | off | the extraction algorithm |
 | `extract` | [`POST /api/v1/agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation) body | follow agent config | per-turn extraction gate |
-| `include_invalidated` | [`GET /api/v1/memory-entries`](/docs/api/memoryEntries/list-memory-entries) query | `false` | whether superseded entries appear in listings |
+| `include_invalidated` | [`GET /api/v1/memory-entries`](/docs/api/memory-entries/list-memory-entries) query | `false` | whether superseded entries appear in listings |
 | `EMBEDDING_*` env vars | server environment | — | the shared vector space |
 
 Fixed by design today (no knob): the cosine distance metric, the merge band's `0.75` floor (agent paths only), the retrieval ranking formula, the injection preamble and source-tag format, the extraction candidate cap (20), and the per-source embedding concurrency during ingestion.
@@ -213,7 +213,7 @@ The engine already has one fully pluggable stage and several composition points 
 - **Custom content extraction — first-class.** An [ingestion rule](../modules/ingestion-rules.md) pointing at your own tool *is* a pluggable extraction algorithm: OCR, audio transcription, layout-aware PDF parsing, table extraction — anything that can answer with pages of text, synchronously or via the deferred callback. This is the sanctioned way to teach SOAT a new file type or a better extractor.
 - **Custom chunking — via pre-chunking.** Run your own splitter (semantic, token-based, heading-aware) and create one document per chunk with `chunk_strategy: whole`, encoding structure in `path`, `title`, `tags`, and `metadata`. Retrieval treats your chunks identically to engine-made ones.
 - **Custom extraction behavior.** `extraction.prompt` changes *what* the fact miner looks for (domain-specific facts, a narrower definition of "worth remembering") while the engine keeps the response contract; `extraction.ai_provider_id`/`model` route it to a cheaper or better model.
-- **Custom write policy.** Curation pipelines that write through [`POST /api/v1/memory-entries`](/docs/api/memoryEntries/create-memory-entry) can tune `duplicate_threshold` per write — e.g. lower the bar to skip more aggressively on a high-churn feed, or raise it toward `1.0` to keep near-duplicates as distinct facts. Manual writes never merge, so every accepted fact lands as its own atomic entry.
+- **Custom write policy.** Curation pipelines that write through [`POST /api/v1/memory-entries`](/docs/api/memory-entries/create-memory-entry) can tune `duplicate_threshold` per write — e.g. lower the bar to skip more aggressively on a high-churn feed, or raise it toward `1.0` to keep near-duplicates as distinct facts. Manual writes never merge, so every accepted fact lands as its own atomic entry.
 - **Custom retrieval composition.** For ranking the engine doesn't do yet — reranking, fusion with your own lexical index, recency weighting — call [`POST /api/v1/knowledge/search`](/docs/api/knowledge/search-knowledge) with a generous `limit`, re-rank on your side using `similarity_score` (the stable signal) plus your own features, and pass the survivors as input messages. Context composition is deliberately the application's job in SOAT, so this pattern is supported, not a workaround.
 
 ## Design headroom — where the engine is going
@@ -233,7 +233,7 @@ The design records live in the repository — [`docs/prd-memories.md`](https://g
 Whatever algorithm runs at each stage, these properties hold across the engine and are safe to build on:
 
 - **Writes are never lost to an LLM failure.** Consolidation and (future) arbitration degrade to deterministic fallbacks; extraction failures are logged and skipped.
-- **Invalidated entries never reach a generation.** Superseded facts are excluded from search, injection, and dedup — but stay readable by ID ([`GET /api/v1/memory-entries/{entry_id}`](/docs/api/memoryEntries/get-memory-entry)) for audit.
+- **Invalidated entries never reach a generation.** Superseded facts are excluded from search, injection, and dedup — but stay readable by ID ([`GET /api/v1/memory-entries/{entry_id}`](/docs/api/memory-entries/get-memory-entry)) for audit.
 - **Retrieved knowledge never gains `system` authority.** Injection is fenced, framed as reference material, and delivered as a `user` message; extraction runs tool-less.
 - **Every injected claim is traceable.** Source tags carry the entry ID or document path and page; entry provenance links back to the generation and conversation that produced a fact.
 - **Slow stages never sit on the request path.** Extraction is fire-and-forget; ingestion is background by default; write latency stays embedding-bound.

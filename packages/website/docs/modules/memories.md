@@ -86,7 +86,7 @@ When the same correction keeps being made by hand, the
 
 Every write to a memory — via REST, agent tool, or extraction — goes through the same deduplication algorithm.
 
-When you call [`POST /api/v1/memory-entries`](/docs/api/memoryEntries/create-memory-entry) (with `memory_id` in the body), the server:
+When you call [`POST /api/v1/memory-entries`](/docs/api/memory-entries/create-memory-entry) (with `memory_id` in the body), the server:
 
 1. **Embeds** the incoming content.
 2. **Finds** the most similar **currently-valid** existing entry in that memory (cosine similarity via pgvector). [Invalidated entries](#temporal-invalidation) are never candidates.
@@ -97,7 +97,7 @@ When you call [`POST /api/v1/memory-entries`](/docs/api/memoryEntries/create-mem
 | ≥ `duplicate_threshold` | **Skip**   | The fact is already known. Returns the existing entry unchanged. |
 | below it                | **Create** | A new entry is written.                                          |
 
-`duplicate_threshold` is a per-request field on [`POST /api/v1/memory-entries`](/docs/api/memoryEntries/create-memory-entry), defaulting to `0.95`.
+`duplicate_threshold` is a per-request field on [`POST /api/v1/memory-entries`](/docs/api/memory-entries/create-memory-entry), defaulting to `0.95`.
 
 **Merge** is a third outcome, and only agent write paths can reach it. A write made
 during a generation (the [`write_memory` tool](#write_memory-tool) and
@@ -115,7 +115,7 @@ lose a fact, and an entry stays one fact rather than growing into a paragraph
 whose embedding drifts away from everything in it. The cost is a possible
 near-duplicate pair, which future arbitration merges properly.
 
-On a **merge**, the incoming `tags` are unioned into the existing entry's tags and `metadata` is shallow-merged (incoming keys win), so accumulated labels are never lost. [`PUT /api/v1/memory-entries/:id`](/docs/api/memoryEntries/update-memory-entry) replaces `tags`/`metadata` outright; pass `null` (or `[]` for tags) to clear.
+On a **merge**, the incoming `tags` are unioned into the existing entry's tags and `metadata` is shallow-merged (incoming keys win), so accumulated labels are never lost. [`PUT /api/v1/memory-entries/:id`](/docs/api/memory-entries/update-memory-entry) replaces `tags`/`metadata` outright; pass `null` (or `[]` for tags) to clear.
 
 #### Response `action` Field
 
@@ -137,7 +137,7 @@ agent believe this" is answerable from the entry itself:
 | --- | --- | --- |
 | [`write_memory` tool](#write_memory-tool) | the generation that called the tool | `null` — the tool has no conversation context |
 | [Automatic extraction](#automatic-extraction) | the generation whose turn was extracted | the conversation, when the turn came from one |
-| [`POST /api/v1/memory-entries`](/docs/api/memoryEntries/create-memory-entry) | `null` | `null` |
+| [`POST /api/v1/memory-entries`](/docs/api/memory-entries/create-memory-entry) | `null` | `null` |
 | [Orchestration `memory_write` node](#orchestration-memory_write-node) | `null` | `null` |
 
 Provenance is recorded **when the entry is created and never rewritten by a later merge**:
@@ -157,12 +157,12 @@ stays intact: `DELETE` remains the way to remove an entry outright.
 
 Invalidated entries are excluded from:
 
-- entry listing ([`GET /api/v1/memory-entries`](/docs/api/memoryEntries/list-memory-entries)) unless `include_invalidated=true` is passed
+- entry listing ([`GET /api/v1/memory-entries`](/docs/api/memory-entries/list-memory-entries)) unless `include_invalidated=true` is passed
 - [write deduplication](#write-algorithm) — a retired fact is never a merge target, so
   restating superseded knowledge creates a new entry
 - [Knowledge search](./knowledge.md), so a retired fact is never injected into a generation
 
-They stay readable by ID ([`GET /api/v1/memory-entries/{entry_id}`](/docs/api/memoryEntries/get-memory-entry)) for audit.
+They stay readable by ID ([`GET /api/v1/memory-entries/{entry_id}`](/docs/api/memory-entries/get-memory-entry)) for audit.
 
 The write path that *produces* an invalidation — LLM arbitration over a shortlist of
 similar entries — has not shipped yet; the columns and the API shape are in place because
