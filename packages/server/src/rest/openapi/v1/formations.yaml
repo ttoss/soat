@@ -295,6 +295,13 @@ paths:
         `status: "failed"`, and `error` explains why. Read `status` — a `2xx`
         here means the deploy was attempted, not that it worked. The `builtin` CLI
         exits non-zero on that body so `update-formation && …` does not lie.
+
+
+        A deploy that replaced a resource and could not delete the superseded
+        one answers `status: "active"` with
+        `error.code: "FORMATION_REPLACE_CLEANUP_FAILED"` — the desired state is
+        realised, and `error.meta.failures` names every resource still live. The
+        next deploy retries the disposal.
       operationId: updateFormation
       parameters:
         - name: formation_id
@@ -1968,6 +1975,15 @@ components:
             other status, and cleared by the next successful deploy. This is the
             reason a `2xx` deploy response can report `status: "failed"` without
             a second call to `list-formation-events`.
+
+
+            One case carries an error while the formation is `active`:
+            `FORMATION_REPLACE_CLEANUP_FAILED`, when a deploy replaced a
+            resource and the superseded one could not be deleted. The desired
+            state is realised, so the deploy succeeded — but the old resource is
+            still live, and `meta.failures` names it. It stays on the formation
+            as pending cleanup and is retried on the next deploy or teardown,
+            which clears the error once it is gone.
         resources:
           type: array
           items:
@@ -2091,8 +2107,9 @@ components:
           type: string
           description: >-
             The failing operation's error code (`VALIDATION_FAILED`,
-            `RESOURCE_NOT_FOUND`, `FORMATION_DELETE_FAILED`, …), or `UNKNOWN`
-            when the underlying failure carried no code.
+            `RESOURCE_NOT_FOUND`, `FORMATION_DELETE_FAILED`,
+            `FORMATION_REPLACE_CLEANUP_FAILED`, …), or `UNKNOWN` when the
+            underlying failure carried no code.
           example: VALIDATION_FAILED
         message:
           type: string
@@ -2106,7 +2123,9 @@ components:
           description: >-
             Context for the failure. A failed apply names the resource that
             broke it (`logical_id`, `resource_type`); a failed teardown lists
-            every blocker under `failures`.
+            every blocker under `failures`, and so does a succeeded deploy that
+            could not dispose of a replaced resource — there each entry adds the
+            `physical_resource_id` still live.
           example:
             logical_id: case1
             resource_type: dataset_item
