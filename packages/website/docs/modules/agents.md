@@ -121,7 +121,7 @@ When `status` is `completed`, `stop_reason` indicates why:
 | Stop Reason    | Description                                                                       |
 | -------------- | --------------------------------------------------------------------------------- |
 | `stop`         | The model produced a final response with no tool calls                             |
-| `tool-calls`   | The turn ended on a tool call — either one the platform is still settling (a pause), or the one a `hasToolCall` [stop condition](#stop-conditions) named |
+| `tool-calls`   | The turn ended on a tool call — either one the platform is still settling (a pause), or the one a `has_tool_call` [stop condition](#stop-conditions) named |
 | `max_steps`    | The turn spent its whole `max_steps` budget on tool calls and could not finish      |
 | `depth_guard`  | A nested call exceeded `max_call_depth`                                             |
 | `chain_limit`  | A [continuation chain](./chains.md) reached its generation budget and was not resumed |
@@ -200,16 +200,16 @@ The `tool_choice` field sets the **default** tool-selection strategy for every s
 
 `"required"` combined with a tool that has no `execute` configuration (a "done" tool) forces tool use at every step; the loop stops when the executor-less tool is called.
 
-**A forcing value must declare how a turn ends.** `"required"` and the object form forbid a final assistant message, so a turn running under one can only end by exhausting `max_steps` — on every turn of the agent's life, including a [continuation](#continuation-chains) spawned to carry an approval decision back to it. So an agent that forces a tool is refused on write unless its [`stop_conditions`](#stop-conditions) declare a terminal `hasToolCall`:
+**A forcing value must declare how a turn ends.** `"required"` and the object form forbid a final assistant message, so a turn running under one can only end by exhausting `max_steps` — on every turn of the agent's life, including a [continuation](#continuation-chains) spawned to carry an approval decision back to it. So an agent that forces a tool is refused on write unless its [`stop_conditions`](#stop-conditions) declare a terminal `has_tool_call`:
 
 ```json
 {
   "tool_choice": "required",
-  "stop_conditions": [{ "type": "hasToolCall", "tool_name": "done" }]
+  "stop_conditions": [{ "type": "has_tool_call", "tool_name": "done" }]
 }
 ```
 
-Without it the write fails with [`FORCED_TOOL_CHOICE_CANNOT_STOP`](../error-codes.md#forced_tool_choice_cannot_stop). `maxChainGenerations` does not satisfy the rule — it bounds a chain, it never ends a turn. The check reads the config the write would *leave behind*, so removing the condition from a forcing agent is refused exactly like adding the forcing to one that has none.
+Without it the write fails with [`FORCED_TOOL_CHOICE_CANNOT_STOP`](../error-codes.md#forced_tool_choice_cannot_stop). `max_chain_generations` does not satisfy the rule — it bounds a chain, it never ends a turn. The check reads the config the write would *leave behind*, so removing the condition from a forcing agent is refused exactly like adding the forcing to one that has none.
 
 The alternative is to stop forcing at the agent level: leave `tool_choice` at `"auto"` and force the one step you care about with [Step Rules](#step-rules), which are numbered from the first step of each turn.
 
@@ -262,20 +262,20 @@ The work has two axes, and each condition names the one it bounds:
 
 | Condition                                                  | Scope | Stops when                                                        |
 | ---------------------------------------------------------- | ----- | ----------------------------------------------------------------- |
-| `{ type: "hasToolCall", tool_name: "<name>" }`              | turn  | The model calls the named tool                                    |
-| `{ type: "maxChainGenerations", max_generations: <n> }`     | chain | The [continuation chain](./chains.md) has spawned `n` generations |
+| `{ type: "has_tool_call", tool_name: "<name>" }`              | turn  | The model calls the named tool                                    |
+| `{ type: "max_chain_generations", max_generations: <n> }`     | chain | The [continuation chain](./chains.md) has spawned `n` generations |
 
 ```json
 {
   "max_steps": 50,
   "stop_conditions": [
-    { "type": "hasToolCall", "tool_name": "done" },
-    { "type": "maxChainGenerations", "max_generations": 20 }
+    { "type": "has_tool_call", "tool_name": "done" },
+    { "type": "max_chain_generations", "max_generations": 20 }
   ]
 }
 ```
 
-**Turn-scoped.** `hasToolCall` is optional for an agent that can answer in text,
+**Turn-scoped.** `has_tool_call` is optional for an agent that can answer in text,
 and **required** for one whose [`tool_choice`](#tool-choice) forces a tool —
 forcing forbids the final message, so the named call is the only way such a turn
 ends short of its step budget. `max_steps` always applies: a condition narrows
@@ -292,7 +292,7 @@ that arrives at `submit-tool-outputs` with nothing left ends there — the outpu
 are recorded, and the generation completes with `stop_reason: "max_steps"`
 without another model call.
 
-**Chain-scoped.** `maxChainGenerations` never shortens a turn. It is evaluated
+**Chain-scoped.** `max_chain_generations` never shortens a turn. It is evaluated
 where a continuation is *spawned*: once the chain has reached that many
 generations, further resumptions stop with `chain_limit` instead of extending it.
 The effective ceiling is the smallest of this, the project's
@@ -300,10 +300,10 @@ The effective ceiling is the smallest of this, the project's
 `MAX_CONTINUATION_CHAIN_GENERATIONS`, so an agent can be stricter than either
 but never looser — see [Bounding a chain](./chains.md#bounding-a-chain).
 
-Conditions are validated on write: an unknown `type`, a `hasToolCall` with no
-`tool_name`, or a `maxChainGenerations` whose `max_generations` is not a positive
+Conditions are validated on write: an unknown `type`, a `has_tool_call` with no
+`tool_name`, or a `max_chain_generations` whose `max_generations` is not a positive
 integer is refused with `400 VALIDATION_FAILED` rather than stored as a condition
-that never fires. Dropping the `hasToolCall` an agent's forcing `tool_choice`
+that never fires. Dropping the `has_tool_call` an agent's forcing `tool_choice`
 depends on is refused too, with
 [`FORCED_TOOL_CHOICE_CANNOT_STOP`](../error-codes.md#forced_tool_choice_cannot_stop).
 
@@ -394,7 +394,7 @@ Three consequences worth relying on:
 
 Context headers are forwarded to `http` and `mcp` tools, propagated into nested generations for `builtin` tools, and not sent to `client` tools (they execute on the caller's side). They are injected **after** any headers configured on the tool definition, and are preserved and reapplied when a `requires_action` pause resumes.
 
-A [session](./sessions.md) also auto-populates `sessionId`, `actorId` and `actorExternalId`, which caller-supplied keys override. For the exact key→header rule, validation (`400 INVALID_TOOL_CONTEXT_KEY`), and the security notes on header trust and PII egress, see the [Tool Context reference](../advanced/tool-context.md).
+A [session](./sessions.md) also auto-populates `session_id`, `actor_id` and `actor_external_id`, which caller-supplied keys override. For the exact key→header rule, validation (`400 INVALID_TOOL_CONTEXT_KEY`), and the security notes on header trust and PII egress, see the [Tool Context reference](../advanced/tool-context.md).
 
 ### Context Window Limiting
 
@@ -434,7 +434,7 @@ Each source tag identifies the exact row the text came from: a memory result
 carries its entry id, and a document chunk carries its page when the document
 has one (a chunk with no page renders as `[Document: /reports/q1.txt]`). That is
 what makes an injected claim traceable — the entry id resolves through
-[`GET /api/v1/memory-entries/{entry_id}`](/docs/api/memoryEntries/get-memory-entry), including for an entry that was later
+[`GET /api/v1/memory-entries/{entry_id}`](/docs/api/memory-entries/get-memory-entry), including for an entry that was later
 [superseded](./memories.md#temporal-invalidation).
 
 | Field            | Type       | Description                                                                                 |
@@ -617,7 +617,7 @@ Two agent fields are read from the live agent even during a rollout, because the
 
 ### Deletion
 
-By default, deleting an agent that has dependent generations or traces returns `409 Conflict` with error code `AGENT_HAS_DEPENDENTS` and `meta.generationCount` / `meta.traceCount`. Pass `?force=true` to delete those generations and traces along with the agent. An agent's archived versions are removed with it, and each deleted trace's backing [file](./files.md) and stored bytes are removed too.
+By default, deleting an agent that has dependent generations or traces returns `409 Conflict` with error code `AGENT_HAS_DEPENDENTS` and `meta.generation_count` / `meta.trace_count`. Pass `?force=true` to delete those generations and traces along with the agent. An agent's archived versions are removed with it, and each deleted trace's backing [file](./files.md) and stored bytes are removed too.
 
 ### Webhook Events
 

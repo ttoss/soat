@@ -640,7 +640,7 @@ components:
             before this field existed. When set, only the listed keys are, so a
             per-user credential in `tool_context` can be confined to the tools
             that need it; `[]` forwards none. The server-pinned identity keys
-            (`sessionId`, `actorId`, `actorExternalId`) are always forwarded.
+            (`session_id`, `actor_id`, `actor_external_id`) are always forwarded.
             A key consumed by a `{{context:<key>}}` token in this tool's own
             headers is substituted regardless of this list — the tool declared
             that header itself.
@@ -818,7 +818,7 @@ components:
             before this field existed. When set, only the listed keys are, so a
             per-user credential in `tool_context` can be confined to the tools
             that need it; `[]` forwards none. The server-pinned identity keys
-            (`sessionId`, `actorId`, `actorExternalId`) are always forwarded.
+            (`session_id`, `actor_id`, `actor_external_id`) are always forwarded.
             A key consumed by a `{{context:<key>}}` token in this tool's own
             headers is substituted regardless of this list — the tool declared
             that header itself.
@@ -967,7 +967,7 @@ components:
             before this field existed. When set, only the listed keys are, so a
             per-user credential in `tool_context` can be confined to the tools
             that need it; `[]` forwards none. The server-pinned identity keys
-            (`sessionId`, `actorId`, `actorExternalId`) are always forwarded.
+            (`session_id`, `actor_id`, `actor_external_id`) are always forwarded.
             A key consumed by a `{{context:<key>}}` token in this tool's own
             headers is substituted regardless of this list — the tool declared
             that header itself.
@@ -1038,7 +1038,7 @@ components:
             `context_keys` allowlist when it sets one.
 
             This route has no session, so it stamps no server-derived identity:
-            the reserved keys `sessionId`, `actorId` and `actorExternalId` are
+            the reserved keys `session_id`, `actor_id` and `actor_external_id` are
             dropped from this bag (in any casing) rather than forwarded, so a
             downstream tool can still trust that a context header naming one is
             server-derived. Every other key becomes an HTTP header name and must

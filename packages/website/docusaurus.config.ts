@@ -152,6 +152,20 @@ const config: Config = {
             from: '/docs/getting-started/choosing-an-automation-model',
             to: '/docs/advanced/choosing-an-automation-model',
           },
+          // The reference route is the spec's filename, so renaming
+          // `memoryEntries.yaml` moved five live operation pages.
+          ...[
+            'list-memory-entries',
+            'create-memory-entry',
+            'get-memory-entry',
+            'update-memory-entry',
+            'delete-memory-entry',
+          ].map((operation) => {
+            return {
+              from: `/docs/api/memoryEntries/${operation}`,
+              to: `/docs/api/memory-entries/${operation}`,
+            };
+          }),
         ],
       },
     ],

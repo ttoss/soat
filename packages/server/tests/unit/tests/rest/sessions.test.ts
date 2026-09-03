@@ -175,9 +175,9 @@ describe('Sessions', () => {
     // body alone. Pinned in all three places it could drift.
     test('stores tool_context keys verbatim, whatever their case', async () => {
       const toolContext = {
-        actor_external_id: 'snake',
-        actorExternalId: 'camel',
-        'actor-external-id': 'kebab',
+        tenant_external_id: 'snake',
+        tenantExternalId: 'camel',
+        'tenant-external-id': 'kebab',
         PascalKey: 'pascal',
       };
 
@@ -1930,9 +1930,9 @@ describe('Sessions', () => {
       // Identity travels on the typed argument the chokepoint stamps from —
       // never invented into the caller bag on this path.
       expect(callArgs.sessionId).toBe(withActorSessionId);
-      expect(callArgs.toolContext).not.toHaveProperty('sessionId');
-      expect(callArgs.toolContext).not.toHaveProperty('actorId');
-      expect(callArgs.toolContext).not.toHaveProperty('actorExternalId');
+      expect(callArgs.toolContext).not.toHaveProperty('session_id');
+      expect(callArgs.toolContext).not.toHaveProperty('actor_id');
+      expect(callArgs.toolContext).not.toHaveProperty('actor_external_id');
     });
 
     test('caller bags merge with per-request values winning, and forged identity keys are left for the chokepoint to strip', async () => {
@@ -1956,7 +1956,7 @@ describe('Sessions', () => {
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/sessions/${withActorSessionId}/generate?wait=true`)
         .send({
-          tool_context: { tenant: 'request', sessionId: 'ses_forged' },
+          tool_context: { tenant: 'request', session_id: 'ses_forged' },
         });
 
       expect(response.status).toBe(200);

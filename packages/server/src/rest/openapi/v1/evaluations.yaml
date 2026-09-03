@@ -934,7 +934,7 @@ paths:
 
 
                     An eval generation has no session, so the reserved keys
-                    `sessionId`, `actorId` and `actorExternalId` are dropped
+                    `session_id`, `actor_id` and `actor_external_id` are dropped
                     (in any casing) rather than forwarded. Every other key
                     becomes an HTTP header name and must match that grammar, or
                     the request is rejected with `400 INVALID_TOOL_CONTEXT_KEY`

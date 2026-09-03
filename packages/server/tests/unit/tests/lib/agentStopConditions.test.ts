@@ -14,7 +14,7 @@ import {
 /**
  * `stop_conditions` is a documented agent field: the loop stops when any
  * condition is met, and the one condition the docs define is
- * `{ type: "hasToolCall", tool_name: "<resolved name>" }` — the terminator for
+ * `{ type: "has_tool_call", tool_name: "<resolved name>" }` — the terminator for
  * the "done tool" idiom.
  *
  * It was stored, wire-mapped, versioned and snapshotted, and reached nothing:
@@ -176,10 +176,10 @@ describe('stop_conditions', () => {
     expect(requestCount).toBe(MAX_STEPS);
   });
 
-  test('hasToolCall ends the loop at the step that calls the tool', async () => {
+  test('has_tool_call ends the loop at the step that calls the tool', async () => {
     const result = await run({
       generationId: 'gen_stopcond_hastoolcall',
-      stopConditions: [{ type: 'hasToolCall', tool_name: 'done' }],
+      stopConditions: [{ type: 'has_tool_call', tool_name: 'done' }],
     });
 
     expect(result.status).toBe('completed');
@@ -192,7 +192,7 @@ describe('stop_conditions', () => {
     // Guards against a stop condition that fires on any tool call at all.
     const result = await run({
       generationId: 'gen_stopcond_othertool',
-      stopConditions: [{ type: 'hasToolCall', tool_name: 'not_called' }],
+      stopConditions: [{ type: 'has_tool_call', tool_name: 'not_called' }],
     });
 
     expect(result.status).toBe('completed');
@@ -232,7 +232,7 @@ describe('stop_conditions', () => {
           instructions: null,
           maxSteps: MAX_STEPS,
           toolChoice: 'auto',
-          stopConditions: [{ type: 'hasToolCall', tool_name: 'done' }],
+          stopConditions: [{ type: 'has_tool_call', tool_name: 'done' }],
           activeToolIds: null,
           stepRules: null,
           temperature: null,
@@ -317,13 +317,13 @@ describe('stop_conditions', () => {
   });
 
   test('a chain-scoped condition does not bound the per-turn loop', async () => {
-    // `maxChainGenerations` bounds the *chain*, evaluated when a continuation is
+    // `max_chain_generations` bounds the *chain*, evaluated when a continuation is
     // spawned (`generationChain.test.ts`). Treating it as a `stopWhen` predicate
     // would silently cap every turn's step count at the chain's number — a
     // different limit on a different axis, quietly enforced on the wrong one.
     const result = await run({
       generationId: 'gen_stopcond_chainscoped',
-      stopConditions: [{ type: 'maxChainGenerations', max_generations: 1 }],
+      stopConditions: [{ type: 'max_chain_generations', max_generations: 1 }],
     });
 
     expect(result.status).toBe('completed');

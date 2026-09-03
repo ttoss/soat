@@ -379,9 +379,9 @@ describe('continuation chain lineage and budget', () => {
         args.maxGenerations === undefined
           ? null
           : [
-              { type: 'hasToolCall', tool_name: 'done' },
+              { type: 'has_tool_call', tool_name: 'done' },
               {
-                type: 'maxChainGenerations',
+                type: 'max_chain_generations',
                 max_generations: args.maxGenerations,
               },
             ],

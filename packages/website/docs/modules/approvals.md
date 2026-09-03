@@ -115,7 +115,7 @@ The two producers share the item lifecycle but suspend differently:
   session or conversation, the continuation's messages append there.
 - **The continuation runs the agent's own config.** That includes
   [`tool_choice`](./agents.md#tool-choice): an agent that forces a tool reports
-  the decision by reaching its declared `hasToolCall`
+  the decision by reaching its declared `has_tool_call`
   [stop condition](./agents.md#stop-conditions), which is why that condition is
   mandatory for a forcing agent rather than optional.
 

@@ -33,8 +33,8 @@ const log = createDebug('soat:generation');
  * capping every turn's step count.
  */
 export const STOP_CONDITION_TYPES = [
-  'hasToolCall',
-  'maxChainGenerations',
+  'has_tool_call',
+  'max_chain_generations',
 ] as const;
 
 /**
@@ -43,7 +43,7 @@ export const STOP_CONDITION_TYPES = [
  * `generationChain.ts` (via {@link resolveChainGenerationCeiling}).
  */
 const CHAIN_SCOPED_TYPES: ReadonlySet<string> = new Set([
-  'maxChainGenerations',
+  'max_chain_generations',
 ]);
 
 const KNOWN_TYPES: ReadonlySet<string> = new Set(STOP_CONDITION_TYPES);
@@ -92,15 +92,15 @@ const assertValidCondition = (entry: unknown): void => {
       { condition: entry }
     );
   }
-  if (type === 'hasToolCall' && !readToolName(entry)) {
+  if (type === 'has_tool_call' && !readToolName(entry)) {
     throw invalid(
-      'A hasToolCall stop condition requires a non-empty tool_name.',
+      'A has_tool_call stop condition requires a non-empty tool_name.',
       { condition: entry }
     );
   }
-  if (type === 'maxChainGenerations' && !readMaxGenerations(entry)) {
+  if (type === 'max_chain_generations' && !readMaxGenerations(entry)) {
     throw invalid(
-      'A maxChainGenerations stop condition requires max_generations to be a positive integer.',
+      'A max_chain_generations stop condition requires max_generations to be a positive integer.',
       { condition: entry }
     );
   }
@@ -128,14 +128,14 @@ export const assertValidStopConditions = (value: unknown): void => {
 
 /**
  * Whether a `stop_conditions` value declares a condition that can end a *turn*.
- * Only `hasToolCall` can: `maxChainGenerations` caps how many generations a
+ * Only `has_tool_call` can: `max_chain_generations` caps how many generations a
  * chain spawns and never shortens the turn it is evaluated on.
  */
 const declaresTurnExit = (stopConditions: unknown): boolean => {
   if (!Array.isArray(stopConditions)) return false;
   return stopConditions.some((entry) => {
     if (!isPlainObject(entry)) return false;
-    return readType(entry) === 'hasToolCall' && Boolean(readToolName(entry));
+    return readType(entry) === 'has_tool_call' && Boolean(readToolName(entry));
   });
 };
 
@@ -167,7 +167,7 @@ export const assertForcedToolChoiceCanStop = (args: {
   if (declaresTurnExit(args.stopConditions)) return;
   throw new DomainError(
     'FORCED_TOOL_CHOICE_CANNOT_STOP',
-    'An agent whose tool_choice forces a tool must declare a hasToolCall stop condition, or no turn it runs could end by answering.',
+    'An agent whose tool_choice forces a tool must declare a has_tool_call stop condition, or no turn it runs could end by answering.',
     { toolChoice: args.toolChoice }
   );
 };
@@ -245,7 +245,7 @@ export const resolveStopWhen = (config: {
     if (!isPlainObject(entry)) continue;
     const type = readType(entry);
     const toolName = readToolName(entry);
-    if (type === 'hasToolCall' && toolName) {
+    if (type === 'has_tool_call' && toolName) {
       conditions.push(hasToolCall<ToolSet>(toolName));
       continue;
     }
@@ -278,7 +278,7 @@ export const resolveChainGenerationCeiling = (
   let ceiling: number | null = null;
   for (const entry of stopConditions) {
     if (!isPlainObject(entry)) continue;
-    if (readType(entry) !== 'maxChainGenerations') continue;
+    if (readType(entry) !== 'max_chain_generations') continue;
     const declared = readMaxGenerations(entry);
     if (declared === null) continue;
     ceiling = ceiling === null ? declared : Math.min(ceiling, declared);

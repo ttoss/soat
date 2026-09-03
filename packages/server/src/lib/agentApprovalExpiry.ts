@@ -12,7 +12,7 @@
  * `react` restores that continuation for an agent that genuinely handles the
  * news — retry differently, notify through an ungated tool. It runs under the
  * agent's own `tool_choice`, so an agent that forces one reaches its declared
- * `hasToolCall` exit or spends the turn's steps; nothing rewrites the choice for
+ * `has_tool_call` exit or spends the turn's steps; nothing rewrites the choice for
  * it (`assertForcedToolChoiceCanStop`).
  */
 import { DomainError } from '../errors';

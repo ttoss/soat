@@ -38,7 +38,7 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   VALIDATION_FAILED:
     'Fix the request and retry. Unknown fields are rejected outright, so compare the payload against the operation in `/openapi.json`; `meta` names the offending field when the check can identify one.',
   FORCED_TOOL_CHOICE_CANNOT_STOP:
-    'Add `{ "type": "hasToolCall", "tool_name": "<your done tool>" }` to `stop_conditions`, or set `tool_choice` to `"auto"` and force the step you actually care about with `step_rules`. `maxChainGenerations` does not satisfy this — it bounds a chain, it never ends a turn.',
+    'Add `{ "type": "has_tool_call", "tool_name": "<your done tool>" }` to `stop_conditions`, or set `tool_choice` to `"auto"` and force the step you actually care about with `step_rules`. `max_chain_generations` does not satisfy this — it bounds a chain, it never ends a turn.',
   FORMATION_HANDLER_FAILED:
     'A resource type this deployment registered delegates to an external handler, and that handler did not answer. The template is not at fault, so re-deploying it unchanged will fail identically — the deployment operator has to fix the handler (`meta.resource_type` names the type, `meta.request_type` the operation it failed on).',
   QUOTA_EXCEEDED:

@@ -14,7 +14,7 @@ servers:
         description: The base URL of your SOAT deployment
         default: http://localhost:5047
 tags:
-  - name: MemoryEntries
+  - name: Memory Entries
     description: Manage individual memory entries (the actual knowledge items stored in a memory)
 security:
   - bearerAuth: []
@@ -22,7 +22,7 @@ paths:
   /api/v1/memory-entries:
     get:
       tags:
-        - MemoryEntries
+        - Memory Entries
       summary: List memory entries
       description: Returns all entries in a memory container
       operationId: listMemoryEntries
@@ -89,7 +89,7 @@ paths:
           description: Internal server error
     post:
       tags:
-        - MemoryEntries
+        - Memory Entries
       summary: Create a memory entry
       description: >-
         Creates a new entry in the specified memory container. Automatically
@@ -167,7 +167,7 @@ paths:
   /api/v1/memory-entries/{entry_id}:
     get:
       tags:
-        - MemoryEntries
+        - Memory Entries
       summary: Get a memory entry
       description: Returns a single memory entry by ID
       operationId: getMemoryEntry
@@ -196,7 +196,7 @@ paths:
           description: Internal server error
     put:
       tags:
-        - MemoryEntries
+        - Memory Entries
       summary: Update a memory entry
       description: Updates an existing memory entry. Regenerates the embedding if content changes.
       operationId: updateMemoryEntry
@@ -247,7 +247,7 @@ paths:
           description: Internal server error
     delete:
       tags:
-        - MemoryEntries
+        - Memory Entries
       summary: Delete a memory entry
       description: Deletes a memory entry
       operationId: deleteMemoryEntry

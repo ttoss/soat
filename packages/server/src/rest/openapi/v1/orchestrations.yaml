@@ -836,8 +836,8 @@ components:
             nothing. Matching is case-insensitive, since an entry names a key
             that becomes an HTTP header name; an entry outside that grammar is
             rejected at write time with `INVALID_TOOL_CONTEXT_KEY`. The
-            server-derived identity keys (`sessionId`, `actorId`,
-            `actorExternalId`) are unaffected — they are re-derived per
+            server-derived identity keys (`session_id`, `actor_id`,
+            `actor_external_id`) are unaffected — they are re-derived per
             generation in the child regardless of this list. Ignored for other
             node types.
         interval:
@@ -1491,8 +1491,8 @@ components:
             with `400 INVALID_TOOL_CONTEXT_KEY` and no run is created.
 
 
-            The reserved identity keys (`sessionId`, `actorId`,
-            `actorExternalId`) are stripped at generation time — a caller cannot
+            The reserved identity keys (`session_id`, `actor_id`,
+            `actor_external_id`) are stripped at generation time — a caller cannot
             address them from here.
           example:
             ocaToken: eyJhbGciOiJIUzI1NiJ9.abc

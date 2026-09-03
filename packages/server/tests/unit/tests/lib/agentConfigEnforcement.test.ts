@@ -10,7 +10,7 @@ import { AGENT_SCALAR_FIELDS } from 'src/lib/agents';
 // existed. This pins the third from happening the same way.
 //
 // The contract is "reaches its enforcement point", not "reaches the model
-// call": `stop_conditions` carries `maxChainGenerations`, which is enforced
+// call": `stop_conditions` carries `max_chain_generations`, which is enforced
 // where a continuation is *spawned* and deliberately never reaches `stopWhen`.
 // So a field declares where it is enforced, and the declaration is checked
 // against the source rather than trusted.
@@ -21,7 +21,7 @@ const LIB_DIR = path.resolve(__dirname, '../../../../src/lib');
  * Source with comments removed, so the check below matches only code. A stale
  * doc comment naming a field must not keep this contract green after the code
  * that read the field is gone. String and template literals are kept — they
- * are live code here (`readType(entry) === 'hasToolCall'` is exactly how a
+ * are live code here (`readType(entry) === 'has_tool_call'` is exactly how a
  * stop condition is matched) — which is also why the scanner tracks them: a
  * comment opener inside one is content, not a comment.
  */
@@ -120,7 +120,7 @@ const ENFORCEMENT: Record<(typeof AGENT_SCALAR_FIELDS)[number], Declaration> = {
   stopConditions: {
     modules: ['agentStopConditions.ts', 'generationChain.ts'],
     enforces:
-      'Turn-scoped `hasToolCall` reaches `stopWhen`; chain-scoped `maxChainGenerations` bounds continuation spawning instead — the two points this test exists to keep distinct.',
+      'Turn-scoped `has_tool_call` reaches `stopWhen`; chain-scoped `max_chain_generations` bounds continuation spawning instead — the two points this test exists to keep distinct.',
   },
   activeToolIds: {
     modules: ['agentToolSelection.ts'],
@@ -184,7 +184,7 @@ describe('agent config field enforcement contract', () => {
 
   test('some field is enforced somewhere other than the model call', () => {
     // Keeps the contract from being re-narrowed to "reaches the provider
-    // request", which would flag `maxChainGenerations` as a defect when it is
+    // request", which would flag `max_chain_generations` as a defect when it is
     // enforced exactly as designed.
     const declaration = ENFORCEMENT.stopConditions;
     expect(isEnforced(declaration) && declaration.modules).toContain(

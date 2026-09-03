@@ -114,7 +114,7 @@ const fileChainLimitException = async (event: SoatEvent): Promise<void> => {
       initiatorGenerationId: asStringOrNull(data.initiatorGenerationId),
       chainSize: asNumberOrNull(data.chainSize),
       limit: asNumberOrNull(data.limit),
-      // Which ceiling refused it: the agent's own `maxChainGenerations`, or the
+      // Which ceiling refused it: the agent's own `max_chain_generations`, or the
       // deployment's `MAX_CONTINUATION_CHAIN_GENERATIONS`. Without it the number
       // alone does not say which knob to turn.
       limitSource: asStringOrNull(data.limitSource),

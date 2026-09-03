@@ -434,11 +434,11 @@ fi
 
 # The reserved identity keys are the server's, and this route has no session to
 # derive them from, so a caller-supplied one is dropped rather than forwarded.
-# Passing only `sessionId` leaves `ocaToken` unresolvable, which is the
+# Passing only `session_id` leaves `ocaToken` unresolvable, which is the
 # observable proof it never became a header.
 expect_cli_error_status 400 call-tool \
   --tool-id "$CONTEXT_REF_TOOL_ID" \
-  --tool-context '{"sessionId":"sess_forged"}'
+  --tool-context '{"session_id":"sess_forged"}'
 
 # Outside `headers`, the token is a write-time error: a caller-supplied value
 # must not be able to steer the outbound URL.
@@ -2979,7 +2979,7 @@ GATED_AGENT_RESP=$($SOAT_CLI create-agent \
   --tool_bindings "[{\"tool_id\":\"$GATED_TOOL_ID\"}]" \
   --guardrail_ids "[\"$GATED_GUARDRAIL_ID\"]" \
   --tool_choice required \
-  --stop_conditions '[{"type":"hasToolCall","tool_name":"gated-project-detail"}]' \
+  --stop_conditions '[{"type":"has_tool_call","tool_name":"gated-project-detail"}]' \
   --max_steps 2)
 GATED_AGENT_ID=$(printf '%s\n' "$GATED_AGENT_RESP" | jq -r '.id')
 echo "Guardrail-gated agent id: $GATED_AGENT_ID"
@@ -3128,7 +3128,7 @@ ACT_AGENT_RESP=$($SOAT_CLI create-agent \
   --tool_bindings "[{\"tool_id\":\"$ACT_TOOL_ID\"}]" \
   --guardrail_ids "[\"$ACT_GUARDRAIL_ID\"]" \
   --tool_choice required \
-  --stop_conditions '[{"type":"hasToolCall","tool_name":"activity-project-detail"}]' \
+  --stop_conditions '[{"type":"has_tool_call","tool_name":"activity-project-detail"}]' \
   --max_steps 2)
 ACT_AGENT_ID=$(printf '%s\n' "$ACT_AGENT_RESP" | jq -r '.id')
 echo "Activity-recorded agent id: $ACT_AGENT_ID"
@@ -3422,7 +3422,7 @@ CLIENT_AGENT_RESP=$($SOAT_CLI create-agent \
   --instructions "You are a weather assistant. When the user asks about the weather, call the get_weather tool with the cityName argument." \
   --tool_bindings "[{\"tool_id\":\"$CLIENT_TOOL_ID\"}]" \
   --step_rules '[{"step":1,"tool_choice":{"type":"tool","tool_name":"get_weather"}}]' \
-  --stop_conditions '[{"type":"hasToolCall","tool_name":"get_weather"}]' \
+  --stop_conditions '[{"type":"has_tool_call","tool_name":"get_weather"}]' \
   --max_steps 3)
 CLIENT_AGENT_ID=$(printf '%s\n' "$CLIENT_AGENT_RESP" | jq -r '.id')
 if [ -z "$CLIENT_AGENT_ID" ] || [ "$CLIENT_AGENT_ID" = "null" ]; then

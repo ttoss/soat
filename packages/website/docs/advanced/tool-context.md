@@ -121,7 +121,7 @@ soat call-tool \
 
 The bag behaves as it does anywhere else: it resolves `{{context:...}}` in `execute.headers`, `mcp.headers` and `preset_parameters`, it is forwarded as `X-Soat-Context-*` headers, and the tool's [`context_keys`](../modules/tools.md#scoping-which-context-keys-reach-a-tool) narrows it.
 
-One difference, and it is the reason this route was the last one to get a bag. There is no session here, so there is no server-derived identity to stamp — and therefore nothing that would overwrite a caller-supplied `sessionId`. The [auto-populated keys](#auto-populated-keys-sessions) are dropped from this bag rather than forwarded, in any casing, so a tool endpoint can still read `X-Soat-Context-sessionId` as a value SOAT derived rather than one a caller chose.
+One difference, and it is the reason this route was the last one to get a bag. There is no session here, so there is no server-derived identity to stamp — and therefore nothing that would overwrite a caller-supplied `session_id`. The [auto-populated keys](#auto-populated-keys-sessions) are dropped from this bag rather than forwarded, in any casing, so a tool endpoint can still read `X-Soat-Context-session_id` as a value SOAT derived rather than one a caller chose.
 
 ## Key → header name
 
@@ -131,14 +131,14 @@ The header name is the context prefix — `X-Soat-Context-` unless your deployme
 | --- | --- |
 | `userId` | `X-Soat-Context-userId` |
 | `tenantId` | `X-Soat-Context-tenantId` |
-| `actorExternalId` | `X-Soat-Context-actorExternalId` |
-| `actor_external_id` | `X-Soat-Context-actor_external_id` |
-| `actor-external-id` | `X-Soat-Context-actor-external-id` |
-| `actor.external.id` | `X-Soat-Context-actor.external.id` |
+| `tenantExternalId` | `X-Soat-Context-tenantExternalId` |
+| `tenant_external_id` | `X-Soat-Context-tenant_external_id` |
+| `tenant-external-id` | `X-Soat-Context-tenant-external-id` |
+| `tenant.external.id` | `X-Soat-Context-tenant.external.id` |
 | `TenantId` | `X-Soat-Context-TenantId` |
 | `env` | `X-Soat-Context-env` |
 
-The table is a formality — the rule is string concatenation. `actor_external_id` and `actorExternalId` are two different keys and produce two different headers.
+The table is a formality — the rule is string concatenation. `tenant_external_id` and `tenantExternalId` are two different keys and produce two different headers.
 
 **Keys are never case-converted.** Unlike every other field in the REST API, `tool_context` keys are not rewritten between snake_case and camelCase: a key is an HTTP header name, not a SOAT field name, so it is stored, echoed in responses, and forwarded exactly as you wrote it — on REST, in formation templates, and over MCP alike. Reading a session's `tool_context` and sending it back unchanged is lossless.
 
@@ -161,9 +161,9 @@ When a generation runs through a [session](../modules/sessions.md), the server i
 
 | Injected key | Forwarded header | Value |
 | --- | --- | --- |
-| `sessionId` | `X-Soat-Context-sessionId` | Public ID of the session; always present |
-| `actorId` | `X-Soat-Context-actorId` | Public ID of the session's actor; omitted if not set |
-| `actorExternalId` | `X-Soat-Context-actorExternalId` | `external_id` of the session's actor; omitted if not set |
+| `session_id` | `X-Soat-Context-session_id` | Public ID of the session; always present |
+| `actor_id` | `X-Soat-Context-actor_id` | Public ID of the session's actor; omitted if not set |
+| `actor_external_id` | `X-Soat-Context-actor_external_id` | `external_id` of the session's actor; omitted if not set |
 
 You do not need to set these yourself — a session-backed generation already carries them.
 
@@ -175,7 +175,7 @@ For every other key, later wins — a per-request `tool_context` overrides the s
 session tool_context  <  per-request tool_context
 ```
 
-The three auto-populated keys (`sessionId`, `actorId`, `actorExternalId`) are the exception: they are always taken from the session and its actor, and a caller-supplied value for one of them — in either the stored or the per-request `tool_context` — is ignored. A tool endpoint can rely on these three headers reflecting the real session/actor even if the caller tries to set them.
+The three auto-populated keys (`session_id`, `actor_id`, `actor_external_id`) are the exception: they are always taken from the session and its actor, and a caller-supplied value for one of them — in either the stored or the per-request `tool_context` — is ignored. A tool endpoint can rely on these three headers reflecting the real session/actor even if the caller tries to set them.
 
 ## Validation
 
@@ -199,7 +199,7 @@ TOOL_CONTEXT_HEADER_PREFIX=X-Acme-Context-
 | `tool_context` key | Forwarded header |
 | --- | --- |
 | `userId` | `X-Acme-Context-userId` |
-| `actor_external_id` | `X-Acme-Context-actor_external_id` |
+| `tenant_external_id` | `X-Acme-Context-tenant_external_id` |
 
 Everything else is unchanged: the prefix is prepended verbatim (include the trailing `-` yourself), the key is still never re-cased, the [auto-populated keys](#auto-populated-keys-sessions) still take the same names after the prefix, and the [validation rules](#validation) above are evaluated against the configured prefix.
 
@@ -216,7 +216,7 @@ The forwarded headers are the point: a tool endpoint can trust them in a way it 
 
 **Verify the caller.** Any client that can reach your tool endpoint can set an `X-Soat-Context-*` header by hand. The headers are trustworthy only if the endpoint also authenticates the request as coming from SOAT (a shared secret in `execute.headers`, mTLS, or network-level restriction). Treat them as *attested by SOAT*, not as *unforgeable*.
 
-**Mind what egresses.** Unless a tool sets [`context_keys`](../modules/tools.md#scoping-which-context-keys-reach-a-tool), every value is transmitted to every `http`, `mcp` and `builtin` tool the agent calls, including endpoints you do not control. Set `context_keys` on the tools that need a given key — particularly when a key holds a credential. This applies to the auto-populated `actorExternalId`: if an [Actor](../modules/actors.md)'s `external_id` holds a phone number or an email address, that PII reaches every third-party tool endpoint in the agent's tool set. When the tool set includes third-party endpoints, prefer an opaque internal identifier as `external_id` and correlate to the real contact detail on your own side.
+**Mind what egresses.** Unless a tool sets [`context_keys`](../modules/tools.md#scoping-which-context-keys-reach-a-tool), every value is transmitted to every `http`, `mcp` and `builtin` tool the agent calls, including endpoints you do not control. Set `context_keys` on the tools that need a given key — particularly when a key holds a credential. This applies to the auto-populated `actor_external_id`: if an [Actor](../modules/actors.md)'s `external_id` holds a phone number or an email address, that PII reaches every third-party tool endpoint in the agent's tool set. When the tool set includes third-party endpoints, prefer an opaque internal identifier as `external_id` and correlate to the real contact detail on your own side.
 
 ## Example
 
@@ -230,9 +230,9 @@ soat create-session \
 Every `http` tool call in that session then receives:
 
 ```http
-X-Soat-Context-sessionId: sess_01
-X-Soat-Context-actorId: actor_01
-X-Soat-Context-actorExternalId: +5511999999999
+X-Soat-Context-session_id: sess_01
+X-Soat-Context-actor_id: actor_01
+X-Soat-Context-actor_external_id: +5511999999999
 X-Soat-Context-tenantId: acme
 X-Soat-Context-plan: pro
 ```

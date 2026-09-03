@@ -322,8 +322,8 @@ paths:
         '409':
           description: >
             Agent has dependent generations or traces (pass `force=true` to
-            delete anyway). `error.meta` carries `generationCount` and
-            `traceCount` so a caller can tell which one is nonzero.
+            delete anyway). `error.meta` carries `generation_count` and
+            `trace_count` so a caller can tell which one is nonzero.
           content:
             application/json:
               schema:
@@ -962,7 +962,7 @@ components:
             with `stop_reason: "max_steps"` instead of calling the model again.
         tool_choice:
           nullable: true
-          description: 'Tool choice strategy. Accepts a string (`"auto"`, `"required"`) or an object (`{ "type": "tool", "tool_name": "my_tool" }`). A forcing value (`"required"` or the object form) forbids a final assistant message on every step of every turn, including a resumed or continued one, so it requires a `hasToolCall` entry in `stop_conditions` — otherwise the write is refused with `FORCED_TOOL_CHOICE_CANNOT_STOP`.'
+          description: 'Tool choice strategy. Accepts a string (`"auto"`, `"required"`) or an object (`{ "type": "tool", "tool_name": "my_tool" }`). A forcing value (`"required"` or the object form) forbids a final assistant message on every step of every turn, including a resumed or continued one, so it requires a `has_tool_call` entry in `stop_conditions` — otherwise the write is refused with `FORCED_TOOL_CHOICE_CANNOT_STOP`.'
         stop_conditions:
           type: array
           nullable: true
@@ -970,8 +970,8 @@ components:
             type: object
           description: >-
             Conditions that end the agent's work early, on top of `max_steps` —
-            turn-scoped (`hasToolCall`) or chain-scoped
-            (`maxChainGenerations`). See the create request body for the
+            turn-scoped (`has_tool_call`) or chain-scoped
+            (`max_chain_generations`). See the create request body for the
             accepted shapes.
         active_tool_ids:
           x-soat-ref: tools
@@ -1327,7 +1327,7 @@ components:
         max_steps:
           type: integer
         tool_choice:
-          description: 'Tool choice strategy. Accepts a string (`"auto"`, `"required"`) or an object (`{ "type": "tool", "tool_name": "my_tool" }`). A forcing value (`"required"` or the object form) forbids a final assistant message on every step of every turn, including a resumed or continued one, so it requires a `hasToolCall` entry in `stop_conditions` — otherwise the write is refused with `FORCED_TOOL_CHOICE_CANNOT_STOP`.'
+          description: 'Tool choice strategy. Accepts a string (`"auto"`, `"required"`) or an object (`{ "type": "tool", "tool_name": "my_tool" }`). A forcing value (`"required"` or the object form) forbids a final assistant message on every step of every turn, including a resumed or continued one, so it requires a `has_tool_call` entry in `stop_conditions` — otherwise the write is refused with `FORCED_TOOL_CHOICE_CANNOT_STOP`.'
         stop_conditions:
           type: array
           items:
@@ -1337,12 +1337,12 @@ components:
             Two scopes:
 
 
-            `{"type": "hasToolCall", "tool_name": "<resolved tool name>"}` ends
+            `{"type": "has_tool_call", "tool_name": "<resolved tool name>"}` ends
             the **turn** after the step that calls the named tool. It narrows
             when the loop ends — it never lets it run past `max_steps`.
 
 
-            `{"type": "maxChainGenerations", "max_generations": <n>}` bounds the
+            `{"type": "max_chain_generations", "max_generations": <n>}` bounds the
             **continuation chain** instead: once the chain has spawned that many
             generations, further resumptions stop with `chain_limit` rather than
             extending it. It never shortens a turn. The effective ceiling is the
@@ -1351,8 +1351,8 @@ components:
             than the platform but never looser.
 
 
-            An unknown `type`, a `hasToolCall` without a `tool_name`, a
-            `maxChainGenerations` whose `max_generations` is not a positive
+            An unknown `type`, a `has_tool_call` without a `tool_name`, a
+            `max_chain_generations` whose `max_generations` is not a positive
             integer, or a non-object entry is rejected with 400.
         active_tool_ids:
           x-soat-ref: tools
@@ -1509,7 +1509,7 @@ components:
           nullable: true
         tool_choice:
           nullable: true
-          description: 'Tool choice strategy. Accepts a string (`"auto"`, `"required"`) or an object (`{ "type": "tool", "tool_name": "my_tool" }`). A forcing value (`"required"` or the object form) forbids a final assistant message on every step of every turn, including a resumed or continued one, so it requires a `hasToolCall` entry in `stop_conditions` — otherwise the write is refused with `FORCED_TOOL_CHOICE_CANNOT_STOP`.'
+          description: 'Tool choice strategy. Accepts a string (`"auto"`, `"required"`) or an object (`{ "type": "tool", "tool_name": "my_tool" }`). A forcing value (`"required"` or the object form) forbids a final assistant message on every step of every turn, including a resumed or continued one, so it requires a `has_tool_call` entry in `stop_conditions` — otherwise the write is refused with `FORCED_TOOL_CHOICE_CANNOT_STOP`.'
         stop_conditions:
           type: array
           nullable: true
@@ -1520,12 +1520,12 @@ components:
             Two scopes:
 
 
-            `{"type": "hasToolCall", "tool_name": "<resolved tool name>"}` ends
+            `{"type": "has_tool_call", "tool_name": "<resolved tool name>"}` ends
             the **turn** after the step that calls the named tool. It narrows
             when the loop ends — it never lets it run past `max_steps`.
 
 
-            `{"type": "maxChainGenerations", "max_generations": <n>}` bounds the
+            `{"type": "max_chain_generations", "max_generations": <n>}` bounds the
             **continuation chain** instead: once the chain has spawned that many
             generations, further resumptions stop with `chain_limit` rather than
             extending it. It never shortens a turn. The effective ceiling is the
@@ -1534,8 +1534,8 @@ components:
             than the platform but never looser.
 
 
-            An unknown `type`, a `hasToolCall` without a `tool_name`, a
-            `maxChainGenerations` whose `max_generations` is not a positive
+            An unknown `type`, a `has_tool_call` without a `tool_name`, a
+            `max_chain_generations` whose `max_generations` is not a positive
             integer, or a non-object entry is rejected with 400.
         active_tool_ids:
           x-soat-ref: tools

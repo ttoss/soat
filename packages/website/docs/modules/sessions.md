@@ -187,13 +187,13 @@ When a generation is triggered through a session, the server automatically injec
 
 | Injected key      | Forwarded header                 | Value                                                  |
 | ----------------- | -------------------------------- | ------------------------------------------------------ |
-| `actorId`         | `X-Soat-Context-actorId`         | Public ID of the session's actor; omitted if not set   |
-| `actorExternalId` | `X-Soat-Context-actorExternalId` | External ID of the session's actor; omitted if not set |
-| `sessionId`       | `X-Soat-Context-sessionId`       | Public ID of the session; always present               |
+| `actor_id`         | `X-Soat-Context-actor_id`         | Public ID of the session's actor; omitted if not set   |
+| `actor_external_id` | `X-Soat-Context-actor_external_id` | External ID of the session's actor; omitted if not set |
+| `session_id`       | `X-Soat-Context-session_id`       | Public ID of the session; always present               |
 
-These three keys are always taken from the session and actor, regardless of what the caller supplies — a caller-provided `actorId`, `actorExternalId` or `sessionId` in either the session's stored `tool_context` or a per-request `tool_context` is ignored in favor of the auto-populated value. Any other key a caller sets in `tool_context` is unaffected and still wins in the usual way (a per-request value overrides the session's stored value).
+These three keys are always taken from the session and actor, regardless of what the caller supplies — a caller-provided `actor_id`, `actor_external_id` or `session_id` in either the session's stored `tool_context` or a per-request `tool_context` is ignored in favor of the auto-populated value. Any other key a caller sets in `tool_context` is unaffected and still wins in the usual way (a per-request value overrides the session's stored value).
 
-Note that `actorExternalId` carries the actor's `external_id` to every `http` and `mcp` tool the agent calls; see [Actors](./actors.md#external_id-and-idempotent-creation) if that value holds PII.
+Note that `actor_external_id` carries the actor's `external_id` to every `http` and `mcp` tool the agent calls; see [Actors](./actors.md#external_id-and-idempotent-creation) if that value holds PII.
 
 ### Background Generation
 
