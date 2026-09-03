@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.37.1](https://github.com/ttoss/soat/compare/v0.37.0...v0.37.1) (2026-09-03)
+
+### Bug Fixes
+
+* **server:** read the AI meter alone for a cost quota's pricing blackout ([#1201](https://github.com/ttoss/soat/issues/1201)) ([4c51067](https://github.com/ttoss/soat/commit/4c51067ed5216c72ea38b2d590f678135f9ed6ec))
+
 # [0.37.0](https://github.com/ttoss/soat/compare/v0.36.0...v0.37.0) (2026-09-03)
 
 * refactor(server)!: snake_case stop condition types, delete meta and tool context identity keys (#1199) ([f9066cf](https://github.com/ttoss/soat/commit/f9066cffbae092491f2a7c70eadd747569a84903)), closes [#1199](https://github.com/ttoss/soat/issues/1199)
