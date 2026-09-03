@@ -3,6 +3,22 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.37.0](https://github.com/ttoss/soat/compare/v0.36.0...v0.37.0) (2026-09-03)
+
+* refactor(server)!: snake_case stop condition types, delete meta and tool context identity keys (#1199) ([f9066cf](https://github.com/ttoss/soat/commit/f9066cffbae092491f2a7c70eadd747569a84903)), closes [#1199](https://github.com/ttoss/soat/issues/1199)
+
+### Bug Fixes
+
+* **orchestrations:** bound loop / sub_orchestration nesting depth ([#1197](https://github.com/ttoss/soat/issues/1197)) ([d222f14](https://github.com/ttoss/soat/commit/d222f147d9da56844a09a899372fc2eb3d21b566))
+* **server:** defer replace-cleanup until dependents are re-pointed, and report a leak ([#1195](https://github.com/ttoss/soat/issues/1195)) ([35552f0](https://github.com/ttoss/soat/commit/35552f025dcde4a9e709aad95aabadefaa778c78)), closes [#1194](https://github.com/ttoss/soat/issues/1194) [#1193](https://github.com/ttoss/soat/issues/1193)
+* **server:** let a first price take effect immediately ([#1196](https://github.com/ttoss/soat/issues/1196)) ([#1198](https://github.com/ttoss/soat/issues/1198)) ([1de10be](https://github.com/ttoss/soat/commit/1de10bec520b1791ea8af864148123adca17d86a))
+
+### BREAKING CHANGES
+
+* agents declaring hasToolCall or maxChainGenerations stop
+  conditions are refused on write; tool endpoints must read the
+  X-Soat-Context-session_id, -actor_id and -actor_external_id headers.
+
 # [0.36.0](https://github.com/ttoss/soat/compare/v0.35.0...v0.36.0) (2026-09-02)
 
 * fix(server)!: authorize every formation resource, and scope template id lookups to the project (#1190) ([c856519](https://github.com/ttoss/soat/commit/c856519bd97c2534f08c30db2fdb144f13ec0f59)), closes [#1190](https://github.com/ttoss/soat/issues/1190) [#1181](https://github.com/ttoss/soat/issues/1181) [#1180](https://github.com/ttoss/soat/issues/1180)

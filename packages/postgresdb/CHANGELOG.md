@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.37.0](https://github.com/ttoss/soat/compare/v0.36.0...v0.37.0) (2026-09-03)
+
+### Bug Fixes
+
+* **orchestrations:** bound loop / sub_orchestration nesting depth ([#1197](https://github.com/ttoss/soat/issues/1197)) ([d222f14](https://github.com/ttoss/soat/commit/d222f147d9da56844a09a899372fc2eb3d21b566))
+* **server:** defer replace-cleanup until dependents are re-pointed, and report a leak ([#1195](https://github.com/ttoss/soat/issues/1195)) ([35552f0](https://github.com/ttoss/soat/commit/35552f025dcde4a9e709aad95aabadefaa778c78)), closes [#1194](https://github.com/ttoss/soat/issues/1194) [#1193](https://github.com/ttoss/soat/issues/1193)
+
 # [0.36.0](https://github.com/ttoss/soat/compare/v0.35.0...v0.36.0) (2026-09-02)
 
 **Note:** Version bump only for package @soat/postgresdb
