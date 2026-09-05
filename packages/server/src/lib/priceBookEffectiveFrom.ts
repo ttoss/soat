@@ -56,6 +56,25 @@ const hasPriorPriceRow = async (args: {
 };
 
 /**
+ * The row a refusal is about, as structured context rather than prose. A write
+ * here carries a batch and fails on the first bad row, so without it a client
+ * has to parse the message to learn which row to correct (#1203).
+ */
+const priceRowMeta = (price: {
+  provider: string;
+  model: string;
+  component: string;
+  effectiveFrom: string;
+}) => {
+  return {
+    provider: price.provider,
+    model: price.model,
+    component: price.component,
+    effective_from: price.effectiveFrom,
+  };
+};
+
+/**
  * Resolves `effective_from` for one write, enforcing immutability only where
  * there is something to protect.
  *
@@ -91,7 +110,8 @@ export const createEffectiveFromResolver = (args: {
     if (Number.isNaN(effectiveFrom.getTime())) {
       throw new DomainError(
         'VALIDATION_FAILED',
-        `effective_from must be a valid timestamp (got '${price.effectiveFrom}').`
+        `effective_from must be a valid timestamp (got '${price.effectiveFrom}').`,
+        priceRowMeta(price)
       );
     }
     if (effectiveFrom > args.now) return effectiveFrom;
@@ -125,7 +145,8 @@ export const createEffectiveFromResolver = (args: {
     if (alreadyPriced) {
       throw new DomainError(
         'VALIDATION_FAILED',
-        `effective_from must be in the future for '${price.model}' / '${price.component}', which is already priced — past prices are immutable, so ship corrections as new future-dated rows (got '${price.effectiveFrom}').`
+        `effective_from must be in the future for '${price.model}' / '${price.component}', which is already priced — past prices are immutable, so ship corrections as new future-dated rows (got '${price.effectiveFrom}').`,
+        priceRowMeta(price)
       );
     }
 

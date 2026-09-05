@@ -1585,6 +1585,7 @@ describe('Projects', () => {
           new Date(first.body.prices[0].effective_from).toISOString()
         ).toBe(effectiveFrom);
 
+        const backDated = new Date(Date.now() - 500).toISOString();
         const second = await authenticatedTestClient(priceUserToken)
           .put(`/api/v1/projects/${priceProjectId}/prices`)
           .send({
@@ -1595,12 +1596,18 @@ describe('Projects', () => {
                 component: 'input_tokens',
                 unit: 'token',
                 unit_price: 0.000002,
-                effective_from: new Date(Date.now() - 500).toISOString(),
+                effective_from: backDated,
               },
             ],
           });
         expect(second.status).toBe(400);
         expect(second.body.error.code).toBe('VALIDATION_FAILED');
+        expect(second.body.error.meta).toEqual({
+          provider: 'openai',
+          model: 'project-first-write-model',
+          component: 'input_tokens',
+          effective_from: backDated,
+        });
       });
     });
   });
