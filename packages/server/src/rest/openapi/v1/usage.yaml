@@ -156,11 +156,18 @@ paths:
       description: >
         Returns a project's usage rolled up over an optional `[from, to]` time
         window, bucketed by a single dimension and optionally narrowed to one
-        `meter_type`. Each group and the grand total carry summed token counts, a
+        `meter_type`. Each group and the grand total carry an `event_count`,
+        summed token counts, a
         measured `quantity` per component (so infra meters report their real
         amount, not zeros), and `cost_usd` (null when no event in the bucket was
         priced). This is the per-project cost-by-range/by-category query — a
         monthly figure without scanning raw meter rows client-side.
+
+
+        `groups` is paginated. Its `total` is the number of distinct buckets in
+        the window, so "how many runs this cycle" is one small response rather
+        than a page walk, and `totals` always describes the whole window — never
+        the page above it.
       operationId: getUsage
       parameters:
         - name: project_id
@@ -224,6 +231,23 @@ paths:
             every meter. An unknown type yields an empty rollup, not an error.
           schema:
             type: string
+        - name: limit
+          in: query
+          required: false
+          description: >
+            Maximum number of `groups` entries to return. Clamped to 100.
+            Does not affect `totals` or `groups.total`, which describe the whole
+            window.
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          description: Number of `groups` entries to skip
+          schema:
+            type: integer
+            default: 0
       responses:
         '200':
           description: The aggregated usage rollup
@@ -721,6 +745,12 @@ components:
           type: number
           nullable: true
           description: Sum of priced event costs in the bucket; null when nothing is priced
+        event_count:
+          type: integer
+          description: >
+            Usage events measured in the bucket. On `totals` this counts the
+            whole `[from, to]` window, so "how many" is answerable without
+            reading a single group.
         input_tokens:
           type: integer
           description: Full prompt tokens (uncached input + cached), reconstructed from components
@@ -775,37 +805,60 @@ components:
           nullable: true
           description: Meter-type filter applied, echoed back; null when unfiltered
         groups:
-          type: array
-          description: One entry per distinct value in the chosen dimension.
-          items:
-            allOf:
-              - type: object
-                properties:
-                  key:
-                    type: string
-                    nullable: true
-                    description: >
-                      The bucket's value in the chosen dimension (a model id,
-                      meter type, AI provider / agent / run / actor / session
-                      public id, or `YYYY-MM-DD` UTC day). Null when the dimension does not
-                      apply to an event — under `actor`/`session` this is the
-                      bucket holding everything with no end user behind it.
-                  ai_provider_id:
-                    type: string
-                    x-soat-ref: ai-providers
-                    nullable: true
-                    description: >
-                      Under `group_by=model`, the provider that served the
-                      bucket's model; null on every other dimension. A model id
-                      does not identify its provider on its own — one project
-                      can hold two providers serving byte-identical model names
-                      — so the model dimension buckets on (model,
-                      `ai_provider_id`) and two groups may repeat one `key`
-                      with different providers. The groups still sum to
-                      `totals`.
-              - $ref: '#/components/schemas/UsageAggregateTotals'
+          type: object
+          description: >
+            One entry per distinct value in the chosen dimension, paginated.
+            Ordered by `cost_usd` descending, ties broken by `key` then
+            `ai_provider_id` ascending, with nulls last — so the first page is
+            the biggest spenders and paging never repeats or skips a bucket.
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/UsageAggregateGroup'
+            total:
+              type: integer
+              description: >
+                Distinct buckets in the window, independent of `limit`. This is
+                the count a "how many runs this cycle" question reads — no page
+                walk required.
+            limit:
+              type: integer
+            offset:
+              type: integer
         totals:
-          $ref: '#/components/schemas/UsageAggregateTotals'
+          allOf:
+            - $ref: '#/components/schemas/UsageAggregateTotals'
+            - description: >
+                The whole `[from, to]` window, never the `groups` page above it.
+
+    UsageAggregateGroup:
+      allOf:
+        - type: object
+          properties:
+            key:
+              type: string
+              nullable: true
+              description: >
+                The bucket's value in the chosen dimension (a model id,
+                meter type, AI provider / agent / run / actor / session
+                public id, or `YYYY-MM-DD` UTC day). Null when the dimension does not
+                apply to an event — under `actor`/`session` this is the
+                bucket holding everything with no end user behind it.
+            ai_provider_id:
+              type: string
+              x-soat-ref: ai-providers
+              nullable: true
+              description: >
+                Under `group_by=model`, the provider that served the
+                bucket's model; null on every other dimension. A model id
+                does not identify its provider on its own — one project
+                can hold two providers serving byte-identical model names
+                — so the model dimension buckets on (model,
+                `ai_provider_id`) and two groups may repeat one `key`
+                with different providers. The groups still sum to
+                `totals`.
+        - $ref: '#/components/schemas/UsageAggregateTotals'
 
     UsageThreshold:
       type: object

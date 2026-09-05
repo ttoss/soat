@@ -3847,7 +3847,7 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
   USAGE_AGG_RESP=$($SOAT_CLI get-usage \
     --project-id "$PROJECT_PUBLIC_ID" \
     --group-by meter_type | sanitize_json)
-  USAGE_AGG_OK=$(printf '%s\n' "$USAGE_AGG_RESP" | jq -r '((.project_id | length > 0) and (.group_by == "meter_type") and (.groups | type == "array") and (.totals.input_tokens | type == "number") and ([.groups[] | select(.key == "llm_tokens")] | length >= 1))')
+  USAGE_AGG_OK=$(printf '%s\n' "$USAGE_AGG_RESP" | jq -r '((.project_id | length > 0) and (.group_by == "meter_type") and (.groups.data | type == "array") and (.groups.total | type == "number") and (.totals.input_tokens | type == "number") and (.totals.event_count | type == "number") and ([.groups.data[] | select(.key == "llm_tokens")] | length >= 1))')
   if [ "$USAGE_AGG_OK" != "true" ]; then
     echo "ERROR: get-usage did not return a well-formed aggregate rollup" >&2
     echo "$USAGE_AGG_RESP" >&2
@@ -3860,7 +3860,7 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
   # metered compute in this project, so that bucket has zero tokens and a
   # positive compute_second — reporting it all-zero is the regression guarded.
   USAGE_QTY_OK=$(printf '%s\n' "$USAGE_AGG_RESP" | jq -r '
-    [.groups[] | select(.key == "compute_execution")] as $g
+    [.groups.data[] | select(.key == "compute_execution")] as $g
     | ($g | length == 1)
       and ($g[0].input_tokens == 0)
       and ([$g[0].components[] | select(.component == "compute_second")
@@ -3882,7 +3882,7 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
     --meter-type compute_execution | sanitize_json)
   USAGE_FILTERED_OK=$(printf '%s\n' "$USAGE_FILTERED_RESP" | jq -r '
     (.meter_type == "compute_execution")
-      and ((.groups | map(.key)) == ["compute_execution"])
+      and ((.groups.data | map(.key)) == ["compute_execution"])
       and ((.totals.components | map(.component)) == ["compute_second"])')
   if [ "$USAGE_FILTERED_OK" != "true" ]; then
     echo "ERROR: get-usage --meter-type did not narrow the rollup" >&2
@@ -3890,6 +3890,27 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
     exit 1
   fi
   echo "Usage aggregate meter_type filter: OK"
+
+  # 34b-iii-d. Counting without materializing: `groups.total` is the number of
+  # buckets, so a count is one small response however many there are. The page
+  # is bounded by --limit while `total` and `totals` keep describing the whole
+  # window — a page-scoped total read against an allowance would understate it.
+  USAGE_COUNT_RESP=$($SOAT_CLI get-usage \
+    --project-id "$PROJECT_PUBLIC_ID" \
+    --group-by meter_type \
+    --limit 1 | sanitize_json)
+  USAGE_COUNT_OK=$(printf '%s\n' "$USAGE_COUNT_RESP" | jq -r --argjson full "$USAGE_AGG_RESP" '
+    (.groups.limit == 1)
+      and (.groups.offset == 0)
+      and ((.groups.data | length) <= 1)
+      and (.groups.total == ($full.groups.total))
+      and (.totals == ($full.totals))')
+  if [ "$USAGE_COUNT_OK" != "true" ]; then
+    echo "ERROR: get-usage --limit did not bound the page while keeping totals whole-window" >&2
+    echo "$USAGE_COUNT_RESP" >&2
+    exit 1
+  fi
+  echo "Usage aggregate counting and paging: OK"
 fi
 
 # 34b-v. End-user attribution — a session-driven generation attributes its usage
