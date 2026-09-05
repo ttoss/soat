@@ -188,7 +188,28 @@ A run whose graph contains a `loop` or `sub_orchestration` node is covered by th
 
 ### Aggregation
 
-[`GET /api/v1/usage?project_id=…&group_by=…`](/docs/api/usage/get-usage) rolls a project's usage up over an optional `[from, to]` window (inclusive ISO-8601 bounds on `created_at`), bucketed by one dimension — `model`, `ai_provider`, `agent`, `run`, `day`, `meter_type`, `actor`, `session`, or [`source`](#workload-source). `ai_provider` buckets on the provider the spend was billed against (see [Provider attribution](#provider-attribution)). Each group and the grand `totals` carry summed token counts and `cost_usd` (`null` when no event in the bucket was priced). An event a dimension does not apply to collapses into a `null`-keyed group, so groups always sum to the project total. Requires `usage:GetUsage` on the project.
+[`GET /api/v1/usage?project_id=…&group_by=…`](/docs/api/usage/get-usage) rolls a project's usage up over an optional `[from, to]` window (inclusive ISO-8601 bounds on `created_at`), bucketed by one dimension — `model`, `ai_provider`, `agent`, `run`, `day`, `meter_type`, `actor`, `session`, or [`source`](#workload-source). `ai_provider` buckets on the provider the spend was billed against (see [Provider attribution](#provider-attribution)). Each group and the grand `totals` carry an `event_count`, summed token counts and `cost_usd` (`null` when no event in the bucket was priced). An event a dimension does not apply to collapses into a `null`-keyed group, so groups always sum to the project total. Requires `usage:GetUsage` on the project.
+
+The rollup is computed by the database — the window is grouped and summed in SQL, with one join for the chosen dimension — so the cost of a request tracks the buckets it answers with rather than the events behind them.
+
+#### Counting and paging the groups
+
+`groups` is the standard paginated envelope (`data`, `total`, `limit`, `offset`), and `groups.total` is the number of distinct buckets in the window. That is what answers "how many runs did this project make this cycle" — `group_by=run&limit=1` reads the count in one small response instead of returning one entry per run:
+
+```json
+{
+  "group_by": "run",
+  "groups": { "data": [ … ], "total": 250000, "limit": 1, "offset": 0 },
+  "totals": { "cost_usd": 1234.56, "event_count": 812004, … }
+}
+```
+
+Two guarantees worth relying on:
+
+- **`totals` and `groups.total` always describe the whole `[from, to]` window**, never the page above them. A page-scoped total read against an allowance would understate spend by however much the caller did not page through.
+- **Groups are ordered by `cost_usd` descending**, ties broken by `key` then `ai_provider_id` ascending, nulls last. So the first page is the biggest spenders, and paging never repeats or skips a bucket — including in a window nothing has priced yet, where the key order is what keeps it deterministic.
+
+`limit` defaults to 50 and is clamped to 100, as everywhere else in the API.
 
 Every group also carries a `components` array — the measured dimensions summed over the bucket — so an infra meter aggregates to what it measured rather than reading as all-zero tokens. Entries are keyed by `component` **and** `unit` and sorted, and quantities are summed as exact decimals (no float drift).
 
@@ -333,6 +354,49 @@ if (error) throw new Error(JSON.stringify(error));
 
 ```bash
 curl "https://api.example.com/api/v1/usage?project_id=proj_V1StGXR8Z5jdHi6B&group_by=meter_type&from=2026-07-01T00:00:00Z&to=2026-08-01T00:00:00Z" \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
+
+Count the runs in a billing cycle without listing them — `groups.total` is the
+answer, so `limit=1` keeps the response small however many runs there were:
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat get-usage \
+  --project-id proj_V1StGXR8Z5jdHi6B \
+  --group-by run \
+  --from 2026-07-01T00:00:00Z \
+  --to 2026-08-01T00:00:00Z \
+  --limit 1
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.usage.getUsage({
+  query: {
+    project_id: 'proj_V1StGXR8Z5jdHi6B',
+    group_by: 'run',
+    from: '2026-07-01T00:00:00Z',
+    to: '2026-08-01T00:00:00Z',
+    limit: 1,
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+const runCount = data.groups.total;
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl "https://api.example.com/api/v1/usage?project_id=proj_V1StGXR8Z5jdHi6B&group_by=run&from=2026-07-01T00:00:00Z&to=2026-08-01T00:00:00Z&limit=1" \
   -H "Authorization: Bearer <token>"
 ```
 

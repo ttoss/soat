@@ -155,7 +155,7 @@ describe('Model provenance', () => {
     );
     expect(res.status).toBe(200);
 
-    const stubGroups = res.body.groups.filter((g: { key: string }) => {
+    const stubGroups = res.body.groups.data.filter((g: { key: string }) => {
       return g.key === 'stub-model';
     });
     expect(stubGroups).toHaveLength(2);
@@ -185,7 +185,7 @@ describe('Model provenance', () => {
     expect(res.status).toBe(200);
     expect(res.body.group_by).toBe('ai_provider');
     expect(
-      res.body.groups
+      res.body.groups.data
         .map((g: { key: string }) => {
           return g.key;
         })
@@ -198,8 +198,8 @@ describe('Model provenance', () => {
       `/api/v1/usage?project_id=${projectId}&group_by=agent`
     );
     expect(res.status).toBe(200);
-    expect(res.body.groups.length).toBeGreaterThan(0);
-    for (const group of res.body.groups) {
+    expect(res.body.groups.data.length).toBeGreaterThan(0);
+    for (const group of res.body.groups.data) {
       expect(group.ai_provider_id).toBeNull();
     }
   });

@@ -432,7 +432,7 @@ describe('Usage', () => {
       );
       expect(res.status).toBe(200);
       expect(res.body.group_by).toBe('actor');
-      const byActor = res.body.groups.find((g: { key: string | null }) => {
+      const byActor = res.body.groups.data.find((g: { key: string | null }) => {
         return g.key === actorId;
       });
       expect(byActor).toBeDefined();
@@ -445,9 +445,11 @@ describe('Usage', () => {
       );
       expect(res.status).toBe(200);
       expect(res.body.group_by).toBe('session');
-      const bySession = res.body.groups.find((g: { key: string | null }) => {
-        return g.key === sessionId;
-      });
+      const bySession = res.body.groups.data.find(
+        (g: { key: string | null }) => {
+          return g.key === sessionId;
+        }
+      );
       expect(bySession).toBeDefined();
       expect(bySession.output_tokens).toBeGreaterThanOrEqual(20);
     });
@@ -457,9 +459,11 @@ describe('Usage', () => {
         `/api/v1/usage?project_id=${projectId}&group_by=actor`
       );
       expect(res.status).toBe(200);
-      const unattributed = res.body.groups.find((g: { key: string | null }) => {
-        return g.key === null;
-      });
+      const unattributed = res.body.groups.data.find(
+        (g: { key: string | null }) => {
+          return g.key === null;
+        }
+      );
       expect(unattributed).toBeDefined();
       expect(unattributed.output_tokens).toBeGreaterThanOrEqual(20);
     });
@@ -1191,9 +1195,9 @@ describe('Usage', () => {
       expect(res.status).toBe(200);
       expect(res.body.project_id).toBe(projectId);
       expect(res.body.group_by).toBe('model');
-      expect(Array.isArray(res.body.groups)).toBe(true);
+      expect(Array.isArray(res.body.groups.data)).toBe(true);
 
-      const stub = res.body.groups.find((g: { key: string }) => {
+      const stub = res.body.groups.data.find((g: { key: string }) => {
         return g.key === 'stub-model';
       });
       expect(stub).toBeDefined();
@@ -1216,7 +1220,7 @@ describe('Usage', () => {
         `/api/v1/usage?project_id=${projectId}&group_by=meter_type`
       );
       expect(res.status).toBe(200);
-      const llm = res.body.groups.find((g: { key: string }) => {
+      const llm = res.body.groups.data.find((g: { key: string }) => {
         return g.key === 'llm_tokens';
       });
       expect(llm).toBeDefined();
@@ -1258,7 +1262,7 @@ describe('Usage', () => {
       );
       expect(res.status).toBe(200);
 
-      const judge = res.body.groups.find((g: { key: string | null }) => {
+      const judge = res.body.groups.data.find((g: { key: string | null }) => {
         return g.key === 'eval_judge';
       });
       expect(judge).toBeDefined();
@@ -1267,9 +1271,11 @@ describe('Usage', () => {
 
       // Ordinary agent traffic carries no source and buckets under null rather
       // than being dropped, so the groups still sum to the project total.
-      const unsourced = res.body.groups.find((g: { key: string | null }) => {
-        return g.key === null;
-      });
+      const unsourced = res.body.groups.data.find(
+        (g: { key: string | null }) => {
+          return g.key === null;
+        }
+      );
       expect(unsourced).toBeDefined();
       expect(unsourced.output_tokens).toBeGreaterThan(0);
     });
@@ -1279,7 +1285,7 @@ describe('Usage', () => {
         `/api/v1/usage?project_id=${projectId}&group_by=agent`
       );
       expect(res.status).toBe(200);
-      const byAgent = res.body.groups.find((g: { key: string }) => {
+      const byAgent = res.body.groups.data.find((g: { key: string }) => {
         return g.key === agentId;
       });
       expect(byAgent).toBeDefined();
@@ -1291,8 +1297,8 @@ describe('Usage', () => {
         `/api/v1/usage?project_id=${projectId}&group_by=day`
       );
       expect(res.status).toBe(200);
-      expect(res.body.groups.length).toBeGreaterThanOrEqual(1);
-      for (const group of res.body.groups) {
+      expect(res.body.groups.data.length).toBeGreaterThanOrEqual(1);
+      for (const group of res.body.groups.data) {
         expect(group.key).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       }
     });
@@ -1303,11 +1309,286 @@ describe('Usage', () => {
         `/api/v1/usage?project_id=${projectId}&group_by=model&from=${from}`
       );
       expect(res.status).toBe(200);
-      expect(res.body.groups).toEqual([]);
+      expect(res.body.groups.data).toEqual([]);
       expect(res.body.from).toBe(from);
       expect(res.body.totals.input_tokens).toBe(0);
       expect(res.body.totals.cost_usd).toBeNull();
       expect(res.body.totals.components).toEqual([]);
+    });
+  });
+
+  /**
+   * The rollup answers "how many" and "the top N" without materializing the
+   * whole window. `groups` is the canonical paginated envelope, so `total` is
+   * the group count — the figure a run-per-cycle question actually wants —
+   * and `totals` stays whole-window whatever page is being read.
+   */
+  describe('GET /api/v1/usage (aggregate) — counting and pagination', () => {
+    let pagedProjectId: string;
+
+    // Costs are seeded directly rather than priced through the book: the point
+    // of these assertions is the ordering and the arithmetic over known
+    // figures, which a price lookup would only make harder to read.
+    const seedEvent = async (args: {
+      internalId: number;
+      model: string;
+      costUsd: string | null;
+      inputTokens: number;
+    }): Promise<void> => {
+      const event = await db.UsageEvent.create({
+        projectId: args.internalId,
+        meterType: 'llm_tokens',
+        provider: 'stub',
+        model: args.model,
+        costUsd: args.costUsd,
+        idempotencyKey: `paged-${args.model}-${generatePublicId(
+          PUBLIC_ID_PREFIXES.usageEvent
+        )}`,
+      });
+      await db.UsageComponent.create({
+        usageEventId: event.id as number,
+        component: 'input_tokens',
+        quantity: String(args.inputTokens),
+        unit: 'token',
+        costUsd: args.costUsd,
+      });
+    };
+
+    beforeAll(async () => {
+      const projectRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'usage-pagination' });
+      expect(projectRes.status).toBe(201);
+      pagedProjectId = projectRes.body.id;
+
+      const project = await db.Project.findOne({
+        where: { publicId: pagedProjectId },
+      });
+      const internalId = project!.id as number;
+
+      // Four buckets, three distinct costs — `tie-a` and `tie-b` share one so
+      // the key tiebreak is exercised rather than left to insertion order.
+      await seedEvent({
+        internalId,
+        model: 'costly',
+        costUsd: '3.000000',
+        inputTokens: 30,
+      });
+      await seedEvent({
+        internalId,
+        model: 'tie-b',
+        costUsd: '2.000000',
+        inputTokens: 20,
+      });
+      await seedEvent({
+        internalId,
+        model: 'tie-a',
+        costUsd: '2.000000',
+        inputTokens: 20,
+      });
+      await seedEvent({
+        internalId,
+        model: 'cheap',
+        costUsd: '1.000000',
+        inputTokens: 10,
+      });
+    });
+
+    const readGroups = (body: {
+      groups: {
+        data: Array<{ key: string | null; cost_usd: number | null }>;
+        total: number;
+        limit: number;
+        offset: number;
+      };
+    }) => {
+      return body.groups;
+    };
+
+    test('groups is the canonical paginated envelope', async () => {
+      const res = await authenticatedTestClient(adminToken).get(
+        `/api/v1/usage?project_id=${pagedProjectId}&group_by=model`
+      );
+      expect(res.status).toBe(200);
+
+      const groups = readGroups(res.body);
+      expect(Array.isArray(groups.data)).toBe(true);
+      // The group count is what "how many runs this cycle" reads, and it is
+      // answered without the caller walking a single page.
+      expect(groups.total).toBe(4);
+      expect(groups.limit).toBe(50);
+      expect(groups.offset).toBe(0);
+    });
+
+    test('totals carries the number of events in the window', async () => {
+      const res = await authenticatedTestClient(adminToken).get(
+        `/api/v1/usage?project_id=${pagedProjectId}&group_by=model`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.totals.event_count).toBe(4);
+    });
+
+    test('groups come back cost-descending, ties broken by key', async () => {
+      const res = await authenticatedTestClient(adminToken).get(
+        `/api/v1/usage?project_id=${pagedProjectId}&group_by=model`
+      );
+      expect(res.status).toBe(200);
+
+      const keys = readGroups(res.body).data.map((group) => {
+        return group.key;
+      });
+      expect(keys).toEqual(['costly', 'tie-a', 'tie-b', 'cheap']);
+    });
+
+    test('limit bounds the page while total still counts every group', async () => {
+      const res = await authenticatedTestClient(adminToken).get(
+        `/api/v1/usage?project_id=${pagedProjectId}&group_by=model&limit=2`
+      );
+      expect(res.status).toBe(200);
+
+      const groups = readGroups(res.body);
+      expect(groups.data).toHaveLength(2);
+      expect(groups.limit).toBe(2);
+      expect(groups.total).toBe(4);
+      expect(
+        groups.data.map((group) => {
+          return group.key;
+        })
+      ).toEqual(['costly', 'tie-a']);
+    });
+
+    test('offset walks the groups without repeating or skipping one', async () => {
+      const page = async (offset: number) => {
+        const res = await authenticatedTestClient(adminToken).get(
+          `/api/v1/usage?project_id=${pagedProjectId}&group_by=model&limit=2&offset=${offset}`
+        );
+        expect(res.status).toBe(200);
+        return readGroups(res.body).data.map((group) => {
+          return group.key;
+        });
+      };
+
+      expect(await page(0)).toEqual(['costly', 'tie-a']);
+      expect(await page(2)).toEqual(['tie-b', 'cheap']);
+      expect(await page(4)).toEqual([]);
+    });
+
+    /**
+     * The one thing pagination must not do. `totals` describes the window, not
+     * the page — a page-scoped total read against an allowance would understate
+     * spend by however much the caller did not page through.
+     */
+    test('totals stay whole-window on every page', async () => {
+      const readTotals = async (query: string) => {
+        const res = await authenticatedTestClient(adminToken).get(
+          `/api/v1/usage?project_id=${pagedProjectId}&group_by=model${query}`
+        );
+        expect(res.status).toBe(200);
+        return res.body.totals;
+      };
+
+      const whole = await readTotals('');
+      const firstPage = await readTotals('&limit=1');
+      const lastPage = await readTotals('&limit=1&offset=3');
+
+      expect(whole.cost_usd).toBe(8);
+      expect(whole.input_tokens).toBe(80);
+      expect(firstPage).toEqual(whole);
+      expect(lastPage).toEqual(whole);
+    });
+
+    test('limit is clamped to the shared maximum page size', async () => {
+      const res = await authenticatedTestClient(adminToken).get(
+        `/api/v1/usage?project_id=${pagedProjectId}&group_by=model&limit=5000`
+      );
+      expect(res.status).toBe(200);
+      expect(readGroups(res.body).limit).toBe(100);
+    });
+
+    /**
+     * The day key is the event's **UTC** calendar day, not the database
+     * server's. `2026-07-01T02:00:00Z` is still 2026-06-30 in any timezone
+     * behind UTC, so an expression reading the server's own zone would bucket
+     * it a day early everywhere the server is not UTC — and pass in CI, which
+     * is. Pinning the value is what the format-only assertion could not do.
+     */
+    test('the day key is the UTC calendar day, not the server timezone', async () => {
+      const projectRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'usage-utc-day' });
+      expect(projectRes.status).toBe(201);
+      const dayProjectId = projectRes.body.id;
+
+      const project = await db.Project.findOne({
+        where: { publicId: dayProjectId },
+      });
+
+      // Two hours past midnight UTC: the same instant is the previous day in
+      // every zone west of Greenwich.
+      const event = await db.UsageEvent.create({
+        projectId: project!.id as number,
+        meterType: 'llm_tokens',
+        provider: 'stub',
+        model: 'boundary',
+        costUsd: '1.000000',
+        idempotencyKey: `utc-day-${generatePublicId(
+          PUBLIC_ID_PREFIXES.usageEvent
+        )}`,
+        createdAt: new Date('2026-07-01T02:00:00.000Z'),
+      });
+      await db.UsageComponent.create({
+        usageEventId: event.id as number,
+        component: 'input_tokens',
+        quantity: '5',
+        unit: 'token',
+        costUsd: '1.000000',
+      });
+
+      const res = await authenticatedTestClient(adminToken).get(
+        `/api/v1/usage?project_id=${dayProjectId}&group_by=day`
+      );
+      expect(res.status).toBe(200);
+      expect(
+        readGroups(res.body).data.map((group) => {
+          return group.key;
+        })
+      ).toEqual(['2026-07-01']);
+    });
+
+    // An unpriced window has no cost to sort on; the key order is what keeps
+    // paging deterministic rather than letting the database choose.
+    test('an all-unpriced dimension still pages in a stable order', async () => {
+      const projectRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'usage-pagination-unpriced' });
+      expect(projectRes.status).toBe(201);
+      const unpricedProjectId = projectRes.body.id;
+
+      const project = await db.Project.findOne({
+        where: { publicId: unpricedProjectId },
+      });
+      const internalId = project!.id as number;
+
+      for (const model of ['gamma', 'alpha', 'beta']) {
+        await seedEvent({
+          internalId,
+          model,
+          costUsd: null,
+          inputTokens: 5,
+        });
+      }
+
+      const res = await authenticatedTestClient(adminToken).get(
+        `/api/v1/usage?project_id=${unpricedProjectId}&group_by=model`
+      );
+      expect(res.status).toBe(200);
+      expect(
+        readGroups(res.body).data.map((group) => {
+          return group.key;
+        })
+      ).toEqual(['alpha', 'beta', 'gamma']);
+      expect(res.body.totals.cost_usd).toBeNull();
+      expect(res.body.totals.event_count).toBe(3);
     });
   });
 
@@ -1317,10 +1598,10 @@ describe('Usage', () => {
   // dimension the receipt reports per line item.
   describe('GET /api/v1/usage (aggregate) — measured quantities', () => {
     const findGroup = (
-      body: { groups: Array<{ key: string | null }> },
+      body: { groups: { data: Array<{ key: string | null }> } },
       key: string
     ) => {
-      return body.groups.find((group) => {
+      return body.groups.data.find((group) => {
         return group.key === key;
       });
     };
@@ -1494,7 +1775,7 @@ describe('Usage', () => {
       expect(res.body.meter_type).toBe('storage');
       // Only the platform SKU remains — no LLM model ids in the dimension.
       expect(
-        res.body.groups.map((g: { key: string | null }) => {
+        res.body.groups.data.map((g: { key: string | null }) => {
           return g.key;
         })
       ).toEqual(['gb-day']);
@@ -1508,7 +1789,7 @@ describe('Usage', () => {
       );
       expect(res.status).toBe(200);
       expect(res.body.meter_type).toBeNull();
-      expect(res.body.groups.length).toBeGreaterThanOrEqual(2);
+      expect(res.body.groups.data.length).toBeGreaterThanOrEqual(2);
     });
 
     test('an unknown meter_type returns an empty rollup', async () => {
@@ -1516,7 +1797,7 @@ describe('Usage', () => {
         `/api/v1/usage?project_id=${projectId}&group_by=model&meter_type=nope`
       );
       expect(res.status).toBe(200);
-      expect(res.body.groups).toEqual([]);
+      expect(res.body.groups.data).toEqual([]);
       expect(res.body.totals.components).toEqual([]);
       expect(res.body.totals.cost_usd).toBeNull();
     });
@@ -2241,15 +2522,17 @@ describe('Usage', () => {
       );
       expect(res.status).toBe(200);
       expect(res.body.group_by).toBe('run');
-      const byRun = res.body.groups.find((g: { key: string | null }) => {
+      const byRun = res.body.groups.data.find((g: { key: string | null }) => {
         return g.key === orchestrationRunId;
       });
       expect(byRun).toBeDefined();
       expect(byRun.output_tokens).toBeGreaterThanOrEqual(20);
       // Standalone generations carry no run and collapse into the null bucket.
-      const standalone = res.body.groups.find((g: { key: string | null }) => {
-        return g.key === null;
-      });
+      const standalone = res.body.groups.data.find(
+        (g: { key: string | null }) => {
+          return g.key === null;
+        }
+      );
       expect(standalone).toBeDefined();
     });
 

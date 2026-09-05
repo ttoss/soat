@@ -346,18 +346,25 @@ Expected output — one bucket per end user:
 
 ```json
 {
-  "groups": [
-    {
-      "key": "actor_...",
-      "cost_usd": null,
-      "input_tokens": 36,
-      "output_tokens": 14,
-      "cached_tokens": 0,
-      "reasoning_tokens": 0
-    }
-  ],
+  "groups": {
+    "data": [
+      {
+        "key": "actor_...",
+        "cost_usd": null,
+        "event_count": 1,
+        "input_tokens": 36,
+        "output_tokens": 14,
+        "cached_tokens": 0,
+        "reasoning_tokens": 0
+      }
+    ],
+    "total": 1,
+    "limit": 50,
+    "offset": 0
+  },
   "totals": {
     "cost_usd": null,
+    "event_count": 1,
     "input_tokens": 36,
     "output_tokens": 14,
     "cached_tokens": 0,
@@ -397,7 +404,7 @@ soat list-usage-meters --actor-id "$ADA_ID" \
 const { data: byActor } = await adminSoat.usage.getUsage({
   params: { query: { project_id: PROJECT_ID, group_by: 'actor' } },
 });
-console.log(byActor.groups);
+console.log(byActor.groups.data, byActor.groups.total);
 
 const { data: meters } = await adminSoat.usage.listUsageMeters({
   params: { query: { actor_id: ada.id } },
@@ -583,7 +590,7 @@ BLAKE_SESSION_ID=$(soat create-session --agent-id "$AGENT_ID" \
 soat add-session-message --session-id "$BLAKE_SESSION_ID" \
   --message "Name one use for a rubber band."
 soat generate-session-response --wait true --session-id "$BLAKE_SESSION_ID" | jq '{status}'
-soat get-usage --project-id "$PROJECT_ID" --group-by actor | jq '.groups'
+soat get-usage --project-id "$PROJECT_ID" --group-by actor | jq '.groups.data'
 ```
 
 ```json

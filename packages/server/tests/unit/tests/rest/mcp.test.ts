@@ -130,7 +130,7 @@ describe('MCP tools - happy path', () => {
     // totals — but well-formed.
     expect(result.project_id).toBe(projectId);
     expect(result.group_by).toBe('meter_type');
-    expect(Array.isArray(result.groups)).toBe(true);
+    expect(Array.isArray(result.groups.data)).toBe(true);
     expect(result.totals.input_tokens).toBe(0);
     expect(result.totals.cost_usd).toBeNull();
     // Measured quantities per component, so infra meters are not reported as
@@ -148,7 +148,7 @@ describe('MCP tools - happy path', () => {
     expect(res.status).toBe(200);
     const result = parseResult(res);
     expect(result.meter_type).toBe('storage');
-    expect(result.groups).toEqual([]);
+    expect(result.groups.data).toEqual([]);
   });
 
   test('create-, list-, and delete-usage-threshold manage a threshold', async () => {
