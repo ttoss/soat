@@ -78,6 +78,24 @@ describe('recordEmbeddingUsage', () => {
     expect(events[1].idempotencyKey).toMatch(/^embedding:/);
   });
 
+  test('a project that does not exist is swallowed, not thrown', async () => {
+    const before = await eventsForProject();
+
+    // The project FK is what fails here — a real database refusal rather than a
+    // stubbed one, driving the contract that metering never fails the embedding
+    // call it measures.
+    await expect(
+      recordEmbeddingUsage({
+        projectId: 2_147_483_600,
+        provider: PROVIDER,
+        model: MODEL,
+        tokens: 5,
+      })
+    ).resolves.toBeUndefined();
+
+    expect(await eventsForProject()).toHaveLength(before.length);
+  });
+
   test('an unpriced model records the quantity with a null cost', async () => {
     await recordEmbeddingUsage({
       projectId,

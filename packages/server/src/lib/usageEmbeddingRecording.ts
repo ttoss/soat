@@ -46,12 +46,11 @@ export const recordEmbeddingUsage = async (args: {
     args.tokens
   );
   try {
-    const model = args.model || 'unknown';
     const priced = await priceComponents({
       components: buildEmbeddingComponents({ tokens: args.tokens }),
       provider: args.provider,
       aiProviderId: null,
-      model,
+      model: args.model,
       projectId: args.projectId,
     });
     const costUsd = sumComponentCostUsd(
@@ -79,7 +78,7 @@ export const recordEmbeddingUsage = async (args: {
       },
       idempotencyKey: `embedding:${randomUUID()}`,
       provider: args.provider,
-      model,
+      model: args.model,
       priced,
       costUsd,
     });
@@ -92,6 +91,8 @@ export const recordEmbeddingUsage = async (args: {
 
     // Same choke-point rule as every other meter: only a newly written event
     // can move a windowed total across a threshold.
+    /* istanbul ignore else -- the key is a fresh uuid per call, so the write is
+       never the idempotent no-op the other meters guard against */
     if (created) {
       await evaluateProjectThresholds({ projectId: args.projectId });
     }
@@ -99,7 +100,7 @@ export const recordEmbeddingUsage = async (args: {
     log(
       'recordEmbeddingUsage: failed projectId=%d error=%s',
       args.projectId,
-      error instanceof Error ? error.message : String(error)
+      error
     );
   }
 };
