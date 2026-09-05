@@ -3,6 +3,20 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.38.0](https://github.com/ttoss/soat/compare/v0.37.1...v0.38.0) (2026-09-05)
+
+* feat(server)!: count, paginate and SQL-aggregate the usage rollup (#1206) ([2f8aaa3](https://github.com/ttoss/soat/commit/2f8aaa32d4650d903305edf9f1c7ebd71a147b7d)), closes [#1206](https://github.com/ttoss/soat/issues/1206) [#1204](https://github.com/ttoss/soat/issues/1204)
+
+### Bug Fixes
+
+* **server:** name the refused price row in the error meta ([#1205](https://github.com/ttoss/soat/issues/1205)) ([10845bd](https://github.com/ttoss/soat/commit/10845bd07af04b6b8f2b275651f368c7a712b1fc)), closes [#1203](https://github.com/ttoss/soat/issues/1203)
+
+### BREAKING CHANGES
+
+* `groups` on `GET /v1/usage` is now a paginated envelope rather
+  than a bare array. Read `groups.data` for the buckets and `groups.total` for
+  their count.
+
 ## [0.37.1](https://github.com/ttoss/soat/compare/v0.37.0...v0.37.1) (2026-09-03)
 
 ### Bug Fixes
