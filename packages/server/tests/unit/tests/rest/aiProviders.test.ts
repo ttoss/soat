@@ -677,6 +677,12 @@ describe('AI Providers', () => {
           });
         expect(res.status).toBe(400);
         expect(res.body.error.code).toBe('VALIDATION_FAILED');
+        expect(res.body.error.meta).toEqual({
+          provider: 'openai',
+          model: 'gpt-4o',
+          component: 'input_tokens',
+          effective_from: 'not-a-timestamp',
+        });
       });
 
       test('upserts a component override and reads it back', async () => {
@@ -799,6 +805,39 @@ describe('AI Providers', () => {
         });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    // A PUT carries a batch, so the refusal has to say which row it is about:
+    // reading that out of the message is the only alternative (#1203).
+    test('names the refused row in meta', async () => {
+      const effectiveFrom = new Date(Date.now() - 500).toISOString();
+      const res = await authenticatedTestClient(userToken)
+        .put(`/api/v1/ai-providers/${providerId}/prices`)
+        .send({
+          prices: [
+            {
+              model: 'batch-first-write-model',
+              component: 'input_tokens',
+              unit: 'token',
+              unit_price: 0.000001,
+              effective_from: effectiveFrom,
+            },
+            {
+              model: 'first-write-model',
+              component: 'input_tokens',
+              unit: 'token',
+              unit_price: 0.000002,
+              effective_from: effectiveFrom,
+            },
+          ],
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error.meta).toEqual({
+        provider: 'openai',
+        model: 'first-write-model',
+        component: 'input_tokens',
+        effective_from: effectiveFrom,
+      });
     });
 
     test('another component on the same model is still a first write', async () => {
