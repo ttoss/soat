@@ -3953,7 +3953,7 @@ echo "Usage meters actor/session attribution: OK (actor $EUA_ACTOR_ID)"
 # The same spend must be reachable through the aggregate, bucketed by actor.
 EUA_AGG=$($SOAT_CLI get-usage \
   --project-id "$PROJECT_PUBLIC_ID" --group-by actor | sanitize_json)
-EUA_AGG_OK=$(printf '%s\n' "$EUA_AGG" | jq -r --arg actor "$EUA_ACTOR_ID" '(.group_by == "actor") and ([.groups[] | select(.key == $actor)] | length == 1)')
+EUA_AGG_OK=$(printf '%s\n' "$EUA_AGG" | jq -r --arg actor "$EUA_ACTOR_ID" '(.group_by == "actor") and ([.groups.data[] | select(.key == $actor)] | length == 1)')
 if [ "$EUA_AGG_OK" != "true" ]; then
   echo "ERROR: get-usage --group-by actor did not bucket the end user's spend" >&2
   printf '%s\n' "$EUA_AGG" >&2
@@ -3962,7 +3962,7 @@ fi
 
 EUA_AGG_SESSION=$($SOAT_CLI get-usage \
   --project-id "$PROJECT_PUBLIC_ID" --group-by session | sanitize_json)
-EUA_AGG_SESSION_OK=$(printf '%s\n' "$EUA_AGG_SESSION" | jq -r --arg session "$EUA_SESSION_ID" '(.group_by == "session") and ([.groups[] | select(.key == $session)] | length == 1)')
+EUA_AGG_SESSION_OK=$(printf '%s\n' "$EUA_AGG_SESSION" | jq -r --arg session "$EUA_SESSION_ID" '(.group_by == "session") and ([.groups.data[] | select(.key == $session)] | length == 1)')
 if [ "$EUA_AGG_SESSION_OK" != "true" ]; then
   echo "ERROR: get-usage --group-by session did not bucket the session's spend" >&2
   printf '%s\n' "$EUA_AGG_SESSION" >&2

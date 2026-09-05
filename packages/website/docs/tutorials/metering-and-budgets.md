@@ -325,7 +325,7 @@ const { data: byDay } = await adminSoat.usage.getUsage({
 const { data: byModel } = await adminSoat.usage.getUsage({
   query: { project_id: PROJECT_ID, group_by: 'model' },
 });
-console.log(byDay.totals, byModel.groups);
+console.log(byDay.totals, byModel.groups.data);
 ```
 
 </TabItem>
