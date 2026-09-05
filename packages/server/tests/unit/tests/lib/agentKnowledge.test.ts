@@ -225,6 +225,7 @@ describe('buildWriteMemoryTool', () => {
 describe('buildKnowledgeMessages', () => {
   test('returns [] when config is null', async () => {
     const result = await buildKnowledgeMessages({
+      billingProjectId: null,
       knowledgeConfig: null,
       messages: [],
     });
@@ -234,6 +235,7 @@ describe('buildKnowledgeMessages', () => {
 
   test('returns [] when config is undefined', async () => {
     const result = await buildKnowledgeMessages({
+      billingProjectId: null,
       knowledgeConfig: undefined,
       messages: [],
     });
@@ -243,6 +245,7 @@ describe('buildKnowledgeMessages', () => {
 
   test('returns [] when no query and no knowledge filters', async () => {
     const result = await buildKnowledgeMessages({
+      billingProjectId: null,
       knowledgeConfig: {},
       messages: [],
     });
@@ -253,6 +256,7 @@ describe('buildKnowledgeMessages', () => {
   test('returns [] when searchKnowledge returns empty results', async () => {
     mockSearchKnowledge.mockResolvedValueOnce([]);
     const result = await buildKnowledgeMessages({
+      billingProjectId: null,
       knowledgeConfig: {},
       messages: [{ role: 'user', content: 'hello' }],
     });
@@ -270,6 +274,7 @@ describe('buildKnowledgeMessages', () => {
       { role: 'user', content: 'latest question' },
     ];
     await buildKnowledgeMessages({
+      billingProjectId: null,
       knowledgeConfig: {},
       messages,
     });
@@ -283,6 +288,7 @@ describe('buildKnowledgeMessages', () => {
   // injects nothing.
   test('injects nothing when no user message exists and no filters are set', async () => {
     const result = await buildKnowledgeMessages({
+      billingProjectId: null,
       knowledgeConfig: { limit: 5 },
       messages: [{ role: 'assistant', content: 'hi' }],
     });
@@ -293,6 +299,7 @@ describe('buildKnowledgeMessages', () => {
   test('still searches on filters alone when no user message exists', async () => {
     mockSearchKnowledge.mockResolvedValueOnce([]);
     await buildKnowledgeMessages({
+      billingProjectId: null,
       knowledgeConfig: { memoryIds: ['mem_1'] },
       messages: [{ role: 'assistant', content: 'hi' }],
     });
@@ -320,6 +327,7 @@ describe('buildKnowledgeMessages', () => {
     ] as Awaited<ReturnType<typeof knowledgeModule.searchKnowledge>>);
 
     const result = await buildKnowledgeMessages({
+      billingProjectId: null,
       knowledgeConfig: {},
       messages: [{ role: 'user', content: 'guide' }],
     });
@@ -351,6 +359,7 @@ describe('buildKnowledgeMessages', () => {
     ] as Awaited<ReturnType<typeof knowledgeModule.searchKnowledge>>);
 
     const result = await buildKnowledgeMessages({
+      billingProjectId: null,
       knowledgeConfig: {},
       messages: [{ role: 'user', content: 'revenue' }],
     });
@@ -377,6 +386,7 @@ describe('buildKnowledgeMessages', () => {
     ] as Awaited<ReturnType<typeof knowledgeModule.searchKnowledge>>);
 
     const result = await buildKnowledgeMessages({
+      billingProjectId: null,
       knowledgeConfig: {},
       messages: [{ role: 'user', content: 'guide' }],
     });
@@ -399,6 +409,7 @@ describe('buildKnowledgeMessages', () => {
     ] as Awaited<ReturnType<typeof knowledgeModule.searchKnowledge>>);
 
     const result = await buildKnowledgeMessages({
+      billingProjectId: null,
       knowledgeConfig: {},
       messages: [{ role: 'user', content: 'remember' }],
     });
@@ -416,6 +427,7 @@ describe('buildKnowledgeMessages', () => {
   test('calls searchKnowledge when knowledge filters are set even without query', async () => {
     mockSearchKnowledge.mockResolvedValueOnce([]);
     await buildKnowledgeMessages({
+      billingProjectId: null,
       knowledgeConfig: { memoryIds: ['mem_1'] },
       messages: [],
     });
@@ -427,6 +439,7 @@ describe('buildKnowledgeMessages', () => {
   test('excludes document search when only memory filters are configured, even with a chat message', async () => {
     mockSearchKnowledge.mockResolvedValueOnce([]);
     await buildKnowledgeMessages({
+      billingProjectId: null,
       knowledgeConfig: { memoryIds: ['mem_1'], limit: 50 },
       messages: [{ role: 'user', content: 'what is the CPA cap?' }],
     });
@@ -445,6 +458,7 @@ describe('buildKnowledgeMessages', () => {
   test('still searches documents when memory_ids is combined with explicit document scoping', async () => {
     mockSearchKnowledge.mockResolvedValueOnce([]);
     await buildKnowledgeMessages({
+      billingProjectId: null,
       knowledgeConfig: { memoryIds: ['mem_1'], documentPaths: ['/alice/'] },
       messages: [{ role: 'user', content: 'what is the CPA cap?' }],
     });
@@ -461,6 +475,7 @@ describe('buildKnowledgeMessages', () => {
   test('still searches documents from the chat message when no filters are configured at all', async () => {
     mockSearchKnowledge.mockResolvedValueOnce([]);
     await buildKnowledgeMessages({
+      billingProjectId: null,
       knowledgeConfig: { limit: 5 },
       messages: [{ role: 'user', content: 'general question' }],
     });
@@ -475,6 +490,7 @@ describe('buildKnowledgeMessages', () => {
   test('passes projectIds and config options to searchKnowledge', async () => {
     mockSearchKnowledge.mockResolvedValueOnce([]);
     await buildKnowledgeMessages({
+      billingProjectId: 7,
       knowledgeConfig: {
         memoryTags: ['tag1'],
         documentIds: [42],
@@ -487,6 +503,7 @@ describe('buildKnowledgeMessages', () => {
     });
     expect(mockSearchKnowledge).toHaveBeenCalledWith({
       projectIds: [1, 2],
+      billingProjectId: 7,
       query: 'test',
       memoryIds: undefined,
       memoryTags: ['tag1'],
@@ -527,6 +544,7 @@ describe('buildKnowledgeMessages', () => {
     ] as Awaited<ReturnType<typeof knowledgeModule.searchKnowledge>>);
 
     const result = await buildKnowledgeMessages({
+      billingProjectId: null,
       knowledgeConfig: {},
       messages: [{ role: 'user', content: 'combined' }],
     });
@@ -834,6 +852,7 @@ describe('buildKnowledgeMessages — injection hardening', () => {
     mockSearchKnowledge.mockResolvedValueOnce(memoryResult);
 
     const result = await buildKnowledgeMessages({
+      billingProjectId: null,
       knowledgeConfig: {},
       messages: [{ role: 'user', content: 'prefs' }],
     });
@@ -847,6 +866,7 @@ describe('buildKnowledgeMessages — injection hardening', () => {
     mockSearchKnowledge.mockResolvedValueOnce(memoryResult);
 
     const result = await buildKnowledgeMessages({
+      billingProjectId: null,
       knowledgeConfig: {},
       messages: [{ role: 'user', content: 'prefs' }],
     });

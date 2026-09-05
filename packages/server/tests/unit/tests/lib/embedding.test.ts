@@ -117,9 +117,9 @@ describe('getEmbeddings', () => {
     const prev = process.env.EMBEDDING_PROVIDER;
     delete process.env.EMBEDDING_PROVIDER;
     try {
-      await expect(getEmbeddings({ texts: ['hello'] })).rejects.toThrow(
-        /EMBEDDING_PROVIDER and EMBEDDING_MODEL/
-      );
+      await expect(
+        getEmbeddings({ texts: ['hello'], projectId: null })
+      ).rejects.toThrow(/EMBEDDING_PROVIDER and EMBEDDING_MODEL/);
     } finally {
       process.env.EMBEDDING_PROVIDER = prev;
     }
@@ -129,16 +129,19 @@ describe('getEmbeddings', () => {
     const prev = process.env.EMBEDDING_PROVIDER;
     process.env.EMBEDDING_PROVIDER = 'cohere';
     try {
-      await expect(getEmbeddings({ texts: ['hello'] })).rejects.toThrow(
-        /Unsupported embedding provider: cohere/
-      );
+      await expect(
+        getEmbeddings({ texts: ['hello'], projectId: null })
+      ).rejects.toThrow(/Unsupported embedding provider: cohere/);
     } finally {
       process.env.EMBEDDING_PROVIDER = prev;
     }
   });
 
   test('returns one vector per input for the configured provider', async () => {
-    const embeddings = await getEmbeddings({ texts: ['alpha', 'beta'] });
+    const embeddings = await getEmbeddings({
+      texts: ['alpha', 'beta'],
+      projectId: null,
+    });
     expect(embeddings).toHaveLength(2);
     expect(embeddings[0]).toHaveLength(
       Number(process.env.EMBEDDING_DIMENSIONS)

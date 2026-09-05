@@ -6,16 +6,17 @@
  * the scorer algebra see one surface.
  *
  * Embedding is I/O, so — like judging — the call is injected (see
- * {@link EmbeddingScorerRunner}); the run path passes `getEmbeddings` from
- * `embedding.ts`, the same env-configured stack document ingestion uses.
+ * {@link EmbeddingScorerRunner}); the run path binds `getEmbeddings` from
+ * `embedding.ts` to the run's project, the same env-configured stack document
+ * ingestion uses.
  */
 import type { ScoredOutput, ScorerOutcome } from './evaluationScorers';
 import { isUnitInterval } from './evaluationToolScorerContract';
 
 /**
- * How embeddings are obtained for an `embedding_similarity` scorer. Matches
- * `getEmbeddings` from `embedding.ts` exactly, so the run path injects that
- * function unchanged and a test supplies fixed vectors.
+ * How embeddings are obtained for an `embedding_similarity` scorer. The run path
+ * supplies `getEmbeddings` from `embedding.ts` with the run's billing project
+ * already bound; a test supplies fixed vectors.
  *
  * A rejection propagates out of `scoreOutput` — the caller records the item as
  * **errored**, never as a 0: an embedding backend that cannot answer says

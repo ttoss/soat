@@ -87,6 +87,10 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
 
   const results = await searchKnowledge({
     projectIds,
+    // A search scoped to exactly one project bills its query embedding there.
+    // An unscoped search (a JWT admin, or a user with several projects in
+    // scope) names no single project to charge, so it is not metered.
+    billingProjectId: projectIds?.length === 1 ? projectIds[0] : null,
     policyWhere,
     query: body.query,
     minScore: body.min_score,

@@ -46,6 +46,9 @@ The endpoint is stateless — it does not store embeddings. The response shape d
 
 Both fields can be present if the request includes both `input` and `inputs`.
 
+The request also accepts an optional `project_id`, which names the project the
+call's token usage is billed to — see [Metering](#metering).
+
 ## Key Concepts
 
 ### Single vs batch
@@ -55,6 +58,33 @@ Pass `input` (a string) for a single vector, or `inputs` (an array of strings) f
 ### Shared vector space
 
 All embeddings produced by a given SOAT deployment are in the same vector space because they use the same model. Cosine similarity between any two vectors produced by the same server is meaningful. Vectors from different deployments or models are not comparable.
+
+### Metering
+
+Every embedding call is metered as an `llm_tokens` usage event with `source`
+`embedding`, whatever reached the model: this endpoint, document ingestion, a
+memory write, an `embedding_similarity` scorer, or the query embedding behind a
+knowledge search. Spend therefore appears in
+[`GET /api/v1/usage/meters`](/docs/api/usage/list-usage-meters) and counts
+towards a project's `cost_usd` and `tokens`
+[quotas](./quotas.md), like every other provider call.
+
+The embedding stack is configured per deployment, not by an AI provider record,
+so the event carries the provider *slug* and no `ai_provider_id`. Price it with a
+project or global price-book row for `(provider, EMBEDDING_MODEL,
+input_tokens)`; an embedding model emits no completion, so `input_tokens` is the
+only dimension. Without a matching row the tokens are still recorded and
+`cost_usd` is `null`.
+
+A usage event belongs to a project, so an embedding call needs one:
+
+| Call | Billed to |
+| --- | --- |
+| [`POST /api/v1/embeddings`](/docs/api/embeddings/create-embeddings) with `project_id` | that project — the caller must be able to write to it |
+| The same call from a project-scoped credential | the credential's project |
+| The same call with neither | nothing — the call is served but not metered |
+| Ingestion, memory, evaluation | the document's, memory's or run's project |
+| A knowledge search | the project searched, when the search is scoped to exactly one |
 
 ### 503 when unconfigured
 
@@ -68,7 +98,8 @@ If `EMBEDDING_PROVIDER` or `EMBEDDING_MODEL` is not set, the server returns `503
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat create-embeddings --input "The quick brown fox jumps over the lazy dog."
+soat create-embeddings --project-id "proj_V1StGXR8Z5jdHi6B" \
+  --input "The quick brown fox jumps over the lazy dog."
 ```
 
 </TabItem>
@@ -86,7 +117,10 @@ const client = createClient(
 
 const { data } = await Embeddings.createEmbeddings({
   client,
-  body: { input: 'The quick brown fox jumps over the lazy dog.' },
+  body: {
+    project_id: 'proj_V1StGXR8Z5jdHi6B',
+    input: 'The quick brown fox jumps over the lazy dog.',
+  },
 });
 
 console.log(data.embedding.length); // 1024 (depends on EMBEDDING_DIMENSIONS)
@@ -99,7 +133,7 @@ console.log(data.embedding.length); // 1024 (depends on EMBEDDING_DIMENSIONS)
 curl -s -X POST "$SOAT_BASE_URL/api/v1/embeddings" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"input":"The quick brown fox jumps over the lazy dog."}' \
+  -d '{"project_id":"proj_V1StGXR8Z5jdHi6B","input":"The quick brown fox jumps over the lazy dog."}' \
   | jq '.embedding | length'
 ```
 

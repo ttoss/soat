@@ -108,9 +108,11 @@ const buildScorerRunners = (args: { projectId: number }) => {
       return runToolScorerCall({ projectId: args.projectId, ...call });
     },
     // The embedding stack is env-configured (EMBEDDING_PROVIDER / _MODEL — the
-    // same one document ingestion uses), so unlike the judge there is nothing
-    // project-scoped to bind; the lib function is the runner.
-    runEmbeddings: getEmbeddings,
+    // same one document ingestion uses), so the only thing bound here is the
+    // project the scorer's embeddings are billed to.
+    runEmbeddings: (embed: { texts: string[] }) => {
+      return getEmbeddings({ ...embed, projectId: args.projectId });
+    },
   };
 };
 

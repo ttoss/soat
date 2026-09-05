@@ -1,6 +1,7 @@
 import { Op } from '@ttoss/postgresdb';
 
 import { db } from '../db';
+import type { EmbeddingBillingProjectId } from './embedding';
 import { getEmbedding } from './embedding';
 
 export type MemoryQueryConfig = {
@@ -119,11 +120,15 @@ const mapEntry = (
 const resolveMemorySearchBySemantic = async (args: {
   entryWhere: Record<string, unknown>;
   memoryWhere: Record<string, unknown>;
+  billingProjectId: EmbeddingBillingProjectId;
   search: string;
   limit: number;
   minScore?: number;
 }): Promise<MemoryKnowledgeResult[]> => {
-  const embedding = await getEmbedding({ text: args.search });
+  const embedding = await getEmbedding({
+    text: args.search,
+    projectId: args.billingProjectId,
+  });
   const embeddingLiteral = `[${embedding.join(',')}]`;
   const distanceLiteral = db.MemoryEntry.sequelize!.literal(
     `embedding <=> '${embeddingLiteral}'`
@@ -223,6 +228,8 @@ const buildEntrySelection = async (args: {
 
 export const resolveMemorySearch = async (args: {
   projectIds?: number[];
+  /** See `resolveDocumentSearch` in `knowledge.ts`. */
+  billingProjectId: EmbeddingBillingProjectId;
   config: MemoryQueryConfig;
 }): Promise<MemoryKnowledgeResult[]> => {
   const { config, projectIds } = args;
@@ -253,6 +260,7 @@ export const resolveMemorySearch = async (args: {
     return resolveMemorySearchBySemantic({
       entryWhere,
       memoryWhere,
+      billingProjectId: args.billingProjectId,
       search: config.search,
       limit,
       minScore: config.minScore,

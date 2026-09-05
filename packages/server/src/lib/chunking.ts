@@ -122,6 +122,7 @@ const runBounded = async (
  */
 export const persistChunks = async (args: {
   documentId: number;
+  projectId: number;
   chunks: PreparedChunk[];
   concurrency?: number;
   onProgress?: (completed: number) => Promise<void> | void;
@@ -140,7 +141,10 @@ export const persistChunks = async (args: {
     const chunk = args.chunks[i];
     let embedding: number[] | null = null;
     try {
-      embedding = await getEmbedding({ text: chunk.content });
+      embedding = await getEmbedding({
+        text: chunk.content,
+        projectId: args.projectId,
+      });
     } catch {
       // embedding is optional — continue without it
     }

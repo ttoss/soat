@@ -150,6 +150,28 @@ export const buildTokenComponents = (tokens: {
 };
 
 /**
+ * An embedding call's single dimension. `embedMany` reports one token count and
+ * an embedding model emits no completion, so there is no output rate to price
+ * against: a second component would be a permanent zero row in every rollup.
+ *
+ * A provider that reports no usage yields `NaN`, which would be persisted as a
+ * non-numeric quantity; it records 0 instead, the same way `extractUsageTokens`
+ * keeps an omitted breakdown summable.
+ */
+export const buildEmbeddingComponents = (args: {
+  tokens: number;
+}): TokenComponent[] => {
+  return [
+    {
+      component: 'input_tokens',
+      quantity: Number.isFinite(args.tokens) ? Math.max(0, args.tokens) : 0,
+      unit: 'token',
+      billable: true,
+    },
+  ];
+};
+
+/**
  * Validates a single price-book upsert row's shape (transport-independent, so
  * REST and any future formation path share it). Returns a message describing
  * the violation, or null when valid. `effective_from` immutability is enforced

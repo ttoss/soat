@@ -2,6 +2,7 @@ import { Op } from '@ttoss/postgresdb';
 
 import { db } from '../db';
 import { mapDocument } from './documentMapper';
+import type { EmbeddingBillingProjectId } from './embedding';
 import { getEmbedding } from './embedding';
 import type { MemoryKnowledgeResult } from './knowledgeMemory';
 import { resolveMemorySearch } from './knowledgeMemory';
@@ -195,13 +196,17 @@ const buildDocumentInclude = (args: {
 
 const findChunksWithSearch = async (args: {
   config: DocumentQueryConfig;
+  billingProjectId: EmbeddingBillingProjectId;
   docWhere: Record<string, unknown> | undefined;
   fileInclude: ReturnType<typeof buildFileInclude>;
   limit: number;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   topLevelWhere?: Record<string, any>;
 }): Promise<ChunkWithDocument[]> => {
-  const embedding = await getEmbedding({ text: args.config.search! });
+  const embedding = await getEmbedding({
+    text: args.config.search!,
+    projectId: args.billingProjectId,
+  });
   const embeddingLiteral = `[${embedding.join(',')}]`;
   const distanceLiteral = db.DocumentChunk.sequelize!.literal(
     `"DocumentChunk"."embedding" <=> '${embeddingLiteral}'`
@@ -286,6 +291,12 @@ const remapPolicyWhereForChunks = (
 
 export const resolveDocumentSearch = async (args: {
   projectIds?: number[];
+  /**
+   * The project the query embedding is billed to. Separate from `projectIds`,
+   * which is an access filter that may name many projects or none: a search
+   * that spans a caller's whole scope has no single project to charge.
+   */
+  billingProjectId: EmbeddingBillingProjectId;
   config: DocumentQueryConfig;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   policyWhere?: Record<string, any>;
@@ -308,6 +319,7 @@ export const resolveDocumentSearch = async (args: {
   const rawChunks = config.search
     ? await findChunksWithSearch({
         config,
+        billingProjectId: args.billingProjectId,
         docWhere,
         fileInclude,
         limit,
@@ -335,6 +347,8 @@ export const resolveDocumentSearch = async (args: {
 
 type SearchKnowledgeArgs = {
   projectIds?: number[];
+  /** See {@link resolveDocumentSearch}. Required, so a caller has to say. */
+  billingProjectId: EmbeddingBillingProjectId;
   query?: string;
   minScore?: number;
   limit?: number;
@@ -378,6 +392,7 @@ export const searchKnowledge = async (
     !hasMemorySearch || hasDocumentSearch
       ? resolveDocumentSearch({
           projectIds: args.projectIds,
+          billingProjectId: args.billingProjectId,
           policyWhere: args.policyWhere,
           config: {
             search: args.query,
@@ -391,6 +406,7 @@ export const searchKnowledge = async (
     hasMemorySearch
       ? resolveMemorySearch({
           projectIds: args.projectIds,
+          billingProjectId: args.billingProjectId,
           config: {
             memoryIds: args.memoryIds,
             memoryTags: args.memoryTags,

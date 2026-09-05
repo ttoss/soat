@@ -200,6 +200,7 @@ const runIngestionPipeline = async (args: IngestionPipelineArgs) => {
   await finalizeIngestedPages({
     doc,
     docId,
+    projectId: file.projectId,
     docPath: args.docPath,
     pages: resolved.pages,
     rule: resolved.rule,

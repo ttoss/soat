@@ -521,6 +521,11 @@ with [`GET /api/v1/usage/meters?source=eval`](/docs/api/usage/list-usage-meters)
 [`GET /api/v1/usage?group_by=source`](/docs/api/usage/get-usage). [Quotas](./quotas.md) and usage thresholds still
 apply to eval runs.
 
+An `embedding_similarity` scorer's own embeddings are metered too, under
+`source: "embedding"` rather than `"eval_judge"` — they go through the
+deployment's [embedding](./embeddings.md#metering) stack, not a project provider,
+so they carry that stack's provider and model.
+
 :::warning[Eval runs have real side effects]
 
 A run creates real generations, so an agent with a write-capable `http` or `mcp`

@@ -344,6 +344,7 @@ export const createDocument = async (args: {
 
   await chunkDocumentText({
     documentId: doc.id as number,
+    projectId: args.projectId,
     content: args.content,
     chunkStrategy: args.chunkStrategy,
     chunkSize: args.chunkSize,
