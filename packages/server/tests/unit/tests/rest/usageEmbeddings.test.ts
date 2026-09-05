@@ -32,8 +32,10 @@ describe('Usage — embedding metering', () => {
   const UNIT_PRICE = 0.000002;
 
   const readEmbeddingMeters = async (): Promise<MeterRow[]> => {
+    // The route scopes to the caller's own projects — there is no `project_id`
+    // filter — and this user can read exactly the one project.
     const res = await authenticatedTestClient(userToken).get(
-      `/api/v1/usage/meters?project_id=${projectId}&source=embedding`
+      '/api/v1/usage/meters?source=embedding'
     );
     expect(res.status).toBe(200);
     return res.body.data as MeterRow[];

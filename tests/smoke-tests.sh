@@ -3849,7 +3849,6 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
     --project-id "$PROJECT_PUBLIC_ID" \
     --input "smoke test embedding metering" > /dev/null
   EMBEDDING_METERS_RESP=$($SOAT_CLI list-usage-meters \
-    --project-id "$PROJECT_PUBLIC_ID" \
     --source embedding --limit 100 | sanitize_json)
   EMBEDDING_METER_OK=$(printf '%s\n' "$EMBEDDING_METERS_RESP" | jq -r '([.data[] | select(.meter_type == "llm_tokens" and .generation_id == null and .ai_provider_id == null and ([.components[] | select(.component == "input_tokens" and .quantity > 0)] | length == 1))] | length >= 1)')
   if [ "$EMBEDDING_METER_OK" != "true" ]; then
