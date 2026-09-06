@@ -3,6 +3,40 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.40.0](https://github.com/ttoss/soat/compare/v0.39.0...v0.40.0) (2026-09-06)
+
+* feat(server)!: count entities on usage totals, and rename the module's misleading vocabulary (#1217) ([d7a2c08](https://github.com/ttoss/soat/commit/d7a2c08af18ee9c691f5103cefb8b0e7054de6b8)), closes [#1217](https://github.com/ttoss/soat/issues/1217) [#1216](https://github.com/ttoss/soat/issues/1216)
+
+### BREAKING CHANGES
+
+* the usage module's public vocabulary is renamed, with no
+  aliases.
+
+  - `GET /api/v1/usage/meters` -> `GET /api/v1/usage/events`
+    (`listUsageMeters` -> `listUsageEvents`, `soat list-usage-events`)
+  - `GET /api/v1/usage` -> `GET /api/v1/usage/aggregate`
+    (`getUsage` -> `getUsageAggregate`, `soat get-usage-aggregate`)
+  - IAM: `usage:ListUsageMeters` -> `usage:ListEvents`,
+    `usage:GetUsage` -> `usage:GetAggregate`
+  - `group_by=run` -> `group_by=orchestration_run`
+  - guardrail runtime variables: `runtime.usage.run_tokens` /
+    `run_cost_usd` -> `runtime.usage.orchestration_run_tokens` /
+    `orchestration_run_cost_usd`; `runtime.run.node_attempt` / `tool_calls` ->
+    `runtime.orchestration_run.node_attempt` / `tool_calls`
+  - `max_run_depth` -> `max_orchestration_run_depth` (project),
+    `run_depth` -> `orchestration_run_depth` (orchestration run)
+  - one `UsageTotals` component now shapes a receipt's `totals` (replacing its
+    five flattened `total_*` fields), an aggregate bucket, and a run's `usage` /
+    `usage_own`; `RunUsageTotals` and `StartRunRequest` are gone
+
+  Stored documents carrying a renamed platform-owned string are rewritten at
+  boot by `backfillUsageRenames`, wired in beside the knowledge-config backfill:
+  policy `action` arrays, guardrail documents and their version snapshots, and
+  the policy/guardrail resources of a formation template. Idempotent and
+  prefiltered in SQL, so a converged database reads no rows. Without it a stored
+  `Allow` would grant nothing, a `Deny` would deny nothing, and a per-run
+  guardrail ceiling would trip on every call.
+
 # [0.39.0](https://github.com/ttoss/soat/compare/v0.38.1...v0.39.0) (2026-09-06)
 
 **Note:** Version bump only for package @soat/cli
