@@ -98,11 +98,9 @@ const priceComponent = async (args: {
 
 /**
  * Prices an already-decomposed component list at one instant, so every
- * component of one call reads the same effective row. Exported because the
- * decomposition differs by meter — an LLM call has four token dimensions, an
- * embedding call has one — while the pricing rule must not.
+ * component of one call reads the same effective row.
  */
-export const priceComponents = (args: {
+const priceComponents = (args: {
   components: TokenComponent[];
   provider: string;
   aiProviderId: number | null;

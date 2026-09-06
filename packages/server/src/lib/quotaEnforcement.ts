@@ -1,4 +1,3 @@
-import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
@@ -13,6 +12,13 @@ import {
   windowResetsAt,
   windowStartsAt,
 } from './quotas';
+import {
+  type UnpricedRow,
+  unpricedRowsInWindow,
+  type WindowScope,
+  windowScopeWhere,
+} from './quotaUnpricedRows';
+import { EMBEDDING_USAGE_SOURCE } from './usageEmbeddingRecording';
 
 const log = createDebug('soat:quotas');
 
@@ -29,6 +35,8 @@ type QuotaInstance = InstanceType<(typeof db)['Quota']>;
  */
 export type QuotaBreachReason = 'limit_exceeded' | 'unpriced_usage';
 
+export type { UnpricedRow };
+
 export type QuotaBreach = {
   quotaId: string;
   scope: string;
@@ -39,6 +47,8 @@ export type QuotaBreach = {
   resetsAt: Date;
   retryAfter: number;
   reason: QuotaBreachReason;
+  /** Populated only on an `unpriced_usage` breach — the rows to price. */
+  unpricedRows?: UnpricedRow[];
 };
 
 // Which scope to report when several quotas breach at once — the most specific
@@ -71,6 +81,9 @@ export const quotaBreachError = (breach: QuotaBreach): DomainError => {
         metric: breach.metric,
         limit: breach.limit,
         window: breach.window,
+        // The operator's next action is to price exactly these. Without them
+        // the refusal reports that a price is missing but not which (#1213).
+        unpriced_rows: breach.unpricedRows ?? [],
       }
     );
   }
@@ -144,6 +157,7 @@ const buildBreach = (args: {
   window: QuotaWindow;
   now: Date;
   reason: QuotaBreachReason;
+  unpricedRows?: UnpricedRow[];
 }): QuotaBreach => {
   const resetsAt = windowResetsAt({ window: args.window, now: args.now });
   return {
@@ -156,6 +170,7 @@ const buildBreach = (args: {
     resetsAt,
     retryAfter: retryAfterSeconds({ resetsAt, now: args.now }),
     reason: args.reason,
+    ...(args.unpricedRows ? { unpricedRows: args.unpricedRows } : {}),
   };
 };
 
@@ -271,17 +286,12 @@ const aggregateGenerationMetric = async (args: {
   actorId: number | null;
   windowStart: Date;
 }): Promise<WindowAggregate> => {
-  const where: Record<string | symbol, unknown> = {
-    projectId: args.projectId,
-    createdAt: { [Op.gte]: args.windowStart },
-  };
-  if (args.agentId != null) where.agentId = args.agentId;
-  if (args.actorId != null) where.actorId = args.actorId;
+  const where = windowScopeWhere(args);
 
   if (args.metric === 'cost_usd') {
     const events = await db.UsageEvent.findAll({
       where,
-      attributes: ['costUsd', 'meterType'],
+      attributes: ['costUsd', 'meterType', 'source'],
     });
     const priced = events.filter((event) => {
       return event.costUsd != null;
@@ -293,8 +303,19 @@ const aggregateGenerationMetric = async (args: {
     // refuses the very generation that would land the first priced AI event, so
     // the blackout could never clear. Reading it alone also stops a priced
     // platform event from masking a genuine AI blackout.
+    // An embedding is held out of the verdict in both directions. Its rate is
+    // deployment configuration (`EMBEDDING_INPUT_1M_TOKEN_PRICE_USD`) with no
+    // price-book tier a tenant could reach, so counting it unpriced refuses a
+    // cap nobody in the project can make enforceable (#1213) — and counting it
+    // *priced*, which an unset rate metering at 0 makes it, would report a
+    // window as priced and wave through every unpriced generation beside it.
+    // Either way the verdict would be about a call the tenant did not choose.
+    // Its cost still lands in `total`: zero or not, it is real spend.
     const aiEvents = events.filter((event) => {
-      return event.meterType === DEFAULT_METER_TYPE;
+      return (
+        event.meterType === DEFAULT_METER_TYPE &&
+        event.source !== EMBEDDING_USAGE_SOURCE
+      );
     });
     const pricedAiEvents = aiEvents.filter((event) => {
       return event.costUsd != null;
@@ -374,6 +395,45 @@ const resolveSessionActor = async (args: {
   return { id: actor.id as number, publicId: actor.publicId };
 };
 
+/**
+ * What an `enforce` cost cap does over a window it cannot measure.
+ *
+ * Refusing is the point: a cap that cannot measure the spend it caps must not
+ * wave it through, which is the fail-open the cap exists to prevent. But a
+ * fresh window's first event landing on the one unpriced model of a
+ * mostly-priced project must not stop it at every window boundary, so the
+ * refusal waits for a real blackout while the triage item files from the first
+ * event — an operator sees the dead cap before a caller is stopped by it.
+ *
+ * `on_unpriced: "allow"` is the operator's opt-out, recorded on the quota
+ * itself; `monitor` observes and never blocks, here as everywhere.
+ */
+const blackoutBreach = async (args: {
+  quota: QuotaInstance;
+  window: QuotaWindow;
+  now: Date;
+  scope: WindowScope;
+  unpricedEventCount: number;
+}): Promise<QuotaBreach | null> => {
+  const { quota } = args;
+  await reportUnpricedCostQuota({
+    quota,
+    unpricedEventCount: args.unpricedEventCount,
+  });
+  const refuses =
+    quota.mode === 'enforce' &&
+    resolveOnUnpriced(quota.onUnpriced) === 'block' &&
+    args.unpricedEventCount >= UNPRICED_BLACKOUT_MIN_EVENTS;
+  if (!refuses) return null;
+  return buildBreach({
+    quota,
+    window: args.window,
+    now: args.now,
+    reason: 'unpriced_usage',
+    unpricedRows: await unpricedRowsInWindow(args.scope),
+  });
+};
+
 // Fires `quota.exceeded` once per window in both modes, but returns the breach
 // only for `enforce` — a `monitor` breach webhooks without blocking.
 const evaluateGenerationQuota = async (args: {
@@ -390,35 +450,23 @@ const evaluateGenerationQuota = async (args: {
   // a null-ref actor quota is one budget *per* actor, not one shared budget
   // (see `evaluateGenerationQuotas`). Matching guarantees an actor is present.
   const scopeToActor = quota.scope === 'actor';
-  const { total, unpricedEventCount } = await aggregateGenerationMetric({
-    metric: quota.metric as 'tokens' | 'cost_usd',
+  const scope: WindowScope = {
     projectId: args.projectId,
     agentId: scopeToAgent ? args.agentInternalId : null,
     actorId: scopeToActor ? args.actorInternalId : null,
     windowStart: windowStartsAt({ window, now }),
+  };
+  const { total, unpricedEventCount } = await aggregateGenerationMetric({
+    metric: quota.metric as 'tokens' | 'cost_usd',
+    ...scope,
   });
 
   // A cost cap over an entirely unpriced window aggregates to 0, so the limit
-  // comparison below can never fire however much was actually spent. File the
-  // triage item from the first such event, then refuse only a real blackout:
-  // an `enforce` cap that cannot measure the spend it caps must not wave it
-  // through, which is the fail-open the cap exists to prevent — but a fresh
-  // window's first event landing on the one unpriced model must not stop a
-  // mostly-priced project at every window boundary, so the refusal waits for
-  // the threshold while the exception does not. `on_unpriced: "allow"` is the
-  // operator's opt-out, recorded on the quota itself; `monitor` observes and
-  // never blocks, here as everywhere. Below the threshold the aggregate is 0
-  // by construction, so falling through would pass anyway — returning here
-  // just says so explicitly.
+  // comparison below can never fire however much was actually spent. Below the
+  // blackout threshold the aggregate is 0 by construction, so falling through
+  // would pass anyway — returning here just says so explicitly.
   if (unpricedEventCount > 0) {
-    await reportUnpricedCostQuota({ quota, unpricedEventCount });
-    const refuses =
-      quota.mode === 'enforce' &&
-      resolveOnUnpriced(quota.onUnpriced) === 'block' &&
-      unpricedEventCount >= UNPRICED_BLACKOUT_MIN_EVENTS;
-    return refuses
-      ? buildBreach({ quota, window, now, reason: 'unpriced_usage' })
-      : null;
+    return blackoutBreach({ quota, window, now, scope, unpricedEventCount });
   }
 
   if (total < Number(quota.limit)) return null;

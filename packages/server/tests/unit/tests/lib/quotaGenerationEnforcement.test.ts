@@ -1,4 +1,3 @@
-import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import { db } from 'src/db';
 import { eventBus, type SoatEvent } from 'src/lib/eventBus';
 import {
@@ -8,6 +7,11 @@ import {
 } from 'src/lib/quotaEnforcement';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import {
+  createQuotaRow,
+  freshProjectAndAgent as freshProjectAndAgentFixture,
+  seedUsageEvent,
+} from '../../fixtures/quotaSeed';
 import { authenticatedTestClient } from '../../testClient';
 
 // A pure aggregation over scope × metric × window × attribution, where a bare
@@ -25,131 +29,8 @@ describe('evaluateGenerationQuotas', () => {
     adminToken = setup.adminToken;
   });
 
-  // A fresh project + agent per test so windowed aggregation is isolated by
-  // project id — no cross-test usage bleed and no global cleanup.
-  const freshProjectAndAgent = async (name: string) => {
-    const projRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/projects')
-      .send({ name });
-    const projectPublicId = projRes.body.id as string;
-
-    const provRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/ai-providers')
-      .send({
-        project_id: projectPublicId,
-        name: `${name} provider`,
-        provider: 'ollama',
-        default_model: 'stub-model',
-      });
-
-    const agentRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/agents')
-      .send({
-        project_id: projectPublicId,
-        ai_provider_id: provRes.body.id,
-        name: `${name} agent`,
-      });
-    const agentPublicId = agentRes.body.id as string;
-
-    const project = await db.Project.findOne({
-      where: { publicId: projectPublicId },
-    });
-    const agent = await db.Agent.findOne({
-      where: { publicId: agentPublicId },
-    });
-
-    return {
-      projectPublicId,
-      agentPublicId,
-      projectInternalId: (project as unknown as { id: number }).id,
-      agentInternalId: (agent as unknown as { id: number }).id,
-    };
-  };
-
-  const seedUsageEvent = async (opts: {
-    projectInternalId: number;
-    agentInternalId?: number | null;
-    actorInternalId?: number | null;
-    tokens?: {
-      input?: number;
-      output?: number;
-      cached?: number;
-      reasoning?: number;
-    };
-    costUsd?: string | null;
-    createdAt?: Date;
-    meterType?: string;
-  }) => {
-    const event = await db.UsageEvent.create({
-      projectId: opts.projectInternalId,
-      agentId: opts.agentInternalId ?? null,
-      actorId: opts.actorInternalId ?? null,
-      meterType: opts.meterType ?? 'llm_tokens',
-      provider: 'ollama',
-      model: 'stub-model',
-      costUsd: opts.costUsd ?? null,
-      idempotencyKey: `${generatePublicId(PUBLIC_ID_PREFIXES.usageEvent)}:seed`,
-    });
-    const t = opts.tokens ?? {};
-    const comps = [
-      { component: 'input_tokens', quantity: t.input ?? 0, billable: true },
-      { component: 'output_tokens', quantity: t.output ?? 0, billable: true },
-      { component: 'cached_tokens', quantity: t.cached ?? 0, billable: true },
-      {
-        component: 'reasoning_tokens',
-        quantity: t.reasoning ?? 0,
-        billable: false,
-      },
-    ];
-    await db.UsageComponent.bulkCreate(
-      comps.map((c) => {
-        return {
-          // bulkCreate does not fire the beforeValidate publicId hook, so set it
-          // explicitly (as the production write path in usageRecording does).
-          publicId: generatePublicId(PUBLIC_ID_PREFIXES.usageComponent),
-          usageEventId: (event as unknown as { id: number }).id,
-          component: c.component,
-          quantity: String(c.quantity),
-          unit: 'token',
-          billable: c.billable,
-          unitPrice: null,
-          costUsd: null,
-          priceId: null,
-        };
-      })
-    );
-    if (opts.createdAt) {
-      await db.UsageEvent.update(
-        { createdAt: opts.createdAt },
-        { where: { id: (event as unknown as { id: number }).id }, silent: true }
-      );
-    }
-    return event;
-  };
-
-  const createQuotaRow = async (opts: {
-    projectInternalId: number;
-    scope: string;
-    scopeRef?: string | null;
-    metric: string;
-    window?: string;
-    limit: number;
-    mode?: string;
-    // Left null when absent — which is also what every quota row stored before
-    // the column existed carries, so the default here doubles as the legacy case.
-    onUnpriced?: string;
-  }) => {
-    const quota = await db.Quota.create({
-      projectId: opts.projectInternalId,
-      scope: opts.scope,
-      scopeRef: opts.scopeRef ?? null,
-      metric: opts.metric,
-      window: opts.window ?? 'calendar_month',
-      limit: String(opts.limit),
-      mode: opts.mode ?? 'enforce',
-      onUnpriced: opts.onUnpriced ?? null,
-    });
-    return quota;
+  const freshProjectAndAgent = (name: string) => {
+    return freshProjectAndAgentFixture({ adminToken, name });
   };
 
   // An unpriced event contributes 0, so a `cost_usd` cap on a project with no
@@ -310,6 +191,63 @@ describe('evaluateGenerationQuotas', () => {
       expect(await unpricedExceptions(ctx.projectInternalId)).toHaveLength(1);
     });
 
+    /**
+     * An embedding is metered against a rate the tenant does not own and cannot
+     * set — `EMBEDDING_INPUT_1M_TOKEN_PRICE_USD` is the deployment's, and no
+     * price-book tier reaches a call that carries no provider record. So it is
+     * read out of the blackout verdict in both directions: it can neither raise
+     * one (#1213, where ingestion alone turned a healthy cap into a 409) nor
+     * clear one.
+     */
+    test('a window of only embedding events is not a blackout', async () => {
+      const ctx = await freshProjectAndAgent('genquota-unpriced-embedding');
+      for (let i = 0; i < 4; i += 1) {
+        await seedUsageEvent({
+          projectInternalId: ctx.projectInternalId,
+          source: 'embedding',
+          costUsd: '0',
+        });
+      }
+      await createQuotaRow({
+        projectInternalId: ctx.projectInternalId,
+        scope: 'project',
+        metric: 'cost_usd',
+        limit: 5,
+      });
+
+      const breach = await evaluateGenerationQuotas({
+        agentId: ctx.agentPublicId,
+      });
+      expect(breach).toBeNull();
+      expect(await unpricedExceptions(ctx.projectInternalId)).toHaveLength(0);
+    });
+
+    test('an embedding priced at zero does not clear a genuine blackout', async () => {
+      // An unset embedding rate meters at 0, which is a *priced* event. Counted
+      // in the verdict it would report the window as priced and wave through
+      // every unpriced generation beside it — the fail-open the cap exists to
+      // prevent, now reachable from ordinary ingestion.
+      const ctx = await freshProjectAndAgent('genquota-unpriced-embedmask');
+      await seedUnpricedEvents(ctx, 3);
+      await seedUsageEvent({
+        projectInternalId: ctx.projectInternalId,
+        source: 'embedding',
+        costUsd: '0',
+      });
+      await createQuotaRow({
+        projectInternalId: ctx.projectInternalId,
+        scope: 'project',
+        metric: 'cost_usd',
+        limit: 5,
+      });
+
+      const breach = await evaluateGenerationQuotas({
+        agentId: ctx.agentPublicId,
+      });
+      expect(breach?.reason).toBe('unpriced_usage');
+      expect(await unpricedExceptions(ctx.projectInternalId)).toHaveLength(1);
+    });
+
     test('files nothing when the window has priced events', async () => {
       const ctx = await freshProjectAndAgent('genquota-unpriced-priced');
       await seedUsageEvent({
@@ -431,6 +369,66 @@ describe('evaluateGenerationQuotas', () => {
         quota_id: quota.publicId,
         metric: 'cost_usd',
       });
+    });
+
+    test('names the rows to price, so the fix does not need the rollup', async () => {
+      // The operator's next action is to price exactly these; without them the
+      // refusal says a price is missing but not which one (#1213).
+      const ctx = await freshProjectAndAgent('genquota-unpriced-rows');
+      await seedUnpricedEvents(ctx, 3);
+      await createQuotaRow({
+        projectInternalId: ctx.projectInternalId,
+        scope: 'project',
+        metric: 'cost_usd',
+        limit: 5,
+      });
+
+      const breach = await evaluateGenerationQuotas({
+        agentId: ctx.agentPublicId,
+      });
+      const error = quotaBreachError(breach!);
+      const rows = (error.meta as { unpriced_rows: unknown }).unpriced_rows;
+      // `cached_tokens` measured 0 and `reasoning_tokens` is not billable —
+      // pricing either changes nothing, so neither is worth reporting.
+      expect(rows).toEqual([
+        { provider: 'ollama', model: 'stub-model', component: 'input_tokens' },
+        { provider: 'ollama', model: 'stub-model', component: 'output_tokens' },
+      ]);
+    });
+
+    test('an embedding is never named as a row to price', async () => {
+      // It has no price book row to create — the deployment variable is the
+      // only place its rate lives — so naming it would send the operator to a
+      // route that cannot fix anything.
+      const ctx = await freshProjectAndAgent('genquota-unpriced-rows-embed');
+      await seedUnpricedEvents(ctx, 3);
+      await seedUsageEvent({
+        projectInternalId: ctx.projectInternalId,
+        source: 'embedding',
+        provider: 'openai',
+        model: 'text-embedding-3-small',
+        costUsd: null,
+      });
+      await createQuotaRow({
+        projectInternalId: ctx.projectInternalId,
+        scope: 'project',
+        metric: 'cost_usd',
+        limit: 5,
+      });
+
+      const breach = await evaluateGenerationQuotas({
+        agentId: ctx.agentPublicId,
+      });
+      const rows = (
+        quotaBreachError(breach!).meta as {
+          unpriced_rows: Array<{ model: string }>;
+        }
+      ).unpriced_rows;
+      expect(
+        rows.some((row) => {
+          return row.model === 'text-embedding-3-small';
+        })
+      ).toBe(false);
     });
   });
 

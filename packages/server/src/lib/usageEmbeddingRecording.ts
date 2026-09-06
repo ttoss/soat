@@ -2,27 +2,60 @@ import { randomUUID } from 'node:crypto';
 
 import createDebug from 'debug';
 
-import { buildEmbeddingComponents, sumComponentCostUsd } from './priceCompute';
+import { readEmbeddingInputTokenPriceUsd } from './embeddingPrice';
+import {
+  buildEmbeddingComponents,
+  computeComponentCostUsd,
+  sumComponentCostUsd,
+} from './priceCompute';
 import { evaluateProjectThresholds } from './usageThresholds';
-import { persistTokenEvent, priceComponents } from './usageTokenEvent';
+import { persistTokenEvent, type PricedComponent } from './usageTokenEvent';
 
 const log = createDebug('soat:usage');
 
 /**
  * The workload label every embedding event carries. Separate from the
  * generation and completion sources so a rollup can price retrieval and
- * ingestion apart from the turns that read them (#1208).
+ * ingestion apart from the turns that read them (#1208), and so quota
+ * enforcement can tell a call the tenant configured from one the deployment
+ * did.
  */
 export const EMBEDDING_USAGE_SOURCE = 'embedding';
+
+/**
+ * Prices an embedding's one component from the deployment's configured rate.
+ *
+ * The price book is not consulted: an embedding carries no `AiProvider` row for
+ * its provider-instance tier to match, and the rate lives beside the model it
+ * prices instead (`embeddingPrice.ts`). `priceId` is null for the same reason —
+ * no row explains this cost, the configuration does.
+ */
+const priceEmbeddingComponents = (args: {
+  tokens: number;
+}): PricedComponent[] => {
+  const unitPrice = readEmbeddingInputTokenPriceUsd();
+  return buildEmbeddingComponents({ tokens: args.tokens }).map((component) => {
+    return {
+      ...component,
+      unitPrice,
+      costUsd: computeComponentCostUsd({
+        quantity: component.quantity,
+        unitPrice: Number(unitPrice),
+      }),
+      priceId: null,
+    };
+  });
+};
 
 /**
  * Writes one `llm_tokens` usage event for a completed embedding call.
  *
  * The embedding stack is configured per deployment (`EMBEDDING_PROVIDER` /
- * `EMBEDDING_MODEL`), not by an `AiProvider` row, so the event bills against the
- * provider *slug* with `ai_provider_id = null`: pricing resolves at the project
- * + slug tier, then the global default. A price book that names the embedding
- * model therefore prices every project's embeddings without a per-project row.
+ * `EMBEDDING_MODEL`), not by an `AiProvider` row, so the event bills against
+ * the provider *slug* with `ai_provider_id = null` and is priced from
+ * `EMBEDDING_INPUT_1M_TOKEN_PRICE_USD`. An unset rate meters at zero, so an
+ * embedding always carries a cost and can never make a `cost_usd` quota
+ * unenforceable (#1213).
  *
  * Like a generation-less completion, an embedding call has no replay identity —
  * nothing re-delivers it and a retried request really did reach the provider —
@@ -46,13 +79,7 @@ export const recordEmbeddingUsage = async (args: {
     args.tokens
   );
   try {
-    const priced = await priceComponents({
-      components: buildEmbeddingComponents({ tokens: args.tokens }),
-      provider: args.provider,
-      aiProviderId: null,
-      model: args.model,
-      projectId: args.projectId,
-    });
+    const priced = priceEmbeddingComponents({ tokens: args.tokens });
     const costUsd = sumComponentCostUsd(
       priced.map((component) => {
         return component.costUsd;
