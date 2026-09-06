@@ -3844,15 +3844,18 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
 
   # 34b-ii-c. Embedding coverage — an embedding reaches the provider with no
   # Generation and no AI provider record behind it, so it must still be metered,
-  # under its own `embedding` source (#1208).
+  # under its own `embedding` source (#1208). Its cost comes from
+  # EMBEDDING_INPUT_1M_TOKEN_PRICE_USD rather than the price book (#1213); the
+  # stack sets a non-zero rate, so a positive cost_usd is what proves the
+  # per-million conversion ran end to end.
   $SOAT_CLI create-embeddings \
     --project-id "$PROJECT_PUBLIC_ID" \
     --input "smoke test embedding metering" > /dev/null
   EMBEDDING_METERS_RESP=$($SOAT_CLI list-usage-meters \
     --source embedding --limit 100 | sanitize_json)
-  EMBEDDING_METER_OK=$(printf '%s\n' "$EMBEDDING_METERS_RESP" | jq -r '([.data[] | select(.meter_type == "llm_tokens" and .generation_id == null and .ai_provider_id == null and ([.components[] | select(.component == "input_tokens" and .quantity > 0)] | length == 1))] | length >= 1)')
+  EMBEDDING_METER_OK=$(printf '%s\n' "$EMBEDDING_METERS_RESP" | jq -r '([.data[] | select(.meter_type == "llm_tokens" and .generation_id == null and .ai_provider_id == null and .cost_usd > 0 and ([.components[] | select(.component == "input_tokens" and .quantity > 0 and .cost_usd > 0)] | length == 1))] | length >= 1)')
   if [ "$EMBEDDING_METER_OK" != "true" ]; then
-    echo "ERROR: embedding call was not metered as an input_tokens llm_tokens event" >&2
+    echo "ERROR: embedding call was not metered as a priced input_tokens llm_tokens event" >&2
     echo "$EMBEDDING_METERS_RESP" >&2
     exit 1
   fi

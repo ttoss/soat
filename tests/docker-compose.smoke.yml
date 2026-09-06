@@ -154,6 +154,9 @@ services:
       EMBEDDING_PROVIDER: ollama
       EMBEDDING_MODEL: qwen3-embedding:0.6b
       EMBEDDING_DIMENSIONS: '1024'
+      # Non-zero on purpose: an unset rate meters embeddings at 0, which would
+      # let the cost assertion below pass without the conversion running.
+      EMBEDDING_INPUT_1M_TOKEN_PRICE_USD: '0.02'
       NODE_OPTIONS: '--max-old-space-size=768'
       SOAT_BASE_URL: 'http://server:50477'
       # Worker-fleet topology: the API tier stays request-only and the
@@ -217,6 +220,9 @@ services:
       EMBEDDING_PROVIDER: ollama
       EMBEDDING_MODEL: qwen3-embedding:0.6b
       EMBEDDING_DIMENSIONS: '1024'
+      # Non-zero on purpose: an unset rate meters embeddings at 0, which would
+      # let the cost assertion below pass without the conversion running.
+      EMBEDDING_INPUT_1M_TOKEN_PRICE_USD: '0.02'
       NODE_OPTIONS: '--max-old-space-size=768'
       SOAT_BASE_URL: 'http://server:50477'
       ORCHESTRATION_WORKER_INTERVAL_MS: '1000'

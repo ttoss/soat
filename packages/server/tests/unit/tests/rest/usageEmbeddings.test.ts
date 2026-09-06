@@ -4,7 +4,9 @@ import { authenticatedTestClient, testClient } from '../../testClient';
 // Every embedding the server makes reaches the provider through one function, so
 // these assertions drive the entry points that reach it and read the meter back:
 // the stateless endpoint, document ingestion, a memory write, and a knowledge
-// search (#1208). The stub embedding provider reports one token per word.
+// search (#1208). The stub embedding provider reports one token per word, and
+// the rate comes from `EMBEDDING_INPUT_1M_TOKEN_PRICE_USD` rather than the price
+// book (#1213).
 
 type MeterRow = {
   meter_type: string;
@@ -29,7 +31,13 @@ describe('Usage — embedding metering', () => {
   let noPermToken: string;
 
   const EMBEDDING_MODEL = 'text-embedding-3-small';
-  const UNIT_PRICE = 0.000002;
+  // USD per million input tokens, as the deployment states it, and the per-token
+  // figure it converts to.
+  const RATE_PER_1M = '0.02';
+  const UNIT_PRICE = 0.00000002;
+  // Deliberately different, and deliberately never applied: an embedding is
+  // priced from configuration, so a price-book row naming its model is ignored.
+  const IGNORED_PRICE_BOOK_UNIT_PRICE = 0.000002;
 
   const readEmbeddingMeters = async (): Promise<MeterRow[]> => {
     // The route scopes to the caller's own projects — there is no `project_id`
@@ -87,12 +95,18 @@ describe('Usage — embedding metering', () => {
             model: EMBEDDING_MODEL,
             component: 'input_tokens',
             unit: 'token',
-            unit_price: UNIT_PRICE,
+            unit_price: IGNORED_PRICE_BOOK_UNIT_PRICE,
             effective_from: '2020-01-01T00:00:00.000Z',
           },
         ],
       });
     expect(priceRes.status).toBe(200);
+
+    process.env.EMBEDDING_INPUT_1M_TOKEN_PRICE_USD = RATE_PER_1M;
+  });
+
+  afterAll(() => {
+    delete process.env.EMBEDDING_INPUT_1M_TOKEN_PRICE_USD;
   });
 
   test('POST /embeddings meters the call against the named project', async () => {
@@ -114,7 +128,9 @@ describe('Usage — embedding metering', () => {
     expect(rows[0].generation_id).toBeNull();
     expect(rows[0].components).toHaveLength(1);
     expect(quantityOf(rows[0], 'input_tokens')).toBe(4);
-    expect(rows[0].cost_usd).toBeCloseTo(4 * UNIT_PRICE, 10);
+    // From the deployment rate, not the price-book row above — that one would
+    // make this 0.000008.
+    expect(rows[0].cost_usd).toBeCloseTo(4 * UNIT_PRICE, 12);
   });
 
   test('a call naming no project is not metered', async () => {

@@ -95,14 +95,27 @@ So a window that metered usage and priced **none** of it aggregates to `0` howev
   "error": {
     "code": "QUOTA_UNENFORCEABLE",
     "message": "Cost quota qta_... cannot be enforced: the current window metered usage but priced none of it.",
-    "meta": { "quota_id": "qta_...", "metric": "cost_usd", "limit": 25, "window": "calendar_month" }
+    "meta": {
+      "quota_id": "qta_...",
+      "metric": "cost_usd",
+      "limit": 25,
+      "window": "calendar_month",
+      "unpriced_rows": [
+        { "provider": "openai", "model": "gpt-4o", "component": "input_tokens" },
+        { "provider": "openai", "model": "gpt-4o", "component": "output_tokens" }
+      ]
+    }
   }
 }
 ```
 
 The refusal waits for a real **blackout** — at least 3 metered events in the window, none of them priced. A fresh window's first event can land on the one unpriced model of a mostly-priced project; ordering noise like that must not stop a project at every window boundary, so one or two all-unpriced events pass (the exception below still files) and three with nothing priced refuse. A **partially** priced window never refuses: the aggregate is real, if incomplete.
 
+`unpriced_rows` names what to price, so clearing the refusal does not need a trip through the [rollup](./usage.md#aggregation) to find out which model is missing. It lists the distinct `(provider, model, component)` the window metered and no price row covered, capped at 10 — a component that measured zero is left out, since pricing it would move no aggregate.
+
 The verdict reads the [`llm_tokens`](./usage.md#meter-types-and-components) meter alone, while the aggregate it guards sums **every** priced meter. A platform meter such as `compute_execution` is priced by the operator from a `soat` SKU rather than by a tenant's provider, so a deployment that prices no compute has not lost the ability to measure AI spend — and counting it would make the cap unrecoverable, because a window holding only unpriced platform events would refuse the very generation that would land the first priced AI event. Reading the AI meter alone also stops a priced platform event from masking a genuine AI blackout.
+
+[Embeddings](./embeddings.md#pricing-embeddings) are held out of the verdict for the same reason, though they are on the AI meter. Their rate is deployment configuration and no price book tier reaches them, so a project cannot make that half of its window priced — counting an embedding unpriced would refuse a cap nobody in the project can satisfy, and counting it priced (an unset rate meters at `0`, which is a priced event) would report the window as measurable and wave through every unpriced generation beside it. Embedding spend still counts towards the aggregate the cap guards, and never appears in `unpriced_rows`.
 
 Worth knowing about the refusal:
 

@@ -12,6 +12,11 @@ import {
 import { startApprovalScheduler } from './lib/approvalScheduler';
 import { startAuditRetentionScheduler } from './lib/auditScheduler';
 import { startContentRetentionScheduler } from './lib/contentRetentionScheduler';
+import {
+  EMBEDDING_INPUT_1M_TOKEN_PRICE_ENV,
+  embeddingPriceWarning,
+  readEmbeddingInputTokenPriceUsd,
+} from './lib/embeddingPrice';
 import { startEvalWorker } from './lib/evaluationWorker';
 import { initFormationResourceTypes } from './lib/formationsRegistry';
 import { backfillKnowledgeConfigCasing } from './lib/knowledgeConfigBackfill';
@@ -37,12 +42,27 @@ const startServer = async () => {
   // problem is fatal — see `formationResourceTypeConfig.ts` for why.
   try {
     initFormationResourceTypes();
+    // Same reason and the same place: a rate that cannot be parsed must not
+    // reach the meter, where it would be swallowed and every embedding frozen
+    // at an unintended cost.
+    readEmbeddingInputTokenPriceUsd();
   } catch (error) {
     // Fatal and process-terminating, so it goes to stderr unconditionally
     // rather than through the opt-in `debug` logger.
     // eslint-disable-next-line no-console
     console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);
+  }
+
+  const priceWarning = embeddingPriceWarning({
+    provider: process.env.EMBEDDING_PROVIDER,
+    value: process.env[EMBEDDING_INPUT_1M_TOKEN_PRICE_ENV],
+  });
+  if (priceWarning) {
+    // Unconditional rather than through the opt-in `debug` logger: the one boot
+    // where an unintended zero is still cheap to fix is this one.
+    // eslint-disable-next-line no-console
+    console.warn(priceWarning);
   }
 
   try {

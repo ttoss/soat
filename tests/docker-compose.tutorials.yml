@@ -142,6 +142,7 @@ services:
       FILES_STORAGE_DIR: /data/files
       EMBEDDING_PROVIDER: ollama
       EMBEDDING_MODEL: qwen3-embedding:0.6b
+      EMBEDDING_INPUT_1M_TOKEN_PRICE_USD: '0.02'
       EMBEDDING_DIMENSIONS: '1024'
       OLLAMA_BASE_URL: http://ollama-tool-choice:11434
       NODE_OPTIONS: '--max-old-space-size=768'

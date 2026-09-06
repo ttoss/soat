@@ -244,6 +244,9 @@ SOAT uses [Ollama](https://ollama.com) by default for generating vector embeddin
 | `EMBEDDING_API_KEY`    | —                        | OpenAI API key, or a Bedrock `ABSK…` bearer token. `openai` falls back to `OPENAI_API_KEY` |
 | `EMBEDDING_BASE_URL`   | —                        | Override base URL for an OpenAI-compatible endpoint (`openai` only)                        |
 | `EMBEDDING_REGION`     | `us-east-1`              | AWS region for Bedrock (`bedrock` only); falls back to `AWS_REGION`                        |
+| `EMBEDDING_INPUT_1M_TOKEN_PRICE_USD` | _(unset)_ | USD per **million** input tokens. Unset meters embeddings at `0`; the price book does not price them |
+
+Embedding spend is priced from `EMBEDDING_INPUT_1M_TOKEN_PRICE_USD`, not from the price book — the embedding stack is configured here rather than by an AI provider record, so no price-book tier can reach it. Leaving it unset meters every embedding at `0`, which is correct for a local model and silently free on a vendor-billed one; the server logs a warning at startup in that case. See [Pricing embeddings](/docs/modules/embeddings#pricing-embeddings).
 
 To use a different embedding model, update `EMBEDDING_MODEL` and `EMBEDDING_DIMENSIONS` together — the model name and dimension count must be consistent. For `openai` and `bedrock`, set the provider's credentials as well; Bedrock without `EMBEDDING_API_KEY` uses the standard AWS credential chain (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`).
 

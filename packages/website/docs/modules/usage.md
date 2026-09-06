@@ -164,6 +164,8 @@ An event carries the [actor](./actors.md) and [session](./sessions.md) it was pr
 
 Each component's cost is computed at write time from the effective price row for its `(provider, model, component)`, resolved most-specific first: AI provider instance → project + provider-slug → global default. Costs are frozen onto the components; later price changes never alter them. `cached_tokens` falls back to the `input_tokens` rate when no cached price is set. A `null` `cost_usd` means no price row covered the component — the quantity is still captured. Each component records `price_id`, so a receipt is auditable to the precise price applied.
 
+**Embeddings are the one exception.** No tier prices an embedding call — it carries no provider record, and its rate is deployment configuration (`EMBEDDING_INPUT_1M_TOKEN_PRICE_USD`), so a price book row naming the embedding model is ignored. See [Pricing embeddings](./embeddings.md#pricing-embeddings).
+
 SOAT ships **no default prices**. Prices are managed where their scope lives:
 
 - **Global defaults** — admins via [`PUT /api/v1/usage/prices`](/docs/api/usage/upsert-price-book). [`GET /api/v1/usage/prices`](/docs/api/usage/get-price-book) lists only these.

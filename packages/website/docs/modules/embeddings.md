@@ -28,6 +28,7 @@ The embedding model is configured server-side via environment variables (`EMBEDD
 | `EMBEDDING_API_KEY`   | No       | API key for the backend: the OpenAI key (`openai`), or a Bedrock `ABSK…` bearer token (`bedrock`). For `openai`, falls back to `OPENAI_API_KEY`. |
 | `EMBEDDING_BASE_URL`  | No       | Override the base URL for any OpenAI-compatible endpoint (`openai` only).                                 |
 | `EMBEDDING_REGION`    | No       | AWS region for Bedrock (`bedrock` only). Falls back to `AWS_REGION`, then `us-east-1`.                    |
+| `EMBEDDING_INPUT_1M_TOKEN_PRICE_USD` | No | USD per **million** input tokens, the unit vendors publish (`$0.02 / 1M` → `0.02`). Unset meters embeddings at `0`. See [Pricing embeddings](#pricing-embeddings). |
 
 ### Provider selection
 
@@ -81,98 +82,50 @@ A usage event belongs to a project, so an embedding call needs one:
 
 ### Pricing embeddings
 
-**The provider reports tokens, never money.** `cost_usd` is computed at write
-time as `tokens × unit_price`, read from the effective
-[price book](./usage.md#pricing) row for
-`(provider, model, input_tokens)` — where `provider` is the `EMBEDDING_PROVIDER`
-slug, `model` is `EMBEDDING_MODEL` verbatim, and `input_tokens` is the only
-dimension an embedding has (the model emits no completion, so there is no output
-rate to price against).
+**The rate is deployment configuration, not a price book row.**
+`EMBEDDING_INPUT_1M_TOKEN_PRICE_USD` prices every embedding this deployment
+makes, and `cost_usd` is computed at write time as
+`tokens × rate / 1,000,000`. `input_tokens` is the only dimension an embedding
+has — the model emits no completion, so there is no output rate to price
+against.
 
-**No price rows ship by default.** Until an operator seeds one, an embedding
-records its token quantity with `cost_usd` of `null` — a `tokens` quota enforces
-immediately, a `cost_usd` quota still sees nothing. This is the same "captured
-but not priced" semantics every other meter has: an absent price is reported as
-`null` rather than a misleading `0`.
+The variable is denominated per **million** tokens because that is how vendors
+publish embedding rates, so the figure is copied across as written:
 
-Two of the three price tiers can cover embeddings:
+```bash
+EMBEDDING_PROVIDER=openai
+EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_INPUT_1M_TOKEN_PRICE_USD=0.02
+```
+
+**Unset means zero.** A deployment that states no rate meters every embedding at
+`cost_usd` of `0` rather than `null`, so an embedding never leaves a `cost_usd`
+[quota](./quotas.md) unable to evaluate its window. That is the right answer for
+a local model, which bills nothing per token; on a vendor-billed provider it
+reports real spend as free, so the server logs a warning at startup naming the
+variable. The recorded cost is frozen per event, so a rate set later prices the
+*next* embedding, never an earlier one.
+
+**The [price book](./usage.md#pricing) does not reach embeddings.** None of its
+three tiers can price one, and a row naming the embedding model is ignored:
 
 | Tier | Scope | Applies to embeddings? |
 | --- | --- | --- |
-| Provider instance | One `ai_provider_id` | **No** — the event carries no provider record, so nothing matches |
-| Project + slug | One project's rate for a provider slug | Yes — [`PUT /api/v1/projects/{project_id}/prices`](/docs/api/projects/update-project-prices) |
-| Global default | Every project | Yes — [`PUT /api/v1/usage/prices`](/docs/api/usage/upsert-price-book) |
+| Provider instance | One `ai_provider_id` | No — an embedding event carries no provider record |
+| Project + slug | One project's rate for a provider slug | No |
+| Global default | Every project | No |
 
-The provider-instance tier is unreachable because the embedding stack is
-configured per deployment rather than by an AI provider record. That is also why
-one global row prices embeddings for every project at once:
+The embedding stack is configured per deployment rather than by an AI provider
+record, so there is no provider instance to price and no per-project rate to
+vary. Keeping the rate beside `EMBEDDING_MODEL` means the operator who chooses
+the model sets its price in the same place.
 
-<Tabs groupId="client">
-<TabItem value="cli" label="CLI" default>
+An embedding is also never named in a `QUOTA_UNENFORCEABLE` refusal's
+`unpriced_rows`, and never counts towards one: with no price book row to create,
+naming it would point at a fix that does not exist.
 
-```bash
-soat upsert-price-book --prices '[{
-  "provider": "openai",
-  "model": "text-embedding-3-small",
-  "component": "input_tokens",
-  "unit": "token",
-  "unit_price": 0.00000002,
-  "effective_from": "2020-01-01T00:00:00.000Z"
-}]'
-```
-
-</TabItem>
-<TabItem value="sdk" label="SDK">
-
-```ts
-import { Usage } from '@soat/sdk';
-
-await Usage.upsertPriceBook({
-  client,
-  body: {
-    prices: [
-      {
-        provider: 'openai',
-        model: 'text-embedding-3-small',
-        component: 'input_tokens',
-        unit: 'token',
-        unit_price: 0.00000002,
-        effective_from: '2020-01-01T00:00:00.000Z',
-      },
-    ],
-  },
-});
-```
-
-</TabItem>
-<TabItem value="curl" label="curl">
-
-```bash
-curl -s -X PUT "$SOAT_BASE_URL/api/v1/usage/prices" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"prices":[{"provider":"openai","model":"text-embedding-3-small","component":"input_tokens","unit":"token","unit_price":0.00000002,"effective_from":"2020-01-01T00:00:00.000Z"}]}'
-```
-
-</TabItem>
-</Tabs>
-
-`unit_price` is per token, so a vendor rate quoted per million tokens is that
-figure divided by 1,000,000 (`$0.02 / 1M` → `0.00000002`). Seeding the price
-book is an admin operation.
-
-**The back-dated `effective_from` above is deliberate, and only a first price may
-use one.** A cost is frozen when the usage event is written, so a row that
-arrives afterwards cannot reach back: requiring a future timestamp for the very
-first price would leave a window in which the model is live and unpriced, and
-every embedding landing inside it metered at `null` permanently. Once that
-`(provider, model, component)` is priced in this scope or a broader one, the
-timestamp must be in the future — a correction is a new row, never an edit, so
-recorded spend stays explainable by the rows that produced it.
-
-For the same reason the resolved `unit_price`, `cost_usd` and `price_id` are
-frozen onto the usage event at write time: repricing changes what the *next*
-embedding costs, never what an earlier one already cost.
+Rows already in the price book for an embedding model keep explaining costs
+frozen before this behaviour changed; they price nothing new.
 
 ### 503 when unconfigured
 
