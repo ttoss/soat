@@ -19,6 +19,16 @@ import {
   type S3ClientLike,
   streamToBuffer,
 } from 'src/lib/fileStorage';
+import type { StorageObjectPath } from 'src/lib/fileStorageLayout';
+
+/**
+ * The branded object path exists to stop production code inventing its own
+ * layout; these cases exercise the provider's own key mechanics, so they mint
+ * one directly rather than going through `buildObjectPath`.
+ */
+const objectPath = (value: string) => {
+  return value as StorageObjectPath;
+};
 
 const drain = async (stream: Readable): Promise<Buffer> => {
   const chunks: Buffer[] = [];
@@ -93,7 +103,7 @@ describe('fileStorage', () => {
     test('write persists bytes under storageDir + objectPath and returns absolute path', async () => {
       const provider = createLocalStorageProvider({ storageDir: dir });
       const { storagePath } = await provider.write({
-        objectPath: 'proj_1/files/file_abc.txt',
+        objectPath: objectPath('proj_1/files/file_abc.txt'),
         buffer: Buffer.from('hello'),
       });
 
@@ -104,7 +114,7 @@ describe('fileStorage', () => {
     test('read streams stored bytes with size', async () => {
       const provider = createLocalStorageProvider({ storageDir: dir });
       const { storagePath } = await provider.write({
-        objectPath: 'a/b.txt',
+        objectPath: objectPath('a/b.txt'),
         buffer: Buffer.from('content'),
       });
 
@@ -125,7 +135,7 @@ describe('fileStorage', () => {
     test('delete removes the file and is a no-op when already gone', async () => {
       const provider = createLocalStorageProvider({ storageDir: dir });
       const { storagePath } = await provider.write({
-        objectPath: 'x.txt',
+        objectPath: objectPath('x.txt'),
         buffer: Buffer.from('bye'),
       });
 
@@ -145,7 +155,7 @@ describe('fileStorage', () => {
       });
 
       const { storagePath } = await provider.write({
-        objectPath: 'proj_1/files/file_abc.txt',
+        objectPath: objectPath('proj_1/files/file_abc.txt'),
         buffer: Buffer.from('hello'),
         contentType: 'text/plain',
       });
@@ -168,7 +178,7 @@ describe('fileStorage', () => {
       });
 
       const { storagePath } = await provider.write({
-        objectPath: '/proj_1/files/f.txt',
+        objectPath: objectPath('/proj_1/files/f.txt'),
         buffer: Buffer.from('x'),
       });
 
@@ -182,7 +192,7 @@ describe('fileStorage', () => {
         bucket: 'b',
       });
       const { storagePath } = await provider.write({
-        objectPath: 'k.txt',
+        objectPath: objectPath('k.txt'),
         buffer: Buffer.from('payload'),
       });
 
@@ -211,7 +221,7 @@ describe('fileStorage', () => {
         bucket: 'b',
       });
       const { storagePath } = await provider.write({
-        objectPath: 'k.txt',
+        objectPath: objectPath('k.txt'),
         buffer: Buffer.from('x'),
       });
 
@@ -285,7 +295,10 @@ describe('fileStorage', () => {
       process.env.FILES_STORAGE_DIR = storageDir;
       const { storagePath } = await createLocalStorageProvider({
         storageDir,
-      }).write({ objectPath: 'a/b.txt', buffer: Buffer.from('hi there') });
+      }).write({
+        objectPath: objectPath('a/b.txt'),
+        buffer: Buffer.from('hi there'),
+      });
 
       const buffer = await readFileBuffer({
         storageType: 'local',
@@ -322,11 +335,11 @@ describe('fileStorage', () => {
       process.env.FILES_STORAGE_DIR = dir;
       const provider = createLocalStorageProvider({ storageDir: dir });
       const a = await provider.write({
-        objectPath: 'a.txt',
+        objectPath: objectPath('a.txt'),
         buffer: Buffer.from('a'),
       });
       const b = await provider.write({
-        objectPath: 'b.txt',
+        objectPath: objectPath('b.txt'),
         buffer: Buffer.from('b'),
       });
 

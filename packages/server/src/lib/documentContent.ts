@@ -2,12 +2,65 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { chunkPages, type ChunkStrategy, persistChunks } from './chunking';
-import { getStorageProvider, streamToBuffer } from './fileStorage';
+import { resolveProjectPublicId } from './eventBus';
+import {
+  getActiveStorageProvider,
+  getStorageProvider,
+  streamToBuffer,
+} from './fileStorage';
+import { categoryFromPath, persistFileBytes } from './fileStorageLayout';
 
 const log = createDebug('soat:documents');
 
+/** A document's stored object always holds UTF-8 text, whatever it is named. */
+export const DOCUMENT_TEXT_EXTENSION = '.txt';
+
+/**
+ * Whether a file's stored bytes are the document's own text, rather than a
+ * source binary it was ingested from. Only the former is ours to overwrite: an
+ * ingested PDF is the caller's upload, still served by the files API.
+ */
+const holdsDocumentText = (file: NonNullable<DocWithFile['file']>): boolean => {
+  return file.contentType === 'text/plain';
+};
+
 export type DocWithFile = InstanceType<(typeof db)['Document']> & {
   file?: InstanceType<(typeof db)['File']>;
+};
+
+/**
+ * Create the backing File row for a document and write its text. Lives beside
+ * the rewrite below so both writers of a document's object agree on where it is.
+ */
+export const createDocumentTextFile = async (args: {
+  projectId: number;
+  content: string;
+  normalizedPath: string | null;
+  filename?: string;
+}): Promise<InstanceType<(typeof db)['File']>> => {
+  const provider = getActiveStorageProvider();
+  const file = await db.File.create({
+    projectId: args.projectId,
+    path: args.normalizedPath,
+    filename: args.filename ?? 'document.txt',
+    contentType: 'text/plain',
+    size: Buffer.byteLength(args.content, 'utf-8'),
+    storageType: provider.storageType,
+    storagePath: '',
+  });
+
+  await persistFileBytes({
+    provider,
+    file,
+    projectPublicId: await resolveProjectPublicId({
+      projectId: args.projectId,
+    }),
+    category: categoryFromPath(args.normalizedPath),
+    buffer: Buffer.from(args.content, 'utf-8'),
+    contentType: 'text/plain',
+    extension: DOCUMENT_TEXT_EXTENSION,
+  });
+  return file;
 };
 
 /**
@@ -72,15 +125,18 @@ const rechunkDocument = async (args: {
   // nothing to rewrite. Returning before the destroy keeps the existing chunks.
   if (!file) return;
 
-  if (args.rewriteStorage && file.storagePath) {
-    const provider = getStorageProvider({ storageType: file.storageType });
-    // Overwrite in place — reuse the existing publicId-based object location.
-    await provider.write({
-      objectPath: `${file.publicId}.txt`,
+  if (args.rewriteStorage && file.storagePath && holdsDocumentText(file)) {
+    await persistFileBytes({
+      provider: getStorageProvider({ storageType: file.storageType }),
+      file,
+      projectPublicId: await resolveProjectPublicId({
+        projectId: file.projectId,
+      }),
+      category: categoryFromPath(file.path),
       buffer: Buffer.from(args.content, 'utf-8'),
       contentType: 'text/plain',
+      extension: DOCUMENT_TEXT_EXTENSION,
     });
-    await file.update({ size: Buffer.byteLength(args.content, 'utf-8') });
   }
 
   await db.DocumentChunk.destroy({ where: { documentId: args.doc.id } });

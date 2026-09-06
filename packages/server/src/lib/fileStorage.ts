@@ -11,8 +11,21 @@ import {
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
+import type { StorageObjectPath } from './fileStorageLayout';
 
 const log = createDebug('soat:file-storage');
+
+/**
+ * Joins a backend's configured key prefix onto logical object paths. Any
+ * prefixed backend (s3 today, gcs or azure later) shares this so the leading-
+ * and trailing-slash handling cannot drift between them.
+ */
+export const createKeyPrefixer = (args: { prefix?: string }) => {
+  const prefix = args.prefix ? args.prefix.replace(/^\/+|\/+$/g, '') + '/' : '';
+  return (objectPath: string) => {
+    return prefix + objectPath.replace(/^\/+/, '');
+  };
+};
 
 /**
  * Physical storage backends a file can live on. `local` is the on-disk
@@ -28,15 +41,16 @@ export type StorageType = 'local' | 's3';
  * directly.
  *
  * - `objectPath` is the backend-agnostic logical location, e.g.
- *   `proj_ABC/traces/file_abc123.json`. The provider turns it into a concrete
- *   `storagePath` (an absolute filesystem path for local, an object key for s3)
- *   and returns it to be recorded on the file row.
+ *   `proj_ABC/traces/file_abc123.json`. Only `buildObjectPath` can produce one,
+ *   so every backend is handed the same layout. The provider turns it into a
+ *   concrete `storagePath` (an absolute filesystem path for local, an object key
+ *   for s3) and returns it to be recorded on the file row.
  * - `read` / `delete` take that stored `storagePath` back and interpret it.
  */
 export interface FileStorageProvider {
   readonly storageType: StorageType;
   write(args: {
-    objectPath: string;
+    objectPath: StorageObjectPath;
     buffer: Buffer;
     contentType?: string;
   }): Promise<{ storagePath: string }>;
@@ -123,12 +137,7 @@ export const createS3StorageProvider = (args: {
   bucket: string;
   keyPrefix?: string;
 }): FileStorageProvider => {
-  const prefix = args.keyPrefix
-    ? args.keyPrefix.replace(/^\/+|\/+$/g, '') + '/'
-    : '';
-  const toKey = (objectPath: string) => {
-    return prefix + objectPath.replace(/^\/+/, '');
-  };
+  const toKey = createKeyPrefixer({ prefix: args.keyPrefix });
 
   return {
     storageType: 's3',
