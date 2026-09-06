@@ -14,7 +14,7 @@ export const USAGE_GROUP_BY = [
   'model',
   'ai_provider',
   'agent',
-  'run',
+  'orchestration_run',
   'day',
   'meter_type',
   'actor',
@@ -83,7 +83,12 @@ const GROUP_DIMENSIONS: { [K in UsageGroupBy]: GroupDimension } = {
     keyExpr: 'agt."public_id"',
     join: { table: 'agents', alias: 'agt', foreignKey: 'agent_id' },
   },
-  run: {
+  // Buckets on the orchestration run the event belongs to. Traffic that runs
+  // no orchestration — a direct agent generation, an eval item, a trigger
+  // firing — carries no run and collapses into the single null bucket, so the
+  // bucket count is not a count of anything. `totals.distinct` is what answers
+  // "how many" (#1216).
+  orchestration_run: {
     keyExpr: 'run."public_id"',
     join: {
       table: 'orchestration_runs',
@@ -204,22 +209,104 @@ const runQuery = async (args: {
   return rows.map(asSqlRow);
 };
 
-/** The window's event count and summed event cost — no dimension, no joins. */
+/**
+ * The distinct-entity counters, keyed by the column each counts over.
+ *
+ * The set is the event model's foreign keys minus `project_id` (the filter
+ * fixes it), mechanically rather than by judgment — `trigger_id` and
+ * `action_id` are denormalized strings, not FKs, so they are out, and
+ * `trace_id` is in even though it tracks `generations` closely on today's
+ * traffic. A list chosen by hand is one a test cannot pin against the model,
+ * and a new attribution column later is one key here rather than a new named
+ * field. Every column is indexed (`UsageEvent`).
+ */
+export const DISTINCT_COUNT_COLUMNS = {
+  generations: 'generation_id',
+  traces: 'trace_id',
+  orchestration_runs: 'orchestration_run_id',
+  agents: 'agent_id',
+  actors: 'actor_id',
+  sessions: 'session_id',
+  ai_providers: 'ai_provider_id',
+} as const;
+
+/**
+ * How many distinct entities of each kind the window touched.
+ *
+ * `COUNT(DISTINCT …)` ignores nulls throughout, which is the wanted semantics:
+ * a generation-less completion contributes to `event_count` and to nothing
+ * here, a standalone generation contributes to `generations` and not to
+ * `orchestration_runs`, and a retried orchestration node — a second event and
+ * a second generation — counts once as a run.
+ */
+export type UsageDistinctCounts = {
+  [K in keyof typeof DISTINCT_COUNT_COLUMNS]: number;
+};
+
+const DISTINCT_SELECT = Object.entries(DISTINCT_COUNT_COLUMNS)
+  .map(([key, column]) => {
+    return `, COUNT(DISTINCT e."${column}") AS ${key}`;
+  })
+  .join('');
+
+/**
+ * The totals query's SELECT list. Exported so a test can pin the cost rule the
+ * opt-in exists for: with `distinct` false the statement contains no
+ * `DISTINCT` aggregate at all, so the default path stays the single pass it
+ * was however many attribution columns the event grows.
+ */
+export const windowTotalsSelect = (args: { distinct: boolean }): string => {
+  return `COUNT(*) AS event_count, SUM(e."cost_usd") AS cost_usd${
+    args.distinct ? DISTINCT_SELECT : ''
+  }`;
+};
+
+const readDistinctCounts = (
+  row: Record<string, unknown>
+): UsageDistinctCounts => {
+  const counts = {} as Record<keyof typeof DISTINCT_COUNT_COLUMNS, number>;
+  for (const key of Object.keys(DISTINCT_COUNT_COLUMNS) as Array<
+    keyof typeof DISTINCT_COUNT_COLUMNS
+  >) {
+    counts[key] = readSqlCount(row, key);
+  }
+  return counts;
+};
+
+/**
+ * The window's event count and summed event cost — no dimension, no joins —
+ * plus, when `distinct` is asked for, one `COUNT(DISTINCT …)` per attribution
+ * column.
+ *
+ * The counters are opt-in because Postgres sorts the window's rows once per
+ * `DISTINCT` aggregate: they turn this single pass into eight, and every FK a
+ * later module adds is one more sort. `aggregateUsage` recomputes the window
+ * totals on every page, and the heaviest consumer walks every page of every
+ * project's cycle window, so the default path must keep today's cost whatever
+ * the event table grows to carry.
+ */
 export const loadWindowTotals = async (
-  filter: EventFilter
-): Promise<{ costUsd: string | null; eventCount: number }> => {
+  filter: EventFilter,
+  options?: { distinct?: boolean }
+): Promise<{
+  costUsd: string | null;
+  eventCount: number;
+  distinct: UsageDistinctCounts | null;
+}> => {
   const where = eventFilter(filter);
+  const distinct = options?.distinct === true;
   const rows = await runQuery({
-    sql: `SELECT COUNT(*) AS event_count, SUM(e."cost_usd") AS cost_usd
+    sql: `SELECT ${windowTotalsSelect({ distinct })}
             FROM "${EVENT_TABLE}" e
            WHERE ${where.sql}`,
     replacements: where.replacements,
   });
   const row = rows[0];
-  if (!row) return { costUsd: null, eventCount: 0 };
+  if (!row) return { costUsd: null, eventCount: 0, distinct: null };
   return {
     costUsd: readSqlDecimal(row, 'cost_usd'),
     eventCount: readSqlCount(row, 'event_count'),
+    distinct: distinct ? readDistinctCounts(row) : null,
   };
 };
 
@@ -250,8 +337,11 @@ export const loadWindowComponents = async (
 };
 
 /**
- * The number of distinct buckets in the window — `groups.total`, and the figure
- * a "how many runs this cycle" question reads without walking a single page.
+ * The number of distinct buckets in the window — `groups.total`.
+ *
+ * Bucket cardinality, not an entity count: every dimension that admits nulls
+ * has a null bucket of its own, and it is a real bucket. "How many" is
+ * `totals.distinct` (#1216).
  */
 export const countGroups = async (args: {
   filter: EventFilter;

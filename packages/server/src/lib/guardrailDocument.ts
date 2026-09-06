@@ -46,8 +46,8 @@ export const RUNTIME_CONTEXT_CATALOG: ReadonlySet<string> = new Set([
   'runtime.tool.name',
   'runtime.agent.id',
   'runtime.project.id',
-  'runtime.run.node_attempt',
-  'runtime.run.tool_calls',
+  'runtime.orchestration_run.node_attempt',
+  'runtime.orchestration_run.tool_calls',
   'runtime.activity.actions_1h',
   'runtime.activity.actions_24h',
   'runtime.usage.cost_usd_1h',
@@ -59,8 +59,8 @@ export const RUNTIME_CONTEXT_CATALOG: ReadonlySet<string> = new Set([
   // Run-scoped cumulative spend — the current orchestration run's totals so
   // far, not a project window. Unresolvable (→ null → fail-closed) outside a
   // run, where there is no run to accumulate against.
-  'runtime.usage.run_tokens',
-  'runtime.usage.run_cost_usd',
+  'runtime.usage.orchestration_run_tokens',
+  'runtime.usage.orchestration_run_cost_usd',
 ]);
 
 export const isActionClass = (value: unknown): value is ActionClass => {

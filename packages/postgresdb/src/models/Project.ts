@@ -54,7 +54,7 @@ export class Project extends Model {
   // make the bound smaller, so this is the operator's bound on a self-
   // referencing graph that a graph author cannot opt out of (#1185).
   @Column({ type: DataType.INTEGER, allowNull: true })
-  declare maxRunDepth: number | null;
+  declare maxOrchestrationRunDepth: number | null;
 
   // Inherited by consumers naming neither a route nor a provider; `null` forces
   // every consumer to bind explicitly. A public id rather than an

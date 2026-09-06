@@ -118,8 +118,8 @@ describe('MCP tools - happy path', () => {
 
   // ── Usage ────────────────────────────────────────────────────────────────
 
-  test('get-usage returns an aggregate rollup for a project', async () => {
-    const res = await mcpCall('get-usage', {
+  test('get-usage-aggregate returns an aggregate rollup for a project', async () => {
+    const res = await mcpCall('get-usage-aggregate', {
       project_id: projectId,
       group_by: 'meter_type',
     });
@@ -139,8 +139,8 @@ describe('MCP tools - happy path', () => {
     expect(result.meter_type).toBeNull();
   });
 
-  test('get-usage narrows the rollup to one meter type', async () => {
-    const res = await mcpCall('get-usage', {
+  test('get-usage-aggregate narrows the rollup to one meter type', async () => {
+    const res = await mcpCall('get-usage-aggregate', {
       project_id: projectId,
       group_by: 'model',
       meter_type: 'storage',

@@ -517,8 +517,8 @@ terminal run.
 Every item is a real generation, and `llm_judge` doubles the calls. Eval spend is labelled
 in [usage](./usage.md) metering: item generations carry `source: "eval"` and judge
 completions `source: "eval_judge"` (ordinary agent traffic carries no `source`). Filter
-with [`GET /api/v1/usage/meters?source=eval`](/docs/api/usage/list-usage-meters) or roll up with
-[`GET /api/v1/usage?group_by=source`](/docs/api/usage/get-usage). [Quotas](./quotas.md) and usage thresholds still
+with [`GET /api/v1/usage/events?source=eval`](/docs/api/usage/list-usage-events) or roll up with
+[`GET /api/v1/usage/aggregate?group_by=source`](/docs/api/usage/get-usage-aggregate). [Quotas](./quotas.md) and usage thresholds still
 apply to eval runs.
 
 An `embedding_similarity` scorer's own embeddings are metered too, under

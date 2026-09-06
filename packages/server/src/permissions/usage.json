@@ -2,9 +2,9 @@
   "module": "usage",
   "operations": [
     {
-      "operationId": "listUsageMeters",
-      "action": "usage:ListUsageMeters",
-      "description": "List raw usage-meter rows, optionally filtered by agent or generation"
+      "operationId": "listUsageEvents",
+      "action": "usage:ListEvents",
+      "description": "List raw usage events, optionally filtered by agent or generation"
     },
     {
       "operationId": "getUsageReceipt",
@@ -12,8 +12,8 @@
       "description": "Get a billing receipt for a generation"
     },
     {
-      "operationId": "getUsage",
-      "action": "usage:GetUsage",
+      "operationId": "getUsageAggregate",
+      "action": "usage:GetAggregate",
       "description": "Read a project's aggregated usage rollup"
     },
     {

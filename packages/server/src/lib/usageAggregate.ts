@@ -7,6 +7,7 @@ import { sumComponentCostUsd, sumQuantities } from './priceCompute';
 import type {
   ComponentSum,
   EventFilter,
+  UsageDistinctCounts,
   UsageGroupBy,
 } from './usageAggregateSql';
 import {
@@ -21,7 +22,7 @@ import {
 
 const log = createDebug('soat:usage');
 
-export type { UsageGroupBy } from './usageAggregateSql';
+export type { UsageDistinctCounts, UsageGroupBy } from './usageAggregateSql';
 export { USAGE_GROUP_BY } from './usageAggregateSql';
 
 const isGroupBy = (value: string): value is UsageGroupBy => {
@@ -38,10 +39,10 @@ export type UsageAggregateComponent = {
   cost_usd: number | null;
 };
 
-export type UsageAggregateTotals = {
+/** The figures every bucket carries — one group, or the whole window. */
+export type UsageAggregateBucket = {
   cost_usd: number | null;
-  // Events measured in the bucket. The one figure a "how many" question can
-  // read without walking the groups; on `totals` it counts the whole window.
+  // Events measured in the bucket. On `totals` it counts the whole window.
   event_count: number;
   input_tokens: number;
   output_tokens: number;
@@ -52,10 +53,23 @@ export type UsageAggregateTotals = {
   components: UsageAggregateComponent[];
 };
 
-export type UsageAggregateGroup = UsageAggregateTotals & {
+/**
+ * The window's bucket, plus the distinct-entity counters when the caller asked
+ * for them.
+ *
+ * `distinct` is on `totals` only: filling it per group would mean a
+ * `COUNT(DISTINCT)` per bucket on the page query, and leaving it declared on
+ * the shared shape would have groups carrying a field they cannot fill.
+ */
+export type UsageAggregateTotals = UsageAggregateBucket & {
+  distinct?: UsageDistinctCounts;
+};
+
+export type UsageAggregateGroup = UsageAggregateBucket & {
   // The group's value in the chosen dimension: a model id, meter type, agent /
-  // run public id, or a `YYYY-MM-DD` UTC day. Null when the dimension does not
-  // apply to an event (e.g. a standalone generation grouped by `run`).
+  // orchestration run public id, or a `YYYY-MM-DD` UTC day. Null when the
+  // dimension does not apply to an event (e.g. a standalone generation
+  // grouped by `orchestration_run`).
   key: string | null;
   // The provider that served the bucket's model, under `group_by=model` only;
   // null on every other dimension. See `GROUP_DIMENSIONS`.
@@ -70,9 +84,10 @@ export type UsageAggregate = {
   group_by: UsageGroupBy;
   // The meter-type filter applied, echoed back; null when unfiltered.
   meter_type: string | null;
-  // Paginated: a dimension like `run` has one entry per run in the window, so
-  // the collection is walked rather than returned whole. `total` is the number
-  // of distinct buckets, which answers "how many" without reading a page.
+  // Paginated: a dimension like `orchestration_run` has one entry per run in
+  // the window, so the collection is walked rather than returned whole.
+  // `total` is the number of distinct buckets — bucket cardinality, never an
+  // entity count (#1216): read `totals.distinct` for that.
   groups: PaginatedResult<UsageAggregateGroup>;
   // Always the whole `[from, to]` window, never the page above it. A
   // page-scoped total read against an allowance would understate spend by
@@ -116,7 +131,7 @@ const totalsFrom = (args: {
   costUsd: string | null;
   eventCount: number;
   components: ComponentSum[];
-}): UsageAggregateTotals => {
+}): UsageAggregateBucket => {
   const cached = quantityOf(args.components, 'cached_tokens');
   return {
     cost_usd: decimalToCost(args.costUsd),
@@ -159,13 +174,37 @@ const parseGroupBy = (value: string | undefined): UsageGroupBy => {
   return value;
 };
 
+// The only `include` value: opt-in for the distinct-entity counters, which
+// cost one sort of the window per key. Rejected rather than ignored, so a typo
+// is a bad request instead of a silently missing field the caller then reads
+// as zero.
+const USAGE_INCLUDE_DISTINCT = 'distinct';
+
+const parseInclude = (value: string | undefined): boolean => {
+  if (value === undefined || value === '') return false;
+  const requested = value.split(',').map((part) => {
+    return part.trim();
+  });
+  for (const part of requested) {
+    if (part !== USAGE_INCLUDE_DISTINCT) {
+      throw new DomainError(
+        'VALIDATION_FAILED',
+        `include must be '${USAGE_INCLUDE_DISTINCT}' (got '${part}').`
+      );
+    }
+  }
+  return true;
+};
+
 /**
  * Rolls a project's usage up over an optional `[from, to]` window, bucketed by
- * one dimension (`model` | `ai_provider` | `agent` | `run` | `day` |
- * `meter_type` | `actor` | `session` | `source`), optionally narrowed to a
- * single `meterType`. Each group and the grand total carry an event count,
- * summed token counts, a measured `quantity` per component, and `cost_usd`
- * (null when no event in the bucket was priced).
+ * one dimension (`model` | `ai_provider` | `agent` | `orchestration_run` |
+ * `day` | `meter_type` | `actor` | `session` | `source`), optionally narrowed
+ * to a single `meterType`. Each group and the grand total carry an event
+ * count, summed token counts, a measured `quantity` per component, and
+ * `cost_usd` (null when no event in the bucket was priced). `include=distinct`
+ * adds `totals.distinct`, the distinct-entity counters a "how many" question
+ * reads.
  *
  * Aggregated by Postgres, not in memory: the window is grouped and summed in
  * SQL with one join for the chosen dimension, and only the requested page of
@@ -180,10 +219,12 @@ export const aggregateUsage = async (args: {
   to?: string;
   groupBy?: string;
   meterType?: string;
+  include?: string;
   limit?: number;
   offset?: number;
 }): Promise<UsageAggregate> => {
   const groupBy = parseGroupBy(args.groupBy);
+  const includeDistinct = parseInclude(args.include);
   const from = parseBound(args.from, 'from');
   const to = parseBound(args.to, 'to');
   const { limit, offset } = resolvePagination({
@@ -218,7 +259,7 @@ export const aggregateUsage = async (args: {
     groupRows,
     pageComponents,
   ] = await Promise.all([
-    loadWindowTotals(filter),
+    loadWindowTotals(filter, { distinct: includeDistinct }),
     loadWindowComponents(filter),
     countGroups({ filter, groupBy }),
     loadGroupPage({ filter, groupBy, limit, offset }),
@@ -244,10 +285,15 @@ export const aggregateUsage = async (args: {
     group_by: groupBy,
     meter_type: args.meterType ?? null,
     groups: { data: groups, total: groupCount, limit, offset },
-    totals: totalsFrom({
-      costUsd: windowTotals.costUsd,
-      eventCount: windowTotals.eventCount,
-      components: windowComponents,
-    }),
+    totals: {
+      ...totalsFrom({
+        costUsd: windowTotals.costUsd,
+        eventCount: windowTotals.eventCount,
+        components: windowComponents,
+      }),
+      ...(windowTotals.distinct === null
+        ? {}
+        : { distinct: windowTotals.distinct }),
+    },
   };
 };

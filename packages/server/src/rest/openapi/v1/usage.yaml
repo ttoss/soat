@@ -3,11 +3,11 @@ info:
   title: Usage API
   version: 1.0.0
   description: >
-    Billing-grade usage metering. One append-only usage-meter row is recorded
-    per completed LLM generation, capturing the provider's reported token
-    counts — input, output, cached, and reasoning tokens — attributed to the
-    project, agent, and generation. Rows are immutable, so historical usage
-    never changes after the fact.
+    Billing-grade usage metering. One append-only usage event is recorded per
+    completed LLM generation, capturing the provider's reported token counts —
+    input, output, cached, and reasoning tokens — attributed to the project,
+    agent, and generation. Events are immutable, so historical usage never
+    changes after the fact.
   contact:
     name: SOAT API Support
 
@@ -21,23 +21,23 @@ servers:
 
 tags:
   - name: Usage
-    description: Inspect LLM token-usage meter rows
+    description: Inspect raw usage events
 
 security:
   - bearerAuth: []
 
 paths:
-  /api/v1/usage/meters:
+  /api/v1/usage/events:
     get:
       tags:
         - Usage
-      summary: List usage meters
+      summary: List usage events
       description: >
-        Returns the raw usage-meter rows the caller can access, most recent
-        first, optionally filtered by agent, generation, trace, actor, session,
-        or `source`. Each row is the per-generation token usage as reported by
+        Returns the raw usage events the caller can access, most recent first,
+        optionally filtered by agent, generation, trace, actor, session, or
+        `source`. Each event is the per-generation token usage as reported by
         the provider, for audit and reconciliation.
-      operationId: listUsageMeters
+      operationId: listUsageEvents
       parameters:
         - name: agent_id
           in: query
@@ -119,7 +119,7 @@ paths:
             default: 0
       responses:
         '200':
-          description: Paginated list of usage-meter rows
+          description: Paginated list of usage events
           content:
             application/json:
               schema:
@@ -148,7 +148,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /api/v1/usage:
+  /api/v1/usage/aggregate:
     get:
       tags:
         - Usage
@@ -161,14 +161,15 @@ paths:
         measured `quantity` per component (so infra meters report their real
         amount, not zeros), and `cost_usd` (null when no event in the bucket was
         priced). This is the per-project cost-by-range/by-category query — a
-        monthly figure without scanning raw meter rows client-side.
+        monthly figure without scanning raw usage events client-side.
 
 
         `groups` is paginated. Its `total` is the number of distinct buckets in
-        the window, so "how many runs this cycle" is one small response rather
-        than a page walk, and `totals` always describes the whole window — never
-        the page above it.
-      operationId: getUsage
+        the window — bucket cardinality, including a null bucket for the events
+        the dimension does not apply to, and never a count of entities. To
+        count entities, send `include=distinct` and read `totals.distinct`.
+        `totals` always describes the whole window — never the page above it.
+      operationId: getUsageAggregate
       parameters:
         - name: project_id
           in: query
@@ -190,20 +191,26 @@ paths:
             what the spend was incurred for (`eval`, `eval_judge`), which is how
             verification spend is priced apart from the traffic serving real
             users; unlabelled traffic collapses into the single `null` bucket.
+            `orchestration_run` buckets on the orchestration run the event
+            belongs to — a standalone generation runs no orchestration and
+            collapses into the single `null` bucket, so the bucket count under
+            this dimension is not a count of runs.
+          schema:
+            $ref: '#/components/schemas/UsageGroupBy'
+        - name: include
+          in: query
+          required: false
+          description: >
+            Optional extras to compute. The only value is `distinct`, which
+            adds `totals.distinct` — one distinct-entity count per attribution
+            column. It is opt-in because each key costs the database one extra
+            sort of the window, so the default response keeps its cost whatever
+            the event table grows to carry; a caller counting entities sends
+            one request at `limit=1&include=distinct`. Any other value is a
+            `400`.
           schema:
             type: string
-            enum:
-              [
-                model,
-                ai_provider,
-                agent,
-                run,
-                day,
-                meter_type,
-                actor,
-                session,
-                source,
-              ]
+            enum: [distinct]
         - name: from
           in: query
           required: false
@@ -425,13 +432,14 @@ paths:
     get:
       tags:
         - Usage
-      summary: Get a generation or run billing receipt
+      summary: Get a generation or orchestration-run billing receipt
       description: >
         Returns a billing receipt. Pass generation_id for a per-generation
-        receipt, or orchestration_run_id for a per-run receipt summed across the orchestration
-        run's meters — both share the same shape (per-model line items with
-        tokens, the price-book version that priced them, and cost, plus totals).
-        Exactly one of generation_id or orchestration_run_id must be supplied.
+        receipt, or orchestration_run_id for a receipt summed across the
+        orchestration run's events — both share the same shape (per-model line
+        items with tokens, the price-book version that priced them, and cost,
+        plus totals). Exactly one of generation_id or orchestration_run_id must
+        be supplied.
       operationId: getUsageReceipt
       parameters:
         - name: generation_id
@@ -705,6 +713,86 @@ components:
           type: string
           format: date-time
 
+    UsageGroupBy:
+      type: string
+      description: >
+        The dimension an aggregate buckets on. `orchestration_run` buckets on
+        the orchestration run; work that runs no orchestration collapses into
+        the single `null` bucket.
+      enum:
+        [
+          model,
+          ai_provider,
+          agent,
+          orchestration_run,
+          day,
+          meter_type,
+          actor,
+          session,
+          source,
+        ]
+
+    UsageTotals:
+      type: object
+      description: >
+        The token and cost figures every usage surface reports, in one shape —
+        a receipt's `totals`, an aggregate bucket, and an orchestration run's
+        `usage` / `usage_own`, so one client type sums all three. Tokens and
+        cost only: a `compute_second` or `gb_day` meter is reported by the
+        aggregate's `components` array.
+      properties:
+        cost_usd:
+          type: number
+          nullable: true
+          description: Sum of priced component costs; null when nothing was priced
+        input_tokens:
+          type: integer
+          description: Full prompt tokens (uncached input + cached), reconstructed from components
+        output_tokens:
+          type: integer
+        cached_tokens:
+          type: integer
+        reasoning_tokens:
+          type: integer
+
+    UsageDistinct:
+      type: object
+      description: >
+        How many distinct entities of each kind the window touched — the
+        counters a "how many generations / runs / actors this cycle" question
+        reads. Present on `totals` exactly when `include=distinct` was sent,
+        and never on a group — filling it per bucket would mean a
+        `COUNT(DISTINCT)` per bucket on the page query.
+
+
+        Nulls are not counted: a generation-less completion (`chat`,
+        `memory_extraction`, `memory_consolidation`, `eval_judge`) contributes
+        to `event_count` and to nothing here; a standalone generation
+        contributes to `generations` and not to `orchestration_runs`; a retried
+        orchestration node — a second event and a second generation — counts
+        once as a run.
+
+
+        Every figure describes one window and none of them add. Two adjacent
+        windows' `sessions` overlap wherever a session spans the boundary, and
+        a run that straddles midnight is in two `day` windows. A wider figure
+        is a wider query, never a sum of narrower ones.
+      properties:
+        generations:
+          type: integer
+        traces:
+          type: integer
+        orchestration_runs:
+          type: integer
+        agents:
+          type: integer
+        actors:
+          type: integer
+        sessions:
+          type: integer
+        ai_providers:
+          type: integer
+
     UsageAggregateComponent:
       type: object
       description: >
@@ -737,40 +825,36 @@ components:
             the component — the quantity is still captured, it does not mean the
             usage was free.
 
+    UsageAggregateBucket:
+      allOf:
+        - $ref: '#/components/schemas/UsageTotals'
+        - type: object
+          description: >
+            Summed token counts, measured component quantities, and cost for a
+            bucket (or the grand total).
+          properties:
+            event_count:
+              type: integer
+              description: >
+                Usage events measured in the bucket. On `totals` this counts
+                the whole `[from, to]` window.
+            components:
+              type: array
+              description: >
+                Every component measured in the bucket, sorted by `component`
+                then `unit`. The token fields cover `llm_tokens` only, so this
+                is where a `storage` / `api_request` / `compute_execution`
+                bucket reports what it actually measured.
+              items:
+                $ref: '#/components/schemas/UsageAggregateComponent'
+
     UsageAggregateTotals:
-      type: object
-      description: >
-        Summed token counts, measured component quantities, and cost for a
-        bucket (or the grand total).
-      properties:
-        cost_usd:
-          type: number
-          nullable: true
-          description: Sum of priced event costs in the bucket; null when nothing is priced
-        event_count:
-          type: integer
-          description: >
-            Usage events measured in the bucket. On `totals` this counts the
-            whole `[from, to]` window, so "how many" is answerable without
-            reading a single group.
-        input_tokens:
-          type: integer
-          description: Full prompt tokens (uncached input + cached), reconstructed from components
-        output_tokens:
-          type: integer
-        cached_tokens:
-          type: integer
-        reasoning_tokens:
-          type: integer
-        components:
-          type: array
-          description: >
-            Every component measured in the bucket, sorted by `component` then
-            `unit`. The token fields above cover `llm_tokens` only, so this is
-            where a `storage` / `api_request` / `compute_execution` bucket
-            reports what it actually measured.
-          items:
-            $ref: '#/components/schemas/UsageAggregateComponent'
+      allOf:
+        - $ref: '#/components/schemas/UsageAggregateBucket'
+        - type: object
+          properties:
+            distinct:
+              $ref: '#/components/schemas/UsageDistinct'
 
     UsageAggregate:
       type: object
@@ -789,19 +873,7 @@ components:
           nullable: true
           description: Upper bound applied, echoed back; null when unbounded
         group_by:
-          type: string
-          enum:
-            [
-              model,
-              ai_provider,
-              agent,
-              run,
-              day,
-              meter_type,
-              actor,
-              session,
-              source,
-            ]
+          $ref: '#/components/schemas/UsageGroupBy'
         meter_type:
           type: string
           nullable: true
@@ -821,9 +893,14 @@ components:
             total:
               type: integer
               description: >
-                Distinct buckets in the window, independent of `limit`. This is
-                the count a "how many runs this cycle" question reads — no page
-                walk required.
+                Distinct buckets in the window, independent of `limit`,
+                including a null bucket for the events the dimension does not
+                apply to. Bucket cardinality is not an entity count on any
+                dimension that admits nulls: a project whose traffic is
+                standalone generations has exactly one
+                `group_by=orchestration_run` bucket whatever its volume. Read
+                `totals.distinct` (under `include=distinct`) to count
+                entities.
             limit:
               type: integer
             offset:
@@ -843,10 +920,12 @@ components:
               nullable: true
               description: >
                 The bucket's value in the chosen dimension (a model id,
-                meter type, AI provider / agent / run / actor / session
-                public id, or `YYYY-MM-DD` UTC day). Null when the dimension does not
-                apply to an event — under `actor`/`session` this is the
-                bucket holding everything with no end user behind it.
+                meter type, AI provider / agent / orchestration run / actor /
+                session public id, or `YYYY-MM-DD` UTC day). Null when the
+                dimension does not apply to an event — under
+                `actor`/`session` this is the bucket holding everything with
+                no end user behind it, and under `orchestration_run` the one
+                holding every generation that ran no orchestration.
             ai_provider_id:
               type: string
               x-soat-ref: ai-providers
@@ -860,7 +939,7 @@ components:
                 `ai_provider_id`) and two groups may repeat one `key`
                 with different providers. The groups still sum to
                 `totals`.
-        - $ref: '#/components/schemas/UsageAggregateTotals'
+        - $ref: '#/components/schemas/UsageAggregateBucket'
 
     UsageThreshold:
       type: object
@@ -933,13 +1012,14 @@ components:
       properties:
         generation_id:
           description: >
-            Present on a per-generation receipt; absent on a per-run receipt.
+            Present on a per-generation receipt; absent on an
+            orchestration-run receipt.
           x-soat-ref: generations
           type: string
         orchestration_run_id:
           description: >
-            Present on a per-run receipt (summed across the run's meters); absent
-            on a per-generation receipt.
+            Present on an orchestration-run receipt (summed across the run's
+            events); absent on a per-generation receipt.
           x-soat-ref: orchestration-runs
           type: string
         currency:
@@ -949,7 +1029,8 @@ components:
           type: array
           description: >
             One line per usage event — for a generation receipt, the events on
-            that generation; for a run receipt, every event across the run.
+            that generation; for an orchestration-run receipt, every event
+            across the run.
           items:
             type: object
             properties:
@@ -965,7 +1046,8 @@ components:
                 type: string
                 nullable: true
                 description: >
-                  Orchestration node that produced the event. On a run receipt
+                  Orchestration node that produced the event. On an
+                  orchestration-run receipt
                   every line carries it — an `agent` node's `llm_tokens` line and
                   the `compute_execution` line of each node execution alike — so
                   grouping the lines by `node_id` gives the per-node cost the
@@ -995,19 +1077,8 @@ components:
               cost_usd:
                 type: number
                 nullable: true
-        total_input_tokens:
-          type: integer
-          description: Full prompt tokens (uncached input + cached), reconstructed from components
-        total_output_tokens:
-          type: integer
-        total_cached_tokens:
-          type: integer
-        total_reasoning_tokens:
-          type: integer
-        total_cost_usd:
-          type: number
-          nullable: true
-          description: Sum of priced component costs; null when nothing is priced
+        totals:
+          $ref: '#/components/schemas/UsageTotals'
 
     Price:
       type: object

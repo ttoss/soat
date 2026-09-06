@@ -24,6 +24,7 @@ import { startOrchestrationScheduler } from './lib/orchestrationScheduler';
 import { startOrchestrationWorker } from './lib/orchestrationWorker';
 import { startTasksScheduler } from './lib/tasksScheduler';
 import { startTriggerScheduler } from './lib/triggerScheduler';
+import { backfillUsageRenames } from './lib/usageRenameBackfill';
 import { startUsageRequestScheduler } from './lib/usageRequestScheduler';
 import { startUsageStorageScheduler } from './lib/usageStorageScheduler';
 import { createFirstAdminUser } from './lib/users';
@@ -74,6 +75,10 @@ const startServer = async () => {
     // camelCase before single-casing. Idempotent and prefiltered in SQL, so a
     // converged database pays a single indexless scan and writes nothing.
     await backfillKnowledgeConfigCasing();
+    // One-time rewrite of stored policy / guardrail / formation documents that
+    // name a string #1216 renamed. Same shape: idempotent, prefiltered in SQL,
+    // and a converged database writes nothing.
+    await backfillUsageRenames();
     // Start the durable orchestration scheduler once the database is ready so
     // it can wake sleeping runs whose delay/poll waits are due (including runs
     // that were parked before a restart).

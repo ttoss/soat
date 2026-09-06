@@ -22,7 +22,7 @@ const ACTIONS = [
   'agents:CreateAgent',
   'agents:CreateAgentGeneration',
   'generations:GetGeneration',
-  'usage:ListUsageMeters',
+  'usage:ListEvents',
 ];
 
 type StubReply = {
@@ -367,7 +367,7 @@ describe('Model route failover through agent generation', () => {
     // attributed from what the route did — otherwise the spend meters against
     // no provider and the billing rollup cannot name the model's vendor.
     const meters = await authenticatedTestClient(userToken).get(
-      `/api/v1/usage/meters?generation_id=${res.body.id}`
+      `/api/v1/usage/events?generation_id=${res.body.id}`
     );
     expect(meters.status).toBe(200);
     expect(meters.body.data).toHaveLength(1);

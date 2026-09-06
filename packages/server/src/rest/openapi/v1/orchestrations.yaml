@@ -404,7 +404,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/StartRunRequest'
+              $ref: '#/components/schemas/StartOrchestrationRunRequest'
       responses:
         '201':
           description: Run created and executed
@@ -1254,7 +1254,7 @@ components:
           description: >-
             The node within `parent_orchestration_run_id` that started this run.
             Null when `parent_orchestration_run_id` is null.
-        run_depth:
+        orchestration_run_depth:
           type: integer
           minimum: 0
           description: >-
@@ -1262,7 +1262,8 @@ components:
             caller started: `0` for a caller-started run, one more than its
             parent's for a child. Starting a child past the effective bound —
             the smaller of the deployment's `MAX_ORCHESTRATION_RUN_DEPTH`
-            (default 10) and the project's `max_run_depth` — is refused with
+            (default 10) and the project's `max_orchestration_run_depth` — is
+            refused with
             `ORCHESTRATION_RUN_DEPTH_LIMIT`, which fails the run that tried to
             descend. That bounds a graph whose `sub_orchestration` node names
             itself, directly or through a cycle of two graphs, which the
@@ -1282,7 +1283,7 @@ components:
             $ref: '#/components/schemas/NodeExecution'
         usage:
           allOf:
-            - $ref: '#/components/schemas/RunUsageTotals'
+            - $ref: '#/components/schemas/UsageTotals'
           description: >-
             What the run cost: token counts and `cost_usd` summed across every
             metered generation it produced **and every run it started** through
@@ -1298,7 +1299,7 @@ components:
             carry a `node_id` from one graph only.
         usage_own:
           allOf:
-            - $ref: '#/components/schemas/RunUsageTotals'
+            - $ref: '#/components/schemas/UsageTotals'
           description: >-
             The same roll-up restricted to **this run's own nodes**, excluding
             every nested run it started. Equal to `usage` for a run with no
@@ -1327,26 +1328,28 @@ components:
           type: string
           format: date-time
 
-    RunUsageTotals:
+    UsageTotals:
       type: object
-      description: >-
-        Token and cost roll-up for an orchestration run, summed across every
-        usage event the run's generations produced.
+      description: >
+        The token and cost figures every usage surface reports, in one shape —
+        a receipt's `totals`, an aggregate bucket, and an orchestration run's
+        `usage` / `usage_own`, so one client type sums all three. Tokens and
+        cost only: a `compute_second` or `gb_day` meter is reported by the
+        aggregate's `components` array.
       properties:
-        total_input_tokens:
-          type: integer
-        total_output_tokens:
-          type: integer
-        total_cached_tokens:
-          type: integer
-        total_reasoning_tokens:
-          type: integer
-        total_cost_usd:
+        cost_usd:
           type: number
           nullable: true
-          description: >-
-            Sum of the run's priced component costs in USD. Null when nothing on
-            the run was priced.
+          description: Sum of priced component costs; null when nothing was priced
+        input_tokens:
+          type: integer
+          description: Full prompt tokens (uncached input + cached), reconstructed from components
+        output_tokens:
+          type: integer
+        cached_tokens:
+          type: integer
+        reasoning_tokens:
+          type: integer
 
     NodeExecution:
       type: object
@@ -1459,7 +1462,7 @@ components:
           type: object
           description: Output/response provided by the human reviewer.
 
-    StartRunRequest:
+    StartOrchestrationRunRequest:
       type: object
       required:
         - orchestration_id

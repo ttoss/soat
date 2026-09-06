@@ -19,7 +19,11 @@ export type {
   UsageReceiptMeterTypeTotal,
   UsageTotals,
 } from './usageReceipt';
-export { getReceipt, getRunReceipt, getRunUsageRollups } from './usageReceipt';
+export {
+  getOrchestrationRunReceipt,
+  getOrchestrationRunUsageRollups,
+  getReceipt,
+} from './usageReceipt';
 export type { CompletionUsageSource } from './usageRecording';
 export { recordCompletionUsage, recordGenerationUsage } from './usageRecording';
 export type { PersistedUsageThreshold } from './usageThresholds';
@@ -113,7 +117,7 @@ const mapUsageEvent = (
   return {
     id: event.publicId,
     project_id: event.project.publicId,
-    orchestration_run_id: assocPublicId(event.run),
+    orchestration_run_id: assocPublicId(event.orchestrationRun),
     node_id: event.nodeId,
     agent_id: assocPublicId(event.agent),
     generation_id: assocPublicId(event.generation),
@@ -268,7 +272,7 @@ export const listUsageEvents = async (args: {
           { model: db.Project, as: 'project' },
           { model: db.Agent, as: 'agent' },
           { model: db.Generation, as: 'generation' },
-          { model: db.OrchestrationRun, as: 'run' },
+          { model: db.OrchestrationRun, as: 'orchestrationRun' },
           { model: db.Trace, as: 'trace' },
           { model: db.Actor, as: 'actor' },
           { model: db.Session, as: 'session' },

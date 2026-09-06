@@ -433,7 +433,7 @@ The [usage](/docs/modules/usage) meter for the purged generation is intact — a
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat list-usage-meters --generation-id "$GENERATION_ID" \
+soat list-usage-events --generation-id "$GENERATION_ID" \
   | jq '.data[0] | {generation_id, model, meter_type, components}'
 
 soat get-generation --generation-id "$GENERATION_ID" \
@@ -444,7 +444,7 @@ soat get-generation --generation-id "$GENERATION_ID" \
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: meters } = await adminSoat.usage.listUsageMeters({
+const { data: meters } = await adminSoat.usage.listUsageEvents({
   query: { generation_id: turn.generation_id },
 });
 console.log(meters.data[0].components); // token counts, still there
@@ -459,7 +459,7 @@ console.log(skeleton.status, skeleton.metadata); // 'completed', null
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s "$SOAT_BASE_URL/api/v1/usage/meters?generation_id=$GENERATION_ID" \
+curl -s "$SOAT_BASE_URL/api/v1/usage/events?generation_id=$GENERATION_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   | jq '.data[0] | {generation_id, model, meter_type, components}'
 
@@ -708,7 +708,7 @@ The principal id distinguishes **never stored** (`zero_retention`) from **stored
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat list-usage-meters --generation-id "$INTAKE_GENERATION_ID" \
+soat list-usage-events --generation-id "$INTAKE_GENERATION_ID" \
   | jq '.data[0] | {model, meter_type, components}'
 ```
 
@@ -716,7 +716,7 @@ soat list-usage-meters --generation-id "$INTAKE_GENERATION_ID" \
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: intakeMeters } = await adminSoat.usage.listUsageMeters({
+const { data: intakeMeters } = await adminSoat.usage.listUsageEvents({
   query: { generation_id: intakeTurn.generation_id },
 });
 console.log(intakeMeters.data[0].components); // metered exactly as usual
@@ -726,7 +726,7 @@ console.log(intakeMeters.data[0].components); // metered exactly as usual
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s "$SOAT_BASE_URL/api/v1/usage/meters?generation_id=$(printf '%s\n' "$INTAKE_TURN" | jq -r '.generation_id')" \
+curl -s "$SOAT_BASE_URL/api/v1/usage/events?generation_id=$(printf '%s\n' "$INTAKE_TURN" | jq -r '.generation_id')" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.data[0] | {model, meter_type, components}'
 ```
 

@@ -136,22 +136,22 @@ echo "Project chain ceiling set/cleared: OK"
 # for.
 echo "--- Project orchestration nesting bound ---"
 PROJECT_DEPTH_DEFAULT=$($SOAT_CLI get-project --project-id "$PROJECT_PUBLIC_ID")
-if [ "$(printf '%s\n' "$PROJECT_DEPTH_DEFAULT" | jq -r '.max_run_depth')" != "null" ]; then
+if [ "$(printf '%s\n' "$PROJECT_DEPTH_DEFAULT" | jq -r '.max_orchestration_run_depth')" != "null" ]; then
   echo "ERROR: a new project did not default to no run-depth bound" >&2
   echo "$PROJECT_DEPTH_DEFAULT" >&2
   exit 1
 fi
 
-PROJECT_DEPTH_RESP=$($SOAT_CLI update-project --project-id "$PROJECT_PUBLIC_ID" --max_run_depth 4)
-if [ "$(printf '%s\n' "$PROJECT_DEPTH_RESP" | jq -r '.max_run_depth')" != "4" ]; then
-  echo "ERROR: update-project did not set max_run_depth" >&2
+PROJECT_DEPTH_RESP=$($SOAT_CLI update-project --project-id "$PROJECT_PUBLIC_ID" --max_orchestration_run_depth 4)
+if [ "$(printf '%s\n' "$PROJECT_DEPTH_RESP" | jq -r '.max_orchestration_run_depth')" != "4" ]; then
+  echo "ERROR: update-project did not set max_orchestration_run_depth" >&2
   echo "$PROJECT_DEPTH_RESP" >&2
   exit 1
 fi
 
-PROJECT_DEPTH_CLEARED=$($SOAT_CLI update-project --project-id "$PROJECT_PUBLIC_ID" --max_run_depth null)
-if [ "$(printf '%s\n' "$PROJECT_DEPTH_CLEARED" | jq -r '.max_run_depth')" != "null" ]; then
-  echo "ERROR: update-project did not clear max_run_depth" >&2
+PROJECT_DEPTH_CLEARED=$($SOAT_CLI update-project --project-id "$PROJECT_PUBLIC_ID" --max_orchestration_run_depth null)
+if [ "$(printf '%s\n' "$PROJECT_DEPTH_CLEARED" | jq -r '.max_orchestration_run_depth')" != "null" ]; then
+  echo "ERROR: update-project did not clear max_orchestration_run_depth" >&2
   echo "$PROJECT_DEPTH_CLEARED" >&2
   exit 1
 fi
@@ -1840,7 +1840,7 @@ echo "Get run: OK"
 # Run usage roll-up: the single-run read surfaces a usage object with numeric
 # token totals. This orchestration has only transform nodes (no metered
 # generation), so the token totals are a deterministic zero.
-if ! printf '%s\n' "$ORCH_RUN_GET_RESP" | jq -e '(.usage | type) == "object" and (.usage.total_input_tokens | type) == "number"' >/dev/null 2>&1; then
+if ! printf '%s\n' "$ORCH_RUN_GET_RESP" | jq -e '(.usage | type) == "object" and (.usage.input_tokens | type) == "number"' >/dev/null 2>&1; then
   echo "get-orchestration-run did not include a usage roll-up"
   printf '%s\n' "$ORCH_RUN_GET_RESP"
   exit 1
@@ -1851,7 +1851,7 @@ echo "Run usage roll-up: OK"
 # Uses the default admin CLI (the usage:GetReceipt permission lives with the
 # admin, not the orchestration-scoped API key).
 ORCH_RUN_RECEIPT=$($SOAT_CLI get-usage-receipt --orchestration-run-id "$ORCH_RUN_ID")
-if ! printf '%s\n' "$ORCH_RUN_RECEIPT" | jq -e --arg id "$ORCH_RUN_ID" '(.orchestration_run_id == $id) and (.currency == "USD") and ((.line_items | type) == "array") and ((.total_input_tokens | type) == "number")' >/dev/null 2>&1; then
+if ! printf '%s\n' "$ORCH_RUN_RECEIPT" | jq -e --arg id "$ORCH_RUN_ID" '(.orchestration_run_id == $id) and (.currency == "USD") and ((.line_items | type) == "array") and ((.totals.input_tokens | type) == "number")' >/dev/null 2>&1; then
   echo "get-usage-receipt --orchestration-run-id did not return a well-formed run receipt"
   printf '%s\n' "$ORCH_RUN_RECEIPT"
   exit 1
@@ -1921,7 +1921,7 @@ SOAT_TOKEN="$ORCH_API_KEY_RAW" expect_cli_error_status 400 create-orchestration 
 
 NESTED_CHILDREN=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestration-runs \
   --parent-orchestration-run-id "$NESTED_PARENT_RUN")
-if ! printf '%s\n' "$NESTED_CHILDREN" | jq -e --arg parent "$NESTED_PARENT_RUN" '(.data | length) == 1 and .data[0].parent_orchestration_run_id == $parent and .data[0].parent_node_id == "delegate" and .data[0].run_depth == 1' >/dev/null 2>&1; then
+if ! printf '%s\n' "$NESTED_CHILDREN" | jq -e --arg parent "$NESTED_PARENT_RUN" '(.data | length) == 1 and .data[0].parent_orchestration_run_id == $parent and .data[0].parent_node_id == "delegate" and .data[0].orchestration_run_depth == 1' >/dev/null 2>&1; then
   echo "a sub_orchestration child did not name the run and node that started it"
   printf '%s\n' "$NESTED_CHILDREN"
   exit 1
@@ -1943,7 +1943,7 @@ SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI update-orchestration \
 SELF_REF_RUN=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
   --orchestration-id "$SELF_REF_ORCH" \
   --wait true)
-if ! printf '%s\n' "$SELF_REF_RUN" | jq -e '.status == "failed" and .run_depth == 0 and .error.code == "ORCHESTRATION_RUN_DEPTH_LIMIT"' >/dev/null 2>&1; then
+if ! printf '%s\n' "$SELF_REF_RUN" | jq -e '.status == "failed" and .orchestration_run_depth == 0 and .error.code == "ORCHESTRATION_RUN_DEPTH_LIMIT"' >/dev/null 2>&1; then
   echo "a self-referencing sub_orchestration graph did not terminate on the depth bound"
   printf '%s\n' "$SELF_REF_RUN"
   exit 1
@@ -1952,7 +1952,7 @@ echo "Run depth bound: OK"
 
 NESTED_PARENT_GET=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI get-orchestration-run \
   --orchestration-run-id "$NESTED_PARENT_RUN")
-if ! printf '%s\n' "$NESTED_PARENT_GET" | jq -e '(.usage | type) == "object" and (.usage_own | type) == "object" and (.usage.total_input_tokens | type) == "number" and (.usage_own.total_input_tokens | type) == "number" and .parent_orchestration_run_id == null' >/dev/null 2>&1; then
+if ! printf '%s\n' "$NESTED_PARENT_GET" | jq -e '(.usage | type) == "object" and (.usage_own | type) == "object" and (.usage.input_tokens | type) == "number" and (.usage_own.input_tokens | type) == "number" and .parent_orchestration_run_id == null' >/dev/null 2>&1; then
   echo "the parent run did not carry both the subtree and own-nodes roll-up"
   printf '%s\n' "$NESTED_PARENT_GET"
   exit 1
@@ -3794,33 +3794,33 @@ fi
 
 # 34b. Usage metering — a meter row is recorded per completed generation
 echo "--- Verifying usage metering ---"
-USAGE_METERS_RESP=$($SOAT_CLI list-usage-meters | sanitize_json)
-USAGE_IS_ARRAY=$(printf '%s\n' "$USAGE_METERS_RESP" | jq -r 'if (.data | type) == "array" then "yes" else "no" end')
+USAGE_EVENTS_RESP=$($SOAT_CLI list-usage-events | sanitize_json)
+USAGE_IS_ARRAY=$(printf '%s\n' "$USAGE_EVENTS_RESP" | jq -r 'if (.data | type) == "array" then "yes" else "no" end')
 if [ "$USAGE_IS_ARRAY" != "yes" ]; then
-  echo "ERROR: list-usage-meters did not return a data array" >&2
-  echo "$USAGE_METERS_RESP" >&2
+  echo "ERROR: list-usage-events did not return a data array" >&2
+  echo "$USAGE_EVENTS_RESP" >&2
   exit 1
 fi
-USAGE_TOTAL=$(printf '%s\n' "$USAGE_METERS_RESP" | jq -r '.total // 0')
+USAGE_TOTAL=$(printf '%s\n' "$USAGE_EVENTS_RESP" | jq -r '.total // 0')
 echo "List usage meters endpoint: OK (total: $USAGE_TOTAL)"
 
 # When at least one generation has completed, the event must carry token
 # components (values depend on the live provider, so only their shape is
 # checked).
 if [ "$USAGE_TOTAL" -ge 1 ]; then
-  USAGE_ROW_OK=$(printf '%s\n' "$USAGE_METERS_RESP" | jq -r '(.data[0] | (.id | startswith("ue_")) and (.provider | length > 0) and (.meter_type == "llm_tokens") and (.components | type == "array") and ([.components[] | select(.component == "input_tokens")] | length >= 1))')
+  USAGE_ROW_OK=$(printf '%s\n' "$USAGE_EVENTS_RESP" | jq -r '(.data[0] | (.id | startswith("ue_")) and (.provider | length > 0) and (.meter_type == "llm_tokens") and (.components | type == "array") and ([.components[] | select(.component == "input_tokens")] | length >= 1))')
   if [ "$USAGE_ROW_OK" != "true" ]; then
     echo "ERROR: usage event missing expected token components" >&2
-    echo "$USAGE_METERS_RESP" >&2
+    echo "$USAGE_EVENTS_RESP" >&2
     exit 1
   fi
   echo "Usage event shape (token components): OK"
 
   # 34b-ii. Receipt — the metered generation has a reconcilable receipt
-  USAGE_GEN_ID=$(printf '%s\n' "$USAGE_METERS_RESP" | jq -r '.data[0].generation_id // empty')
+  USAGE_GEN_ID=$(printf '%s\n' "$USAGE_EVENTS_RESP" | jq -r '.data[0].generation_id // empty')
   if [ -n "$USAGE_GEN_ID" ]; then
     RECEIPT_RESP=$($SOAT_CLI get-usage-receipt --generation-id "$USAGE_GEN_ID" | sanitize_json)
-    RECEIPT_OK=$(printf '%s\n' "$RECEIPT_RESP" | jq -r '((.generation_id | length > 0) and (.currency == "USD") and (.line_items | type == "array") and (.total_input_tokens | type == "number"))')
+    RECEIPT_OK=$(printf '%s\n' "$RECEIPT_RESP" | jq -r '((.generation_id | length > 0) and (.currency == "USD") and (.line_items | type == "array") and (.totals.input_tokens | type == "number"))')
     if [ "$RECEIPT_OK" != "true" ]; then
       echo "ERROR: get-usage-receipt did not return a well-formed receipt" >&2
       echo "$RECEIPT_RESP" >&2
@@ -3833,11 +3833,11 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
   # 17/18 create no generation, so they must still be metered as llm_tokens
   # events with a null generation_id. Proves no LLM call skips metering just
   # because it has no Generation row behind it.
-  CHAT_METERS_RESP=$($SOAT_CLI list-usage-meters --meter-type llm_tokens --limit 100 | sanitize_json)
-  CHAT_METER_COUNT=$(printf '%s\n' "$CHAT_METERS_RESP" | jq -r '[.data[] | select(.generation_id == null)] | length')
+  CHAT_EVENTS_RESP=$($SOAT_CLI list-usage-events --meter-type llm_tokens --limit 100 | sanitize_json)
+  CHAT_METER_COUNT=$(printf '%s\n' "$CHAT_EVENTS_RESP" | jq -r '[.data[] | select(.generation_id == null)] | length')
   if [ "$CHAT_METER_COUNT" -lt 1 ]; then
     echo "ERROR: no generation-less llm_tokens event — chat completions were not metered" >&2
-    echo "$CHAT_METERS_RESP" >&2
+    echo "$CHAT_EVENTS_RESP" >&2
     exit 1
   fi
   echo "Standalone completion metering: OK ($CHAT_METER_COUNT generation-less llm_tokens events)"
@@ -3851,24 +3851,24 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
   $SOAT_CLI create-embeddings \
     --project-id "$PROJECT_PUBLIC_ID" \
     --input "smoke test embedding metering" > /dev/null
-  EMBEDDING_METERS_RESP=$($SOAT_CLI list-usage-meters \
+  EMBEDDING_EVENTS_RESP=$($SOAT_CLI list-usage-events \
     --source embedding --limit 100 | sanitize_json)
-  EMBEDDING_METER_OK=$(printf '%s\n' "$EMBEDDING_METERS_RESP" | jq -r '([.data[] | select(.meter_type == "llm_tokens" and .generation_id == null and .ai_provider_id == null and .cost_usd > 0 and ([.components[] | select(.component == "input_tokens" and .quantity > 0 and .cost_usd > 0)] | length == 1))] | length >= 1)')
+  EMBEDDING_METER_OK=$(printf '%s\n' "$EMBEDDING_EVENTS_RESP" | jq -r '([.data[] | select(.meter_type == "llm_tokens" and .generation_id == null and .ai_provider_id == null and .cost_usd > 0 and ([.components[] | select(.component == "input_tokens" and .quantity > 0 and .cost_usd > 0)] | length == 1))] | length >= 1)')
   if [ "$EMBEDDING_METER_OK" != "true" ]; then
     echo "ERROR: embedding call was not metered as a priced input_tokens llm_tokens event" >&2
-    echo "$EMBEDDING_METERS_RESP" >&2
+    echo "$EMBEDDING_EVENTS_RESP" >&2
     exit 1
   fi
   echo "Embedding metering: OK"
 
   # 34b-iii. Aggregate — the per-project usage rollup, bucketed by meter type.
   # Grand totals and each group carry summed token counts and cost_usd.
-  USAGE_AGG_RESP=$($SOAT_CLI get-usage \
+  USAGE_AGG_RESP=$($SOAT_CLI get-usage-aggregate \
     --project-id "$PROJECT_PUBLIC_ID" \
     --group-by meter_type | sanitize_json)
   USAGE_AGG_OK=$(printf '%s\n' "$USAGE_AGG_RESP" | jq -r '((.project_id | length > 0) and (.group_by == "meter_type") and (.groups.data | type == "array") and (.groups.total | type == "number") and (.totals.input_tokens | type == "number") and (.totals.event_count | type == "number") and ([.groups.data[] | select(.key == "llm_tokens")] | length >= 1))')
   if [ "$USAGE_AGG_OK" != "true" ]; then
-    echo "ERROR: get-usage did not return a well-formed aggregate rollup" >&2
+    echo "ERROR: get-usage-aggregate did not return a well-formed aggregate rollup" >&2
     echo "$USAGE_AGG_RESP" >&2
     exit 1
   fi
@@ -3887,7 +3887,7 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
            | length == 1)
       and (.meter_type == null)')
   if [ "$USAGE_QTY_OK" != "true" ]; then
-    echo "ERROR: get-usage reported the compute_execution meter without a measured quantity" >&2
+    echo "ERROR: get-usage-aggregate reported the compute_execution meter without a measured quantity" >&2
     echo "$USAGE_AGG_RESP" >&2
     exit 1
   fi
@@ -3895,7 +3895,7 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
 
   # 34b-iii-c. meter_type narrows the rollup, so `group_by=model` can be asked
   # about models alone without platform SKUs sharing the dimension.
-  USAGE_FILTERED_RESP=$($SOAT_CLI get-usage \
+  USAGE_FILTERED_RESP=$($SOAT_CLI get-usage-aggregate \
     --project-id "$PROJECT_PUBLIC_ID" \
     --group-by meter_type \
     --meter-type compute_execution | sanitize_json)
@@ -3904,7 +3904,7 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
       and ((.groups.data | map(.key)) == ["compute_execution"])
       and ((.totals.components | map(.component)) == ["compute_second"])')
   if [ "$USAGE_FILTERED_OK" != "true" ]; then
-    echo "ERROR: get-usage --meter-type did not narrow the rollup" >&2
+    echo "ERROR: get-usage-aggregate --meter-type did not narrow the rollup" >&2
     echo "$USAGE_FILTERED_RESP" >&2
     exit 1
   fi
@@ -3914,7 +3914,7 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
   # buckets, so a count is one small response however many there are. The page
   # is bounded by --limit while `total` and `totals` keep describing the whole
   # window — a page-scoped total read against an allowance would understate it.
-  USAGE_COUNT_RESP=$($SOAT_CLI get-usage \
+  USAGE_COUNT_RESP=$($SOAT_CLI get-usage-aggregate \
     --project-id "$PROJECT_PUBLIC_ID" \
     --group-by meter_type \
     --limit 1 | sanitize_json)
@@ -3925,11 +3925,47 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
       and (.groups.total == ($full.groups.total))
       and (.totals == ($full.totals))')
   if [ "$USAGE_COUNT_OK" != "true" ]; then
-    echo "ERROR: get-usage --limit did not bound the page while keeping totals whole-window" >&2
+    echo "ERROR: get-usage-aggregate --limit did not bound the page while keeping totals whole-window" >&2
     echo "$USAGE_COUNT_RESP" >&2
     exit 1
   fi
   echo "Usage aggregate counting and paging: OK"
+
+  # 34b-iii-e. Counting entities, which `groups.total` does not answer: it is
+  # bucket cardinality, and a null key is a real bucket, so a project whose
+  # traffic is standalone generations reports one `orchestration_run` bucket
+  # whatever its volume. `include=distinct` is the counter (#1216), and it is
+  # absent unless asked for.
+  USAGE_DISTINCT_RESP=$($SOAT_CLI get-usage-aggregate \
+    --project-id "$PROJECT_PUBLIC_ID" \
+    --group-by orchestration_run \
+    --include distinct \
+    --limit 1 | sanitize_json)
+  USAGE_DISTINCT_OK=$(printf '%s\n' "$USAGE_DISTINCT_RESP" | jq -r '
+    (.totals.distinct.generations | type == "number")
+      and (.totals.distinct.generations > 0)
+      and (.totals.distinct.orchestration_runs | type == "number")
+      and (.totals.distinct.traces | type == "number")
+      and (.totals.distinct.agents | type == "number")
+      and (.totals.distinct.actors | type == "number")
+      and (.totals.distinct.sessions | type == "number")
+      and (.totals.distinct.ai_providers | type == "number")')
+  if [ "$USAGE_DISTINCT_OK" != "true" ]; then
+    echo "ERROR: get-usage-aggregate --include distinct did not report the distinct counters" >&2
+    echo "$USAGE_DISTINCT_RESP" >&2
+    exit 1
+  fi
+
+  USAGE_NO_DISTINCT=$($SOAT_CLI get-usage-aggregate \
+    --project-id "$PROJECT_PUBLIC_ID" \
+    --group-by orchestration_run \
+    --limit 1 | sanitize_json)
+  if ! printf '%s\n' "$USAGE_NO_DISTINCT" | jq -e '.totals.distinct == null' >/dev/null 2>&1; then
+    echo "ERROR: totals.distinct was present without include=distinct" >&2
+    echo "$USAGE_NO_DISTINCT" >&2
+    exit 1
+  fi
+  echo "Usage aggregate distinct counters: OK"
 fi
 
 # 34b-v. End-user attribution — a session-driven generation attributes its usage
@@ -3960,30 +3996,30 @@ $SOAT_CLI generate-session-response --wait true --session-id "$EUA_SESSION_ID" >
 
 # Filter the raw meters by actor: every returned row must carry that actor, and
 # the session-driven event must carry the session too.
-EUA_METERS=$($SOAT_CLI list-usage-meters --actor-id "$EUA_ACTOR_ID" | sanitize_json)
-EUA_METERS_OK=$(printf '%s\n' "$EUA_METERS" | jq -r --arg actor "$EUA_ACTOR_ID" --arg session "$EUA_SESSION_ID" '((.data | length) >= 1) and all(.data[]; .actor_id == $actor and .session_id == $session)')
-if [ "$EUA_METERS_OK" != "true" ]; then
-  echo "ERROR: list-usage-meters --actor-id did not return actor-attributed rows" >&2
-  printf '%s\n' "$EUA_METERS" >&2
+EUA_EVENTS=$($SOAT_CLI list-usage-events --actor-id "$EUA_ACTOR_ID" | sanitize_json)
+EUA_EVENTS_OK=$(printf '%s\n' "$EUA_EVENTS" | jq -r --arg actor "$EUA_ACTOR_ID" --arg session "$EUA_SESSION_ID" '((.data | length) >= 1) and all(.data[]; .actor_id == $actor and .session_id == $session)')
+if [ "$EUA_EVENTS_OK" != "true" ]; then
+  echo "ERROR: list-usage-events --actor-id did not return actor-attributed rows" >&2
+  printf '%s\n' "$EUA_EVENTS" >&2
   exit 1
 fi
 echo "Usage meters actor/session attribution: OK (actor $EUA_ACTOR_ID)"
 
 # The same spend must be reachable through the aggregate, bucketed by actor.
-EUA_AGG=$($SOAT_CLI get-usage \
+EUA_AGG=$($SOAT_CLI get-usage-aggregate \
   --project-id "$PROJECT_PUBLIC_ID" --group-by actor | sanitize_json)
 EUA_AGG_OK=$(printf '%s\n' "$EUA_AGG" | jq -r --arg actor "$EUA_ACTOR_ID" '(.group_by == "actor") and ([.groups.data[] | select(.key == $actor)] | length == 1)')
 if [ "$EUA_AGG_OK" != "true" ]; then
-  echo "ERROR: get-usage --group-by actor did not bucket the end user's spend" >&2
+  echo "ERROR: get-usage-aggregate --group-by actor did not bucket the end user's spend" >&2
   printf '%s\n' "$EUA_AGG" >&2
   exit 1
 fi
 
-EUA_AGG_SESSION=$($SOAT_CLI get-usage \
+EUA_AGG_SESSION=$($SOAT_CLI get-usage-aggregate \
   --project-id "$PROJECT_PUBLIC_ID" --group-by session | sanitize_json)
 EUA_AGG_SESSION_OK=$(printf '%s\n' "$EUA_AGG_SESSION" | jq -r --arg session "$EUA_SESSION_ID" '(.group_by == "session") and ([.groups.data[] | select(.key == $session)] | length == 1)')
 if [ "$EUA_AGG_SESSION_OK" != "true" ]; then
-  echo "ERROR: get-usage --group-by session did not bucket the session's spend" >&2
+  echo "ERROR: get-usage-aggregate --group-by session did not bucket the session's spend" >&2
   printf '%s\n' "$EUA_AGG_SESSION" >&2
   exit 1
 fi
@@ -6387,10 +6423,10 @@ $SOAT_CLI delete-guardrail --guardrail-id "$GUARDRAIL_ID" >/dev/null
 RUN_CEILING_RESP=$($SOAT_CLI create-guardrail \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name smoke-run-ceiling-guardrail \
-  --document '{"class":"B","guard":{"<":[{"var":"runtime.usage.run_tokens"},{"var":"context.action_token_ceiling"}]}}')
+  --document '{"class":"B","guard":{"<":[{"var":"runtime.usage.orchestration_run_tokens"},{"var":"context.action_token_ceiling"}]}}')
 RUN_CEILING_ID=$(printf '%s\n' "$RUN_CEILING_RESP" | jq -r '.id')
 if [ -z "$RUN_CEILING_ID" ] || [ "$RUN_CEILING_ID" = "null" ]; then
-  echo "ERROR: runtime.usage.run_tokens was rejected by the guardrail catalog" >&2
+  echo "ERROR: runtime.usage.orchestration_run_tokens was rejected by the guardrail catalog" >&2
   echo "$RUN_CEILING_RESP" >&2
   exit 1
 fi

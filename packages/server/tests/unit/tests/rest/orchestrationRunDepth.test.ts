@@ -31,10 +31,12 @@ describe('Orchestration run depth', () => {
       .send({ wait: true, orchestration_id: orchestrationId, input: {} });
   };
 
-  const setProjectRunDepth = async (maxRunDepth: number | null) => {
+  const setProjectRunDepth = async (
+    maxOrchestrationRunDepth: number | null
+  ) => {
     const res = await authenticatedTestClient(adminToken)
       .patch(`/api/v1/projects/${projectId}`)
-      .send({ max_run_depth: maxRunDepth });
+      .send({ max_orchestration_run_depth: maxOrchestrationRunDepth });
     expect(res.status).toBe(200);
   };
 
@@ -93,7 +95,7 @@ describe('Orchestration run depth', () => {
       expect(run.body.status).toBe('failed');
       expect(run.body.error.code).toBe('ORCHESTRATION_RUN_DEPTH_LIMIT');
       expect(run.body.error.message).toMatch(/nesting depth 11.*limit of 10/);
-      expect(run.body.run_depth).toBe(0);
+      expect(run.body.orchestration_run_depth).toBe(0);
     });
 
     test('a cycle spanning two graphs fails the same way', async () => {
@@ -210,7 +212,7 @@ describe('Orchestration run depth', () => {
     });
   });
 
-  describe('run_depth on the run', () => {
+  describe('orchestration_run_depth on the run', () => {
     test('is 0 for a caller-started run and 1 for its child', async () => {
       const childId = await createOrchestration({
         name: 'Depth Field Child',
@@ -226,53 +228,61 @@ describe('Orchestration run depth', () => {
       const run = await startRun(parentId);
       expect(run.status).toBe(201);
       expect(run.body.status).toBe('succeeded');
-      expect(run.body.run_depth).toBe(0);
+      expect(run.body.orchestration_run_depth).toBe(0);
 
       const children = await authenticatedTestClient(userToken).get(
         `/api/v1/orchestration-runs?parent_orchestration_run_id=${run.body.id}`
       );
       expect(children.status).toBe(200);
       expect(children.body.data).toHaveLength(1);
-      expect(children.body.data[0].run_depth).toBe(1);
+      expect(children.body.data[0].orchestration_run_depth).toBe(1);
     });
   });
 
-  describe('PATCH /api/v1/projects/{project_id} max_run_depth', () => {
+  describe('PATCH /api/v1/projects/{project_id} max_orchestration_run_depth', () => {
     test('defaults to null, and an admin can set and clear it', async () => {
       const initial = await authenticatedTestClient(adminToken).get(
         `/api/v1/projects/${projectId}`
       );
       expect(initial.status).toBe(200);
-      expect(initial.body.max_run_depth).toBeNull();
+      expect(initial.body.max_orchestration_run_depth).toBeNull();
 
       const set = await authenticatedTestClient(adminToken)
         .patch(`/api/v1/projects/${projectId}`)
-        .send({ max_run_depth: 3 });
+        .send({ max_orchestration_run_depth: 3 });
       expect(set.status).toBe(200);
-      expect(set.body.max_run_depth).toBe(3);
+      expect(set.body.max_orchestration_run_depth).toBe(3);
 
       const cleared = await authenticatedTestClient(adminToken)
         .patch(`/api/v1/projects/${projectId}`)
-        .send({ max_run_depth: null });
+        .send({ max_orchestration_run_depth: null });
       expect(cleared.status).toBe(200);
-      expect(cleared.body.max_run_depth).toBeNull();
+      expect(cleared.body.max_orchestration_run_depth).toBeNull();
+    });
+
+    test('the old max_run_depth spelling is rejected', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/projects/${projectId}`)
+        .send({ max_run_depth: 3 });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
 
     test.each([0, -1, 2.5])(
-      'rejects max_run_depth %p with 400',
+      'rejects max_orchestration_run_depth %p with 400',
       async (value) => {
         const res = await authenticatedTestClient(adminToken)
           .patch(`/api/v1/projects/${projectId}`)
-          .send({ max_run_depth: value });
+          .send({ max_orchestration_run_depth: value });
         expect(res.status).toBe(400);
         expect(res.body.error.code).toBe('VALIDATION_FAILED');
       }
     );
 
-    test('a non-admin cannot set max_run_depth', async () => {
+    test('a non-admin cannot set max_orchestration_run_depth', async () => {
       const res = await authenticatedTestClient(userToken)
         .patch(`/api/v1/projects/${projectId}`)
-        .send({ max_run_depth: 5 });
+        .send({ max_orchestration_run_depth: 5 });
       expect(res.status).toBe(403);
     });
   });

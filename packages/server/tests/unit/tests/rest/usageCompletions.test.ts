@@ -113,7 +113,7 @@ describe('Usage — chat completion metering', () => {
   const waitForMeters = async (expected: number): Promise<MeterRow[]> => {
     for (let attempt = 0; attempt < 100; attempt += 1) {
       const res = await authenticatedTestClient(userToken).get(
-        '/api/v1/usage/meters?meter_type=llm_tokens'
+        '/api/v1/usage/events?meter_type=llm_tokens'
       );
       expect(res.status).toBe(200);
       const rows = res.body.data as MeterRow[];
@@ -161,7 +161,7 @@ describe('Usage — chat completion metering', () => {
       policyActions: [
         'chats:CreateChat',
         'chats:CreateChatCompletion',
-        'usage:ListUsageMeters',
+        'usage:ListEvents',
       ],
       createNoPermUser: false,
     });

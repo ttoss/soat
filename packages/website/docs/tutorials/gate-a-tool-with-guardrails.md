@@ -982,7 +982,7 @@ The classification model, fail-closed evaluation rules, and stricter-wins compos
 
 ## Next Steps
 
-- Feed live values into guards with `guardrail_context` and a `context_tool_id`, and cap a runaway run with `runtime.usage.run_tokens` — see [Per-run spend ceilings](/docs/modules/guardrails#per-run-spend-ceilings).
+- Feed live values into guards with `guardrail_context` and a `context_tool_id`, and cap a runaway run with `runtime.usage.orchestration_run_tokens` — see [Per-run spend ceilings](/docs/modules/guardrails#per-run-spend-ceilings).
 - Model an explicit human decision point in the graph instead of a guardrail-driven one with the [`approval` node](/docs/tutorials/approval-gate).
 - Cap aggregate spend rather than individual calls with [Cap Spend Per End User](/docs/tutorials/cap-spend-per-end-user).
 - Triage what a tripwire files — see [Exceptions](/docs/modules/exceptions).

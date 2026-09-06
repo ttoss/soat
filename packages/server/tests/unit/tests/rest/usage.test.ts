@@ -12,10 +12,17 @@ import {
   recordCompletionUsage,
   recordGenerationUsage,
 } from 'src/lib/usage';
+import {
+  DISTINCT_COUNT_COLUMNS,
+  windowTotalsSelect,
+} from 'src/lib/usageAggregateSql';
 import { snapshotProjectStorage } from 'src/lib/usageStorage';
 import * as usageTokenEventModule from 'src/lib/usageTokenEvent';
 
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import {
+  createScopedPrincipal,
+  setupProjectWithUsers,
+} from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 /**
@@ -38,6 +45,7 @@ describe('Usage', () => {
   let sessionId: string;
   let sessionGenerationId: string;
   let stubServer: Server;
+  let stubBaseUrl: string;
 
   const startStubServer = async (): Promise<string> => {
     stubServer = createServer((req, res) => {
@@ -87,7 +95,7 @@ describe('Usage', () => {
   };
 
   beforeAll(async () => {
-    const stubBaseUrl = await startStubServer();
+    stubBaseUrl = await startStubServer();
 
     const setup = await setupProjectWithUsers({
       prefix: 'usage',
@@ -97,9 +105,9 @@ describe('Usage', () => {
         'agents:CreateSession',
         'agents:SendSessionMessage',
         'actors:CreateActor',
-        'usage:ListUsageMeters',
+        'usage:ListEvents',
         'usage:GetReceipt',
-        'usage:GetUsage',
+        'usage:GetAggregate',
         'usage:ListThresholds',
         'usage:ManageThresholds',
         'orchestrations:CreateOrchestration',
@@ -176,22 +184,22 @@ describe('Usage', () => {
     });
   });
 
-  describe('GET /api/v1/usage/meters', () => {
+  describe('GET /api/v1/usage/events', () => {
     test('returns 401 when unauthenticated', async () => {
-      const response = await testClient.get('/api/v1/usage/meters');
+      const response = await testClient.get('/api/v1/usage/events');
       expect(response.status).toBe(401);
     });
 
     test('returns 403 when the user lacks permission', async () => {
       const response = await authenticatedTestClient(noPermToken).get(
-        '/api/v1/usage/meters'
+        '/api/v1/usage/events'
       );
       expect(response.status).toBe(403);
     });
 
     test('admin without project scoping lists across all projects', async () => {
       const response = await authenticatedTestClient(adminToken).get(
-        '/api/v1/usage/meters'
+        '/api/v1/usage/events'
       );
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body.data)).toBe(true);
@@ -199,7 +207,7 @@ describe('Usage', () => {
 
     test('records an event with token components', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage/meters?generation_id=${generationId}`
+        `/api/v1/usage/events?generation_id=${generationId}`
       );
       expect(response.status).toBe(200);
       expect(response.body.total).toBe(1);
@@ -262,14 +270,14 @@ describe('Usage', () => {
       });
 
       const match = await authenticatedTestClient(userToken).get(
-        '/api/v1/usage/meters?source=memory_extraction'
+        '/api/v1/usage/events?source=memory_extraction'
       );
       expect(match.status).toBe(200);
       expect(match.body.total).toBe(1);
       expect(match.body.data[0].source).toBe('memory_extraction');
 
       const none = await authenticatedTestClient(userToken).get(
-        '/api/v1/usage/meters?source=eval'
+        '/api/v1/usage/events?source=eval'
       );
       expect(none.status).toBe(200);
       expect(none.body.total).toBe(0);
@@ -277,13 +285,13 @@ describe('Usage', () => {
 
     test('filters by meter_type', async () => {
       const match = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage/meters?generation_id=${generationId}&meter_type=llm_tokens`
+        `/api/v1/usage/events?generation_id=${generationId}&meter_type=llm_tokens`
       );
       expect(match.status).toBe(200);
       expect(match.body.total).toBe(1);
 
       const none = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage/meters?generation_id=${generationId}&meter_type=storage`
+        `/api/v1/usage/events?generation_id=${generationId}&meter_type=storage`
       );
       expect(none.status).toBe(200);
       expect(none.body.total).toBe(0);
@@ -291,7 +299,7 @@ describe('Usage', () => {
 
     test('does not expose internal numeric IDs', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        '/api/v1/usage/meters'
+        '/api/v1/usage/events'
       );
       expect(response.status).toBe(200);
       for (const event of response.body.data) {
@@ -302,7 +310,7 @@ describe('Usage', () => {
 
     test('filters by agent_id', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage/meters?agent_id=${agentId}`
+        `/api/v1/usage/events?agent_id=${agentId}`
       );
       expect(response.status).toBe(200);
       expect(response.body.total).toBeGreaterThanOrEqual(1);
@@ -313,7 +321,7 @@ describe('Usage', () => {
 
     test('unknown agent_id filter returns an empty page', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        '/api/v1/usage/meters?agent_id=agent_doesnotexist0'
+        '/api/v1/usage/events?agent_id=agent_doesnotexist0'
       );
       expect(response.status).toBe(200);
       expect(response.body.data).toEqual([]);
@@ -322,7 +330,7 @@ describe('Usage', () => {
 
     test('filters by trace_id', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage/meters?trace_id=${traceId}`
+        `/api/v1/usage/events?trace_id=${traceId}`
       );
       expect(response.status).toBe(200);
       expect(response.body.total).toBe(1);
@@ -331,7 +339,7 @@ describe('Usage', () => {
 
     test('unknown trace_id filter returns an empty page', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        '/api/v1/usage/meters?trace_id=trace_doesnotexist'
+        '/api/v1/usage/events?trace_id=trace_doesnotexist'
       );
       expect(response.status).toBe(200);
       expect(response.body.data).toEqual([]);
@@ -342,7 +350,7 @@ describe('Usage', () => {
   describe('actor and session attribution', () => {
     test('a session-driven generation records actor_id and session_id', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage/meters?generation_id=${sessionGenerationId}`
+        `/api/v1/usage/events?generation_id=${sessionGenerationId}`
       );
       expect(response.status).toBe(200);
       expect(response.body.total).toBe(1);
@@ -354,7 +362,7 @@ describe('Usage', () => {
 
     test('a generation outside a session has null actor_id and session_id', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage/meters?generation_id=${generationId}`
+        `/api/v1/usage/events?generation_id=${generationId}`
       );
       expect(response.status).toBe(200);
       expect(response.body.data[0].actor_id).toBeNull();
@@ -378,7 +386,7 @@ describe('Usage', () => {
       expect(genRes.status).toBe(200);
 
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage/meters?generation_id=${genRes.body.generation_id}`
+        `/api/v1/usage/events?generation_id=${genRes.body.generation_id}`
       );
       expect(response.status).toBe(200);
       expect(response.body.total).toBe(1);
@@ -388,7 +396,7 @@ describe('Usage', () => {
 
     test('filters meters by actor_id', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage/meters?actor_id=${actorId}`
+        `/api/v1/usage/events?actor_id=${actorId}`
       );
       expect(response.status).toBe(200);
       expect(response.body.total).toBeGreaterThanOrEqual(1);
@@ -399,7 +407,7 @@ describe('Usage', () => {
 
     test('filters meters by session_id', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage/meters?session_id=${sessionId}`
+        `/api/v1/usage/events?session_id=${sessionId}`
       );
       expect(response.status).toBe(200);
       expect(response.body.total).toBeGreaterThanOrEqual(1);
@@ -410,7 +418,7 @@ describe('Usage', () => {
 
     test('unknown actor_id filter returns an empty page', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        '/api/v1/usage/meters?actor_id=actor_doesnotexist'
+        '/api/v1/usage/events?actor_id=actor_doesnotexist'
       );
       expect(response.status).toBe(200);
       expect(response.body.data).toEqual([]);
@@ -419,7 +427,7 @@ describe('Usage', () => {
 
     test('unknown session_id filter returns an empty page', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        '/api/v1/usage/meters?session_id=sess_doesnotexist'
+        '/api/v1/usage/events?session_id=sess_doesnotexist'
       );
       expect(response.status).toBe(200);
       expect(response.body.data).toEqual([]);
@@ -428,7 +436,7 @@ describe('Usage', () => {
 
     test('groups usage by actor', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage?project_id=${projectId}&group_by=actor`
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=actor`
       );
       expect(res.status).toBe(200);
       expect(res.body.group_by).toBe('actor');
@@ -441,7 +449,7 @@ describe('Usage', () => {
 
     test('groups usage by session', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage?project_id=${projectId}&group_by=session`
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=session`
       );
       expect(res.status).toBe(200);
       expect(res.body.group_by).toBe('session');
@@ -456,7 +464,7 @@ describe('Usage', () => {
 
     test('generations outside a session collapse into the null actor bucket', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage?project_id=${projectId}&group_by=actor`
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=actor`
       );
       expect(res.status).toBe(200);
       const unattributed = res.body.groups.data.find(
@@ -481,7 +489,7 @@ describe('Usage', () => {
       const actionGenerationId = genRes.body.id;
 
       const byGeneration = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage/meters?generation_id=${actionGenerationId}`
+        `/api/v1/usage/events?generation_id=${actionGenerationId}`
       );
       expect(byGeneration.status).toBe(200);
       expect(byGeneration.body.total).toBe(1);
@@ -489,7 +497,7 @@ describe('Usage', () => {
       expect(byGeneration.body.data[0].trigger_id).toBeNull();
 
       const byAction = await authenticatedTestClient(userToken).get(
-        '/api/v1/usage/meters?action_id=action-A'
+        '/api/v1/usage/events?action_id=action-A'
       );
       expect(byAction.status).toBe(200);
       expect(byAction.body.total).toBe(1);
@@ -511,7 +519,7 @@ describe('Usage', () => {
       })) as { id: string };
 
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage/meters?trigger_id=${triggerPublicId}`
+        `/api/v1/usage/events?trigger_id=${triggerPublicId}`
       );
       expect(response.status).toBe(200);
       expect(response.body.total).toBe(1);
@@ -591,7 +599,7 @@ describe('Usage', () => {
         usage: undefined,
       });
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage/meters?generation_id=${generationId}`
+        `/api/v1/usage/events?generation_id=${generationId}`
       );
       expect(response.status).toBe(200);
       expect(response.body.total).toBe(1);
@@ -642,7 +650,7 @@ describe('Usage', () => {
       });
 
       const response = await authenticatedTestClient(userToken).get(
-        '/api/v1/usage/meters'
+        '/api/v1/usage/events'
       );
       expect(response.status).toBe(200);
       const seeded = response.body.data.find((e: { id: string }) => {
@@ -927,7 +935,7 @@ describe('Usage', () => {
       expect(genRes.status).toBe(200);
 
       const meters = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage/meters?generation_id=${genRes.body.id}`
+        `/api/v1/usage/events?generation_id=${genRes.body.id}`
       );
       expect(meters.status).toBe(200);
       // (10-4)*1e-6 + 4*0.5e-6 + 20*2e-6 = (6 + 2 + 40)e-6 = 4.8e-5
@@ -984,7 +992,7 @@ describe('Usage', () => {
       expect(genRes.status).toBe(200);
 
       const meters = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage/meters?generation_id=${genRes.body.id}`
+        `/api/v1/usage/events?generation_id=${genRes.body.id}`
       );
       // Override: (10-4)*10e-6 + 4*10e-6 + 20*20e-6 = (60 + 40 + 400)e-6 = 5e-4.
       expect(meters.body.data[0].cost_usd).toBeCloseTo(0.0005, 9);
@@ -1092,16 +1100,16 @@ describe('Usage', () => {
       expect(line.cost_usd).toBeGreaterThan(0);
 
       // Full prompt tokens are reconstructed as uncached input + cached.
-      expect(res.body.total_input_tokens).toBe(10);
-      expect(res.body.total_output_tokens).toBe(20);
-      expect(res.body.total_cached_tokens).toBe(4);
-      expect(res.body.total_reasoning_tokens).toBe(7);
-      expect(res.body.total_cost_usd).toBeGreaterThan(0);
+      expect(res.body.totals.input_tokens).toBe(10);
+      expect(res.body.totals.output_tokens).toBe(20);
+      expect(res.body.totals.cached_tokens).toBe(4);
+      expect(res.body.totals.reasoning_tokens).toBe(7);
+      expect(res.body.totals.cost_usd).toBeGreaterThan(0);
 
       // Single-type receipt → one by_meter_type entry equal to the total.
       expect(res.body.by_meter_type).toHaveLength(1);
       expect(res.body.by_meter_type[0].meter_type).toBe('llm_tokens');
-      expect(res.body.by_meter_type[0].cost_usd).toBe(res.body.total_cost_usd);
+      expect(res.body.by_meter_type[0].cost_usd).toBe(res.body.totals.cost_usd);
     });
 
     test('an admin gets an unpriced receipt with null costs', async () => {
@@ -1125,33 +1133,33 @@ describe('Usage', () => {
       expect(inputComponent.cost_usd).toBeNull();
       expect(inputComponent.price_id).toBeNull();
 
-      expect(res.body.total_cost_usd).toBeNull();
+      expect(res.body.totals.cost_usd).toBeNull();
       expect(res.body.by_meter_type).toHaveLength(1);
       expect(res.body.by_meter_type[0].cost_usd).toBeNull();
       // Token totals are still reconstructed from the components.
-      expect(res.body.total_input_tokens).toBe(10);
-      expect(res.body.total_cached_tokens).toBe(4);
+      expect(res.body.totals.input_tokens).toBe(10);
+      expect(res.body.totals.cached_tokens).toBe(4);
     });
   });
 
   describe('GET /api/v1/usage (aggregate)', () => {
     test('unauthenticated request returns 401', async () => {
       const res = await testClient.get(
-        `/api/v1/usage?project_id=${projectId}&group_by=model`
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=model`
       );
       expect(res.status).toBe(401);
     });
 
     test('user without permission returns 403', async () => {
       const res = await authenticatedTestClient(noPermToken).get(
-        `/api/v1/usage?project_id=${projectId}&group_by=model`
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=model`
       );
       expect(res.status).toBe(403);
     });
 
     test('missing project_id returns 400', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        '/api/v1/usage?group_by=model'
+        '/api/v1/usage/aggregate?group_by=model'
       );
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
@@ -1159,7 +1167,7 @@ describe('Usage', () => {
 
     test('invalid group_by returns 400', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage?project_id=${projectId}&group_by=nonsense`
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=nonsense`
       );
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
@@ -1167,7 +1175,7 @@ describe('Usage', () => {
 
     test('missing group_by returns 400', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage?project_id=${projectId}`
+        `/api/v1/usage/aggregate?project_id=${projectId}`
       );
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
@@ -1175,7 +1183,7 @@ describe('Usage', () => {
 
     test('invalid from timestamp returns 400', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage?project_id=${projectId}&group_by=model&from=not-a-date`
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=model&from=not-a-date`
       );
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
@@ -1183,14 +1191,14 @@ describe('Usage', () => {
 
     test('an unknown project returns 403 (not visible in scope)', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        '/api/v1/usage?project_id=proj_doesNotExist01&group_by=model'
+        '/api/v1/usage/aggregate?project_id=proj_doesNotExist01&group_by=model'
       );
       expect(res.status).toBe(403);
     });
 
     test('groups by model with token and cost totals', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage?project_id=${projectId}&group_by=model`
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=model`
       );
       expect(res.status).toBe(200);
       expect(res.body.project_id).toBe(projectId);
@@ -1217,7 +1225,7 @@ describe('Usage', () => {
 
     test('groups by meter_type', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage?project_id=${projectId}&group_by=meter_type`
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=meter_type`
       );
       expect(res.status).toBe(200);
       const llm = res.body.groups.data.find((g: { key: string }) => {
@@ -1258,7 +1266,7 @@ describe('Usage', () => {
       });
 
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage?project_id=${projectId}&group_by=source`
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=source`
       );
       expect(res.status).toBe(200);
 
@@ -1282,7 +1290,7 @@ describe('Usage', () => {
 
     test('groups by agent', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage?project_id=${projectId}&group_by=agent`
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=agent`
       );
       expect(res.status).toBe(200);
       const byAgent = res.body.groups.data.find((g: { key: string }) => {
@@ -1294,7 +1302,7 @@ describe('Usage', () => {
 
     test('groups by day (UTC calendar day key)', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage?project_id=${projectId}&group_by=day`
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=day`
       );
       expect(res.status).toBe(200);
       expect(res.body.groups.data.length).toBeGreaterThanOrEqual(1);
@@ -1306,7 +1314,7 @@ describe('Usage', () => {
     test('a future-only window returns empty groups and zeroed totals', async () => {
       const from = new Date(Date.now() + 10 * 86_400_000).toISOString();
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage?project_id=${projectId}&group_by=model&from=${from}`
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=model&from=${from}`
       );
       expect(res.status).toBe(200);
       expect(res.body.groups.data).toEqual([]);
@@ -1407,7 +1415,7 @@ describe('Usage', () => {
 
     test('groups is the canonical paginated envelope', async () => {
       const res = await authenticatedTestClient(adminToken).get(
-        `/api/v1/usage?project_id=${pagedProjectId}&group_by=model`
+        `/api/v1/usage/aggregate?project_id=${pagedProjectId}&group_by=model`
       );
       expect(res.status).toBe(200);
 
@@ -1422,7 +1430,7 @@ describe('Usage', () => {
 
     test('totals carries the number of events in the window', async () => {
       const res = await authenticatedTestClient(adminToken).get(
-        `/api/v1/usage?project_id=${pagedProjectId}&group_by=model`
+        `/api/v1/usage/aggregate?project_id=${pagedProjectId}&group_by=model`
       );
       expect(res.status).toBe(200);
       expect(res.body.totals.event_count).toBe(4);
@@ -1430,7 +1438,7 @@ describe('Usage', () => {
 
     test('groups come back cost-descending, ties broken by key', async () => {
       const res = await authenticatedTestClient(adminToken).get(
-        `/api/v1/usage?project_id=${pagedProjectId}&group_by=model`
+        `/api/v1/usage/aggregate?project_id=${pagedProjectId}&group_by=model`
       );
       expect(res.status).toBe(200);
 
@@ -1442,7 +1450,7 @@ describe('Usage', () => {
 
     test('limit bounds the page while total still counts every group', async () => {
       const res = await authenticatedTestClient(adminToken).get(
-        `/api/v1/usage?project_id=${pagedProjectId}&group_by=model&limit=2`
+        `/api/v1/usage/aggregate?project_id=${pagedProjectId}&group_by=model&limit=2`
       );
       expect(res.status).toBe(200);
 
@@ -1460,7 +1468,7 @@ describe('Usage', () => {
     test('offset walks the groups without repeating or skipping one', async () => {
       const page = async (offset: number) => {
         const res = await authenticatedTestClient(adminToken).get(
-          `/api/v1/usage?project_id=${pagedProjectId}&group_by=model&limit=2&offset=${offset}`
+          `/api/v1/usage/aggregate?project_id=${pagedProjectId}&group_by=model&limit=2&offset=${offset}`
         );
         expect(res.status).toBe(200);
         return readGroups(res.body).data.map((group) => {
@@ -1481,7 +1489,7 @@ describe('Usage', () => {
     test('totals stay whole-window on every page', async () => {
       const readTotals = async (query: string) => {
         const res = await authenticatedTestClient(adminToken).get(
-          `/api/v1/usage?project_id=${pagedProjectId}&group_by=model${query}`
+          `/api/v1/usage/aggregate?project_id=${pagedProjectId}&group_by=model${query}`
         );
         expect(res.status).toBe(200);
         return res.body.totals;
@@ -1499,7 +1507,7 @@ describe('Usage', () => {
 
     test('limit is clamped to the shared maximum page size', async () => {
       const res = await authenticatedTestClient(adminToken).get(
-        `/api/v1/usage?project_id=${pagedProjectId}&group_by=model&limit=5000`
+        `/api/v1/usage/aggregate?project_id=${pagedProjectId}&group_by=model&limit=5000`
       );
       expect(res.status).toBe(200);
       expect(readGroups(res.body).limit).toBe(100);
@@ -1545,7 +1553,7 @@ describe('Usage', () => {
       });
 
       const res = await authenticatedTestClient(adminToken).get(
-        `/api/v1/usage?project_id=${dayProjectId}&group_by=day`
+        `/api/v1/usage/aggregate?project_id=${dayProjectId}&group_by=day`
       );
       expect(res.status).toBe(200);
       expect(
@@ -1579,7 +1587,7 @@ describe('Usage', () => {
       }
 
       const res = await authenticatedTestClient(adminToken).get(
-        `/api/v1/usage?project_id=${unpricedProjectId}&group_by=model`
+        `/api/v1/usage/aggregate?project_id=${unpricedProjectId}&group_by=model`
       );
       expect(res.status).toBe(200);
       expect(
@@ -1691,7 +1699,7 @@ describe('Usage', () => {
       });
 
       const res = await authenticatedTestClient(adminToken).get(
-        `/api/v1/usage?project_id=${quantityProjectId}&group_by=meter_type`
+        `/api/v1/usage/aggregate?project_id=${quantityProjectId}&group_by=meter_type`
       );
       expect(res.status).toBe(200);
 
@@ -1707,7 +1715,7 @@ describe('Usage', () => {
 
     test('a storage bucket reports its measured gb_day quantity, not zero', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage?project_id=${projectId}&group_by=meter_type`
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=meter_type`
       );
       expect(res.status).toBe(200);
 
@@ -1731,7 +1739,7 @@ describe('Usage', () => {
 
     test('an llm_tokens bucket reports its token components as quantities too', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage?project_id=${projectId}&group_by=meter_type`
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=meter_type`
       );
       expect(res.status).toBe(200);
 
@@ -1756,7 +1764,7 @@ describe('Usage', () => {
 
     test('components are sorted by name so the rollup is stable', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage?project_id=${projectId}&group_by=meter_type`
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=meter_type`
       );
       expect(res.status).toBe(200);
       const names = res.body.totals.components.map((c: AggregateComponent) => {
@@ -1769,7 +1777,7 @@ describe('Usage', () => {
 
     test('meter_type narrows the rollup to one meter', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage?project_id=${projectId}&group_by=model&meter_type=storage`
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=model&meter_type=storage`
       );
       expect(res.status).toBe(200);
       expect(res.body.meter_type).toBe('storage');
@@ -1785,7 +1793,7 @@ describe('Usage', () => {
 
     test('meter_type echoes null when unfiltered', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage?project_id=${projectId}&group_by=meter_type`
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=meter_type`
       );
       expect(res.status).toBe(200);
       expect(res.body.meter_type).toBeNull();
@@ -1794,7 +1802,7 @@ describe('Usage', () => {
 
     test('an unknown meter_type returns an empty rollup', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage?project_id=${projectId}&group_by=model&meter_type=nope`
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=model&meter_type=nope`
       );
       expect(res.status).toBe(200);
       expect(res.body.groups.data).toEqual([]);
@@ -2355,7 +2363,7 @@ describe('Usage', () => {
 
     test('its tokens are metered', async () => {
       const res = await authenticatedTestClient(adminToken).get(
-        `/api/v1/usage/meters?generation_id=${failedGenerationId}`
+        `/api/v1/usage/events?generation_id=${failedGenerationId}`
       );
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveLength(1);
@@ -2424,7 +2432,7 @@ describe('Usage', () => {
         `/api/v1/orchestration-runs/${childRunId}`
       );
       expect(res.status).toBe(200);
-      expect(res.body.usage.total_output_tokens).toBe(20);
+      expect(res.body.usage.output_tokens).toBe(20);
     });
 
     test("the parent's usage covers what it delegated", async () => {
@@ -2436,9 +2444,9 @@ describe('Usage', () => {
       // not tokens, so every token on this figure was spent by the child run.
       // `usage` answers "what did this run cost", which for a delegating graph
       // is the subtree — not the fraction that happens to sit on this record.
-      expect(res.body.usage.total_output_tokens).toBe(20);
-      expect(res.body.usage.total_input_tokens).toBe(10);
-      expect('total_cost_usd' in res.body.usage).toBe(true);
+      expect(res.body.usage.output_tokens).toBe(20);
+      expect(res.body.usage.input_tokens).toBe(10);
+      expect('cost_usd' in res.body.usage).toBe(true);
     });
 
     test("the parent's own-nodes figure excludes its children", async () => {
@@ -2447,10 +2455,10 @@ describe('Usage', () => {
       );
       expect(res.status).toBe(200);
       // The split a run-tree reader needs: own vs subtree, without an N+1 walk.
-      expect(res.body.usage_own.total_output_tokens).toBe(0);
+      expect(res.body.usage_own.output_tokens).toBe(0);
       // `usage` is never below the own figure — it contains it.
-      expect(res.body.usage.total_output_tokens).toBeGreaterThanOrEqual(
-        res.body.usage_own.total_output_tokens
+      expect(res.body.usage.output_tokens).toBeGreaterThanOrEqual(
+        res.body.usage_own.output_tokens
       );
     });
 
@@ -2459,12 +2467,10 @@ describe('Usage', () => {
         `/api/v1/orchestration-runs/${childRunId}`
       );
       expect(res.status).toBe(200);
-      expect(res.body.usage_own.total_output_tokens).toBe(
-        res.body.usage.total_output_tokens
+      expect(res.body.usage_own.output_tokens).toBe(
+        res.body.usage.output_tokens
       );
-      expect(res.body.usage_own.total_cost_usd).toBe(
-        res.body.usage.total_cost_usd
-      );
+      expect(res.body.usage_own.cost_usd).toBe(res.body.usage.cost_usd);
     });
   });
 
@@ -2499,7 +2505,7 @@ describe('Usage', () => {
 
     test('the run node meters with orchestration_run_id and node_id', async () => {
       const res = await authenticatedTestClient(adminToken).get(
-        '/api/v1/usage/meters'
+        '/api/v1/usage/events'
       );
       expect(res.status).toBe(200);
       // The agent node now emits two events: the llm_tokens meter and a
@@ -2516,12 +2522,88 @@ describe('Usage', () => {
       expect(llmEvents[0].node_id).toBe(nodeId);
     });
 
-    test('groups usage by run', async () => {
+    test('distinct counts the run once and both kinds of generation', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage?project_id=${projectId}&group_by=run`
+        `/api/v1/usage/aggregate?project_id=${projectId}` +
+          `&group_by=orchestration_run&include=distinct`
       );
       expect(res.status).toBe(200);
-      expect(res.body.group_by).toBe('run');
+
+      // The distinct run count is the bucket count *minus its null bucket* —
+      // which is the whole distinction: this project also carries the outer
+      // setup's standalone generations, so the two figures differ by exactly
+      // the one bucket that counts nothing.
+      const buckets = res.body.groups.data as Array<{ key: string | null }>;
+      expect(res.body.groups.total).toBe(buckets.length);
+      const namedRuns = buckets.filter((bucket) => {
+        return bucket.key !== null;
+      });
+      expect(namedRuns.length).toBeGreaterThan(0);
+      expect(res.body.totals.distinct.orchestration_runs).toBe(
+        namedRuns.length
+      );
+      expect(res.body.groups.total).toBe(namedRuns.length + 1);
+
+      // The standalone generations the null bucket holds are counted here and
+      // nowhere in the run figure.
+      expect(res.body.totals.distinct.generations).toBeGreaterThan(
+        res.body.totals.distinct.orchestration_runs
+      );
+    });
+
+    test('a second attempt on a run counts once in orchestration_runs', async () => {
+      const before = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${projectId}` +
+          `&group_by=orchestration_run&include=distinct`
+      );
+      expect(before.status).toBe(200);
+
+      // A retried node writes a second event carrying a second generation
+      // under the same run — the shape the metering layer sees, which is the
+      // layer this assertion is about. Seeded directly rather than driven
+      // through a transient node failure and its backoff.
+      const run = await db.OrchestrationRun.findOne({
+        where: { publicId: orchestrationRunId },
+      });
+      const generation = await db.Generation.findOne({
+        where: { publicId: generationId },
+      });
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+      await db.UsageEvent.create({
+        projectId: project!.id as number,
+        orchestrationRunId: run!.id as number,
+        nodeId,
+        generationId: generation!.id as number,
+        meterType: 'llm_tokens',
+        provider: 'stub',
+        model: 'stub-model',
+        costUsd: null,
+        idempotencyKey: `retry-${generatePublicId(
+          PUBLIC_ID_PREFIXES.usageEvent
+        )}`,
+      });
+
+      const after = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${projectId}` +
+          `&group_by=orchestration_run&include=distinct`
+      );
+      expect(after.status).toBe(200);
+      expect(after.body.totals.event_count).toBe(
+        before.body.totals.event_count + 1
+      );
+      expect(after.body.totals.distinct.orchestration_runs).toBe(
+        before.body.totals.distinct.orchestration_runs
+      );
+    });
+
+    test('groups usage by orchestration_run', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=orchestration_run`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.group_by).toBe('orchestration_run');
       const byRun = res.body.groups.data.find((g: { key: string | null }) => {
         return g.key === orchestrationRunId;
       });
@@ -2546,10 +2628,10 @@ describe('Usage', () => {
       expect(res.body.currency).toBe('USD');
       expect(res.body.line_items.length).toBeGreaterThanOrEqual(1);
       // Deterministic stub token counts, reconstructed from the components.
-      expect(res.body.total_input_tokens).toBe(10);
-      expect(res.body.total_output_tokens).toBe(20);
-      expect(res.body.total_cached_tokens).toBe(4);
-      expect(res.body.total_reasoning_tokens).toBe(7);
+      expect(res.body.totals.input_tokens).toBe(10);
+      expect(res.body.totals.output_tokens).toBe(20);
+      expect(res.body.totals.cached_tokens).toBe(4);
+      expect(res.body.totals.reasoning_tokens).toBe(7);
       // The run also carries a compute_execution meter (P4), so assert the
       // llm_tokens roll-up by lookup rather than by position.
       const llmRollup = res.body.by_meter_type.find(
@@ -2646,13 +2728,13 @@ describe('Usage', () => {
       );
       expect(res.status).toBe(200);
       expect(res.body.usage).toBeDefined();
-      expect(res.body.usage.total_input_tokens).toBe(10);
-      expect(res.body.usage.total_output_tokens).toBe(20);
-      expect(res.body.usage.total_cached_tokens).toBe(4);
-      expect(res.body.usage.total_reasoning_tokens).toBe(7);
+      expect(res.body.usage.input_tokens).toBe(10);
+      expect(res.body.usage.output_tokens).toBe(20);
+      expect(res.body.usage.cached_tokens).toBe(4);
+      expect(res.body.usage.reasoning_tokens).toBe(7);
       // total_cost_usd is present (a number or null); its value depends on the
       // price-book timeline, so only its presence is asserted here.
-      expect('total_cost_usd' in res.body.usage).toBe(true);
+      expect('cost_usd' in res.body.usage).toBe(true);
     });
 
     test('a replayed node upserts into a no-op (idempotent by run:node)', async () => {
@@ -2782,7 +2864,7 @@ describe('Usage', () => {
       expect(run.status).toBe('succeeded');
 
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage/meters?trigger_id=${triggerPublicId}`
+        `/api/v1/usage/events?trigger_id=${triggerPublicId}`
       );
       expect(res.status).toBe(200);
       expect(res.body.total).toBe(1);
@@ -2828,7 +2910,7 @@ describe('Usage', () => {
       runIdValue: string
     ): Promise<Array<Record<string, unknown>>> => {
       const res = await authenticatedTestClient(adminToken).get(
-        `/api/v1/usage/meters?meter_type=compute_execution`
+        `/api/v1/usage/events?meter_type=compute_execution`
       );
       expect(res.status).toBe(200);
       return res.body.data.filter(
@@ -2896,7 +2978,7 @@ describe('Usage', () => {
 
     test('a transform node writes no llm_tokens event', async () => {
       const res = await authenticatedTestClient(adminToken).get(
-        '/api/v1/usage/meters?meter_type=llm_tokens'
+        '/api/v1/usage/events?meter_type=llm_tokens'
       );
       expect(res.status).toBe(200);
       const llm = res.body.data.filter(
@@ -2935,7 +3017,7 @@ describe('Usage', () => {
 
     test('an agent node meters both llm_tokens and compute_execution', async () => {
       const res = await authenticatedTestClient(adminToken).get(
-        '/api/v1/usage/meters'
+        '/api/v1/usage/events'
       );
       expect(res.status).toBe(200);
       const forRun = res.body.data.filter(
@@ -2952,6 +3034,286 @@ describe('Usage', () => {
       // Exactly one compute event per node execution (idempotent, not doubled).
       expect(byType('compute_execution')).toHaveLength(1);
       expect(byType('compute_execution')[0].node_id).toBe('ag');
+    });
+  });
+
+  describe('the renamed usage surface', () => {
+    test('group_by=orchestration_run answers and the old `run` is a 400', async () => {
+      const renamed = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=orchestration_run`
+      );
+      expect(renamed.status).toBe(200);
+      expect(renamed.body.group_by).toBe('orchestration_run');
+
+      const old = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=run`
+      );
+      expect(old.status).toBe(400);
+      expect(old.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('the old collection and root aggregate paths are gone', async () => {
+      const meters = await authenticatedTestClient(adminToken).get(
+        '/api/v1/usage/meters'
+      );
+      expect(meters.status).toBe(404);
+
+      const root = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage?project_id=${projectId}&group_by=model`
+      );
+      expect(root.status).toBe(404);
+    });
+
+    test('the new paths are gated by the new IAM actions', async () => {
+      // A principal granted only the renamed actions reaches both routes; the
+      // old action names no longer name a permission at all.
+      const scoped = await createScopedPrincipal({
+        adminToken,
+        projectId,
+        username: 'usagerenamed',
+        actions: ['usage:ListEvents', 'usage:GetAggregate'],
+      });
+
+      const events = await authenticatedTestClient(scoped).get(
+        '/api/v1/usage/events'
+      );
+      expect(events.status).toBe(200);
+
+      const aggregate = await authenticatedTestClient(scoped).get(
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=model`
+      );
+      expect(aggregate.status).toBe(200);
+
+      const stale = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [{ effect: 'Allow', action: ['usage:GetUsage'] }],
+          },
+        });
+      expect(stale.status).toBe(400);
+    });
+  });
+
+  /**
+   * `totals.distinct` — the counters a "how many X this cycle" question reads.
+   *
+   * The dimension the old spec pointed at (`groups.total` under
+   * `group_by=orchestration_run`) counts *buckets*, and a null key is a real bucket, so a
+   * project whose traffic is standalone generations reported 1 whatever the
+   * volume (#1216). These pin the distinction: the bucket count stays what it
+   * is, and the entity counts live on `totals` behind `include=distinct`.
+   */
+  describe('GET /api/v1/usage/aggregate — totals.distinct', () => {
+    let standaloneProjectId: string;
+    let standaloneAgentId: string;
+    let standaloneProviderId: string;
+    // Two direct generations plus the session-driven one below.
+    const DIRECT_GENERATIONS = 2;
+
+    const readDistinct = async (args: {
+      projectId: string;
+      query?: string;
+    }) => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${args.projectId}` +
+          `&group_by=orchestration_run&include=distinct${args.query ?? ''}`
+      );
+      expect(res.status).toBe(200);
+      return res.body.totals.distinct as Record<string, number>;
+    };
+
+    beforeAll(async () => {
+      const projectRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'usage-distinct-standalone' });
+      expect(projectRes.status).toBe(201);
+      standaloneProjectId = projectRes.body.id;
+
+      const providerRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: standaloneProjectId,
+          name: 'Distinct Stub Provider',
+          provider: 'ollama',
+          default_model: 'stub-model',
+          base_url: stubBaseUrl,
+        });
+      expect(providerRes.status).toBe(201);
+      standaloneProviderId = providerRes.body.id;
+
+      const agentRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: standaloneProviderId,
+          project_id: standaloneProjectId,
+          name: 'Distinct Metered Agent',
+        });
+      expect(agentRes.status).toBe(201);
+      standaloneAgentId = agentRes.body.id;
+
+      for (let i = 0; i < DIRECT_GENERATIONS; i++) {
+        const genRes = await authenticatedTestClient(userToken)
+          .post(`/api/v1/agents/${standaloneAgentId}/generate?wait=true`)
+          .send({ messages: [{ role: 'user', content: `direct ${i}` }] });
+        expect(genRes.status).toBe(200);
+        expect(genRes.body.status).toBe('completed');
+      }
+
+      // One end user talking through a session — the only traffic in this
+      // project that attributes an actor and a session.
+      const actorRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/actors')
+        .send({ project_id: standaloneProjectId, name: 'Distinct End User' });
+      expect(actorRes.status).toBe(201);
+
+      const sessionRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/sessions')
+        .send({ agent_id: standaloneAgentId, actor_id: actorRes.body.id });
+      expect(sessionRes.status).toBe(201);
+
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/sessions/${sessionRes.body.id}/messages`)
+        .send({ message: 'hello' });
+
+      const sessionGenRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/sessions/${sessionRes.body.id}/generate?wait=true`)
+        .send({});
+      expect(sessionGenRes.status).toBe(200);
+      expect(sessionGenRes.body.status).toBe('completed');
+    }, 90000);
+
+    test('counts generations while the run bucket count stays 1', async () => {
+      const distinct = await readDistinct({ projectId: standaloneProjectId });
+      expect(distinct.generations).toBe(DIRECT_GENERATIONS + 1);
+      expect(distinct.orchestration_runs).toBe(0);
+
+      // The figure the old spec pointed at, unchanged and still not a count of
+      // anything: every event here collapses into the single null bucket.
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${standaloneProjectId}&group_by=orchestration_run`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.groups.total).toBe(1);
+      expect(res.body.groups.data[0].key).toBeNull();
+    });
+
+    test('counts traces, agents and providers over the same window', async () => {
+      const distinct = await readDistinct({ projectId: standaloneProjectId });
+      expect(distinct.traces).toBe(DIRECT_GENERATIONS + 1);
+      expect(distinct.agents).toBe(1);
+      expect(distinct.ai_providers).toBe(1);
+    });
+
+    test('actors and sessions count the session-path generation only', async () => {
+      const distinct = await readDistinct({ projectId: standaloneProjectId });
+      expect(distinct.actors).toBe(1);
+      expect(distinct.sessions).toBe(1);
+    });
+
+    test('a generation-less completion moves event_count and nothing else', async () => {
+      const before = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${standaloneProjectId}&group_by=orchestration_run&include=distinct`
+      );
+      expect(before.status).toBe(200);
+
+      const project = await db.Project.findOne({
+        where: { publicId: standaloneProjectId },
+      });
+      await recordCompletionUsage({
+        source: 'chat',
+        projectId: project!.id as number,
+        provider: 'ollama',
+        aiProviderId: null,
+        model: 'stub-model',
+        usage: {
+          inputTokens: 5,
+          outputTokens: 5,
+          totalTokens: 10,
+          inputTokenDetails: {
+            noCacheTokens: undefined,
+            cacheReadTokens: undefined,
+            cacheWriteTokens: undefined,
+          },
+          outputTokenDetails: {
+            textTokens: undefined,
+            reasoningTokens: undefined,
+          },
+        },
+      });
+
+      const after = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${standaloneProjectId}&group_by=orchestration_run&include=distinct`
+      );
+      expect(after.status).toBe(200);
+      expect(after.body.totals.event_count).toBe(
+        before.body.totals.event_count + 1
+      );
+      expect(after.body.totals.distinct).toEqual(before.body.totals.distinct);
+    });
+
+    test('distinct is absent unless include=distinct is sent', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${standaloneProjectId}&group_by=model`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.totals.distinct).toBeUndefined();
+    });
+
+    test('groups never carry distinct, even under include=distinct', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${standaloneProjectId}&group_by=model&include=distinct`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.groups.data.length).toBeGreaterThan(0);
+      for (const group of res.body.groups.data) {
+        expect(group.distinct).toBeUndefined();
+      }
+    });
+
+    test('the totals query runs no DISTINCT aggregate unless asked', () => {
+      // The opt-in exists because Postgres sorts the window once per
+      // `COUNT(DISTINCT …)`; the default path must not pay for a key it was
+      // not asked for, whatever the event grows to carry.
+      expect(windowTotalsSelect({ distinct: false })).not.toMatch(/DISTINCT/);
+
+      const withDistinct = windowTotalsSelect({ distinct: true });
+      for (const [key, column] of Object.entries(DISTINCT_COUNT_COLUMNS)) {
+        expect(withDistinct).toContain(
+          `COUNT(DISTINCT e."${column}") AS ${key}`
+        );
+      }
+    });
+
+    test('an include value other than distinct is a 400', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${standaloneProjectId}&group_by=model&include=nonsense`
+      );
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('the distinct key set is the event model FK set minus project_id', async () => {
+      const foreignKeyColumns = Object.values(db.UsageEvent.getAttributes())
+        .filter((attribute) => {
+          return attribute.references !== undefined;
+        })
+        .map((attribute) => {
+          return attribute.field as string;
+        })
+        .filter((field) => {
+          return field !== 'project_id';
+        })
+        .sort();
+
+      expect(Object.values(DISTINCT_COUNT_COLUMNS).sort()).toEqual(
+        foreignKeyColumns
+      );
+
+      const distinct = await readDistinct({ projectId: standaloneProjectId });
+      expect(Object.keys(distinct).sort()).toEqual(
+        Object.keys(DISTINCT_COUNT_COLUMNS).sort()
+      );
     });
   });
 });

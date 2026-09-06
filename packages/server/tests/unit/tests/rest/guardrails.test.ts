@@ -623,7 +623,9 @@ describe('Guardrails', () => {
       // No usage events → windowed cost is 0, under the ceiling → guard passes.
       expect(response.body.guard_result).toBe(true);
       expect(response.body.decision).toBe('execute');
-      expect(response.body.context_snapshot['runtime.usage.cost_usd_24h']).toBe(0);
+      expect(response.body.context_snapshot['runtime.usage.cost_usd_24h']).toBe(
+        0
+      );
     });
 
     test('run-scoped usage keys are catalogued and fail closed outside a run', async () => {
@@ -636,7 +638,7 @@ describe('Guardrails', () => {
             class: 'B',
             guard: {
               '<': [
-                { var: 'runtime.usage.run_tokens' },
+                { var: 'runtime.usage.orchestration_run_tokens' },
                 { var: 'context.action_token_ceiling' },
               ],
             },
@@ -655,7 +657,51 @@ describe('Guardrails', () => {
       expect(response.body.guard_result).toBe(false);
       expect(response.body.decision).toBe('tripwire');
       expect(
-        response.body.context_snapshot['runtime.usage.run_tokens']
+        response.body.context_snapshot['runtime.usage.orchestration_run_tokens']
+      ).toBeNull();
+    });
+
+    test.each([
+      'runtime.usage.run_tokens',
+      'runtime.usage.run_cost_usd',
+      'runtime.run.node_attempt',
+      'runtime.run.tool_calls',
+    ])('the pre-rename spelling %s is rejected at write time', async (path) => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/guardrails')
+        .send({
+          project_id: projectId,
+          name: `Stale Var ${path}`,
+          document: {
+            class: 'B',
+            guard: { '<': [{ var: path }, 10] },
+          },
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('the run namespace resolves under its renamed path', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/guardrails')
+        .send({
+          project_id: projectId,
+          name: 'Renamed Run Namespace Guardrail',
+          document: {
+            class: 'A',
+            guard: {
+              '==': [{ var: 'runtime.orchestration_run.tool_calls' }, null],
+            },
+          },
+        });
+      expect(res.status).toBe(201);
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/guardrails/${res.body.id}/evaluate`)
+        .send({ args: {} });
+      expect(response.status).toBe(200);
+      expect(
+        response.body.context_snapshot['runtime.orchestration_run.tool_calls']
       ).toBeNull();
     });
 

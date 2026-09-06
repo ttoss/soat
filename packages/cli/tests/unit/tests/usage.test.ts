@@ -10,9 +10,9 @@ describe('usage commands', () => {
     jest.spyOn(console, 'log').mockImplementation(() => {});
   });
 
-  test('get-usage sends project_id, group_by and the time window as query params', async () => {
+  test('get-usage-aggregate sends project_id, group_by and the time window as query params', async () => {
     const requests = await cli.call([
-      'get-usage',
+      'get-usage-aggregate',
       '--project_id',
       'prj_test',
       '--group_by',
@@ -26,7 +26,7 @@ describe('usage commands', () => {
     expect(cli.fetchMock).toHaveBeenCalledTimes(1);
     expect(requests).toHaveLength(1);
     expect(requests[0]?.method).toBe('GET');
-    expect(requests[0]?.path).toBe('/api/v1/usage');
+    expect(requests[0]?.path).toBe('/api/v1/usage/aggregate');
 
     const url = new URL((cli.fetchMock.mock.calls[0]?.[0] as Request).url);
     expect(url.searchParams.get('project_id')).toBe('prj_test');
@@ -35,9 +35,9 @@ describe('usage commands', () => {
     expect(url.searchParams.get('to')).toBe('2026-02-01T00:00:00.000Z');
   });
 
-  test('get-usage works with only the required project_id and group_by', async () => {
+  test('get-usage-aggregate works with only the required project_id and group_by', async () => {
     const requests = await cli.call([
-      'get-usage',
+      'get-usage-aggregate',
       '--project_id',
       'prj_test',
       '--group_by',
@@ -45,7 +45,7 @@ describe('usage commands', () => {
     ]);
 
     expect(requests[0]?.method).toBe('GET');
-    expect(requests[0]?.path).toBe('/api/v1/usage');
+    expect(requests[0]?.path).toBe('/api/v1/usage/aggregate');
 
     const url = new URL((cli.fetchMock.mock.calls[0]?.[0] as Request).url);
     expect(url.searchParams.get('group_by')).toBe('day');

@@ -131,15 +131,15 @@ The `runtime.*` catalog (windows are baked into the key name — a fixed suffix 
 | ---------------------------------------------------------- | ------- | ------------------------------------------------------- |
 | `runtime.action` / `runtime.tool.id` / `runtime.tool.name`          | string  | The call being classified                               |
 | `runtime.agent.id` / `runtime.project.id`                        | string  | Evaluation identity                                     |
-| `runtime.run.node_attempt` / `runtime.run.tool_calls`            | integer | Current [orchestration run](./orchestrations.md) state  |
+| `runtime.orchestration_run.node_attempt` / `runtime.orchestration_run.tool_calls`            | integer | Current [orchestration run](./orchestrations.md) state  |
 | `runtime.activity.actions_1h` / `runtime.activity.actions_24h`   | integer | [Activity feed](./activity.md) (per project)            |
 | `runtime.usage.cost_usd_1h` / `_24h` / `_7d` / `_30d`         | number  | [Usage metering](./usage.md) (per project)              |
 | `runtime.usage.tokens_24h` / `runtime.usage.tokens_30d`          | integer | [Usage metering](./usage.md) (per project)              |
-| `runtime.usage.run_tokens` / `runtime.usage.run_cost_usd`        | number  | [Usage metering](./usage.md) (**per run**, cumulative)  |
+| `runtime.usage.orchestration_run_tokens` / `runtime.usage.orchestration_run_cost_usd`        | number  | [Usage metering](./usage.md) (**per run**, cumulative)  |
 
 `runtime.activity.actions_1h` / `actions_24h` count this project's `action_executed` entries on the [activity feed](./activity.md#the-feed-as-a-guardrail-signal) over the rolling window, read live. An empty feed reads as a real `0`; only a failing query falls back to the fail-closed rule.
 
-`runtime.usage.run_tokens` / `run_cost_usd` are the odd pair out: they sum only the meter rows of the **current [orchestration run](./orchestrations.md)**, read live — see [Per-run spend ceilings](#per-run-spend-ceilings).
+`runtime.usage.orchestration_run_tokens` / `orchestration_run_cost_usd` are the odd pair out: they sum only the usage events of the **current [orchestration run](./orchestrations.md)**, read live — see [Per-run spend ceilings](#per-run-spend-ceilings).
 
 **Fail-closed at both ends.** At write time, a document referencing a `var` outside the three namespaces — or a `runtime.*` key outside the catalog — is rejected with `400`. At evaluation time, a `context.*` key absent from the effective context, a context-tool failure or timeout, or an unresolvable `runtime.*` provider all fail closed: in `class`, the result resolves to `default_class`; in `guard`, it counts as a **failed guard** and tripwire semantics apply. Forgetting to supply context tightens the posture, never loosens it.
 
@@ -155,7 +155,7 @@ A failing class-B guard is a **tripwire**: by default it aborts the action and f
 
 ### Per-run spend ceilings
 
-A runaway [orchestration run](./orchestrations.md) is not caught by a project-windowed budget guard: the window barely moves while one run burns through its budget. `runtime.usage.run_tokens` and `runtime.usage.run_cost_usd` expose the **current run's** cumulative metered spend, live at evaluation time, so a ceiling trips mid-run on the tool call that crosses it.
+A runaway [orchestration run](./orchestrations.md) is not caught by a project-windowed budget guard: the window barely moves while one run burns through its budget. `runtime.usage.orchestration_run_tokens` and `runtime.usage.orchestration_run_cost_usd` expose the **current run's** cumulative metered spend, live at evaluation time, so a ceiling trips mid-run on the tool call that crosses it.
 
 Give the ceiling itself as `guardrail_context` (or a context tool) so one guardrail serves every run:
 
@@ -166,14 +166,14 @@ soat create-guardrail \
     "class": "B",
     "guard": {
       "<": [
-        { "var": "runtime.usage.run_tokens" },
+        { "var": "runtime.usage.orchestration_run_tokens" },
         { "var": "context.action_token_ceiling" }
       ]
     }
   }'
 ```
 
-Attach it to the tools the run dispatches: once the run crosses the ceiling the guard fails and class-B tripwire semantics abort the call **before** the tool runs. Swap `run_tokens` for `run_cost_usd` to cap dollars.
+Attach it to the tools the run dispatches: once the run crosses the ceiling the guard fails and class-B tripwire semantics abort the call **before** the tool runs. Swap `orchestration_run_tokens` for `orchestration_run_cost_usd` to cap dollars.
 
 Two properties worth knowing:
 

@@ -289,9 +289,9 @@ export const windowedTokens = async (args: {
  * meter type (nulls ignored by SUM). Run-scoped rather than windowed: this is
  * the signal a per-run spend ceiling compares against, so a single runaway run
  * can be aborted mid-flight without waiting for a project window to move.
- * Exported for the guardrail `runtime.usage.run_cost_usd` context provider.
+ * Exported for the guardrail `runtime.usage.orchestration_run_cost_usd` context provider.
  */
-export const runCostUsd = async (args: {
+export const orchestrationRunCostUsd = async (args: {
   runInternalId: number;
 }): Promise<number> => {
   const rows = await db.UsageEvent.findAll({
@@ -306,9 +306,9 @@ export const runCostUsd = async (args: {
  * orchestration run so far. Resolves the run's event ids first, then sums their
  * token components — the same two-step `windowedTokens` uses, for the same
  * reason (a join+aggregate alias is brittle across Sequelize versions).
- * Exported for the guardrail `runtime.usage.run_tokens` context provider.
+ * Exported for the guardrail `runtime.usage.orchestration_run_tokens` context provider.
  */
-export const runTokens = async (args: {
+export const orchestrationRunTokens = async (args: {
   runInternalId: number;
 }): Promise<number> => {
   const events = await db.UsageEvent.findAll({

@@ -202,7 +202,7 @@ describe('guardrail per-run usage ceiling', () => {
     class: 'B',
     guard: {
       '<': [
-        { var: 'runtime.usage.run_tokens' },
+        { var: 'runtime.usage.orchestration_run_tokens' },
         { var: 'context.action_token_ceiling' },
       ],
     },
@@ -300,7 +300,7 @@ describe('guardrail per-run usage ceiling', () => {
       class: 'B',
       guard: {
         '<': [
-          { var: 'runtime.usage.run_cost_usd' },
+          { var: 'runtime.usage.orchestration_run_cost_usd' },
           { var: 'context.action_cost_ceiling' },
         ],
       },

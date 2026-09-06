@@ -566,7 +566,7 @@ describe('Agent Generation Routes', () => {
                   'agents:CreateAgentGeneration',
                   'generations:GetGeneration',
                   'tools:CreateTool',
-                  'usage:ListUsageMeters',
+                  'usage:ListEvents',
                   'usage:GetReceipt',
                 ],
               },
@@ -804,13 +804,13 @@ describe('Agent Generation Routes', () => {
       // the usage event lands asynchronously — poll for it within a bound
       // instead of asserting immediately after the response returns.
       let metersRes = await authenticatedTestClient(userToken).get(
-        '/api/v1/usage/meters?generation_id=gen_usage_metered'
+        '/api/v1/usage/events?generation_id=gen_usage_metered'
       );
       const startedAt = Date.now();
       while (metersRes.body.total === 0 && Date.now() - startedAt < 5000) {
         await sleep(50);
         metersRes = await authenticatedTestClient(userToken).get(
-          '/api/v1/usage/meters?generation_id=gen_usage_metered'
+          '/api/v1/usage/events?generation_id=gen_usage_metered'
         );
       }
       expect(metersRes.status).toBe(200);
@@ -830,8 +830,8 @@ describe('Agent Generation Routes', () => {
       );
       expect(receiptRes.status).toBe(200);
       expect(receiptRes.body.line_items).toHaveLength(1);
-      expect(receiptRes.body.total_input_tokens).toBe(1);
-      expect(receiptRes.body.total_output_tokens).toBe(1);
+      expect(receiptRes.body.totals.input_tokens).toBe(1);
+      expect(receiptRes.body.totals.output_tokens).toBe(1);
     });
 
     // A model narrating its tool call as assistant text used to be
@@ -1122,7 +1122,7 @@ describe('Agent Generation Routes', () => {
                   'agents:CreateAgent',
                   'agents:CreateAgentGeneration',
                   'tools:CreateTool',
-                  'usage:ListUsageMeters',
+                  'usage:ListEvents',
                 ],
               },
             ],
@@ -1273,7 +1273,7 @@ describe('Agent Generation Routes', () => {
       // a zero-token event would land on the same generation and overwrite the
       // row the turn's real calls recorded.
       const metersRes = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage/meters?generation_id=${generationId}`
+        `/api/v1/usage/events?generation_id=${generationId}`
       );
       expect(metersRes.status).toBe(200);
       const models: string[] = metersRes.body.data.map(

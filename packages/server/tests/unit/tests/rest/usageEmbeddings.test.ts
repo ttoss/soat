@@ -43,7 +43,7 @@ describe('Usage — embedding metering', () => {
     // The route scopes to the caller's own projects — there is no `project_id`
     // filter — and this user can read exactly the one project.
     const res = await authenticatedTestClient(userToken).get(
-      '/api/v1/usage/meters?source=embedding'
+      '/api/v1/usage/events?source=embedding'
     );
     expect(res.status).toBe(200);
     return res.body.data as MeterRow[];
@@ -78,7 +78,7 @@ describe('Usage — embedding metering', () => {
         'knowledge:SearchKnowledge',
         'memories:CreateMemory',
         'memories:CreateMemoryEntry',
-        'usage:ListUsageMeters',
+        'usage:ListEvents',
       ],
     });
     adminToken = setup.adminToken;

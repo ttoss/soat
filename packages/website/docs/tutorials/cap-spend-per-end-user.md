@@ -339,7 +339,7 @@ The [usage meter](/docs/modules/usage#end-user-attribution) copies the actor and
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat get-usage --project-id "$PROJECT_ID" --group-by actor | jq '{groups, totals}'
+soat get-usage-aggregate --project-id "$PROJECT_ID" --group-by actor | jq '{groups, totals}'
 ```
 
 Expected output — one bucket per end user:
@@ -376,7 +376,7 @@ Expected output — one bucket per end user:
 The raw event carries the full attribution chain, filterable by actor:
 
 ```bash
-soat list-usage-meters --actor-id "$ADA_ID" \
+soat list-usage-events --actor-id "$ADA_ID" \
   | jq '.data[0] | {meter_type, model, actor_id, session_id, agent_id, cost_usd, components}'
 ```
 
@@ -401,12 +401,12 @@ soat list-usage-meters --actor-id "$ADA_ID" \
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: byActor } = await adminSoat.usage.getUsage({
+const { data: byActor } = await adminSoat.usage.getUsageAggregate({
   params: { query: { project_id: PROJECT_ID, group_by: 'actor' } },
 });
 console.log(byActor.groups.data, byActor.groups.total);
 
-const { data: meters } = await adminSoat.usage.listUsageMeters({
+const { data: meters } = await adminSoat.usage.listUsageEvents({
   params: { query: { actor_id: ada.id } },
 });
 console.log(meters.data[0].actor_id, meters.data[0].components);
@@ -416,10 +416,10 @@ console.log(meters.data[0].actor_id, meters.data[0].components);
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s "$SOAT_BASE_URL/api/v1/usage?project_id=$PROJECT_ID&group_by=actor" \
+curl -s "$SOAT_BASE_URL/api/v1/usage/aggregate?project_id=$PROJECT_ID&group_by=actor" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{groups, totals}'
 
-curl -s "$SOAT_BASE_URL/api/v1/usage/meters?actor_id=$ADA_ID" \
+curl -s "$SOAT_BASE_URL/api/v1/usage/events?actor_id=$ADA_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   | jq '.data[0] | {meter_type, actor_id, session_id, components}'
 ```
@@ -590,7 +590,7 @@ BLAKE_SESSION_ID=$(soat create-session --agent-id "$AGENT_ID" \
 soat add-session-message --session-id "$BLAKE_SESSION_ID" \
   --message "Name one use for a rubber band."
 soat generate-session-response --wait true --session-id "$BLAKE_SESSION_ID" | jq '{status}'
-soat get-usage --project-id "$PROJECT_ID" --group-by actor | jq '.groups.data'
+soat get-usage-aggregate --project-id "$PROJECT_ID" --group-by actor | jq '.groups.data'
 ```
 
 ```json

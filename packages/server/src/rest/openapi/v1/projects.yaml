@@ -150,7 +150,7 @@ paths:
         the project), its orchestration concurrency limit
         (`max_concurrent_runs`), its continuation-chain ceiling
         (`max_chain_generations`), its orchestration nesting bound
-        (`max_run_depth`), its inherited model route
+        (`max_orchestration_run_depth`), its inherited model route
         (`default_model_route_id`), its read-auditing opt-in
         (`audit_reads_enabled`), its trace-content retention window
         (`trace_content_retention_days`), and/or its zero-retention setting
@@ -207,7 +207,7 @@ paths:
                     deployment's ceiling, this one, and the agent's own
                     `max_chain_generations` stop condition, so an agent author can
                     be stricter than this number but never exceed it.
-                max_run_depth:
+                max_orchestration_run_depth:
                   type: integer
                   nullable: true
                   minimum: 1
@@ -455,7 +455,7 @@ components:
             the smallest of the deployment's ceiling, this one, and the agent's
             own `max_chain_generations` stop condition.
           example: null
-        max_run_depth:
+        max_orchestration_run_depth:
           type: integer
           nullable: true
           minimum: 1
