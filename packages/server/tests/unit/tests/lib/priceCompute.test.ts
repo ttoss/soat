@@ -1,4 +1,5 @@
 import {
+  buildEmbeddingComponents,
   buildTokenComponents,
   computeComponentCostUsd,
   sumComponentCostUsd,
@@ -139,6 +140,26 @@ describe('priceCompute', () => {
       expect(names).toEqual(['input_tokens', 'output_tokens']);
       // with no cached tokens, input_tokens is the full input
       expect(components[0].quantity).toBe(5);
+    });
+  });
+
+  describe('buildEmbeddingComponents', () => {
+    test('records the reported tokens as the one billable input dimension', () => {
+      expect(buildEmbeddingComponents({ tokens: 1500 })).toEqual([
+        {
+          component: 'input_tokens',
+          quantity: 1500,
+          unit: 'token',
+          billable: true,
+        },
+      ]);
+    });
+
+    test('records 0 when the provider reports no usage', () => {
+      expect(buildEmbeddingComponents({ tokens: Number.NaN })[0].quantity).toBe(
+        0
+      );
+      expect(buildEmbeddingComponents({ tokens: -5 })[0].quantity).toBe(0);
     });
   });
 

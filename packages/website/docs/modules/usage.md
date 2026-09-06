@@ -148,6 +148,7 @@ Requests are counted in memory per (project, API key) and a periodic flush write
 | `eval_judge` | An `llm_judge` scorer's own grading completion |
 | `chat` | A standalone [chat](./chats.md) completion |
 | `memory_extraction` / `memory_consolidation` | A [memory](./memories.md) pass |
+| `embedding` | An [embedding](./embeddings.md#metering) call — the endpoint, document ingestion, a memory write, or a search's query vector |
 
 `source` is set by the platform at the metering choke point — a caller cannot bill eval spend as production. It both filters ([`GET /api/v1/usage/meters?source=eval`](/docs/api/usage/list-usage-meters)) and groups (`group_by=source`); ordinary traffic collapses into the `null` bucket, so groups still sum to the project total.
 

@@ -100,8 +100,8 @@ paths:
             Filter by what the spend was incurred for. `eval` is an eval run's
             item generations and `eval_judge` an `llm_judge` scorer's own
             completion, so verification spend is `source` in (`eval`,
-            `eval_judge`). Ordinary agent traffic carries no source and is
-            matched by neither.
+            `eval_judge`); `embedding` is any embedding call. Ordinary agent
+            traffic carries no source and is matched by none of them.
           schema:
             type: string
             example: eval
@@ -677,7 +677,9 @@ components:
             generations and `eval_judge` an `llm_judge` scorer's own completion,
             so verification spend is `source` in (`eval`, `eval_judge`) and the
             two are distinct so running a suite can be priced apart from grading
-            it. Null for ordinary agent traffic.
+            it. `embedding` is any embedding call — the endpoint, document
+            ingestion, a memory write, or a search's query vector. Null for
+            ordinary agent traffic.
           example: eval
         provider:
           type: string

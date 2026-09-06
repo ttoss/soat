@@ -70,6 +70,7 @@ describe('resolveDocumentSearch — nested path filter with a limit', () => {
       .mockResolvedValue([...nearVector]);
 
     const results = await resolveDocumentSearch({
+      billingProjectId: null,
       config: {
         search: 'unique target',
         paths: ['/unique-target/'],
@@ -119,6 +120,7 @@ describe('resolveDocumentSearch — policyWhere with a $-prefixed key', () => {
 
   test('no-search branch: includes a document matching the policy-scoped path', async () => {
     const results = await resolveDocumentSearch({
+      billingProjectId: null,
       config: { paths: ['/docs/'] },
       policyWhere: { '$file.path$': documentPath },
     });
@@ -132,6 +134,7 @@ describe('resolveDocumentSearch — policyWhere with a $-prefixed key', () => {
 
   test('no-search branch: excludes documents outside the policy-scoped path', async () => {
     const results = await resolveDocumentSearch({
+      billingProjectId: null,
       config: { paths: ['/docs/'] },
       policyWhere: { '$file.path$': '/docs/some-other-file.txt' },
     });
@@ -151,6 +154,7 @@ describe('resolveDocumentSearch — policyWhere with a $-prefixed key', () => {
       .mockResolvedValueOnce(new Array(1024).fill(0.1));
 
     const results = await resolveDocumentSearch({
+      billingProjectId: null,
       config: { search: 'restricted policy content' },
       policyWhere: { '$file.path$': documentPath },
     });

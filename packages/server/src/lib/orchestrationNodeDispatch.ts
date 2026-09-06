@@ -186,7 +186,12 @@ const dispatchNodeExecution = async (
         toolContext,
       });
     case 'knowledge':
-      return executeKnowledgeNode({ node: nodeDefn, state, projectIds });
+      return executeKnowledgeNode({
+        node: nodeDefn,
+        state,
+        projectIds,
+        billingProjectId: projectId ?? null,
+      });
     case 'memory_write':
       return executeMemoryWriteNode({ node: nodeDefn, state });
     default:

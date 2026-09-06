@@ -5,6 +5,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import type { TypedAgent } from './agentGenerationTypes';
 import { isSoatActionAllowedByBoundary } from './agentToolResolver';
+import type { EmbeddingBillingProjectId } from './embedding';
 import { searchKnowledge } from './knowledge';
 import { writeMemoryEntry } from './memoryEntries';
 import { isPlainObject } from './plainObject';
@@ -214,6 +215,8 @@ const buildKnowledgeContent = (knowledgeText: string): string => {
 export const buildKnowledgeMessages = async (args: {
   knowledgeConfig: unknown;
   projectIds?: number[];
+  /** The agent's own project — what a retrieval embedding is billed to. */
+  billingProjectId: EmbeddingBillingProjectId;
   messages: Array<{ role: string; content: unknown }>;
 }): Promise<Array<{ role: string; content: string }>> => {
   const config = args.knowledgeConfig as KnowledgeConfig | null | undefined;
@@ -249,6 +252,7 @@ export const buildKnowledgeMessages = async (args: {
 
   const results = await searchKnowledge({
     projectIds: args.projectIds,
+    billingProjectId: args.billingProjectId,
     query,
     memoryIds: config.memoryIds,
     memoryTags: config.memoryTags,

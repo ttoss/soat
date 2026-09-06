@@ -174,6 +174,8 @@ export const completeIngestionCallback = async (args: {
 
   const doc = await db.Document.findOne({
     where: { publicId: args.documentId },
+    // The file carries the project the ingestion's embeddings are billed to.
+    include: [{ model: db.File, as: 'file' }],
   });
   if (!doc) {
     throw new DomainError(
@@ -181,6 +183,9 @@ export const completeIngestionCallback = async (args: {
       `Document '${args.documentId}' not found.`
     );
   }
+
+  // Read before the reload below, which need not carry the association forward.
+  const projectId = doc.file.projectId;
 
   const verified = verifyIngestionCallbackToken({
     token: args.token,
@@ -217,6 +222,7 @@ export const completeIngestionCallback = async (args: {
   await finalizeIngestedPages({
     doc,
     docId: doc.id as number,
+    projectId,
     docPath: doc.pendingDocPath ?? `/${doc.publicId}`,
     pages: outcome.pages,
     rule: null,

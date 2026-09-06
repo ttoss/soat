@@ -96,8 +96,14 @@ const priceComponent = async (args: {
   };
 };
 
-export const priceTokenComponents = (args: {
-  tokens: UsageTokens;
+/**
+ * Prices an already-decomposed component list at one instant, so every
+ * component of one call reads the same effective row. Exported because the
+ * decomposition differs by meter — an LLM call has four token dimensions, an
+ * embedding call has one — while the pricing rule must not.
+ */
+export const priceComponents = (args: {
+  components: TokenComponent[];
   provider: string;
   aiProviderId: number | null;
   model: string;
@@ -105,7 +111,7 @@ export const priceTokenComponents = (args: {
 }): Promise<PricedComponent[]> => {
   const at = new Date();
   return Promise.all(
-    buildTokenComponents(args.tokens).map((component) => {
+    args.components.map((component) => {
       return priceComponent({
         component,
         provider: args.provider,
@@ -116,6 +122,19 @@ export const priceTokenComponents = (args: {
       });
     })
   );
+};
+
+export const priceTokenComponents = (args: {
+  tokens: UsageTokens;
+  provider: string;
+  aiProviderId: number | null;
+  model: string;
+  projectId: number;
+}): Promise<PricedComponent[]> => {
+  return priceComponents({
+    ...args,
+    components: buildTokenComponents(args.tokens),
+  });
 };
 
 // All nullable but the project: a chat or memory completion has no Generation

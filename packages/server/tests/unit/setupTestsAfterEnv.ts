@@ -36,6 +36,15 @@ export const mockCreateGeneration = jest.spyOn(
 // also exercises the real request serialization.
 let embeddingServer: Server;
 
+// One "token" per whitespace-separated word, so metering assertions have a
+// non-zero, deterministic count to read (a real provider reports its own).
+const countStubTokens = (inputs: Array<string | undefined>): number => {
+  return inputs.reduce((total, input) => {
+    const words = (input ?? '').trim().split(/\s+/).filter(Boolean);
+    return total + words.length;
+  }, 0);
+};
+
 const embeddingResponse = (body: {
   input?: string | string[];
   model?: string;
@@ -45,11 +54,12 @@ const embeddingResponse = (body: {
   const data = inputs.map((_input, index) => {
     return { object: 'embedding', index, embedding: vector };
   });
+  const promptTokens = countStubTokens(inputs);
   return {
     object: 'list',
     model: body.model ?? 'test-embedding',
     data,
-    usage: { prompt_tokens: 0, total_tokens: 0 },
+    usage: { prompt_tokens: promptTokens, total_tokens: promptTokens },
   };
 };
 

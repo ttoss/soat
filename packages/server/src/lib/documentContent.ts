@@ -35,6 +35,7 @@ export const readFileContent = async (
  */
 export const chunkDocumentText = async (args: {
   documentId: number;
+  projectId: number;
   content: string;
   chunkStrategy?: ChunkStrategy;
   chunkSize?: number;
@@ -46,7 +47,11 @@ export const chunkDocumentText = async (args: {
     chunkSize: args.chunkSize,
     chunkOverlap: args.chunkOverlap,
   });
-  await persistChunks({ documentId: args.documentId, chunks });
+  await persistChunks({
+    documentId: args.documentId,
+    projectId: args.projectId,
+    chunks,
+  });
 };
 
 /**
@@ -62,7 +67,12 @@ const rechunkDocument = async (args: {
   rewriteStorage: boolean;
 }) => {
   const file = args.doc.file;
-  if (args.rewriteStorage && file?.storagePath) {
+  // A document's project is its file's, and a re-chunk meters the embeddings it
+  // makes — so without the association loaded there is nothing to charge and
+  // nothing to rewrite. Returning before the destroy keeps the existing chunks.
+  if (!file) return;
+
+  if (args.rewriteStorage && file.storagePath) {
     const provider = getStorageProvider({ storageType: file.storageType });
     // Overwrite in place — reuse the existing publicId-based object location.
     await provider.write({
@@ -77,6 +87,7 @@ const rechunkDocument = async (args: {
 
   await chunkDocumentText({
     documentId: args.doc.id as number,
+    projectId: file.projectId,
     content: args.content,
     chunkStrategy: args.chunkStrategy,
     chunkSize: args.chunkSize,

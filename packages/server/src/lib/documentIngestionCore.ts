@@ -121,6 +121,7 @@ export const resolveChunkConfig = (
 const persistChunksWithProgress = async (args: {
   doc: InstanceType<(typeof db)['Document']>;
   docId: number;
+  projectId: number;
   totalPages: number;
   chunks: { content: string; chunkIndex: number; pageNumber?: number }[];
 }): Promise<void> => {
@@ -137,6 +138,7 @@ const persistChunksWithProgress = async (args: {
   let lastTouch = Date.now();
   await persistChunks({
     documentId: args.docId,
+    projectId: args.projectId,
     chunks: args.chunks,
     onProgress: async (indexed) => {
       const now = Date.now();
@@ -159,6 +161,8 @@ export const finalizeIngestedPages = async (
   args: ChunkConfigInput & {
     doc: InstanceType<(typeof db)['Document']>;
     docId: number;
+    /** The document's project, read off its file — the embeddings are billed to it. */
+    projectId: number;
     docPath: string;
     pages: { text: string; pageNumber?: number }[];
     rule: MappedIngestionRule | null;
@@ -187,6 +191,7 @@ export const finalizeIngestedPages = async (
   await persistChunksWithProgress({
     doc,
     docId,
+    projectId: args.projectId,
     totalPages: args.pages.length,
     chunks,
   });

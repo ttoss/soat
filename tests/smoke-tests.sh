@@ -3842,6 +3842,22 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
   fi
   echo "Standalone completion metering: OK ($CHAT_METER_COUNT generation-less llm_tokens events)"
 
+  # 34b-ii-c. Embedding coverage — an embedding reaches the provider with no
+  # Generation and no AI provider record behind it, so it must still be metered,
+  # under its own `embedding` source (#1208).
+  $SOAT_CLI create-embeddings \
+    --project-id "$PROJECT_PUBLIC_ID" \
+    --input "smoke test embedding metering" > /dev/null
+  EMBEDDING_METERS_RESP=$($SOAT_CLI list-usage-meters \
+    --source embedding --limit 100 | sanitize_json)
+  EMBEDDING_METER_OK=$(printf '%s\n' "$EMBEDDING_METERS_RESP" | jq -r '([.data[] | select(.meter_type == "llm_tokens" and .generation_id == null and .ai_provider_id == null and ([.components[] | select(.component == "input_tokens" and .quantity > 0)] | length == 1))] | length >= 1)')
+  if [ "$EMBEDDING_METER_OK" != "true" ]; then
+    echo "ERROR: embedding call was not metered as an input_tokens llm_tokens event" >&2
+    echo "$EMBEDDING_METERS_RESP" >&2
+    exit 1
+  fi
+  echo "Embedding metering: OK"
+
   # 34b-iii. Aggregate — the per-project usage rollup, bucketed by meter type.
   # Grand totals and each group carry summed token counts and cost_usd.
   USAGE_AGG_RESP=$($SOAT_CLI get-usage \

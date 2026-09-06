@@ -128,6 +128,20 @@ const mergeEntryMetadata = (args: {
   return { ...(args.existing ?? {}), ...args.incoming };
 };
 
+/**
+ * The project a memory's embeddings are billed to. A memory entry is addressed
+ * by its memory, never by a project, so the owner is read here rather than
+ * threaded through the six write paths that reach these functions.
+ */
+const resolveMemoryProjectId = async (args: {
+  memoryId: number;
+}): Promise<number | null> => {
+  const memory = await db.Memory.findByPk(args.memoryId, {
+    attributes: ['projectId'],
+  });
+  return memory?.projectId ?? null;
+};
+
 const findTopSimilarEntry = async (args: {
   memoryId: number;
   embeddingLiteral: string;
@@ -210,7 +224,10 @@ const mergeAndUpdateEntry = async (args: {
     incoming: args.metadata,
   });
   try {
-    match.embedding = await getEmbedding({ text: mergedContent });
+    match.embedding = await getEmbedding({
+      text: mergedContent,
+      projectId: await resolveMemoryProjectId({ memoryId: match.memoryId }),
+    });
   } catch {
     // embedding is optional
   }
@@ -309,7 +326,10 @@ export const writeMemoryEntry = async (args: {
   // Step 1: Generate embedding for incoming content
   let embedding: number[] | null = null;
   try {
-    embedding = await getEmbedding({ text: args.content });
+    embedding = await getEmbedding({
+      text: args.content,
+      projectId: await resolveMemoryProjectId({ memoryId: args.memoryId }),
+    });
   } catch {
     // embedding is optional
   }
@@ -351,7 +371,10 @@ export const createMemoryEntry = async (args: {
   let embedding: number[] | null = null;
 
   try {
-    embedding = await getEmbedding({ text: args.content });
+    embedding = await getEmbedding({
+      text: args.content,
+      projectId: await resolveMemoryProjectId({ memoryId: args.memoryId }),
+    });
   } catch {
     // embedding is optional — continue without it
   }
@@ -423,7 +446,10 @@ export const updateMemoryEntry = async (args: {
     entry.content = args.content;
 
     try {
-      entry.embedding = await getEmbedding({ text: args.content });
+      entry.embedding = await getEmbedding({
+        text: args.content,
+        projectId: await resolveMemoryProjectId({ memoryId: entry.memoryId }),
+      });
     } catch {
       // embedding is optional — continue without it
     }
