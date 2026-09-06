@@ -66,7 +66,7 @@ Every embedding call is metered as an `llm_tokens` usage event with `source`
 `embedding`, whatever reached the model: this endpoint, document ingestion, a
 memory write, an `embedding_similarity` scorer, or the query embedding behind a
 knowledge search. Spend therefore appears in
-[`GET /api/v1/usage/meters`](/docs/api/usage/list-usage-meters) and counts
+[`GET /api/v1/usage/events`](/docs/api/usage/list-usage-events) and counts
 towards a project's `cost_usd` and `tokens`
 [quotas](./quotas.md), like every other provider call.
 

@@ -65,9 +65,9 @@ export const resolveEffectiveRunDepthLimit = async (args: {
 
   const project = await db.Project.findOne({
     where: { id: args.projectId },
-    attributes: ['maxRunDepth'],
+    attributes: ['maxOrchestrationRunDepth'],
   });
-  const declared = project?.maxRunDepth;
+  const declared = project?.maxOrchestrationRunDepth;
 
   if (
     typeof declared === 'number' &&

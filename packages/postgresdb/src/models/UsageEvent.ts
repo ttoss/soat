@@ -105,7 +105,7 @@ export class UsageEvent extends Model {
     },
     { onDelete: 'SET NULL' }
   )
-  declare run: OrchestrationRun | null;
+  declare orchestrationRun: OrchestrationRun | null;
 
   // Node within the orchestration run, when applicable.
   @Column({ type: DataType.STRING, allowNull: true })

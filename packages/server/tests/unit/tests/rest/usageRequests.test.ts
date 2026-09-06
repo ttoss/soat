@@ -24,7 +24,7 @@ describe('Usage — API-request metering', () => {
   beforeAll(async () => {
     const setup = await setupProjectWithUsers({
       prefix: 'usagereq',
-      policyActions: ['usage:ListUsageMeters'],
+      policyActions: ['usage:ListEvents'],
     });
     userToken = setup.userToken;
     userPublicId = setup.userId;
@@ -57,7 +57,7 @@ describe('Usage — API-request metering', () => {
     }>
   > => {
     const res = await authenticatedTestClient(rawKey).get(
-      '/api/v1/usage/meters?meter_type=api_request'
+      '/api/v1/usage/events?meter_type=api_request'
     );
     expect(res.status).toBe(200);
     return res.body.data;
@@ -69,7 +69,7 @@ describe('Usage — API-request metering', () => {
     // Three project-key requests are counted on arrival (before quota).
     for (let i = 0; i < 3; i += 1) {
       const res = await authenticatedTestClient(rawKey).get(
-        '/api/v1/usage/meters?meter_type=api_request'
+        '/api/v1/usage/events?meter_type=api_request'
       );
       expect(res.status).toBe(200);
     }
@@ -93,7 +93,7 @@ describe('Usage — API-request metering', () => {
   test('a re-flush of the same window writes nothing (idempotent)', async () => {
     resetRequestCounters();
     await authenticatedTestClient(rawKey).get(
-      '/api/v1/usage/meters?meter_type=api_request'
+      '/api/v1/usage/events?meter_type=api_request'
     );
     const now = new Date();
     const first = await flushRequestCounters({ now });
@@ -126,7 +126,7 @@ describe('Usage — API-request metering', () => {
     // Authorized through the key's policies as a boundary, so a 200 here also
     // proves the request reached the handler rather than being short-circuited.
     const res = await authenticatedTestClient(runToken).get(
-      '/api/v1/usage/meters?meter_type=api_request'
+      '/api/v1/usage/events?meter_type=api_request'
     );
     expect(res.status).toBe(200);
 
@@ -138,7 +138,7 @@ describe('Usage — API-request metering', () => {
     resetRequestCounters();
     // A JWT (non-api-key) request must not increment any counter.
     const res = await authenticatedTestClient(userToken).get(
-      '/api/v1/usage/meters?meter_type=api_request'
+      '/api/v1/usage/events?meter_type=api_request'
     );
     expect(res.status).toBe(200);
     const written = await flushRequestCounters({ now: new Date() });
@@ -157,7 +157,7 @@ describe('Usage — API-request metering', () => {
     const unscopedKeyId = keyRes.body.id as string;
 
     const res = await authenticatedTestClient(keyRes.body.key).get(
-      '/api/v1/usage/meters?meter_type=api_request'
+      '/api/v1/usage/events?meter_type=api_request'
     );
     expect(res.status).toBe(200);
 
@@ -193,7 +193,7 @@ describe('Usage — API-request metering', () => {
     resetRequestCounters();
     for (let i = 0; i < 2; i += 1) {
       await authenticatedTestClient(rawKey).get(
-        '/api/v1/usage/meters?meter_type=api_request'
+        '/api/v1/usage/events?meter_type=api_request'
       );
     }
     // No `now` argument — exercises the default flush-window path.
@@ -214,7 +214,7 @@ describe('Usage — API-request metering', () => {
 
   test('unauthenticated meters request returns 401', async () => {
     const res = await testClient.get(
-      '/api/v1/usage/meters?meter_type=api_request'
+      '/api/v1/usage/events?meter_type=api_request'
     );
     expect(res.status).toBe(401);
   });

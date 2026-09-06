@@ -7,8 +7,8 @@ import {
   aggregateUsage,
   createThreshold,
   deleteThreshold,
+  getOrchestrationRunReceipt,
   getReceipt,
-  getRunReceipt,
   getThreshold,
   listThresholds,
   listUsageEvents,
@@ -41,19 +41,19 @@ type UpsertPricesBody = {
 
 /**
  * @openapi
- * GET /api/v1/usage/meters
- * operationId: listUsageMeters
- * Lists raw usage-meter rows the caller can access, optionally filtered by
+ * GET /api/v1/usage/events
+ * operationId: listUsageEvents
+ * Lists raw usage events the caller can access, optionally filtered by
  * agent_id, generation_id, trace_id, actor_id, session_id, and source. One row
  * is recorded per completed generation with the provider's reported
  * input/output/cached/reasoning token counts.
  */
-usageRouter.get('/usage/meters', async (ctx: Context) => {
+usageRouter.get('/usage/events', async (ctx: Context) => {
   requireAuth(ctx);
 
   const projectIds = await requireProjectAccess({
     ctx,
-    action: 'usage:ListUsageMeters',
+    action: 'usage:ListEvents',
     resourceType: 'usage',
   });
 
@@ -91,18 +91,20 @@ usageRouter.get('/usage/meters', async (ctx: Context) => {
 
 /**
  * @openapi
- * GET /api/v1/usage
- * operationId: getUsage
+ * GET /api/v1/usage/aggregate
+ * operationId: getUsageAggregate
  * Returns a project's usage rolled up over an optional [from, to] window,
  * bucketed by one dimension
- * (group_by=model|ai_provider|agent|run|day|meter_type|actor|session|source)
- * and optionally narrowed to a single meter_type. Each group and the grand
- * total carry an event count, summed token counts, a measured quantity per
- * component, and cost_usd. groups is paginated with limit/offset; its total is
- * the number of distinct buckets, while totals always describes the whole
- * window. Requires usage:GetUsage on the project.
+ * (group_by=model|ai_provider|agent|orchestration_run|day|meter_type|actor|
+ * session|source) and optionally narrowed to a single meter_type. Each group
+ * and the grand total carry an event count, summed token counts, a measured
+ * quantity per component, and cost_usd. groups is paginated with limit/offset;
+ * its total is the number of distinct buckets, while totals always describes
+ * the whole window. include=distinct adds totals.distinct, the distinct-entity
+ * counters a "how many" question reads. Requires usage:GetAggregate on the
+ * project.
  */
-usageRouter.get('/usage', async (ctx: Context) => {
+usageRouter.get('/usage/aggregate', async (ctx: Context) => {
   requireAuth(ctx);
 
   const {
@@ -111,6 +113,7 @@ usageRouter.get('/usage', async (ctx: Context) => {
     to,
     group_by: groupBy,
     meter_type: meterType,
+    include,
   } = ctx.query as Record<string, string | undefined>;
 
   if (!projectPublicId) {
@@ -123,7 +126,7 @@ usageRouter.get('/usage', async (ctx: Context) => {
   const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId,
-    action: 'usage:GetUsage',
+    action: 'usage:GetAggregate',
     resourceType: 'usage',
   });
 
@@ -142,6 +145,7 @@ usageRouter.get('/usage', async (ctx: Context) => {
     to,
     groupBy,
     meterType,
+    include,
     ...parsePagination(ctx),
   });
 });
@@ -284,7 +288,7 @@ const resolveReceipt = async (args: {
   }
 
   if (args.orchestrationRunId) {
-    const receipt = await getRunReceipt({
+    const receipt = await getOrchestrationRunReceipt({
       orchestrationRunId: args.orchestrationRunId,
       projectIds: args.projectIds,
     });
@@ -321,10 +325,10 @@ const resolveReceipt = async (args: {
  * @openapi
  * GET /api/v1/usage/receipt
  * operationId: getUsageReceipt
- * Returns a billing receipt. Pass generation_id for a per-generation receipt or
- * orchestration_run_id for a per-run receipt summed across the orchestration run's meters —
- * both share the same shape (per-model line items with tokens, the price-book
- * version that priced them, and cost, plus totals).
+ * Returns a billing receipt. Pass generation_id for a per-generation receipt
+ * or orchestration_run_id for a receipt summed across the orchestration run's
+ * events — both share the same shape (per-model line items with tokens, the
+ * price-book version that priced them, and cost, plus totals).
  */
 usageRouter.get('/usage/receipt', async (ctx: Context) => {
   requireAuth(ctx);

@@ -27,7 +27,10 @@ import {
   type PaginatedResult,
   resolvePagination,
 } from './pagination';
-import { getRunUsageRollups, type UsageTotals } from './usageReceipt';
+import {
+  getOrchestrationRunUsageRollups,
+  type UsageTotals,
+} from './usageReceipt';
 
 const log = createDebug('soat:orchestrations');
 
@@ -213,27 +216,15 @@ export type MappedOrchestrationRun = {
   parent_node_id: string | null;
   // `loop` / `sub_orchestration` edges between this run and the one a caller
   // started; 0 for a caller-started run. What the depth bound counts (#1185).
-  run_depth: number;
+  orchestration_run_depth: number;
   node_executions: MappedNodeExecution[];
   // Usage roll-up (tokens + cost_usd) summed across every metered generation the
-  // run produced. Populated on the single-run read; omitted from list responses.
-  // `UsageTotals` is the internal camelCase shape; this is its wire projection.
-  usage?: {
-    total_input_tokens: number;
-    total_output_tokens: number;
-    total_cached_tokens: number;
-    total_reasoning_tokens: number;
-    total_cost_usd: number | null;
-  };
+  // run produced, in the shape a receipt and an aggregate bucket also report.
+  // Populated on the single-run read; omitted from list responses.
+  usage?: UsageTotals;
   // The roll-up summed over this run and every descendant, so it equals `usage`
   // only for a run with no children.
-  usage_own?: {
-    total_input_tokens: number;
-    total_output_tokens: number;
-    total_cached_tokens: number;
-    total_reasoning_tokens: number;
-    total_cost_usd: number | null;
-  };
+  usage_own?: UsageTotals;
   started_at: Date | null;
   completed_at: Date | null;
   created_at: Date;
@@ -345,30 +336,10 @@ export const mapOrchestrationRun = (
     output: run.output as Record<string, unknown> | null,
     parent_orchestration_run_id: run.parentRunId,
     parent_node_id: run.parentNodeId,
-    run_depth: run.runDepth,
+    orchestration_run_depth: run.orchestrationRunDepth,
     node_executions: (run.nodeExecutions ?? []).map(mapNodeExecution),
-    ...(usage
-      ? {
-          usage: {
-            total_input_tokens: usage.totalInputTokens,
-            total_output_tokens: usage.totalOutputTokens,
-            total_cached_tokens: usage.totalCachedTokens,
-            total_reasoning_tokens: usage.totalReasoningTokens,
-            total_cost_usd: usage.totalCostUsd,
-          },
-        }
-      : {}),
-    ...(ownUsage
-      ? {
-          usage_own: {
-            total_input_tokens: ownUsage.totalInputTokens,
-            total_output_tokens: ownUsage.totalOutputTokens,
-            total_cached_tokens: ownUsage.totalCachedTokens,
-            total_reasoning_tokens: ownUsage.totalReasoningTokens,
-            total_cost_usd: ownUsage.totalCostUsd,
-          },
-        }
-      : {}),
+    ...(usage ? { usage } : {}),
+    ...(ownUsage ? { usage_own: ownUsage } : {}),
     started_at: run.startedAt,
     completed_at: run.completedAt,
     created_at: run.createdAt,
@@ -645,7 +616,7 @@ export const findOrchestrationRun = async (args: {
 
   // `usage` is the subtree figure and `usage_own` the run's own nodes — both
   // from one pass, so the split costs no extra query (#1135).
-  const rollups = await getRunUsageRollups({
+  const rollups = await getOrchestrationRunUsageRollups({
     runInternalId: run.id as number,
     runPublicId: run.publicId as string,
   });

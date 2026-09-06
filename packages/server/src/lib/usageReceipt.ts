@@ -38,6 +38,23 @@ export type UsageReceiptMeterTypeTotal = {
   cost_usd: number | null;
 };
 
+/**
+ * The token/cost roll-up every usage surface reports, in one shape.
+ *
+ * A receipt, an aggregate bucket and an orchestration run's spend are the same
+ * five figures; reported under three different field sets they could not be
+ * summed by one client type. Tokens and cost only — a `compute_second` or
+ * `gb_day` meter is the aggregate's `components` array, which is a decision of
+ * its own rather than one this shape should settle.
+ */
+export type UsageTotals = {
+  cost_usd: number | null;
+  input_tokens: number;
+  output_tokens: number;
+  cached_tokens: number;
+  reasoning_tokens: number;
+};
+
 /** A receipt is a response body, so the type is the wire shape. */
 export type UsageReceipt = {
   // Present on a per-generation receipt; absent on a per-run receipt.
@@ -48,21 +65,7 @@ export type UsageReceipt = {
   currency: string;
   line_items: UsageReceiptLine[];
   by_meter_type: UsageReceiptMeterTypeTotal[];
-  total_input_tokens: number;
-  total_output_tokens: number;
-  total_cached_tokens: number;
-  total_reasoning_tokens: number;
-  total_cost_usd: number | null;
-};
-
-// The token/cost roll-up of a receipt without its line items — surfaced on the
-// orchestration-run response so callers see run spend without a second request.
-export type UsageTotals = {
-  totalInputTokens: number;
-  totalOutputTokens: number;
-  totalCachedTokens: number;
-  totalReasoningTokens: number;
-  totalCostUsd: number | null;
+  totals: UsageTotals;
 };
 
 const allComponents = (lines: UsageReceiptLine[]): UsageReceiptComponent[] => {
@@ -179,11 +182,13 @@ const assembleReceipt = (
     currency: 'USD',
     line_items: lineItems,
     by_meter_type: groupByMeterType(lineItems),
-    total_input_tokens: sumQuantity(lineItems, 'input_tokens') + cached,
-    total_output_tokens: sumQuantity(lineItems, 'output_tokens'),
-    total_cached_tokens: cached,
-    total_reasoning_tokens: sumQuantity(lineItems, 'reasoning_tokens'),
-    total_cost_usd: sumLineCosts(lineItems),
+    totals: {
+      cost_usd: sumLineCosts(lineItems),
+      input_tokens: sumQuantity(lineItems, 'input_tokens') + cached,
+      output_tokens: sumQuantity(lineItems, 'output_tokens'),
+      cached_tokens: cached,
+      reasoning_tokens: sumQuantity(lineItems, 'reasoning_tokens'),
+    },
   };
 };
 
@@ -232,7 +237,7 @@ const resolveRunInternalId = async (args: {
  * "One operating cycle → one action" billing. Returns null when the run is not
  * visible in scope (the route yields 404).
  */
-export const getRunReceipt = async (args: {
+export const getOrchestrationRunReceipt = async (args: {
   orchestrationRunId: string;
   projectIds?: number[];
 }): Promise<UsageReceipt | null> => {
@@ -243,19 +248,6 @@ export const getRunReceipt = async (args: {
   return assembleReceipt(lineItems, {
     orchestration_run_id: args.orchestrationRunId,
   });
-};
-
-// The wire receipt projected down to the token/cost totals the run response
-// carries. Shared by the self-only and nested roll-ups so the two can never
-// disagree on how a total is derived.
-const toTotals = (receipt: UsageReceipt): UsageTotals => {
-  return {
-    totalInputTokens: receipt.total_input_tokens,
-    totalOutputTokens: receipt.total_output_tokens,
-    totalCachedTokens: receipt.total_cached_tokens,
-    totalReasoningTokens: receipt.total_reasoning_tokens,
-    totalCostUsd: receipt.total_cost_usd,
-  };
 };
 
 // Descendants of `runPublicId` as internal ids, excluding the run itself.
@@ -304,7 +296,7 @@ const descendantRunIds = async (args: {
  * Takes both ids because the caller has already loaded the run: the internal id
  * keys the events, the public id keys the parent link.
  */
-export const getRunUsageRollups = async (args: {
+export const getOrchestrationRunUsageRollups = async (args: {
   runInternalId: number;
   runPublicId: string;
 }): Promise<{ own: UsageTotals; includingNested: UsageTotals }> => {
@@ -313,7 +305,7 @@ export const getRunUsageRollups = async (args: {
     descendantRunIds({ runPublicId: args.runPublicId }),
   ]);
 
-  const own = toTotals(assembleReceipt(ownLineItems, {}));
+  const own = assembleReceipt(ownLineItems, {}).totals;
   if (descendantIds.length === 0) return { own, includingNested: own };
 
   const descendantLineItems = await loadLineItems({
@@ -323,8 +315,9 @@ export const getRunUsageRollups = async (args: {
     own,
     // Order-independent: every total is a sum over the components of every
     // line, so concatenating two ordered reads needs no re-sort.
-    includingNested: toTotals(
-      assembleReceipt([...ownLineItems, ...descendantLineItems], {})
-    ),
+    includingNested: assembleReceipt(
+      [...ownLineItems, ...descendantLineItems],
+      {}
+    ).totals,
   };
 };

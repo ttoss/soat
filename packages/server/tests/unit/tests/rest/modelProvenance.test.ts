@@ -98,7 +98,7 @@ describe('Model provenance', () => {
       policyActions: [
         'agents:CreateAgent',
         'agents:CreateAgentGeneration',
-        'usage:GetUsage',
+        'usage:GetAggregate',
       ],
       createNoPermUser: false,
     });
@@ -151,7 +151,7 @@ describe('Model provenance', () => {
 
   test('the model rollup splits one model name per serving provider', async () => {
     const res = await authenticatedTestClient(userToken).get(
-      `/api/v1/usage?project_id=${projectId}&group_by=model`
+      `/api/v1/usage/aggregate?project_id=${projectId}&group_by=model`
     );
     expect(res.status).toBe(200);
 
@@ -180,7 +180,7 @@ describe('Model provenance', () => {
 
   test('groups by ai_provider', async () => {
     const res = await authenticatedTestClient(userToken).get(
-      `/api/v1/usage?project_id=${projectId}&group_by=ai_provider`
+      `/api/v1/usage/aggregate?project_id=${projectId}&group_by=ai_provider`
     );
     expect(res.status).toBe(200);
     expect(res.body.group_by).toBe('ai_provider');
@@ -195,7 +195,7 @@ describe('Model provenance', () => {
 
   test('a dimension other than model carries a null provider', async () => {
     const res = await authenticatedTestClient(userToken).get(
-      `/api/v1/usage?project_id=${projectId}&group_by=agent`
+      `/api/v1/usage/aggregate?project_id=${projectId}&group_by=agent`
     );
     expect(res.status).toBe(200);
     expect(res.body.groups.data.length).toBeGreaterThan(0);

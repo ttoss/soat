@@ -6,6 +6,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { sumComponentCostUsd } from './priceCompute';
 import { evaluateProjectThresholds } from './usageThresholds';
+import type { PricedComponent } from './usageTokenEvent';
 import {
   extractUsageTokens,
   persistTokenEvent,
@@ -86,7 +87,7 @@ const resolveEventAttribution = (args: {
 // Resolves the run's public id to its internal FK. Returns null when absent or
 // the run no longer exists — the event is still recorded, just without the run
 // association.
-const resolveRunId = async (
+const resolveOrchestrationRunId = async (
   runPublicId: string | null
 ): Promise<number | null> => {
   if (!runPublicId) return null;
@@ -112,6 +113,33 @@ const buildIdempotencyKey = (args: {
     return `run:${args.runPublicId}:node:${args.nodeId}:attempt:${attempt}`;
   }
   return args.generationPublicId;
+};
+
+// The priced components and their summed cost for one set of reported tokens.
+// Shared by both writers so a generation-backed event and a generation-less
+// completion can never price the same tokens differently.
+const priceTokens = async (args: {
+  usage: LanguageModelUsage | undefined;
+  provider: string;
+  aiProviderId: number | null;
+  model: string;
+  projectId: number;
+}): Promise<{ priced: PricedComponent[]; costUsd: string | null }> => {
+  const priced = await priceTokenComponents({
+    tokens: extractUsageTokens(args.usage),
+    provider: args.provider,
+    aiProviderId: args.aiProviderId,
+    model: args.model,
+    projectId: args.projectId,
+  });
+  return {
+    priced,
+    costUsd: sumComponentCostUsd(
+      priced.map((component) => {
+        return component.costUsd;
+      })
+    ),
+  };
 };
 
 const writeGenerationEvent = async (args: {
@@ -144,20 +172,17 @@ const writeGenerationEvent = async (args: {
     }),
   });
   const model = args.model || 'unknown';
-  const priced = await priceTokenComponents({
-    tokens: extractUsageTokens(args.usage),
+  const { priced, costUsd } = await priceTokens({
+    usage: args.usage,
     provider: attribution.provider,
     aiProviderId: attribution.aiProviderId,
     model,
     projectId: generation.projectId,
   });
-  const costUsd = sumComponentCostUsd(
-    priced.map((c) => {
-      return c.costUsd;
-    })
-  );
 
-  const orchestrationRunId = await resolveRunId(attribution.runPublicId);
+  const orchestrationRunId = await resolveOrchestrationRunId(
+    attribution.runPublicId
+  );
   const idempotencyKey = buildIdempotencyKey({
     generationPublicId: generation.publicId,
     runPublicId: attribution.runPublicId,
@@ -252,18 +277,13 @@ export const recordCompletionUsage = async (args: {
   );
   try {
     const model = args.model || 'unknown';
-    const priced = await priceTokenComponents({
-      tokens: extractUsageTokens(args.usage),
+    const { priced, costUsd } = await priceTokens({
+      usage: args.usage,
       provider: args.provider,
       aiProviderId: args.aiProviderId,
       model,
       projectId: args.projectId,
     });
-    const costUsd = sumComponentCostUsd(
-      priced.map((c) => {
-        return c.costUsd;
-      })
-    );
 
     const created = await persistTokenEvent({
       attribution: {

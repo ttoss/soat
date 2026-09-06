@@ -264,7 +264,7 @@ export const ERROR_CODES = {
   ORCHESTRATION_RUN_DEPTH_LIMIT: {
     httpStatus: 409,
     description:
-      "Starting the next `loop` / `sub_orchestration` child run would nest past the depth bound, so it was refused. This bounds a cycle no intra-graph validator can see — a graph whose `sub_orchestration` node names itself, directly or through a cycle of two graphs — which the orchestration cycle validator (intra-graph, and excluding loop nodes deliberately) cannot detect. The bound is the smaller of MAX_ORCHESTRATION_RUN_DEPTH (default 10) and the project's `max_run_depth`; the error meta names the depth reached, the limit, and which of the two set it (#1185).",
+      "Starting the next `loop` / `sub_orchestration` child run would nest past the depth bound, so it was refused. This bounds a cycle no intra-graph validator can see — a graph whose `sub_orchestration` node names itself, directly or through a cycle of two graphs — which the orchestration cycle validator (intra-graph, and excluding loop nodes deliberately) cannot detect. The bound is the smaller of MAX_ORCHESTRATION_RUN_DEPTH (default 10) and the project's `max_orchestration_run_depth`; the error meta names the depth reached, the limit, and which of the two set it (#1185).",
   },
   ORCHESTRATION_MAX_ITERATIONS_EXCEEDED: {
     httpStatus: 422,

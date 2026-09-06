@@ -134,7 +134,7 @@ export class OrchestrationRun extends Model {
   // A stored counter rather than an ancestor walk, so the check costs nothing
   // at the depth where it matters most.
   @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 0 })
-  declare runDepth: number;
+  declare orchestrationRunDepth: number;
 
   // Denormalized (not an FK) so it survives trigger deletion and can be copied
   // onto the usage events of the run's generations for trigger attribution.

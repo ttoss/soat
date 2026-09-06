@@ -20,7 +20,7 @@ describe('Usage — storage metering', () => {
   beforeAll(async () => {
     const setup = await setupProjectWithUsers({
       prefix: 'usagestorage',
-      policyActions: ['usage:ListUsageMeters'],
+      policyActions: ['usage:ListEvents'],
     });
     userToken = setup.userToken;
     projectId = setup.projectId;
@@ -55,7 +55,7 @@ describe('Usage — storage metering', () => {
     }>
   > => {
     const res = await authenticatedTestClient(userToken).get(
-      '/api/v1/usage/meters?meter_type=storage'
+      '/api/v1/usage/events?meter_type=storage'
     );
     expect(res.status).toBe(200);
     return res.body.data;
@@ -155,7 +155,7 @@ describe('Usage — storage metering', () => {
   });
 
   test('unauthenticated meters request returns 401', async () => {
-    const res = await testClient.get('/api/v1/usage/meters?meter_type=storage');
+    const res = await testClient.get('/api/v1/usage/events?meter_type=storage');
     expect(res.status).toBe(401);
   });
 });

@@ -473,7 +473,7 @@ const createRunRecord = async (args: {
     // `sub_orchestration` child. What makes a parent's spend reachable from the
     // parent instead of only from the project's aggregate (#1135).
     ...resolveRunParent(args.parent),
-    runDepth,
+    orchestrationRunDepth: runDepth,
     ...resolveRunPrincipal({
       principal: args.principal,
       authHeader: args.authHeader,

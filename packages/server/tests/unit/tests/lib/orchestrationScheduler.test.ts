@@ -28,7 +28,7 @@ const fakeRun: MappedOrchestrationRun = {
   active_nodes: [],
   artifacts: {},
   error: null,
-  run_depth: 0,
+  orchestration_run_depth: 0,
   required_action: null,
   trace_id: null,
   input: null,

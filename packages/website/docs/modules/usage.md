@@ -150,7 +150,7 @@ Requests are counted in memory per (project, API key) and a periodic flush write
 | `memory_extraction` / `memory_consolidation` | A [memory](./memories.md) pass |
 | `embedding` | An [embedding](./embeddings.md#metering) call — the endpoint, document ingestion, a memory write, or a search's query vector |
 
-`source` is set by the platform at the metering choke point — a caller cannot bill eval spend as production. It both filters ([`GET /api/v1/usage/meters?source=eval`](/docs/api/usage/list-usage-meters)) and groups (`group_by=source`); ordinary traffic collapses into the `null` bucket, so groups still sum to the project total.
+`source` is set by the platform at the metering choke point — a caller cannot bill eval spend as production. It both filters ([`GET /api/v1/usage/events?source=eval`](/docs/api/usage/list-usage-events)) and groups (`group_by=source`); ordinary traffic collapses into the `null` bucket, so groups still sum to the project total.
 
 ### Provider attribution
 
@@ -178,7 +178,7 @@ Each `PUT` takes a batch and stops at the first row it refuses. Both refusals �
 
 ### Receipts and reconciliation
 
-[`GET /api/v1/usage/receipt?generation_id=…`](/docs/api/usage/get-usage-receipt) returns a billing **receipt** for a completed generation: one line item per usage event, a `by_meter_type` cost split, reconstructed token totals (`total_input_tokens` is uncached input + cached), and a grand total. Because every component carries its price-book version and frozen cost, receipts are reproducible and meant to reconcile against the provider's invoice within a small tolerance (target ±2%).
+[`GET /api/v1/usage/receipt?generation_id=…`](/docs/api/usage/get-usage-receipt) returns a billing **receipt** for a completed generation: one line item per usage event, a `by_meter_type` cost split, reconstructed token totals (`input_tokens` is uncached input + cached), and a grand total. Because every component carries its price-book version and frozen cost, receipts are reproducible and meant to reconcile against the provider's invoice within a small tolerance (target ±2%).
 
 [`GET /api/v1/usage/receipt?orchestration_run_id=…`](/docs/api/usage/get-usage-receipt) returns the same shape for an entire [orchestration](./orchestrations.md) run, summed across every node. The run's roll-up is also surfaced inline as a `usage` object on [`GET /api/v1/orchestration-runs/{orchestration_run_id}`](/docs/api/orchestrations/get-orchestration-run).
 
@@ -191,21 +191,51 @@ A run whose graph contains a `loop` or `sub_orchestration` node is covered by th
 
 ### Aggregation
 
-[`GET /api/v1/usage?project_id=…&group_by=…`](/docs/api/usage/get-usage) rolls a project's usage up over an optional `[from, to]` window (inclusive ISO-8601 bounds on `created_at`), bucketed by one dimension — `model`, `ai_provider`, `agent`, `run`, `day`, `meter_type`, `actor`, `session`, or [`source`](#workload-source). `ai_provider` buckets on the provider the spend was billed against (see [Provider attribution](#provider-attribution)). Each group and the grand `totals` carry an `event_count`, summed token counts and `cost_usd` (`null` when no event in the bucket was priced). An event a dimension does not apply to collapses into a `null`-keyed group, so groups always sum to the project total. Requires `usage:GetUsage` on the project.
+[`GET /api/v1/usage/aggregate?project_id=…&group_by=…`](/docs/api/usage/get-usage-aggregate) rolls a project's usage up over an optional `[from, to]` window (inclusive ISO-8601 bounds on `created_at`), bucketed by one dimension — `model`, `ai_provider`, `agent`, `orchestration_run`, `day`, `meter_type`, `actor`, `session`, or [`source`](#workload-source). `ai_provider` buckets on the provider the spend was billed against (see [Provider attribution](#provider-attribution)). Each group and the grand `totals` carry an `event_count`, summed token counts and `cost_usd` (`null` when no event in the bucket was priced). An event a dimension does not apply to collapses into a `null`-keyed group, so groups always sum to the project total. Requires `usage:GetAggregate` on the project.
 
 The rollup is computed by the database — the window is grouped and summed in SQL, with one join for the chosen dimension — so the cost of a request tracks the buckets it answers with rather than the events behind them.
 
-#### Counting and paging the groups
+#### Counting entities
 
-`groups` is the standard paginated envelope (`data`, `total`, `limit`, `offset`), and `groups.total` is the number of distinct buckets in the window. That is what answers "how many runs did this project make this cycle" — `group_by=run&limit=1` reads the count in one small response instead of returning one entry per run:
+**`groups.total` counts buckets, not entities.** A dimension that does not apply to an event puts it in a `null`-keyed bucket, and that bucket is real: a project whose traffic is direct agent generations, eval items and trigger firings has exactly **one** `group_by=orchestration_run` bucket whether the window held ten events or a million. `actor`, `session`, `agent` and `source` each carry the same null bucket.
+
+To count entities, send `include=distinct` and read `totals.distinct` — one `COUNT(DISTINCT …)` per attribution column on the event:
+
+```bash
+GET /api/v1/usage/aggregate?project_id=…&group_by=day&limit=1&include=distinct
+```
 
 ```json
 {
-  "group_by": "run",
-  "groups": { "data": [ … ], "total": 250000, "limit": 1, "offset": 0 },
-  "totals": { "cost_usd": 1234.56, "event_count": 812004, … }
+  "totals": {
+    "cost_usd": 12.34,
+    "event_count": 812004,
+    "distinct": {
+      "generations": 811990,
+      "traces": 811990,
+      "orchestration_runs": 12,
+      "agents": 4,
+      "actors": 318,
+      "sessions": 902,
+      "ai_providers": 2
+    }
+  }
 }
 ```
+
+Nulls are not counted, which is the wanted reading throughout: a generation-less completion (`chat`, `memory_extraction`, `memory_consolidation`, `eval_judge`) moves `event_count` and nothing in `distinct`; a standalone generation counts under `generations` and not under `orchestration_runs`; a retried orchestration node — a second event and a second generation — counts once as a run.
+
+Three things to know before relying on it:
+
+- **It is opt-in because it costs.** Each key makes the database sort the window once more, so the default response keeps its cost whatever the event table grows to carry. A caller counting entities sends one request at `limit=1&include=distinct`; a caller walking pages for spend sends no `include` and pays nothing.
+- **It is on `totals` only.** Groups never carry `distinct`: filling it per bucket would mean a `COUNT(DISTINCT)` per bucket on the page query.
+- **These figures describe one window and none of them add.** Two adjacent windows' `distinct.sessions` overlap wherever a session spans the boundary, and a run that straddles midnight is in two `day` windows. A wider figure is a wider query, never a sum of narrower ones.
+
+Any `include` value other than `distinct` is a `400`.
+
+#### Paging the groups
+
+`groups` is the standard paginated envelope (`data`, `total`, `limit`, `offset`), where `total` is the bucket count described above.
 
 Two guarantees worth relying on:
 
@@ -225,7 +255,7 @@ Under `group_by=model` every group also carries `ai_provider_id` — the [AI pro
 Metered usage feeds the [guardrail](./guardrails.md) evaluator's `runtime.usage.*` context, so a spend limit is enforced deterministically at the tool boundary:
 
 - **Per project, windowed** — `runtime.usage.cost_usd_{1h,24h,7d,30d}` and `runtime.usage.tokens_{24h,30d}`.
-- **Per run, cumulative** — `runtime.usage.run_tokens` and `runtime.usage.run_cost_usd`; see [per-run spend ceilings](./guardrails.md#per-run-spend-ceilings).
+- **Per run, cumulative** — `runtime.usage.orchestration_run_tokens` and `runtime.usage.orchestration_run_cost_usd`; see [per-run spend ceilings](./guardrails.md#per-run-spend-ceilings).
 
 Both read live at evaluation time and fail closed. Unlike [thresholds](#thresholds-and-alerts), which alert, a guard **aborts** the call.
 
@@ -270,14 +300,14 @@ List a generation's raw meter rows:
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat list-usage-meters --generation-id gen_V1StGXR8Z5jdHi6B
+soat list-usage-events --generation-id gen_V1StGXR8Z5jdHi6B
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data, error } = await soat.usage.listUsageMeters({
+const { data, error } = await soat.usage.listUsageEvents({
   query: { generation_id: 'gen_V1StGXR8Z5jdHi6B' },
 });
 if (error) throw new Error(JSON.stringify(error));
@@ -287,7 +317,7 @@ if (error) throw new Error(JSON.stringify(error));
 <TabItem value="curl" label="curl">
 
 ```bash
-curl "https://api.example.com/api/v1/usage/meters?generation_id=gen_V1StGXR8Z5jdHi6B" \
+curl "https://api.example.com/api/v1/usage/events?generation_id=gen_V1StGXR8Z5jdHi6B" \
   -H "Authorization: Bearer <token>"
 ```
 
@@ -330,7 +360,7 @@ Aggregate a project's usage by meter type over a window:
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat get-usage \
+soat get-usage-aggregate \
   --project-id proj_V1StGXR8Z5jdHi6B \
   --group-by meter_type \
   --from 2026-07-01T00:00:00Z \
@@ -341,7 +371,7 @@ soat get-usage \
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data, error } = await soat.usage.getUsage({
+const { data, error } = await soat.usage.getUsageAggregate({
   query: {
     project_id: 'proj_V1StGXR8Z5jdHi6B',
     group_by: 'meter_type',
@@ -356,25 +386,27 @@ if (error) throw new Error(JSON.stringify(error));
 <TabItem value="curl" label="curl">
 
 ```bash
-curl "https://api.example.com/api/v1/usage?project_id=proj_V1StGXR8Z5jdHi6B&group_by=meter_type&from=2026-07-01T00:00:00Z&to=2026-08-01T00:00:00Z" \
+curl "https://api.example.com/api/v1/usage/aggregate?project_id=proj_V1StGXR8Z5jdHi6B&group_by=meter_type&from=2026-07-01T00:00:00Z&to=2026-08-01T00:00:00Z" \
   -H "Authorization: Bearer <token>"
 ```
 
 </TabItem>
 </Tabs>
 
-Count the runs in a billing cycle without listing them — `groups.total` is the
-answer, so `limit=1` keeps the response small however many runs there were:
+Count the runs in a billing cycle without listing them — `totals.distinct` is
+the answer (`groups.total` would count buckets, not runs), so `limit=1` keeps
+the response small however many runs there were:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat get-usage \
+soat get-usage-aggregate \
   --project-id proj_V1StGXR8Z5jdHi6B \
-  --group-by run \
+  --group-by orchestration_run \
   --from 2026-07-01T00:00:00Z \
   --to 2026-08-01T00:00:00Z \
+  --include distinct \
   --limit 1
 ```
 
@@ -382,24 +414,25 @@ soat get-usage \
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data, error } = await soat.usage.getUsage({
+const { data, error } = await soat.usage.getUsageAggregate({
   query: {
     project_id: 'proj_V1StGXR8Z5jdHi6B',
-    group_by: 'run',
+    group_by: 'orchestration_run',
     from: '2026-07-01T00:00:00Z',
     to: '2026-08-01T00:00:00Z',
+    include: 'distinct',
     limit: 1,
   },
 });
 if (error) throw new Error(JSON.stringify(error));
-const runCount = data.groups.total;
+const runCount = data.totals.distinct.orchestration_runs;
 ```
 
 </TabItem>
 <TabItem value="curl" label="curl">
 
 ```bash
-curl "https://api.example.com/api/v1/usage?project_id=proj_V1StGXR8Z5jdHi6B&group_by=run&from=2026-07-01T00:00:00Z&to=2026-08-01T00:00:00Z&limit=1" \
+curl "https://api.example.com/api/v1/usage/aggregate?project_id=proj_V1StGXR8Z5jdHi6B&group_by=orchestration_run&from=2026-07-01T00:00:00Z&to=2026-08-01T00:00:00Z&include=distinct&limit=1" \
   -H "Authorization: Bearer <token>"
 ```
 

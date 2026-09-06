@@ -236,14 +236,14 @@ you have not registered any prices yet, and SOAT ships none by default.
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat list-usage-meters --generation-id "$GENERATION_ID"
+soat list-usage-events --generation-id "$GENERATION_ID"
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: meters } = await adminSoat.usage.listUsageMeters({
+const { data: meters } = await adminSoat.usage.listUsageEvents({
   query: { generation_id: GENERATION_ID },
 });
 console.log(meters.data);
@@ -253,7 +253,7 @@ console.log(meters.data);
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s "$SOAT_URL/api/v1/usage/meters?generation_id=$GENERATION_ID" \
+curl -s "$SOAT_URL/api/v1/usage/events?generation_id=$GENERATION_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq
 ```
 
@@ -286,7 +286,7 @@ soat get-usage-receipt --generation-id "$GENERATION_ID"
 const { data: receipt } = await adminSoat.usage.getUsageReceipt({
   query: { generation_id: GENERATION_ID },
 });
-console.log(receipt.total_input_tokens, receipt.total_output_tokens);
+console.log(receipt.input_tokens, receipt.output_tokens);
 ```
 
 </TabItem>
@@ -304,25 +304,25 @@ curl -s "$SOAT_URL/api/v1/usage/receipt?generation_id=$GENERATION_ID" \
 
 ## Step 6 — Aggregate the project's usage
 
-`get-usage` rolls the whole project up over an optional `[from, to]` window,
+`get-usage-aggregate` rolls the whole project up over an optional `[from, to]` window,
 bucketed by one dimension: `model`, `agent`, `run`, `day`, or `meter_type`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat get-usage --project-id "$PROJECT_ID" --group-by day
-soat get-usage --project-id "$PROJECT_ID" --group-by model
+soat get-usage-aggregate --project-id "$PROJECT_ID" --group-by day
+soat get-usage-aggregate --project-id "$PROJECT_ID" --group-by model
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: byDay } = await adminSoat.usage.getUsage({
+const { data: byDay } = await adminSoat.usage.getUsageAggregate({
   query: { project_id: PROJECT_ID, group_by: 'day' },
 });
-const { data: byModel } = await adminSoat.usage.getUsage({
+const { data: byModel } = await adminSoat.usage.getUsageAggregate({
   query: { project_id: PROJECT_ID, group_by: 'model' },
 });
 console.log(byDay.totals, byModel.groups.data);
@@ -332,9 +332,9 @@ console.log(byDay.totals, byModel.groups.data);
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s "$SOAT_URL/api/v1/usage?project_id=$PROJECT_ID&group_by=day" \
+curl -s "$SOAT_URL/api/v1/usage/aggregate?project_id=$PROJECT_ID&group_by=day" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq
-curl -s "$SOAT_URL/api/v1/usage?project_id=$PROJECT_ID&group_by=model" \
+curl -s "$SOAT_URL/api/v1/usage/aggregate?project_id=$PROJECT_ID&group_by=model" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq
 ```
 

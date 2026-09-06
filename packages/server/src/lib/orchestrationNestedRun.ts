@@ -24,7 +24,7 @@ export type NestedRunParent = {
   runId?: string;
   nodeId: string;
   /**
-   * The parent run's own `run_depth`, so the child's is one more than it. Read
+   * The parent run's own `orchestration_run_depth`, so the child's is one more than it. Read
    * off the parent's row by the engine driving it rather than looked up from
    * `runId` here: the row is already in hand there, and a child started by a
    * parent whose row had since been deleted would otherwise restart the count

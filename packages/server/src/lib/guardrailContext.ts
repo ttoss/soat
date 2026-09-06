@@ -8,8 +8,8 @@ import type { GuardrailEvaluationContext } from './guardrailEvaluation';
 import { isPlainObject } from './plainObject';
 import { callTool } from './tools';
 import {
-  runCostUsd,
-  runTokens,
+  orchestrationRunCostUsd,
+  orchestrationRunTokens,
   windowedCostUsd,
   windowedTokens,
 } from './usageThresholds';
@@ -20,7 +20,7 @@ const log = createDebug('soat:guardrails');
 // recorded on the audit record (guardrails.md — Evaluation Audit Record).
 export type GuardrailContextSource = 'caller' | 'tool' | 'merged' | 'none';
 
-/** Orchestration-run state feeding `runtime.run.*`; absent for plain generations. */
+/** Orchestration-run state feeding `runtime.orchestration_run.*`; absent for plain generations. */
 export type SoatRunContext = {
   nodeAttempt?: number | null;
   toolCalls?: number | null;
@@ -85,7 +85,7 @@ const buildDeterministicRuntime = (
     tool: { id: identity.toolId ?? null, name: identity.toolName ?? null },
     agent: { id: identity.agentId ?? null },
     project: { id: identity.projectPublicId },
-    run: {
+    orchestration_run: {
       node_attempt: identity.run?.nodeAttempt ?? null,
       tool_calls: identity.run?.toolCalls ?? null,
     },
@@ -96,7 +96,10 @@ const buildDeterministicRuntime = (
 // `null`, which a failed query writes explicitly.
 const UNRESOLVED = Symbol('unresolved');
 
-const RUN_USAGE_KEYS = new Set(['usage.run_tokens', 'usage.run_cost_usd']);
+const RUN_USAGE_KEYS = new Set([
+  'usage.orchestration_run_tokens',
+  'usage.orchestration_run_cost_usd',
+]);
 
 // Resolves the call's run public id to its internal id, at most once per
 // evaluation: the two run keys share the lookup, and a guard referencing
@@ -134,9 +137,9 @@ const resolveRunUsage = async (args: {
   try {
     const runInternalId = await args.resolveRun();
     if (runInternalId === null) return UNRESOLVED;
-    return args.rel === 'usage.run_cost_usd'
-      ? await runCostUsd({ runInternalId })
-      : await runTokens({ runInternalId });
+    return args.rel === 'usage.orchestration_run_cost_usd'
+      ? await orchestrationRunCostUsd({ runInternalId })
+      : await orchestrationRunTokens({ runInternalId });
   } catch (error) {
     log(
       'buildGuardrailRuntimeContext: run usage failed path=%s %o',
@@ -225,8 +228,9 @@ const resolveAsyncRuntimeKey = (args: {
  * Populates the `runtime.*` namespace for a call, filling **only** the catalog keys
  * the applying guardrails actually reference (`referencedRuntimePaths`). Identity
  * and run keys are synchronous; `runtime.usage.cost_usd_*` / `tokens_*` sum the
- * project's windowed usage at evaluation time; `runtime.usage.run_tokens` /
- * `run_cost_usd` sum only the current orchestration run's meters so far, so a
+ * project's windowed usage at evaluation time;
+ * `runtime.usage.orchestration_run_tokens` / `orchestration_run_cost_usd` sum
+ * only the current orchestration run's meters so far, so a
  * per-run ceiling can abort one runaway run mid-flight; `runtime.activity.actions_*`
  * count the project's executed actions over the same rolling windows, off the
  * activity feed. Fail-closed throughout: a usage or activity query that throws,
