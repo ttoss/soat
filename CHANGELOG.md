@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.39.0](https://github.com/ttoss/soat/compare/v0.38.1...v0.39.0) (2026-09-06)
+
+### Features
+
+* **server:** price embeddings from configuration, not the price book ([#1214](https://github.com/ttoss/soat/issues/1214)) ([b1ab0fd](https://github.com/ttoss/soat/commit/b1ab0fd6dcb9c47d376666081b6609c06a07999f)), closes [#1211](https://github.com/ttoss/soat/issues/1211) [#1213](https://github.com/ttoss/soat/issues/1213) [#1213](https://github.com/ttoss/soat/issues/1213)
+
 ## [0.38.1](https://github.com/ttoss/soat/compare/v0.38.0...v0.38.1) (2026-09-06)
 
 ### Bug Fixes
