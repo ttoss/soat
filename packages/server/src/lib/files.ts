@@ -11,7 +11,7 @@ import {
   rebuildKey,
 } from './filePaths';
 import { getActiveStorageProvider, getStorageProvider } from './fileStorage';
-import { persistFileBytes } from './fileStorageLayout';
+import { categoryFromPath, persistFileBytes } from './fileStorageLayout';
 import { emptyPage, paginatedList } from './pagination';
 import {
   type CompiledPolicy,
@@ -113,12 +113,6 @@ export const getFile = async (args: { id: string }) => {
  * The category is the first path segment (e.g., `/traces/foo.json` → `traces`).
  * Falls back to `files` when the path has no sub-directory.
  */
-const categoryFromPath = (normalizedPath: string | null): string => {
-  if (!normalizedPath) return 'files';
-  const segments = normalizedPath.split('/').filter(Boolean);
-  return segments.length > 1 ? segments[0] : 'files';
-};
-
 export const uploadFile = async (args: {
   projectId: number;
   projectPublicId?: string;

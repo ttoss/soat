@@ -6,12 +6,13 @@ import type { ChunkStrategy } from './chunking';
 import {
   applyDocumentChunkChanges,
   chunkDocumentText,
+  createDocumentTextFile,
   readFileContent,
 } from './documentContent';
 import { mapDocument } from './documentMapper';
 import { emitResourceEvent } from './eventBus';
 import { pathPrefixPattern } from './filePaths';
-import { getActiveStorageProvider, getStorageProvider } from './fileStorage';
+import { getStorageProvider } from './fileStorage';
 import { recoverStaleDocument } from './ingestionCallback';
 import { emptyPage, paginatedList } from './pagination';
 import { registerResourceFieldMap } from './policyCompiler';
@@ -282,35 +283,6 @@ export const getDocument = async (args: { id: string }) => {
   return { ...mapped, content };
 };
 
-// Create the backing File row and write the document's content to storage.
-const createStoredFile = async (args: {
-  projectId: number;
-  content: string;
-  path?: string;
-  filename?: string;
-}) => {
-  const provider = getActiveStorageProvider();
-  const rawPath = args.path ?? args.filename ?? null;
-  const size = Buffer.byteLength(args.content, 'utf-8');
-  const file = await db.File.create({
-    projectId: args.projectId,
-    path: rawPath === null ? null : normalizePath(rawPath),
-    filename: args.filename ?? 'document.txt',
-    contentType: 'text/plain',
-    size,
-    storageType: provider.storageType,
-    storagePath: '',
-  });
-
-  const { storagePath } = await provider.write({
-    objectPath: `${file.publicId}.txt`,
-    buffer: Buffer.from(args.content, 'utf-8'),
-    contentType: 'text/plain',
-  });
-  await file.update({ storagePath, size });
-  return file;
-};
-
 export const createDocument = async (args: {
   projectId: number;
   content: string;
@@ -325,10 +297,11 @@ export const createDocument = async (args: {
 }) => {
   log('createDocument: projectId=%d', args.projectId);
 
-  const file = await createStoredFile({
+  const rawPath = args.path ?? args.filename ?? null;
+  const file = await createDocumentTextFile({
     projectId: args.projectId,
     content: args.content,
-    path: args.path,
+    normalizedPath: rawPath === null ? null : normalizePath(rawPath),
     filename: args.filename,
   });
 

@@ -58,6 +58,8 @@ Both backends use the same logical object layout, `{projectPublicId}/{category}/
 | `fileId`          | The file's public ID                                                                               |
 | `ext`             | File extension from the original filename                                                          |
 
+Every writer builds this key the same way, so a new storage backend inherits the layout rather than defining its own. `ext` describes the stored bytes: a [document](/docs/modules/documents)'s text object is always `.txt`, whatever the document is named.
+
 If a file has no `path`, the category defaults to `files/`. For the local backend this becomes a path under `FILES_STORAGE_DIR`; for S3 it becomes the object key (optionally namespaced by `FILES_S3_KEY_PREFIX`):
 
 ```
