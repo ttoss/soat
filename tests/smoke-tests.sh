@@ -1921,7 +1921,7 @@ SOAT_TOKEN="$ORCH_API_KEY_RAW" expect_cli_error_status 400 create-orchestration 
 
 NESTED_CHILDREN=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestration-runs \
   --parent-orchestration-run-id "$NESTED_PARENT_RUN")
-if ! printf '%s\n' "$NESTED_CHILDREN" | jq -e --arg parent "$NESTED_PARENT_RUN" '(.data | length) == 1 and .data[0].parent_orchestration_run_id == $parent and .data[0].parent_node_id == "delegate" and .data[0].run_depth == 1' >/dev/null 2>&1; then
+if ! printf '%s\n' "$NESTED_CHILDREN" | jq -e --arg parent "$NESTED_PARENT_RUN" '(.data | length) == 1 and .data[0].parent_orchestration_run_id == $parent and .data[0].parent_node_id == "delegate" and .data[0].orchestration_run_depth == 1' >/dev/null 2>&1; then
   echo "a sub_orchestration child did not name the run and node that started it"
   printf '%s\n' "$NESTED_CHILDREN"
   exit 1
@@ -1943,7 +1943,7 @@ SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI update-orchestration \
 SELF_REF_RUN=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
   --orchestration-id "$SELF_REF_ORCH" \
   --wait true)
-if ! printf '%s\n' "$SELF_REF_RUN" | jq -e '.status == "failed" and .run_depth == 0 and .error.code == "ORCHESTRATION_RUN_DEPTH_LIMIT"' >/dev/null 2>&1; then
+if ! printf '%s\n' "$SELF_REF_RUN" | jq -e '.status == "failed" and .orchestration_run_depth == 0 and .error.code == "ORCHESTRATION_RUN_DEPTH_LIMIT"' >/dev/null 2>&1; then
   echo "a self-referencing sub_orchestration graph did not terminate on the depth bound"
   printf '%s\n' "$SELF_REF_RUN"
   exit 1
