@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.38.1](https://github.com/ttoss/soat/compare/v0.38.0...v0.38.1) (2026-09-06)
+
+### Bug Fixes
+
+* **server:** meter embedding calls so their spend reaches usage and quotas ([#1211](https://github.com/ttoss/soat/issues/1211)) ([e228962](https://github.com/ttoss/soat/commit/e2289626a9ce8d726d9e5bb101eeb02aeb8819fb)), closes [#1208](https://github.com/ttoss/soat/issues/1208)
+
 # [0.38.0](https://github.com/ttoss/soat/compare/v0.37.1...v0.38.0) (2026-09-05)
 
 * feat(server)!: count, paginate and SQL-aggregate the usage rollup (#1206) ([2f8aaa3](https://github.com/ttoss/soat/commit/2f8aaa32d4650d903305edf9f1c7ebd71a147b7d)), closes [#1206](https://github.com/ttoss/soat/issues/1206) [#1204](https://github.com/ttoss/soat/issues/1204)
