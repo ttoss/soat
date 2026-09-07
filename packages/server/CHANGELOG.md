@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.40.1](https://github.com/ttoss/soat/compare/v0.40.0...v0.40.1) (2026-09-07)
+
+### Bug Fixes
+
+* **postgresdb:** index both vector columns for approximate nearest-neighbour search ([#1222](https://github.com/ttoss/soat/issues/1222)) ([5961fe1](https://github.com/ttoss/soat/commit/5961fe11bf6c60efc154de91421d4cc299de8335)), closes [#1220](https://github.com/ttoss/soat/issues/1220)
+
 # [0.40.0](https://github.com/ttoss/soat/compare/v0.39.0...v0.40.0) (2026-09-06)
 
 * feat(server)!: count entities on usage totals, and rename the module's misleading vocabulary (#1217) ([d7a2c08](https://github.com/ttoss/soat/commit/d7a2c08af18ee9c691f5103cefb8b0e7054de6b8)), closes [#1217](https://github.com/ttoss/soat/issues/1217) [#1216](https://github.com/ttoss/soat/issues/1216)
