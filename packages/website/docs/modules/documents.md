@@ -212,7 +212,7 @@ For endpoints that accept `project_id`, the field is optional: when omitted, the
 | `FILES_STORAGE_DIR`    | Yes      | Directory where `.txt` files are written (shared with Files) |
 | `EMBEDDING_PROVIDER`   | Yes      | Embedding backend: `ollama`, `openai`, or `bedrock`          |
 | `EMBEDDING_MODEL`      | Yes      | Model name, e.g. `qwen3-embedding:0.6b`                      |
-| `EMBEDDING_DIMENSIONS` | Yes      | Vector dimensions — must match the model output, e.g. `1024` |
+| `EMBEDDING_DIMENSIONS` | Yes      | Vector dimensions — must match the model output, e.g. `1024`, and be at most `2000` |
 | `OLLAMA_BASE_URL`      | No       | Ollama server URL, defaults to `http://localhost:11434`      |
 | `SYNC_INGESTION_MAX_BYTES` | No   | Max file size (bytes) allowed for synchronous ingestion (`?wait=true`). Larger files return `413`. Defaults to `10485760` (10 MB). |
 | `INGESTION_STALL_TIMEOUT_MS` | No | How long (ms) a document may stay in `pending`/`processing` with no progress before it is auto-failed with `INGESTION_TIMEOUT`. Defaults to `300000` (5 min). |

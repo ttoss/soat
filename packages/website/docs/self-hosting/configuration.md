@@ -19,7 +19,9 @@ This page covers all environment variables available for the SOAT server, along 
 | `DATABASE_USER`     | `soat_user`     | Database user     |
 | `DATABASE_PASSWORD` | `soat_password` | Database password |
 
-The database must have the [pgvector](https://github.com/pgvector/pgvector) extension installed. Use the official `pgvector/pgvector` Docker image or install the extension manually.
+The database must have the [pgvector](https://github.com/pgvector/pgvector) extension installed, at **version 0.8 or newer**. Use the official `pgvector/pgvector` Docker image or install the extension manually.
+
+0.8 is what semantic search needs to be exact about its filters: it sets `hnsw.iterative_scan`, added in that version, so a scoped or path-filtered search cannot return fewer results than exist. An older extension still answers every search — PostgreSQL discards the unknown setting with a warning — but a narrow filter can silently come back short. See [Ranking is approximate](../modules/knowledge.md#ranking-is-approximate).
 
 #### Standard `PG*` environment variables
 
@@ -239,7 +241,7 @@ SOAT uses [Ollama](https://ollama.com) by default for generating vector embeddin
 | ---------------------- | ------------------------ | ------------------------------------------------------------------------------------------ |
 | `EMBEDDING_PROVIDER`   | `ollama`                 | Embedding provider: `ollama`, `openai`, or `bedrock`                                       |
 | `EMBEDDING_MODEL`      | `qwen3-embedding:0.6b`   | Model name for the selected provider                                                       |
-| `EMBEDDING_DIMENSIONS` | `1024`                   | Embedding vector dimensions (must match the model)                                         |
+| `EMBEDDING_DIMENSIONS` | `1024`                   | Embedding vector dimensions (must match the model; at most `2000`)                         |
 | `OLLAMA_BASE_URL`      | `http://localhost:11434` | Base URL of the Ollama instance (`ollama` only)                                            |
 | `EMBEDDING_API_KEY`    | —                        | OpenAI API key, or a Bedrock `ABSK…` bearer token. `openai` falls back to `OPENAI_API_KEY` |
 | `EMBEDDING_BASE_URL`   | —                        | Override base URL for an OpenAI-compatible endpoint (`openai` only)                        |
@@ -248,7 +250,7 @@ SOAT uses [Ollama](https://ollama.com) by default for generating vector embeddin
 
 Embedding spend is priced from `EMBEDDING_INPUT_1M_TOKEN_PRICE_USD`, not from the price book — the embedding stack is configured here rather than by an AI provider record, so no price-book tier can reach it. Leaving it unset meters every embedding at `0`, which is correct for a local model and silently free on a vendor-billed one; the server logs a warning at startup in that case. See [Pricing embeddings](/docs/modules/embeddings#pricing-embeddings).
 
-To use a different embedding model, update `EMBEDDING_MODEL` and `EMBEDDING_DIMENSIONS` together — the model name and dimension count must be consistent. For `openai` and `bedrock`, set the provider's credentials as well; Bedrock without `EMBEDDING_API_KEY` uses the standard AWS credential chain (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`).
+To use a different embedding model, update `EMBEDDING_MODEL` and `EMBEDDING_DIMENSIONS` together — the model name and dimension count must be consistent. The count may not exceed **2000**: both vector columns carry an HNSW index, and that is the widest vector pgvector can build one over. A model above it is refused at startup rather than at the first schema sync. For `openai` and `bedrock`, set the provider's credentials as well; Bedrock without `EMBEDDING_API_KEY` uses the standard AWS credential chain (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`).
 
 ## Docker Compose Example
 

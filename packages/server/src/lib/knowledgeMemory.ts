@@ -3,6 +3,7 @@ import { Op } from '@ttoss/postgresdb';
 import { db } from '../db';
 import type { EmbeddingBillingProjectId } from './embedding';
 import { getEmbedding } from './embedding';
+import { withIterativeVectorScan } from './vectorSearch';
 
 export type MemoryQueryConfig = {
   memoryIds?: string[];
@@ -133,20 +134,25 @@ const resolveMemorySearchBySemantic = async (args: {
   const distanceLiteral = db.MemoryEntry.sequelize!.literal(
     `embedding <=> '${embeddingLiteral}'`
   );
-  const entries = await db.MemoryEntry.findAll({
-    where: args.entryWhere,
-    attributes: { include: [[distanceLiteral, 'distance']] },
-    include: [
-      {
-        model: db.Memory,
-        as: 'memory',
-        where: args.memoryWhere,
-        required: true,
-      },
-    ],
-    order: distanceLiteral,
-    subQuery: false,
-    limit: args.limit,
+  const entries = await withIterativeVectorScan({
+    run: ({ transaction }) => {
+      return db.MemoryEntry.findAll({
+        where: args.entryWhere,
+        attributes: { include: [[distanceLiteral, 'distance']] },
+        include: [
+          {
+            model: db.Memory,
+            as: 'memory',
+            where: args.memoryWhere,
+            required: true,
+          },
+        ],
+        order: distanceLiteral,
+        subQuery: false,
+        limit: args.limit,
+        transaction,
+      });
+    },
   });
   const results = entries.map((entry) => {
     const distance = parseFloat(

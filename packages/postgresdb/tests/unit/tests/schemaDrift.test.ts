@@ -221,6 +221,50 @@ describe('schema drift after sync({ alter: true })', () => {
     expect(mismatched).toEqual([]);
   });
 
+  test('every vector column is indexed with HNSW and the cosine opclass', async () => {
+    // `modelIndexes.test.ts` proves the models *declare* this; only the catalog
+    // proves it reached the database. That gap is not hypothetical here — the
+    // `@Index` decorator reads as an index in review and registers nothing, so
+    // an ANN index that exists solely in the model metadata is a known failure
+    // shape in this package. Vector columns are found through the catalog for
+    // the same reason.
+    const indexed = await selectRows(`
+      SELECT tbl.relname AS table,
+             att.attname AS column,
+             am.amname AS method,
+             opc.opcname AS opclass
+        FROM pg_attribute att
+        JOIN pg_class tbl ON tbl.oid = att.attrelid
+        JOIN pg_namespace ns ON ns.oid = tbl.relnamespace
+        JOIN pg_type typ ON typ.oid = att.atttypid
+        LEFT JOIN pg_index i
+               ON i.indrelid = att.attrelid
+              AND att.attnum = i.indkey[0]
+        LEFT JOIN pg_class idx ON idx.oid = i.indexrelid
+        LEFT JOIN pg_am am ON am.oid = idx.relam
+        LEFT JOIN pg_opclass opc ON opc.oid = i.indclass[0]
+       WHERE ns.nspname = current_schema()
+         AND typ.typname = 'vector'
+         AND tbl.relkind = 'r'
+       ORDER BY tbl.relname
+    `);
+
+    expect(indexed).toEqual([
+      {
+        table: 'document_chunks',
+        column: 'embedding',
+        method: 'hnsw',
+        opclass: 'vector_cosine_ops',
+      },
+      {
+        table: 'memory_entries',
+        column: 'embedding',
+        method: 'hnsw',
+        opclass: 'vector_cosine_ops',
+      },
+    ]);
+  });
+
   test('a second sync adds no indexes', async () => {
     // Pins the #710 regression directly: before it, three consecutive alter
     // passes took the index count 150 -> 205 -> 260, because a column-level

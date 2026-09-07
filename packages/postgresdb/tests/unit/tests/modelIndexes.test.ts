@@ -35,12 +35,49 @@ type ModelIndex = {
   name?: string;
   unique?: boolean;
   fields?: unknown;
+  using?: string;
+};
+
+type IndexField = { name: string; operator?: string };
+
+const indexFieldsOf = (index: ModelIndex): IndexField[] => {
+  if (!Array.isArray(index.fields)) {
+    return [];
+  }
+
+  return index.fields.flatMap((field: unknown): IndexField[] => {
+    if (typeof field === 'string') {
+      return [{ name: field }];
+    }
+
+    if (typeof field !== 'object' || field === null || !('name' in field)) {
+      return [];
+    }
+
+    const { name } = field;
+
+    if (typeof name !== 'string') {
+      return [];
+    }
+
+    const operator = 'operator' in field ? field.operator : undefined;
+
+    return [
+      { name, operator: typeof operator === 'string' ? operator : undefined },
+    ];
+  });
+};
+
+type ModelAttribute = {
+  unique?: unknown;
+  type?: unknown;
+  field?: unknown;
 };
 
 type ModelMeta = {
   model: string;
   table: string;
-  attributes: [string, { unique?: unknown }][];
+  attributes: [string, ModelAttribute][];
   indexes: readonly ModelIndex[];
 };
 
@@ -52,6 +89,42 @@ const modelEntries: ModelMeta[] = modelList.map((model) => {
     indexes: model.options.indexes ?? [],
   };
 });
+
+/**
+ * `key` is what a Sequelize DataType instance reports itself as, so it
+ * identifies a pgvector column without importing the type or matching on the
+ * SQL it renders.
+ */
+const attributeTypeKey = (attribute: ModelAttribute): string | undefined => {
+  const { type } = attribute;
+
+  if (typeof type !== 'object' || type === null || !('key' in type)) {
+    return undefined;
+  }
+
+  const { key } = type;
+
+  return typeof key === 'string' ? key : undefined;
+};
+
+const vectorColumns = modelEntries.flatMap(
+  ({ model, table, attributes, indexes }) => {
+    return attributes
+      .filter(([, attribute]) => {
+        return attributeTypeKey(attribute) === 'vector';
+      })
+      .map(([name, attribute]) => {
+        return {
+          model,
+          table,
+          // Models are `underscored`, so the column an index names is `field`
+          // when Sequelize derived one, and the attribute name otherwise.
+          column: typeof attribute.field === 'string' ? attribute.field : name,
+          indexes,
+        };
+      });
+  }
+);
 
 const uniqueIndexes = modelEntries.flatMap(({ model, table, indexes }) => {
   return indexes
@@ -278,5 +351,46 @@ describe('model unique constraints', () => {
     }
 
     expect(collisions).toEqual([]);
+  });
+});
+
+describe('vector columns carry an ANN index', () => {
+  test('the vector columns are the two the models declare', () => {
+    // Proves the discriminator above still recognizes a pgvector column: an
+    // empty list would make the ANN assertion below pass by finding nothing.
+    expect(
+      vectorColumns
+        .map(({ table, column }) => {
+          return `${table}.${column}`;
+        })
+        .sort()
+    ).toEqual(['document_chunks.embedding', 'memory_entries.embedding']);
+  });
+
+  test('every vector column is indexed `USING hnsw` with the cosine operator', () => {
+    // Without an ANN index a semantic search is `ORDER BY embedding <=> $q
+    // LIMIT n` over every vector in scope, so its cost grows linearly with the
+    // corpus — and silently, because the buffer cache hides it until the
+    // corpus outgrows the instance's memory (#1220). Both search paths order on
+    // `<=>`, so the operator class has to be the cosine one: an index built for
+    // another distance is simply not used by that ordering.
+    const missing = vectorColumns
+      .filter(({ column, indexes }) => {
+        return !indexes.some((index) => {
+          return (
+            index.using?.toLowerCase() === 'hnsw' &&
+            indexFieldsOf(index).some((field) => {
+              return (
+                field.name === column && field.operator === 'vector_cosine_ops'
+              );
+            })
+          );
+        });
+      })
+      .map(({ table, column }) => {
+        return `${table}.${column}`;
+      });
+
+    expect(missing).toEqual([]);
   });
 });
