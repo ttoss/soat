@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.40.2](https://github.com/ttoss/soat/compare/v0.40.1...v0.40.2) (2026-09-07)
+
+### Bug Fixes
+
+* **server:** sweep once at scheduler start, so a daily sweep is not lost to a restart ([#1230](https://github.com/ttoss/soat/issues/1230)) ([60815e5](https://github.com/ttoss/soat/commit/60815e533defa82e5163ffcf8fbca0bf223f2667)), closes [#1229](https://github.com/ttoss/soat/issues/1229)
+
 ## [0.40.1](https://github.com/ttoss/soat/compare/v0.40.0...v0.40.1) (2026-09-07)
 
 ### Bug Fixes
