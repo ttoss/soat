@@ -6383,7 +6383,7 @@ echo "--- Guardrails module ---"
 GUARDRAIL_RESP=$($SOAT_CLI create-guardrail \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name smoke-budget-guardrail \
-  --document '{"default_class":"C","class":{"if":[{"<":[{"var":"args.amount"},500]},"B","C"]},"guard":{"<":[{"var":"runtime.usage.cost_usd_24h"},1000000]}}')
+  --document '{"default_class":"C","class":{"if":[{"<":[{"var":"args.amount"},500]},"B","C"]},"guard":{"<":[{"var":"runtime.usage.tokens_24h"},1000000]}}')
 GUARDRAIL_ID=$(printf '%s\n' "$GUARDRAIL_RESP" | jq -r '.id')
 if [ -z "$GUARDRAIL_ID" ] || [ "$GUARDRAIL_ID" = "null" ]; then
   echo "ERROR: Failed to create guardrail" >&2
@@ -6397,6 +6397,10 @@ if [ "$GUARDRAIL_VERSION" != "1" ]; then
 fi
 
 # Dry-run: below the threshold classifies B and the spend guard passes → execute.
+# The guard reads `tokens_24h`, which has no pricing dependency: every
+# immediately-effective price row on this stack is for a model nothing generates
+# with, so a `cost_usd_24h` guard here would resolve to null and fail closed —
+# which is what the next case asserts on purpose.
 DRYRUN_LOW=$($SOAT_CLI evaluate-guardrail --guardrail-id "$GUARDRAIL_ID" --args '{"amount":100}')
 if [ "$(printf '%s\n' "$DRYRUN_LOW" | jq -r '.class')" != "B" ] || \
    [ "$(printf '%s\n' "$DRYRUN_LOW" | jq -r '.decision')" != "execute" ]; then
@@ -6415,6 +6419,32 @@ if [ "$(printf '%s\n' "$DRYRUN_HIGH" | jq -r '.class')" != "C" ] || \
 fi
 
 $SOAT_CLI delete-guardrail --guardrail-id "$GUARDRAIL_ID" >/dev/null
+
+# A cost ceiling over a window that metered LLM usage and priced none of it
+# cannot be enforced, so the key resolves to null and the guard fails closed
+# rather than passing on a sum that ignores every unpriced event. This stack is
+# that case end to end: it generates against `qwen2.5:0.5b`, whose only price
+# rows are future-dated.
+UNPRICED_CEILING_RESP=$($SOAT_CLI create-guardrail \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-unpriced-ceiling-guardrail \
+  --document '{"class":"B","guard":{"<":[{"var":"runtime.usage.cost_usd_24h"},1000000]}}')
+UNPRICED_CEILING_ID=$(printf '%s\n' "$UNPRICED_CEILING_RESP" | jq -r '.id')
+if [ -z "$UNPRICED_CEILING_ID" ] || [ "$UNPRICED_CEILING_ID" = "null" ]; then
+  echo "ERROR: Failed to create the unpriced-ceiling guardrail" >&2
+  echo "$UNPRICED_CEILING_RESP" >&2
+  exit 1
+fi
+DRYRUN_UNPRICED=$($SOAT_CLI evaluate-guardrail \
+  --guardrail-id "$UNPRICED_CEILING_ID" --args '{}')
+if [ "$(printf '%s\n' "$DRYRUN_UNPRICED" | jq -r '.context_snapshot["runtime.usage.cost_usd_24h"]')" != "null" ] || \
+   [ "$(printf '%s\n' "$DRYRUN_UNPRICED" | jq -r '.decision')" != "tripwire" ]; then
+  echo "ERROR: a cost ceiling over an unpriced window did not fail closed" >&2
+  echo "$DRYRUN_UNPRICED" >&2
+  exit 1
+fi
+$SOAT_CLI delete-guardrail --guardrail-id "$UNPRICED_CEILING_ID" >/dev/null
+echo "Cost ceiling over an unpriced window (fail-closed): OK"
 
 # Per-run cumulative ceiling (#486): the run-scoped usage keys must be in the
 # runtime.* catalog (an uncatalogued key is rejected at write time with 400), and
