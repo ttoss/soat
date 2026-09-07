@@ -108,6 +108,35 @@ What this means in practice:
   you upgrade.
 - **Need a stable number?** Read `similarity_score`.
 
+### Ranking is approximate
+
+Both vector columns carry an HNSW index, so `query` search is **approximate nearest
+neighbour**: it reads a bounded candidate list out of the index graph instead of comparing
+the query against every vector in scope. That is what keeps search cost sub-linear as a
+corpus grows — an exact scan reads every vector on every search, so its cost and latency
+grow with the corpus until they fall off a cliff at whatever size stops fitting in the
+database's memory.
+
+What it costs is exactness:
+
+- **Recall against the true top-k is no longer 1.0.** A result that would have ranked
+  10th can be missed. Both fields keep their documented meaning — `similarity_score` is
+  still the raw cosine value of whatever comes back, and results are still ordered by
+  descending `score` — but the set being ordered is no longer guaranteed to be the exact
+  best k.
+- **`min_score` needs re-tuning.** It filters on `score`, and the candidate set feeding it
+  changed. Re-tune it per deployment, as its own note above already advises.
+- **Filters do not silently shrink the result set.** Scope, `paths`, `document_ids` and
+  permission filters are applied *after* the index proposes candidates, so a narrow scope
+  could return fewer than `limit` rows even when more exist. SOAT enables pgvector's
+  iterative index scan for every search, which keeps widening the candidate list until
+  `limit` is satisfied post-filter.
+
+That last guarantee needs **pgvector 0.8 or newer**, which is where
+`hnsw.iterative_scan` was added. On an older extension PostgreSQL discards the setting
+with a warning and search still answers, but a filtered search can come back short — see
+[Configuration](../self-hosting/configuration.md).
+
 ### Injected knowledge is untrusted input
 
 Retrieved knowledge is partly **user-derived** — a memory entry written by
@@ -143,7 +172,7 @@ and documents may influence what it tries to do.
 | `FILES_STORAGE_DIR`    | Yes      | Directory where `.txt` files are stored (shared with Files)  |
 | `EMBEDDING_PROVIDER`   | Yes      | Embedding backend: `ollama`, `openai`, or `bedrock`          |
 | `EMBEDDING_MODEL`      | Yes      | Model name, e.g. `qwen3-embedding:0.6b`                      |
-| `EMBEDDING_DIMENSIONS` | Yes      | Vector dimensions — must match the model output, e.g. `1024` |
+| `EMBEDDING_DIMENSIONS` | Yes      | Vector dimensions — must match the model output, e.g. `1024`, and be at most `2000` |
 | `OLLAMA_BASE_URL`      | No       | Ollama server URL, defaults to `http://localhost:11434`      |
 
 ## Examples

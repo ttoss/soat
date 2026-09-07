@@ -68,6 +68,13 @@ A memory entry is a **fact the agent learns about the world** — a customer's s
 address, a decision a team reached, a constraint discovered while working. It is retrieved
 by semantic similarity and consumed as context.
 
+That retrieval is **approximate**: `memory_entries.embedding` carries an HNSW index, so a
+similarity search reads a bounded candidate list from the index rather than scanning every
+entry. Recall against the exact top-k is therefore no longer 1.0, and `min_score`
+thresholds tuned against an exact scan may select a slightly different set. See
+[Ranking is approximate](./knowledge.md#ranking-is-approximate) for the full trade-off; it
+applies to entry search and to the consolidation similarity check below alike.
+
 A **correction to the agent's behavior** is not a fact, and does not belong here.
 "Never quote a delivery date without checking stock" is doctrine about how the agent should
 act; storing it as an entry makes its application depend on whether a retrieval happened to

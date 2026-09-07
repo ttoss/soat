@@ -7,6 +7,7 @@ import {
   Table,
 } from '@ttoss/postgresdb';
 
+import { getEmbeddingDimensions } from '../utils/embedding';
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { Document } from './Document';
 
@@ -17,6 +18,14 @@ import { Document } from './Document';
       name: 'document_chunks_public_id_unique',
       unique: true,
       fields: ['public_id'],
+    },
+    {
+      // Without it a semantic search scans every vector in scope: the read
+      // pattern is only ever `ORDER BY embedding <=> $query LIMIT n` (#1220).
+      // Cosine, because that is the operator both search paths order on.
+      name: 'document_chunks_embedding_hnsw_idx',
+      using: 'hnsw',
+      fields: [{ name: 'embedding', operator: 'vector_cosine_ops' }],
     },
   ],
   hooks: {
@@ -58,17 +67,7 @@ export class DocumentChunk extends Model {
   declare chunkIndex: number;
 
   @Column({
-    type: DataType.VECTOR(
-      (() => {
-        const dim = Number(process.env.EMBEDDING_DIMENSIONS);
-        if (!dim) {
-          throw new Error(
-            'EMBEDDING_DIMENSIONS environment variable must be set to a positive integer'
-          );
-        }
-        return dim;
-      })()
-    ),
+    type: DataType.VECTOR(getEmbeddingDimensions()),
     allowNull: true,
   })
   declare embedding: number[] | null;

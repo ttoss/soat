@@ -6,6 +6,7 @@ import type { EmbeddingBillingProjectId } from './embedding';
 import { getEmbedding } from './embedding';
 import type { MemoryKnowledgeResult } from './knowledgeMemory';
 import { resolveMemorySearch } from './knowledgeMemory';
+import { withIterativeVectorScan } from './vectorSearch';
 
 export type { MemoryQueryConfig } from './knowledgeMemory';
 
@@ -223,15 +224,20 @@ const findChunksWithSearch = async (args: {
       return k.startsWith('$');
     });
 
-  return db.DocumentChunk.findAll({
-    where: args.topLevelWhere,
-    attributes: { include: [[distanceLiteral, 'distance']] },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    include: [docInclude] as any,
-    order: distanceLiteral,
-    subQuery: needsSubQueryFalse ? false : undefined,
-    limit: args.limit,
-  }) as unknown as Promise<ChunkWithDocument[]>;
+  return withIterativeVectorScan({
+    run: ({ transaction }) => {
+      return db.DocumentChunk.findAll({
+        where: args.topLevelWhere,
+        attributes: { include: [[distanceLiteral, 'distance']] },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        include: [docInclude] as any,
+        order: distanceLiteral,
+        subQuery: needsSubQueryFalse ? false : undefined,
+        limit: args.limit,
+        transaction,
+      }) as unknown as Promise<ChunkWithDocument[]>;
+    },
+  });
 };
 
 const findChunksWithoutSearch = async (args: {

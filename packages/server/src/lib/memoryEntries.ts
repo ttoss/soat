@@ -6,6 +6,7 @@ import { pickMergedContent } from 'src/lib/memoryConsolidation';
 import * as consolidationCompletion from 'src/lib/memoryConsolidationCompletion';
 import { paginatedList } from 'src/lib/pagination';
 import { makeResourceAccessor } from 'src/lib/resourceAccessor';
+import { withIterativeVectorScan } from 'src/lib/vectorSearch';
 
 /**
  * Context needed to consolidate a merge with an LLM. Present only for writes
@@ -146,33 +147,41 @@ const findTopSimilarEntry = async (args: {
   memoryId: number;
   embeddingLiteral: string;
 }) => {
-  return db.MemoryEntry.findOne({
-    where: {
-      memoryId: args.memoryId,
-      embedding: { [Op.not]: null },
-      // A retired fact is not a dedup candidate: a write that restates
-      // superseded knowledge must land as a new entry, not merge into the
-      // entry that was invalidated precisely because it no longer holds.
-      invalidatedAt: null,
+  // Every filter here is applied *after* the HNSW index proposes candidates, so
+  // without an iterative scan a crowded index can hide this memory's own match
+  // and the write falls through to create a near-duplicate.
+  return withIterativeVectorScan({
+    run: ({ transaction }) => {
+      return db.MemoryEntry.findOne({
+        where: {
+          memoryId: args.memoryId,
+          embedding: { [Op.not]: null },
+          // A retired fact is not a dedup candidate: a write that restates
+          // superseded knowledge must land as a new entry, not merge into the
+          // entry that was invalidated precisely because it no longer holds.
+          invalidatedAt: null,
+        },
+        attributes: {
+          include: [
+            [
+              db.MemoryEntry.sequelize!.literal(
+                `"MemoryEntry"."embedding" <=> '${args.embeddingLiteral}'`
+              ),
+              'distance',
+            ],
+          ],
+        },
+        // The includes join memory_entries to itself (`supersededByEntry`), so a
+        // bare `embedding` in the literals below is ambiguous — both sides of that
+        // join have the column. Qualify with the table alias.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        include: memoryEntryIncludes() as any,
+        order: db.MemoryEntry.sequelize!.literal(
+          `"MemoryEntry"."embedding" <=> '${args.embeddingLiteral}'`
+        ),
+        transaction,
+      });
     },
-    attributes: {
-      include: [
-        [
-          db.MemoryEntry.sequelize!.literal(
-            `"MemoryEntry"."embedding" <=> '${args.embeddingLiteral}'`
-          ),
-          'distance',
-        ],
-      ],
-    },
-    // The includes join memory_entries to itself (`supersededByEntry`), so a
-    // bare `embedding` in the literals below is ambiguous — both sides of that
-    // join have the column. Qualify with the table alias.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    include: memoryEntryIncludes() as any,
-    order: db.MemoryEntry.sequelize!.literal(
-      `"MemoryEntry"."embedding" <=> '${args.embeddingLiteral}'`
-    ),
   });
 };
 
