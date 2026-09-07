@@ -245,9 +245,10 @@ const readTotal = (
   return total === null || total === undefined ? 0 : Number(total);
 };
 
-// Sums the windowed cost across all meter types (nulls ignored by SUM).
-// Exported for the guardrail `runtime.usage.cost_usd_*` context providers, which
-// sum the same events over their own rolling windows.
+// Sums the windowed cost across all meter types (nulls ignored by SUM). A
+// threshold is an alert rather than a gate, so an understated sum delays a
+// notification where it would have let a ceiling pass — which is why the
+// guardrail providers read `costEnforceability.ts` instead.
 export const windowedCostUsd = async (args: {
   projectId: number;
   start: Date;
@@ -280,23 +281,6 @@ export const windowedTokens = async (args: {
       component: { [Op.in]: TOKEN_COMPONENTS },
     },
     attributes: [[Sequelize.fn('SUM', Sequelize.col('quantity')), 'total']],
-  });
-  return readTotal(rows[0]);
-};
-
-/**
- * Sums the cost recorded against one orchestration run so far, across every
- * meter type (nulls ignored by SUM). Run-scoped rather than windowed: this is
- * the signal a per-run spend ceiling compares against, so a single runaway run
- * can be aborted mid-flight without waiting for a project window to move.
- * Exported for the guardrail `runtime.usage.orchestration_run_cost_usd` context provider.
- */
-export const orchestrationRunCostUsd = async (args: {
-  runInternalId: number;
-}): Promise<number> => {
-  const rows = await db.UsageEvent.findAll({
-    where: { orchestrationRunId: args.runInternalId },
-    attributes: [[Sequelize.fn('SUM', Sequelize.col('cost_usd')), 'total']],
   });
   return readTotal(rows[0]);
 };
