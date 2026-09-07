@@ -23,30 +23,81 @@ const utcDateKey = (now: Date): string => {
   return now.toISOString().slice(0, 10);
 };
 
-// A `COALESCE(SUM(...), 0)` query always returns exactly one row whose `bytes`
-// column is numeric (never null), so the single aggregate row can be read
-// without defensive branching.
-const readBytes = (rows: unknown[]): number => {
-  const [row] = rows as Array<{ bytes: string | number }>;
-  return Number(row.bytes);
+/**
+ * The bytes a project stores, split by where they live so the debug line names
+ * each term: a term that reads zero is the only visible symptom of one this
+ * meter stopped reaching (#1221).
+ */
+type StoredBytes = {
+  files: number;
+  documentChunks: number;
+  memoryEntries: number;
+  total: number;
 };
 
-// Aggregated at snapshot time rather than tracked incrementally — a daily
-// sample is the accepted granularity here.
-const projectStoredBytes = async (projectId: number): Promise<number> => {
-  const [fileRows] = await db.sequelize.query(
-    `SELECT COALESCE(SUM("size"), 0) AS bytes FROM "files" WHERE "project_id" = :projectId`,
+// Every term is a `COALESCE(SUM(...), 0)` scalar subquery, so the statement
+// always returns exactly one row whose columns are numeric (never null) and can
+// be read without defensive branching. `numeric` arrives as a string.
+const readStoredBytes = (rows: unknown[]): StoredBytes => {
+  const [row] = rows as Array<{
+    file_bytes: string | number;
+    chunk_bytes: string | number;
+    memory_bytes: string | number;
+  }>;
+  const files = Number(row.file_bytes);
+  const documentChunks = Number(row.chunk_bytes);
+  const memoryEntries = Number(row.memory_bytes);
+  return {
+    files,
+    documentChunks,
+    memoryEntries,
+    total: files + documentChunks + memoryEntries,
+  };
+};
+
+/**
+ * Aggregated at snapshot time rather than tracked incrementally — a daily
+ * sample is the accepted granularity here.
+ *
+ * Both vector-bearing tables are measured with `pg_column_size`, which reads
+ * the stored width of the value itself rather than deriving it from
+ * `EMBEDDING_DIMENSIONS`, so the figure cannot drift when that moves or when
+ * the column's type changes. It reads the tuple's inline TOAST pointer and
+ * never fetches the out-of-line value, which is what keeps a term dominated by
+ * ~4 KB vectors as cheap as the text sums beside it.
+ *
+ * The inner `COALESCE` is load-bearing: an un-embedded row's `pg_column_size`
+ * is null, and `text + null` would discard that row's *content* too.
+ *
+ * What this deliberately excludes is physical overhead — index pages, TOAST
+ * chunk headers, tuple headers and bloat. None of it is attributable to one
+ * project, and it moves with vacuum state; the meter is the logical bytes a
+ * project put there. Documented on `modules/usage.md`.
+ */
+const projectStoredBytes = async (projectId: number): Promise<StoredBytes> => {
+  const [rows] = await db.sequelize.query(
+    `SELECT
+       (SELECT COALESCE(SUM(f."size"), 0)
+          FROM "files" f
+         WHERE f."project_id" = :projectId) AS file_bytes,
+       (SELECT COALESCE(SUM(
+                 OCTET_LENGTH(dc."content")
+                 + COALESCE(pg_column_size(dc."embedding"), 0)
+               ), 0)
+          FROM "document_chunks" dc
+          JOIN "documents" d ON dc."document_id" = d."id"
+          JOIN "files" f ON d."file_id" = f."id"
+         WHERE f."project_id" = :projectId) AS chunk_bytes,
+       (SELECT COALESCE(SUM(
+                 OCTET_LENGTH(me."content")
+                 + COALESCE(pg_column_size(me."embedding"), 0)
+               ), 0)
+          FROM "memory_entries" me
+          JOIN "memories" m ON me."memory_id" = m."id"
+         WHERE m."project_id" = :projectId) AS memory_bytes`,
     { replacements: { projectId } }
   );
-  const [chunkRows] = await db.sequelize.query(
-    `SELECT COALESCE(SUM(OCTET_LENGTH("content")), 0) AS bytes
-       FROM "document_chunks" dc
-       JOIN "documents" d ON dc."document_id" = d."id"
-       JOIN "files" f ON d."file_id" = f."id"
-      WHERE f."project_id" = :projectId`,
-    { replacements: { projectId } }
-  );
-  return readBytes(fileRows) + readBytes(chunkRows);
+  return readStoredBytes(rows);
 };
 
 // Atomic + idempotent on the storage key: a re-run of the same UTC day finds the
@@ -118,7 +169,7 @@ export const snapshotProjectStorage = async (args: {
 }): Promise<boolean> => {
   const now = args.now ?? new Date();
   const bytes = await projectStoredBytes(args.projectId);
-  const quantityGbDay = bytes / BYTES_PER_GB;
+  const quantityGbDay = bytes.total / BYTES_PER_GB;
 
   const price = await getEffectivePrice({
     provider: STORAGE_PROVIDER,
@@ -144,9 +195,12 @@ export const snapshotProjectStorage = async (args: {
     priceId: price?.id ?? null,
   });
   log(
-    'snapshotProjectStorage: project=%s bytes=%d gbDay=%s created=%s costUsd=%s',
+    'snapshotProjectStorage: project=%s bytes=%d files=%d chunks=%d memories=%d gbDay=%s created=%s costUsd=%s',
     args.projectPublicId,
-    bytes,
+    bytes.total,
+    bytes.files,
+    bytes.documentChunks,
+    bytes.memoryEntries,
     quantityGbDay,
     created,
     costUsd

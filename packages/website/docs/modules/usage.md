@@ -127,7 +127,32 @@ Every orchestration node execution that actively ran writes one `compute_executi
 
 ### Storage metering
 
-A daily snapshot writes one `storage` event per project per UTC day, carrying a `gb_day` component with the project's stored gigabytes — uploaded [file](./files.md) sizes plus [document](./documents.md) chunk text, summed at snapshot time. No principal/agent/run attribution. Priced from a `soat`/`gb-day` SKU; idempotent on `storage:<project>:<YYYY-MM-DD>`. Intra-day churn between samples meters zero.
+A daily snapshot writes one `storage` event per project per UTC day, carrying a `gb_day` component with the project's stored gigabytes, summed at snapshot time. No principal/agent/run attribution. Priced from a `soat`/`gb-day` SKU; idempotent on `storage:<project>:<YYYY-MM-DD>`. Intra-day churn between samples meters zero.
+
+Five terms are summed:
+
+| Term | Source |
+| --- | --- |
+| Uploaded file bytes | [`files.size`](./files.md) |
+| Chunk text | [document](./documents.md) chunk `content` |
+| Chunk embeddings | the stored width of each chunk's vector |
+| Memory entry text | [memory entry](./memories.md) `content` |
+| Memory entry embeddings | the stored width of each entry's vector |
+
+**Embeddings dominate.** A vector is four bytes per dimension, so at
+`EMBEDDING_DIMENSIONS=1024` one embedding is ~4 KB against the ~1 KB of text it
+encodes. A row with no embedding yet contributes its text and nothing more. Both
+vector widths are measured from the stored value rather than computed from
+`EMBEDDING_DIMENSIONS`, so the figure follows that setting without being pinned
+to it.
+
+**Physical overhead is excluded, deliberately.** The meter is the logical bytes a
+project stored: index pages (including the HNSW graphs over both vector columns),
+TOAST chunk and tuple headers, and table bloat are not counted. None of it is
+attributable to a single project, and it moves with vacuum state, so including it
+would make one project's figure depend on every other project's write history.
+Real disk use is therefore higher than `gb_day` reports — by a factor that
+depends on the deployment, not on the project.
 
 ### API-request metering
 
