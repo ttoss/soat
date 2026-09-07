@@ -2,7 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { DEFAULT_METER_TYPE } from './priceCompute';
+import { countsTowardPricingVerdict } from './costEnforceability';
 import { fireQuotaExceeded, reportUnpricedCostQuota } from './quotaEvents';
 import type { QuotaWindow } from './quotas';
 import {
@@ -18,7 +18,6 @@ import {
   type WindowScope,
   windowScopeWhere,
 } from './quotaUnpricedRows';
-import { EMBEDDING_USAGE_SOURCE } from './usageEmbeddingRecording';
 
 const log = createDebug('soat:quotas');
 
@@ -312,10 +311,7 @@ const aggregateGenerationMetric = async (args: {
     // Either way the verdict would be about a call the tenant did not choose.
     // Its cost still lands in `total`: zero or not, it is real spend.
     const aiEvents = events.filter((event) => {
-      return (
-        event.meterType === DEFAULT_METER_TYPE &&
-        event.source !== EMBEDDING_USAGE_SOURCE
-      );
+      return countsTowardPricingVerdict(event);
     });
     const pricedAiEvents = aiEvents.filter((event) => {
       return event.costUsd != null;

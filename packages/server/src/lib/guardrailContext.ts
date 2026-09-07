@@ -2,17 +2,16 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { windowedActionCount } from './activity';
+import {
+  orchestrationRunEnforceableCostUsd,
+  windowedEnforceableCostUsd,
+} from './costEnforceability';
 import type { CollectedGuardrail } from './guardrailCollection';
 import { collectDocumentVarPaths } from './guardrailDocument';
 import type { GuardrailEvaluationContext } from './guardrailEvaluation';
 import { isPlainObject } from './plainObject';
 import { callTool } from './tools';
-import {
-  orchestrationRunCostUsd,
-  orchestrationRunTokens,
-  windowedCostUsd,
-  windowedTokens,
-} from './usageThresholds';
+import { orchestrationRunTokens, windowedTokens } from './usageThresholds';
 
 const log = createDebug('soat:guardrails');
 
@@ -138,7 +137,7 @@ const resolveRunUsage = async (args: {
     const runInternalId = await args.resolveRun();
     if (runInternalId === null) return UNRESOLVED;
     return args.rel === 'usage.orchestration_run_cost_usd'
-      ? await orchestrationRunCostUsd({ runInternalId })
+      ? await orchestrationRunEnforceableCostUsd({ runInternalId })
       : await orchestrationRunTokens({ runInternalId });
   } catch (error) {
     log(
@@ -151,7 +150,9 @@ const resolveRunUsage = async (args: {
 };
 
 // `runtime.usage.cost_usd_*` / `tokens_*` — the project's rolling window ending
-// now. An unknown window suffix is left unresolved.
+// now. An unknown window suffix is left unresolved, and a cost window that
+// metered AI usage but priced none of it resolves to `null` rather than to a
+// sum that understates it (`costEnforceability.ts`).
 const resolveWindowedUsage = async (args: {
   rel: string;
   path: string;
@@ -164,7 +165,7 @@ const resolveWindowedUsage = async (args: {
   const start = new Date(args.now.getTime() - ms);
   try {
     return key.startsWith('cost_usd_')
-      ? await windowedCostUsd({ projectId: args.projectId, start })
+      ? await windowedEnforceableCostUsd({ projectId: args.projectId, start })
       : await windowedTokens({ projectId: args.projectId, start });
   } catch (error) {
     log(
@@ -234,7 +235,8 @@ const resolveAsyncRuntimeKey = (args: {
  * per-run ceiling can abort one runaway run mid-flight; `runtime.activity.actions_*`
  * count the project's executed actions over the same rolling windows, off the
  * activity feed. Fail-closed throughout: a usage or activity query that throws,
- * or a run key read outside a run, leaves the key `null`.
+ * a run key read outside a run, or a cost window whose spend cannot be priced
+ * all leave the key `null`.
  */
 export const buildGuardrailRuntimeContext = async (args: {
   identity: GuardrailCallIdentity;
