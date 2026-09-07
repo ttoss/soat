@@ -129,6 +129,8 @@ Every orchestration node execution that actively ran writes one `compute_executi
 
 A daily snapshot writes one `storage` event per project per UTC day, carrying a `gb_day` component with the project's stored gigabytes, summed at snapshot time. No principal/agent/run attribution. Priced from a `soat`/`gb-day` SKU; idempotent on `storage:<project>:<YYYY-MM-DD>`. Intra-day churn between samples meters zero.
 
+The snapshot also runs once at server startup, so a deployment that restarts more often than the interval still meters every day it is up. Being idempotent per project per UTC day, a restart re-samples the current day rather than writing a second event for it.
+
 Five terms are summed:
 
 | Term | Source |

@@ -94,7 +94,7 @@ The operation is idempotent: purging an already-purged trace succeeds and leaves
 
 ### Retention Policy
 
-Setting `trace_content_retention_days` on a [project](./projects.md) makes purging automatic: a daily sweep content-purges every trace in that project older than the window.
+Setting `trace_content_retention_days` on a [project](./projects.md) makes purging automatic: a daily sweep content-purges every trace in that project older than the window. The sweep also runs once at server startup, so a deployment that restarts more often than the interval still purges.
 
 ```bash
 soat update-project --project_id proj_abc --trace_content_retention_days 90

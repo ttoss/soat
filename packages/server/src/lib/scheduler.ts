@@ -85,14 +85,29 @@ type SchedulerConfig = {
 /**
  * Owns the timer/interval scaffolding shared by every background poller: an
  * idempotent `start` that resolves the interval (explicit override → env var
- * → default) and runs every sweep on each tick, and a `stop` for graceful
- * shutdown / test teardown. The timer is unref'd so it never keeps the
- * process alive on its own.
+ * → default), sweeps once immediately and then on each tick, and a `stop` for
+ * graceful shutdown / test teardown. The timer is unref'd so it never keeps
+ * the process alive on its own.
  */
 export const createScheduler = (
   config: SchedulerConfig
 ): { start: (args?: { intervalMs?: number }) => void; stop: () => void } => {
   let timer: ReturnType<typeof setInterval> | null = null;
+
+  /**
+   * Sweeps are dispatched fire-and-forget, so a rejecting one would surface as
+   * an unhandled promise and take the process down under a strict handler.
+   * Most sweeps already swallow their own failures; catching here covers the
+   * ones that can reject before their first `try` (a `findAll` of the batch,
+   * say) and keeps one sweep's failure from skipping the rest.
+   */
+  const runSweeps = (): void => {
+    for (const sweep of config.sweeps) {
+      void sweep().catch((error: unknown) => {
+        config.log('sweep failed %o', error);
+      });
+    }
+  };
 
   const start = (args?: { intervalMs?: number }): void => {
     if (timer) return;
@@ -114,12 +129,15 @@ export const createScheduler = (
         : config.defaultIntervalMs;
 
     config.log('start: interval=%dms', resolvedInterval);
-    timer = setInterval(() => {
-      for (const sweep of config.sweeps) {
-        void sweep();
-      }
-    }, resolvedInterval);
+    timer = setInterval(runSweeps, resolvedInterval);
     timer.unref?.();
+
+    // The first tick lands one whole interval after boot, and a restart begins
+    // the interval again from zero — so a sweep on a daily interval only ever
+    // runs if the process survives 24 unbroken hours, which a service that
+    // redeploys or recycles daily never does (#1229). Assigned to `timer`
+    // first, so this stays idempotent against a re-entrant `start`.
+    runSweeps();
   };
 
   const stop = (): void => {

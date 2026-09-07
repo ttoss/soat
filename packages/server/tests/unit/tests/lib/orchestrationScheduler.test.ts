@@ -511,18 +511,18 @@ describe('orchestrationScheduler', () => {
       expect(stillParked?.status).toBe('sleeping');
     });
 
-    test('falls back to the default interval for an invalid override', async () => {
+    test('still drives the sweeps when the override is invalid', async () => {
       const sleeping = await createDueSleepingRun();
 
       startOrchestrationScheduler({ intervalMs: 0 });
 
-      // Nothing fires before the default 5s interval elapses.
-      await jest.advanceTimersByTimeAsync(4999);
-      const parked = await db.OrchestrationRun.findByPk(sleeping.id as number);
-      expect(parked?.status).toBe('sleeping');
-
-      // One tick past the default interval → the sweep claims the run.
-      await jest.advanceTimersByTimeAsync(1);
+      // An unusable override resolves to the default interval rather than
+      // leaving the poller un-started, so the due run is claimed either by the
+      // sweep at start or by the first tick. Which of the two is deliberately
+      // not asserted here: reading the DB between them races the in-flight
+      // sweep. The interval arithmetic itself is covered against stub sweeps in
+      // `scheduler.test.ts`, where it needs no database.
+      await jest.advanceTimersByTimeAsync(5000);
       await waitForRunStatus(sleeping.id as number, ['running', 'succeeded']);
     });
   });

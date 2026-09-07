@@ -87,7 +87,7 @@ The flag is cached briefly in-process so the read path never pays a lookup; a ch
 
 ### Append-only & retention
 
-Entries are never updated or deleted through the API; the model layer rejects updates and single-row deletes. A daily sweep prunes rows older than the retention window (see [Configuration](#configuration)). To archive before expiry, use the [NDJSON export](#ndjson-export).
+Entries are never updated or deleted through the API; the model layer rejects updates and single-row deletes. A daily sweep prunes rows older than the retention window (see [Configuration](#configuration)); it also runs once at server startup, so a deployment that restarts more often than the interval still prunes. To archive before expiry, use the [NDJSON export](#ndjson-export).
 
 ### NDJSON export
 
