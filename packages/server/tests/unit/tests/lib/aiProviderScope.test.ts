@@ -1,6 +1,7 @@
 import { db } from 'src/db';
 import { resolveAgentModel } from 'src/lib/agentModelResolution';
 import { resolveAiProviderSecret } from 'src/lib/aiProviders';
+import { resolveChatModel } from 'src/lib/chatCompletionModel';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
@@ -93,6 +94,25 @@ describe('resolving a provider is scoped to the consuming project', () => {
       projectId: otherProjectDbId,
     });
     expect(resolved?.defaultModel).toBe('other-scope-model');
+  });
+
+  // A stateless completion belongs to no project of its own, so the provider
+  // names the project rather than the other way round — the one shape where the
+  // scope is the provider's own, and it still goes through the scoped resolver
+  // with that project.
+  test("a stateless completion resolves through the provider's own project", async () => {
+    const resolved = await resolveChatModel({
+      aiProviderId: otherAiProviderId,
+    });
+    expect(resolved.modelName).toBe('other-scope-model');
+  });
+
+  // The route this serves maps this exact message to its published 404, so the
+  // string is contract rather than prose.
+  test('a stateless completion naming no real provider reports it', async () => {
+    await expect(
+      resolveChatModel({ aiProviderId: 'aip_doesnotexist000000' })
+    ).rejects.toThrow('AI provider not found');
   });
 
   // The stored pin is repointed underneath the write guards, which is the
