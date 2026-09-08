@@ -224,6 +224,16 @@ describe('enumerateProviderModels — anthropic', () => {
   });
 });
 
+// A service-account key file, the credential a vertex record links to list
+// with. The token itself comes from `accessTokenProvider` in these tests; what
+// the key decides is that the record signs as itself rather than as whatever
+// the deployment holds.
+const VERTEX_KEY_SECRET = JSON.stringify({
+  type: 'service_account',
+  client_email: 'lister@example.iam.gserviceaccount.com',
+  private_key: '-----BEGIN PRIVATE KEY-----\nnot-a-real-key\n-----END',
+});
+
 describe('enumerateProviderModels — vertex', () => {
   test('lists publisher models from the publisher-rooted path for the location', async () => {
     const { fetchImpl, calls } = fakeFetch({
@@ -243,6 +253,7 @@ describe('enumerateProviderModels — vertex', () => {
 
     const models = await enumerateProviderModels({
       provider: 'vertex',
+      secretValue: VERTEX_KEY_SECRET,
       config: { project: 'naturali-504614', location: 'us-central1' },
       accessTokenProvider: () => {
         return Promise.resolve('ya29.test');
@@ -300,6 +311,7 @@ describe('enumerateProviderModels — vertex', () => {
 
     const models = await enumerateProviderModels({
       provider: 'vertex',
+      secretValue: VERTEX_KEY_SECRET,
       config: { project: 'p', location: 'us-central1' },
       accessTokenProvider: () => {
         return Promise.resolve('ya29.test');
@@ -332,6 +344,7 @@ describe('enumerateProviderModels — vertex', () => {
 
     await enumerateProviderModels({
       provider: 'vertex',
+      secretValue: VERTEX_KEY_SECRET,
       config: { project: 'p' },
       accessTokenProvider: () => {
         return Promise.resolve('ya29.test');
@@ -362,6 +375,7 @@ describe('enumerateProviderModels — vertex', () => {
 
     const models = await enumerateProviderModels({
       provider: 'vertex',
+      secretValue: VERTEX_KEY_SECRET,
       config: { project: 'naturali-504614', location: 'global' },
       accessTokenProvider: () => {
         return Promise.resolve('ya29.test');
@@ -394,6 +408,7 @@ describe('enumerateProviderModels — vertex', () => {
 
     await enumerateProviderModels({
       provider: 'vertex',
+      secretValue: VERTEX_KEY_SECRET,
       config: { project: 'p', location: 'eu' },
       accessTokenProvider: () => {
         return Promise.resolve('ya29.test');
@@ -411,6 +426,7 @@ describe('enumerateProviderModels — vertex', () => {
     await expect(
       enumerateProviderModels({
         provider: 'vertex',
+        secretValue: VERTEX_KEY_SECRET,
         config: {},
         accessTokenProvider: () => {
           return Promise.resolve('ya29.test');
@@ -425,6 +441,7 @@ describe('enumerateProviderModels — bedrock', () => {
   test('maps foundation models, including the inference-profile prefix', async () => {
     const models = await enumerateProviderModels({
       provider: 'bedrock',
+      secretValue: 'ABSKexample',
       config: { region: 'us-east-1' },
       listFoundationModels: () => {
         return Promise.resolve([
@@ -459,6 +476,7 @@ describe('enumerateProviderModels — bedrock', () => {
   test('reports a legacy lifecycle so the catalog can flag a sunset model', async () => {
     const models = await enumerateProviderModels({
       provider: 'bedrock',
+      secretValue: 'ABSKexample',
       config: { region: 'us-east-1' },
       listFoundationModels: () => {
         return Promise.resolve([
@@ -477,6 +495,7 @@ describe('enumerateProviderModels — bedrock', () => {
     let seenRegion: string | undefined;
     await enumerateProviderModels({
       provider: 'bedrock',
+      secretValue: 'ABSKexample',
       config: { region: 'sa-east-1' },
       listFoundationModels: (args) => {
         seenRegion = args.region;
@@ -679,20 +698,56 @@ describe('enumerateProviderModels — listing honors the linked secret (#1044)',
     });
   });
 
-  test('bedrock still falls back to the ambient chain with no secret', async () => {
-    let seen: BedrockListArgs | undefined;
-    await enumerateProviderModels({
-      provider: 'bedrock',
-      config: { region: 'us-east-1' },
-      listFoundationModels: (args) => {
-        seen = args;
-        return Promise.resolve([]);
-      },
-    });
+  // Listing signs with the record's credentials exactly as generation does, so
+  // a record carrying none reaches for the deployment's on this path too — and
+  // is refused on the same terms. That is what closes the listing half:
+  // otherwise a tenant enumerates whatever the deployment's own role can see.
+  test.each(['bedrock', 'vertex'] as const)(
+    'a credential-less %s record cannot list either',
+    async (provider) => {
+      await expect(
+        enumerateProviderModels({
+          provider,
+          config: { region: 'us-east-1', project: 'p' },
+          listFoundationModels: () => {
+            return Promise.resolve([]);
+          },
+          accessTokenProvider: () => {
+            return Promise.resolve('ya29.test');
+          },
+          fetchImpl: fakeFetch({}).fetchImpl,
+        })
+      ).rejects.toThrow(
+        expect.objectContaining({ code: 'AI_PROVIDER_MISCONFIGURED' })
+      );
+    }
+  );
 
-    // The credential-less catalogue record documented in the module page has to
-    // keep working — that is what lets a caller browse before provisioning.
-    expect(seen?.credentials).toHaveProperty('credentialProvider');
+  test('bedrock falls back to the ambient chain where the operator allows it', async () => {
+    const previous = process.env.AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS;
+    process.env.AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS = 'true';
+    try {
+      let seen: BedrockListArgs | undefined;
+      await enumerateProviderModels({
+        provider: 'bedrock',
+        config: { region: 'us-east-1' },
+        listFoundationModels: (args) => {
+          seen = args;
+          return Promise.resolve([]);
+        },
+      });
+
+      // The credential-less catalogue record documented in the module page keeps
+      // working on a deployment that opted in — that is what lets a caller browse
+      // before provisioning.
+      expect(seen?.credentials).toHaveProperty('credentialProvider');
+    } finally {
+      if (previous === undefined) {
+        delete process.env.AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS;
+      } else {
+        process.env.AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS = previous;
+      }
+    }
   });
 
   test('vertex authenticates with the linked service account', async () => {
@@ -809,6 +864,7 @@ describe('enumerateProviderModels — credentials and region', () => {
       let seenRegion: string | undefined;
       await enumerateProviderModels({
         provider: 'bedrock',
+        secretValue: 'ABSKexample',
         listFoundationModels: (args) => {
           seenRegion = args.region;
           return Promise.resolve([]);
@@ -833,6 +889,7 @@ describe('enumerateProviderModels — credentials and region', () => {
       await expect(
         enumerateProviderModels({
           provider: 'bedrock',
+          secretValue: 'ABSKexample',
           listFoundationModels: () => {
             return Promise.resolve([]);
           },
@@ -849,6 +906,7 @@ describe('enumerateProviderModels — credentials and region', () => {
   test('omits fields a Bedrock summary does not report', async () => {
     const models = await enumerateProviderModels({
       provider: 'bedrock',
+      secretValue: 'ABSKexample',
       config: { region: 'us-east-1' },
       listFoundationModels: () => {
         return Promise.resolve([
@@ -866,6 +924,7 @@ describe('enumerateProviderModels — credentials and region', () => {
   test('reports a deprecated Bedrock lifecycle', async () => {
     const models = await enumerateProviderModels({
       provider: 'bedrock',
+      secretValue: 'ABSKexample',
       config: { region: 'us-east-1' },
       listFoundationModels: () => {
         return Promise.resolve([

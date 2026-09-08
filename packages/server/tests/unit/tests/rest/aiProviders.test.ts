@@ -183,6 +183,9 @@ describe('AI Providers', () => {
           name: `Provider ${provider}`,
           provider,
           default_model: 'model-x',
+          // `bedrock` and `vertex` are refused without one; every other slug is
+          // indifferent to it, so the sweep links one throughout.
+          secret_id: secretId,
         });
 
       expect(response.status).toBe(201);
@@ -212,8 +215,77 @@ describe('AI Providers', () => {
 
         expect(response.status).toBe(400);
         expect(response.body.error.code).toBe('VALIDATION_FAILED');
+        // Named, so a refusal for some other reason cannot pass as this one.
+        expect(response.body.error.meta.field).toMatch(/^config\./);
       }
     );
+
+    // `bedrock` and `vertex` are the two slugs whose SDK signs with a
+    // credential nobody put on the record. On a deployment serving more than
+    // one tenant that credential is the operator's, so the record would
+    // generate on the operator's cloud account — refused at the write, where
+    // the caller can still link one.
+    test.each(['bedrock', 'vertex'] as const)(
+      'refuses a %s provider that links no credential',
+      async (provider) => {
+        const response = await authenticatedTestClient(userToken)
+          .post('/api/v1/ai-providers')
+          .send({
+            project_id: projectId,
+            name: `Ambient ${provider}`,
+            provider,
+            default_model: 'model-x',
+          });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error.code).toBe('VALIDATION_FAILED');
+        expect(response.body.error.meta.field).toBe('secret_id');
+      }
+    );
+
+    // `config.apiKey` is the other credential a record can carry, so dropping
+    // it leaves the record reaching for the deployment's.
+    test('refuses an update that drops the only credential', async () => {
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: 'Bedrock Config Key',
+          provider: 'bedrock',
+          default_model: 'model-x',
+          config: { apiKey: 'ABSKexample', region: 'us-east-1' },
+        });
+      expect(created.status).toBe(201);
+
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/ai-providers/${created.body.id}`)
+        .send({ config: { region: 'us-east-1' } });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.meta.field).toBe('secret_id');
+    });
+
+    // The rule is keyed on the provider, so switching an existing record onto
+    // one of the two slugs is the same door as creating it there.
+    test('refuses an update that moves a credential-less record onto bedrock', async () => {
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: 'Ollama To Bedrock',
+          provider: 'ollama',
+          default_model: 'llama3',
+        });
+      expect(created.status).toBe(201);
+
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/ai-providers/${created.body.id}`)
+        .send({ provider: 'bedrock' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
 
     test('accepts a real vertex location', async () => {
       const response = await authenticatedTestClient(userToken)
@@ -223,6 +295,7 @@ describe('AI Providers', () => {
           name: 'Vertex EU',
           provider: 'vertex',
           default_model: 'gemini-2.0-flash',
+          secret_id: secretId,
           config: { project: 'my-project', location: 'europe-west4' },
         });
 
@@ -933,6 +1006,22 @@ describe('AI Providers', () => {
         });
       azureProviderId = azureRes.body.id;
 
+      // A service-account key file that names no project: the record signs as
+      // itself, so it is not refused for reaching at the deployment's
+      // credentials, and nothing supplies the project the listing needs.
+      const keyFileRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/secrets')
+        .send({
+          project_id: projectId,
+          name: 'Vertex Key File',
+          value: JSON.stringify({
+            type: 'service_account',
+            client_email: 'lister@example.iam.gserviceaccount.com',
+            private_key:
+              '-----BEGIN PRIVATE KEY-----\nnot-a-real-key\n-----END',
+          }),
+        });
+
       const vertexRes = await authenticatedTestClient(userToken)
         .post('/api/v1/ai-providers')
         .send({
@@ -940,6 +1029,7 @@ describe('AI Providers', () => {
           name: 'Vertex Listing',
           provider: 'vertex',
           default_model: 'gemini-2.5-flash',
+          secret_id: keyFileRes.body.id,
         });
       vertexProviderId = vertexRes.body.id;
     });
@@ -987,9 +1077,9 @@ describe('AI Providers', () => {
 
     test('an API-key provider with no secret linked returns 400', async () => {
       // An OpenAI-family listing needs the record's own key, so a secret-less
-      // record cannot list — while `vertex`/`bedrock` resolve credentials from
-      // the environment, which is why the vertex case above complains about
-      // `config.project` rather than a missing key.
+      // record cannot list. `vertex` and `bedrock` answer the same way for a
+      // different reason — the credential they would otherwise reach for is the
+      // deployment's, which no record may use unless the operator allows it.
       const openaiRes = await authenticatedTestClient(userToken)
         .post('/api/v1/ai-providers')
         .send({

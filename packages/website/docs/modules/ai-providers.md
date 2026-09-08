@@ -51,7 +51,8 @@ carries whatever credential the record authenticates with. So `config.location`,
 `config.project`, `config.region` and `config.resourceName` must each be a
 single name — letters, digits and hyphens — and anything else is refused with
 `400 VALIDATION_FAILED` on create and update, and `400
-AI_PROVIDER_MISCONFIGURED` if a record written before this rule is used.
+AI_PROVIDER_MISCONFIGURED` when such a record is used, so a value that reached
+the table some other way cannot reach the host it names.
 
 `base_url` names its endpoint outright, so it is checked for shape instead: an
 absolute `http`/`https` URL, with no username or password in it (link a secret
@@ -110,7 +111,9 @@ The `bedrock` provider supports two authentication modes, determined by the shap
 
 > **Important:** Store the secret value as a **JSON object** (shown above) — the only form that supports IAM credentials. As a convenience, a bare `ABSK…` string is also accepted and treated as `{ "apiKey": "<value>" }`.
 
-If neither field is present the default AWS credential chain (environment variables, instance profile, etc.) is used. The `region` field in the provider's `config` object defaults to `us-east-1`. An `apiKey` in `config` (without a linked secret) also works — useful for quick testing; link a secret in production.
+If neither field is present the default AWS credential chain (environment variables, instance profile, etc.) would be used — the **deployment's** credentials rather than the record's, which a deployment allows only by setting [`AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS`](../self-hosting/configuration.md#provider-credentials). Without it, a `bedrock` record that links no secret is refused at create and update with `400 VALIDATION_FAILED`, and with `400 AI_PROVIDER_MISCONFIGURED` when such a record is used, so one that reached the table some other way fails closed rather than signing with credentials it was never given.
+
+The `region` field in the provider's `config` object defaults to `us-east-1`. An `apiKey` in `config` (without a linked secret) also works — useful for quick testing; link a secret in production.
 
 ### Vertex AI authentication
 
@@ -131,7 +134,9 @@ Like `bedrock`, the authentication mode is determined by the shape of the linked
 
 **Express-mode API key** — store the key on its own (no JSON wrapper), or as `{ "apiKey": "AIza..." }`. [Vertex AI in express mode](https://cloud.google.com/vertex-ai/generative-ai/docs/start/express-mode/overview) targets a global, project-less endpoint, so `project` and `location` are ignored for this mode.
 
-**Application Default Credentials** — link no secret at all. The server falls back to [ADC](https://cloud.google.com/docs/authentication/application-default-credentials): `GOOGLE_APPLICATION_CREDENTIALS`, Workload Identity, the GCE/GKE metadata server, or a local `gcloud auth application-default login`. This is the recommended mode when SOAT itself runs on Google Cloud, because no key material is stored anywhere.
+**Application Default Credentials** — link no secret at all and the server falls back to [ADC](https://cloud.google.com/docs/authentication/application-default-credentials): `GOOGLE_APPLICATION_CREDENTIALS`, Workload Identity, the GCE/GKE metadata server, or a local `gcloud auth application-default login`. No key material is stored anywhere, which makes it the natural mode when SOAT itself runs on Google Cloud.
+
+Those are the deployment's credentials, though, and a provider record is written by a tenant — so this mode is available only where the operator set [`AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS`](../self-hosting/configuration.md#provider-credentials). Without it, a `vertex` record that links no secret is refused at create and update with `400 VALIDATION_FAILED`, and with `400 AI_PROVIDER_MISCONFIGURED` when such a record is used. It is a setting for a single-tenant deployment: on any other, it lets one project's record generate on the account the server runs as.
 
 #### Federating an AWS identity (SOAT on ECS or EC2)
 
@@ -171,7 +176,7 @@ Not every provider type can answer:
 | `bedrock` | `ListFoundationModels` in the provider's `config.region` | the linked secret's IAM keys or API key, else the AWS default credential chain |
 | `azure`, `ollama` | **unsupported** — Azure lists deployments an operator named, and Ollama lists whatever was pulled onto that host, so neither answers "which models can this provider run" | — |
 
-Listing resolves credentials exactly the way generation does, so a record that can generate can list. For `bedrock` and `vertex` that means the linked secret wins when present and the server's ambient credentials are the fallback, not the other way round — a record whose IAM keys or service-account key are correct no longer depends on the server holding credentials of its own.
+Listing resolves credentials exactly the way generation does, so a record that can generate can list — the deployment's own credentials included, on the same terms: a `bedrock` or `vertex` record that links none cannot list either, unless the operator set [`AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS`](../self-hosting/configuration.md#provider-credentials).
 
 Two consequences worth knowing:
 
@@ -184,7 +189,7 @@ Errors: `MODEL_LISTING_UNSUPPORTED` (400) for `azure`, `ollama`, and Vertex expr
 
 #### Listing models before you hold credentials
 
-Because `secret_id` is optional on create and `bedrock` / `vertex` fall back to the server's ambient credentials, a provider record with **no linked secret** can still list models. Browsing a vendor's live catalogue before any key is provisioned therefore needs no separate endpoint — create a credential-less record naming only the region (or GCP project) and list against it:
+On a deployment that set [`AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS`](../self-hosting/configuration.md#provider-credentials), a `bedrock` or `vertex` record with **no linked secret** can still list models, because it signs with the server's own credentials. Browsing a vendor's live catalogue before any key is provisioned therefore needs no separate endpoint — create a credential-less record naming only the region (or GCP project) and list against it:
 
 ```bash
 soat create-ai-provider \
@@ -198,6 +203,8 @@ soat list-ai-provider-models --ai-provider-id aip_01
 ```
 
 The record supplies the region and the IAM scope; the credential comes from the server's instance role. This is the supported way to keep a model catalogue current instead of vendoring a static list that drifts whenever the vendor ships a model.
+
+Without that setting the record is refused at creation, and the same browse is one linked secret away: give the record a key that can call `ListFoundationModels` (or the Vertex publisher listing) and it lists against its own credential instead of the server's.
 
 ### Price overrides
 
