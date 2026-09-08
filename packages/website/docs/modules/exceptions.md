@@ -57,7 +57,7 @@ Severity is keyed to actionability, not raw "badness". Each `kind` has a default
 | `run_failed` | `critical` | A run died after exhausting retries — needs intervention |
 | `guardrail_tripwire` | `warning` | The guard worked as designed; also a feedback-loop signal |
 | `approval_expired` | `warning` | Fail-safe missed SLA — the action never ran |
-| `quota_unpriced` | `warning` | A cost cap is protecting nothing; needs a config fix, not incident response |
+| `quota_unpriced` | `warning` | A cost cap is measuring less than it caps; needs a config fix, not incident response |
 | `event_trigger_loop` | `warning` | The causation guard stopped a self-feeding [event trigger](./triggers.md#loops-and-cost); the wiring still needs a human |
 | `chain_limit` | `warning` | A [continuation chain](./chains.md) spent its generation budget — the guard stopped it, and an agent that cannot terminate on its own still needs a human |
 | `manual` | `warning` | Author-chosen |
@@ -80,7 +80,7 @@ Exceptions are filed by subscribing to platform events, so producers stay decoup
 
 This is the signal that a chain stopped growing. The refusal itself is recorded on a trace and returned to a caller that is usually a background sweep with nothing left to hand it to, so without the exception a runaway would be bounded but still reach nobody until the bill arrived.
 
-`quota_unpriced` is the exception to the event-driven pattern: it is filed inline from the [quota](./quotas.md#token-and-cost-enforcement) pre-generation check, which is the only place that knows a cost cap just evaluated against an unpriced window. It is deduped on the quota rather than the window, so one dead cap is one triage item and `occurrence_count` reads as the number of generations that ran unprotected. The check fails open, so a filing error can never block a generation.
+`quota_unpriced` is the exception to the event-driven pattern: it is filed inline from the [quota](./quotas.md#token-and-cost-enforcement) pre-generation check, which is the only place that knows a cost cap just evaluated against a window whose usage was not fully priced. A window that priced **nothing** and one that priced only **part** of its usage file the same item — the fix is the same price rows, named in the item's `unpriced_rows` — and it is deduped on the quota rather than the window, so one degraded cap is one triage item and `occurrence_count` reads as the number of generations that ran under it. The check fails open, so a filing error can never block a generation.
 
 ## Examples
 

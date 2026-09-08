@@ -729,7 +729,7 @@ To give one named user a different allowance instead of the shared per-actor bud
 
 ## Step 10 — A cost cap with no prices protects nothing
 
-A `cost_usd` quota sums priced costs — an event with no [price-book](/docs/modules/usage#pricing) row contributes `0`, so on a project with no prices (like this one) a `cost_usd` cap fails **open**: it never breaches. When a cost check finds metered usage but nothing priced, it files a `quota_unpriced` [exception](/docs/modules/exceptions#severity), deduped on the quota.
+A `cost_usd` quota sums priced costs — an event with no [price-book](/docs/modules/usage#pricing) row contributes `0`, so on a project with no prices (like this one) a `cost_usd` cap fails **open**: it never breaches. When a cost check finds AI usage the price book did not cover, it files a `quota_unpriced` [exception](/docs/modules/exceptions#severity) naming the rows to price, deduped on the quota. A project that prices *some* of its models files the same item, for the same reason: the cap is measuring less than it caps.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -753,7 +753,7 @@ Expected output — the generation is **not** blocked (the cap fails open), and 
   "kind": "quota_unpriced",
   "severity": "warning",
   "status": "open",
-  "title": "Cost quota quota_... cannot be enforced: no priced usage in the window",
+  "title": "Cost quota quota_... cannot be enforced: the window metered usage no price row covered",
   "occurrence_count": 1,
   "detail": {
     "quota_id": "quota_...",
@@ -762,7 +762,12 @@ Expected output — the generation is **not** blocked (the cap fails open), and 
     "metric": "cost_usd",
     "window": "calendar_month",
     "limit": 5,
-    "unpriced_event_count": 2
+    "metered_event_count": 2,
+    "unpriced_event_count": 2,
+    "unpriced_rows": [
+      { "provider": "ollama", "model": "qwen2.5:0.5b", "component": "input_tokens" },
+      { "provider": "ollama", "model": "qwen2.5:0.5b", "component": "output_tokens" }
+    ]
   }
 }
 ```

@@ -162,7 +162,9 @@ paths:
                     QUOTA_UNENFORCEABLE until pricing is configured; allow
                     accepts the unmeasurable spend explicitly. Either way a
                     quota_unpriced exception is filed. monitor-mode quotas
-                    never block regardless.
+                    never block regardless. A partly priced window is not a
+                    blackout: no posture refuses it, it is enforced on its
+                    priced total, and it files the same exception.
                   example: block
       responses:
         '201':
@@ -323,7 +325,8 @@ components:
           description: >-
             Pricing posture of a cost_usd quota over an unpriced blackout —
             block refuses generations, allow lets them through (the
-            quota_unpriced exception is filed either way). Null for metrics
+            quota_unpriced exception is filed either way, and for a partly
+            priced window, which no posture refuses). Null for metrics
             with no pricing dependency.
         current_usage:
           type: object
