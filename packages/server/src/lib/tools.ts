@@ -11,7 +11,7 @@ import {
 } from './pipelineTools';
 import { makeResourceAccessor } from './resourceAccessor';
 import { assertSecretRefsExist } from './secrets';
-import { soatTools } from './soatTools';
+import { validateSoatActions } from './soatActionValidation';
 import { validateExecuteAuth } from './toolAuth';
 import { assertValidToolContextAllowlist } from './toolContext';
 import {
@@ -32,41 +32,6 @@ export {
   callEphemeralTool,
   type InlineToolDefinition,
 } from './toolsCall';
-
-// ── SOAT Action Validation ──────────────────────────────────────────────────
-
-const KNOWN_SOAT_ACTIONS = new Set(
-  soatTools.map((tool) => {
-    return tool.name;
-  })
-);
-
-// Action names are kebab-case, matching the MCP tool name derived from the
-// operationId. Passing the camelCase operationId itself is a common mistake, so
-// it is detected and the right name suggested.
-const camelToKebab = (value: string): string => {
-  return value.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
-};
-
-const validateSoatActions = (actions: string[] | null | undefined) => {
-  if (!actions) return;
-  const unknown = actions.filter((action) => {
-    return !KNOWN_SOAT_ACTIONS.has(action);
-  });
-  if (unknown.length === 0) return;
-  const details = unknown
-    .map((action) => {
-      const suggestion = camelToKebab(action);
-      return KNOWN_SOAT_ACTIONS.has(suggestion)
-        ? `"${action}" (did you mean "${suggestion}"?)`
-        : `"${action}"`;
-    })
-    .join(', ');
-  throw new DomainError(
-    'VALIDATION_FAILED',
-    `Unknown SOAT action(s): ${details}.`
-  );
-};
 
 // ── Mapped Types ─────────────────────────────────────────────────────────
 

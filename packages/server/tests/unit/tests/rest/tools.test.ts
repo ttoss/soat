@@ -1959,6 +1959,62 @@ describe('Tools', () => {
       expect(createRes.body.error.message).toMatch(/not-a-real-soat-action/);
     });
 
+    // An agent's builtin tool runs under the caller's bearer with an LLM
+    // choosing the arguments, so an action that mints a credential, rewrites
+    // authorization or settles an approval is one the agent surface must not
+    // carry — whatever that bearer would allow a human to do directly.
+    test.each([
+      ['approve-approval'],
+      ['reject-approval'],
+      ['create-api-key'],
+      ['attach-user-policies'],
+      ['create-policy'],
+      ['create-secret'],
+      ['login-user'],
+      ['get-webhook-secret'],
+      ['rotate-trigger-secret'],
+      ['update-ai-provider-prices'],
+    ])('creating a soat tool bound to %s returns 400', async (action) => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: `excluded-${action}-tool`,
+          type: 'builtin',
+          actions: [action],
+        });
+
+      expect(createRes.status).toBe(400);
+      expect(createRes.body.error.code).toBe('VALIDATION_FAILED');
+      expect(createRes.body.error.message).toMatch(action);
+    });
+
+    test('updating a soat tool onto an excluded action returns 400', async () => {
+      const updateRes = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/tools/${soatToolId}`)
+        .send({ actions: ['approve-approval'] });
+
+      expect(updateRes.status).toBe(400);
+      expect(updateRes.body.error.code).toBe('VALIDATION_FAILED');
+      expect(updateRes.body.error.message).toMatch(/approve-approval/);
+    });
+
+    // The refusal names the reason rather than reusing the unknown-action
+    // message: the action exists and the caller may well hold the permission,
+    // so "unknown" would send them looking for a typo.
+    test('the refusal distinguishes an excluded action from an unknown one', async () => {
+      const excluded = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'excluded-reason-tool',
+          type: 'builtin',
+          actions: ['approve-approval'],
+        });
+
+      expect(excluded.body.error.message).not.toMatch(/[Uu]nknown/);
+    });
+
     test('creating a soat tool with an operationId-style action name is rejected with a kebab-case suggestion', async () => {
       // A common mistake: using the OpenAPI operationId (camelCase, e.g. "searchKnowledge")
       // instead of the MCP tool name (kebab-case, e.g. "search-knowledge"). See #358.

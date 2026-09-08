@@ -48,6 +48,7 @@ paths:
       summary: List all users
       description: Returns a list of all users
       operationId: listUsers
+      x-soat-agent-exclude: true
       parameters:
         - name: limit
           in: query
@@ -98,6 +99,7 @@ paths:
       summary: Create a user
       description: Creates a new user in the system
       operationId: createUser
+      x-soat-agent-exclude: true
       requestBody:
         required: true
         content:
@@ -139,6 +141,7 @@ paths:
       summary: Get a user by ID
       description: Returns the data of a specific user
       operationId: getUser
+      x-soat-agent-exclude: true
       parameters:
         - name: user_id
           in: path
@@ -172,6 +175,7 @@ paths:
       summary: Delete a user by ID
       description: Deletes a specific user
       operationId: deleteUser
+      x-soat-agent-exclude: true
       parameters:
         - name: user_id
           in: path
@@ -202,6 +206,7 @@ paths:
       summary: Create the first admin user
       description: Creates the first admin user. Returns 409 if any user already exists.
       operationId: bootstrapUser
+      x-soat-agent-exclude: true
       security: []
       requestBody:
         required: true
@@ -246,6 +251,7 @@ paths:
       summary: Login user
       description: Authenticates a user and returns a JWT token
       operationId: loginUser
+      x-soat-agent-exclude: true
       security: []
       requestBody:
         required: true
@@ -290,6 +296,7 @@ paths:
       summary: Attach policies to a user
       description: Replaces the user's policy list with the provided policy IDs. Requires admin role.
       operationId: attachUserPolicies
+      x-soat-agent-exclude: true
       parameters:
         - name: user_id
           in: path
