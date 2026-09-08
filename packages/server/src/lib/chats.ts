@@ -116,7 +116,9 @@ export const createChat = async (args: {
   });
 
   const aiProvider = args.aiProviderId
-    ? await db.AiProvider.findOne({ where: { publicId: args.aiProviderId } })
+    ? await db.AiProvider.findOne({
+        where: { publicId: args.aiProviderId, projectId: args.projectId },
+      })
     : null;
 
   if (args.aiProviderId && !aiProvider) {
@@ -241,6 +243,7 @@ const resolveChatScopedModel = async (args: {
   const resolved = typedChat.aiProvider
     ? await resolveAiProviderSecret({
         aiProviderId: typedChat.aiProvider.publicId,
+        projectId,
       })
     : null;
 

@@ -70,7 +70,7 @@ The stored prompt applies only when the request carries none. The two are never 
 
 ### AI Provider Resolution
 
-For per-chat completions the AI provider is taken from the Chat record. A chat created **without** `ai_provider_id` pins none and resolves through its project's [`default_model_route_id`](./model-routes.md#project-default-route) instead, which gives its completions ordered provider failover; `model` cannot be combined with that (each route target names its own), and omitting the provider returns `400` when the project has no default.
+For per-chat completions the AI provider is taken from the Chat record, and the pin must name a provider in the **chat's own project** — one from another project answers `400 AI_PROVIDER_NOT_FOUND`, indistinguishably from an id that exists nowhere. A chat created **without** `ai_provider_id` pins none and resolves through its project's [`default_model_route_id`](./model-routes.md#project-default-route) instead, which gives its completions ordered provider failover; `model` cannot be combined with that (each route target names its own), and omitting the provider returns `400` when the project has no default.
 
 For a stateless completion `ai_provider_id` is passed directly in the request body and is **required** — that call belongs to no chat, so there is no chat binding and no default to inherit. It is still scoped to a project: the provider's own — see [Authorization](#authorization).
 

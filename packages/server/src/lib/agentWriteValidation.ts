@@ -127,10 +127,20 @@ export const assertAgentReferencesExist = async (args: {
   });
 };
 
-export const resolveAiProviderDbId = async (
-  publicId: string
-): Promise<number | null> => {
-  const aiProvider = await db.AiProvider.findOne({ where: { publicId } });
+/**
+ * The internal id of a provider **in this project**. A pin is where the pinning
+ * resource's generations get their credential, so one that crossed the project
+ * boundary would have this project's agent generate on another project's
+ * secret — and the caller's own reach is not the boundary, since a principal
+ * may legitimately hold both projects.
+ */
+export const resolveAiProviderDbId = async (args: {
+  publicId: string;
+  projectId: number;
+}): Promise<number | null> => {
+  const aiProvider = await db.AiProvider.findOne({
+    where: { publicId: args.publicId, projectId: args.projectId },
+  });
   return aiProvider ? (aiProvider.id as number) : null;
 };
 
@@ -159,14 +169,20 @@ export const assertModelBinding = async (args: {
   });
 };
 
-export const requireAiProviderDbId = async (
-  publicId: string
-): Promise<number> => {
-  const dbId = await resolveAiProviderDbId(publicId);
+/**
+ * The message is the same one an id that exists nowhere gets: a caller who may
+ * write here learns nothing about which ids are real in a project they cannot
+ * pin from.
+ */
+export const requireAiProviderDbId = async (args: {
+  publicId: string;
+  projectId: number;
+}): Promise<number> => {
+  const dbId = await resolveAiProviderDbId(args);
   if (!dbId) {
     throw new DomainError(
       'AI_PROVIDER_NOT_FOUND',
-      `AI provider '${publicId}' not found.`
+      `AI provider '${args.publicId}' not found.`
     );
   }
   return dbId;
@@ -192,7 +208,10 @@ export const resolveCreateModelBinding = async (args: {
 
   return {
     aiProviderId: args.aiProviderId
-      ? await requireAiProviderDbId(args.aiProviderId)
+      ? await requireAiProviderDbId({
+          publicId: args.aiProviderId,
+          projectId: args.projectId,
+        })
       : null,
     modelRouteId: args.modelRouteId
       ? await resolveModelRouteDbId({

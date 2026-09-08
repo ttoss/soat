@@ -58,16 +58,27 @@ export const mapMessage = async (message: ConversationMessageRow) => {
   };
 };
 
+/**
+ * A message's participants come from the conversation's own project, the same
+ * scope its `document_id` is already held to. Unscoped, a message could name an
+ * actor or agent from another project — and the listing that filters
+ * conversations by `actor_id` would then answer across the boundary.
+ */
 const resolveParticipantDbIds = async (args: {
   actorId?: string | null;
   agentId?: string | null;
+  projectId: number;
 }): Promise<{ actorDbId: number | null; agentDbId: number | null } | null> => {
   const [actor, agent] = await Promise.all([
     args.actorId
-      ? db.Actor.findOne({ where: { publicId: args.actorId } })
+      ? db.Actor.findOne({
+          where: { publicId: args.actorId, projectId: args.projectId },
+        })
       : null,
     args.agentId
-      ? db.Agent.findOne({ where: { publicId: args.agentId } })
+      ? db.Agent.findOne({
+          where: { publicId: args.agentId, projectId: args.projectId },
+        })
       : null,
   ]);
   if (args.actorId && !actor) return null;
@@ -221,6 +232,7 @@ export const addConversationMessage = async (args: {
   const participants = await resolveParticipantDbIds({
     actorId: args.actorId,
     agentId: args.agentId,
+    projectId: conversation.projectId,
   });
   if (!participants) return null;
   const { actorDbId, agentDbId } = participants;
@@ -283,6 +295,7 @@ export const addConversationDocumentMessage = async (args: {
   const participants = await resolveParticipantDbIds({
     actorId: args.actorId,
     agentId: args.agentId,
+    projectId: conversation.projectId,
   });
 
   if (!participants) {

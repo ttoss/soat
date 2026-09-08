@@ -2,6 +2,7 @@ import type { AiProviderSlug } from '@soat/postgresdb';
 import createDebug from 'debug';
 import { GoogleAuth } from 'google-auth-library';
 
+import { db } from '../db';
 import { DomainError } from '../errors';
 import type { VertexSettings } from './agentModel';
 import { resolveBedrockCredentials, resolveVertexSettings } from './agentModel';
@@ -467,9 +468,23 @@ export const enumerateProviderModels = async (
 export const listAiProviderModels = async (args: {
   aiProviderId: string;
 }): Promise<{ provider: AiProviderSlug; models: ProviderModel[] }> => {
+  // The provider is this route's subject rather than something another
+  // project's record points at, and the caller was authorized against the
+  // provider's own project — so that project is the scope.
+  const owner = await db.AiProvider.findOne({
+    where: { publicId: args.aiProviderId },
+    attributes: ['projectId'],
+  });
+  if (!owner) {
+    throw new DomainError('RESOURCE_NOT_FOUND', 'AI provider not found');
+  }
+
   const resolved = await resolveAiProviderSecret({
     aiProviderId: args.aiProviderId,
+    projectId: owner.projectId,
   });
+  /* istanbul ignore next -- the row was just read; only a delete racing this
+     call resolves it away. */
   if (!resolved) {
     throw new DomainError('RESOURCE_NOT_FOUND', 'AI provider not found');
   }
