@@ -190,6 +190,8 @@ export const createQuotaRow = async (opts: {
   // Left null when absent — which is also what every quota row stored before
   // the column existed carries, so the default here doubles as the legacy case.
   onUnpriced?: string;
+  // Null means every meter, which is what a pre-column row carries too.
+  meterType?: string;
 }): Promise<QuotaInstance> => {
   const quota = await db.Quota.create({
     projectId: opts.projectInternalId,
@@ -200,6 +202,7 @@ export const createQuotaRow = async (opts: {
     limit: String(opts.limit),
     mode: opts.mode ?? 'enforce',
     onUnpriced: opts.onUnpriced ?? null,
+    meterType: opts.meterType ?? null,
   });
   return quota;
 };

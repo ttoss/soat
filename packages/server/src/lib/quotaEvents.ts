@@ -62,6 +62,7 @@ export const reportUnpricedCostQuota = async (args: {
       metric: quota.metric,
       scope: quota.scope,
       scopeRef: quota.scopeRef,
+      meterType: quota.meterType,
       window: quota.window,
       limit: Number(quota.limit),
       meteredEventCount: coverage.meteredEventCount,
@@ -123,6 +124,9 @@ export const fireQuotaExceeded = async (args: {
       scope: quota.scope,
       scope_ref: quota.scopeRef,
       metric: quota.metric,
+      // Restated with the rest of the identity: with two caps over one
+      // scope/metric/window, this is what says which budget breached.
+      meter_type: quota.meterType,
       window: quota.window,
       window_key: args.windowKey,
       limit: Number(quota.limit),
@@ -152,6 +156,7 @@ export const fireQuotaExceeded = async (args: {
         metric: quota.metric,
         scope: quota.scope,
         scopeRef: quota.scopeRef,
+        meterType: quota.meterType,
         window: quota.window,
         windowKey: args.windowKey,
         limit: Number(quota.limit),

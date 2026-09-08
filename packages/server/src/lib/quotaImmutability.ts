@@ -8,9 +8,10 @@
 
 /**
  * The fields fixed at creation. `limit` and `mode` are the only mutable ones: a
- * quota's identity is `(project, scope, scope_ref, metric, window)` and its
- * window counters are keyed to that identity, so changing any of it in place
- * would silently re-point live counters at what is really a different cap.
+ * quota's identity is
+ * `(project, scope, scope_ref, metric, window, meter_type)` and its window
+ * counters are keyed to that identity, so changing any of it in place would
+ * silently re-point live counters at what is really a different cap.
  * `PATCH /quotas/{id}` accepts only `limit`/`mode`, so this is also exactly the
  * set the REST contract already treats as immutable.
  */
@@ -19,6 +20,7 @@ export const QUOTA_IMMUTABLE_FIELDS = [
   'scopeRef',
   'metric',
   'window',
+  'meterType',
 ] as const;
 
 const WIRE_NAMES: Record<(typeof QUOTA_IMMUTABLE_FIELDS)[number], string> = {
@@ -26,6 +28,7 @@ const WIRE_NAMES: Record<(typeof QUOTA_IMMUTABLE_FIELDS)[number], string> = {
   scopeRef: 'scope_ref',
   metric: 'metric',
   window: 'window',
+  meterType: 'meter_type',
 };
 
 // `null` is a materially different scope_ref than `""` (see the per-actor
@@ -51,12 +54,14 @@ export const validateQuotaImmutableFields = (args: {
     scopeRef?: unknown;
     metric?: unknown;
     window?: unknown;
+    meterType?: unknown;
   };
   current: {
     scope: string;
     scopeRef: string | null;
     metric: string;
     window: string;
+    meterType: string | null;
   };
 }): string | null => {
   for (const field of QUOTA_IMMUTABLE_FIELDS) {

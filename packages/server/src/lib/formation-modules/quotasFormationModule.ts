@@ -25,6 +25,7 @@ export const quotasFormationModule = defineFormationModule({
       limit: properties.limit,
       mode: toOptionalString(properties.mode) ?? undefined,
       onUnpriced: toOptionalString(properties.on_unpriced) ?? undefined,
+      meterType: toOptionalString(properties.meter_type) ?? undefined,
     });
   },
 
@@ -43,6 +44,7 @@ export const quotasFormationModule = defineFormationModule({
       scope: toOptionalString(properties.scope),
       metric: toOptionalString(properties.metric),
       window: toOptionalString(properties.window),
+      meterType: toOptionalString(properties.meter_type),
       // Distinguish "omitted" from an explicit null: only a declared value is
       // asserted against the stored ref, so a template that leaves the nullable
       // `scope_ref` out is not treated as clearing it.
