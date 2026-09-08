@@ -4214,6 +4214,62 @@ describe('Orchestrations', () => {
       expect(accepted.status).toBe(200);
     });
 
+    // Edge case 3 of #1237: without this a parent's pause bounds nothing, since
+    // a `sub_orchestration` child drives its own graph and its own spend.
+    test('flags a nested descendant, which parks at its own next checkpoint', async () => {
+      const childId = await createOrch({
+        ...humanNodeOrchestration,
+        name: 'Pause Fan-out Child',
+      });
+      const parentId = await createOrch({
+        name: 'Pause Fan-out Parent',
+        nodes: [
+          { id: 'child', type: 'sub_orchestration', orchestration_id: childId },
+          {
+            id: 'gate',
+            type: 'human',
+            prompt: 'Parent gate.',
+          },
+        ],
+        edges: [{ from: 'child', to: 'gate' }],
+      });
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: parentId, input: {} });
+      expect(runRes.status).toBe(201);
+      // The child parked on its own human node, so the parent carried on to its
+      // own gate — both runs are non-terminal when the pause arrives.
+      expect(runRes.body.status).toBe('awaiting_input');
+      const parentRunId = runRes.body.id as string;
+
+      const children = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs?parent_orchestration_run_id=${parentRunId}`
+      );
+      expect(children.status).toBe(200);
+      expect(children.body.data).toHaveLength(1);
+      const childRunId = children.body.data[0].id as string;
+      expect(children.body.data[0].pause_requested_at).toBeNull();
+
+      const paused = await pause(parentRunId, { reason: 'stop the tree' });
+      expect(paused.status).toBe(200);
+
+      const childRun = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs/${childRunId}`
+      );
+      expect(childRun.status).toBe(200);
+      expect(childRun.body.pause_requested_at).not.toBeNull();
+      expect(childRun.body.pause_reason).toBe('stop the tree');
+
+      // Resuming the parent is deliberately not a cascade: the child keeps its
+      // pause and is resumed by its own id.
+      expect((await resume(parentRunId)).status).toBe(200);
+      const childAfter = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs/${childRunId}`
+      );
+      expect(childAfter.body.pause_requested_at).not.toBeNull();
+    });
+
     test('pausing an already-paused run is idempotent', async () => {
       const orchId = await createOrch(humanNodeOrchestration);
       const runRes = await authenticatedTestClient(userToken)

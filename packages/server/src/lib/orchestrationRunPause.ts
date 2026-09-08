@@ -51,17 +51,6 @@ export const pausedRequiredAction = (
 };
 
 /**
- * Whether a persisted `required_action` is an operator pause rather than a
- * node's own. Reads the stored bag, so it answers for a run loaded from the
- * database as well as one being settled.
- */
-export const isPausedRequiredAction = (raw: unknown): boolean => {
-  if (typeof raw !== 'object' || raw === null || Array.isArray(raw))
-    return false;
-  return (raw as Record<string, unknown>).type === 'paused';
-};
-
-/**
  * Parks a run on its operator pause: `awaiting_input`, carrying a
  * `required_action` that names the pause as operator-initiated rather than a
  * node's, with `activeNodes` set to the frontier `resume` must re-drive.
