@@ -23,7 +23,12 @@ export const applyTestEnv = () => {
   // Egress is default-deny for non-public destinations, and nearly every tool
   // test points at loopback — so the suite declares it, as the smoke stack does
   // its containers. Tests asserting the *block* pass their own allowlist.
-  process.env.TOOL_EGRESS_ALLOWED_HOSTS = '127.0.0.1,localhost,::1';
+  // `example.com` is where this suite points every webhook and tool target. It
+  // is allowlisted so the guard settles on the host entry instead of resolving
+  // it — a test must not depend on the DNS the machine running it happens to
+  // have.
+  process.env.TOOL_EGRESS_ALLOWED_HOSTS =
+    '127.0.0.1,localhost,::1,example.com,*.example.com';
   // Cleared, not defaulted: upload/download/callback URLs are built by prefixing
   // it, so a shell that exports one for its own use (a `soat` CLI session
   // against a deployment) silently rewrites those URLs and the assertions on

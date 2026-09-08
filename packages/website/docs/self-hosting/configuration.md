@@ -162,11 +162,11 @@ Production requirement
 `SECRETS_ENCRYPTION_KEY` must be set in production. Changing it after secrets have been stored will make those secrets, as well as webhook and trigger signing secrets, unreadable.
 :::
 
-### Tool Egress
+### Outbound Egress
 
 | Variable                    | Default        | Description                                                                       |
 | --------------------------- | -------------- | --------------------------------------------------------------------------------- |
-| `TOOL_EGRESS_ALLOWED_HOSTS` | _(unset)_      | Comma-separated non-public destinations `http`/`mcp` tools may reach               |
+| `TOOL_EGRESS_ALLOWED_HOSTS` | _(unset)_      | Comma-separated non-public destinations the server may request on a tenant's behalf |
 
 An [`http` or `mcp` tool](../modules/tools.md) is a request **the server makes on
 the agent's behalf**, so by default its target may only be a publicly routable
@@ -175,8 +175,23 @@ address. Everything that is not — loopback, RFC1918 (`10/8`, `172.16/12`,
 service lives), CGNAT, IPv6 ULA — is refused with `403 TOOL_EGRESS_BLOCKED`
 unless this variable lists it.
 
-Unset, tools still reach the whole public internet; only your own network is
-closed. List what a tool legitimately needs:
+A tool target is not the only such destination, and the same rule covers each
+one:
+
+| Destination                                                       | Refused how |
+| ----------------------------------------------------------------- | ----------- |
+| An `http`/`mcp` [tool](../modules/tools.md) target                 | `403 TOOL_EGRESS_BLOCKED` on the call |
+| A [webhook](../modules/webhooks.md)'s `url`                        | the delivery is closed as `failed`, with the reason on the row |
+| An [AI provider](../modules/ai-providers.md)'s `base_url`          | the generation or model listing fails |
+| A GCP service-account key file's `token_uri`, on an `http` tool    | `403 TOOL_EGRESS_BLOCKED` on the call |
+
+What it does **not** cover is a destination the deployment itself chose:
+`OLLAMA_BASE_URL`, `EMBEDDING_BASE_URL` and the embedding stack are operator
+settings, already an operator's decision about their own network, and they keep
+working when they point at localhost.
+
+Unset, these requests still reach the whole public internet; only your own
+network is closed. List what a tool legitimately needs:
 
 ```yaml
 environment:

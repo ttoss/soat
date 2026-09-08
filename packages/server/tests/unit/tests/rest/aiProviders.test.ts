@@ -189,6 +189,65 @@ describe('AI Providers', () => {
       expect(response.body.provider).toBe(provider);
     });
 
+    // A record's `config` is spliced into the host the provider SDK requests,
+    // so a value carrying a dot or a slash names a different server — and the
+    // request that lands there carries whatever credential the record
+    // authenticates with. Refused at the write, where the caller can fix it.
+    test.each([
+      ['vertex', { project: 'p', location: 'evil.example.com/' }],
+      ['bedrock', { region: 'evil.example.com/' }],
+      ['azure', { resourceName: 'evil.example.com/x' }],
+    ])(
+      'refuses a %s config value that would move the host',
+      async (provider, config) => {
+        const response = await authenticatedTestClient(userToken)
+          .post('/api/v1/ai-providers')
+          .send({
+            project_id: projectId,
+            name: `Injecting ${provider}`,
+            provider,
+            default_model: 'model-x',
+            config,
+          });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      }
+    );
+
+    test('accepts a real vertex location', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: 'Vertex EU',
+          provider: 'vertex',
+          default_model: 'gemini-2.0-flash',
+          config: { project: 'my-project', location: 'europe-west4' },
+        });
+
+      expect(response.status).toBe(201);
+    });
+
+    test.each([
+      ['not-a-url'],
+      ['ftp://gateway.example.com'],
+      ['https://user:pass@gateway.example.com/v1'],
+    ])('refuses base_url %s', async (baseUrl) => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: 'Bad Base URL',
+          provider: 'openai',
+          default_model: 'gpt-4o',
+          base_url: baseUrl,
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
     test('can create AI provider linked to a secret', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/ai-providers')

@@ -7,6 +7,7 @@ import {
   encryptValue,
   generateSecretValue,
 } from './secrets';
+import { assertTenantHttpUrl } from './tenantUrl';
 
 const generateSecret = generateSecretValue;
 
@@ -100,6 +101,8 @@ export const createWebhook = async (args: {
   url: string;
   events: string[];
 }) => {
+  assertTenantHttpUrl({ url: args.url, field: 'url' });
+
   const secret = generateSecret();
 
   const webhook = await db.Webhook.create({
@@ -133,7 +136,10 @@ export const updateWebhook = async (args: {
   const updates: Record<string, unknown> = {};
   if (args.name !== undefined) updates.name = args.name;
   if (args.description !== undefined) updates.description = args.description;
-  if (args.url !== undefined) updates.url = args.url;
+  if (args.url !== undefined) {
+    assertTenantHttpUrl({ url: args.url, field: 'url' });
+    updates.url = args.url;
+  }
   if (args.events !== undefined) updates.events = args.events;
   if (args.active !== undefined) updates.active = args.active;
   if (args.policyId !== undefined) updates.policyId = args.policyId;

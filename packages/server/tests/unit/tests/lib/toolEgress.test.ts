@@ -354,7 +354,13 @@ describe('toolEgress', () => {
       });
       try {
         await expect(
-          fetchWithEgressGuard(origin, {}, parseEgressAllowlist(undefined))
+          fetchWithEgressGuard(
+            origin,
+            {},
+            {
+              allowlist: parseEgressAllowlist(undefined),
+            }
+          )
         ).rejects.toMatchObject({ code: 'TOOL_EGRESS_BLOCKED' });
       } finally {
         await closeServer(server);
@@ -369,7 +375,7 @@ describe('toolEgress', () => {
         const response = await fetchWithEgressGuard(
           origin,
           {},
-          parseEgressAllowlist(`127.0.0.1:${port}`)
+          { allowlist: parseEgressAllowlist(`127.0.0.1:${port}`) }
         );
         await expect(response.text()).resolves.toBe('reached');
       } finally {
@@ -392,7 +398,7 @@ describe('toolEgress', () => {
           fetchWithEgressGuard(
             redirector.origin,
             {},
-            parseEgressAllowlist(`127.0.0.1:${redirector.port}`)
+            { allowlist: parseEgressAllowlist(`127.0.0.1:${redirector.port}`) }
           )
         ).rejects.toMatchObject({ code: 'TOOL_EGRESS_BLOCKED' });
       } finally {
@@ -413,7 +419,7 @@ describe('toolEgress', () => {
         const response = await fetchWithEgressGuard(
           redirector.origin,
           { method: 'POST', body: 'payload' },
-          parseEgressAllowlist('127.0.0.1')
+          { allowlist: parseEgressAllowlist('127.0.0.1') }
         );
         await expect(response.text()).resolves.toBe('final');
       } finally {
@@ -435,7 +441,7 @@ describe('toolEgress', () => {
         const response = await fetchWithEgressGuard(
           `${origin}/start`,
           {},
-          parseEgressAllowlist('127.0.0.1')
+          { allowlist: parseEgressAllowlist('127.0.0.1') }
         );
         await expect(response.text()).resolves.toBe('relative-ok');
       } finally {
@@ -457,7 +463,7 @@ describe('toolEgress', () => {
         await fetchWithEgressGuard(
           redirector.origin,
           { headers: { Authorization: 'Bearer super-secret' } },
-          parseEgressAllowlist('127.0.0.1')
+          { allowlist: parseEgressAllowlist('127.0.0.1') }
         );
         expect(receivedAuth).toBeUndefined();
       } finally {
@@ -481,7 +487,7 @@ describe('toolEgress', () => {
         await fetchWithEgressGuard(
           `${origin}/start`,
           { headers: { Authorization: 'Bearer keep-me' } },
-          parseEgressAllowlist('127.0.0.1')
+          { allowlist: parseEgressAllowlist('127.0.0.1') }
         );
         expect(receivedAuth).toBe('Bearer keep-me');
       } finally {
@@ -504,7 +510,7 @@ describe('toolEgress', () => {
         await fetchWithEgressGuard(
           `${origin}/start`,
           { method: 'POST', body: 'payload' },
-          parseEgressAllowlist('127.0.0.1')
+          { allowlist: parseEgressAllowlist('127.0.0.1') }
         );
         expect(method).toBe('GET');
       } finally {
@@ -533,7 +539,7 @@ describe('toolEgress', () => {
         await fetchWithEgressGuard(
           `${origin}/start`,
           { method: 'POST', body: 'payload' },
-          parseEgressAllowlist('127.0.0.1')
+          { allowlist: parseEgressAllowlist('127.0.0.1') }
         );
         expect(seen).toEqual({ method: 'POST', body: 'payload' });
       } finally {
@@ -548,7 +554,13 @@ describe('toolEgress', () => {
       });
       try {
         await expect(
-          fetchWithEgressGuard(origin, {}, parseEgressAllowlist('127.0.0.1'))
+          fetchWithEgressGuard(
+            origin,
+            {},
+            {
+              allowlist: parseEgressAllowlist('127.0.0.1'),
+            }
+          )
         ).rejects.toMatchObject({ code: 'TOOL_EGRESS_BLOCKED' });
       } finally {
         await closeServer(server);
@@ -562,7 +574,13 @@ describe('toolEgress', () => {
       });
       try {
         await expect(
-          fetchWithEgressGuard(origin, {}, parseEgressAllowlist('127.0.0.1'))
+          fetchWithEgressGuard(
+            origin,
+            {},
+            {
+              allowlist: parseEgressAllowlist('127.0.0.1'),
+            }
+          )
         ).rejects.toMatchObject({ code: 'TOOL_EGRESS_BLOCKED' });
       } finally {
         await closeServer(server);
@@ -578,7 +596,7 @@ describe('toolEgress', () => {
         const response = await fetchWithEgressGuard(
           origin,
           {},
-          parseEgressAllowlist('127.0.0.1')
+          { allowlist: parseEgressAllowlist('127.0.0.1') }
         );
         expect(response.status).toBe(304);
       } finally {

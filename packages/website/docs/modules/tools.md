@@ -389,7 +389,7 @@ dropped when a redirect changes origin. So a public-looking hostname pointing at
 `302 Location: http://169.254.169.254/…`, are both refused.
 
 To reach an internal service on purpose, the operator lists it in
-[`TOOL_EGRESS_ALLOWED_HOSTS`](../self-hosting/configuration.md#tool-egress) —
+[`TOOL_EGRESS_ALLOWED_HOSTS`](../self-hosting/configuration.md#outbound-egress) —
 a deployment-wide setting, not a per-project one. When the destination is SOAT's
 own API, use a [`builtin` tool](#builtin) instead of an `http` tool pointed at
 your own base URL: it dispatches in-process under the caller's own permissions

@@ -3179,10 +3179,12 @@ describe('Orchestrations', () => {
         const call = callTo();
         expect(call).toBeDefined();
         const init = call![1] as {
-          headers: Record<string, string>;
+          headers: HeadersInit;
           body: string;
         };
-        expect(init.headers['X-Soat-Event']).toBe('guardrail.exception');
+        expect(new Headers(init.headers).get('X-Soat-Event')).toBe(
+          'guardrail.exception'
+        );
         const body = JSON.parse(init.body);
         expect(body.event).toBe('guardrail.exception');
         expect(body.resource_type ?? body.resourceType).toBe(

@@ -38,6 +38,34 @@ When a provider is linked to a secret the secret's encrypted value is retrieved 
 | `created_at`    | string           | ISO 8601 creation timestamp                               |
 | `updated_at`    | string           | ISO 8601 last-updated timestamp                           |
 
+### Where a provider record may point
+
+`base_url` and `config` decide the URL the server requests, so both are bounded.
+
+For `azure`, `bedrock` and `vertex` there is no `base_url` at all: the SDK
+builds the endpoint out of the record — `<location>-aiplatform.googleapis.com`,
+`bedrock-runtime.<region>.amazonaws.com`,
+`<resourceName>.openai.azure.com`. A value carrying a dot, a slash or an `@`
+would therefore name a **different server**, and the request that lands there
+carries whatever credential the record authenticates with. So `config.location`,
+`config.project`, `config.region` and `config.resourceName` must each be a
+single name — letters, digits and hyphens — and anything else is refused with
+`400 VALIDATION_FAILED` on create and update, and `400
+AI_PROVIDER_MISCONFIGURED` if a record written before this rule is used.
+
+`base_url` names its endpoint outright, so it is checked for shape instead: an
+absolute `http`/`https` URL, with no username or password in it (link a secret
+for the credential). Whether the endpoint may be **reached** is the deployment's
+egress rule, evaluated per request against the resolved address — a `base_url`
+inside your own network is refused unless the operator lists it in
+[`TOOL_EGRESS_ALLOWED_HOSTS`](../self-hosting/configuration.md#outbound-egress),
+exactly as an `http` tool's target is.
+
+A model listing that the provider rejects answers `MODEL_LISTING_FAILED` with
+the provider's status. The provider's response **body** is not relayed: the host
+that wrote it is one the record named, so returning it would answer a caller
+with whatever that host said. It goes to the server log instead.
+
 ### Provider Slugs
 
 Valid values for the `provider` field:
