@@ -50,7 +50,7 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
   AI_PROVIDER_ERROR:
     'The upstream model provider failed, not this server. Check the provider credential and the account behind it (credits, rate limits, model access), then retry with backoff.',
   AI_PROVIDER_MISCONFIGURED:
-    'The provider record is missing something it needs to make a call — usually the API key secret or the base URL. Update the AI provider and retry.',
+    'The provider record is missing something it needs to make a call — usually the API key secret or the base URL. A `bedrock` or `vertex` record linking no credential is this too: it would sign with the deployment\'s own, which only an operator may allow. Update the AI provider and retry.',
   EMBEDDING_NOT_CONFIGURED:
     'Knowledge search needs an embedding model. Configure one on the project or the AI provider before ingesting or searching.',
   INTERNAL_ERROR:

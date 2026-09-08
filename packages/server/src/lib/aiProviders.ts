@@ -7,6 +7,7 @@ import { makeResourceAccessor } from 'src/lib/resourceAccessor';
 import { decryptValue } from 'src/lib/secrets';
 
 import { assertAiProviderConfig } from './aiProviderConfigValidation';
+import { assertAiProviderCarriesCredential } from './ambientCredentials';
 
 const getAiProviderIncludes = () => {
   return [
@@ -84,6 +85,11 @@ export const createAiProvider = async (args: {
     baseUrl: args.baseUrl,
     config: args.config,
   });
+  assertAiProviderCarriesCredential({
+    provider: args.provider,
+    secretId: args.secretId,
+    config: args.config,
+  });
 
   const instance = await db.AiProvider.create({
     projectId: args.projectId,
@@ -123,6 +129,11 @@ export const updateAiProvider = async (args: {
   assertAiProviderConfig({
     provider: instance.provider,
     baseUrl: instance.baseUrl,
+    config: instance.config,
+  });
+  assertAiProviderCarriesCredential({
+    provider: instance.provider,
+    secretId: instance.secretId,
     config: instance.config,
   });
 

@@ -116,7 +116,7 @@ export const ERROR_CODES = {
   AI_PROVIDER_MISCONFIGURED: {
     httpStatus: 400,
     description:
-      'The AI provider record is missing configuration the provider type requires — for example a `vertex` provider with no Google Cloud project in `config.project` and no service-account key file linked as its secret.',
+      'The AI provider record is missing configuration the provider type requires — for example a `vertex` provider with no Google Cloud project in `config.project` and no service-account key file linked as its secret, or a `bedrock`/`vertex` record that links no credential at all on a deployment that does not let a record use the deployment\'s own.',
   },
   MODEL_LISTING_UNSUPPORTED: {
     httpStatus: 400,

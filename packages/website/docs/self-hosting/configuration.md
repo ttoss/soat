@@ -227,6 +227,47 @@ your own base URL — it dispatches in-process under the caller's own
 permissions instead of leaving the network at all.
 :::
 
+### Provider Credentials
+
+| Variable                                 | Default | Description                                                                                    |
+| ---------------------------------------- | ------- | ---------------------------------------------------------------------------------------------- |
+| `AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS`  | `false` | Whether an AI provider record that links no credential may sign with the deployment's own       |
+
+`bedrock` and `vertex` are the two [AI provider](../modules/ai-providers.md)
+types whose SDK reaches for a credential nobody put on the record: Bedrock walks
+the AWS default credential chain (environment, instance or task role), Vertex
+resolves [Application Default Credentials](https://cloud.google.com/docs/authentication/application-default-credentials).
+Those are the **deployment's** credentials, and a provider record is written by
+a tenant — so unless this is set to `true`, a `bedrock` or `vertex` record must
+carry a credential of its own:
+
+- `400 VALIDATION_FAILED` when such a record is created or updated with neither
+  a linked secret nor a `config.apiKey`, and
+- `400 AI_PROVIDER_MISCONFIGURED` when a record written before this rule existed
+  is used to generate or to list models, so it fails closed rather than signing
+  with credentials it was never given.
+
+Set it to `true` on a **single-tenant** deployment, where the account the server
+runs as is the account its projects are meant to bill — a server on an EC2
+instance profile or an ECS task role serving only your own team. Leave it off
+wherever a project may be created by someone you would not hand those
+credentials to: without it, such a record generates on the deployment's cloud
+account, against the deployment's quotas, with whatever IAM the deployment's
+role holds.
+
+:::warning Upgrading
+This rule is new, and it fails closed. If your deployment already relies on
+credential-less `bedrock` or `vertex` records — including the credential-less
+record the [model listing docs](../modules/ai-providers.md#listing-models-before-you-hold-credentials)
+describe for browsing a vendor's catalogue — set
+`AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS=true` **before** upgrading, or link a
+secret to each of those records.
+:::
+
+The embedding stack is unaffected: `EMBEDDING_PROVIDER` and its region are
+operator settings that no tenant writes, so `bedrock` embeddings keep using the
+AWS credential chain whatever this is set to.
+
 ### File Storage
 
 | Variable            | Default       | Description                                     |
