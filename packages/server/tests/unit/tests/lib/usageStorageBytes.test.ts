@@ -5,15 +5,19 @@ import { snapshotProjectStorage } from 'src/lib/usageStorage';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 
 /**
- * What the `gb_day` snapshot quantifies, row by row. The event shape,
+ * What the storage snapshot quantifies, row by row. The event shape,
  * idempotency and pricing are covered in `rest/usageStorage.test.ts`; this
- * asserts the bytes themselves, on a project of its own so the total is exactly
- * what these fixtures seed (#1221).
+ * asserts the measured quantities themselves, on a project of its own so each
+ * one is exactly what these fixtures seed (#1221, #1232).
  *
  * An embedding is the dominant term — a `vector(1024)` stores ~4 KB against the
  * ~1 KB of text it encodes — so a meter blind to it reports a fraction of the
  * footprint, and under-reports in the direction that lets an unbounded corpus
  * grow.
+ *
+ * Bytes still miss the index over those vectors, which no `pg_column_size` can
+ * see and which costs more per element than the vector itself. `chunk_count`
+ * is the term that prices it, so what it counts is asserted here beside them.
  */
 
 const DIMENSIONS = Number(process.env.EMBEDDING_DIMENSIONS);
@@ -104,8 +108,16 @@ describe('Usage — what the storage snapshot counts', () => {
     });
   });
 
-  /** The `gb_day` quantity of this project's only storage event, in bytes. */
-  const meteredBytes = async (now: Date): Promise<number> => {
+  type MeteredComponent = { quantity: number; unit: string; billable: boolean };
+
+  /**
+   * Snapshots `now`'s day and reads back that event's components by name. The
+   * event is located by the same idempotency key the snapshot writes, so a
+   * suite that samples more than one day never reads another day's row.
+   */
+  const meteredComponents = async (
+    now: Date
+  ): Promise<Record<string, MeteredComponent>> => {
     const created = await snapshotProjectStorage({
       projectId: projectInternalId,
       projectPublicId: projectId,
@@ -114,13 +126,32 @@ describe('Usage — what the storage snapshot counts', () => {
     expect(created).toBe(true);
 
     const event = await db.UsageEvent.findOne({
-      where: { projectId: projectInternalId, meterType: 'storage' },
+      where: {
+        idempotencyKey: `storage:${projectId}:${now.toISOString().slice(0, 10)}`,
+      },
     });
-    const component = await db.UsageComponent.findOne({
-      where: { usageEventId: event!.id, component: 'gb_day' },
+    const components = await db.UsageComponent.findAll({
+      where: { usageEventId: event!.id },
     });
 
-    return Number(component!.quantity) * 1_000_000_000;
+    return Object.fromEntries(
+      components.map((component) => {
+        return [
+          component.component,
+          {
+            quantity: Number(component.quantity),
+            unit: component.unit,
+            billable: component.billable,
+          },
+        ];
+      })
+    );
+  };
+
+  /** The `gb_day` quantity of the snapshot for `now`'s day, in bytes. */
+  const meteredBytes = async (now: Date): Promise<number> => {
+    const components = await meteredComponents(now);
+    return components.gb_day.quantity * 1_000_000_000;
   };
 
   /**
@@ -169,5 +200,23 @@ describe('Usage — what the storage snapshot counts', () => {
     const bytes = await meteredBytes(new Date('2026-08-11T00:00:00.000Z'));
 
     expect(bytes).toBe(expected);
+  });
+
+  /**
+   * The count is rows, not bytes: an un-embedded row still occupies a heap
+   * tuple and still joins the HNSW graph the moment it is embedded, and the
+   * whole point of the component is that it does not move with chunk size.
+   */
+  test('counts document chunks and memory entries as one chunk_count', async () => {
+    const components = await meteredComponents(
+      new Date('2026-08-12T00:00:00.000Z')
+    );
+
+    expect(components.chunk_count).toEqual({
+      // Two chunks and two entries, embedded or not.
+      quantity: 4,
+      unit: 'count',
+      billable: true,
+    });
   });
 });

@@ -52,9 +52,9 @@ One priced dimension of an event: `quantity` is always in `unit`, and `cost_usd 
 
 | Field        | Type            | Description                                                                                   |
 | ------------ | --------------- | --------------------------------------------------------------------------------------------- |
-| `component`  | string          | The measured dimension: `input_tokens`, `output_tokens`, `cached_tokens`, `reasoning_tokens`, `compute_second`, `request`, `gb_day`, … |
+| `component`  | string          | The measured dimension: `input_tokens`, `output_tokens`, `cached_tokens`, `reasoning_tokens`, `compute_second`, `request`, `gb_day`, `chunk_count`, … |
 | `quantity`   | number          | The measured amount, expressed in `unit`                                                      |
-| `unit`       | string          | Unit `quantity` is measured in (`token`, `compute_second`, `request`, `gb_day`)                  |
+| `unit`       | string          | Unit `quantity` is measured in (`token`, `compute_second`, `request`, `gb_day`, `count`)         |
 | `billable`   | boolean         | Whether the component contributes to cost. `reasoning_tokens` (a subset of `output_tokens`) is non-billable and excluded from cost and billable totals |
 | `unit_price` | number \| null  | USD per `unit`, frozen at write time; `null` when unpriced                                    |
 | `cost_usd`   | number \| null  | `quantity × unit_price`, frozen at write time; `null` when unpriced                           |
@@ -102,7 +102,7 @@ A per-project alert rule on windowed usage. When the project's `metric` over `wi
 | `llm_tokens`     | One completed LLM call's token usage | `input_tokens`, `output_tokens`, `cached_tokens`, `reasoning_tokens` |
 | `compute_execution` | Wall-clock compute time of a unit of work (orchestration node, agent generation, tool call) | `compute_second`                                     |
 | `api_request`    | A batch of API requests served for a project        | `request`                                         |
-| `storage`        | One project's stored bytes for one day              | `gb_day`                                          |
+| `storage`        | One project's stored footprint for one day          | `gb_day`, `chunk_count`                           |
 
 For platform meter types the `(provider, model)` pair is a **SKU**: `provider` is `soat` and `model` names the billable unit (e.g. `compute-second`, `gb-day`, `request`).
 
@@ -127,11 +127,11 @@ Every orchestration node execution that actively ran writes one `compute_executi
 
 ### Storage metering
 
-A daily snapshot writes one `storage` event per project per UTC day, carrying a `gb_day` component with the project's stored gigabytes, summed at snapshot time. No principal/agent/run attribution. Priced from a `soat`/`gb-day` SKU; idempotent on `storage:<project>:<YYYY-MM-DD>`. Intra-day churn between samples meters zero.
+A daily snapshot writes one `storage` event per project per UTC day, carrying two components measured in the same statement: `gb_day` (the project's stored gigabytes) and `chunk_count` (the indexed rows behind them). No principal/agent/run attribution. Both are priced from the `soat`/`gb-day` SKU, each from its own component row, and the event's cost is their sum; idempotent on `storage:<project>:<YYYY-MM-DD>`. Intra-day churn between samples meters zero. Either component may be left unpriced — it still records its quantity, with `cost_usd` null.
 
 The snapshot also runs once at server startup, so a deployment that restarts more often than the interval still meters every day it is up. Being idempotent per project per UTC day, a restart re-samples the current day rather than writing a second event for it.
 
-Five terms are summed:
+`gb_day` sums five terms:
 
 | Term | Source |
 | --- | --- |
@@ -141,6 +141,10 @@ Five terms are summed:
 | Memory entry text | [memory entry](./memories.md) `content` |
 | Memory entry embeddings | the stored width of each entry's vector |
 
+`chunk_count` counts the rows behind two of them — [document](./documents.md)
+chunks plus [memory entries](./memories.md) — embedded or not, since a row joins
+the vector index as soon as its embedding is written.
+
 **Embeddings dominate.** A vector is four bytes per dimension, so at
 `EMBEDDING_DIMENSIONS=1024` one embedding is ~4 KB against the ~1 KB of text it
 encodes. A row with no embedding yet contributes its text and nothing more. Both
@@ -148,13 +152,25 @@ vector widths are measured from the stored value rather than computed from
 `EMBEDDING_DIMENSIONS`, so the figure follows that setting without being pinned
 to it.
 
-**Physical overhead is excluded, deliberately.** The meter is the logical bytes a
-project stored: index pages (including the HNSW graphs over both vector columns),
-TOAST chunk and tuple headers, and table bloat are not counted. None of it is
-attributable to a single project, and it moves with vacuum state, so including it
-would make one project's figure depend on every other project's write history.
-Real disk use is therefore higher than `gb_day` reports — by a factor that
-depends on the deployment, not on the project.
+**Physical overhead is excluded from `gb_day`, deliberately.** That component is
+the logical bytes a project stored: index pages (including the HNSW graphs over
+both vector columns), TOAST chunk and tuple headers, and table bloat are not
+counted. None of it is attributable to a single project, and it moves with vacuum
+state, so including it would make one project's figure depend on every other
+project's write history. Real disk use is therefore higher than `gb_day` reports —
+by a factor that depends on the deployment, not on the project.
+
+**`chunk_count` is what that overhead is priced against.** Most of what a chunk
+costs is fixed per row rather than proportional to its text: at
+`EMBEDDING_DIMENSIONS=1024` an HNSW element occupies a whole 8 KiB page — a
+4 KB vector plus its neighbour list leaves no room for a second element — on top
+of the ~5.5 KB the vector itself stores out of line. Measured against a mirrored
+schema, a 25× change in chunk size moves the cost of a chunk by 17%, so the same
+corpus re-chunked meters between 2.2× and 7.4× its own source size on `gb_day`
+alone while costing roughly the same to store. A count does not drift with a
+[`chunk_strategy`](./documents.md) the caller picks, and it is also the figure
+that says whether a project is a few large documents or a million tiny chunks —
+two corpora that read alike on `gb_day` and behave nothing alike on search.
 
 ### API-request metering
 

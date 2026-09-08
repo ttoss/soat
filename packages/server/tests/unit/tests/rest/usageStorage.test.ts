@@ -43,13 +43,51 @@ describe('Usage — storage metering', () => {
     });
   };
 
+  // One indexed row of each kind. Embeddings are left null: the count is rows,
+  // so it must not depend on whether the vector has been written yet.
+  const seedOneChunkAndOneEntry = async (): Promise<void> => {
+    const file = await db.File.create({
+      publicId: generatePublicId(PUBLIC_ID_PREFIXES.file),
+      projectId: projectInternalId,
+      size: 10,
+      storageType: 'local',
+      storagePath: `seed/${generatePublicId(PUBLIC_ID_PREFIXES.file)}`,
+      filename: 'chunked.txt',
+    });
+    const document = await db.Document.create({
+      publicId: generatePublicId(PUBLIC_ID_PREFIXES.document),
+      fileId: file.id,
+      status: 'ready',
+    });
+    await db.DocumentChunk.create({
+      publicId: generatePublicId(PUBLIC_ID_PREFIXES.documentChunk),
+      documentId: document.id,
+      content: 'chunk',
+      chunkIndex: 0,
+      embedding: null,
+    });
+    const memory = await db.Memory.create({
+      publicId: generatePublicId(PUBLIC_ID_PREFIXES.memory),
+      projectId: projectInternalId,
+      name: 'storage-memory',
+    });
+    await db.MemoryEntry.create({
+      publicId: generatePublicId(PUBLIC_ID_PREFIXES.memoryEntry),
+      memoryId: memory.id,
+      content: 'entry',
+      embedding: null,
+    });
+  };
+
   const storageMeters = async (): Promise<
     Array<{
       meter_type: string;
+      cost_usd: number | null;
       components: Array<{
         component: string;
         quantity: string;
         unit: string;
+        billable: boolean;
         cost_usd: string | null;
       }>;
     }>
@@ -83,6 +121,17 @@ describe('Usage — storage metering', () => {
     expect(comp!.unit).toBe('gb_day');
     expect(Number(comp!.quantity)).toBeCloseTo(0.4);
 
+    // The count rides the same event, and is written even at zero: the daily
+    // series is what a rollup sums, so a day left out reads as a day the
+    // project stored nothing rather than a day nobody measured.
+    const count = meters[0].components.find((c) => {
+      return c.component === 'chunk_count';
+    });
+    expect(count).toBeDefined();
+    expect(count!.unit).toBe('count');
+    expect(count!.billable).toBe(true);
+    expect(Number(count!.quantity)).toBe(0);
+
     // A second snapshot for the same UTC day writes nothing.
     const again = await snapshotProjectStorage({
       projectId: projectInternalId,
@@ -102,6 +151,25 @@ describe('Usage — storage metering', () => {
     // A new day is a distinct idempotency key → exactly one more event for this
     // project (the run also meters other suites' projects, invisible to this user).
     expect((await storageMeters()).length).toBe(before + 1);
+  });
+
+  test("counts document chunks and memory entries on the next day's snapshot", async () => {
+    await seedOneChunkAndOneEntry();
+
+    const created = await snapshotProjectStorage({
+      projectId: projectInternalId,
+      projectPublicId: projectId,
+      now: new Date('2026-07-26T00:00:00.000Z'),
+    });
+    expect(created).toBe(true);
+
+    const meters = await storageMeters();
+    const day = meters.find((event) => {
+      return event.components.some((c) => {
+        return c.component === 'chunk_count' && Number(c.quantity) === 2;
+      });
+    });
+    expect(day).toBeDefined();
   });
 
   test('prices the storage event from an effective global soat/gb-day SKU', async () => {
@@ -137,6 +205,49 @@ describe('Usage — storage metering', () => {
       });
     });
     expect(priced).toBe(true);
+  });
+
+  test('prices chunk_count on its own row and sums both into the event cost', async () => {
+    await db.PriceBook.create({
+      aiProviderId: null,
+      projectId: null,
+      meterType: 'storage',
+      provider: 'soat',
+      model: 'gb-day',
+      component: 'chunk_count',
+      unit: 'count',
+      unitPrice: '0.25',
+      effectiveFrom: new Date('2000-01-01T00:00:00.000Z'),
+    });
+
+    const day = new Date('2026-07-29T00:00:00.000Z');
+    const created = await snapshotProjectStorage({
+      projectId: projectInternalId,
+      projectPublicId: projectId,
+      now: day,
+    });
+    expect(created).toBe(true);
+
+    const event = (await storageMeters()).find((meter) => {
+      return meter.components.every((c) => {
+        return c.cost_usd != null;
+      });
+    });
+    expect(event).toBeDefined();
+
+    const count = event!.components.find((c) => {
+      return c.component === 'chunk_count';
+    });
+    // The two rows seeded above, at 0.25 each.
+    expect(Number(count!.quantity)).toBe(2);
+    expect(Number(count!.cost_usd)).toBeCloseTo(0.5);
+
+    // The event's cost is both components, not the one it used to carry.
+    const componentSum = event!.components.reduce((total, c) => {
+      return total + Number(c.cost_usd);
+    }, 0);
+    expect(Number(event!.cost_usd)).toBeCloseTo(componentSum);
+    expect(Number(event!.cost_usd)).toBeGreaterThan(0.5);
   });
 
   test('snapshots with the current UTC day when no now is given', async () => {
