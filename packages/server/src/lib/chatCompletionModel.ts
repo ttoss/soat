@@ -1,4 +1,5 @@
 import type { LanguageModel, LanguageModelUsage } from 'ai';
+import { db } from 'src/db';
 import { resolveAiProviderSecret } from 'src/lib/aiProviders';
 
 import { buildModel } from './agentModel';
@@ -73,7 +74,10 @@ export const buildRoutedChatModel = async (args: {
   route: ModelRouteConfig;
 }): Promise<ResolvedChatModel> => {
   return {
-    model: await buildRoutedModel({ route: args.route }),
+    model: await buildRoutedModel({
+      route: args.route,
+      projectId: args.projectId,
+    }),
     modelName: args.route.id,
     projectId: args.projectId,
     attribution: null,
@@ -92,9 +96,19 @@ export const resolveChatModel = async (args: {
   aiProviderId: string;
   model?: string;
 }): Promise<ResolvedChatModel> => {
-  const resolved = await resolveAiProviderSecret({
-    aiProviderId: args.aiProviderId,
+  // The provider names the project here rather than the other way round: the
+  // route authorized the caller against the provider's own project, so that is
+  // the scope this resolution carries.
+  const owner = await db.AiProvider.findOne({
+    where: { publicId: args.aiProviderId },
+    attributes: ['projectId'],
   });
+  const resolved = owner
+    ? await resolveAiProviderSecret({
+        aiProviderId: args.aiProviderId,
+        projectId: owner.projectId,
+      })
+    : null;
 
   // The stateless route maps this exact message to a 404 — it is the endpoint's
   // published contract, so the message is load-bearing and must not drift.

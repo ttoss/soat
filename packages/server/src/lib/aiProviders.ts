@@ -261,11 +261,21 @@ export const deleteAiProvider = async (args: {
   return 'deleted' as const;
 };
 
+/**
+ * The provider's credential, for the project that is about to generate with it.
+ *
+ * `projectId` is required rather than optional because this is the one funnel
+ * that hands out a decrypted provider secret: an optional filter is one a new
+ * caller can leave off, and the write-time guards it backs up cannot reach a
+ * row that is already stored. A provider in another project resolves to `null`,
+ * exactly as one that does not exist.
+ */
 export const resolveAiProviderSecret = async (args: {
   aiProviderId: string;
+  projectId: number;
 }) => {
   const instance = await db.AiProvider.findOne({
-    where: { publicId: args.aiProviderId },
+    where: { publicId: args.aiProviderId, projectId: args.projectId },
   });
   if (!instance) return null;
 

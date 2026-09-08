@@ -18,6 +18,7 @@ describe('Agent versions', () => {
   let projectId: string;
   let otherProjectId: string;
   let aiProviderId: string;
+  let otherAiProviderId: string;
   let noPermToken: string;
 
   const createAgent = async (body: Record<string, unknown>) => {
@@ -74,6 +75,18 @@ describe('Agent versions', () => {
         default_model: 'llama3.2',
       });
     aiProviderId = aiProvRes.body.id;
+
+    // An agent pins a provider from its own project, so the other project
+    // needs one of its own to hold the agent this suite creates there.
+    const otherAiProvRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/ai-providers')
+      .send({
+        project_id: otherProjectId,
+        name: 'Agent Versions Other Provider',
+        provider: 'ollama',
+        default_model: 'llama3.2',
+      });
+    otherAiProviderId = otherAiProvRes.body.id;
   });
 
   // ── Phase 1: snapshots ───────────────────────────────────────────────────
@@ -452,7 +465,10 @@ describe('Agent versions', () => {
     test('a project-scoped principal cannot read another project’s history', async () => {
       const otherAgentRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/agents')
-        .send({ project_id: otherProjectId, ai_provider_id: aiProviderId });
+        .send({
+          project_id: otherProjectId,
+          ai_provider_id: otherAiProviderId,
+        });
       expect(otherAgentRes.status).toBe(201);
 
       // The shared fixture user holds a wildcard policy, so it legitimately

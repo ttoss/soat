@@ -186,6 +186,8 @@ To vary the system prompt per call, edit the agent (`update-agent --instructions
 
 The agent resolves its AI provider by `ai_provider_id`; if `model` is not set, the provider's `default_model` is used. See [AI Providers](./ai-providers.md).
 
+The provider must belong to the **agent's own project**: a provider from another project answers `400 AI_PROVIDER_NOT_FOUND`, the same as an id that exists nowhere, even for a caller who may read both. What a pin decides is which credential the agent generates with, so it stays inside one project's resource graph rather than following the writer's reach. The same holds for a [model route](./model-routes.md)'s targets and for a [chat](./chats.md)'s pinned provider.
+
 An agent sets **exactly one** of `ai_provider_id` or `model_route_id` — both, or neither, is a `400`. With a [model route](./model-routes.md) the model is resolved through the route's ordered provider+model targets, and a retryable failure fails over to the next target *per LLM call*, so already-executed tool calls are never repeated. `model` cannot accompany a route, since each target names its own model. To switch a pinned agent to a route, send `model_route_id` together with `ai_provider_id: null` in the same request.
 
 ### Tool Choice

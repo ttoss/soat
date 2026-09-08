@@ -8,6 +8,7 @@ describe('Conversations', () => {
   let projectId: string;
   let policyId: string;
   let actorId: string;
+  let otherProjectActorId: string;
   let noPermToken: string;
 
   beforeAll(async () => {
@@ -65,6 +66,14 @@ describe('Conversations', () => {
       .post('/api/v1/actors')
       .send({ project_id: projectId, name: 'ConvoActor' });
     actorId = actorRes.body.id;
+
+    const otherProjectRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/projects')
+      .send({ name: 'Conversations Other Project' });
+    const otherActorRes = await authenticatedTestClient(userToken)
+      .post('/api/v1/actors')
+      .send({ project_id: otherProjectRes.body.id, name: 'OtherConvoActor' });
+    otherProjectActorId = otherActorRes.body.id;
 
     const noPermRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/users')
@@ -445,6 +454,22 @@ describe('Conversations', () => {
 
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('SYSTEM_MESSAGE_NOT_ALLOWED');
+    });
+
+    // A message names its participants by public id, and the conversation's
+    // project is the only place those may come from — the document on the same
+    // message is already checked that way. Refused for a caller who may read
+    // both projects: what is scoped is the conversation, not the caller.
+    test('an actor_id from another project is refused', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/conversations/${conversationId}/messages`)
+        .send({
+          message: 'Hello from elsewhere',
+          role: 'user',
+          actor_id: otherProjectActorId,
+        });
+
+      expect(response.status).toBe(404);
     });
 
     test('missing role returns 400', async () => {

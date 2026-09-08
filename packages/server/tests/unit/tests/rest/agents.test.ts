@@ -14,6 +14,7 @@ describe('Agents', () => {
   let projectId: string;
   let otherProjectId: string;
   let aiProviderId: string;
+  let otherProjectAiProviderId: string;
   let noPermToken: string;
 
   beforeAll(async () => {
@@ -53,6 +54,16 @@ describe('Agents', () => {
         default_model: 'llama3.2',
       });
     aiProviderId = aiProvRes.body.id;
+
+    const otherAiProvRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/ai-providers')
+      .send({
+        project_id: otherProjectId,
+        name: 'Agents Other Project Provider',
+        provider: 'ollama',
+        default_model: 'llama3.2',
+      });
+    otherProjectAiProviderId = otherAiProvRes.body.id;
   });
 
   // ── Agent Tools CRUD ─────────────────────────────────────────────────────
@@ -376,6 +387,41 @@ describe('Agents', () => {
 
       expect(response.status).toBe(400);
       expect(response.body.error).toBeDefined();
+    });
+
+    // An agent's provider is where its generations get their credential, so a
+    // pin that crosses the project boundary would have this project's agent
+    // generate on another project's secret. Refused even for a caller who may
+    // read both projects: the boundary is the resource graph's, not the
+    // caller's reach.
+    test('an ai_provider_id from another project returns 400', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: otherProjectAiProviderId,
+          project_id: projectId,
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('AI_PROVIDER_NOT_FOUND');
+    });
+
+    // Same answer as an id that exists nowhere, so the route does not report
+    // which ids are real in projects the agent cannot use.
+    test('a cross-project provider is indistinguishable from an unknown one', async () => {
+      const [crossProject, unknown] = await Promise.all([
+        authenticatedTestClient(adminToken).post('/api/v1/agents').send({
+          ai_provider_id: otherProjectAiProviderId,
+          project_id: projectId,
+        }),
+        authenticatedTestClient(adminToken).post('/api/v1/agents').send({
+          ai_provider_id: 'aip_doesnotexist000000',
+          project_id: projectId,
+        }),
+      ]);
+
+      expect(crossProject.body.error.code).toBe(unknown.body.error.code);
+      expect(crossProject.status).toBe(unknown.status);
     });
 
     test('creates an agent with required fields', async () => {
@@ -931,6 +977,16 @@ describe('Agents', () => {
       expect(response.status).toBe(200);
       expect(response.body.name).toBe('Patched Agent');
       expect(response.body.max_steps).toBe(7);
+    });
+
+    // The update is the second door onto the same pin.
+    test("repointing at another project's provider returns 400", async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/agents/${agentId}`)
+        .send({ ai_provider_id: otherProjectAiProviderId });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('AI_PROVIDER_NOT_FOUND');
     });
 
     test('unknown fields in PATCH body return 400', async () => {

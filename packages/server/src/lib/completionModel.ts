@@ -53,6 +53,7 @@ const assertOverrideInProject = async (args: {
 const resolvePinnedCompletionModel = async (args: {
   agentId: string;
   providerId: string;
+  projectId: number;
   /** True when the provider came from the config override, not the agent's pin. */
   isOverride: boolean;
   agentModel?: string | null;
@@ -60,6 +61,7 @@ const resolvePinnedCompletionModel = async (args: {
 }): Promise<{ model: LanguageModel; attribution: CompletionAttribution }> => {
   const resolved = await resolveAiProviderSecret({
     aiProviderId: args.providerId,
+    projectId: args.projectId,
   });
 
   if (!resolved) {
@@ -178,7 +180,7 @@ export const resolveCompletionModel = async (args: {
       route.id
     );
     return {
-      model: await buildRoutedModel({ route }),
+      model: await buildRoutedModel({ route, projectId }),
       modelName: route.id,
       projectId,
       agentDbId,
@@ -200,6 +202,7 @@ export const resolveCompletionModel = async (args: {
   const { model, attribution } = await resolvePinnedCompletionModel({
     agentId: args.agentId,
     providerId,
+    projectId,
     isOverride: Boolean(args.aiProviderId),
     agentModel: typedAgent.model,
     model: args.model,

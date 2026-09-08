@@ -316,7 +316,10 @@ const applyModelBindingUpdates = async (args: {
 
   if (fields.aiProviderId !== undefined) {
     updates.aiProviderId = fields.aiProviderId
-      ? await requireAiProviderDbId(fields.aiProviderId)
+      ? await requireAiProviderDbId({
+          publicId: fields.aiProviderId,
+          projectId,
+        })
       : null;
   }
 
