@@ -179,6 +179,18 @@ export class Task extends Model {
   @Column({ type: DataType.DATE, allowNull: true })
   declare stallDeadlineAt: Date | null;
 
+  // Set while an operator pause is in force, and the single answer to "is this
+  // task paused?" A workflow has no run object, so the pause lands on its
+  // instance: while it is set no state's `on_enter` dispatches and no retry
+  // chain continues, which is the only spend a task drives on its own (#1237).
+  // The task still transitions — a move costs nothing while every dispatch is
+  // suppressed — and `resume` is the only thing that clears it.
+  @Column({ type: DataType.DATE, allowNull: true })
+  declare pauseRequestedAt: Date | null;
+
+  @Column({ type: DataType.STRING(256), allowNull: true })
+  declare pauseReason: string | null;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

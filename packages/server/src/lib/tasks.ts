@@ -70,6 +70,8 @@ export const mapTask = (instance: TaskInstance) => {
     assignee: instance.assignee,
     active_dispatch: instance.activeDispatch,
     automation_status: instance.automationStatus,
+    pause_requested_at: instance.pauseRequestedAt,
+    pause_reason: instance.pauseReason,
     automation_chain_depth: instance.automationChainDepth ?? 0,
     pending_transition: instance.pendingTransition,
     entered_state_at: instance.enteredStateAt,

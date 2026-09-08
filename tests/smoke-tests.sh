@@ -1448,7 +1448,7 @@ echo "=== Orchestrations ==="
 echo "--- Creating orchestration-scoped auth ---"
 ORCH_POLICY_RESP=$($SOAT_CLI create-policy \
   --name smoke-orchestration-policy \
-  --document '{"statement":[{"effect":"Allow","action":["orchestrations:CreateOrchestration","orchestrations:ValidateOrchestration","orchestrations:ListOrchestrations","orchestrations:GetOrchestration","orchestrations:UpdateOrchestration","orchestrations:DeleteOrchestration","orchestrations:ListOrchestrationVersions","orchestrations:GetOrchestrationVersion","orchestrations:RestoreOrchestrationVersion","orchestrations:StartRun","orchestrations:ListRuns","orchestrations:GetRun","orchestrations:CancelRun","orchestrations:SubmitHumanInput","orchestrations:ResumeRun"]}]}' )
+  --document '{"statement":[{"effect":"Allow","action":["orchestrations:CreateOrchestration","orchestrations:ValidateOrchestration","orchestrations:ListOrchestrations","orchestrations:GetOrchestration","orchestrations:UpdateOrchestration","orchestrations:DeleteOrchestration","orchestrations:ListOrchestrationVersions","orchestrations:GetOrchestrationVersion","orchestrations:RestoreOrchestrationVersion","orchestrations:StartRun","orchestrations:ListRuns","orchestrations:GetRun","orchestrations:CancelRun","orchestrations:PauseRun","orchestrations:SubmitHumanInput","orchestrations:ResumeRun"]}]}' )
 ORCH_POLICY_ID=$(printf '%s\n' "$ORCH_POLICY_RESP" | jq -r '.id')
 if [ -z "$ORCH_POLICY_ID" ] || [ "$ORCH_POLICY_ID" = "null" ]; then
   echo "Failed to create orchestration policy"
@@ -2051,6 +2051,58 @@ if ! printf '%s\n' "$HUMAN_RESUME_RESP" | jq -e '.status == "awaiting_input" and
   exit 1
 fi
 echo "Resume run: OK"
+
+echo "--- Pausing and resuming a run (#1237) ---"
+PAUSE_CANDIDATE_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
+  --orchestration-id "$HUMAN_ORCH_ID" \
+  --input '{}' \
+  --wait true)
+PAUSE_RUN_ID=$(printf '%s\n' "$PAUSE_CANDIDATE_RESP" | jq -r '.id')
+if ! printf '%s\n' "$PAUSE_CANDIDATE_RESP" | jq -e '.status == "awaiting_input"' >/dev/null 2>&1; then
+  echo "Expected pause candidate run to be parked on its human node"
+  printf '%s\n' "$PAUSE_CANDIDATE_RESP"
+  exit 1
+fi
+PAUSE_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI pause-orchestration-run \
+  --orchestration-run-id "$PAUSE_RUN_ID" \
+  --reason "smoke: operator stop")
+# The node's own required_action stands; the pause is recorded beside it.
+if ! printf '%s\n' "$PAUSE_RESP" | jq -e '.required_action.type == "human_input" and .pause_reason == "smoke: operator stop" and .pause_requested_at != null' >/dev/null 2>&1; then
+  echo "pause-orchestration-run did not record the pause as expected"
+  printf '%s\n' "$PAUSE_RESP"
+  exit 1
+fi
+# A tenant cannot lift the operator's stop by satisfying the node behind it.
+set +e
+PAUSED_INPUT_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI submit-human-input \
+  --orchestration-run-id "$PAUSE_RUN_ID" \
+  --node-id approval \
+  --output '{"choice":"approve"}' 2>&1)
+PAUSED_INPUT_EXIT=$?
+set -e
+if [ "$PAUSED_INPUT_EXIT" -eq 0 ] || ! printf '%s\n' "$PAUSED_INPUT_RESP" \
+  | jq -e '.status == 409 and .error.code == "ORCHESTRATION_RUN_PAUSED"' >/dev/null 2>&1; then
+  echo "submit-human-input was not refused while the run was paused"
+  printf '%s\n' "$PAUSED_INPUT_RESP"
+  exit 1
+fi
+PAUSE_RESUME_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI resume-orchestration-run \
+  --orchestration-run-id "$PAUSE_RUN_ID")
+if ! printf '%s\n' "$PAUSE_RESUME_RESP" | jq -e '.pause_requested_at == null' >/dev/null 2>&1; then
+  echo "resume-orchestration-run did not lift the pause"
+  printf '%s\n' "$PAUSE_RESUME_RESP"
+  exit 1
+fi
+PAUSE_INPUT_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI submit-human-input \
+  --orchestration-run-id "$PAUSE_RUN_ID" \
+  --node-id approval \
+  --output '{"choice":"approve"}')
+if ! printf '%s\n' "$PAUSE_INPUT_RESP" | jq -e '.status == "succeeded"' >/dev/null 2>&1; then
+  echo "submit-human-input did not succeed after the pause was lifted"
+  printf '%s\n' "$PAUSE_INPUT_RESP"
+  exit 1
+fi
+echo "Pause and resume run: OK"
 
 echo "--- Cancelling a paused run ---"
 CANCEL_CANDIDATE_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
@@ -5903,6 +5955,33 @@ if [ "$($SOAT_CLI get-task --task-id "$TASK_ID" | jq -r '.metadata.tenant_accoun
 fi
 $SOAT_CLI transition-task --task-id "$TASK_ID" --transition to_review >/dev/null
 echo "Backward move: OK (review -> drafting -> review)"
+
+# Operator pause (#1237): a paused task still transitions, and the pause is
+# lifted only by resume-task.
+PAUSE_TASK_RESP=$($SOAT_CLI pause-task --task-id "$TASK_ID" --reason "smoke: operator stop")
+if ! printf '%s\n' "$PAUSE_TASK_RESP" | jq -e '.pause_requested_at != null and .pause_reason == "smoke: operator stop"' >/dev/null 2>&1; then
+  echo "ERROR: pause-task did not record the pause" >&2
+  printf '%s\n' "$PAUSE_TASK_RESP" >&2
+  exit 1
+fi
+# Idempotent: a second pause keeps the first instant and reason.
+PAUSE_TASK_AGAIN=$($SOAT_CLI pause-task --task-id "$TASK_ID" --reason "smoke: second")
+if [ "$(printf '%s\n' "$PAUSE_TASK_AGAIN" | jq -r '.pause_reason')" != "smoke: operator stop" ]; then
+  echo "ERROR: pause-task was not idempotent" >&2
+  printf '%s\n' "$PAUSE_TASK_AGAIN" >&2
+  exit 1
+fi
+# A move costs nothing while dispatches are suppressed, so the board stays usable.
+$SOAT_CLI transition-task --task-id "$TASK_ID" --transition revise >/dev/null
+$SOAT_CLI transition-task --task-id "$TASK_ID" --transition to_review >/dev/null
+RESUME_TASK_RESP=$($SOAT_CLI resume-task --task-id "$TASK_ID")
+if ! printf '%s\n' "$RESUME_TASK_RESP" | jq -e '.pause_requested_at == null' >/dev/null 2>&1; then
+  echo "ERROR: resume-task did not lift the pause" >&2
+  printf '%s\n' "$RESUME_TASK_RESP" >&2
+  exit 1
+fi
+expect_cli_error_status 409 resume-task --task-id "$TASK_ID"
+echo "Task pause and resume: OK"
 
 # A false guard rejects the transition.
 expect_cli_error_status 400 transition-task --task-id "$TASK_ID" --transition publish

@@ -198,6 +198,13 @@ export type MappedOrchestrationRun = {
   artifacts: Record<string, unknown>;
   error: object | null;
   required_action: object | null;
+  /**
+   * When an operator pause was requested, and why. Set independently of
+   * `status`: a `running` run keeps running until its next checkpoint, and a run
+   * parked on a node keeps that node's `required_action` (#1237).
+   */
+  pause_requested_at: Date | null;
+  pause_reason: string | null;
   trace_id: string | null;
   input: Record<string, unknown> | null;
   // The caller context the run carries for its whole lifetime, forwarded as
@@ -291,19 +298,23 @@ export const mapRequiredAction = (raw: unknown): object | null => {
   };
 
   const optional = Object.entries({
+    // A node pause names the node it waits at; an operator pause has no node of
+    // its own and carries a `reason` instead (#1237), so these are per-kind
+    // rather than universal.
+    node_id: field('nodeId', 'node_id'),
+    prompt: action.prompt,
+    context: action.context,
+    reason: action.reason,
     options: action.options,
     approval_spec: field('approvalSpec', 'approval_spec'),
     approval_id: field('approvalId', 'approval_id'),
     expires_at: field('expiresAt', 'expires_at'),
   }).filter(([, value]) => {
-    return value !== undefined && value !== null;
+    return value !== undefined;
   });
 
   return {
     type: action.type,
-    node_id: field('nodeId', 'node_id'),
-    prompt: action.prompt,
-    context: action.context,
     ...Object.fromEntries(optional),
   };
 };
@@ -329,6 +340,8 @@ export const mapOrchestrationRun = (
     artifacts: run.artifacts as Record<string, unknown>,
     error: run.error,
     required_action: mapRequiredAction(run.requiredAction),
+    pause_requested_at: run.pauseRequestedAt,
+    pause_reason: run.pauseReason,
     trace_id: run.traceId,
     input: run.input as Record<string, unknown> | null,
     tool_context: run.toolContext ?? null,
@@ -695,6 +708,7 @@ export { startOrchestrationRun } from './orchestrationEngine';
 export type { MappedOrchestrationCheckpoint } from './orchestrationRunActions';
 export {
   cancelOrchestrationRun,
+  pauseOrchestrationRun,
   resumeOrchestrationRun,
   submitHumanInput,
 } from './orchestrationRunActions';

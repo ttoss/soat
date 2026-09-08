@@ -14,6 +14,7 @@ import {
   transitionTask,
   updateTask,
 } from 'src/lib/tasks';
+import { pauseTask, resumeTask } from 'src/lib/tasksPauseActions';
 
 import {
   parsePagination,
@@ -204,6 +205,56 @@ tasksRouter.post('/tasks/:task_id/transitions', async (ctx: Context) => {
     // principal above cannot distinguish a dispatch continuing its own chain
     // from the person who started it. This can (#885).
     viaRunToken: ctx.authUser!.isRunToken === true,
+  });
+});
+
+tasksRouter.post('/tasks/:task_id/pause', async (ctx: Context) => {
+  requireAuth(ctx);
+  const task = await getTask({ id: ctx.params.task_id });
+
+  const allowed = await ctx.authUser!.isAllowed({
+    projectPublicId: task.project_id!,
+    action: 'tasks:PauseTask',
+    resource: buildSrn({
+      projectPublicId: task.project_id!,
+      resourceType: 'task',
+      resourceId: task.id,
+    }),
+  });
+  if (!allowed) {
+    throw new DomainError('FORBIDDEN', 'Forbidden');
+  }
+
+  const body = ctx.request.body as { reason?: unknown };
+
+  ctx.body = await pauseTask({
+    id: ctx.params.task_id,
+    reason: typeof body.reason === 'string' ? body.reason : null,
+  });
+});
+
+tasksRouter.post('/tasks/:task_id/resume', async (ctx: Context) => {
+  requireAuth(ctx);
+  const task = await getTask({ id: ctx.params.task_id });
+
+  const allowed = await ctx.authUser!.isAllowed({
+    projectPublicId: task.project_id!,
+    action: 'tasks:ResumeTask',
+    resource: buildSrn({
+      projectPublicId: task.project_id!,
+      resourceType: 'task',
+      resourceId: task.id,
+    }),
+  });
+  if (!allowed) {
+    throw new DomainError('FORBIDDEN', 'Forbidden');
+  }
+
+  ctx.body = await resumeTask({
+    id: ctx.params.task_id,
+    // The suppressed dispatch runs as whoever resumed: the resume is the
+    // decision to spend, and the move that scheduled the work may be weeks old.
+    principal: principalFromAuthUser(ctx.authUser!),
   });
 });
 

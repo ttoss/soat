@@ -11,6 +11,7 @@ import {
   findOrchestrationRun,
   listOrchestrationRuns,
   listOrchestrations,
+  pauseOrchestrationRun,
   resumeOrchestrationRun,
   startOrchestrationRun,
   submitHumanInput,
@@ -398,6 +399,27 @@ orchestrationsRouter.post(
     });
 
     ctx.body = result;
+  }
+);
+/**
+ * @openapi
+ * /api/v1/orchestration-runs/{orchestration_run_id}/pause:
+ *   post:
+ *     $ref: 'openapi/v1/orchestrations.yaml#/paths/~1api~1v1~1orchestration-runs~1{orchestration_run_id}~1pause/post'
+ */
+orchestrationsRouter.post(
+  '/orchestration-runs/:orchestration_run_id/pause',
+  async (ctx: Context) => {
+    const orchestrationRunId = ctx.params['orchestration_run_id'] as string;
+    const auth = await resolveRunAuth(ctx, 'orchestrations:PauseRun');
+
+    const body = ctx.request.body as { reason?: unknown };
+
+    ctx.body = await pauseOrchestrationRun({
+      runPublicId: orchestrationRunId,
+      projectIds: auth.projectIds,
+      reason: typeof body.reason === 'string' ? body.reason : null,
+    });
   }
 );
 /**

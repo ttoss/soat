@@ -15,6 +15,7 @@ import {
   failedDispatchIds,
   runDispatch,
 } from './tasksDispatch';
+import { isTaskPaused, markDispatchPaused } from './tasksPause';
 import type { RetryPolicy, WorkflowDispatch } from './workflowsValidation';
 
 const log = createDebug('soat:tasks');
@@ -47,6 +48,14 @@ const backoffMs = (args: { retry: RetryPolicy; attempt: number }): number => {
 // promise open for the whole delay.
 const STALENESS_POLL_MS = 500;
 
+/**
+ * Waits out the backoff before the next attempt, abandoning it when the task
+ * has moved on. A backoff is the longest stretch of a dispatch, so it is also
+ * where an operator pause is most likely to arrive: a pause abandons the
+ * remaining attempts and records the dispatch as suppressed, so the resume
+ * starts the state's `on_enter` over rather than leaving a half-spent retry
+ * chain nobody restarts (#1237).
+ */
 const waitForRetry = async (args: {
   taskPublicId: string;
   stateName: string;
@@ -57,6 +66,14 @@ const waitForRetry = async (args: {
   for (;;) {
     const task = await loadTask(args.taskPublicId);
     if (isStale({ task, stateName: args.stateName, token: args.token })) {
+      return false;
+    }
+    if (task && isTaskPaused(task)) {
+      await markDispatchPaused({
+        taskPublicId: args.taskPublicId,
+        stateName: args.stateName,
+        token: args.token,
+      });
       return false;
     }
     if (remaining <= 0) return true;

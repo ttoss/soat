@@ -30,6 +30,8 @@ const fakeRun: MappedOrchestrationRun = {
   error: null,
   orchestration_run_depth: 0,
   required_action: null,
+  pause_requested_at: null,
+  pause_reason: null,
   trace_id: null,
   input: null,
   tool_context: null,

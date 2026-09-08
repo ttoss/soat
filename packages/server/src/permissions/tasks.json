@@ -32,6 +32,16 @@
       "description": "Fire a named transition on a task"
     },
     {
+      "operationId": "pauseTask",
+      "action": "tasks:PauseTask",
+      "description": "Pause a task's automation, suppressing every state dispatch"
+    },
+    {
+      "operationId": "resumeTask",
+      "action": "tasks:ResumeTask",
+      "description": "Lift a task's pause and re-dispatch the state it was suppressed in"
+    },
+    {
       "operationId": "deleteTask",
       "action": "tasks:DeleteTask",
       "description": "Delete a task"

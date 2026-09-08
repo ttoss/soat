@@ -108,6 +108,8 @@ export const SOAT_EVENTS = {
     'tasks.transitioned': 'A task moved to a new state.',
     'tasks.closed': 'A task reached a terminal state.',
     'tasks.stalled': 'A task exceeded its stall threshold without progress.',
+    'tasks.paused': "A task's automation was paused by an operator.",
+    'tasks.resumed': "A task's automation was resumed.",
     'tasks.approval_failed': "A task's approval gate was rejected or expired.",
     'tasks.automation_retrying': "A task's automation is being retried.",
     'tasks.automation_rejected': "A task's automation rejected the task.",

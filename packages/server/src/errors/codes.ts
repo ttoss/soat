@@ -251,6 +251,16 @@ export const ERROR_CODES = {
     httpStatus: 409,
     description: 'The orchestration run is not awaiting input.',
   },
+  ORCHESTRATION_RUN_NOT_PAUSABLE: {
+    httpStatus: 409,
+    description:
+      "The orchestration run has already settled, so there is nothing left to pause. Unlike cancel, a pause keeps the run's last checkpoint and the existing resume route re-drives it from there — so it only applies to a run that is queued, running, sleeping or awaiting input (#1237).",
+  },
+  ORCHESTRATION_RUN_PAUSED: {
+    httpStatus: 409,
+    description:
+      'An operator pause is in force on the run, so the requested action was refused. An operator pause has no payload to supply, and a pause standing behind a human or approval node must not be lifted by satisfying it — resume the run first, then submit (#1237).',
+  },
   ORCHESTRATION_HUMAN_NODE_MISMATCH: {
     httpStatus: 400,
     description:
@@ -562,6 +572,16 @@ export const ERROR_CODES = {
     httpStatus: 409,
     description:
       'A concurrent change made the requested transition invalid from the current state, or the task is already closed.',
+  },
+  TASK_NOT_PAUSABLE: {
+    httpStatus: 409,
+    description:
+      'The task is closed, so there is no automation left to pause. A workflow has no run object, so an operator pause lands on its instance — the task — and suppresses every state dispatch until it is resumed (#1237).',
+  },
+  TASK_NOT_PAUSED: {
+    httpStatus: 409,
+    description:
+      'The task carries no operator pause, so there is nothing to resume. Resuming is only how a pause is lifted; a task that is merely idle is advanced by firing a transition (#1237).',
   },
   TASK_AUTOMATION_PROVENANCE_MISSING: {
     httpStatus: 500,
