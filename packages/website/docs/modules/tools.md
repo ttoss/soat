@@ -295,7 +295,7 @@ Some platform actions are withheld from the agent surface whatever the caller's 
 | `attach-user-policies`, `create-policy`, `update-policy`, `delete-policy`, `create-user`, `delete-user`, `list-users`, `get-user` | Change or enumerate who may do what |
 | `update-ai-provider-prices`, `update-project-prices` | Rewrite the price book its own spend is metered against. The `get-*` twins stay available |
 
-The difference is who chooses the arguments. Over [MCP](../mcp/overview.md) these are ordinary operations — the caller is a person acting as themselves — so they are withheld from agents only. A tool row created before an action joined this list keeps the action stored, and the agent's surface leaves it out.
+The difference is who chooses the arguments. Over [MCP](../mcp/introduction.md) these are ordinary operations — the caller is a person acting as themselves — so they are withheld from agents only. A tool row created before an action joined this list keeps the action stored, and the agent's surface leaves it out.
 
 Because the exclusion is per surface, an `mcp` tool pointed at this deployment's own MCP endpoint reaches them again. That is one more reason to prefer a `builtin` tool over pointing a tool back at your own API: it dispatches in-process under the caller's permissions, and it is the surface these rules apply to.
 
