@@ -296,6 +296,22 @@ describe('toolEgress', () => {
       ).rejects.toMatchObject({ code: 'TOOL_EGRESS_BLOCKED' });
     });
 
+    // How a deployment declares one host that serves two things on two ports —
+    // a webhook listener and a tool endpoint on the same container, which is
+    // what `tests/docker-compose.tutorials.yml` does.
+    test('allows one host on each of the ports listed for it', async () => {
+      const allowlist = parseEgressAllowlist('127.0.0.1:8787,127.0.0.1:8788');
+      await expect(
+        assertEgressAllowed({ url: 'http://127.0.0.1:8787/webhook', allowlist })
+      ).resolves.toBeUndefined();
+      await expect(
+        assertEgressAllowed({ url: 'http://127.0.0.1:8788/echo', allowlist })
+      ).resolves.toBeUndefined();
+      await expect(
+        assertEgressAllowed({ url: 'http://127.0.0.1:8789/x', allowlist })
+      ).rejects.toMatchObject({ code: 'TOOL_EGRESS_BLOCKED' });
+    });
+
     test('applies the implicit scheme port against a listed port', async () => {
       const allowlist = parseEgressAllowlist('127.0.0.1:80');
       await expect(
