@@ -545,6 +545,11 @@ content requires deleting the item explicitly. That applies to items curated wit
 turn copies its content into a fixture that outlives the source, which is what keeps a
 suite runnable, and also what makes deleting the item the only way to erase it.
 
+Because only `output` is cleared, the corpus is not bounded by a project's retention
+window: every item and every frozen result counts toward the project's stored
+gigabytes ([`gb_day`](./usage.md#storage-metering)) until the dataset item or the run is
+deleted.
+
 ## Examples
 
 Create a dataset and add a case:
