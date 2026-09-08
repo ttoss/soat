@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.43.0](https://github.com/ttoss/soat/compare/v0.42.0...v0.43.0) (2026-09-08)
+
+### Bug Fixes
+
+* **server:** guard every outbound request to a tenant-chosen URL ([#1241](https://github.com/ttoss/soat/issues/1241)) ([dbda5b9](https://github.com/ttoss/soat/commit/dbda5b92021bd7762863485bbb41963143daa2fd))
+
+### Features
+
+* **orchestrations,tasks:** filter the run and task listings by what is still live ([#1243](https://github.com/ttoss/soat/issues/1243)) ([f2fa0ec](https://github.com/ttoss/soat/commit/f2fa0ecd5c14fa9dee910aecaad67e17557f0f3b)), closes [#1242](https://github.com/ttoss/soat/issues/1242)
+* **server:** scope a cost_usd quota to one meter type ([#1244](https://github.com/ttoss/soat/issues/1244)) ([08b18cf](https://github.com/ttoss/soat/commit/08b18cfcacea1fa98f950c0482474e1cba8035a0)), closes [#1240](https://github.com/ttoss/soat/issues/1240)
+
 # [0.42.0](https://github.com/ttoss/soat/compare/v0.41.0...v0.42.0) (2026-09-08)
 
 ### Features

@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.43.0](https://github.com/ttoss/soat/compare/v0.42.0...v0.43.0) (2026-09-08)
+
+### Features
+
+* **server:** scope a cost_usd quota to one meter type ([#1244](https://github.com/ttoss/soat/issues/1244)) ([08b18cf](https://github.com/ttoss/soat/commit/08b18cfcacea1fa98f950c0482474e1cba8035a0)), closes [#1240](https://github.com/ttoss/soat/issues/1240)
+
 # [0.42.0](https://github.com/ttoss/soat/compare/v0.41.0...v0.42.0) (2026-09-08)
 
 ### Features
