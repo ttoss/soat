@@ -56,12 +56,13 @@ Counting scope mirrors [API-request metering](./usage.md#api-request-metering) e
 | `window`        | string  | `rolling_1m` \| `rolling_1h` \| `rolling_24h` \| `calendar_month`                 |
 | `limit`         | number  | The cap (> 0)                                                                      |
 | `mode`          | string  | `enforce` (block with `429`) \| `monitor` (observe and report, never block — see [Monitor mode](#monitor-mode)) |
+| `meter_type`    | string  | The meter a `cost_usd` cap answers for (see [Meter scope](#meter-scope)); `null` = every priced meter |
 | `on_unpriced`   | string  | `block` \| `allow` — what an `enforce` `cost_usd` quota does over a pricing blackout (see [Unpriced usage](#unpriced-usage)). Defaults to `block`; `null` for metrics with no pricing dependency |
 | `current_usage` | object  | Current fixed-window usage for `requests` (`window_key`, `count`, `resets_at`); `null` for token/cost quotas (they aggregate the meter at check time) and in list responses |
 | `created_at`    | string  | ISO 8601 creation timestamp                                                       |
 | `updated_at`    | string  | ISO 8601 last-updated timestamp                                                   |
 
-A quota is uniquely identified by `(project_id, scope, scope_ref, metric, window)`; creating a duplicate returns `409 QUOTA_CONFLICT`. `scope_ref` is validated to reference an api key / agent / actor in the same project at create time. It is a soft reference: when the referenced entity is later deleted the quota goes inert (it is not cascade-deleted) and remains visible and deletable through the API.
+A quota is uniquely identified by `(project_id, scope, scope_ref, metric, window, meter_type)`; creating a duplicate returns `409 QUOTA_CONFLICT`. `scope_ref` is validated to reference an api key / agent / actor in the same project at create time. It is a soft reference: when the referenced entity is later deleted the quota goes inert (it is not cascade-deleted) and remains visible and deletable through the API.
 
 ## Key Concepts
 
@@ -117,7 +118,9 @@ A **partly** priced window never refuses — the aggregate is real, if incomplet
 
 The rows are read per **component**, not per event, which is what makes a **partly priced event** visible: an event's `cost_usd` is the sum of its priced components, so a model with an input-token price and no output-token price produces an event that carries a real number and still understates itself. No comparison of priced events against unpriced ones can see that; `output_tokens` appearing in `unpriced_rows` is what does.
 
-The verdict reads the [`llm_tokens`](./usage.md#meter-types-and-components) meter alone, while the aggregate it guards sums **every** priced meter. A platform meter such as `compute_execution` is priced by the operator from a `soat` SKU rather than by a tenant's provider, so a deployment that prices no compute has not lost the ability to measure AI spend — and counting it would make the cap unrecoverable, because a window holding only unpriced platform events would refuse the very generation that would land the first priced AI event. Reading the AI meter alone also stops a priced platform event from masking a genuine AI blackout.
+The verdict reads the [`llm_tokens`](./usage.md#meter-types-and-components) meter alone, while the aggregate it guards sums **every** priced meter the quota's [meter scope](#meter-scope) admits. A platform meter such as `compute_execution` is priced by the operator from a `soat` SKU rather than by a tenant's provider, so a deployment that prices no compute has not lost the ability to measure AI spend — and counting it would make the cap unrecoverable, because a window holding only unpriced platform events would refuse the very generation that would land the first priced AI event. Reading the AI meter alone also stops a priced platform event from masking a genuine AI blackout.
+
+A quota that names a **platform** meter therefore has no pricing verdict at all: the events it aggregates are the ones the verdict reads out, so its window is never a blackout and never files the exception below. Nothing is lost — the rows it would name are the operator's to price, not the project's — and a `llm_tokens`-scoped quota is held to exactly the verdict above.
 
 [Embeddings](./embeddings.md#pricing-embeddings) are held out of the verdict for the same reason, though they are on the AI meter. Their rate is deployment configuration and no price book tier reaches them, so a project cannot make that half of its window priced — counting an embedding unpriced would refuse a cap nobody in the project can satisfy, and counting it priced (an unset rate meters at `0`, which is a priced event) would report the window as measurable and wave through every unpriced generation beside it. Embedding spend still counts towards the aggregate the cap guards, and never appears in `unpriced_rows`.
 
@@ -132,6 +135,28 @@ Whatever the posture, a cap that is not measuring what it caps is reported: when
 A blackout and a partly-priced window file the **same** item: the fix is identical (price those rows), so it is deduped on the quota either way — one degraded cap is one triage item, and its `occurrence_count` is the number of generations that ran under it. An empty window files nothing and refuses nothing, since a zero aggregate with nothing metered is legitimately zero.
 
 A generation already **in flight is never killed** — its tokens are already spent and will be billed — so a budget may overshoot by at most one generation. A `project`-scoped quota aggregates the whole project; an `agent`-scoped quota with a `scope_ref` aggregates only that agent; an `actor`-scoped quota aggregates only the end user behind the generation (see [Actor scope](#actor-scope)). Because the check reads the meter rather than a separate counter, quotas and usage can never disagree.
+
+### Meter scope
+
+A `cost_usd` quota sums every priced meter by default — a priced platform meter is real spend, and on a deployment that bills its platform meters to the same tenant it belongs under the cap. Without a meter dimension, though, a project would hold exactly one project-wide `cost_usd` slot: the moment an operator prices a platform meter, that cost starts consuming a cap the project may have set to bound *model* spend, with no way to separate the two and no second slot to open.
+
+`meter_type` is the way to say which meter a cap answers for:
+
+```json
+{
+  "scope": "project",
+  "metric": "cost_usd",
+  "window": "calendar_month",
+  "limit": 200,
+  "meter_type": "llm_tokens"
+}
+```
+
+- **Omitted** (`null`) is the default and unchanged: every priced meter counts. No existing quota moves.
+- **Named** — one of [`llm_tokens`, `compute_execution`, `api_request`, `storage`](./usage.md#meter-types-and-components) — counts that meter alone. A meter type outside that list is rejected with `400`: it matches no event, so the cap would aggregate `0` forever.
+- Only `cost_usd` takes it. On any other metric it would be accepted-but-inert, so the write is refused with `400`.
+
+The scope is part of the quota's **identity**, which is what lets an AI cap and a storage cap sit side by side over the same scope and window without conflicting — and what makes an unscoped cap a third, distinct budget rather than a duplicate of either. Like the rest of the identity it is immutable: replace the quota to change it.
 
 ### Actor scope
 
@@ -195,19 +220,19 @@ A breach returns HTTP `429` with a `Retry-After` header (seconds until the windo
 
 ### quota.exceeded webhook
 
-Every breach fires a `quota.exceeded` webhook event **once per window**, for both `enforce` and `monitor` quotas. Because a quota's window always has a discrete fixed key and usage only grows within it, the fire state is a single stored key — a breach re-fires only after the window rolls to a new key (no hysteresis). The event `data` carries `quota_id`, `project_id`, `scope`, `scope_ref`, `metric`, `window`, `window_key`, `limit`, `observed_value`, and `mode`. Subscribe a [webhook](./webhooks.md) to `quota.exceeded` (or a wildcard) to receive it.
+Every breach fires a `quota.exceeded` webhook event **once per window**, for both `enforce` and `monitor` quotas. Because a quota's window always has a discrete fixed key and usage only grows within it, the fire state is a single stored key — a breach re-fires only after the window rolls to a new key (no hysteresis). The event `data` carries `quota_id`, `project_id`, `scope`, `scope_ref`, `metric`, `meter_type`, `window`, `window_key`, `limit`, `observed_value`, and `mode` — the identity restated, so a consumer holding two caps over one scope and window can tell which [meter](#meter-scope) breached without a fetch. Subscribe a [webhook](./webhooks.md) to `quota.exceeded` (or a wildcard) to receive it.
 
 ### Monitor mode
 
 `mode: monitor` observes without blocking: a breach fires the `quota.exceeded` webhook and lets the request (or generation) through. Use it to dry-run a cap before enforcing — flip `mode` to `enforce` via `PATCH` and the next breaching request is blocked. `enforce` quotas fire the same webhook in addition to returning `429`.
 
-Because a monitor breach never blocks, the request it rode in on returns success and leaves no trace beyond the webhook. So a monitor breach also writes a durable [audit-log](./audit-log.md) entry — `action: quotas:MonitorBreach` (no principal authorized it, so `principal_type`/`principal_id` are null), the quota as its resource, and a `detail.kind` of `quota_monitor_breach` carrying the metric, window, limit, and observed value. Like the webhook, it is written once per window. `enforce` breaches need no such entry: they surface as the `429` the audit log already records on the blocked request.
+Because a monitor breach never blocks, the request it rode in on returns success and leaves no trace beyond the webhook. So a monitor breach also writes a durable [audit-log](./audit-log.md) entry — `action: quotas:MonitorBreach` (no principal authorized it, so `principal_type`/`principal_id` are null), the quota as its resource, and a `detail.kind` of `quota_monitor_breach` carrying the metric, meter scope, window, limit, and observed value. Like the webhook, it is written once per window. `enforce` breaches need no such entry: they surface as the `429` the audit log already records on the blocked request.
 
 ### Formation resource
 
-Quotas can be declared as a `quota` formation resource (`QuotaResourceProperties`): `scope`, `scope_ref`, `metric`, `window`, `limit`, `mode`. A `scope_ref` naming an actor can be a `{ "ref": … }` to an actor resource in the same template. Only `limit` and `mode` update through the formation lifecycle. Unknown fields are rejected with `400`.
+Quotas can be declared as a `quota` formation resource (`QuotaResourceProperties`): `scope`, `scope_ref`, `metric`, `window`, `limit`, `mode`, `on_unpriced`, `meter_type`. A `scope_ref` naming an actor can be a `{ "ref": … }` to an actor resource in the same template. Only `limit` and `mode` update through the formation lifecycle. Unknown fields are rejected with `400`.
 
-`scope`, `scope_ref`, `metric`, and `window` are immutable after creation — together with the project they form the quota's identity, and its window counters are keyed to that identity. Declaring a **different** value for any of them fails the operation: the formation is left `status: "failed"` with the offending field named in the operation error, and the quota keeps every one of its previous values (including `limit` and `mode`, which are never applied piecemeal on a failed update). Restating an immutable field at its current value is always fine — templates carry `scope`, `metric`, and `window` on every update because they are required on create. To change one, replace the quota resource.
+`scope`, `scope_ref`, `metric`, `window`, and `meter_type` are immutable after creation — together with the project they form the quota's identity, and its window counters are keyed to that identity. Declaring a **different** value for any of them fails the operation: the formation is left `status: "failed"` with the offending field named in the operation error, and the quota keeps every one of its previous values (including `limit` and `mode`, which are never applied piecemeal on a failed update). Restating an immutable field at its current value is always fine — templates carry `scope`, `metric`, and `window` on every update because they are required on create. To change one, replace the quota resource.
 
 Because `scope_ref` is nullable, omitting it is treated as "not supplied" rather than as clearing it; an explicit `null` that disagrees with the stored ref is a change. For `actor` scope that difference is especially load-bearing: `null` is [one budget per actor](#scope_ref-null-means-one-budget-per-actor), while a ref caps one named actor.
 

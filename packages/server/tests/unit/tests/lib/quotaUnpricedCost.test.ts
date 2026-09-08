@@ -615,4 +615,53 @@ describe('unpriced cost_usd quotas', () => {
       })
     ).toBe(false);
   });
+
+  /**
+   * A cap scoped to a platform meter answers for that meter alone, so an AI
+   * blackout beside it is not its blackout: refusing there would stop
+   * generation over a gap the cap does not measure, and file a triage item
+   * naming rows that cannot move its aggregate.
+   */
+  test('an AI blackout does not refuse a quota scoped to a platform meter', async () => {
+    const ctx = await freshProjectAndAgent('genquota-unpriced-meter-scoped');
+    await seedUnpricedEvents(ctx, 3);
+    await seedUsageEvent({
+      projectInternalId: ctx.projectInternalId,
+      meterType: 'storage',
+      costUsd: '1.00',
+    });
+    await createQuotaRow({
+      projectInternalId: ctx.projectInternalId,
+      scope: 'project',
+      metric: 'cost_usd',
+      limit: 5,
+      meterType: 'storage',
+    });
+
+    const breach = await evaluateGenerationQuotas({
+      agentId: ctx.agentPublicId,
+    });
+    expect(breach).toBeNull();
+    expect(await unpricedExceptions(ctx.projectInternalId)).toHaveLength(0);
+  });
+
+  // The other direction: scoping to the AI meter changes nothing about the
+  // verdict, which reads that meter already.
+  test('a quota scoped to the AI meter is still refused by a blackout', async () => {
+    const ctx = await freshProjectAndAgent('genquota-unpriced-meter-ai');
+    await seedUnpricedEvents(ctx, 3);
+    await createQuotaRow({
+      projectInternalId: ctx.projectInternalId,
+      scope: 'project',
+      metric: 'cost_usd',
+      limit: 5,
+      meterType: 'llm_tokens',
+    });
+
+    const breach = await evaluateGenerationQuotas({
+      agentId: ctx.agentPublicId,
+    });
+    expect(breach?.reason).toBe('unpriced_usage');
+    expect(await unpricedExceptions(ctx.projectInternalId)).toHaveLength(1);
+  });
 });

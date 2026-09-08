@@ -721,6 +721,144 @@ describe('evaluateGenerationQuotas', () => {
     });
   });
 
+  // A `cost_usd` cap with no meter scope answers for every priced meter, and a
+  // scoped one answers for the meter it names — which is what lets a tenant cap
+  // AI spend without the operator's platform pricing landing in the same slot.
+  describe('meter-scoped cost quotas', () => {
+    const seedBothMeters = async (ctx: {
+      projectInternalId: number;
+      agentInternalId: number;
+    }) => {
+      await seedUsageEvent({
+        projectInternalId: ctx.projectInternalId,
+        agentInternalId: ctx.agentInternalId,
+        costUsd: '4.00',
+      });
+      await seedUsageEvent({
+        projectInternalId: ctx.projectInternalId,
+        meterType: 'storage',
+        costUsd: '3.00',
+      });
+    };
+
+    test('an unscoped cost quota still sums every meter', async () => {
+      const ctx = await freshProjectAndAgent('genquota-meter-unscoped');
+      await seedBothMeters(ctx);
+      await createQuotaRow({
+        projectInternalId: ctx.projectInternalId,
+        scope: 'project',
+        metric: 'cost_usd',
+        limit: 7,
+      });
+
+      const breach = await evaluateGenerationQuotas({
+        agentId: ctx.agentPublicId,
+      });
+      expect(breach?.reason).toBe('limit_exceeded');
+    });
+
+    test('a quota scoped to the AI meter ignores platform spend', async () => {
+      const ctx = await freshProjectAndAgent('genquota-meter-ai');
+      await seedBothMeters(ctx);
+      await createQuotaRow({
+        projectInternalId: ctx.projectInternalId,
+        scope: 'project',
+        metric: 'cost_usd',
+        limit: 7,
+        meterType: 'llm_tokens',
+      });
+
+      const breach = await evaluateGenerationQuotas({
+        agentId: ctx.agentPublicId,
+      });
+      expect(breach).toBeNull();
+    });
+
+    test('a quota scoped to a platform meter ignores AI spend', async () => {
+      const ctx = await freshProjectAndAgent('genquota-meter-storage-under');
+      await seedBothMeters(ctx);
+      await createQuotaRow({
+        projectInternalId: ctx.projectInternalId,
+        scope: 'project',
+        metric: 'cost_usd',
+        limit: 4,
+        meterType: 'storage',
+      });
+
+      const breach = await evaluateGenerationQuotas({
+        agentId: ctx.agentPublicId,
+      });
+      expect(breach).toBeNull();
+    });
+
+    test('a quota scoped to a platform meter breaches on that meter alone', async () => {
+      const ctx = await freshProjectAndAgent('genquota-meter-storage-over');
+      await seedBothMeters(ctx);
+      const quota = await createQuotaRow({
+        projectInternalId: ctx.projectInternalId,
+        scope: 'project',
+        metric: 'cost_usd',
+        limit: 3,
+        meterType: 'storage',
+      });
+
+      const breach = await evaluateGenerationQuotas({
+        agentId: ctx.agentPublicId,
+      });
+      expect(breach?.quotaId).toBe(quota.publicId);
+      expect(breach?.reason).toBe('limit_exceeded');
+    });
+
+    // Both slots side by side is the whole point of the scope: the AI cap is
+    // breached while the storage cap, holding the same window, is not.
+    // The breach payload restates the quota's identity so a consumer can act on
+    // it without a fetch; with two caps over one window the meter is the half
+    // that says which budget blew.
+    test('the breach webhook names the meter the cap answers for', async () => {
+      const ctx = await freshProjectAndAgent('genquota-meter-webhook');
+      await seedBothMeters(ctx);
+      const quota = await createQuotaRow({
+        projectInternalId: ctx.projectInternalId,
+        scope: 'project',
+        metric: 'cost_usd',
+        limit: 3,
+        meterType: 'storage',
+      });
+
+      const captured = await withCapture(async () => {
+        await evaluateGenerationQuotas({ agentId: ctx.agentPublicId });
+      });
+
+      expect(captured).toHaveLength(1);
+      expect(captured[0].data.quota_id).toBe(quota.publicId);
+      expect(captured[0].data.meter_type).toBe('storage');
+    });
+
+    test('an AI-scoped and a platform-scoped quota hold separate budgets', async () => {
+      const ctx = await freshProjectAndAgent('genquota-meter-both');
+      await seedBothMeters(ctx);
+      const aiQuota = await createQuotaRow({
+        projectInternalId: ctx.projectInternalId,
+        scope: 'project',
+        metric: 'cost_usd',
+        limit: 4,
+        meterType: 'llm_tokens',
+      });
+      await createQuotaRow({
+        projectInternalId: ctx.projectInternalId,
+        scope: 'project',
+        metric: 'cost_usd',
+        limit: 10,
+        meterType: 'storage',
+      });
+
+      const breach = await evaluateGenerationQuotas({
+        agentId: ctx.agentPublicId,
+      });
+      expect(breach?.quotaId).toBe(aiQuota.publicId);
+    });
+  });
+
   test('checkGenerationQuota fails open on an infrastructure error', async () => {
     const ctx = await freshProjectAndAgent('genquota-fail-open');
     await seedUsageEvent({

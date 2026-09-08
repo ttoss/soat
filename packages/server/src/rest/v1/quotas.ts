@@ -55,6 +55,7 @@ quotasRouter.post('/quotas', async (ctx: Context) => {
     limit: body.limit,
     mode: parseStringOrUndefined(body.mode),
     onUnpriced: parseStringOrUndefined(body.on_unpriced),
+    meterType: parseStringOrUndefined(body.meter_type),
   });
 
   ctx.status = 201;

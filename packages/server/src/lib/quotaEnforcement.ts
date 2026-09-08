@@ -27,6 +27,8 @@ type WindowScope = {
   projectId: number;
   agentId: number | null;
   actorId: number | null;
+  /** The meter a `cost_usd` cap answers for; null is every meter (#1240). */
+  meterType: string | null;
   windowStart: Date;
 };
 
@@ -39,6 +41,7 @@ const windowScopeWhere = (
   };
   if (args.agentId != null) where.agentId = args.agentId;
   if (args.actorId != null) where.actorId = args.actorId;
+  if (args.meterType != null) where.meterType = args.meterType;
   return where;
 };
 
@@ -313,6 +316,7 @@ const aggregateGenerationMetric = async (args: {
   projectId: number;
   agentId: number | null;
   actorId: number | null;
+  meterType: string | null;
   windowStart: Date;
 }): Promise<WindowAggregate> => {
   const where = windowScopeWhere(args);
@@ -333,11 +337,15 @@ const aggregateGenerationMetric = async (args: {
       ],
     });
     return {
-      // Every priced meter is real spend and belongs under the cap, platform
-      // included; only the pricing verdict is meter-specific.
+      // Every priced meter the quota's scope admits is real spend and belongs
+      // under the cap — platform included, unless the quota named one meter.
       total: events.reduce((sum, event) => {
         return event.costUsd == null ? sum : sum + Number(event.costUsd);
       }, 0),
+      // Read from the same rows the total summed, so a quota scoped to a
+      // platform meter reports no coverage at all rather than a verdict on AI
+      // usage it does not measure: `countsTowardPricingVerdict` keeps those
+      // events out in both directions, and an empty set is not a blackout.
       coverage: pricingCoverage(events),
     };
   }
@@ -458,6 +466,7 @@ const evaluateGenerationQuota = async (args: {
     projectId: args.projectId,
     agentId: scopeToAgent ? args.agentInternalId : null,
     actorId: scopeToActor ? args.actorInternalId : null,
+    meterType: quota.meterType,
     windowStart: windowStartsAt({ window, now }),
   };
   const { total, coverage } = await aggregateGenerationMetric({

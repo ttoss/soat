@@ -216,6 +216,34 @@ describe('validateQuotaShape', () => {
       validateQuotaShape({ ...base, scope: 'api_key', metric: 'requests' })
     ).toBeNull();
   });
+
+  const costBase = {
+    ...base,
+    metric: 'cost_usd',
+    window: 'calendar_month',
+    limit: 1.5,
+  };
+
+  test('accepts a cost quota scoped to one meter type', () => {
+    expect(
+      validateQuotaShape({ ...costBase, meterType: 'storage' })
+    ).toBeNull();
+  });
+  test('accepts a cost quota with no meter scope', () => {
+    expect(validateQuotaShape(costBase)).toBeNull();
+  });
+  test('rejects a meter type outside the metered vocabulary', () => {
+    // An unrecorded meter type matches no event, so the cap would aggregate 0
+    // forever — the same silent no-op `SCOPES_BY_METRIC` refuses.
+    expect(
+      validateQuotaShape({ ...costBase, meterType: 'llm_token' })
+    ).toMatch(/meter_type/);
+  });
+  test('rejects a meter scope on a metric with no cost dimension', () => {
+    expect(
+      validateQuotaShape({ ...base, metric: 'tokens', meterType: 'storage' })
+    ).toMatch(/cost_usd/);
+  });
 });
 
 describe('validateQuotaImmutableFields', () => {
@@ -224,6 +252,7 @@ describe('validateQuotaImmutableFields', () => {
     scopeRef: 'agent_abc',
     metric: 'tokens',
     window: 'rolling_1h',
+    meterType: null,
   };
 
   test('accepts an update that restates every immutable field unchanged', () => {
@@ -249,6 +278,7 @@ describe('validateQuotaImmutableFields', () => {
     ['metric', { metric: 'cost_usd' }],
     ['window', { window: 'calendar_month' }],
     ['scope_ref', { scopeRef: 'agent_other' }],
+    ['meter_type', { meterType: 'storage' }],
   ])('rejects a changed %s', (field, next) => {
     const error = validateQuotaImmutableFields({ next, current });
     expect(error).toMatch(new RegExp(field));
@@ -321,6 +351,7 @@ describe('validateQuotaImmutableFields', () => {
           scopeRef: null,
           metric: 'tokens',
           window: 'calendar_month',
+          meterType: null,
         },
       })
     ).toMatch(/scope_ref/);
@@ -335,9 +366,31 @@ describe('validateQuotaImmutableFields', () => {
           scopeRef: 'actor_abc',
           metric: 'tokens',
           window: 'calendar_month',
+          meterType: null,
         },
       })
     ).toMatch(/scope_ref/);
+  });
+
+  // A meter scope narrows what the cap measures, so widening it back to every
+  // meter is as material a change as narrowing it — rejected in both
+  // directions, like the per-actor `scope_ref`.
+  test('rejects clearing a meter scope back to every meter', () => {
+    expect(
+      validateQuotaImmutableFields({
+        next: { meterType: null },
+        current: { ...current, metric: 'cost_usd', meterType: 'storage' },
+      })
+    ).toMatch(/meter_type/);
+  });
+
+  test('treats a restated meter scope as unchanged', () => {
+    expect(
+      validateQuotaImmutableFields({
+        next: { meterType: 'storage' },
+        current: { ...current, metric: 'cost_usd', meterType: 'storage' },
+      })
+    ).toBeNull();
   });
 
   // The first offending field is reported rather than a combined list, so the

@@ -84,6 +84,16 @@ export class Quota extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare onUnpriced: string | null;
 
+  /**
+   * Which meter a `cost_usd` cap answers for (`llm_tokens`, `storage`, …).
+   * NULL is every meter — what a pre-column row carries, and what an operator
+   * pricing a platform meter would otherwise silently add to every tenant's
+   * one project-wide cost slot. Part of the quota's identity, so it is
+   * immutable and disambiguates two caps over the same scope/metric/window.
+   */
+  @Column({ type: DataType.STRING, allowNull: true })
+  declare meterType: string | null;
+
   /** Webhook fire state (once per window) — Phase 3. */
   @Column({ type: DataType.STRING, allowNull: true })
   declare firedWindowKey: string | null;

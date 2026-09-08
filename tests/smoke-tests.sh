@@ -6617,6 +6617,37 @@ echo "Cost cap over an unpriced AI window refuses: OK"
 
 $SOAT_CLI delete-quota --quota-id "$COST_QUOTA_ID"
 
+# A cost cap may name the meter it answers for. The scope is part of the quota's
+# identity, so a second meter over the same scope/window is a second budget
+# rather than a 409 — which is what keeps a priced platform meter out of the
+# project's one AI spend cap. An unrecorded meter type matches no event, so it
+# is refused rather than stored as a cap that can never fire.
+AI_METER_QUOTA_ID=$($SOAT_CLI create-quota \
+  --project-id "$PROJECT_PUBLIC_ID" --scope project --metric cost_usd \
+  --window rolling_1h --limit 30 --meter_type llm_tokens | jq -r '.id')
+if [ "$($SOAT_CLI get-quota --quota-id "$AI_METER_QUOTA_ID" | jq -r '.meter_type')" != "llm_tokens" ]; then
+  echo "ERROR: Expected meter_type=llm_tokens on the meter-scoped quota" >&2
+  exit 1
+fi
+STORAGE_METER_QUOTA_ID=$($SOAT_CLI create-quota \
+  --project-id "$PROJECT_PUBLIC_ID" --scope project --metric cost_usd \
+  --window rolling_1h --limit 30 --meter_type storage | jq -r '.id')
+if [ -z "$STORAGE_METER_QUOTA_ID" ] || [ "$STORAGE_METER_QUOTA_ID" = "null" ]; then
+  echo "ERROR: A second meter scope must not collide with the first" >&2
+  exit 1
+fi
+expect_cli_error_status 409 create-quota \
+  --project-id "$PROJECT_PUBLIC_ID" --scope project --metric cost_usd \
+  --window rolling_1h --limit 30 --meter_type storage
+expect_cli_error_status 400 create-quota \
+  --project-id "$PROJECT_PUBLIC_ID" --scope project --metric cost_usd \
+  --window rolling_24h --limit 30 --meter_type llm_token
+expect_cli_error_status 400 create-quota \
+  --project-id "$PROJECT_PUBLIC_ID" --scope project --metric tokens \
+  --window rolling_24h --limit 30 --meter_type storage
+$SOAT_CLI delete-quota --quota-id "$AI_METER_QUOTA_ID"
+$SOAT_CLI delete-quota --quota-id "$STORAGE_METER_QUOTA_ID"
+
 # scope=api_key + metric=tokens/cost_usd is rejected (400) — no attribution.
 expect_cli_error_status 400 create-quota \
   --project-id "$PROJECT_PUBLIC_ID" --scope api_key --metric tokens \

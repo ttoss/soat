@@ -242,6 +242,112 @@ describe('Quotas', () => {
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
 
+    test('scopes a cost quota to one meter type (201)', async () => {
+      const res = await createQuota(userToken, {
+        scope: 'project',
+        metric: 'cost_usd',
+        window: 'calendar_month',
+        limit: 20,
+        meter_type: 'storage',
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body.meter_type).toBe('storage');
+    });
+
+    test('a cost quota with no meter scope reports none', async () => {
+      const res = await createQuota(userToken, {
+        scope: 'project',
+        metric: 'cost_usd',
+        window: 'rolling_1m',
+        limit: 20,
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body.meter_type).toBeNull();
+    });
+
+    test('rejects a meter_type outside the metered vocabulary (400)', async () => {
+      const res = await createQuota(userToken, {
+        scope: 'project',
+        metric: 'cost_usd',
+        window: 'rolling_1h',
+        limit: 20,
+        meter_type: 'llm_token',
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('rejects a meter_type on a metric with no cost dimension (400)', async () => {
+      const res = await createQuota(userToken, {
+        scope: 'project',
+        metric: 'tokens',
+        window: 'rolling_1h',
+        limit: 20,
+        meter_type: 'storage',
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toContain('cost_usd');
+    });
+
+    // The meter scope is part of a quota's identity, so an AI cap and a storage
+    // cap over the same window are two quotas rather than a conflict — which is
+    // the whole point of the scope. Same scope again is still a duplicate.
+    test('two meter scopes share a scope/metric/window without conflict', async () => {
+      const first = await createQuota(userToken, {
+        scope: 'agent',
+        metric: 'cost_usd',
+        window: 'calendar_month',
+        limit: 5,
+        meter_type: 'llm_tokens',
+      });
+      const second = await createQuota(userToken, {
+        scope: 'agent',
+        metric: 'cost_usd',
+        window: 'calendar_month',
+        limit: 5,
+        meter_type: 'storage',
+      });
+      const duplicate = await createQuota(userToken, {
+        scope: 'agent',
+        metric: 'cost_usd',
+        window: 'calendar_month',
+        limit: 9,
+        meter_type: 'storage',
+      });
+
+      expect(first.status).toBe(201);
+      expect(second.status).toBe(201);
+      expect(duplicate.status).toBe(409);
+      expect(duplicate.body.error.code).toBe('QUOTA_CONFLICT');
+    });
+
+    // An unscoped cap covers every meter, so it is a different cap from any
+    // scoped one and never collides with it.
+    test('an unscoped cost quota does not conflict with a scoped one', async () => {
+      const scoped = await createQuota(userToken, {
+        scope: 'actor',
+        metric: 'cost_usd',
+        window: 'calendar_month',
+        limit: 5,
+        meter_type: 'storage',
+      });
+      const unscoped = await createQuota(userToken, {
+        scope: 'actor',
+        metric: 'cost_usd',
+        window: 'calendar_month',
+        limit: 5,
+      });
+
+      expect(scoped.status).toBe(201);
+      expect(unscoped.status).toBe(201);
+      expect(unscoped.body.meter_type).toBeNull();
+    });
+
     test('creates an agent/tokens quota with a null scope_ref (201)', async () => {
       const res = await createQuota(userToken, {
         scope: 'agent',
@@ -583,6 +689,30 @@ describe('Quotas', () => {
         .send({});
       expect(res.status).toBe(200);
       expect(res.body.id).toBe(quotaId);
+    });
+
+    // The meter scope is part of the quota's identity, so PATCH does not carry
+    // it — the same treatment scope/metric/window get, and the whole patch is
+    // refused rather than applying `limit` and dropping the rest.
+    test('rejects a patched meter_type (400) and moves nothing', async () => {
+      const created = await createQuota(userToken, {
+        scope: 'project',
+        metric: 'cost_usd',
+        window: 'rolling_1h',
+        limit: 7,
+        meter_type: 'storage',
+      });
+      const res = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/quotas/${created.body.id}`)
+        .send({ meter_type: 'llm_tokens', limit: 8 });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+
+      const after = await authenticatedTestClient(userToken).get(
+        `/api/v1/quotas/${created.body.id}`
+      );
+      expect(after.body.meter_type).toBe('storage');
+      expect(after.body.limit).toBe(7);
     });
 
     test('rejects an invalid mode (400)', async () => {

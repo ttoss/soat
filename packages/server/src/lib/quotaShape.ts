@@ -7,6 +7,7 @@
  * and the formation module must never drift apart on what a valid quota is.
  */
 
+import { validateMeterType } from './quotaMeterScope';
 import { validateOnUnpriced } from './quotaPricingPosture';
 import { QUOTA_WINDOWS } from './quotaWindows';
 
@@ -83,6 +84,7 @@ export const validateQuotaShape = (args: {
   mode: unknown;
   limit: unknown;
   onUnpriced?: unknown;
+  meterType?: unknown;
 }): string | null => {
   if (!isOneOf(QUOTA_SCOPES, args.scope)) {
     return `scope must be one of ${QUOTA_SCOPES.join(' / ')}.`;
@@ -104,5 +106,10 @@ export const validateQuotaShape = (args: {
     onUnpriced: args.onUnpriced,
   });
   if (onUnpricedError) return onUnpricedError;
+  const meterTypeError = validateMeterType({
+    metric: args.metric,
+    meterType: args.meterType,
+  });
+  if (meterTypeError) return meterTypeError;
   return validateQuotaLimit({ metric: args.metric, limit: args.limit });
 };
