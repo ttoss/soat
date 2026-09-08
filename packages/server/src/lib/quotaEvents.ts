@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import type { db } from '../db';
 import { enqueueAuditWrite } from './auditQueue';
+import type { PricingCoverage } from './costEnforceability';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 import { fileException } from './exceptions';
 
@@ -14,37 +15,47 @@ export const QUOTA_EXCEEDED_EVENT = 'quota.exceeded';
 type QuotaInstance = InstanceType<(typeof db)['Quota']>;
 
 /**
- * Files a `quota_unpriced` exception for a `cost_usd` quota whose window holds
- * metered usage but nothing priced.
+ * Files a `quota_unpriced` exception for a `cost_usd` quota whose window metered
+ * usage no price row covered.
  *
- * Such a quota aggregates to 0 no matter how much was actually spent, so it can
- * never breach: the cap looks healthy through the API while protecting nothing.
- * That is the one case where a quota fails *open* silently, so it is surfaced
- * for triage rather than logged. The exceptions queue is the right home — it
- * already carries severity, an `exceptions.created` webhook, and an
- * acknowledge/resolve lifecycle.
+ * Such a cap aggregates less than was actually spent, so it under-enforces or —
+ * when nothing at all was priced — can never breach: the cap looks healthy
+ * through the API while protecting a fraction of what it claims to. That is the
+ * one case where a quota fails *open* silently, so it is surfaced for triage
+ * rather than logged. The exceptions queue is the right home — it already
+ * carries severity, an `exceptions.created` webhook, and an acknowledge/resolve
+ * lifecycle.
  *
- * Deduped on the quota (not the window): "this cap is dead" is one issue to
- * triage, and the occurrence count then reads as how many generations ran
- * unprotected. Once resolved, a later recurrence files a fresh item.
+ * **A partly-priced window files the same item as a blacked-out one** (#1228).
+ * The fix is identical — price the rows in `unpricedRows` — and the refusal is
+ * the only thing the two shapes differ on, so a separate kind would split one
+ * degraded cap across two triage items and halve the occurrence count that says
+ * how many generations ran under it.
+ *
+ * Deduped on the quota (not the window): "this cap is not measuring what it
+ * caps" is one issue to triage, and the occurrence count then reads as how many
+ * generations ran under it. Once resolved, a later recurrence files a fresh
+ * item.
  */
 export const reportUnpricedCostQuota = async (args: {
   quota: QuotaInstance;
-  unpricedEventCount: number;
+  coverage: PricingCoverage;
 }): Promise<void> => {
-  const { quota } = args;
+  const { quota, coverage } = args;
 
   log(
-    'reportUnpricedCostQuota: quota=%s window=%s unpricedEvents=%d',
+    'reportUnpricedCostQuota: quota=%s window=%s metered=%d unpricedEvents=%d unpricedRows=%d',
     quota.publicId,
     quota.window,
-    args.unpricedEventCount
+    coverage.meteredEventCount,
+    coverage.unpricedEventCount,
+    coverage.unpricedRows.length
   );
 
   await fileException({
     projectId: quota.projectId,
     kind: 'quota_unpriced',
-    title: `Cost quota ${quota.publicId} cannot be enforced: no priced usage in the window`,
+    title: `Cost quota ${quota.publicId} cannot be enforced: the window metered usage no price row covered`,
     dedupKey: `quota_unpriced:${quota.publicId}`,
     detail: {
       quotaId: quota.publicId,
@@ -53,7 +64,11 @@ export const reportUnpricedCostQuota = async (args: {
       scopeRef: quota.scopeRef,
       window: quota.window,
       limit: Number(quota.limit),
-      unpricedEventCount: args.unpricedEventCount,
+      meteredEventCount: coverage.meteredEventCount,
+      unpricedEventCount: coverage.unpricedEventCount,
+      // Which price rows are missing — the operator's next question, and what a
+      // count alone leaves them hunting for.
+      unpricedRows: coverage.unpricedRows,
     },
   });
 };

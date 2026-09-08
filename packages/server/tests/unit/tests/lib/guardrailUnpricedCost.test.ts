@@ -125,9 +125,11 @@ describe('guardrail cost ceiling over an unpriced window', () => {
     meterType?: string;
     source?: string | null;
     orchestrationRunId?: number | null;
+    /** Adds an unpriced billable component, for the partly-priced-event case. */
+    unpricedComponent?: boolean;
   }): Promise<void> => {
     seq += 1;
-    await db.UsageEvent.create({
+    const event = await db.UsageEvent.create({
       projectId: args.projectId,
       orchestrationRunId: args.orchestrationRunId ?? null,
       meterType: args.meterType ?? 'llm_tokens',
@@ -136,6 +138,16 @@ describe('guardrail cost ceiling over an unpriced window', () => {
       model: 'stub-model',
       costUsd: args.costUsd,
       idempotencyKey: `unpriced-cost:${seq}`,
+    });
+    if (!args.unpricedComponent) return;
+    await db.UsageComponent.create({
+      usageEventId: event.id,
+      component: 'output_tokens',
+      quantity: '50',
+      unit: 'token',
+      billable: true,
+      unitPrice: null,
+      costUsd: null,
     });
   };
 
@@ -277,12 +289,32 @@ describe('guardrail cost ceiling over an unpriced window', () => {
     expect(toolRequests).toHaveLength(1);
   });
 
-  // Deliberately unchanged: a partly-priced window still reports its priced
-  // total. Refusing on a ratio is a separate decision this does not take.
+  // Deliberately so, and now decided rather than deferred (#1228): refusing a
+  // partly-priced window on a ratio would block the very generation that would
+  // price it. The gap is reported through the project's `cost_usd` quota
+  // instead — see `quotaUnpricedCost.test.ts`.
   test('a partly priced window still reports its priced total', async () => {
     const project = await makeProject();
     await seedEvent({ projectId: project.projectId, costUsd: '1.00' });
     await seedEvent({ projectId: project.projectId, costUsd: null });
+
+    const result = await runCeiling({ ...project, document: WINDOW_CEILING });
+
+    expect(result).toEqual({ ok: true });
+    expect(toolRequests).toHaveLength(1);
+  });
+
+  // The verdict stays event-level on purpose. An event whose components are
+  // only partly priced carries a real cost, so reading the gap per component —
+  // which is what the exception needs — must not turn a ceiling fail-closed and
+  // strand a project on one missing price row.
+  test('an event with an unpriced component does not black out the window', async () => {
+    const project = await makeProject();
+    await seedEvent({
+      projectId: project.projectId,
+      costUsd: '1.00',
+      unpricedComponent: true,
+    });
 
     const result = await runCeiling({ ...project, document: WINDOW_CEILING });
 

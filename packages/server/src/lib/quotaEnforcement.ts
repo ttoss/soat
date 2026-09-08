@@ -1,8 +1,13 @@
+import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { countsTowardPricingVerdict } from './costEnforceability';
+import {
+  type PricingCoverage,
+  pricingCoverage,
+  type UnpricedRow,
+} from './costEnforceability';
 import { fireQuotaExceeded, reportUnpricedCostQuota } from './quotaEvents';
 import type { QuotaWindow } from './quotas';
 import {
@@ -12,16 +17,30 @@ import {
   windowResetsAt,
   windowStartsAt,
 } from './quotas';
-import {
-  type UnpricedRow,
-  unpricedRowsInWindow,
-  type WindowScope,
-  windowScopeWhere,
-} from './quotaUnpricedRows';
 
 const log = createDebug('soat:quotas');
 
 type QuotaInstance = InstanceType<(typeof db)['Quota']>;
+
+/** The events one quota evaluation is about: a project, a window, and its scope narrowing. */
+type WindowScope = {
+  projectId: number;
+  agentId: number | null;
+  actorId: number | null;
+  windowStart: Date;
+};
+
+const windowScopeWhere = (
+  args: WindowScope
+): Record<string | symbol, unknown> => {
+  const where: Record<string | symbol, unknown> = {
+    projectId: args.projectId,
+    createdAt: { [Op.gte]: args.windowStart },
+  };
+  if (args.agentId != null) where.agentId = args.agentId;
+  if (args.actorId != null) where.actorId = args.actorId;
+  return where;
+};
 
 /**
  * Why the quota refused the work.
@@ -263,13 +282,24 @@ export const UNPRICED_BLACKOUT_MIN_EVENTS = 3;
 
 /**
  * The outcome of aggregating one window. `total` is the value compared to the
- * limit; `unpricedEventCount` is meaningful only for `cost_usd` and is non-zero
- * only when the window held events and **none** of them were priced — the
- * condition under which a cost cap silently cannot be enforced.
+ * limit; `coverage` is meaningful only for `cost_usd` and says how much of the
+ * window's AI usage the total actually accounts for — a `blackedOut` window
+ * cannot be enforced at all, a partly-priced one is enforced on a figure that
+ * understates real spend (#1228).
  */
 type WindowAggregate = {
   total: number;
-  unpricedEventCount: number;
+  coverage: PricingCoverage;
+};
+
+// A window with no pricing dependency to report: the `tokens` metric, whose
+// quantities are always recorded.
+const FULLY_MEASURED: PricingCoverage = {
+  meteredEventCount: 0,
+  unpricedEventCount: 0,
+  hasUnpricedUsage: false,
+  blackedOut: false,
+  unpricedRows: [],
 };
 
 /**
@@ -288,47 +318,27 @@ const aggregateGenerationMetric = async (args: {
   const where = windowScopeWhere(args);
 
   if (args.metric === 'cost_usd') {
+    // The components ride along on the one read: `costEnforceability` reads the
+    // pricing gap per component, and a second query for them could select a
+    // different set of rows than the total was summed from.
     const events = await db.UsageEvent.findAll({
       where,
-      attributes: ['costUsd', 'meterType', 'source'],
-    });
-    const priced = events.filter((event) => {
-      return event.costUsd != null;
-    });
-    // The verdict reads the AI meter alone. A platform meter is priced by the
-    // operator rather than by a tenant's provider, so a deployment that prices
-    // no compute has not lost the ability to measure AI spend — and counting it
-    // deadlocks the cap, because a window holding only unpriced platform events
-    // refuses the very generation that would land the first priced AI event, so
-    // the blackout could never clear. Reading it alone also stops a priced
-    // platform event from masking a genuine AI blackout.
-    // An embedding is held out of the verdict in both directions. Its rate is
-    // deployment configuration (`EMBEDDING_INPUT_1M_TOKEN_PRICE_USD`) with no
-    // price-book tier a tenant could reach, so counting it unpriced refuses a
-    // cap nobody in the project can make enforceable (#1213) — and counting it
-    // *priced*, which an unset rate metering at 0 makes it, would report a
-    // window as priced and wave through every unpriced generation beside it.
-    // Either way the verdict would be about a call the tenant did not choose.
-    // Its cost still lands in `total`: zero or not, it is real spend.
-    const aiEvents = events.filter((event) => {
-      return countsTowardPricingVerdict(event);
-    });
-    const pricedAiEvents = aiEvents.filter((event) => {
-      return event.costUsd != null;
+      attributes: ['costUsd', 'meterType', 'source', 'provider', 'model'],
+      include: [
+        {
+          model: db.UsageComponent,
+          as: 'components',
+          attributes: ['component', 'quantity', 'billable', 'costUsd'],
+        },
+      ],
     });
     return {
       // Every priced meter is real spend and belongs under the cap, platform
-      // included; only the blackout verdict is meter-specific.
-      total: priced.reduce((sum, event) => {
-        return sum + Number(event.costUsd);
+      // included; only the pricing verdict is meter-specific.
+      total: events.reduce((sum, event) => {
+        return event.costUsd == null ? sum : sum + Number(event.costUsd);
       }, 0),
-      // Only a window that metered something yet priced none of it indicates a
-      // pricing gap. An empty window aggregates to a legitimate 0 — reporting
-      // it would cry wolf on every idle project.
-      unpricedEventCount:
-        aiEvents.length > 0 && pricedAiEvents.length === 0
-          ? aiEvents.length
-          : 0,
+      coverage: pricingCoverage(events),
     };
   }
 
@@ -354,9 +364,7 @@ const aggregateGenerationMetric = async (args: {
         }, 0)
       );
     }, 0),
-    // Token quantities are always recorded, so a tokens quota never has a
-    // pricing dependency to report.
-    unpricedEventCount: 0,
+    coverage: FULLY_MEASURED,
   };
 };
 
@@ -392,7 +400,7 @@ const resolveSessionActor = async (args: {
 };
 
 /**
- * What an `enforce` cost cap does over a window it cannot measure.
+ * What an `enforce` cost cap does over a window it cannot measure at all.
  *
  * Refusing is the point: a cap that cannot measure the spend it caps must not
  * wave it through, which is the fail-open the cap exists to prevent. But a
@@ -401,32 +409,32 @@ const resolveSessionActor = async (args: {
  * refusal waits for a real blackout while the triage item files from the first
  * event — an operator sees the dead cap before a caller is stopped by it.
  *
+ * Only a **blackout** reaches here. A partly-priced window is reported and then
+ * enforced on its priced total: refusing on a ratio is what made a cost cap
+ * unrecoverable in #1201, since the refusal blocks the very generation that
+ * would land the first priced event.
+ *
  * `on_unpriced: "allow"` is the operator's opt-out, recorded on the quota
  * itself; `monitor` observes and never blocks, here as everywhere.
  */
-const blackoutBreach = async (args: {
+const blackoutBreach = (args: {
   quota: QuotaInstance;
   window: QuotaWindow;
   now: Date;
-  scope: WindowScope;
-  unpricedEventCount: number;
-}): Promise<QuotaBreach | null> => {
+  coverage: PricingCoverage;
+}): QuotaBreach | null => {
   const { quota } = args;
-  await reportUnpricedCostQuota({
-    quota,
-    unpricedEventCount: args.unpricedEventCount,
-  });
   const refuses =
     quota.mode === 'enforce' &&
     resolveOnUnpriced(quota.onUnpriced) === 'block' &&
-    args.unpricedEventCount >= UNPRICED_BLACKOUT_MIN_EVENTS;
+    args.coverage.unpricedEventCount >= UNPRICED_BLACKOUT_MIN_EVENTS;
   if (!refuses) return null;
   return buildBreach({
     quota,
     window: args.window,
     now: args.now,
     reason: 'unpriced_usage',
-    unpricedRows: await unpricedRowsInWindow(args.scope),
+    unpricedRows: args.coverage.unpricedRows,
   });
 };
 
@@ -452,17 +460,25 @@ const evaluateGenerationQuota = async (args: {
     actorId: scopeToActor ? args.actorInternalId : null,
     windowStart: windowStartsAt({ window, now }),
   };
-  const { total, unpricedEventCount } = await aggregateGenerationMetric({
+  const { total, coverage } = await aggregateGenerationMetric({
     metric: quota.metric as 'tokens' | 'cost_usd',
     ...scope,
   });
+
+  // The triage item files from the first unpriced row, whatever else the window
+  // priced: a cap enforced on part of its window is not measuring what it caps,
+  // and nothing else reports that (#1228). It is the whole of the answer for a
+  // partly-priced window — the refusal below is a blackout's alone.
+  if (coverage.hasUnpricedUsage) {
+    await reportUnpricedCostQuota({ quota, coverage });
+  }
 
   // A cost cap over an entirely unpriced window aggregates to 0, so the limit
   // comparison below can never fire however much was actually spent. Below the
   // blackout threshold the aggregate is 0 by construction, so falling through
   // would pass anyway — returning here just says so explicitly.
-  if (unpricedEventCount > 0) {
-    return blackoutBreach({ quota, window, now, scope, unpricedEventCount });
+  if (coverage.blackedOut) {
+    return blackoutBreach({ quota, window, now, coverage });
   }
 
   if (total < Number(quota.limit)) return null;

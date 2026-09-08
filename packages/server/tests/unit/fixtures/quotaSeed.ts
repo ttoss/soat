@@ -67,24 +67,50 @@ export const freshProjectAndAgent = async (args: {
   };
 };
 
+/**
+ * A billable component carries a cost exactly when a price row covered it, so
+ * a seeded event that is priced at the event level is priced at the component
+ * level too — anything else is a shape the write path cannot produce, and the
+ * pricing-gap signal reads components. `unpriced` names the billable
+ * components a price row missed, which is how a *partly* priced event is
+ * seeded: the event total is a real number and one dimension of it is not.
+ */
 const seedTokenComponents = async (args: {
   eventId: number;
   tokens?: TokenQuantities;
   costUsd: string | null;
+  unpriced: Array<keyof TokenQuantities>;
 }) => {
   const t = args.tokens ?? {};
   const comps = [
-    { component: 'input_tokens', quantity: t.input ?? 0, billable: true },
-    { component: 'output_tokens', quantity: t.output ?? 0, billable: true },
-    { component: 'cached_tokens', quantity: t.cached ?? 0, billable: true },
     {
+      name: 'input',
+      component: 'input_tokens',
+      quantity: t.input ?? 0,
+      billable: true,
+    },
+    {
+      name: 'output',
+      component: 'output_tokens',
+      quantity: t.output ?? 0,
+      billable: true,
+    },
+    {
+      name: 'cached',
+      component: 'cached_tokens',
+      quantity: t.cached ?? 0,
+      billable: true,
+    },
+    {
+      name: 'reasoning',
       component: 'reasoning_tokens',
       quantity: t.reasoning ?? 0,
       billable: false,
     },
-  ];
+  ] as const;
   await db.UsageComponent.bulkCreate(
     comps.map((c) => {
+      const priced = c.billable && !args.unpriced.includes(c.name);
       return {
         // bulkCreate does not fire the beforeValidate publicId hook, so set it
         // explicitly (as the production write path in usageRecording does).
@@ -95,14 +121,14 @@ const seedTokenComponents = async (args: {
         unit: 'token',
         billable: c.billable,
         unitPrice: null,
-        costUsd: args.costUsd,
+        costUsd: priced ? args.costUsd : null,
         priceId: null,
       };
     })
   );
 };
 
-export const seedUsageEvent = async (opts: {
+type SeedUsageEventOptions = {
   projectInternalId: number;
   agentInternalId?: number | null;
   actorInternalId?: number | null;
@@ -113,9 +139,15 @@ export const seedUsageEvent = async (opts: {
   source?: string | null;
   provider?: string;
   model?: string;
+  /** Per-billable-component cost. Defaults to the event's own, so a priced
+   * event is priced all the way down. */
   componentCostUsd?: string | null;
-}): Promise<UsageEventInstance> => {
-  const event = await db.UsageEvent.create({
+  /** Billable components no price row covered, whatever the event total says. */
+  unpricedComponents?: Array<keyof TokenQuantities>;
+};
+
+const eventAttributes = (opts: SeedUsageEventOptions) => {
+  return {
     projectId: opts.projectInternalId,
     agentId: opts.agentInternalId ?? null,
     actorId: opts.actorInternalId ?? null,
@@ -125,11 +157,18 @@ export const seedUsageEvent = async (opts: {
     model: opts.model ?? 'stub-model',
     costUsd: opts.costUsd ?? null,
     idempotencyKey: `${generatePublicId(PUBLIC_ID_PREFIXES.usageEvent)}:seed`,
-  });
+  };
+};
+
+export const seedUsageEvent = async (
+  opts: SeedUsageEventOptions
+): Promise<UsageEventInstance> => {
+  const event = await db.UsageEvent.create(eventAttributes(opts));
   await seedTokenComponents({
     eventId: (event as unknown as { id: number }).id,
     tokens: opts.tokens,
-    costUsd: opts.componentCostUsd ?? null,
+    costUsd: opts.componentCostUsd ?? opts.costUsd ?? null,
+    unpriced: opts.unpricedComponents ?? [],
   });
   if (opts.createdAt) {
     await db.UsageEvent.update(
