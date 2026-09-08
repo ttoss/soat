@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.42.0](https://github.com/ttoss/soat/compare/v0.41.0...v0.42.0) (2026-09-08)
+
+### Features
+
+* **server:** pause a run or a task in flight, resumable from its checkpoint ([#1238](https://github.com/ttoss/soat/issues/1238)) ([1f6c03f](https://github.com/ttoss/soat/commit/1f6c03f48e53dff886a5149beac83804dd884c59)), closes [#1237](https://github.com/ttoss/soat/issues/1237) [#1237](https://github.com/ttoss/soat/issues/1237)
+
 # [0.41.0](https://github.com/ttoss/soat/compare/v0.40.2...v0.41.0) (2026-09-08)
 
 ### Bug Fixes
