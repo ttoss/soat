@@ -1,17 +1,30 @@
 import { lookup } from 'node:dns/promises';
 
 import { DomainError } from '../errors';
+import {
+  type EgressCidr,
+  inCidr,
+  isPublicAddress,
+  toBytes,
+} from './egressAddress';
+
+export type { EgressCidr } from './egressAddress';
+export { isPublicAddress } from './egressAddress';
 
 /**
- * Egress control for destinations an agent's tool call can reach.
+ * Egress control for every destination a tenant can make the server request.
  *
  * SOAT never executes agent-authored code, but an `http`/`mcp` tool is a
  * `fetch` the server performs on the agent's behalf, and by default that could
  * name the deployment's own network: a sibling service, the API's loopback, or
  * the cloud metadata endpoint that hands out the instance's IAM credentials.
+ * A tool is not the only such destination — a webhook URL, an AI provider's
+ * `base_url` and a service-account key file's `token_uri` are all stored by a
+ * tenant and requested by the server, so each one reaches the network through
+ * this module too (`egressFetch.ts` is the `fetch`-shaped door).
  *
- * So: **a tool reaches the public internet, and nothing else.** Anything not
- * publicly routable — loopback, RFC1918, link-local, CGNAT, IPv6 ULA — is
+ * So: **such a request reaches the public internet, and nothing else.** Anything
+ * not publicly routable — loopback, RFC1918, link-local, CGNAT, IPv6 ULA — is
  * refused unless declared in `TOOL_EGRESS_ALLOWED_HOSTS`, which keeps the
  * legitimate internal-service case available as an explicit operator decision.
  *
@@ -28,11 +41,6 @@ export type EgressHostEntry = {
   host: string;
   port?: number;
   wildcard: boolean;
-};
-
-export type EgressCidr = {
-  bytes: Uint8Array;
-  bits: number;
 };
 
 export type EgressAllowlist = {
@@ -57,164 +65,6 @@ const blocked = (
   meta?: Record<string, unknown>
 ): DomainError => {
   return new DomainError('TOOL_EGRESS_BLOCKED', message, meta);
-};
-
-// ── Address parsing ──────────────────────────────────────────────────────
-
-const ipv4ToBytes = (address: string): Uint8Array | null => {
-  const parts = address.split('.');
-  if (parts.length !== 4) return null;
-  const bytes = new Uint8Array(4);
-  for (let i = 0; i < 4; i += 1) {
-    const part = parts[i] as string;
-    if (!/^\d{1,3}$/.test(part)) return null;
-    const value = Number(part);
-    if (value > 255) return null;
-    bytes[i] = value;
-  }
-  return bytes;
-};
-
-const ipv6ToBytes = (address: string): Uint8Array | null => {
-  let head = address;
-  let tail = '';
-  const doubleColon = address.indexOf('::');
-  if (doubleColon !== -1) {
-    head = address.slice(0, doubleColon);
-    tail = address.slice(doubleColon + 2);
-    if (tail.includes('::')) return null;
-  }
-
-  const expand = (section: string): number[] | null => {
-    if (section === '') return [];
-    const groups: number[] = [];
-    const pieces = section.split(':');
-    for (let i = 0; i < pieces.length; i += 1) {
-      const piece = pieces[i] as string;
-      // A trailing dotted-quad ("::ffff:1.2.3.4") occupies the last two groups.
-      if (piece.includes('.')) {
-        if (i !== pieces.length - 1) return null;
-        const v4 = ipv4ToBytes(piece);
-        if (!v4) return null;
-        groups.push(((v4[0] as number) << 8) | (v4[1] as number));
-        groups.push(((v4[2] as number) << 8) | (v4[3] as number));
-        continue;
-      }
-      if (!/^[0-9a-f]{1,4}$/i.test(piece)) return null;
-      groups.push(Number.parseInt(piece, 16));
-    }
-    return groups;
-  };
-
-  const headGroups = expand(head);
-  const tailGroups = expand(tail);
-  if (!headGroups || !tailGroups) return null;
-
-  const total = headGroups.length + tailGroups.length;
-  if (doubleColon === -1) {
-    if (total !== 8) return null;
-  } else if (total > 7) {
-    return null;
-  }
-
-  const groups = [
-    ...headGroups,
-    ...new Array<number>(8 - total).fill(0),
-    ...tailGroups,
-  ];
-  const bytes = new Uint8Array(16);
-  for (const [index, group] of groups.entries()) {
-    bytes[index * 2] = (group >> 8) & 0xff;
-    bytes[index * 2 + 1] = group & 0xff;
-  }
-  return bytes;
-};
-
-/**
- * Parses a literal address to bytes, or `null` when it is not one. The parsers
- * above — not `node:net`'s `isIP` — are the validator: this feeds a security
- * decision, so the code that decides must be the code that rejects, and every
- * malformed shape stays reachable from a test.
- */
-const toBytes = (address: string): Uint8Array | null => {
-  return address.includes(':') ? ipv6ToBytes(address) : ipv4ToBytes(address);
-};
-
-const inCidr = (address: Uint8Array, cidr: EgressCidr): boolean => {
-  if (address.length !== cidr.bytes.length) return false;
-  const fullBytes = Math.floor(cidr.bits / 8);
-  for (let i = 0; i < fullBytes; i += 1) {
-    if (address[i] !== cidr.bytes[i]) return false;
-  }
-  const remainingBits = cidr.bits % 8;
-  if (remainingBits === 0) return true;
-  const mask = (0xff << (8 - remainingBits)) & 0xff;
-  return (
-    ((address[fullBytes] as number) & mask) ===
-    ((cidr.bytes[fullBytes] as number) & mask)
-  );
-};
-
-const cidr = (notation: string): EgressCidr => {
-  const [address, prefix] = notation.split('/');
-  const bytes = toBytes(address as string);
-  if (!bytes) throw new Error(`unparseable CIDR address: ${notation}`);
-  return { bytes, bits: Number(prefix) };
-};
-
-/**
- * Everything that is not publicly routable. RFC1918 and loopback are here for
- * the obvious reason; link-local is here because that is where every cloud
- * provider's metadata service lives (`169.254.169.254`, plus ECS's
- * `169.254.170.2` and EKS Pod Identity's `169.254.170.23`) — enumerating those
- * addresses individually is a list that silently ages, the range is not.
- */
-const NON_PUBLIC_V4 = [
-  '0.0.0.0/8',
-  '10.0.0.0/8',
-  '100.64.0.0/10',
-  '127.0.0.0/8',
-  '169.254.0.0/16',
-  '172.16.0.0/12',
-  '192.0.0.0/24',
-  '192.168.0.0/16',
-  '198.18.0.0/15',
-  '224.0.0.0/4',
-  '240.0.0.0/4',
-].map(cidr);
-
-const NON_PUBLIC_V6 = [
-  '::/128',
-  '::1/128',
-  'fc00::/7',
-  'fe80::/10',
-  'ff00::/8',
-].map(cidr);
-
-const V4_MAPPED = cidr('::ffff:0:0/96');
-const NAT64 = cidr('64:ff9b::/96');
-
-export const isPublicAddress = (address: string): boolean => {
-  const bytes = toBytes(address);
-  if (!bytes) return false;
-
-  if (bytes.length === 16) {
-    // An IPv4 address wearing an IPv6 hat — `::ffff:169.254.169.254` and the
-    // NAT64 prefix are both ways to spell a v4 destination, so classify the
-    // embedded address rather than the wrapper.
-    if (inCidr(bytes, V4_MAPPED) || inCidr(bytes, NAT64)) {
-      return NON_PUBLIC_V4.every((range) => {
-        return !inCidr(bytes.slice(12), range);
-      });
-    }
-    return NON_PUBLIC_V6.every((range) => {
-      return !inCidr(bytes, range);
-    });
-  }
-
-  return NON_PUBLIC_V4.every((range) => {
-    return !inCidr(bytes, range);
-  });
 };
 
 // ── Allowlist ────────────────────────────────────────────────────────────
@@ -345,24 +195,38 @@ const matchesHostEntry = (args: {
 const DEFAULT_PORTS: Record<string, number> = { 'http:': 80, 'https:': 443 };
 
 /**
- * Throws `TOOL_EGRESS_BLOCKED` unless every address `url` resolves to is either
- * publicly routable or covered by the allowlist. Resolves silently otherwise.
+ * What the messages call the destination. A tool target is the default because
+ * tools were the first caller, but the guard now fronts every outbound request
+ * whose destination a tenant chose — a webhook URL, a provider's `base_url`, a
+ * service-account key file's `token_uri` — and telling an operator their
+ * webhook was refused as a "tool target" sends them to the wrong record.
  */
-export const assertEgressAllowed = async (args: {
+const DEFAULT_NOUN = 'Tool target';
+
+type ShapeVerdict = { settled: true } | { settled: false; hostname: string };
+
+/**
+ * The half of the decision that needs no DNS: the URL parses, the scheme is one
+ * we make requests on, and a literal address is either public or allowed.
+ * `settled` means the destination is allowed on the strength of that alone;
+ * otherwise the hostname still has to be resolved.
+ */
+const assertShape = (args: {
   url: string;
   allowlist: EgressAllowlist;
-}): Promise<void> => {
+  noun: string;
+}): ShapeVerdict => {
   let parsed: URL;
   try {
     parsed = new URL(args.url);
   } catch {
-    throw blocked(`Tool target "${args.url}" is not a valid URL.`);
+    throw blocked(`${args.noun} "${args.url}" is not a valid URL.`);
   }
 
   const defaultPort = DEFAULT_PORTS[parsed.protocol];
   if (defaultPort === undefined) {
     throw blocked(
-      `Tool target scheme "${parsed.protocol}" is not allowed; use http or https.`
+      `${args.noun} scheme "${parsed.protocol}" is not allowed; use http or https.`
     );
   }
 
@@ -370,17 +234,41 @@ export const assertEgressAllowed = async (args: {
   // WHATWG keeps an IPv6 host bracketed; addresses are compared unbracketed.
   const hostname = parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase();
 
-  if (matchesHostEntry({ hostname, port, allowlist: args.allowlist })) return;
+  if (matchesHostEntry({ hostname, port, allowlist: args.allowlist })) {
+    return { settled: true };
+  }
 
   if (toBytes(hostname) !== null) {
     if (isAddressAllowed({ address: hostname, allowlist: args.allowlist })) {
-      return;
+      return { settled: true };
     }
     throw blocked(
-      `Tool target ${hostname} is not publicly routable. Add it to ${ENV_VAR} to allow it.`,
+      `${args.noun} ${hostname} is not publicly routable. Add it to ${ENV_VAR} to allow it.`,
       { tool_url: args.url, tool_address: hostname }
     );
   }
+
+  return { settled: false, hostname };
+};
+
+/**
+ * Throws `TOOL_EGRESS_BLOCKED` unless every address `url` resolves to is either
+ * publicly routable or covered by the allowlist. Resolves silently otherwise.
+ */
+export const assertEgressAllowed = async (args: {
+  url: string;
+  allowlist: EgressAllowlist;
+  noun?: string;
+}): Promise<void> => {
+  const noun = args.noun ?? DEFAULT_NOUN;
+  const verdict = assertShape({
+    url: args.url,
+    allowlist: args.allowlist,
+    noun,
+  });
+  if (verdict.settled) return;
+
+  const { hostname } = verdict;
 
   let addresses: string[];
   try {
@@ -389,7 +277,7 @@ export const assertEgressAllowed = async (args: {
       return entry.address;
     });
   } catch {
-    throw blocked(`Tool target host "${hostname}" could not be resolved.`, {
+    throw blocked(`${noun} host "${hostname}" could not be resolved.`, {
       tool_url: args.url,
     });
   }
@@ -399,7 +287,7 @@ export const assertEgressAllowed = async (args: {
   });
   if (denied !== undefined) {
     throw blocked(
-      `Tool target "${hostname}" resolves to ${denied}, which is not publicly routable. Add it to ${ENV_VAR} to allow it.`,
+      `${noun} "${hostname}" resolves to ${denied}, which is not publicly routable. Add it to ${ENV_VAR} to allow it.`,
       { tool_url: args.url, tool_address: denied }
     );
   }
@@ -435,15 +323,18 @@ const nextRequest = (args: {
 export const fetchWithEgressGuard = async (
   url: string,
   init: RequestInit = {},
-  allowlist: EgressAllowlist = getEgressAllowlist()
+  options: { allowlist?: EgressAllowlist; noun?: string } = {}
 ): Promise<Response> => {
+  const allowlist = options.allowlist ?? getEgressAllowlist();
+  const noun = options.noun ?? DEFAULT_NOUN;
+
   let currentUrl = url;
   let method = init.method ?? 'GET';
   let body = init.body;
   let headers = new Headers(init.headers);
 
   for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
-    await assertEgressAllowed({ url: currentUrl, allowlist });
+    await assertEgressAllowed({ url: currentUrl, allowlist, noun });
 
     const response = await fetch(currentUrl, {
       ...init,
@@ -466,7 +357,7 @@ export const fetchWithEgressGuard = async (
       target = new URL(location, currentUrl);
     } catch {
       throw blocked(
-        `Tool target redirected to an invalid Location "${location}".`,
+        `${noun} redirected to an invalid Location "${location}".`,
         { tool_url: currentUrl }
       );
     }
@@ -486,7 +377,7 @@ export const fetchWithEgressGuard = async (
   }
 
   throw blocked(
-    `Tool target exceeded ${MAX_REDIRECTS} redirects; giving up rather than following further.`,
+    `${noun} exceeded ${MAX_REDIRECTS} redirects; giving up rather than following further.`,
     { tool_url: url }
   );
 };

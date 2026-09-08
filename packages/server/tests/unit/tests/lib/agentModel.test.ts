@@ -4,6 +4,7 @@ import {
   resolveBedrockCredentials,
   resolveVertexSettings,
 } from 'src/lib/agentModel';
+import { egressGuardedFetch } from 'src/lib/egressFetch';
 
 // The returned model exposes enough (`modelId`, `config.provider`, `config.url`)
 // to assert the wiring landed, rather than only that `buildModel` didn't throw.
@@ -423,5 +424,103 @@ describe('resolveBedrockCredentials', () => {
         config: { apiKey: 'ABSKfromconfig' },
       })
     ).toEqual({ region: 'us-east-1', apiKey: 'ABSKfromsecret' });
+  });
+});
+
+// The provider SDK builds its endpoint out of the record for these three, so a
+// value carrying a dot or a slash names a different server — and the request
+// that lands there carries the credential the record authenticates with, which
+// for a record linking no secret is the deployment's own. See
+// `aiProviderConfigValidation.ts`.
+describe('config values spliced into a provider URL', () => {
+  test('refuses a vertex location that would move the host', () => {
+    expect(() => {
+      return resolveVertexSettings({
+        secretValue: null,
+        config: { project: 'p', location: 'evil.example.com/' },
+      });
+    }).toThrow(expect.objectContaining({ code: 'AI_PROVIDER_MISCONFIGURED' }));
+  });
+
+  test('refuses a vertex project that would move the path', () => {
+    expect(() => {
+      return resolveVertexSettings({
+        secretValue: null,
+        config: { project: 'p/../../evil', location: 'us-central1' },
+      });
+    }).toThrow(expect.objectContaining({ code: 'AI_PROVIDER_MISCONFIGURED' }));
+  });
+
+  test('keeps a real vertex location working', () => {
+    expect(
+      resolveVertexSettings({
+        secretValue: null,
+        config: { project: 'my-project', location: 'europe-west4' },
+      })
+    ).toEqual({ project: 'my-project', location: 'europe-west4' });
+  });
+
+  test('refuses a bedrock region that would move the host', () => {
+    expect(() => {
+      return resolveBedrockCredentials({
+        secretValue: JSON.stringify({ apiKey: 'ABSKkey' }),
+        config: { region: 'evil.example.com/' },
+      });
+    }).toThrow(expect.objectContaining({ code: 'AI_PROVIDER_MISCONFIGURED' }));
+  });
+
+  test('refuses an azure resource name that would move the host', () => {
+    expect(() => {
+      return buildModel({
+        provider: 'azure',
+        secretValue: 'test-key',
+        model: 'gpt-4o',
+        config: { resourceName: 'evil.example.com/x' },
+      });
+    }).toThrow(expect.objectContaining({ code: 'AI_PROVIDER_MISCONFIGURED' }));
+  });
+});
+
+describe('outbound provider requests go through the egress guard', () => {
+  test.each([
+    ['openai', 'gpt-4o'],
+    ['anthropic', 'claude-3-5-sonnet-20241022'],
+    ['google', 'gemini-2.0-flash'],
+    ['xai', 'grok-3'],
+    ['groq', 'llama-3.3-70b-versatile'],
+  ])('%s is built with the guarded fetch', (provider, model) => {
+    const built = asConfigured(
+      buildModel({
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        provider: provider as any,
+        secretValue: 'test-key',
+        model,
+      })
+    );
+    expect(built.config.fetch).toBe(egressGuardedFetch);
+  });
+
+  test('vertex is built with the guarded fetch', () => {
+    const built = asConfigured(
+      buildModel({
+        provider: 'vertex',
+        secretValue: SERVICE_ACCOUNT_SECRET,
+        model: 'gemini-2.0-flash',
+        config: { location: 'us-central1' },
+      })
+    );
+    expect(built.config.fetch).toBe(egressGuardedFetch);
+  });
+
+  test('ollama is built with the guarded fetch', () => {
+    const built = asConfigured(
+      buildModel({
+        provider: 'ollama',
+        secretValue: null,
+        model: 'llama3',
+        baseUrl: 'http://ollama.example.com:11434',
+      })
+    );
+    expect(built.config.fetch).toBe(egressGuardedFetch);
   });
 });

@@ -2277,9 +2277,11 @@ AI_PROVIDER_RESP=$($SOAT_CLI create-ai-provider \
 AI_PROVIDER_ID=$(printf '%s\n' "$AI_PROVIDER_RESP" | jq -r '.id')
 echo "AI Provider id: $AI_PROVIDER_ID"
 
-# 16a. Model routes — ordered failover. The first target points at a port with
-# nothing listening, so the attempt fails at the connection level
-# (provider_error) and the route falls through to the working Ollama target.
+# 16a. Model routes — ordered failover. The first target points at loopback,
+# which the egress guard refuses (it is not in TOOL_EGRESS_ALLOWED_HOSTS), so
+# the attempt is classed provider_error — a target this deployment cannot reach
+# is one the route cannot use — and the route falls through to the working
+# Ollama target.
 echo "--- Creating model route (dead primary, healthy fallback) ---"
 DEAD_PROVIDER_RESP=$($SOAT_CLI create-ai-provider \
   --project_id "$PROJECT_PUBLIC_ID" \

@@ -12,6 +12,8 @@ import type { AiProviderSlug } from '@soat/postgresdb';
 import type { LanguageModel } from 'ai';
 
 import { DomainError } from '../errors';
+import { readUrlConfigValue } from './aiProviderConfigValidation';
+import { egressGuardedFetch } from './egressFetch';
 import { loadAwsExternalAccountAuthClient } from './vertexAwsCredentials';
 
 type BuildModelArgs = {
@@ -71,7 +73,12 @@ export const resolveBedrockCredentials = (args: {
   config?: Record<string, unknown>;
 }): BedrockCredentials => {
   const secret = parseBedrockSecret(args.secretValue);
-  const region = (args.config?.region as string | undefined) ?? 'us-east-1';
+  const region =
+    readUrlConfigValue({
+      provider: 'bedrock',
+      key: 'region',
+      value: args.config?.region,
+    }) ?? 'us-east-1';
   // config.apiKey is accepted as a credential fallback when no secret is linked
   const configApiKey = args.config?.apiKey as string | undefined;
   const resolvedApiKey = secret.apiKey ?? configApiKey;
@@ -91,7 +98,9 @@ export const resolveBedrockCredentials = (args: {
 
 const buildBedrockModel = (args: BuildModelArgs): LanguageModel => {
   const options = resolveBedrockCredentials(args);
-  return createAmazonBedrock(options)(args.model);
+  return createAmazonBedrock({ ...options, fetch: egressGuardedFetch })(
+    args.model
+  );
 };
 
 /**
@@ -178,7 +187,11 @@ export const resolveVertexSettings = (args: {
   // enough — config.project only has to be set to override it or when
   // authenticating through ADC.
   const project =
-    (args.config?.project as string | undefined) ?? secret.project_id;
+    readUrlConfigValue({
+      provider: 'vertex',
+      key: 'project',
+      value: args.config?.project,
+    }) ?? secret.project_id;
   if (!project) {
     throw new DomainError(
       'AI_PROVIDER_MISCONFIGURED',
@@ -187,7 +200,11 @@ export const resolveVertexSettings = (args: {
   }
 
   const location =
-    (args.config?.location as string | undefined) ?? DEFAULT_VERTEX_LOCATION;
+    readUrlConfigValue({
+      provider: 'vertex',
+      key: 'location',
+      value: args.config?.location,
+    }) ?? DEFAULT_VERTEX_LOCATION;
 
   const googleAuthOptions = readServiceAccountAuth(secret);
   return googleAuthOptions
@@ -219,51 +236,85 @@ const withAwsWorkloadIdentity = (settings: VertexSettings): VertexSettings => {
 };
 
 const buildVertexModel = (args: BuildModelArgs): LanguageModel => {
-  return createVertex(withAwsWorkloadIdentity(resolveVertexSettings(args)))(
-    args.model
-  );
+  return createVertex({
+    ...withAwsWorkloadIdentity(resolveVertexSettings(args)),
+    fetch: egressGuardedFetch,
+  })(args.model);
 };
 
+/**
+ * The guard applies to the destination a **tenant** named, not to the one the
+ * deployment did: `OLLAMA_BASE_URL` — and the loopback it defaults to — is an
+ * operator's own decision about their own network, already made when they set
+ * it. A `base_url` on the provider record is the tenant-written half, and that
+ * is what an allowlist has to answer for.
+ */
 const buildOllamaModel = (args: BuildModelArgs): LanguageModel => {
   const base =
     args.baseUrl ?? process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434';
-  return createOpenAI({ apiKey: 'ollama', baseURL: `${base}/v1` }).chat(
-    args.model
-  );
+  return createOpenAI({
+    apiKey: 'ollama',
+    baseURL: `${base}/v1`,
+    ...(args.baseUrl ? { fetch: egressGuardedFetch } : {}),
+  }).chat(args.model);
 };
 
 const buildAzureModel = (args: BuildModelArgs): LanguageModel => {
   const apiKey = args.secretValue ?? '';
-  const resourceName = (args.config?.resourceName as string | undefined) ?? '';
-  return createAzure({ apiKey, resourceName })(args.model);
+  const resourceName =
+    readUrlConfigValue({
+      provider: 'azure',
+      key: 'resourceName',
+      value: args.config?.resourceName,
+    }) ?? '';
+  return createAzure({ apiKey, resourceName, fetch: egressGuardedFetch })(
+    args.model
+  );
 };
 
 const buildSimpleOpenAiCompatModel = (args: BuildModelArgs): LanguageModel => {
   const apiKey = args.secretValue ?? '';
-  return createOpenAI({ apiKey, baseURL: args.baseUrl }).chat(args.model);
+  return createOpenAI({
+    apiKey,
+    baseURL: args.baseUrl,
+    fetch: egressGuardedFetch,
+  }).chat(args.model);
 };
 
 type ProviderBuilder = (args: BuildModelArgs) => LanguageModel;
 
 const PROVIDER_BUILDERS: Partial<Record<AiProviderSlug, ProviderBuilder>> = {
   openai: (a) => {
-    return createOpenAI({ apiKey: a.secretValue ?? '', baseURL: a.baseUrl })(
-      a.model
-    );
+    return createOpenAI({
+      apiKey: a.secretValue ?? '',
+      baseURL: a.baseUrl,
+      fetch: egressGuardedFetch,
+    })(a.model);
   },
   anthropic: (a) => {
-    return createAnthropic({ apiKey: a.secretValue ?? '', baseURL: a.baseUrl })(
-      a.model
-    );
+    return createAnthropic({
+      apiKey: a.secretValue ?? '',
+      baseURL: a.baseUrl,
+      fetch: egressGuardedFetch,
+    })(a.model);
   },
   google: (a) => {
-    return createGoogleGenerativeAI({ apiKey: a.secretValue ?? '' })(a.model);
+    return createGoogleGenerativeAI({
+      apiKey: a.secretValue ?? '',
+      fetch: egressGuardedFetch,
+    })(a.model);
   },
   xai: (a) => {
-    return createXai({ apiKey: a.secretValue ?? '' })(a.model);
+    return createXai({
+      apiKey: a.secretValue ?? '',
+      fetch: egressGuardedFetch,
+    })(a.model);
   },
   groq: (a) => {
-    return createGroq({ apiKey: a.secretValue ?? '' })(a.model);
+    return createGroq({
+      apiKey: a.secretValue ?? '',
+      fetch: egressGuardedFetch,
+    })(a.model);
   },
   azure: buildAzureModel,
   bedrock: buildBedrockModel,

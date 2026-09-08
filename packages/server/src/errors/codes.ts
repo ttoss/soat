@@ -423,7 +423,7 @@ export const ERROR_CODES = {
   TOOL_EGRESS_BLOCKED: {
     httpStatus: 403,
     description:
-      "An http- or mcp-type tool's target is not publicly routable — a loopback, private, link-local (cloud metadata), CGNAT or IPv6 ULA address — and the deployment's TOOL_EGRESS_ALLOWED_HOSTS does not list it. Also returned when a hostname resolves to such an address, when a redirect leads to one, when the scheme is not http/https, or when the redirect chain is too long. The error `meta` carries `tool_url` and, when known, the offending `tool_address`.",
+      "An outbound request the deployment makes to a URL a tenant chose — an http- or mcp-type tool's target, a webhook's `url`, an AI provider's `base_url`, a service-account key file's `token_uri` — names a destination that is not publicly routable: a loopback, private, link-local (cloud metadata), CGNAT or IPv6 ULA address, and the deployment's TOOL_EGRESS_ALLOWED_HOSTS does not list it. Also returned when a hostname resolves to such an address, when a redirect leads to one, when the scheme is not http/https, or when the redirect chain is too long. The error `meta` carries `tool_url` and, when known, the offending `tool_address`. A webhook delivery refused this way is closed rather than retried, with the reason on the delivery row.",
   },
   TOOL_HTTP_ERROR: {
     httpStatus: 502,

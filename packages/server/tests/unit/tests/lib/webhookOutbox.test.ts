@@ -262,10 +262,10 @@ describe('webhook delivery outbox', () => {
 
     const [, init] = callsToUrl(url)[0] as [
       string,
-      { body: string; headers: Record<string, string> },
+      { body: string; headers: HeadersInit },
     ];
 
-    const header = init.headers['X-Soat-Signature-V2'];
+    const header = new Headers(init.headers).get('X-Soat-Signature-V2') ?? '';
     expect(header).toMatch(/^t=\d+,v1=[0-9a-f]{64}$/);
 
     const [timestampPart, signaturePart] = header.split(',');
@@ -297,14 +297,16 @@ describe('webhook delivery outbox', () => {
 
     const [, init] = callsToUrl(url)[0] as [
       string,
-      { body: string; headers: Record<string, string> },
+      { body: string; headers: HeadersInit },
     ];
 
     const legacy = crypto
       .createHmac('sha256', webhook.secret)
       .update(init.body)
       .digest('hex');
-    expect(init.headers['X-Soat-Signature']).toBe(`sha256=${legacy}`);
+    expect(new Headers(init.headers).get('X-Soat-Signature')).toBe(
+      `sha256=${legacy}`
+    );
   });
 
   test('each attempt re-signs, so a retry never ships a stale timestamp', async () => {
@@ -334,10 +336,12 @@ describe('webhook delivery outbox', () => {
     const timestampOf = (index: number) => {
       const [, init] = callsToUrl(url)[index] as [
         string,
-        { headers: Record<string, string> },
+        { headers: HeadersInit },
       ];
       return Number(
-        init.headers['X-Soat-Signature-V2'].split(',')[0].slice('t='.length)
+        (new Headers(init.headers).get('X-Soat-Signature-V2') ?? '')
+          .split(',')[0]
+          .slice('t='.length)
       );
     };
 

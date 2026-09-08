@@ -55,6 +55,24 @@ describe('Webhooks', () => {
       expect(response.body.project_id).toBe(projectId);
     });
 
+    test.each([
+      ['not-a-url'],
+      ['ftp://hooks.example.com'],
+      ['https://user:pass@hooks.example.com/hook'],
+    ])('returns 400 for url %s', async (url) => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/webhooks')
+        .send({
+          project_id: projectId,
+          name: 'Bad URL Webhook',
+          url,
+          events: ['files.created'],
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
     test('returns 400 when required fields are missing', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/webhooks')

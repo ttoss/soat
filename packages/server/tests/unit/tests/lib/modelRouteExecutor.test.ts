@@ -1,4 +1,5 @@
 import { APICallError } from 'ai';
+import { DomainError } from 'src/errors';
 import { resetModelRouteBreakers } from 'src/lib/modelRouteBreaker';
 import { classifyModelRouteError } from 'src/lib/modelRouteErrors';
 import {
@@ -203,6 +204,29 @@ describe('classifyModelRouteError', () => {
   test('maps a connection-level fetch failure to provider_error', () => {
     const failure = new TypeError('fetch failed');
     expect(classifyModelRouteError({ error: failure })).toBe('provider_error');
+  });
+
+  // A target the deployment refuses to contact is a target this route cannot
+  // use, exactly like one that refuses the connection — and it burns no spend,
+  // so the fail-fast reasoning for a 400-class rejection does not apply. Without
+  // this, one misconfigured target takes the whole route down.
+  test('maps a blocked egress target to provider_error', () => {
+    expect(
+      classifyModelRouteError({
+        error: new DomainError(
+          'TOOL_EGRESS_BLOCKED',
+          'Request target 127.0.0.1 is not publicly routable.'
+        ),
+      })
+    ).toBe('provider_error');
+  });
+
+  test('a DomainError that is not an egress refusal stays non-failover', () => {
+    expect(
+      classifyModelRouteError({
+        error: new DomainError('AI_PROVIDER_MISCONFIGURED', 'bad record'),
+      })
+    ).toBeNull();
   });
 
   test('treats deterministic rejections as non-failover', () => {

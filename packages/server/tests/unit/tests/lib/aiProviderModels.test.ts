@@ -914,3 +914,66 @@ describe('enumerateProviderModels — unsupported', () => {
     ).rejects.toThrow(DomainError);
   });
 });
+
+describe('model listing egress and disclosure', () => {
+  const originalAllowlist = process.env.TOOL_EGRESS_ALLOWED_HOSTS;
+
+  afterEach(() => {
+    if (originalAllowlist === undefined) {
+      delete process.env.TOOL_EGRESS_ALLOWED_HOSTS;
+      return;
+    }
+    process.env.TOOL_EGRESS_ALLOWED_HOSTS = originalAllowlist;
+  });
+
+  // No `fetchImpl`, so this exercises the default one — the point being that a
+  // `base_url` naming the deployment's own network never reaches a socket.
+  test('refuses a base_url that is not publicly routable', async () => {
+    delete process.env.TOOL_EGRESS_ALLOWED_HOSTS;
+    await expect(
+      enumerateProviderModels({
+        provider: 'openai',
+        secretValue: 'sk-test',
+        baseUrl: 'http://169.254.169.254/latest',
+      })
+    ).rejects.toMatchObject({ code: 'TOOL_EGRESS_BLOCKED' });
+  });
+
+  test('refuses a bedrock region that would move the host', async () => {
+    await expect(
+      enumerateProviderModels({
+        provider: 'bedrock',
+        secretValue: null,
+        config: { region: 'evil.example.com/' },
+      })
+    ).rejects.toThrow(/config\.region/);
+  });
+
+  // The body of a refused listing is the read half of an SSRF: whatever the
+  // named host answered would otherwise come back in the error.
+  test('does not relay the provider response body', async () => {
+    const fetchImpl = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      text: async () => {
+        return 'ami-id\ninstance-profile\nsecret-from-an-internal-service';
+      },
+    });
+
+    await expect(
+      enumerateProviderModels({
+        provider: 'openai',
+        secretValue: 'sk-test',
+        fetchImpl,
+      })
+    ).rejects.toThrow(/HTTP 403/);
+
+    await expect(
+      enumerateProviderModels({
+        provider: 'openai',
+        secretValue: 'sk-test',
+        fetchImpl,
+      })
+    ).rejects.not.toThrow(/secret-from-an-internal-service/);
+  });
+});

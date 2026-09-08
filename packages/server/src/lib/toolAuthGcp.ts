@@ -7,6 +7,7 @@ import {
   type GcpServiceAccountAuthConfig,
   toolAuthFailed as authFailed,
 } from './toolAuthConfig';
+import { fetchWithEgressGuard } from './toolEgress';
 
 const log = createDebug('soat:toolAuth');
 
@@ -100,7 +101,9 @@ const exchangeAssertionForToken = async (args: {
   tokenUri: string;
   assertion: string;
 }): Promise<{ accessToken: string; expiresInSeconds: number }> => {
-  const response = await fetch(args.tokenUri, {
+  // `token_uri` comes out of the tenant's own service-account JSON, so it is a
+  // URL a tenant chose and the server requests — guarded like a tool target.
+  const response = await fetchWithEgressGuard(args.tokenUri, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -112,9 +115,17 @@ const exchangeAssertionForToken = async (args: {
   const text = await response.text();
 
   if (!response.ok) {
+    // The body goes to the server log, not to the caller: the endpoint that
+    // wrote it is one the tenant named, so relaying it would answer them with
+    // whatever that host said.
+    log(
+      'exchangeAssertionForToken: rejected status=%d body=%s',
+      response.status,
+      text
+    );
     throw authFailed({
       message: `The GCP token endpoint rejected the service account assertion (HTTP ${response.status}).`,
-      meta: { upstream_status: response.status, upstream_body: text },
+      meta: { upstream_status: response.status },
     });
   }
 
@@ -122,9 +133,10 @@ const exchangeAssertionForToken = async (args: {
   try {
     parsed = JSON.parse(text);
   } catch {
+    log('exchangeAssertionForToken: non-JSON body=%s', text);
     throw authFailed({
       message: 'The GCP token endpoint returned a non-JSON response.',
-      meta: { upstream_status: response.status, upstream_body: text },
+      meta: { upstream_status: response.status },
     });
   }
 
