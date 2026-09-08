@@ -51,7 +51,8 @@ carries whatever credential the record authenticates with. So `config.location`,
 `config.project`, `config.region` and `config.resourceName` must each be a
 single name — letters, digits and hyphens — and anything else is refused with
 `400 VALIDATION_FAILED` on create and update, and `400
-AI_PROVIDER_MISCONFIGURED` if a record written before this rule is used.
+AI_PROVIDER_MISCONFIGURED` when such a record is used, so a value that reached
+the table some other way cannot reach the host it names.
 
 `base_url` names its endpoint outright, so it is checked for shape instead: an
 absolute `http`/`https` URL, with no username or password in it (link a secret
@@ -110,7 +111,7 @@ The `bedrock` provider supports two authentication modes, determined by the shap
 
 > **Important:** Store the secret value as a **JSON object** (shown above) — the only form that supports IAM credentials. As a convenience, a bare `ABSK…` string is also accepted and treated as `{ "apiKey": "<value>" }`.
 
-If neither field is present the default AWS credential chain (environment variables, instance profile, etc.) would be used — the **deployment's** credentials rather than the record's, which a deployment allows only by setting [`AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS`](../self-hosting/configuration.md#provider-credentials). Without it, a `bedrock` record that links no secret is refused at create and update with `400 VALIDATION_FAILED`, and one written before the rule existed is refused with `400 AI_PROVIDER_MISCONFIGURED` when it is used.
+If neither field is present the default AWS credential chain (environment variables, instance profile, etc.) would be used — the **deployment's** credentials rather than the record's, which a deployment allows only by setting [`AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS`](../self-hosting/configuration.md#provider-credentials). Without it, a `bedrock` record that links no secret is refused at create and update with `400 VALIDATION_FAILED`, and with `400 AI_PROVIDER_MISCONFIGURED` when such a record is used, so one that reached the table some other way fails closed rather than signing with credentials it was never given.
 
 The `region` field in the provider's `config` object defaults to `us-east-1`. An `apiKey` in `config` (without a linked secret) also works — useful for quick testing; link a secret in production.
 
@@ -135,7 +136,7 @@ Like `bedrock`, the authentication mode is determined by the shape of the linked
 
 **Application Default Credentials** — link no secret at all and the server falls back to [ADC](https://cloud.google.com/docs/authentication/application-default-credentials): `GOOGLE_APPLICATION_CREDENTIALS`, Workload Identity, the GCE/GKE metadata server, or a local `gcloud auth application-default login`. No key material is stored anywhere, which makes it the natural mode when SOAT itself runs on Google Cloud.
 
-Those are the deployment's credentials, though, and a provider record is written by a tenant — so this mode is available only where the operator set [`AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS`](../self-hosting/configuration.md#provider-credentials). Without it, a `vertex` record that links no secret is refused at create and update with `400 VALIDATION_FAILED`, and one written before the rule existed is refused with `400 AI_PROVIDER_MISCONFIGURED` when it is used. It is a setting for a single-tenant deployment: on any other, it lets one project's record generate on the account the server runs as.
+Those are the deployment's credentials, though, and a provider record is written by a tenant — so this mode is available only where the operator set [`AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS`](../self-hosting/configuration.md#provider-credentials). Without it, a `vertex` record that links no secret is refused at create and update with `400 VALIDATION_FAILED`, and with `400 AI_PROVIDER_MISCONFIGURED` when such a record is used. It is a setting for a single-tenant deployment: on any other, it lets one project's record generate on the account the server runs as.
 
 #### Federating an AWS identity (SOAT on ECS or EC2)
 

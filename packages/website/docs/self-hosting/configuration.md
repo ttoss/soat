@@ -243,9 +243,9 @@ carry a credential of its own:
 
 - `400 VALIDATION_FAILED` when such a record is created or updated with neither
   a linked secret nor a `config.apiKey`, and
-- `400 AI_PROVIDER_MISCONFIGURED` when a record written before this rule existed
-  is used to generate or to list models, so it fails closed rather than signing
-  with credentials it was never given.
+- `400 AI_PROVIDER_MISCONFIGURED` when such a record is used to generate or to
+  list models, so one that reached the table some other way fails closed rather
+  than signing with credentials it was never given.
 
 Set it to `true` on a **single-tenant** deployment, where the account the server
 runs as is the account its projects are meant to bill — a server on an EC2
@@ -254,15 +254,6 @@ wherever a project may be created by someone you would not hand those
 credentials to: without it, such a record generates on the deployment's cloud
 account, against the deployment's quotas, with whatever IAM the deployment's
 role holds.
-
-:::warning Upgrading
-This rule is new, and it fails closed. If your deployment already relies on
-credential-less `bedrock` or `vertex` records — including the credential-less
-record the [model listing docs](../modules/ai-providers.md#listing-models-before-you-hold-credentials)
-describe for browsing a vendor's catalogue — set
-`AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS=true` **before** upgrading, or link a
-secret to each of those records.
-:::
 
 The embedding stack is unaffected: `EMBEDDING_PROVIDER` and its region are
 operator settings that no tenant writes, so `bedrock` embeddings keep using the

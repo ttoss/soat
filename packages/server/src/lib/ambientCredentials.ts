@@ -42,9 +42,9 @@ const ambientCredentialsAllowed = (): boolean => {
 
 /**
  * The build-time half: refuses at the point a provider SDK would be handed the
- * deployment's credentials. Placed there rather than at the write alone so a
- * record created before this rule existed fails closed instead of signing with
- * them on the next generation.
+ * deployment's credentials. Placed there rather than at the write alone because
+ * the setting can be turned off while credential-less rows already exist — the
+ * write refused none of them — so the credential is checked where it is used.
  */
 export const assertAmbientCredentialsAllowed = (args: {
   provider: AmbientProvider;
