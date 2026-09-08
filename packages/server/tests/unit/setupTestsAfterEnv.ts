@@ -108,24 +108,18 @@ jest.setTimeout(120000);
  * container start and a schema `sync()` 167 times over.
  */
 beforeAll(async () => {
-  try {
-    database = await createTestDatabase({ connection });
+  database = await createTestDatabase({ connection });
 
-    const db = await initialize({
-      models,
-      logging: false,
-      ...connection,
-      database,
-    });
+  const db = await initialize({
+    models,
+    logging: false,
+    ...connection,
+    database,
+  });
 
-    await initializeDatabase(app);
+  await initializeDatabase(app);
 
-    sequelize = db.sequelize;
-  } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error('Error during database initialization:', error);
-    throw error;
-  }
+  sequelize = db.sequelize;
 });
 
 afterAll(async () => {
