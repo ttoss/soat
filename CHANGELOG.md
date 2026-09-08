@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.41.0](https://github.com/ttoss/soat/compare/v0.40.2...v0.41.0) (2026-09-08)
+
+### Bug Fixes
+
+* **server:** report a partly-priced cost window instead of enforcing a fraction of it ([#1234](https://github.com/ttoss/soat/issues/1234)) ([4966850](https://github.com/ttoss/soat/commit/4966850e151ae4a33da2e2c5867c83c16e6e45ef)), closes [#1201](https://github.com/ttoss/soat/issues/1201) [#1228](https://github.com/ttoss/soat/issues/1228)
+
+### Features
+
+* **server:** publish a chunk_count component on the storage meter ([#1233](https://github.com/ttoss/soat/issues/1233)) ([1039283](https://github.com/ttoss/soat/commit/1039283781e5ec478ae07dcc079be38b9d010f0f)), closes [#1232](https://github.com/ttoss/soat/issues/1232)
+
 ## [0.40.2](https://github.com/ttoss/soat/compare/v0.40.1...v0.40.2) (2026-09-07)
 
 ### Bug Fixes
