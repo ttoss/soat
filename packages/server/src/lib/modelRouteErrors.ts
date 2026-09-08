@@ -1,5 +1,6 @@
 import { APICallError, RetryError } from 'ai';
 
+import { DomainError } from '../errors';
 import { isFetchFailure } from './providerError';
 
 /**
@@ -42,6 +43,35 @@ const isAbortLike = (error: unknown): boolean => {
  * A caller-initiated abort (the caller's own signal fired) aborts the run and
  * never fails over, even though it looks exactly like a per-target timeout.
  */
+const classifyApiCallError = (
+  error: APICallError
+): ModelRouteErrorClass | null => {
+  if (error.statusCode === 429) return 'rate_limited';
+  // No status code at all = the request never got a response (connection
+  // level). `isRetryable` is the SDK's own provider-shaped verdict.
+  if (
+    error.statusCode === undefined ||
+    error.statusCode >= 500 ||
+    error.isRetryable
+  ) {
+    return 'provider_error';
+  }
+  return null;
+};
+
+/**
+ * A target the deployment refuses to contact is a target this route cannot use
+ * — the same standing as one that refuses the connection, which is what a
+ * `base_url` naming an unreachable host produced before the egress guard
+ * covered provider requests. The fail-fast rule above does not apply: nothing
+ * was sent, so nothing was spent, and the next target is a different provider
+ * on a different host. A caller whose every target is blocked still gets the
+ * refusal, and the attempt is reported either way.
+ */
+const isEgressRefusal = (error: unknown): boolean => {
+  return error instanceof DomainError && error.code === 'TOOL_EGRESS_BLOCKED';
+};
+
 export const classifyModelRouteError = (args: {
   error: unknown;
   callerSignal?: AbortSignal;
@@ -50,22 +80,10 @@ export const classifyModelRouteError = (args: {
 
   const error = unwrapRetryError(args.error);
 
-  if (APICallError.isInstance(error)) {
-    if (error.statusCode === 429) return 'rate_limited';
-    // No status code at all = the request never got a response (connection
-    // level). `isRetryable` is the SDK's own provider-shaped verdict.
-    if (
-      error.statusCode === undefined ||
-      error.statusCode >= 500 ||
-      error.isRetryable
-    ) {
-      return 'provider_error';
-    }
-    return null;
-  }
-
+  if (APICallError.isInstance(error)) return classifyApiCallError(error);
   if (isAbortLike(error)) return 'timeout';
   if (isFetchFailure(error)) return 'provider_error';
+  if (isEgressRefusal(error)) return 'provider_error';
 
   return null;
 };

@@ -321,6 +321,78 @@ describe('Model route failover through agent generation', () => {
     expect(record.body.routing.attempts[1].model).toBe('healthy-model');
   });
 
+  // The smoke stack's failover case: a target whose `base_url` the deployment
+  // refuses to contact. It is a target this route cannot use, so the route
+  // moves on — one misconfigured target must not take the whole route down.
+  // Both stubs are on loopback, so the allowlist is narrowed to the healthy
+  // one's port for the length of this test.
+  test('a route-only agent completes past a target the egress guard refuses', async () => {
+    const healthy = track(
+      await startLlmStub(() => {
+        return chatCompletion({
+          model: 'healthy-model',
+          content: 'served past the blocked target',
+        });
+      })
+    );
+
+    const allowlist = process.env.TOOL_EGRESS_ALLOWED_HOSTS;
+    process.env.TOOL_EGRESS_ALLOWED_HOSTS = `127.0.0.1:${new URL(healthy.baseUrl).port}`;
+
+    try {
+      const healthyProviderId = await createProvider({
+        name: 'mrfail-egress-healthy',
+        baseUrl: healthy.baseUrl,
+        defaultModel: 'healthy-model',
+      });
+      const routeId = await createRoute({
+        name: 'failover-egress',
+        targets: [
+          {
+            ai_provider_id: await createProvider({
+              name: 'mrfail-egress-blocked',
+              // Nothing listens here, and the guard refuses it before anything
+              // tries: port 1 on loopback, outside the narrowed allowlist.
+              baseUrl: 'http://127.0.0.1:1',
+              defaultModel: 'blocked-model',
+            }),
+            model: 'blocked-model',
+          },
+          { ai_provider_id: healthyProviderId, model: 'healthy-model' },
+        ],
+      });
+      const agentId = await createRoutedAgent({
+        name: 'Egress Failover Agent',
+        routeId,
+      });
+
+      const res = await generate(agentId);
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('completed');
+      expect(res.body.output.content).toBe('served past the blocked target');
+      expect(res.body.ai_provider_id).toBe(healthyProviderId);
+
+      const record = await authenticatedTestClient(userToken).get(
+        `/api/v1/generations/${res.body.id}`
+      );
+      expect(record.body.routing).toMatchObject({
+        route_id: routeId,
+        target_index: 1,
+        fallbacks: 1,
+      });
+      expect(record.body.routing.attempts[0].error_class).toBe(
+        'provider_error'
+      );
+    } finally {
+      if (allowlist === undefined) {
+        delete process.env.TOOL_EGRESS_ALLOWED_HOSTS;
+      } else {
+        process.env.TOOL_EGRESS_ALLOWED_HOSTS = allowlist;
+      }
+    }
+  });
+
   test('meters a routed generation against the provider that served it', async () => {
     const failing = track(
       await startLlmStub(() => {
