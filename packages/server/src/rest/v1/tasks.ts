@@ -14,9 +14,15 @@ import {
   transitionTask,
   updateTask,
 } from 'src/lib/tasks';
+import {
+  AUTOMATION_STATUS_NONE,
+  TASK_AUTOMATION_STATUSES,
+  type TaskAutomationStatus,
+} from 'src/lib/tasksAutomationStatus';
 import { pauseTask, resumeTask } from 'src/lib/tasksPauseActions';
 
 import {
+  parseEnumListQuery,
   parsePagination,
   requireAuth,
   resolveReadProjectIds,
@@ -53,11 +59,24 @@ tasksRouter.get('/tasks', async (ctx: Context) => {
     action: 'tasks:ListTasks',
     resourceType: 'task',
   });
+
+  // The absent status is a value a task really holds, so it is a value of the
+  // filter too — the parameter's own absence already means "every task".
+  const automationStatuses = parseEnumListQuery({
+    ctx,
+    name: 'automation_status',
+    allowed: [...TASK_AUTOMATION_STATUSES, AUTOMATION_STATUS_NONE],
+  })?.map((value) => {
+    return value === AUTOMATION_STATUS_NONE
+      ? null
+      : (value as TaskAutomationStatus);
+  });
   ctx.body = await listTasks({
     projectIds: projectIds ?? [],
     workflowId: ctx.query.workflow_id as string | undefined,
     state: ctx.query.state as string | undefined,
     status: ctx.query.status as string | undefined,
+    automationStatuses,
     assignee: ctx.query.assignee as string | undefined,
     ...parsePagination(ctx),
   });

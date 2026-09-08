@@ -429,7 +429,8 @@ paths:
       summary: List orchestration runs
       description: >-
         Returns orchestration runs the caller can access, optionally filtered by
-        orchestration, by parent run, or by whether the run has a parent at all.
+        orchestration, by parent run, by status, or by whether the run has a
+        parent at all.
 
 
         Note when aggregating: a run's `usage` covers its whole subtree, so
@@ -468,6 +469,37 @@ paths:
             is a `400`; any value other than `true` or `false` is a `400`.
           schema:
             type: boolean
+        - name: status
+          in: query
+          required: false
+          description: >-
+            Filter by run status. Repeat the parameter to OR values —
+            `status=queued&status=running&status=sleeping&status=awaiting_input`
+            is the set still driving, which is how a caller finds live work
+            without paging every run the project ever started.
+
+
+            There is no `non_terminal` shorthand on purpose: which statuses
+            count as live is the caller's policy. A value outside the enum,
+            empty string included, is a `400`.
+          schema:
+            type: array
+            items:
+              type: string
+              enum:
+                - queued
+                - running
+                - sleeping
+                - awaiting_input
+                - succeeded
+                - failed
+                - cancelled
+                - expired
+          style: form
+          explode: true
+          example:
+            - queued
+            - running
         - name: limit
           in: query
           required: false

@@ -2671,6 +2671,136 @@ describe('Orchestrations', () => {
     });
   });
 
+  // A background job stopping async spend has to find the runs still driving.
+  // Without this filter the only correct read is every run the project ever
+  // started, since a long-running old run sits behind any number of newer
+  // terminal ones (#1242).
+  describe('GET /api/v1/orchestration-runs — status filter', () => {
+    let statusOrchId: string;
+    let succeededRunId: string;
+    let awaitingRunId: string;
+
+    beforeAll(async () => {
+      const orch = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          ...simpleOrchestration,
+          name: 'Status Filter Pipeline',
+          project_id: projectId,
+        });
+      expect(orch.status).toBe(201);
+      statusOrchId = orch.body.id;
+
+      const succeeded = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: statusOrchId, input: {} });
+      expect(succeeded.status).toBe(201);
+      expect(succeeded.body.status).toBe('succeeded');
+      succeededRunId = succeeded.body.id;
+
+      const humanOrch = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          ...humanNodeOrchestration,
+          name: 'Status Filter Human Pipeline',
+          project_id: projectId,
+        });
+      expect(humanOrch.status).toBe(201);
+      const awaiting = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: humanOrch.body.id, input: {} });
+      expect(awaiting.status).toBe(201);
+      expect(awaiting.body.status).toBe('awaiting_input');
+      awaitingRunId = awaiting.body.id;
+    });
+
+    const listByStatus = (query: string) => {
+      return authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs?limit=100&${query}`
+      );
+    };
+
+    test('a single status narrows the listing to it', async () => {
+      const res = await listByStatus('status=awaiting_input');
+      expect(res.status).toBe(200);
+      expect(
+        res.body.data.every((r: { status: string }) => {
+          return r.status === 'awaiting_input';
+        })
+      ).toBe(true);
+      expect(
+        res.body.data.some((r: { id: string }) => {
+          return r.id === awaitingRunId;
+        })
+      ).toBe(true);
+    });
+
+    // Which statuses count as live is the caller's policy, not the runtime's,
+    // so the parameter repeats rather than naming a "non-terminal" set.
+    test('the parameter repeats, ORing the values', async () => {
+      const live = 'queued,running,sleeping,awaiting_input'.split(',');
+      const res = await listByStatus(
+        live
+          .map((s) => {
+            return `status=${s}`;
+          })
+          .join('&')
+      );
+      expect(res.status).toBe(200);
+      expect(
+        res.body.data.every((r: { status: string }) => {
+          return live.includes(r.status);
+        })
+      ).toBe(true);
+      expect(
+        res.body.data.some((r: { id: string }) => {
+          return r.id === awaitingRunId;
+        })
+      ).toBe(true);
+      expect(
+        res.body.data.some((r: { id: string }) => {
+          return r.id === succeededRunId;
+        })
+      ).toBe(false);
+    });
+
+    test('it composes with the other filters', async () => {
+      const res = await listByStatus(
+        `status=succeeded&orchestration_id=${statusOrchId}&nested=false`
+      );
+      expect(res.status).toBe(200);
+      expect(
+        res.body.data.every(
+          (r: { status: string; parent_orchestration_run_id: string | null }) => {
+            return (
+              r.status === 'succeeded' && r.parent_orchestration_run_id === null
+            );
+          }
+        )
+      ).toBe(true);
+      expect(
+        res.body.data.some((r: { id: string }) => {
+          return r.id === succeededRunId;
+        })
+      ).toBe(true);
+    });
+
+    test('a status outside the enum is rejected', async () => {
+      const res = await listByStatus('status=running&status=finished');
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toMatch(/finished/);
+    });
+
+    // An unset client-side variable interpolates to nothing, and answering it
+    // with every run is the full scan this filter exists to avoid.
+    test('an empty status value is rejected', async () => {
+      const res = await listByStatus('status=');
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+  });
+
   describe('DELETE /api/v1/orchestrations/:orchestration_id', () => {
     test('admin can delete an orchestration without project scoping', async () => {
       const createRes = await authenticatedTestClient(userToken)

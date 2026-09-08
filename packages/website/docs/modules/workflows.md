@@ -347,6 +347,32 @@ Pausing is **idempotent** — a second pause answers with the task unchanged —
 closed task answers `409 TASK_NOT_PAUSABLE`, and resuming a task that carries no
 pause answers `409 TASK_NOT_PAUSED`.
 
+### Finding the tasks whose automation is running
+
+[`GET /api/v1/tasks`](/docs/api/tasks/list-tasks) filters on
+`automation_status` beside `status`, `state`, `workflow_id` and `assignee`. The
+two answer different questions: `status=open` narrows a board to the cards still
+in play, while `automation_status` says which of those has a dispatch of its own
+under way — the set a consumer that pauses spend has to find without paging the
+whole board.
+
+The parameter **repeats**, and the values are ORed:
+
+```
+GET /api/v1/tasks?status=open&automation_status=running&automation_status=paused
+```
+
+`none` selects the cards whose `automation_status` is `null` — the ones that
+never entered a state with an automation. That absence is a value a task really
+holds, so it is a value of the filter too; omitting the parameter already means
+"every task". It is spelled `none` rather than `null` because the CLI reads the
+token `null` as JSON null for every nullable field it has, and one spelling has
+to work in all three clients.
+
+A value outside `running` / `completed` / `failed` / `unrouted` / `paused` /
+`none` — empty string included — is a `400 VALIDATION_FAILED` rather than a
+silently unfiltered listing.
+
 ### Versioning
 
 A workflow's state machine is versioned by the same append-only archive that

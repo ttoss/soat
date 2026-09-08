@@ -314,6 +314,18 @@ Pausing is **idempotent** — a second pause answers with the run unchanged, so 
 
 **What a pause does not reach** is the unit of work already in flight when it arrives — the current round's nodes, including a nested child started in it. That is the same bound the checkpoint gives: a pause defers what has not started, it does not interrupt what has.
 
+### Listing the runs still driving
+
+[`GET /api/v1/orchestration-runs`](/docs/api/orchestrations/list-orchestration-runs) filters on `status` beside `orchestration_id`, `parent_orchestration_run_id` and `nested`. The parameter **repeats**, and the values are ORed:
+
+```
+GET /api/v1/orchestration-runs?status=queued&status=running&status=sleeping&status=awaiting_input
+```
+
+Runs accumulate and the listing is newest-first, so without this a consumer looking for live work — a job pausing what a stopped account is still spending, for one — has to page every run the project ever started: a long-running old run sits behind any number of newer terminal ones, which makes an early exit on the newest page unsound.
+
+There is deliberately no `non_terminal` shorthand. Which statuses count as live is the caller's policy: a run parked `awaiting_input` spends nothing until someone hands it back, so a consumer bounding spend leaves it alone while a dashboard would not. A value outside the [status enum](#orchestrationrun) — empty string included — is a `400 VALIDATION_FAILED` rather than a silently unfiltered listing.
+
 ### Concurrency limits
 
 Parallelism is bounded on two axes:

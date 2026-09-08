@@ -176,6 +176,24 @@ export type MappedNodeExecution = {
   created_at: Date;
 };
 
+/**
+ * Every status a run can hold, in one list so the listing's `status` filter and
+ * the wire type cannot describe different sets.
+ */
+export const ORCHESTRATION_RUN_STATUSES = [
+  'queued',
+  'running',
+  'sleeping',
+  'awaiting_input',
+  'succeeded',
+  'failed',
+  'cancelled',
+  'expired',
+] as const;
+
+export type OrchestrationRunStatus =
+  (typeof ORCHESTRATION_RUN_STATUSES)[number];
+
 export type MappedOrchestrationRun = {
   id: string;
   orchestration_id: string;
@@ -184,15 +202,7 @@ export type MappedOrchestrationRun = {
   // graph — the only thing there is to fall back to.
   orchestration_version: number | null;
   project_id: string;
-  status:
-    | 'queued'
-    | 'running'
-    | 'sleeping'
-    | 'awaiting_input'
-    | 'succeeded'
-    | 'failed'
-    | 'cancelled'
-    | 'expired';
+  status: OrchestrationRunStatus;
   state: Record<string, unknown>;
   active_nodes: string[];
   artifacts: Record<string, unknown>;
@@ -645,6 +655,10 @@ export const listOrchestrationRuns = async (args: {
   // Makes an aggregate over runs safe: `usage` is transitive, so summing it
   // across a list mixing parents and children counts the children twice.
   nested?: boolean;
+  // ORed. Without it, finding the runs still driving means paging every run the
+  // project ever started: a long-running old run sits behind any number of
+  // newer terminal ones, so an early exit on the newest page is unsound (#1242).
+  statuses?: OrchestrationRunStatus[];
   projectIds?: number[];
   limit?: number;
   offset?: number;
@@ -655,6 +669,7 @@ export const listOrchestrationRuns = async (args: {
 
   const where: Record<string, unknown> = {};
   if (args.projectIds) where['projectId'] = args.projectIds;
+  if (args.statuses?.length) where['status'] = args.statuses;
   if (args.parentRunId !== undefined) {
     where['parentRunId'] = args.parentRunId;
   } else if (args.nested !== undefined) {

@@ -25,8 +25,9 @@ paths:
   /api/v1/tasks:
     get:
       description: >-
-        Lists tasks (the board query). Filter by workflow, state, status, or
-        assignee — `GET /tasks?workflow_id=...&state=...` is one board column.
+        Lists tasks (the board query). Filter by workflow, state, status,
+        automation status, or assignee — `GET /tasks?workflow_id=...&state=...`
+        is one board column.
       tags:
         - Tasks
       summary: List tasks
@@ -55,6 +56,33 @@ paths:
             enum:
               - open
               - closed
+        - name: automation_status
+          in: query
+          required: false
+          description: >-
+            Filter by the current state's dispatch status. Repeat the parameter
+            to OR values. `none` selects the tasks whose `automation_status` is
+            `null` — the ones that never entered a state with an automation. It
+            is a value a task really holds, so it is a value of the filter too;
+            the parameter's own absence already means "every task".
+
+
+            A value outside the enum, empty string included, is a `400`.
+          schema:
+            type: array
+            items:
+              type: string
+              enum:
+                - running
+                - completed
+                - failed
+                - unrouted
+                - paused
+                - none
+          style: form
+          explode: true
+          example:
+            - running
         - name: assignee
           in: query
           required: false

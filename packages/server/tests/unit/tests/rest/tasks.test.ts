@@ -632,6 +632,138 @@ describe('Tasks', () => {
     });
   });
 
+  // The stop side of a spend gate has to find the cards whose automation is
+  // still dispatching. `status=open` narrows a board; it does not say which of
+  // those cards is costing anything (#1242).
+  describe('GET /api/v1/tasks — automation_status filter', () => {
+    let filterWorkflowId: string;
+    let pausedTaskId: string;
+    let idleTaskId: string;
+
+    beforeAll(async () => {
+      filterWorkflowId = (
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/workflows')
+          .send({
+            project_id: projectId,
+            name: 'automation-status-filter',
+            states: [
+              { name: 'idea', initial: true },
+              {
+                name: 'writing',
+                on_enter: {
+                  dispatch: {
+                    kind: 'agent',
+                    agent_id: agentId,
+                    input_mapping: { prompt: 'write' },
+                  },
+                },
+              },
+            ],
+            transitions: [{ name: 'to_writing', from: ['idea'], to: 'writing' }],
+          })
+      ).body.id;
+
+      const create = () => {
+        return authenticatedTestClient(userToken).post('/api/v1/tasks').send({
+          project_id: projectId,
+          workflow_id: filterWorkflowId,
+          title: 'filter card',
+        });
+      };
+
+      idleTaskId = (await create()).body.id;
+
+      // Paused rather than dispatched: the suppression is what records a
+      // non-null `automation_status` without spending a generation.
+      const paused = (await create()).body;
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/tasks/${paused.id}/pause`)
+        .send({});
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/tasks/${paused.id}/transitions`)
+        .send({ transition: 'to_writing' });
+      await pollTask({
+        token: userToken,
+        taskId: paused.id,
+        predicate: (t) => {
+          return t.automation_status === 'paused';
+        },
+      });
+      pausedTaskId = paused.id;
+    });
+
+    const listByAutomationStatus = (query: string) => {
+      return authenticatedTestClient(userToken).get(
+        `/api/v1/tasks?limit=100&workflow_id=${filterWorkflowId}&${query}`
+      );
+    };
+
+    test('a single value narrows the listing to it', async () => {
+      const res = await listByAutomationStatus('automation_status=paused');
+      expect(res.status).toBe(200);
+      expect(
+        res.body.data.map((t: { id: string }) => {
+          return t.id;
+        })
+      ).toEqual([pausedTaskId]);
+    });
+
+    // A task that never entered a state with an automation carries `null`, so
+    // the value has to be expressible or that half of the board is unaskable.
+    test('`none` selects the tasks with no automation status', async () => {
+      const res = await listByAutomationStatus('automation_status=none');
+      expect(res.status).toBe(200);
+      expect(
+        res.body.data.every((t: { automation_status: string | null }) => {
+          return t.automation_status === null;
+        })
+      ).toBe(true);
+      const ids = res.body.data.map((t: { id: string }) => {
+        return t.id;
+      });
+      expect(ids).toContain(idleTaskId);
+      expect(ids).not.toContain(pausedTaskId);
+    });
+
+    test('the parameter repeats, ORing the values including `none`', async () => {
+      const res = await listByAutomationStatus(
+        'automation_status=running&automation_status=paused&automation_status=none'
+      );
+      expect(res.status).toBe(200);
+      const ids = res.body.data.map((t: { id: string }) => {
+        return t.id;
+      });
+      expect(ids).toContain(pausedTaskId);
+      expect(ids).toContain(idleTaskId);
+    });
+
+    test('it composes with the status filter', async () => {
+      const res = await listByAutomationStatus(
+        'status=open&automation_status=paused'
+      );
+      expect(res.status).toBe(200);
+      expect(
+        res.body.data.map((t: { id: string }) => {
+          return t.id;
+        })
+      ).toEqual([pausedTaskId]);
+    });
+
+    test('a value outside the enum is rejected', async () => {
+      const res = await listByAutomationStatus('automation_status=dispatching');
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toMatch(/dispatching/);
+    });
+
+    test('an empty value is rejected', async () => {
+      const res = await listByAutomationStatus('automation_status=');
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+  });
+
   describe('GET /api/v1/tasks/:id', () => {
     test('returns a single task to a permitted user', async () => {
       const task = (await createTask({ topic: 'x' })).body;
