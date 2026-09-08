@@ -1710,7 +1710,9 @@ describe('Usage', () => {
       // Exactly 0.3 — not 0.30000000000000004. `toBe` on purpose: the point is
       // the serialized figure, which `toBeCloseTo` would not catch.
       expect(gbDay!.quantity).toBe(0.3);
-      expect(res.body.totals.components[0].quantity).toBe(0.3);
+      expect(findComponent(res.body.totals.components, 'gb_day')!.quantity).toBe(
+        0.3
+      );
     });
 
     test('a storage bucket reports its measured gb_day quantity, not zero', async () => {
@@ -1787,8 +1789,12 @@ describe('Usage', () => {
           return g.key;
         })
       ).toEqual(['gb-day']);
-      expect(res.body.totals.components).toHaveLength(1);
-      expect(res.body.totals.components[0].component).toBe('gb_day');
+      // Both measured dimensions of the storage SKU, and nothing else.
+      expect(
+        res.body.totals.components.map((c: AggregateComponent) => {
+          return c.component;
+        })
+      ).toEqual(['chunk_count', 'gb_day']);
     });
 
     test('meter_type echoes null when unfiltered', async () => {

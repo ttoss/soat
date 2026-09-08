@@ -805,12 +805,12 @@ components:
           description: >
             The measured dimension: `input_tokens`, `cached_tokens`,
             `output_tokens`, `reasoning_tokens`, `compute_second`, `request`,
-            `gb_day`, …
+            `gb_day`, `chunk_count`, …
         unit:
           type: string
           description: >
             Unit `quantity` is measured in: `token`, `compute_second`,
-            `request`, `gb_day`.
+            `request`, `gb_day`, `count`.
         quantity:
           type: number
           description: >
