@@ -7,6 +7,10 @@ import { paginatedList } from './pagination';
 import type { RequestPrincipal } from './principals';
 import { emitTaskEvent } from './taskEvents';
 import { runStateAutomation } from './tasksAutomation';
+import {
+  automationStatusWhere,
+  type TaskAutomationStatus,
+} from './tasksAutomationStatus';
 import { resolveTaskDefinition } from './taskWorkflowDefinition';
 import { sanitizeCallerToolContext } from './toolContext';
 import { validatePayload, type WorkflowState } from './workflowsValidation';
@@ -143,6 +147,9 @@ export const listTasks = async (args: {
   workflowId?: string;
   state?: string;
   status?: string;
+  // ORed, `null` included. `status=open` narrows a board; it does not say which
+  // of those cards has an automation still dispatching (#1242).
+  automationStatuses?: (TaskAutomationStatus | null)[];
   assignee?: string;
   limit?: number;
   offset?: number;
@@ -158,6 +165,10 @@ export const listTasks = async (args: {
   if (args.state) where.state = args.state;
   if (args.status) where.status = args.status;
   if (args.assignee) where.assignee = args.assignee;
+
+  if (args.automationStatuses?.length) {
+    where.automationStatus = automationStatusWhere(args.automationStatuses);
+  }
 
   if (args.workflowId) {
     const workflow = await db.Workflow.findOne({

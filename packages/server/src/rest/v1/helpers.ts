@@ -383,3 +383,39 @@ export type { RequestPrincipal } from 'src/lib/principals';
 export const requestPrincipalFromCtx = (ctx: Context): RequestPrincipal => {
   return principalFromAuthUser(ctx.authUser!);
 };
+
+/**
+ * A repeatable query parameter's values, checked against the enum the column
+ * holds.
+ *
+ * Fail-closed on every value, empty string included: an unset client-side
+ * variable interpolates to nothing, and answering `?status=` with the whole
+ * listing hands back the full scan a status filter exists to avoid (#1242).
+ */
+export const parseEnumListQuery = (args: {
+  ctx: Context;
+  name: string;
+  allowed: readonly string[];
+}): string[] | undefined => {
+  const raw = args.ctx.query[args.name];
+  if (raw === undefined) return undefined;
+
+  const values = Array.isArray(raw) ? raw : [raw];
+  const unknown = values.filter((value) => {
+    return !args.allowed.includes(value);
+  });
+  if (unknown.length > 0) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      `\`${args.name}\` accepts only ${args.allowed.join(', ')} — ` +
+        `received ${unknown
+          .map((v) => {
+            return `'${v}'`;
+          })
+          .join(', ')}`,
+      { parameter: args.name, allowed: [...args.allowed], invalid: unknown }
+    );
+  }
+
+  return [...new Set(values)];
+};

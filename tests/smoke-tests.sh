@@ -1974,6 +1974,24 @@ if ! printf '%s\n' "$NESTED_CHILDREN_ALL" | jq -e '(.data | length) > 0 and all(
 fi
 echo "Nested run attribution: OK"
 
+# The filter a consumer of the pause needs: the runs still driving, without
+# paging every run the project ever started (#1242).
+LIVE_RUNS=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestration-runs \
+  --status queued --status running --status sleeping --status awaiting_input \
+  --limit 100)
+if ! printf '%s\n' "$LIVE_RUNS" | jq -e 'all(.data[]; .status | IN("queued","running","sleeping","awaiting_input"))' >/dev/null 2>&1; then
+  echo "the repeated status filter returned a run outside the requested set"
+  printf '%s\n' "$LIVE_RUNS"
+  exit 1
+fi
+SETTLED_RUNS=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestration-runs --status succeeded --limit 100)
+if ! printf '%s\n' "$SETTLED_RUNS" | jq -e --arg id "$ORCH_RUN_ID" '(.data | map(.id) | index($id)) != null and all(.data[]; .status == "succeeded")' >/dev/null 2>&1; then
+  echo "status=succeeded did not return exactly the settled runs"
+  printf '%s\n' "$SETTLED_RUNS"
+  exit 1
+fi
+echo "Run status filter: OK"
+
 echo "--- Listing runs ---"
 ORCH_RUN_LIST_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestration-runs --orchestration-id "$ORCH_ID")
 if ! printf '%s\n' "$ORCH_RUN_LIST_RESP" | jq -e --arg id "$ORCH_RUN_ID" '.data | map(.id) | index($id) != null' >/dev/null 2>&1; then
@@ -6029,6 +6047,23 @@ echo "Transition history principal_kind: OK"
 
 # Board query by state/status.
 $SOAT_CLI list-tasks --project-id "$PROJECT_PUBLIC_ID" --workflow-id "$WORKFLOW_ID" --status closed >/dev/null
+
+# Which of the open cards has an automation of its own under way — the question
+# `status` cannot answer (#1242). `none` names the cards that never entered a
+# state with one.
+IDLE_TASKS=$($SOAT_CLI list-tasks --project-id "$PROJECT_PUBLIC_ID" --workflow-id "$WORKFLOW_ID" --automation-status none --limit 100)
+if ! printf '%s\n' "$IDLE_TASKS" | jq -e 'all(.data[]; .automation_status == null)' >/dev/null 2>&1; then
+  echo "automation_status=none returned a task carrying an automation status"
+  printf '%s\n' "$IDLE_TASKS" >&2
+  exit 1
+fi
+DRIVING_TASKS=$($SOAT_CLI list-tasks --project-id "$PROJECT_PUBLIC_ID" --workflow-id "$WORKFLOW_ID" --automation-status running --automation-status paused --limit 100)
+if ! printf '%s\n' "$DRIVING_TASKS" | jq -e 'all(.data[]; .automation_status | IN("running","paused"))' >/dev/null 2>&1; then
+  echo "the repeated automation_status filter returned a task outside the requested set"
+  printf '%s\n' "$DRIVING_TASKS" >&2
+  exit 1
+fi
+echo "Task automation_status filter: OK"
 
 # ── on_enter tool dispatch (#1039) ──
 # A state whose work is a single tool call dispatches it directly, with no

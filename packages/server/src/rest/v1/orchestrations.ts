@@ -11,6 +11,8 @@ import {
   findOrchestrationRun,
   listOrchestrationRuns,
   listOrchestrations,
+  ORCHESTRATION_RUN_STATUSES,
+  type OrchestrationRunStatus,
   pauseOrchestrationRun,
   resumeOrchestrationRun,
   startOrchestrationRun,
@@ -20,6 +22,7 @@ import {
 } from 'src/lib/orchestrations';
 
 import {
+  parseEnumListQuery,
   parsePagination,
   parseToolContextBody,
   requestPrincipalFromCtx,
@@ -298,7 +301,11 @@ orchestrationsRouter.post('/orchestration-runs', async (ctx: Context) => {
  *     $ref: 'openapi/v1/orchestrations.yaml#/paths/~1api~1v1~1orchestration-runs/get'
  */
 orchestrationsRouter.get('/orchestration-runs', async (ctx: Context) => {
-  requireAuth(ctx);
+  const projectIds = await requireProjectAccess({
+    ctx,
+    action: 'orchestrations:ListRuns',
+    resourceType: 'orchestration',
+  });
 
   const orchestrationId = ctx.query['orchestration_id'] as string | undefined;
   const parentRunId = ctx.query['parent_orchestration_run_id'] as
@@ -313,37 +320,35 @@ orchestrationsRouter.get('/orchestration-runs', async (ctx: Context) => {
     nestedRaw !== 'true' &&
     nestedRaw !== 'false'
   ) {
-    ctx.status = 400;
-    ctx.body = {
-      code: 'VALIDATION_FAILED',
-      message: "`nested` must be 'true' or 'false'",
-    };
-    return;
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      "`nested` must be 'true' or 'false'"
+    );
   }
   const nested = nestedRaw === undefined ? undefined : nestedRaw === 'true';
 
   // A parent id already asserts the run has a parent, so pairing it with
   // `nested=false` asks for two contradictory things at once.
   if (parentRunId !== undefined && nested === false) {
-    ctx.status = 400;
-    ctx.body = {
-      code: 'VALIDATION_FAILED',
-      message:
-        '`nested=false` contradicts `parent_orchestration_run_id`, which selects runs that have a parent',
-    };
-    return;
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      '`nested=false` contradicts `parent_orchestration_run_id`, which selects runs that have a parent'
+    );
   }
 
-  const projectIds = await requireProjectAccess({
+  // Repeatable rather than a named "non-terminal" value: which statuses count
+  // as live is the caller's policy, not the runtime's.
+  const statuses = parseEnumListQuery({
     ctx,
-    action: 'orchestrations:ListRuns',
-    resourceType: 'orchestration',
-  });
+    name: 'status',
+    allowed: ORCHESTRATION_RUN_STATUSES,
+  }) as OrchestrationRunStatus[] | undefined;
 
   const result = await listOrchestrationRuns({
     orchestrationPublicId: orchestrationId,
     parentRunId,
     nested,
+    statuses,
     projectIds: projectIds ?? undefined,
     ...parsePagination(ctx),
   });
