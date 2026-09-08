@@ -67,6 +67,11 @@
       "description": "Cancel a running or paused orchestration run"
     },
     {
+      "operationId": "pauseOrchestrationRun",
+      "action": "orchestrations:PauseRun",
+      "description": "Pause a run in flight, resumable from its last checkpoint"
+    },
+    {
       "operationId": "submitHumanInput",
       "action": "orchestrations:SubmitHumanInput",
       "description": "Submit human input to a paused orchestration run"

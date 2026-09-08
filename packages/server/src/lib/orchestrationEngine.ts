@@ -37,7 +37,14 @@ import {
   restoreRunFromCheckpoint,
   updateRunRecord,
 } from './orchestrationRunHelpers';
-import { executeRunLoop } from './orchestrationRunLoop';
+import { executeRunLoop, type RunLoopResult } from './orchestrationRunLoop';
+import {
+  clearRunPause,
+  inheritedPause,
+  isRunPaused,
+  parkPausedRun,
+  readRunPause,
+} from './orchestrationRunPause';
 import {
   buildRunAuthHeader,
   readRunTokenPrincipal,
@@ -269,6 +276,146 @@ const settleRun = async (args: {
 };
 
 /**
+ * Parks a run on its operator pause and fires the same `awaiting_input`
+ * lifecycle event a node's own park fires — the run is awaiting input, and
+ * `required_action.type` is what tells a consumer whose pause it is.
+ */
+const settlePausedRun = async (args: {
+  runRecord: InstanceType<typeof db.OrchestrationRun>;
+  reason: string | null;
+  activeNodes: string[];
+  state: Record<string, unknown>;
+  artifacts: Record<string, unknown>;
+  scheduledWait?: ScheduledWait;
+  traceId?: string | null;
+}): Promise<MappedOrchestrationRun> => {
+  await parkPausedRun(args);
+  const mapped = await mapRunWithIncludes(args.runRecord.id as number);
+  emitRunLifecycleEvent({
+    event: 'awaitingInput',
+    projectId: args.runRecord.projectId as number,
+    run: mapped,
+  });
+  return mapped;
+};
+
+/**
+ * Persists a run that has reached a scheduled wait in background mode: parked
+ * `sleeping` for the scheduler, or — when an operator pause landed in the same
+ * round — parked on the pause while keeping the wake it was due, so `resume`
+ * hands it back to the scheduler at the instant it already was.
+ */
+const settleScheduledWait = async (args: {
+  runRecord: InstanceType<typeof db.OrchestrationRun>;
+  scheduledWait: ScheduledWait;
+  state: Record<string, unknown>;
+  artifacts: Record<string, unknown>;
+  traceId: string | null;
+}): Promise<MappedOrchestrationRun> => {
+  const { runRecord, scheduledWait, state, artifacts } = args;
+  const pending = await readRunPause({
+    orchestrationRunId: runRecord.id as number,
+  });
+  if (pending.paused) {
+    return settlePausedRun({
+      runRecord,
+      reason: pending.reason,
+      activeNodes: [scheduledWait.nodeId],
+      state,
+      artifacts,
+      scheduledWait,
+      traceId: args.traceId,
+    });
+  }
+  await persistScheduledWait({
+    runRecord,
+    scheduledWait,
+    state,
+    artifacts,
+    now: Date.now(),
+  });
+  return mapRunWithIncludes(runRecord.id as number);
+};
+
+/**
+ * What a run does when a node parks it on a timer, by drive mode: in
+ * synchronous mode the wait is slept through in-process and the loop continues
+ * from a fresh entry; in background mode the run is persisted for the scheduler
+ * (or parked on a pause that landed in the same round) and the drive is over.
+ */
+const advanceScheduledWait = async (args: {
+  runRecord: InstanceType<typeof db.OrchestrationRun>;
+  scheduledWait: ScheduledWait;
+  nodes: OrchestrationNode[];
+  edges: OrchestrationEdge[];
+  state: Record<string, unknown>;
+  artifacts: Record<string, unknown>;
+  inlineWaits: boolean;
+  traceId: string | null;
+}): Promise<
+  { entry: LoopEntry; settled?: never } | { settled: MappedOrchestrationRun }
+> => {
+  const { runRecord, scheduledWait, nodes, edges, state, artifacts } = args;
+  if (!args.inlineWaits) {
+    return {
+      settled: await settleScheduledWait({
+        runRecord,
+        scheduledWait,
+        state,
+        artifacts,
+        traceId: args.traceId,
+      }),
+    };
+  }
+  await sleep(scheduledWait.resumeInMs);
+  return {
+    entry: await buildResumeEntry({
+      runRecord,
+      nodeId: scheduledWait.nodeId,
+      resume: scheduledWait.resume,
+      nodes,
+      edges,
+      state,
+      artifacts,
+    }),
+  };
+};
+
+/**
+ * One loop segment, entered from a {@link LoopEntry} (or from the graph's start
+ * nodes when there is none). Its own function so `driveRunToRest` reads as the
+ * three ways a segment can end rather than as the call's argument list.
+ */
+const runLoopSegment = (args: {
+  runRecord: InstanceType<typeof db.OrchestrationRun>;
+  nodes: OrchestrationNode[];
+  edges: OrchestrationEdge[];
+  state: Record<string, unknown>;
+  artifacts: Record<string, unknown>;
+  projectIds: number[];
+  traceId: string | null;
+  authHeader?: string;
+  entry?: LoopEntry;
+}): Promise<RunLoopResult> => {
+  const { entry } = args;
+  return executeRunLoop({
+    runRecord: args.runRecord,
+    nodes: args.nodes,
+    edges: args.edges,
+    state: args.state,
+    artifacts: args.artifacts,
+    projectIds: args.projectIds,
+    traceId: args.traceId,
+    authHeader: args.authHeader,
+    completedNodes: entry?.completedNodes,
+    conditionLabels: entry?.conditionLabels,
+    activatedNodes: entry?.activatedNodes,
+    pollAttempts: entry?.pollAttempts,
+    retryAttempts: entry?.retryAttempts,
+  });
+};
+
+/**
  * Runs a run forward until it reaches a resting point.
  *
  * - `inlineWaits: true` (synchronous mode) drives the run to completion or a
@@ -293,60 +440,50 @@ const driveRunToRest = async (args: {
   inlineWaits: boolean;
   entry?: LoopEntry;
 }): Promise<MappedOrchestrationRun> => {
-  const {
-    runRecord,
-    nodes,
-    edges,
-    state,
-    artifacts,
-    projectIds,
-    authHeader,
-    inlineWaits,
-  } = args;
+  const { runRecord, nodes, edges, state, artifacts, inlineWaits } = args;
   let entry = args.entry;
   let capturedTraceId: string | null = args.traceId;
 
   for (;;) {
-    const { runStatus, requiredAction, runError, scheduledWait, traceId } =
-      await executeRunLoop({
+    const {
+      runStatus,
+      requiredAction,
+      runError,
+      scheduledWait,
+      traceId,
+      pause,
+    } = await runLoopSegment({ ...args, traceId: capturedTraceId, entry });
+    capturedTraceId = capturedTraceId ?? traceId;
+
+    // An operator pause stopped the loop at a checkpoint: park the frontier so
+    // `resume` re-drives exactly the nodes that had not run yet. A pause and a
+    // scheduled wait never arrive together — the loop refuses to pause a round
+    // that produced one, and `settleScheduledWait` parks them together instead.
+    if (pause) {
+      return settlePausedRun({
         runRecord,
+        reason: pause.reason,
+        activeNodes: pause.frontier,
+        state,
+        artifacts,
+        traceId: capturedTraceId,
+      });
+    }
+
+    if (scheduledWait) {
+      const advanced = await advanceScheduledWait({
+        runRecord,
+        scheduledWait,
         nodes,
         edges,
         state,
         artifacts,
-        projectIds,
+        inlineWaits,
         traceId: capturedTraceId,
-        authHeader,
-        completedNodes: entry?.completedNodes,
-        conditionLabels: entry?.conditionLabels,
-        activatedNodes: entry?.activatedNodes,
-        pollAttempts: entry?.pollAttempts,
-        retryAttempts: entry?.retryAttempts,
       });
-    capturedTraceId = capturedTraceId ?? traceId;
-
-    if (scheduledWait) {
-      if (inlineWaits) {
-        await sleep(scheduledWait.resumeInMs);
-        entry = await buildResumeEntry({
-          runRecord,
-          nodeId: scheduledWait.nodeId,
-          resume: scheduledWait.resume,
-          nodes,
-          edges,
-          state,
-          artifacts,
-        });
-        continue;
-      }
-      await persistScheduledWait({
-        runRecord,
-        scheduledWait,
-        state,
-        artifacts,
-        now: Date.now(),
-      });
-      return mapRunWithIncludes(runRecord.id as number);
+      if (advanced.settled) return advanced.settled;
+      entry = advanced.entry;
+      continue;
     }
 
     return settleRun({
@@ -478,6 +615,11 @@ const createRunRecord = async (args: {
       principal: args.principal,
       authHeader: args.authHeader,
     }),
+    // A child of a paused parent is born paused, so it parks at its own first
+    // checkpoint rather than running a whole graph its parent was already
+    // stopped from entering (#1237). The tree walk at pause time cannot reach
+    // it — this row does not exist yet then.
+    ...(await inheritedPause({ parentRunId: args.parent?.runId })),
     startedAt: new Date(),
     // In `wait` mode the run is `running` immediately, so acquire a lease so the
     // reaper can reclaim it if this driver crashes before the first checkpoint.
@@ -713,6 +855,19 @@ export const driveQueuedRun = async (args: {
   if (!prepared) return;
   const { nodes, edges, state, artifacts } = prepared;
 
+  // A run flagged before a worker claimed it — the pause action's own park lost
+  // the race, or the flag arrived through its parent's tree walk. Park it here
+  // on the graph's start nodes, so `resume` re-drives the run from the top with
+  // nothing executed.
+  if (isRunPaused(run)) {
+    await parkPausedRun({
+      runRecord: run,
+      reason: run.pauseReason,
+      activeNodes: findStartNodes(nodes, edges),
+    });
+    return;
+  }
+
   await run.update({ status: 'running', leaseExpiresAt: newLeaseExpiry() });
 
   await driveRunToRest({
@@ -742,6 +897,24 @@ export const wakeRun = async (args: {
   const wakeContext = run.wakeContext as PersistedWakeContext | null;
   if (!wakeContext) {
     log('wakeRun: run %s has no wakeContext, skipping', run.id);
+    return;
+  }
+
+  // The scheduler claims a run by status, so a pause that landed after the claim
+  // is only visible here — and the claim already consumed the run's `wakeAt`.
+  // Re-writing the wake as due now is what lets `resume` hand the run back to
+  // the scheduler instead of re-executing the node that set the timer.
+  if (isRunPaused(run)) {
+    await parkPausedRun({
+      runRecord: run,
+      reason: run.pauseReason,
+      activeNodes: [wakeContext.nodeId],
+      scheduledWait: {
+        nodeId: wakeContext.nodeId,
+        resume: wakeContext.resume,
+        resumeInMs: 0,
+      },
+    });
     return;
   }
 
@@ -934,6 +1107,23 @@ const resolveResumeActivation = (args: {
   return { completedNodes, conditionLabels, startNodeIds };
 };
 
+/**
+ * Hands a run that was paused mid-timer back to the scheduler: its `wakeAt` and
+ * `wakeContext` survived the park, so restoring `sleeping` resumes the wait at
+ * the instant it was already due rather than re-running the node that set it.
+ * Returns null when the run carries no pending wake, i.e. nothing to restore.
+ */
+const restoreSleepingRun = async (args: {
+  run: InstanceType<typeof db.OrchestrationRun>;
+}): Promise<MappedOrchestrationRun | null> => {
+  const { run } = args;
+  if (!run.wakeAt || !run.wakeContext) return null;
+  log('restoreSleepingRun %o', { orchestrationRunId: run.id });
+  await run.update({ status: 'sleeping', requiredAction: null });
+  kickWorker();
+  return mapRunWithIncludes(run.id as number);
+};
+
 export const resumeOrchestrationRunExecution = async (args: {
   run: InstanceType<typeof db.OrchestrationRun>;
   humanNodeId?: string;
@@ -945,6 +1135,13 @@ export const resumeOrchestrationRunExecution = async (args: {
   // Set when resuming a guardrail-gated `tool` node approved via class-C: the
   // frozen (or edited) arguments to re-dispatch the tool with, gate skipped.
   approvedArguments?: Record<string, unknown> | null;
+  /**
+   * Set only by the `resume` route: lift any operator pause first, and hand a
+   * run paused mid-timer back to the scheduler instead of re-driving it. Every
+   * other resumption (human input, an approval decision) leaves the pause
+   * standing, and its own caller refuses while one is in force.
+   */
+  liftPause?: boolean;
 }): Promise<MappedOrchestrationRun> => {
   const { run, humanNodeId, humanOutput, decisionLabel } = args;
   log('resumeOrchestrationRunExecution %o', {
@@ -952,6 +1149,16 @@ export const resumeOrchestrationRunExecution = async (args: {
     humanNodeId,
     decisionLabel,
   });
+
+  // `resume` is the only thing that lifts an operator pause — a human payload or
+  // an approval decision must not, or a tenant could walk past the stop
+  // (#1237). Cleared before the drive, so the loop does not re-park on the flag
+  // it just read.
+  if (args.liftPause) {
+    await clearRunPause({ runRecord: run });
+    const restored = await restoreSleepingRun({ run });
+    if (restored) return restored;
+  }
 
   // `onMissing: 'throw'` — this path answers an HTTP request, so a deleted
   // orchestration surfaces as an error rather than a silently failed run.
@@ -1085,6 +1292,19 @@ export const redriveRun = async (args: {
 
   const entry = buildRedriveEntry({ nodes, edges, artifacts });
 
+  // A reclaimed run whose pause landed while its driver was dying: park the
+  // frontier the redrive would have run instead of running it.
+  if (isRunPaused(run)) {
+    await parkPausedRun({
+      runRecord: run,
+      reason: run.pauseReason,
+      activeNodes: [...entry.activatedNodes],
+      state,
+      artifacts,
+    });
+    return;
+  }
+
   await driveRunToRest({
     runRecord: run,
     nodes,
@@ -1123,6 +1343,13 @@ const resumeRunForApproval = async (args: {
     ],
   });
   if (!run || run.status !== 'awaiting_input') return;
+  // An operator pause outranks the decision: resolving an approval would drive
+  // the run the pause exists to stop. The item stays resolved and `resume`
+  // re-drives the parked node, which files a fresh proposal (#1237).
+  if (isRunPaused(run)) {
+    log('resumeRunForApproval: run %s is paused, not resuming', run.publicId);
+    return;
+  }
 
   const activeNodes = run.activeNodes as string[];
   if (!activeNodes.includes(item.node_id)) return;
