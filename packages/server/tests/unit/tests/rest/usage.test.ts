@@ -103,8 +103,11 @@ describe('Usage', () => {
         'agents:CreateAgent',
         'agents:CreateAgentGeneration',
         'agents:CreateSession',
+        'agents:GetSession',
+        'agents:ListSessions',
         'agents:SendSessionMessage',
         'actors:CreateActor',
+        'generations:GetGeneration',
         'usage:ListEvents',
         'usage:GetReceipt',
         'usage:GetAggregate',
@@ -394,6 +397,20 @@ describe('Usage', () => {
       expect(response.body.data[0].actor_id).toBeNull();
     });
 
+    /**
+     * The link that makes a session's spend reconstructable from the outside.
+     * Asserted here because this file holds the only session-driven generation
+     * fixture; the generations module owns the unattributed case.
+     */
+    test('a session-driven generation names its session and actor', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/generations/${sessionGenerationId}`
+      );
+      expect(response.status).toBe(200);
+      expect(response.body.session_id).toBe(sessionId);
+      expect(response.body.actor_id).toBe(actorId);
+    });
+
     test('filters meters by actor_id', async () => {
       const response = await authenticatedTestClient(userToken).get(
         `/api/v1/usage/events?actor_id=${actorId}`
@@ -474,6 +491,137 @@ describe('Usage', () => {
       );
       expect(unattributed).toBeDefined();
       expect(unattributed.output_tokens).toBeGreaterThanOrEqual(20);
+    });
+  });
+
+  /**
+   * Reading spend per session and per end user (#1265).
+   *
+   * The dimensions existed on the aggregate, but nothing narrowed a rollup to
+   * one of them and no record reported its own spend, so "what did this
+   * conversation cost" meant recording the session -> generation link outside
+   * the platform and pricing the transcripts against a second copy of the rate
+   * card.
+   */
+  describe('per-session and per-actor cost', () => {
+    test('a session read carries what it cost', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/sessions/${sessionId}`
+      );
+      expect(res.status).toBe(200);
+      // The session's one generation, in the shape a run already reports.
+      expect(res.body.usage.input_tokens).toBe(10);
+      expect(res.body.usage.output_tokens).toBe(20);
+      expect(res.body.usage.cached_tokens).toBe(4);
+      expect(res.body.usage.reasoning_tokens).toBe(7);
+      expect('cost_usd' in res.body.usage).toBe(true);
+    });
+
+    test('a session that has generated nothing reports zeros', async () => {
+      const sessionRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId });
+      expect(sessionRes.status).toBe(201);
+
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/sessions/${sessionRes.body.id}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.usage).toEqual({
+        cost_usd: null,
+        input_tokens: 0,
+        output_tokens: 0,
+        cached_tokens: 0,
+        reasoning_tokens: 0,
+      });
+    });
+
+    test('the session listing omits usage', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/sessions?agent_id=${agentId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.data.length).toBeGreaterThan(0);
+      for (const session of res.body.data) {
+        expect(session.usage).toBeUndefined();
+      }
+    });
+
+    test('narrows the aggregate to one session', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=model&session_id=${sessionId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.session_id).toBe(sessionId);
+      expect(res.body.totals.event_count).toBe(1);
+      expect(res.body.totals.output_tokens).toBe(20);
+    });
+
+    test('narrows the aggregate to one actor', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=day&actor_id=${actorId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.actor_id).toBe(actorId);
+      expect(res.body.totals.event_count).toBe(1);
+      expect(res.body.totals.output_tokens).toBe(20);
+    });
+
+    test('an unknown session_id yields an empty rollup, never the project total', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=model&session_id=sess_doesnotexist`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.totals.event_count).toBe(0);
+      expect(res.body.totals.cost_usd).toBeNull();
+      expect(res.body.groups.data).toEqual([]);
+    });
+
+    test('a session in another project is not readable through the filter', async () => {
+      const otherProject = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: `Usage Cross Tenant ${Date.now()}` });
+      expect(otherProject.status).toBe(201);
+
+      // The caller's own session id, aggregated against a project it does not
+      // belong to: resolution is project-scoped, so it matches nothing.
+      const res = await authenticatedTestClient(adminToken).get(
+        `/api/v1/usage/aggregate?project_id=${otherProject.body.id}&group_by=model&session_id=${sessionId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.totals.event_count).toBe(0);
+    });
+  });
+
+  /**
+   * A filter the endpoint does not know is a wrong answer, not a missing one:
+   * `?model=` names a real dimension of the rollup, so ignoring it returns the
+   * project-wide total under the caller's belief that it is one model's.
+   */
+  describe('unrecognised query parameters', () => {
+    test('the aggregate rejects an unknown parameter instead of ignoring it', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=model&model=stub-model`
+      );
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toContain('model');
+    });
+
+    test('the events listing rejects an unknown parameter', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        '/api/v1/usage/events?conversation_id=conv_nope'
+      );
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toContain('conversation_id');
+    });
+
+    test('every documented parameter is still accepted', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=model&meter_type=llm_tokens&include=distinct&limit=5&offset=0&session_id=${sessionId}&actor_id=${actorId}`
+      );
+      expect(res.status).toBe(200);
     });
   });
 

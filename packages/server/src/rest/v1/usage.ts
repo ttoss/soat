@@ -96,9 +96,11 @@ usageRouter.get('/usage/events', async (ctx: Context) => {
  * Returns a project's usage rolled up over an optional [from, to] window,
  * bucketed by one dimension
  * (group_by=model|ai_provider|agent|orchestration_run|day|meter_type|actor|
- * session|source) and optionally narrowed to a single meter_type. Each group
- * and the grand total carry an event count, summed token counts, a measured
- * quantity per component, and cost_usd. groups is paginated with limit/offset;
+ * session|source) and optionally narrowed to a single meter_type, session_id
+ * or actor_id. Each group and the grand total carry an event count, summed
+ * token counts, a measured quantity per component, and cost_usd. An unknown
+ * session_id or actor_id yields an empty rollup, never the project total.
+ * groups is paginated with limit/offset;
  * its total is the number of distinct buckets, while totals always describes
  * the whole window. include=distinct adds totals.distinct, the distinct-entity
  * counters a "how many" question reads. Requires usage:GetAggregate on the
@@ -113,6 +115,8 @@ usageRouter.get('/usage/aggregate', async (ctx: Context) => {
     to,
     group_by: groupBy,
     meter_type: meterType,
+    session_id: sessionId,
+    actor_id: actorId,
     include,
   } = ctx.query as Record<string, string | undefined>;
 
@@ -145,6 +149,8 @@ usageRouter.get('/usage/aggregate', async (ctx: Context) => {
     to,
     groupBy,
     meterType,
+    sessionId,
+    actorId,
     include,
     ...parsePagination(ctx),
   });

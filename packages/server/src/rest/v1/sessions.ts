@@ -131,6 +131,7 @@ sessionsRouter.get('/sessions/:session_id', async (ctx: Context) => {
   ctx.body = await getSession({
     agentId,
     sessionId: ctx.params.session_id,
+    includeUsage: true,
   });
 });
 

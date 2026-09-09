@@ -37,6 +37,11 @@ paths:
         optionally filtered by agent, generation, trace, actor, session, or
         `source`. Each event is the per-generation token usage as reported by
         the provider, for audit and reconciliation.
+
+
+        A query parameter this endpoint does not declare is a `400`, not an
+        ignored one, so a filter that is silently dropped can never widen the
+        list past what was asked for.
       operationId: listUsageEvents
       parameters:
         - name: agent_id
@@ -118,6 +123,15 @@ paths:
             type: integer
             default: 0
       responses:
+        '400':
+          description: >-
+            Bad Request — a query parameter this endpoint does not declare. An
+            unrecognised filter is rejected rather than ignored, since ignoring
+            one answers a narrow question with the unfiltered list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '200':
           description: Paginated list of usage events
           content:
@@ -156,7 +170,9 @@ paths:
       description: >
         Returns a project's usage rolled up over an optional `[from, to]` time
         window, bucketed by a single dimension and optionally narrowed to one
-        `meter_type`. Each group and the grand total carry an `event_count`,
+        `meter_type`, `session_id` or `actor_id` — the last two are how "what
+        did this conversation cost" and "what has this end user cost" are
+        answered. Each group and the grand total carry an `event_count`,
         summed token counts, a
         measured `quantity` per component (so infra meters report their real
         amount, not zeros), and `cost_usd` (null when no event in the bucket was
@@ -169,6 +185,11 @@ paths:
         the dimension does not apply to, and never a count of entities. To
         count entities, send `include=distinct` and read `totals.distinct`.
         `totals` always describes the whole window — never the page above it.
+
+
+        A query parameter this endpoint does not declare is a `400`, not an
+        ignored one: `model` names a real dimension of the rollup, so dropping
+        it silently would answer a one-model question with the project total.
       operationId: getUsageAggregate
       parameters:
         - name: project_id
@@ -238,6 +259,28 @@ paths:
             every meter. An unknown type yields an empty rollup, not an error.
           schema:
             type: string
+        - name: session_id
+          in: query
+          required: false
+          description: >
+            Narrow the whole rollup — every bucket, `totals` and
+            `totals.distinct` alike — to one session's traffic. Combines with
+            `group_by`: `group_by=day&session_id=…` is a conversation's spend
+            per day, `group_by=model` is the same spend split by model. An id
+            naming no session in this project yields an empty rollup, never the
+            project total.
+          schema:
+            type: string
+        - name: actor_id
+          in: query
+          required: false
+          description: >
+            The same narrowing, for one end user across every session they
+            appear in. This is the figure behind a `scope: actor`,
+            `metric: cost_usd` quota — what that actor has spent, against the
+            cap it is held to.
+          schema:
+            type: string
         - name: limit
           in: query
           required: false
@@ -263,7 +306,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/UsageAggregate'
         '400':
-          description: Bad Request (missing project_id, invalid group_by or timestamp)
+          description: >-
+            Bad Request (missing project_id, invalid group_by or timestamp, or a
+            query parameter this endpoint does not declare — an unrecognised
+            filter is rejected rather than ignored, since ignoring one returns
+            the project-wide total in answer to a narrower question)
           content:
             application/json:
               schema:
@@ -878,6 +925,19 @@ components:
           type: string
           nullable: true
           description: Meter-type filter applied, echoed back; null when unfiltered
+        session_id:
+          x-soat-ref: sessions
+          type: string
+          nullable: true
+          description: >
+            Session narrowing applied, echoed back; null when unfiltered.
+            Echoed because a rollup of zeros is otherwise indistinguishable from
+            a project that spent nothing.
+        actor_id:
+          x-soat-ref: actors
+          type: string
+          nullable: true
+          description: Actor narrowing applied, echoed back; null when unfiltered
         groups:
           type: object
           description: >

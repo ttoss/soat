@@ -7,6 +7,8 @@ export type PersistedGeneration = {
   trace_id: string;
   initiator_generation_id: string | null;
   chain_id: string | null;
+  session_id: string | null;
+  actor_id: string | null;
   started_by_principal_type: string | null;
   started_by_principal_id: string | null;
   status: string;
@@ -38,6 +40,8 @@ export const mapGeneration = (
     agent?: InstanceType<(typeof db)['Agent']>;
     trace?: InstanceType<(typeof db)['Trace']>;
     initiatorGeneration?: InstanceType<(typeof db)['Generation']> | null;
+    session?: InstanceType<(typeof db)['Session']> | null;
+    startedByActor?: InstanceType<(typeof db)['Actor']> | null;
   }
 ): PersistedGeneration => {
   if (!gen.project || !gen.agent || !gen.trace) {
@@ -53,6 +57,11 @@ export const mapGeneration = (
     // The continuation chain this turn belongs to; null when it is not one. The
     // chain's own key (`rootGenerationId`) stays internal — this is the handle.
     chain_id: gen.chainId,
+    // The end-user attribution the usage event copies at metering time. Exposed
+    // here too, because a session's spend is otherwise reconstructable only by
+    // recording the session -> generation link outside the platform (#1265).
+    session_id: gen.session?.publicId ?? null,
+    actor_id: gen.startedByActor?.publicId ?? null,
     started_by_principal_type: gen.startedByPrincipalType,
     started_by_principal_id: gen.startedByPrincipalId,
     status: gen.status,

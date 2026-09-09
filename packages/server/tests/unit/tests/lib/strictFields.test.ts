@@ -1,15 +1,16 @@
 import type { Context } from 'src/Context';
+import { getDeclaredQueryParams } from 'src/lib/openapiSpec';
 
 type Middleware = (ctx: Context, next: () => Promise<void>) => Promise<void>;
 
 type StrictFieldsModule = {
   strictFieldsMiddleware: Middleware;
   STRICT_FIELDS_OPT_OUT: ReadonlySet<string>;
+  STRICT_QUERY_ROUTES: ReadonlySet<string>;
 };
 
-const { strictFieldsMiddleware, STRICT_FIELDS_OPT_OUT } = jest.requireActual(
-  'src/middleware/strictFields'
-) as StrictFieldsModule;
+const { strictFieldsMiddleware, STRICT_FIELDS_OPT_OUT, STRICT_QUERY_ROUTES } =
+  jest.requireActual('src/middleware/strictFields') as StrictFieldsModule;
 
 // Minimal authenticated user — only its presence matters to the middleware.
 const authUser = { id: 1 } as unknown as Context['authUser'];
@@ -18,11 +19,13 @@ const makeCtx = (args: {
   method: string;
   path: string;
   body?: unknown;
+  query?: Record<string, string>;
   authUser?: Context['authUser'];
 }): Context => {
   return {
     method: args.method,
     path: args.path,
+    query: args.query ?? {},
     authUser: args.authUser,
     request: { body: args.body },
   } as unknown as Context;
@@ -191,5 +194,88 @@ describe('strictFieldsMiddleware', () => {
 
     expect(thrown).toBeUndefined();
     expect(next).toHaveBeenCalledTimes(1);
+  });
+  /**
+   * The query-string half. Its allowlist is the spec's own `parameters`, so
+   * these pin the wiring rather than the list: an entry that names no
+   * operation, or a path template the middleware never matches, would fail
+   * open and silently restore the ignore-and-answer-wrong behavior.
+   */
+  describe('query parameters', () => {
+    test('every strict route names a static path with declared parameters', () => {
+      expect(STRICT_QUERY_ROUTES.size).toBeGreaterThan(0);
+      for (const route of STRICT_QUERY_ROUTES) {
+        const [method, path] = route.split(' ');
+        expect(path).not.toContain('{');
+        const declared = getDeclaredQueryParams({ method, path });
+        expect(declared).not.toBeNull();
+        expect(declared!.size).toBeGreaterThan(0);
+      }
+    });
+
+    test('rejects a parameter the route does not declare', async () => {
+      const ctx = makeCtx({
+        method: 'GET',
+        path: '/api/v1/usage/aggregate',
+        query: { project_id: 'proj_1', group_by: 'model', model: 'gpt-4' },
+        authUser,
+      });
+
+      const { next, thrown } = await run(ctx);
+
+      expect(next).not.toHaveBeenCalled();
+      expect((thrown as { code?: string }).code).toBe('VALIDATION_FAILED');
+      expect(
+        (thrown as { meta?: { unknown_query_parameters?: string[] } }).meta
+          ?.unknown_query_parameters
+      ).toEqual(['model']);
+    });
+
+    test('passes the parameters the spec declares', async () => {
+      const ctx = makeCtx({
+        method: 'GET',
+        path: '/api/v1/usage/aggregate',
+        query: {
+          project_id: 'proj_1',
+          group_by: 'day',
+          session_id: 'sess_1',
+          actor_id: 'actor_1',
+        },
+        authUser,
+      });
+
+      const { next, thrown } = await run(ctx);
+
+      expect(thrown).toBeUndefined();
+      expect(next).toHaveBeenCalledTimes(1);
+    });
+
+    test('leaves routes that did not opt in alone', async () => {
+      const ctx = makeCtx({
+        method: 'GET',
+        path: '/api/v1/projects',
+        query: { bogus: 'yes' },
+        authUser,
+      });
+
+      const { next, thrown } = await run(ctx);
+
+      expect(thrown).toBeUndefined();
+      expect(next).toHaveBeenCalledTimes(1);
+    });
+
+    test('skips unauthenticated requests so the handler can return 401', async () => {
+      const ctx = makeCtx({
+        method: 'GET',
+        path: '/api/v1/usage/aggregate',
+        query: { bogus: 'yes' },
+        authUser: undefined,
+      });
+
+      const { next, thrown } = await run(ctx);
+
+      expect(thrown).toBeUndefined();
+      expect(next).toHaveBeenCalledTimes(1);
+    });
   });
 });

@@ -412,6 +412,23 @@ components:
             Public ID of the continuation chain this generation belongs to.
             Set on every member of a chain — the continuations and the root they
             descend from — and null on a generation that is not part of one.
+        session_id:
+          x-soat-ref: sessions
+          type: string
+          nullable: true
+          description: >
+            Public ID of the session this generation was dispatched through, or
+            null for a generation started outside one. This is the link a
+            per-session cost reading follows; the session's own `usage` field
+            reports the roll-up directly.
+        actor_id:
+          x-soat-ref: actors
+          type: string
+          nullable: true
+          description: >
+            Public ID of the end-user actor the generation was attributed to, or
+            null when none was. Copied onto the generation's usage event, so it
+            is the same dimension `group_by=actor` buckets on.
         started_by_principal_type:
           type: string
           nullable: true

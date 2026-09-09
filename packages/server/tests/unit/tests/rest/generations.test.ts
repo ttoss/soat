@@ -126,6 +126,18 @@ describe('Generations', () => {
       expect(response.body.completed_at).toBeDefined();
     });
 
+    // A generation nothing dispatched through a session names neither, so a
+    // consumer reading the pair can tell "no end user" from "not reported".
+    test('a generation outside a session names no session or actor', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/generations/${failedGenerationId}`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.session_id).toBeNull();
+      expect(response.body.actor_id).toBeNull();
+    });
+
     test('records the error on the trace', async () => {
       const response = await authenticatedTestClient(userToken).get(
         `/api/v1/traces/${failedTraceId}`

@@ -18,6 +18,7 @@ type SpecFile = {
   components?: {
     schemas?: Record<string, unknown>;
     securitySchemes?: Record<string, unknown>;
+    parameters?: Record<string, unknown>;
   };
 };
 
@@ -28,6 +29,10 @@ type MergedSpec = {
   components: {
     schemas: Record<string, unknown>;
     securitySchemes: Record<string, unknown>;
+    // Merged like the schemas: a per-file spec may `$ref` a parameter it
+    // declares here, and dropping the section left those refs dangling in the
+    // published document.
+    parameters: Record<string, unknown>;
   };
 };
 
@@ -36,6 +41,14 @@ const getSpecDir = (): string => {
   const candidate2 = path.resolve(__dirname, 'rest/openapi/v1');
   return fs.existsSync(candidate1) ? candidate1 : candidate2;
 };
+
+// Every `components` section merged across the per-module spec files. A section
+// missing here is one whose `$ref`s dangle in the published document.
+const COMPONENT_SECTIONS = [
+  'schemas',
+  'securitySchemes',
+  'parameters',
+] as const;
 
 const loadSpecFile = (filePath: string): SpecFile | null => {
   try {
@@ -51,7 +64,7 @@ export const loadMergedOpenApiSpec = (): MergedSpec => {
     openapi: '3.0.3',
     info: { title: 'SOAT API', version: '1.0.0' },
     paths: {},
-    components: { schemas: {}, securitySchemes: {} },
+    components: { schemas: {}, securitySchemes: {}, parameters: {} },
   };
 
   if (!fs.existsSync(specDir)) return merged;
@@ -67,11 +80,12 @@ export const loadMergedOpenApiSpec = (): MergedSpec => {
     const spec = loadSpecFile(path.join(specDir, file));
     if (!spec) continue;
     Object.assign(merged.paths, spec.paths ?? {});
-    Object.assign(merged.components.schemas, spec.components?.schemas ?? {});
-    Object.assign(
-      merged.components.securitySchemes,
-      spec.components?.securitySchemes ?? {}
-    );
+    for (const section of COMPONENT_SECTIONS) {
+      Object.assign(
+        merged.components[section],
+        spec.components?.[section] ?? {}
+      );
+    }
   }
 
   return merged;
@@ -270,4 +284,55 @@ export const getRouteResponseSchema = (args: {
   if (!isObjectRecord(schema)) return null;
 
   return resolveSchemaRef(schema);
+};
+
+// Follows a `$ref` into `components.parameters`, or returns an inline parameter
+// object unchanged. Null when the ref names nothing.
+const resolveParameterRef = (
+  parameter: unknown
+): Record<string, unknown> | null => {
+  if (!isObjectRecord(parameter)) return null;
+  const ref = parameter.$ref;
+  if (typeof ref !== 'string') return parameter;
+  const name = ref.split('/').pop();
+  if (!name) return null;
+  const named = getMergedOpenApiSpec().components.parameters[name];
+  return isObjectRecord(named) ? named : null;
+};
+
+const queryParamNames = (parameters: unknown): string[] => {
+  if (!Array.isArray(parameters)) return [];
+  return parameters.flatMap((parameter) => {
+    const resolved = resolveParameterRef(parameter);
+    if (!resolved || resolved.in !== 'query') return [];
+    return typeof resolved.name === 'string' ? [resolved.name] : [];
+  });
+};
+
+/**
+ * Every query parameter an operation declares — the path item's shared
+ * parameters and the operation's own, with `$ref`s followed. Returns `null`
+ * when the (template, method) names no operation, so a caller can tell "no
+ * parameters declared" from "no such operation".
+ *
+ * `path` is the OpenAPI path template, so the result is the spec's contract for
+ * the route rather than a hand-kept allowlist beside it.
+ */
+export const getDeclaredQueryParams = (args: {
+  method: string;
+  path: string;
+}): Set<string> | null => {
+  const method = args.method.toLowerCase();
+  if (!HTTP_METHODS.has(method)) return null;
+
+  const pathItem = getMergedOpenApiSpec().paths[normalizeRoutePath(args.path)];
+  if (!isObjectRecord(pathItem)) return null;
+
+  const operation = pathItem[method];
+  if (!isObjectRecord(operation)) return null;
+
+  return new Set([
+    ...queryParamNames(pathItem.parameters),
+    ...queryParamNames(operation.parameters),
+  ]);
 };

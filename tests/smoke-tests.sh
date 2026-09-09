@@ -4096,6 +4096,49 @@ if [ "$EUA_AGG_SESSION_OK" != "true" ]; then
   exit 1
 fi
 
+# The narrowed rollup: the same spend asked for one session, and one end user,
+# rather than bucketed out of the project's. An unfiltered call would answer
+# with the project total, so the assertion is that the two agree.
+EUA_AGG_NARROWED=$($SOAT_CLI get-usage-aggregate \
+  --project-id "$PROJECT_PUBLIC_ID" --group-by model \
+  --session-id "$EUA_SESSION_ID" | sanitize_json)
+EUA_AGG_NARROWED_OK=$(printf '%s\n' "$EUA_AGG_NARROWED" | jq -r --arg session "$EUA_SESSION_ID" '(.session_id == $session) and (.totals.event_count >= 1) and (.totals.output_tokens > 0)')
+if [ "$EUA_AGG_NARROWED_OK" != "true" ]; then
+  echo "ERROR: get-usage-aggregate --session-id did not narrow the rollup to the session" >&2
+  printf '%s\n' "$EUA_AGG_NARROWED" >&2
+  exit 1
+fi
+
+EUA_AGG_ACTOR=$($SOAT_CLI get-usage-aggregate \
+  --project-id "$PROJECT_PUBLIC_ID" --group-by day \
+  --actor-id "$EUA_ACTOR_ID" | sanitize_json)
+EUA_AGG_ACTOR_OK=$(printf '%s\n' "$EUA_AGG_ACTOR" | jq -r --arg actor "$EUA_ACTOR_ID" '(.actor_id == $actor) and (.totals.event_count >= 1)')
+if [ "$EUA_AGG_ACTOR_OK" != "true" ]; then
+  echo "ERROR: get-usage-aggregate --actor-id did not narrow the rollup to the actor" >&2
+  printf '%s\n' "$EUA_AGG_ACTOR" >&2
+  exit 1
+fi
+
+# A mistyped id must read as zero, never as the project's whole spend.
+EUA_AGG_UNKNOWN=$($SOAT_CLI get-usage-aggregate \
+  --project-id "$PROJECT_PUBLIC_ID" --group-by model \
+  --session-id sess_smokedoesnotexist | sanitize_json)
+EUA_AGG_UNKNOWN_OK=$(printf '%s\n' "$EUA_AGG_UNKNOWN" | jq -r '(.totals.event_count == 0) and ((.groups.data | length) == 0)')
+if [ "$EUA_AGG_UNKNOWN_OK" != "true" ]; then
+  echo "ERROR: get-usage-aggregate with an unknown --session-id did not return an empty rollup" >&2
+  printf '%s\n' "$EUA_AGG_UNKNOWN" >&2
+  exit 1
+fi
+
+# The same figure on the session record itself — what this conversation cost.
+EUA_SESSION_GET=$($SOAT_CLI get-session --session-id "$EUA_SESSION_ID" | sanitize_json)
+EUA_SESSION_USAGE_OK=$(printf '%s\n' "$EUA_SESSION_GET" | jq -r '(.usage | type) == "object" and (.usage.output_tokens | type) == "number" and (.usage.output_tokens > 0)')
+if [ "$EUA_SESSION_USAGE_OK" != "true" ]; then
+  echo "ERROR: get-session did not include the session's usage roll-up" >&2
+  printf '%s\n' "$EUA_SESSION_GET" >&2
+  exit 1
+fi
+
 $SOAT_CLI delete-session --session-id "$EUA_SESSION_ID" >/dev/null
 echo "End-user usage attribution: OK"
 

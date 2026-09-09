@@ -33,6 +33,8 @@ Generations can be listed via [`GET /generations`](/docs/api/generations/list-ge
 | `trace_id`                  | string         | Trace this generation belongs to                                                                     |
 | `initiator_generation_id`   | string \| null | Generation that triggered this one. Set only for sub-agent invocations; `null` for top-level generations |
 | `chain_id`                  | string \| null | [Continuation chain](./chains.md) this generation belongs to — set on every member including the root; `null` when it is not part of one |
+| `session_id`                | string \| null | [Session](./sessions.md) this generation was dispatched through; `null` when it was started outside one |
+| `actor_id`                  | string \| null | End-user [actor](./actors.md) the generation is attributed to, derived from the session; `null` when there is none |
 | `started_by_principal_type` | string \| null | Principal kind that started the generation — `user` or `api_key` (see [Starting principal](#starting-principal)) |
 | `started_by_principal_id`   | string \| null | Public id of that principal — the key's own `key_…` when a key was used, else `user_…` |
 | `status`                    | string         | Lifecycle status: `in_progress`, `requires_action`, `completed`, or `failed`                         |
@@ -237,7 +239,7 @@ soat list-generations --orchestration-run-id run_abc123 --node-id summarize
 
 `node_attempt` is what distinguishes the generations of a **retried** node. A node with a retry policy produces one node execution record per attempt and one generation per attempt; matching them on `node_attempt` is exact, where matching on timestamps is a guess.
 
-From a generation reached this way, the rest of the graph is already reachable: `trace_id` opens the [trace](./traces.md) for that turn, `initiator_generation_id` walks down into any [sub-agent invocations](#sub-agent-invocations) it made, and `chain_id` opens the [continuation chain](./chains.md) it belongs to — filtering generations by that id returns every member of the chain.
+From a generation reached this way, the rest of the graph is already reachable: `trace_id` opens the [trace](./traces.md) for that turn, `initiator_generation_id` walks down into any [sub-agent invocations](#sub-agent-invocations) it made, `chain_id` opens the [continuation chain](./chains.md) it belongs to — filtering generations by that id returns every member of the chain — and `session_id` / `actor_id` name the [session](./sessions.md) and end user it ran for, the same pair its usage event is attributed to.
 
 ### Tool context
 

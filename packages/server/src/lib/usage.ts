@@ -10,7 +10,11 @@ export type {
   UsageAggregateTotals,
   UsageGroupBy,
 } from './usageAggregate';
-export { aggregateUsage, USAGE_GROUP_BY } from './usageAggregate';
+export {
+  aggregateUsage,
+  rollUpUsageTotals,
+  USAGE_GROUP_BY,
+} from './usageAggregate';
 export { recordComputeUsage } from './usageComputeRecording';
 export type {
   UsageReceipt,

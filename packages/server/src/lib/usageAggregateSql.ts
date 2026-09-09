@@ -160,10 +160,15 @@ export type EventFilter = {
   from: Date | null;
   to: Date | null;
   meterType?: string;
+  // Internal ids, already resolved within the project. Narrow the whole rollup
+  // — every bucket, the window totals and the distinct counters alike — to one
+  // end user's traffic.
+  sessionId?: number;
+  actorId?: number;
 };
 
-// The `[from, to]` window and optional meter narrowing, as a WHERE fragment
-// plus the replacements it names. `meterType` is deliberately unvalidated — a
+// The `[from, to]` window and the optional narrowings, as a WHERE fragment plus
+// the replacements it names. `meterType` is deliberately unvalidated — a
 // free-form column the meters listing filters the same way, so an unknown type
 // yields an empty rollup rather than a 400.
 const eventFilter = (
@@ -185,6 +190,14 @@ const eventFilter = (
   if (filter.meterType !== undefined) {
     clauses.push('e."meter_type" = :meterType');
     replacements.meterType = filter.meterType;
+  }
+  if (filter.sessionId !== undefined) {
+    clauses.push('e."session_id" = :sessionId');
+    replacements.sessionId = filter.sessionId;
+  }
+  if (filter.actorId !== undefined) {
+    clauses.push('e."actor_id" = :actorId');
+    replacements.actorId = filter.actorId;
   }
 
   return { sql: clauses.join(' AND '), replacements };

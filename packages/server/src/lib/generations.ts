@@ -24,6 +24,23 @@ import { makeResourceAccessor } from './resourceAccessor';
 // existing `from './generations'` imports of the type keep working.
 export type { PersistedGeneration } from './generationMapper';
 
+/**
+ * Every association `mapGeneration` reads, in one place: the create, update,
+ * get, list and by-trace reads all serialize through the same mapper, and a
+ * per-read include list is how one of them silently starts reporting `null` for
+ * a field the others fill.
+ */
+const generationIncludes = () => {
+  return [
+    { model: db.Project, as: 'project' },
+    { model: db.Agent, as: 'agent' },
+    { model: db.Trace, as: 'trace' },
+    { model: db.Generation, as: 'initiatorGeneration' },
+    { model: db.Session, as: 'session' },
+    { model: db.Actor, as: 'startedByActor' },
+  ];
+};
+
 const findInitiatorGeneration = async (args: {
   initiatorGenerationId?: string | null;
   projectId: number;
@@ -196,12 +213,7 @@ export const createGenerationRecord = async (
   }
 
   const fullGeneration = await db.Generation.findByPk(gen.id, {
-    include: [
-      { model: db.Project, as: 'project' },
-      { model: db.Agent, as: 'agent' },
-      { model: db.Trace, as: 'trace' },
-      { model: db.Generation, as: 'initiatorGeneration' },
-    ],
+    include: generationIncludes(),
   });
 
   if (!fullGeneration) {
@@ -273,12 +285,7 @@ export const updateGenerationRecord = async (
   });
 
   const fullGeneration = await db.Generation.findByPk(gen.id, {
-    include: [
-      { model: db.Project, as: 'project' },
-      { model: db.Agent, as: 'agent' },
-      { model: db.Trace, as: 'trace' },
-      { model: db.Generation, as: 'initiatorGeneration' },
-    ],
+    include: generationIncludes(),
   });
   if (!fullGeneration) return null;
 
@@ -290,20 +297,15 @@ type GenerationRow = InstanceType<(typeof db)['Generation']> & {
   agent?: InstanceType<(typeof db)['Agent']> | null;
   trace?: InstanceType<(typeof db)['Trace']> | null;
   initiatorGeneration?: InstanceType<(typeof db)['Generation']> | null;
+  session?: InstanceType<(typeof db)['Session']> | null;
+  startedByActor?: InstanceType<(typeof db)['Actor']> | null;
 };
 
 const generations = makeResourceAccessor<GenerationRow>({
   model: () => {
     return db.Generation;
   },
-  includes: () => {
-    return [
-      { model: db.Project, as: 'project' },
-      { model: db.Agent, as: 'agent' },
-      { model: db.Trace, as: 'trace' },
-      { model: db.Generation, as: 'initiatorGeneration' },
-    ];
-  },
+  includes: generationIncludes,
   label: 'Generation',
 });
 
@@ -351,12 +353,7 @@ export const listGenerations = async (args: {
     query: ({ limit, offset }) => {
       return db.Generation.findAndCountAll({
         where: Object.keys(where).length > 0 ? where : undefined,
-        include: [
-          { model: db.Project, as: 'project' },
-          { model: db.Agent, as: 'agent' },
-          { model: db.Trace, as: 'trace' },
-          { model: db.Generation, as: 'initiatorGeneration' },
-        ],
+        include: generationIncludes(),
         order: [['startedAt', 'DESC']],
         distinct: true,
         limit,
@@ -389,12 +386,7 @@ export const listGenerationsByTraceIds = async (args: {
 
   const rows = await db.Generation.findAll({
     where: genWhere,
-    include: [
-      { model: db.Project, as: 'project' },
-      { model: db.Agent, as: 'agent' },
-      { model: db.Trace, as: 'trace' },
-      { model: db.Generation, as: 'initiatorGeneration' },
-    ],
+    include: generationIncludes(),
     order: [['startedAt', 'ASC']],
   });
 
