@@ -225,7 +225,11 @@ paths:
               properties:
                 arguments:
                   type: object
-                  description: Edited arguments to execute instead of the proposed ones
+                  description: >-
+                    Edited arguments to execute instead of the proposed ones.
+                    Editing composes a new call, so it additionally requires
+                    permission to make that call: `tools:CallTool` on the tool,
+                    and for a `builtin` proposal the action's own IAM action.
       responses:
         '200':
           description: Approval item approved
@@ -234,11 +238,15 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApprovalItem'
         '400':
-          description: Edited arguments are not a JSON object
+          description: >-
+            Edited arguments are not a JSON object, or do not satisfy the tool's
+            parameters schema
         '401':
           description: Unauthorized
         '403':
-          description: Forbidden
+          description: >-
+            Forbidden — including an edit by a caller who may resolve the item
+            but not make the call it proposes
         '404':
           description: Approval item not found
         '409':

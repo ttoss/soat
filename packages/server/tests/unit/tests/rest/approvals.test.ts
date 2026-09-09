@@ -283,7 +283,9 @@ describe('Approvals', () => {
 
     test('edit-then-approve stores the edited arguments', async () => {
       const seeded = await seedApproval();
-      const res = await authenticatedTestClient(userToken)
+      // `adminToken` rather than `userToken`: editing is authoring a call, so
+      // it needs what calling the tool needs — see the describe block below.
+      const res = await authenticatedTestClient(adminToken)
         .post(`/api/v1/approvals/${seeded.id}/approve`)
         .send({ arguments: { amount: 450 } });
 
@@ -296,7 +298,7 @@ describe('Approvals', () => {
 
     test('rejects non-object edited arguments with 400', async () => {
       const seeded = await seedApproval();
-      const res = await authenticatedTestClient(userToken)
+      const res = await authenticatedTestClient(adminToken)
         .post(`/api/v1/approvals/${seeded.id}/approve`)
         .send({ arguments: [1, 2, 3] });
 
@@ -341,6 +343,198 @@ describe('Approvals', () => {
         .post(`/api/v1/approvals/${seeded.id}/approve`)
         .send({});
       expect(res.status).toBe(403);
+    });
+  });
+
+  /**
+   * Approving as proposed and editing the arguments are different acts. The
+   * first adjudicates a call somebody else's agent composed; the second
+   * composes a new one — and the approved action executes under the
+   * *proposing* generation's principal, not the approver's. So an approver who
+   * may only resolve can turn an admin's agent into a machine for running
+   * whatever they write.
+   */
+  describe('editing arguments needs the authority to make the call', () => {
+    let callerToken: string;
+    let httpToolId: string;
+    let builtinToolId: string;
+
+    beforeAll(async () => {
+      callerToken = await createScopedPrincipal({
+        adminToken,
+        projectId,
+        username: 'approvalscaller',
+        // Enough to author a tool call, and deliberately not `agents:DeleteAgent`.
+        actions: ['approvals:ResolveApproval', 'tools:CallTool'],
+      });
+
+      const httpTool = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'refund-tool',
+          type: 'http',
+          execute: { url: 'https://example.com/refund', method: 'POST' },
+          parameters: {
+            type: 'object',
+            properties: { amount: { type: 'number', maximum: 1000 } },
+            required: ['amount'],
+          },
+        });
+      httpToolId = httpTool.body.id;
+
+      const builtinTool = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'platform',
+          type: 'builtin',
+          actions: ['delete-agent'],
+        });
+      builtinToolId = builtinTool.body.id;
+    });
+
+    test('an approver who may only resolve cannot edit', async () => {
+      const seeded = await seedApproval({
+        proposedAction: { toolId: httpToolId, arguments: { amount: 500 } },
+      });
+
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/approvals/${seeded.id}/approve`)
+        .send({ arguments: { amount: 900 } });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('FORBIDDEN');
+    });
+
+    // The unedited decision is the one the gate exists for, and it stays open
+    // to an approver who holds nothing but the right to make it.
+    test('the same approver can still approve as proposed', async () => {
+      const seeded = await seedApproval({
+        proposedAction: { toolId: httpToolId, arguments: { amount: 500 } },
+      });
+
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/approvals/${seeded.id}/approve`)
+        .send({});
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('approved');
+    });
+
+    test('an approver who may call the tool can edit', async () => {
+      const seeded = await seedApproval({
+        proposedAction: { toolId: httpToolId, arguments: { amount: 500 } },
+      });
+
+      const res = await authenticatedTestClient(callerToken)
+        .post(`/api/v1/approvals/${seeded.id}/approve`)
+        .send({ arguments: { amount: 450 } });
+
+      expect(res.status).toBe(200);
+      expect(res.body.edited_arguments).toEqual({ amount: 450 });
+    });
+
+    // A builtin action is dispatched in-process, where the route re-checks the
+    // action against whoever's credential is on the request — the proposer's.
+    // So on this path nothing else asks whether the approver could have done
+    // it, and `tools:CallTool` alone would let them direct a deletion they
+    // cannot perform.
+    test('editing a builtin proposal needs the action itself', async () => {
+      const seeded = await seedApproval({
+        proposedAction: {
+          toolId: builtinToolId,
+          action: 'delete-agent',
+          arguments: { agent_id: 'agent_theirs00000000' },
+        },
+      });
+
+      const res = await authenticatedTestClient(callerToken)
+        .post(`/api/v1/approvals/${seeded.id}/approve`)
+        .send({ arguments: { agent_id: 'agent_mine000000000' } });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('FORBIDDEN');
+    });
+
+    test('an approver holding the action may edit a builtin proposal', async () => {
+      const seeded = await seedApproval({
+        proposedAction: {
+          toolId: builtinToolId,
+          action: 'delete-agent',
+          arguments: { agent_id: 'agent_theirs00000000' },
+        },
+      });
+
+      const res = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/approvals/${seeded.id}/approve`)
+        .send({ arguments: { agent_id: 'agent_mine000000000' } });
+
+      expect(res.status).toBe(200);
+    });
+  });
+
+  /**
+   * The proposed arguments were composed by a model against the tool's schema.
+   * An edit replaces them wholesale, and nothing downstream checks the result —
+   * `callTool` reads `parameters` only to coerce presets.
+   */
+  describe('edited arguments are checked against the tool schema', () => {
+    let schemaToolId: string;
+
+    beforeAll(async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'bounded-refund-tool',
+          type: 'http',
+          execute: { url: 'https://example.com/refund', method: 'POST' },
+          parameters: {
+            type: 'object',
+            properties: { amount: { type: 'number', maximum: 1000 } },
+            required: ['amount'],
+          },
+        });
+      schemaToolId = res.body.id;
+    });
+
+    const editWith = async (args: object) => {
+      const seeded = await seedApproval({
+        proposedAction: { toolId: schemaToolId, arguments: { amount: 500 } },
+      });
+      return authenticatedTestClient(adminToken)
+        .post(`/api/v1/approvals/${seeded.id}/approve`)
+        .send({ arguments: args });
+    };
+
+    test('a value the schema bounds is refused', async () => {
+      const res = await editWith({ amount: 999999 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('APPROVAL_INVALID_EDIT');
+      expect(res.body.error.message).toMatch(/amount/);
+    });
+
+    test('a missing required field is refused', async () => {
+      const res = await editWith({ note: 'no amount at all' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('APPROVAL_INVALID_EDIT');
+    });
+
+    test('a wrongly typed field is refused', async () => {
+      const res = await editWith({ amount: 'five hundred' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('APPROVAL_INVALID_EDIT');
+    });
+
+    test('arguments the schema accepts go through', async () => {
+      const res = await editWith({ amount: 450 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.edited_arguments).toEqual({ amount: 450 });
     });
   });
 

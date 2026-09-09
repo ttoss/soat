@@ -6,11 +6,13 @@ import { db } from 'src/db';
 import { DomainError } from '../errors';
 import { assertValidApprovalFilters } from './approvalFilters';
 import { emitResourceEvent, resolveProjectPublicId } from './eventBus';
+import { compileJsonSchema, describeSchemaErrors } from './jsonSchemaValidator';
 import {
   paginatedList,
   type PaginatedResult,
   resolvePagination,
 } from './pagination';
+import { isPlainObject } from './plainObject';
 import type { SoatEventTypeFor } from './soatEvents';
 import { isUniqueViolation } from './uniqueViolation';
 
@@ -650,6 +652,42 @@ const assertValidEditedArgs = (editedArguments?: object | null): void => {
 };
 
 /**
+ * Checks an edit against the tool's own `parameters` schema.
+ *
+ * The proposed arguments were composed by a model against that schema; an edit
+ * replaces them wholesale and nothing downstream re-reads it — `callTool` uses
+ * `parameters` only to coerce preset values. So without this an approver could
+ * approve arguments the tool's author declared impossible, and the failure
+ * would surface at the target instead of at the edit.
+ *
+ * Scoped to the approval's own project, and silent where there is nothing to
+ * check against: a proposal naming a tool that no longer exists, a tool that
+ * declares no schema, or a schema ajv cannot compile.
+ */
+const assertEditMatchesToolSchema = async (args: {
+  editedArguments?: object | null;
+  proposedAction: ProposedAction | undefined;
+  projectId: number;
+}): Promise<void> => {
+  const toolId = args.proposedAction?.toolId;
+  if (args.editedArguments == null || !toolId) return;
+
+  const tool = await db.Tool.findOne({
+    where: { publicId: toolId, projectId: args.projectId },
+    attributes: ['parameters'],
+  });
+  if (!isPlainObject(tool?.parameters)) return;
+
+  const validate = compileJsonSchema(tool.parameters);
+  if (!validate || validate(args.editedArguments)) return;
+
+  throw new DomainError(
+    'APPROVAL_INVALID_EDIT',
+    `edited arguments do not satisfy the tool's parameters schema: ${describeSchemaErrors(validate.errors)}`
+  );
+};
+
+/**
  * Re-fetches the resolved item with all provenance includes, emits the given
  * lifecycle event, and returns the mapped item plus its decision output.
  */
@@ -675,8 +713,10 @@ const finalizeResolution = async (args: {
  * (edit-then-approve). Re-checks expiry at decision time to close the
  * sweep-vs-approve race: an item past `expiresAt` is expired and rejected with
  * `APPROVAL_EXPIRED` rather than executed. Edited arguments must be a JSON
- * object; deeper validation against the tool's input schema happens when the
- * approved action is executed.
+ * object and must satisfy the tool's own `parameters` schema.
+ *
+ * Whether the approver may compose this call at all is the route's to answer —
+ * it is the layer that holds the caller's identity.
  */
 export const approveApproval = async (args: {
   id: string;
@@ -692,6 +732,11 @@ export const approveApproval = async (args: {
   assertResolvable(item);
   await assertNotExpiredOrExpire(item, 'approved');
   assertValidEditedArgs(args.editedArguments);
+  await assertEditMatchesToolSchema({
+    editedArguments: args.editedArguments,
+    proposedAction: item.proposedAction as ProposedAction | undefined,
+    projectId: item.projectId,
+  });
 
   item.status = 'approved';
   item.resolvedByUserId = args.resolvedByUserId;
