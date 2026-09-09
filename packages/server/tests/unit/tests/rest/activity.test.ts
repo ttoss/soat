@@ -299,7 +299,10 @@ describe('Activity', () => {
       expect(found).toBeTruthy();
       expect(found.project_id).toBe(projectId);
       expect(found.severity).toBe('info');
-      expect(found.detail).toMatchObject({ toolId: 'tool_activityseed1' });
+      expect(found.detail).toMatchObject({
+        status: 'pending',
+        tool_id: 'tool_activityseed1',
+      });
     });
 
     test('approval_resolved is written when an approval is approved', async () => {
