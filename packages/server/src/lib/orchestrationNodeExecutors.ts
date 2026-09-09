@@ -242,6 +242,8 @@ export const executeToolNode = async (args: {
   if (gated.kind === 'result') return gated.result;
 
   const result = await callTool({
+    // `runToolNodeGate` adjudicated this node's call before dispatch.
+    guardrails: 'already-adjudicated',
     projectIds,
     id: toolId,
     action: node.operationId,

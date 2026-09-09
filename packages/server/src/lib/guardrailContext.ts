@@ -327,6 +327,9 @@ const fetchContextTool = async (args: {
   try {
     const raw = await withTimeout(
       callTool({
+        // A guardrail's own context fetch: gating it would run the guardrails
+        // that decide this call in order to decide this call.
+        guardrails: 'already-adjudicated',
         projectIds: [args.projectId],
         id: args.contextToolId,
         input: {},

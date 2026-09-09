@@ -414,6 +414,14 @@ paths:
         `input` before execution: a key the tool presets keeps its preset value
         even when `input` sets it. Keys the presets do not name are taken from
         `input` as sent.
+
+        Guardrails attached to the tool or to its project adjudicate the call
+        before dispatch, composing project + tool scope. A call this route
+        cannot await a decision on — class C (human sign-off), class D, or a
+        class-B tripwire — is refused with `422 TOOL_DISPATCH_FAILED`, whose
+        `meta` carries the `tool_id` and the `outcome`. A `pipeline` tool is
+        adjudicated before its first step runs, and every step is adjudicated as
+        the call of that tool it is.
       operationId: callTool
       parameters:
         - name: tool_id

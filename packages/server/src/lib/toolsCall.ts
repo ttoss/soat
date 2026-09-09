@@ -13,6 +13,10 @@ import type { PipelineStepCaller } from './pipelineTools';
 import { runPipeline } from './pipelineTools';
 import { resolveSecretRefsInString } from './secrets';
 import { soatTools } from './soatTools';
+import {
+  assertToolCallAllowed,
+  type ToolCallGuardrailMode,
+} from './toolCallGuardrail';
 import { buildContextHeaders } from './toolContext';
 import { mergePresetParameters } from './toolPresetParameters';
 import { callTool } from './tools';
@@ -297,9 +301,50 @@ const dispatchDirectTool = async (args: {
   );
 };
 
+/**
+ * Runs the guardrail gate unless a gate upstream already classified this call,
+ * and answers with the arguments dispatch should carry.
+ */
+const adjudicate = async (gateArgs: {
+  args: {
+    tool: CallableToolDefinition;
+    toolProjectId: number;
+    guardrails: ToolCallGuardrailMode;
+    toolPublicId?: string | null;
+    toolGuardrailIds?: string[] | null;
+    action?: string;
+    input?: Record<string, unknown>;
+    authHeader?: string;
+  };
+  presetParameters: Record<string, unknown> | null;
+}): Promise<Record<string, unknown>> => {
+  const { args, presetParameters } = gateArgs;
+  if (args.guardrails !== 'apply') return args.input ?? {};
+
+  return assertToolCallAllowed({
+    toolId: args.toolPublicId ?? null,
+    toolName: args.tool.name,
+    toolGuardrailIds: args.toolGuardrailIds,
+    action: args.action,
+    input: args.input ?? {},
+    presetParameters,
+    projectId: args.toolProjectId,
+    authHeader: args.authHeader,
+  });
+};
+
 export const callResolvedTool = async (args: {
   tool: CallableToolDefinition;
   toolProjectId: number;
+  /**
+   * Whether a guardrail gate has already adjudicated this call. Required, so a
+   * dispatch path cannot reach a tool without saying which it is — every path
+   * that skipped the gate skipped it by omission rather than by decision.
+   */
+  guardrails: ToolCallGuardrailMode;
+  /** The persisted tool's id and scope, for the gate. Absent for an ephemeral definition. */
+  toolPublicId?: string | null;
+  toolGuardrailIds?: string[] | null;
   action?: string;
   input?: Record<string, unknown>;
   authHeader?: string;
@@ -323,16 +368,20 @@ export const callResolvedTool = async (args: {
     schema: args.tool.parameters,
   });
 
+  // Before any dispatch and before the pipeline runner, so a gated pipeline is
+  // refused whole rather than after its first step has already run.
+  const input = await adjudicate({ args, presetParameters });
+
   const mergedInput = mergePresetParameters({
     presetParameters,
-    input: args.input,
+    input,
   });
 
   if (type === 'pipeline') {
     const rawResult = await runPipeline({
       pipeline: args.tool.pipeline,
       presetParameters,
-      input: args.input,
+      input,
       remainingDepth: args.remainingDepth,
       callStep: (step: Parameters<PipelineStepCaller>[0]) => {
         if (step.tool) {
@@ -340,6 +389,9 @@ export const callResolvedTool = async (args: {
           return callResolvedTool({
             tool: step.tool,
             toolProjectId: args.toolProjectId,
+            // An inline step definition has no Tool row and so no tool-scoped
+            // guardrail of its own, but the project's still governs it.
+            guardrails: 'apply',
             action: step.action,
             input: step.input,
             authHeader: args.authHeader,
@@ -353,6 +405,9 @@ export const callResolvedTool = async (args: {
         return callTool({
           projectIds: args.projectIds,
           id: step.toolId as string,
+          // A step is a call of that tool like any other: its own guardrails
+          // govern it here exactly as they would a direct call.
+          guardrails: 'apply',
           action: step.action,
           input: step.input,
           authHeader: args.authHeader,
@@ -394,6 +449,7 @@ export const callResolvedTool = async (args: {
 export const callEphemeralTool = async (args: {
   definition: InlineToolDefinition;
   projectId: number;
+  guardrails: ToolCallGuardrailMode;
   action?: string;
   input?: Record<string, unknown>;
   authHeader?: string;
@@ -404,6 +460,7 @@ export const callEphemeralTool = async (args: {
   return callResolvedTool({
     tool: args.definition,
     toolProjectId: args.projectId,
+    guardrails: args.guardrails,
     action: args.action,
     input: args.input,
     authHeader: args.authHeader,

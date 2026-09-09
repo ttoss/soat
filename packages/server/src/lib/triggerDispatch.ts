@@ -200,6 +200,9 @@ const dispatchToTarget = async (args: {
   }
 
   const output = await callTool({
+    // A firing is a call of this tool, so its guardrails decide it — a trigger
+    // is not a way to reach a tool the project has classified as forbidden.
+    guardrails: 'apply',
     id: args.targetId,
     projectIds: [args.projectId],
     action: args.action ?? undefined,

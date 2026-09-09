@@ -294,7 +294,7 @@ export const ERROR_CODES = {
   TOOL_DISPATCH_FAILED: {
     httpStatus: 422,
     description:
-      'A workflow on_enter `tool` dispatch did not return a result. The tool call was settled before it ran — blocked by a guardrail (class D or a class-B tripwire), or routed to human approval (class C), which a task dispatch cannot park on. The error `meta` carries the `tool_id` and the `outcome` that settled it. Dispatch an orchestration instead when the tool is approval-gated: its engine can park and resume.',
+      'A tool call was settled by a guardrail before it ran — blocked (class D or a class-B tripwire), or routed to human approval (class C) on a path with nowhere to park. The error `meta` carries the `tool_id` and the `outcome` that settled it. Raised on every dispatch that cannot await sign-off: a direct `POST /tools/{tool_id}/call`, a pipeline step, a trigger firing a tool target, and a workflow on_enter `tool` dispatch. Reach the tool through an agent or an orchestration instead when it is approval-gated: both can park on the approval and resume from it.',
   },
   EMBEDDING_NOT_CONFIGURED: {
     httpStatus: 503,

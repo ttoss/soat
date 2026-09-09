@@ -182,6 +182,8 @@ export const runToolScorerCall = async (args: {
   );
 
   const raw = await callTool({
+    // Grading with a tool still runs the tool.
+    guardrails: 'apply',
     projectIds: [args.projectId],
     id: toolId,
     action:

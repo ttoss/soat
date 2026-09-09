@@ -82,6 +82,10 @@ const executeApprovedAction = async (args: {
   );
 
   const rawResult = await callTool({
+    // The guardrail that filed this approval is what classified the call, and a
+    // human then approved these arguments; re-classifying would re-decide what
+    // the sign-off already settled.
+    guardrails: 'already-adjudicated',
     projectIds: [args.projectInternalId],
     id: proposed.tool_id,
     action: proposed.action,

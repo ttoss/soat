@@ -910,6 +910,9 @@ const resolvePipelineTool = (
           ? (toolArgs as Record<string, unknown>)
           : {};
       return callTool({
+        // The agent surface gates by wrapping this `execute`
+        // (`gateResolvedToolsWithGuardrails`), so the call arrives classified.
+        guardrails: 'already-adjudicated',
         projectIds: args.projectIds,
         id: typedTool.publicId,
         input,
