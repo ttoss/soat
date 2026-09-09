@@ -53,6 +53,7 @@ paths:
             enum:
               [
                 action_executed,
+                approval_created,
                 approval_resolved,
                 exception_created,
                 schedule_fired,
@@ -123,6 +124,7 @@ components:
           enum:
             [
               action_executed,
+              approval_created,
               approval_resolved,
               exception_created,
               schedule_fired,

@@ -25,7 +25,7 @@ There is no public create endpoint — entries are platform-written by producers
 |---|---|---|
 | `id` | string | Public ID, `acte_` prefix |
 | `project_id` | string | Owning project |
-| `kind` | string | `action_executed`, `approval_resolved`, `exception_created`, `schedule_fired` |
+| `kind` | string | `action_executed`, `approval_created`, `approval_resolved`, `exception_created`, `schedule_fired` |
 | `severity` | string | `info`, `warning`, `critical` |
 | `summary` | string | Human-readable one-line description |
 | `detail` | object \| null | Kind-specific structured context (tool id, node id, generation id, guardrail policy version) |
@@ -72,6 +72,7 @@ Severity defaults per kind, and a producer may override it:
 | Kind | Default severity | Why |
 |---|---|---|
 | `action_executed` | `info` | Routine autonomous operation |
+| `approval_created` | `info` | An approval waiting on a human is routine autonomous operation |
 | `approval_resolved` | `info` | Routine autonomous operation |
 | `exception_created` | `warning` | An exception was already filed — an anomaly, by definition |
 | `schedule_fired` | `info` | Routine autonomous operation |
@@ -95,6 +96,7 @@ Each kind is written by a single, dedicated producer:
 - **`action_executed`** — emitted after a successful tool call, from two call sites: the orchestration tool-node executor (attributed to the run and node, `agent_id` null) and the agent tool resolver (attributed to the agent and generation, so a tool call an agent makes during a generation — in a [conversation](./conversations.md), a [session](./sessions.md), or a resumed generation — is recorded too). Each call is recorded by exactly one of them: the orchestration path threads no agent identity into the resolver, so a tool node never double-records.
 
   Recording sits **inside** the [guardrail](./guardrails.md) interceptor and after the tool returns, which is what makes an entry mean the action really ran: a call that was blocked, tripped, or routed to approval never reaches it, and neither does one whose target threw. Two things are deliberately not recorded: [client tools](./tools.md) (no server-side execution, so the platform cannot attest the action happened) and the built-in knowledge-retrieval tools (a [knowledge](./knowledge.md) lookup reads, it does not act).
+- **`approval_created`** — subscribes to the existing `approvals.created` event (see [Approvals](./approvals.md)); no change to that module. Filed while the approval is still pending, so an approval an agent raised is discoverable from the feed before anyone settles it, the way a created exception is. `approvals.expired` is not filed.
 - **`approval_resolved`** — subscribes to the existing `approvals.approved` / `approvals.rejected` events (see [Approvals](./approvals.md)); no change to that module.
 - **`exception_created`** — subscribes to the existing `exceptions.created` event (see [Exceptions](./exceptions.md#producers)); no change to that module.
 - **`schedule_fired`** — emitted directly from the trigger scheduler's due-firing sweep, filtered to `source === 'schedule'` only — a manually- or webhook-fired [trigger](./triggers.md) does not produce this kind.
