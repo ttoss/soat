@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.45.0](https://github.com/ttoss/soat/compare/v0.44.0...v0.45.0) (2026-09-09)
+
+### Features
+
+* **activity:** file an approval_created entry when an approval is raised ([#1263](https://github.com/ttoss/soat/issues/1263)) ([f3437f3](https://github.com/ttoss/soat/commit/f3437f31ff1b14d3ed8538bbf4cffb2be24de595)), closes [#1259](https://github.com/ttoss/soat/issues/1259)
+
 # [0.44.0](https://github.com/ttoss/soat/compare/v0.43.0...v0.44.0) (2026-09-09)
 
 **Note:** Version bump only for package @soat/postgresdb
