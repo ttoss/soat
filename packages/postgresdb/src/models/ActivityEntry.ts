@@ -67,6 +67,7 @@ export class ActivityEntry extends Model {
   @Column({
     type: DataType.ENUM(
       'action_executed',
+      'approval_created',
       'approval_resolved',
       'exception_created',
       'schedule_fired'
@@ -75,6 +76,7 @@ export class ActivityEntry extends Model {
   })
   declare kind:
     | 'action_executed'
+    | 'approval_created'
     | 'approval_resolved'
     | 'exception_created'
     | 'schedule_fired';

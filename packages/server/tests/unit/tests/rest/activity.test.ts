@@ -282,6 +282,26 @@ describe('Activity', () => {
   });
 
   describe('producer wiring', () => {
+    test('approval_created is written when an approval is filed', async () => {
+      const seeded = await emitApprovalLib({
+        projectId: projectInternalId,
+        proposedAction: {
+          toolId: 'tool_activityseed1',
+          arguments: { amount: 20 },
+        },
+        reasoning: 'activity created wiring test',
+        expiresInSeconds: 3600,
+      });
+
+      const found = await waitForActivity((e) => {
+        return e.kind === 'approval_created' && e.ref_id === seeded.id;
+      });
+      expect(found).toBeTruthy();
+      expect(found.project_id).toBe(projectId);
+      expect(found.severity).toBe('info');
+      expect(found.detail).toMatchObject({ toolId: 'tool_activityseed1' });
+    });
+
     test('approval_resolved is written when an approval is approved', async () => {
       const seeded = await emitApprovalLib({
         projectId: projectInternalId,

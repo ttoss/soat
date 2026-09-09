@@ -18,6 +18,7 @@ const log = createDebug('soat:activity');
 export type ActivitySeverity = 'info' | 'warning' | 'critical';
 export type ActivityKind =
   | 'action_executed'
+  | 'approval_created'
   | 'approval_resolved'
   | 'exception_created'
   | 'schedule_fired';
@@ -25,11 +26,12 @@ export type ActivityKind =
 /**
  * Default severity per kind, applied when a producer emits without an
  * explicit severity. `exception_created` defaults to `warning` because an
- * exception was already filed (an anomaly, by definition); the other three
- * kinds are routine autonomous operation.
+ * exception was already filed (an anomaly, by definition); the other kinds are
+ * routine autonomous operation, an approval waiting on a human included.
  */
 const DEFAULT_SEVERITY_BY_KIND: Record<ActivityKind, ActivitySeverity> = {
   action_executed: 'info',
+  approval_created: 'info',
   approval_resolved: 'info',
   exception_created: 'warning',
   schedule_fired: 'info',
@@ -299,18 +301,22 @@ const asSeverityOrUndefined = (
     : undefined;
 };
 
-const fileApprovalResolvedActivity = async (
-  event: SoatEvent
-): Promise<void> => {
-  const approval = asRecord(event.data).approval;
+const fileApprovalActivity = async (args: {
+  event: SoatEvent;
+  kind: 'approval_created' | 'approval_resolved';
+  summarize: (approvalId: string | null, status: string) => string;
+}): Promise<void> => {
+  const approval = asRecord(args.event.data).approval;
   if (!approval) return;
   const record = asRecord(approval);
   const approvalId = asStringOrNull(record.id);
-  const status = asStringOrNull(record.status) ?? 'resolved';
+  const status =
+    asStringOrNull(record.status) ??
+    (args.kind === 'approval_created' ? 'pending' : 'resolved');
   await emitActivityEntry({
-    projectId: event.projectId,
-    kind: 'approval_resolved',
-    summary: `Approval ${approvalId ?? '(unknown)'} ${status}`,
+    projectId: args.event.projectId,
+    kind: args.kind,
+    summary: args.summarize(approvalId, status),
     detail: {
       status,
       toolId: asRecord(record.proposed_action).tool_id,
@@ -319,6 +325,30 @@ const fileApprovalResolvedActivity = async (
     orchestrationRunId: asStringOrNull(record.orchestration_run_id),
     agentId: asStringOrNull(record.agent_id),
     refId: approvalId,
+  });
+};
+
+// Filed on creation so a pending approval is discoverable from the feed the
+// way a created exception is (ttoss/soat#1259).
+const fileApprovalCreatedActivity = async (event: SoatEvent): Promise<void> => {
+  await fileApprovalActivity({
+    event,
+    kind: 'approval_created',
+    summarize: (approvalId) => {
+      return `Approval ${approvalId ?? '(unknown)'} awaiting decision`;
+    },
+  });
+};
+
+const fileApprovalResolvedActivity = async (
+  event: SoatEvent
+): Promise<void> => {
+  await fileApprovalActivity({
+    event,
+    kind: 'approval_resolved',
+    summarize: (approvalId, status) => {
+      return `Approval ${approvalId ?? '(unknown)'} ${status}`;
+    },
   });
 };
 
@@ -359,6 +389,7 @@ const ACTIVITY_HANDLERS = new Map<
   SoatEventType,
   (event: SoatEvent) => Promise<void>
 >([
+  [APPROVAL_EVENT_TYPES.created, fileApprovalCreatedActivity],
   [APPROVAL_EVENT_TYPES.approved, fileApprovalResolvedActivity],
   [APPROVAL_EVENT_TYPES.rejected, fileApprovalResolvedActivity],
   [EXCEPTION_EVENT_TYPES.created, fileExceptionCreatedActivity],
