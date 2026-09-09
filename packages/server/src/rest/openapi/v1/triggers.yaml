@@ -146,7 +146,14 @@ paths:
         '404':
           description: Trigger not found
     patch:
-      description: Updates an existing trigger's configuration. The type is immutable.
+      description: >
+        Updates an existing trigger's configuration. The type is immutable.
+        Changing `target_type` or `target_id` re-checks the target-start action
+        (`orchestrations:StartRun`, `agents:CreateAgentGeneration` or
+        `tools:CallTool`) against the resulting target, because a firing runs with
+        the trigger creator's authority rather than the updater's. A caller who
+        could not start the new target is answered `403` and the trigger keeps the
+        target it had.
       tags:
         - Triggers
       summary: Update a trigger

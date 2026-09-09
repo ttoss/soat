@@ -442,6 +442,7 @@ describe('API Keys', () => {
     let scopedProjectId: string;
     let scopedKeyId: string;
     let rawScopedKey: string;
+    let bobScopedKeyId: string;
 
     beforeAll(async () => {
       const aliceKeyRes = await authenticatedTestClient(aliceToken)
@@ -468,6 +469,12 @@ describe('API Keys', () => {
 
       scopedKeyId = scopedKeyRes.body.id;
       rawScopedKey = scopedKeyRes.body.key;
+
+      const bobScopedKeyRes = await authenticatedTestClient(bobToken)
+        .post('/api/v1/api-keys')
+        .send({ name: 'Bob Scoped List Key', project_id: scopedProjectId });
+
+      bobScopedKeyId = bobScopedKeyRes.body.id;
     });
 
     test('unauthenticated request returns 401', async () => {
@@ -516,6 +523,70 @@ describe('API Keys', () => {
       expect(ids).toContain(scopedKeyId);
       expect(ids).not.toContain(aliceKeyId);
       expect(ids).not.toContain(bobKeyId);
+    });
+
+    // Confinement to a project is not the same as authority over it. Every
+    // item route on this module is owner-or-admin, and a credential holding
+    // none of that authority listed the whole project's key inventory —
+    // prefixes, owners and policy attachments for everyone in it.
+    test("a scoped key does not see another user's key in the same project", async () => {
+      const response =
+        await authenticatedTestClient(rawScopedKey).get('/api/v1/api-keys');
+
+      expect(response.status).toBe(200);
+      const ids = response.body.data.map((k: { id: string }) => {
+        return k.id;
+      });
+      expect(ids).toContain(scopedKeyId);
+      expect(ids).not.toContain(bobScopedKeyId);
+    });
+
+    // The narrowing is a default, not a ceiling: a principal actually granted
+    // the project-wide list action still gets the inventory it is entitled to.
+    test('a scoped key granted the list action sees the whole project', async () => {
+      const listPolicyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['api-keys:ListApiKeys'],
+                resource: [`srn:${scopedProjectId}:*:*`],
+              },
+            ],
+          },
+        });
+
+      // A key is bounded by its owner's permissions, so the grant has to exist
+      // on both — the key's own policy alone would be intersected away. Its own
+      // user, so no other test's principal is altered.
+      const listerRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/users')
+        .send({ username: 'akeylister', password: 'listerpass' });
+      await authenticatedTestClient(adminToken)
+        .put(`/api/v1/users/${listerRes.body.id}/policies`)
+        .send({ policy_ids: [listPolicyRes.body.id] });
+      const listerToken = await loginAs('akeylister', 'listerpass');
+
+      const listerKeyRes = await authenticatedTestClient(listerToken)
+        .post('/api/v1/api-keys')
+        .send({
+          name: 'Project Lister Key',
+          project_id: scopedProjectId,
+          policy_ids: [listPolicyRes.body.id],
+        });
+
+      const response = await authenticatedTestClient(listerKeyRes.body.key).get(
+        '/api/v1/api-keys'
+      );
+
+      expect(response.status).toBe(200);
+      const ids = response.body.data.map((k: { id: string }) => {
+        return k.id;
+      });
+      expect(ids).toContain(bobScopedKeyId);
+      expect(ids).not.toContain(aliceKeyId);
     });
 
     test('response includes expected fields', async () => {

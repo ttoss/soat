@@ -480,6 +480,7 @@ describe('Agent Generation Routes', () => {
     let showDialogToolId: string;
     let projectDbId: number;
     let projectPublicId: string;
+    let stubAdminToken: string;
 
     // When set, the stub answers the next completion with this tool call
     // instead of text, so a generation can be made to pause on a client tool.
@@ -544,10 +545,11 @@ describe('Agent Generation Routes', () => {
       const bootstrapRes = await testClient
         .post('/api/v1/users/bootstrap')
         .send({ username: 'agentstubadmin', password: 'supersecret' });
-      const adminToken =
+      stubAdminToken =
         bootstrapRes.status === 201
           ? await loginAs('agentstubadmin', 'supersecret')
           : await loginAs('agentgeneradmin', 'supersecret');
+      const adminToken = stubAdminToken;
 
       const userRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/users')
@@ -730,6 +732,73 @@ describe('Agent Generation Routes', () => {
       // The persisted recovery state is not reachable through the API.
       expect(record.body.pending_state).toBeUndefined();
     }, 60000);
+
+    /**
+     * The DB-recovery branch resolves the agent through the caller's project
+     * scope, so a foreign generation reads as missing there. The in-memory
+     * branch compared only the agent id — and a paused generation's stored tool
+     * closures carry the victim's own auth header, so answering one hands the
+     * model a result under their credentials.
+     */
+    test('tool-outputs refuses an in-memory pending generation from another project', async () => {
+      const otherProjectRes = await authenticatedTestClient(stubAdminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'AgentGeneration Foreign Project' });
+      const otherProject = await db.Project.findOne({
+        where: { publicId: otherProjectRes.body.id },
+      });
+
+      pendingGenerations.set('gen_foreign_pending', {
+        agentId,
+        projectId: otherProject!.id as number,
+        projectPublicId: otherProjectRes.body.id,
+        traceId: 'trc_foreign',
+        parentTraceId: null,
+        rootTraceId: null,
+        generationId: 'gen_foreign_pending',
+        initiatorGenerationId: null,
+        pendingToolCalls: [{ toolCallId: 'tc_1', toolName: 'noop', args: {} }],
+        messages: [{ role: 'user', content: 'hello' }],
+        steps: [],
+        resolvedModel: buildModel({
+          provider: 'ollama',
+          secretValue: null,
+          model: 'stub-model',
+          baseUrl: stubBaseUrl,
+        }),
+        agentConfig: {
+          instructions: null,
+          maxSteps: 5,
+          toolChoice: 'auto',
+          stopConditions: null,
+          activeToolIds: null,
+          stepRules: null,
+          temperature: null,
+          outputSchema: null,
+        },
+        resolvedTools: {},
+      });
+
+      // A credential confined to the stub project, which is what makes the
+      // caller's project set a real boundary rather than "every project this
+      // user's policy reaches".
+      const scopedKeyRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/api-keys')
+        .send({ name: 'Foreign Probe Key', project_id: projectPublicId });
+
+      const response = await authenticatedTestClient(scopedKeyRes.body.key)
+        .post(
+          `/api/v1/agents/${agentId}/generate/gen_foreign_pending/tool-outputs`
+        )
+        .send({ tool_outputs: [{ tool_call_id: 'tc_1', output: 'ok' }] });
+
+      expect(response.status).toBe(404);
+      expect(response.body.error.code).toBe('GENERATION_NOT_FOUND');
+      // A refusal must not spend the pause — the rightful caller can still
+      // answer it.
+      expect(pendingGenerations.has('gen_foreign_pending')).toBe(true);
+      pendingGenerations.delete('gen_foreign_pending');
+    });
 
     test('tool-outputs recovers a pending generation from the DB when not in memory', async () => {
       // Simulates a restart: with no pending-map entry, `submitToolOutputs`

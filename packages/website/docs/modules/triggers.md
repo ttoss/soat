@@ -139,10 +139,15 @@ re-points the run-as identity at them.
 
 Security invariants:
 
-- **No privilege escalation.** Creating a trigger (or changing its target) also
-  requires the caller to hold the target-start action —
-  `orchestrations:StartRun`, `agents:CreateAgentGeneration`, or `tools:CallTool`
-  — and the same check re-runs at every fire.
+- **No privilege escalation.** Creating a trigger also requires the caller to
+  hold the target-start action — `orchestrations:StartRun`,
+  `agents:CreateAgentGeneration`, or `tools:CallTool` — and the same check
+  re-runs at every fire. Repointing one is the same question, so
+  [`PATCH /api/v1/triggers/{trigger_id}`](/docs/api/triggers/update-trigger)
+  re-asks it whenever `target_type` **or** `target_id` changes, against the
+  target the update leaves in place. Since a firing carries the *creator's*
+  authority rather than the updater's, an updater who could not start the new
+  target is refused with `403` and the trigger keeps the target it had.
 - **No recursion.** Trigger-scoped credentials cannot call the fire endpoint
   (`403`), so a trigger cannot fire another trigger in an unbounded loop.
 - **Fail closed.** If the creator is deleted the trigger is kept but firing fails
