@@ -3,6 +3,21 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.45.0](https://github.com/ttoss/soat/compare/v0.44.0...v0.45.0) (2026-09-09)
+
+### Bug Fixes
+
+* **server:** bound what one request can buffer and compute ([#1260](https://github.com/ttoss/soat/issues/1260)) ([2f7db20](https://github.com/ttoss/soat/commit/2f7db2027b49083272675e93fdac0d0b09419e2c))
+* **server:** bound who may edit an approval and what may answer a tool call ([#1253](https://github.com/ttoss/soat/issues/1253)) ([6853a29](https://github.com/ttoss/soat/commit/6853a293e4f526e6adbaf2a70b42033ba11d7c94))
+* **server:** close three authorization gaps ([#1257](https://github.com/ttoss/soat/issues/1257)) ([2c1dc23](https://github.com/ttoss/soat/commit/2c1dc23a282650fd03f717b4d71b361e61e99d41))
+* **server:** formations never echo secret material ([#1256](https://github.com/ttoss/soat/issues/1256)) ([f83040a](https://github.com/ttoss/soat/commit/f83040ad329e044037ac4de78052ced664d01eb9))
+* **server:** guardrails apply wherever a tool is called ([#1258](https://github.com/ttoss/soat/issues/1258)) ([d6a989a](https://github.com/ttoss/soat/commit/d6a989aebfcb6e43d33344ee7c9690ab060fcff2))
+* **server:** keep credentials out of logs and out of tool reads ([#1262](https://github.com/ttoss/soat/issues/1262)) ([a4cb533](https://github.com/ttoss/soat/commit/a4cb5336d799abe3a9e46abe9c36db591239638f))
+
+### Features
+
+* **activity:** file an approval_created entry when an approval is raised ([#1263](https://github.com/ttoss/soat/issues/1263)) ([f3437f3](https://github.com/ttoss/soat/commit/f3437f31ff1b14d3ed8538bbf4cffb2be24de595)), closes [#1259](https://github.com/ttoss/soat/issues/1259)
+
 # [0.44.0](https://github.com/ttoss/soat/compare/v0.43.0...v0.44.0) (2026-09-09)
 
 ### Bug Fixes
