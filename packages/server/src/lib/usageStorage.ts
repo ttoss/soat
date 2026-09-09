@@ -180,6 +180,54 @@ const projectStoredFootprint = async (
   return readStoredFootprint(rows);
 };
 
+/**
+ * What the last snapshot says a project stores, in bytes, with the moment it
+ * was taken. `null` when the sweep has never metered this project.
+ *
+ * The `storage_bytes` quota is enforced against this rather than against a live
+ * `projectStoredFootprint`: that query joins every chunk row through documents
+ * and files, which is a daily-snapshot cost, not a per-upload one. So a cap
+ * accepts up to a day of staleness — the same posture the cost path takes
+ * against its own meter tick — and the caller's own delta is added on top
+ * (#1249).
+ *
+ * Read as one statement over the newest storage event's `gb_day` component,
+ * rather than by guessing today's or yesterday's idempotency key: a sweep that
+ * has been down for days must still enforce against the last real measurement,
+ * not read as an unmeasured project and disarm the cap.
+ */
+export const lastSnapshotStoredBytes = async (args: {
+  projectId: number;
+}): Promise<{ bytes: number; measuredAt: Date } | null> => {
+  const [rows] = await db.sequelize.query(
+    `SELECT uc."quantity" AS gb, ue."created_at" AS measured_at
+       FROM "usage_events" ue
+       JOIN "usage_components" uc ON uc."usage_event_id" = ue."id"
+      WHERE ue."project_id" = :projectId
+        AND ue."meter_type" = 'storage'
+        AND uc."component" = :component
+      ORDER BY ue."created_at" DESC
+      LIMIT 1`,
+    {
+      replacements: {
+        projectId: args.projectId,
+        component: GB_DAY_COMPONENT,
+      },
+    }
+  );
+
+  const [row] = rows as Array<{
+    gb: string | number;
+    measured_at: string | Date;
+  }>;
+  if (!row) return null;
+
+  return {
+    bytes: Math.round(Number(row.gb) * BYTES_PER_GB),
+    measuredAt: new Date(row.measured_at),
+  };
+};
+
 /** One measured dimension of a day's snapshot, before pricing. */
 type StorageComponent = {
   component: string;

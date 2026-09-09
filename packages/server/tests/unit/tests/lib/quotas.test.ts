@@ -246,6 +246,66 @@ describe('validateQuotaShape', () => {
   });
 });
 
+/**
+ * `storage_bytes` is a stock, not a flow: the aggregate *is* the footprint, so
+ * every fixed window is meaningless on it. The rule has to be fail-closed in
+ * both directions, because either half stored is a quota that reads healthy
+ * while enforcing nothing — a windowed storage cap would never be evaluated,
+ * and `current` on a flow metric has no window math behind it (#1249).
+ */
+describe('validateQuotaShape — the storage_bytes stock metric', () => {
+  const base = {
+    scope: 'project',
+    metric: 'storage_bytes',
+    window: 'current',
+    mode: 'enforce',
+    limit: 1_000_000_000,
+  };
+
+  test('accepts a project-scope cap on the current footprint', () => {
+    expect(validateQuotaShape(base)).toBeNull();
+  });
+
+  test.each(['rolling_1m', 'rolling_1h', 'rolling_24h', 'calendar_month'])(
+    'rejects window=%s, which a stock metric cannot be aggregated over',
+    (window) => {
+      expect(validateQuotaShape({ ...base, window })).toMatch(/current/);
+    }
+  );
+
+  test.each(['requests', 'tokens', 'cost_usd'])(
+    'rejects window=current on the flow metric %s',
+    (metric) => {
+      expect(
+        validateQuotaShape({ ...base, metric, window: 'current' })
+      ).toMatch(/window/);
+    }
+  );
+
+  test.each(['api_key', 'agent', 'actor'])(
+    'rejects scope=%s, which the storage footprint carries no attribution for',
+    (scope) => {
+      expect(validateQuotaShape({ ...base, scope })).toMatch(/storage_bytes/);
+    }
+  );
+
+  test('rejects a fractional byte limit', () => {
+    expect(validateQuotaShape({ ...base, limit: 1.5 })).toMatch(
+      /positive integer/
+    );
+  });
+
+  test('rejects on_unpriced, which has no meaning without a price book', () => {
+    expect(validateQuotaShape({ ...base, onUnpriced: 'allow' })).toMatch(
+      /cost_usd/
+    );
+  });
+
+  test('monitor mode is storable, and is how a cap is dry-run', () => {
+    expect(validateQuotaShape({ ...base, mode: 'monitor' })).toBeNull();
+  });
+});
+
 describe('validateQuotaImmutableFields', () => {
   const current = {
     scope: 'agent',

@@ -5,6 +5,7 @@ import { getEmbedding } from 'src/lib/embedding';
 import { pickMergedContent } from 'src/lib/memoryConsolidation';
 import * as consolidationCompletion from 'src/lib/memoryConsolidationCompletion';
 import { paginatedList } from 'src/lib/pagination';
+import { assertStorageQuota, contentBytes } from 'src/lib/quotaStorage';
 import { makeResourceAccessor } from 'src/lib/resourceAccessor';
 import { withIterativeVectorScan } from 'src/lib/vectorSearch';
 
@@ -141,6 +142,27 @@ const resolveMemoryProjectId = async (args: {
     attributes: ['projectId'],
   });
   return memory?.projectId ?? null;
+};
+
+/**
+ * The project's `storage_bytes` cap applied to a caller-driven entry write.
+ *
+ * Called from the REST route and the formation resource rather than from
+ * `writeMemoryEntry` itself: the `write_memory` tool, automatic extraction and
+ * an orchestration's `memory_write` node all reach that function mid-turn, and
+ * a refusal there would fail a generation already under way — the corpus cap
+ * is a request-boundary refusal by design (#1249).
+ */
+export const assertMemoryEntryStorageQuota = async (args: {
+  memoryId: number;
+  content: string;
+}): Promise<void> => {
+  const projectId = await resolveMemoryProjectId({ memoryId: args.memoryId });
+  if (projectId == null) return;
+  await assertStorageQuota({
+    projectId,
+    addedBytes: contentBytes(args.content),
+  });
 };
 
 const findTopSimilarEntry = async (args: {

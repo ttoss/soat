@@ -1,5 +1,5 @@
 ---
-description: "Hard, fail-closed enforcement of request rates and token/cost budgets per project, API key, agent, or end user in SOAT."
+description: "Hard, fail-closed enforcement of request rates, token/cost budgets and the stored corpus per project, API key, agent, or end user in SOAT."
 ---
 
 import Tabs from '@theme/Tabs';
@@ -11,9 +11,11 @@ Project-scoped caps that block traffic once an aggregate limit is exceeded.
 
 ## Overview
 
-A quota compares a windowed aggregate to a limit and blocks with `429 QUOTA_EXCEEDED` when it is breached. Quotas are cost control, not authorization: [Usage metering](./usage.md) answers "what did this cost?" and [Guardrails](./guardrails.md) answer "may this one tool call execute?", while a quota answers "has this scope exceeded its aggregate cap?".
+A quota compares an aggregate to a limit and blocks when it is breached. Quotas are cost control, not authorization: [Usage metering](./usage.md) answers "what did this cost?" and [Guardrails](./guardrails.md) answer "may this one tool call execute?", while a quota answers "has this scope exceeded its cap?".
 
-The `requests` metric is enforced by a Koa middleware mounted after authentication: it counts **API-key-authenticated requests only** and blocks the request that pushes the counter past the limit. JWT-user (interactive) requests are never counted or blocked — interactive users are not the runaway surface, and exempting them removes the admin-lockout hazard. The `tokens` and `cost_usd` metrics are enforced at the pre-generation check — before an agent generation starts, the current window's usage is aggregated from the [usage meter](./usage.md) and compared to the limit.
+Three of the four metrics measure a **flow** — something that accumulates inside a window and empties when it rolls — and breach with `429 QUOTA_EXCEEDED`. The fourth measures a **stock**: `storage_bytes` caps what the project holds right now, and breaches with `409 QUOTA_STORAGE_EXCEEDED` (see [Storage enforcement](#storage-enforcement)).
+
+The `requests` metric is enforced by a Koa middleware mounted after authentication: it counts **API-key-authenticated requests only** and blocks the request that pushes the counter past the limit. JWT-user (interactive) requests are never counted or blocked — interactive users are not the runaway surface, and exempting them removes the admin-lockout hazard. The `tokens` and `cost_usd` metrics are enforced at the pre-generation check — before an agent generation starts, the current window's usage is aggregated from the [usage meter](./usage.md) and compared to the limit. `storage_bytes` is enforced on the corpus write paths.
 
 ### Which project a request counts against
 
@@ -52,13 +54,13 @@ Counting scope mirrors [API-request metering](./usage.md#api-request-metering) e
 | `project_id`    | string  | ID of the owning project                                                          |
 | `scope`         | string  | `project` \| `api_key` \| `agent` \| `actor`                                      |
 | `scope_ref`     | string  | Public id of the api key / agent / [actor](./actors.md); `null` = all entities of that scope type (for `actor`, one budget *per* actor — see [Actor scope](#actor-scope)) |
-| `metric`        | string  | `requests` \| `tokens` \| `cost_usd`                                              |
-| `window`        | string  | `rolling_1m` \| `rolling_1h` \| `rolling_24h` \| `calendar_month`                 |
-| `limit`         | number  | The cap (> 0)                                                                      |
-| `mode`          | string  | `enforce` (block with `429`) \| `monitor` (observe and report, never block — see [Monitor mode](#monitor-mode)) |
+| `metric`        | string  | `requests` \| `tokens` \| `cost_usd` \| `storage_bytes`                            |
+| `window`        | string  | `rolling_1m` \| `rolling_1h` \| `rolling_24h` \| `calendar_month` \| `current` (`storage_bytes` only — see [Storage enforcement](#storage-enforcement)) |
+| `limit`         | number  | The cap (> 0); bytes for `storage_bytes`                                           |
+| `mode`          | string  | `enforce` (block with `429`, or `409` for `storage_bytes`) \| `monitor` (observe and report, never block — see [Monitor mode](#monitor-mode)) |
 | `meter_type`    | string  | The meter a `cost_usd` cap answers for (see [Meter scope](#meter-scope)); `null` = every priced meter |
 | `on_unpriced`   | string  | `block` \| `allow` — what an `enforce` `cost_usd` quota does over a pricing blackout (see [Unpriced usage](#unpriced-usage)). Defaults to `block`; `null` for metrics with no pricing dependency |
-| `current_usage` | object  | Current fixed-window usage for `requests` (`window_key`, `count`, `resets_at`); `null` for token/cost quotas (they aggregate the meter at check time) and in list responses |
+| `current_usage` | object  | Current fixed-window usage for `requests` (`window_key`, `count`, `resets_at`); `null` for token/cost quotas (they aggregate the meter at check time), `null` for `storage_bytes` (a stored total has no window and no counter — read the footprint from the [storage meter](./usage.md#storage-metering)), and `null` in list responses |
 | `created_at`    | string  | ISO 8601 creation timestamp                                                       |
 | `updated_at`    | string  | ISO 8601 last-updated timestamp                                                   |
 
@@ -75,12 +77,79 @@ A quota is only accepted for a scope the metric can actually be aggregated by. A
 | `requests` | `project`, `api_key` |
 | `tokens` | `project`, `agent`, `actor` |
 | `cost_usd` | `project`, `agent`, `actor` |
+| `storage_bytes` | `project` |
 
-The exclusions follow from where each metric is measured. `requests` is counted by the request middleware, which sees the API key and the project but not the agent or end user behind the call. `tokens` / `cost_usd` aggregate the [usage meter](./usage.md), which carries project, agent, and end-user attribution but no API-key attribution.
+The exclusions follow from where each metric is measured. `requests` is counted by the request middleware, which sees the API key and the project but not the agent or end user behind the call. `tokens` / `cost_usd` aggregate the [usage meter](./usage.md), which carries project, agent, and end-user attribution but no API-key attribution. `storage_bytes` reads the [storage snapshot](./usage.md#storage-metering), which measures a project's footprint and nothing narrower — a stored byte carries no agent, actor or API-key attribution.
+
+The `window` field is validated the same way, and in both directions: `storage_bytes` accepts `current` and nothing else, and every other metric refuses `current`. Either half stored would be a quota that reads healthy through the API while enforcing nothing — a windowed footprint is never evaluated, and `current` on a flow metric names no window to aggregate over.
 
 ### Token and cost enforcement
 
 `tokens` and `cost_usd` quotas are checked **before a generation starts**. The current window's usage is aggregated directly from the [usage meter](./usage.md) — a `cost_usd` quota sums the priced event cost, a `tokens` quota sums the billable token components (uncached input + output + cached; the non-billable `reasoning_tokens` detail is excluded). If the aggregate is at or over the limit, the new generation is blocked with `429 QUOTA_EXCEEDED` and nothing is metered for it.
+
+### Storage enforcement
+
+`storage_bytes` caps what a project **holds**, not what it spends. It is the only metric that bounds an ingesting project: [files](./files.md), document chunks (text *and* vector), memory entries and the [evaluations](./evaluations.md) corpus are all [metered](./usage.md#storage-metering), and without a cap over that figure a project that ingests grows until the disk says no.
+
+A stock shares almost none of the windowed machinery, and the differences are the contract:
+
+| | Flow metrics | `storage_bytes` |
+| --- | --- | --- |
+| `window` | a fixed window | `current` |
+| Aggregate | events inside the window | the project's footprint |
+| Breach | `429 QUOTA_EXCEEDED` | `409 QUOTA_STORAGE_EXCEEDED` |
+| `Retry-After` | seconds until the window resets | not sent |
+| What clears it | the window rolling | deleting stored content |
+| `current_usage` | a counter (`requests`) or `null` | `null` |
+
+The `409` follows the precedent [`QUOTA_UNENFORCEABLE`](#unpriced-usage) set: a `429` promises a `Retry-After` a caller can act on, and here waiting is not a remedy. `meta` carries `current_bytes` beside `limit` so the caller knows how much to remove, and omits `resets_at` because there is nothing to reset:
+
+```json
+{
+  "error": {
+    "code": "QUOTA_STORAGE_EXCEEDED",
+    "message": "Storage quota quota_V1StGXR8Z5jdHi6B exceeded: the project stores more than its 5000000000-byte limit.",
+    "meta": {
+      "quota_id": "quota_V1StGXR8Z5jdHi6B",
+      "metric": "storage_bytes",
+      "limit": 5000000000,
+      "current_bytes": 5241041920
+    }
+  }
+}
+```
+
+#### Where the cap acts
+
+Enforcement is on the caller-facing corpus writes, all of them creates — so a refusal leaves nothing half-written:
+
+| Path | Delta counted |
+| --- | --- |
+| [`POST /api/v1/files/upload`](/docs/api/files/upload-file), [`/upload/base64`](/docs/api/files/upload-file-base-64), [`/upload/{token}`](/docs/api/files/upload-file-with-token) | the uploaded bytes |
+| [`POST /api/v1/files`](/docs/api/files/create-file) | the declared `size` — metadata-only, but it is what the meter sums for the row |
+| [`POST /api/v1/documents`](/docs/api/documents/create-document) | the `content` bytes |
+| [`POST /api/v1/documents/ingest`](/docs/api/documents/ingest-document), [`POST /api/v1/documents/{document_id}/ingest`](/docs/api/documents/reingest-document) | none — the source file is already stored and measured; what ingestion adds is chunk text and vectors, produced after the response |
+| [`POST /api/v1/memory-entries`](/docs/api/memory-entries/create-memory-entry) | the `content` bytes |
+| [`POST /api/v1/datasets/{dataset_id}/items`](/docs/api/evaluations/create-dataset-item), [`/items/from-generation`](/docs/api/evaluations/create-dataset-item-from-generation) | the serialized `input`, `expected_output` and `metadata` |
+
+The `file`, `document`, `memory_entry` and `dataset_item` [formation](./formations.md) resources are held to the same cap, so a template cannot declare what these routes refuse.
+
+**What a generation or a run drives from the inside is deliberately exempt.** Every [conversation](./conversations.md) message is a `Document` with its own chunks and embeddings; the `write_memory` tool, [automatic extraction](./memories.md) and an [orchestration](./orchestrations.md) `memory_write` node all write memory entries mid-turn; and an [`eval_results`](./evaluations.md) row is written while a run executes. A refusal there would fail a turn or a run already under way and leave it half persisted, which is exactly what the enforcement points above are chosen to avoid. So the cap bounds the ingest surface a tenant drives deliberately, and `monitor`-mode data is what should say whether that is enough.
+
+#### Measured against the last snapshot
+
+The footprint is read from the newest [`storage` event](./usage.md#storage-metering), plus the request's own delta — never from a live scan. The live query joins every chunk row through documents and files: that is a daily-snapshot cost, not a per-upload one. So the cap accepts **up to a day of staleness**, and a burst inside one day spends against a figure that has not heard of it.
+
+Two consequences:
+
+- **A project the sweep has never metered is measured on its delta alone**, so a single upload larger than the whole cap is still refused, and everything smaller is admitted until the first snapshot.
+- **The cap is approximate on the way up.** A document's chunks and vectors typically weigh several times its source text ([`chunk_count` and `gb_day`](./usage.md#storage-metering) explain why), and none of that is in the delta — the next snapshot is what sees it. Size the cap for the footprint you are willing to hold, not for the byte the refusal happens to fire on.
+
+**A capped-out project is wedged**: every ingest is refused until a human removes something. That is the trade a cap makes against a retention sweep — it is non-destructive, and `monitor` mode is a real dry run — but it is a trade, so ship a cap in `monitor` mode first and read which projects would breach.
+
+#### Recovering
+
+Delete stored content — [files](./files.md), [documents](./documents.md), [memory entries](./memories.md), [dataset items](./evaluations.md) — and the next snapshot clears the breach. Deletes are never refused. Raising the cap with [`PATCH /api/v1/quotas/{quota_id}`](/docs/api/quotas/update-quota) clears it immediately, and so does switching the quota to `monitor`. Note that a **re-ingest is refused too**: it re-indexes and can grow the corpus, so it is not an escape from a full one.
 
 ### Unpriced usage
 
@@ -200,7 +269,7 @@ When multiple quotas match a request (e.g. a project-wide cap and an API-key cap
 
 ### Breach contract
 
-A breach returns HTTP `429` with a `Retry-After` header (seconds until the window resets) and the standard error body:
+A **flow** breach returns HTTP `429` with a `Retry-After` header (seconds until the window resets) and the standard error body; a `storage_bytes` breach returns `409` with no `Retry-After` (see [Storage enforcement](#storage-enforcement)):
 
 ```json
 {
@@ -222,15 +291,17 @@ A breach returns HTTP `429` with a `Retry-After` header (seconds until the windo
 
 Every breach fires a `quota.exceeded` webhook event **once per window**, for both `enforce` and `monitor` quotas. Because a quota's window always has a discrete fixed key and usage only grows within it, the fire state is a single stored key — a breach re-fires only after the window rolls to a new key (no hysteresis). The event `data` carries `quota_id`, `project_id`, `scope`, `scope_ref`, `metric`, `meter_type`, `window`, `window_key`, `limit`, `observed_value`, and `mode` — the identity restated, so a consumer holding two caps over one scope and window can tell which [meter](#meter-scope) breached without a fetch. Subscribe a [webhook](./webhooks.md) to `quota.exceeded` (or a wildcard) to receive it.
 
+A `storage_bytes` quota has no window, so the **snapshot's own UTC day** is its `window_key`: one report per fresh measurement while a project stays over cap. A fixed key would report the first breach and then be silent forever, including for a project that deleted content and grew back over.
+
 ### Monitor mode
 
-`mode: monitor` observes without blocking: a breach fires the `quota.exceeded` webhook and lets the request (or generation) through. Use it to dry-run a cap before enforcing — flip `mode` to `enforce` via `PATCH` and the next breaching request is blocked. `enforce` quotas fire the same webhook in addition to returning `429`.
+`mode: monitor` observes without blocking: a breach fires the `quota.exceeded` webhook and lets the request (or generation, or corpus write) through. Use it to dry-run a cap before enforcing — flip `mode` to `enforce` via `PATCH` and the next breaching request is blocked. `enforce` quotas fire the same webhook in addition to returning `429`.
 
 Because a monitor breach never blocks, the request it rode in on returns success and leaves no trace beyond the webhook. So a monitor breach also writes a durable [audit-log](./audit-log.md) entry — `action: quotas:MonitorBreach` (no principal authorized it, so `principal_type`/`principal_id` are null), the quota as its resource, and a `detail.kind` of `quota_monitor_breach` carrying the metric, meter scope, window, limit, and observed value. Like the webhook, it is written once per window. `enforce` breaches need no such entry: they surface as the `429` the audit log already records on the blocked request.
 
 ### Formation resource
 
-Quotas can be declared as a `quota` formation resource (`QuotaResourceProperties`): `scope`, `scope_ref`, `metric`, `window`, `limit`, `mode`, `on_unpriced`, `meter_type`. A `scope_ref` naming an actor can be a `{ "ref": … }` to an actor resource in the same template. Only `limit` and `mode` update through the formation lifecycle. Unknown fields are rejected with `400`.
+Quotas can be declared as a `quota` formation resource (`QuotaResourceProperties`): `scope`, `scope_ref`, `metric`, `window`, `limit`, `mode`, `on_unpriced`, `meter_type`. The scope × metric and `window` rules above are the same function the REST route calls, so a template cannot declare a combination the API refuses. A `scope_ref` naming an actor can be a `{ "ref": … }` to an actor resource in the same template. Only `limit` and `mode` update through the formation lifecycle. Unknown fields are rejected with `400`.
 
 `scope`, `scope_ref`, `metric`, `window`, and `meter_type` are immutable after creation — together with the project they form the quota's identity, and its window counters are keyed to that identity. Declaring a **different** value for any of them fails the operation: the formation is left `status: "failed"` with the offending field named in the operation error, and the quota keeps every one of its previous values (including `limit` and `mode`, which are never applied piecemeal on a failed update). Restating an immutable field at its current value is always fine — templates carry `scope`, `metric`, and `window` on every update because they are required on create. To change one, replace the quota resource.
 
@@ -280,6 +351,51 @@ curl -X POST https://api.example.com/api/v1/quotas \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"project_id":"proj_ABC","scope":"api_key","scope_ref":"key_ABC","metric":"requests","window":"rolling_1m","limit":600}'
+```
+
+</TabItem>
+</Tabs>
+
+### Cap the stored corpus
+
+Shipped in `monitor` mode first, which is how a storage cap should always start — it reports which projects would breach and refuses nothing.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat create-quota --project-id proj_ABC --scope project \
+  --metric storage_bytes --window current --limit 5000000000 --mode monitor
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+import { SoatClient } from '@soat/sdk';
+const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
+
+const { data, error } = await soat.quotas.createQuota({
+  body: {
+    project_id: 'proj_ABC',
+    scope: 'project',
+    metric: 'storage_bytes',
+    window: 'current',
+    limit: 5_000_000_000,
+    mode: 'monitor',
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/quotas \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"project_id":"proj_ABC","scope":"project","metric":"storage_bytes","window":"current","limit":5000000000,"mode":"monitor"}'
 ```
 
 </TabItem>

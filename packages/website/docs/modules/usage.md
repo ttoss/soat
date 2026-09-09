@@ -154,6 +154,13 @@ a 100-item dataset run ten times stores eleven copies of every payload. Content
 [retention](./evaluations.md#retention-and-erasure) clears a result's `output`
 and nothing else of it, so the rest accumulates for the life of the project.
 
+**The snapshot is also what bounds the corpus.** A `storage_bytes`
+[quota](./quotas.md#storage-enforcement) caps a project's footprint against the
+newest `storage` event plus the request's own delta, and refuses the corpus write
+paths with `409 QUOTA_STORAGE_EXCEEDED`. Enforcing against the snapshot rather
+than a live scan is what keeps the check off the per-upload path, at the cost of
+up to a day of staleness.
+
 **Embeddings dominate.** A vector is four bytes per dimension, so at
 `EMBEDDING_DIMENSIONS=1024` one embedding is ~4 KB against the ~1 KB of text it
 encodes. A row with no embedding yet contributes its text and nothing more. Both

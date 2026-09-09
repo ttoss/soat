@@ -342,6 +342,13 @@ paths:
           description: Forbidden
         '404':
           description: Dataset not found
+        '409':
+          description: >-
+            The project's `storage_bytes` quota is exceeded
+            (`QUOTA_STORAGE_EXCEEDED`). A fixture is a corpus write like a
+            document, so it is bounded by the same cap; delete stored content or
+            raise the quota — no `Retry-After` is sent, since no window reset
+            clears a stored total.
   /api/v1/datasets/{dataset_id}/items/from-generation:
     post:
       tags:
@@ -429,8 +436,11 @@ paths:
           description: Dataset or generation not found
         '409':
           description: >-
-            The generation has not completed, or its content was never stored
-            or has been purged
+            The generation has not completed, its content was never stored or
+            has been purged, or the project's `storage_bytes` quota is exceeded
+            (`QUOTA_STORAGE_EXCEEDED`; delete stored content or raise the quota
+            — no `Retry-After` is sent, since no window reset clears a stored
+            total)
   /api/v1/datasets/{dataset_id}/items/{item_id}:
     put:
       tags:

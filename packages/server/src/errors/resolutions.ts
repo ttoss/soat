@@ -45,6 +45,8 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'Wait until the window resets — `Retry-After` (seconds) and `meta.resets_at` both carry the time — or raise the quota with `PATCH /api/v1/quotas/{quota_id}`.',
   QUOTA_UNENFORCEABLE:
     'Add price book entries covering the models this project runs (`POST /api/v1/prices`), so the cost quota has something to aggregate. To accept unmeasurable spend instead, set `on_unpriced: "allow"` on the quota with `PATCH /api/v1/quotas/{quota_id}` (or switch it to `monitor` mode to stop blocking entirely).',
+  QUOTA_STORAGE_EXCEEDED:
+    'Delete stored content — files, documents, or memory entries — until the project is back under the cap; `meta.current_bytes` and `meta.limit` say by how much. Waiting does not help: a storage quota caps a stored total, not a rate. Alternatively raise the cap with `PATCH /api/v1/quotas/{quota_id}`, or switch it to `monitor` mode to stop blocking while you measure.',
   TOOL_EGRESS_BLOCKED:
     'The deployment only makes outbound requests to publicly routable addresses, and this destination is not one — `meta.tool_url` names it and `meta.tool_address` the address it resolved to. Point the tool, webhook or provider `base_url` at a public host, or have the operator list this destination in TOOL_EGRESS_ALLOWED_HOSTS. It is not a permissions problem: no policy grants it.',
   AI_PROVIDER_ERROR:

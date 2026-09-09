@@ -12,6 +12,22 @@ export const QUOTA_WINDOWS = [
 export type QuotaWindow = (typeof QUOTA_WINDOWS)[number];
 
 /**
+ * The `window` a stock metric carries. A stock — `storage_bytes` — is not
+ * aggregated over time at all: the measurement *is* the footprint, it never
+ * resets, and waiting never clears it, so none of the math below applies to it
+ * (#1249).
+ *
+ * A sentinel rather than a nullable column: the quota's identity is
+ * `(project, scope, scope_ref, metric, window)`, and a null there would make
+ * two stock quotas on one project distinct rows to Postgres while being the
+ * same cap. It is deliberately **not** a member of `QUOTA_WINDOWS`, so
+ * `windowKeyFor` / `windowStartsAt` / `windowResetsAt` stay total over the
+ * windows they actually implement and cannot be handed a value they would have
+ * to invent an answer for.
+ */
+export const STOCK_QUOTA_WINDOW = 'current';
+
+/**
  * The fixed-window key a timestamp falls into for a given window
  * (`2026-07-07T12:31Z` for `rolling_1m`; `2026-07` for `calendar_month`).
  */

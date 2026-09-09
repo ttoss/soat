@@ -83,13 +83,22 @@ paths:
       description: >-
         Creates a project-scoped quota. `requests` is valid for `scope:
         project`/`api_key`; `tokens` and `cost_usd` are valid for `scope:
-        project`/`agent`/`actor`. Any other scope/metric pair is rejected with
-        400 (no attribution exists to enforce it). An `actor` quota caps one end
-        user's spend, matched from the generation's session; a null `scope_ref`
-        means one budget *per* actor rather than a pooled project total. A
-        `cost_usd` quota may name one `meter_type` to cap; omitting it caps
-        every priced meter. A duplicate quota (same project, scope, scope_ref,
-        metric, window, meter_type) is rejected with 409.
+        project`/`agent`/`actor`; `storage_bytes` is valid for `scope: project`
+        only. Any other scope/metric pair is rejected with 400 (no attribution
+        exists to enforce it). An `actor` quota caps one end user's spend,
+        matched from the generation's session; a null `scope_ref` means one
+        budget *per* actor rather than a pooled project total. A `cost_usd`
+        quota may name one `meter_type` to cap; omitting it caps every priced
+        meter. A duplicate quota (same project, scope, scope_ref, metric,
+        window, meter_type) is rejected with 409.
+
+
+        `storage_bytes` caps a stored total rather than a windowed one, so it
+        takes `window: current` and every other metric refuses that value (400
+        either way). It is enforced at the corpus write paths — file upload and
+        create, document create, document ingest and re-ingest, memory-entry
+        create — with `409 QUOTA_STORAGE_EXCEEDED` and no `Retry-After`, since
+        no window reset clears a footprint.
       operationId: createQuota
       requestBody:
         required: true
@@ -124,18 +133,30 @@ paths:
                   example: key_V1StGXR8Z5jdHi6B
                 metric:
                   type: string
-                  enum: [requests, tokens, cost_usd]
+                  enum: [requests, tokens, cost_usd, storage_bytes]
                   description: The metric being capped
                   example: requests
                 window:
                   type: string
-                  enum: [rolling_1m, rolling_1h, rolling_24h, calendar_month]
-                  description: The window over which the metric is aggregated
+                  enum:
+                    [
+                      rolling_1m,
+                      rolling_1h,
+                      rolling_24h,
+                      calendar_month,
+                      current,
+                    ]
+                  description: >-
+                    The window over which the metric is aggregated. `current`
+                    is the only accepted value for storage_bytes (a stored
+                    total is not aggregated over time) and is refused for
+                    every other metric.
                 limit:
                   type: number
                   description: >-
-                    The cap. Must be a positive integer for requests/tokens;
-                    fractional values are allowed for cost_usd.
+                    The cap. Must be a positive integer for
+                    requests/tokens/storage_bytes (bytes); fractional values
+                    are allowed for cost_usd.
                   example: 600
                 mode:
                   type: string
@@ -323,10 +344,14 @@ components:
             actor rather than a pooled total across all actors.
         metric:
           type: string
-          enum: [requests, tokens, cost_usd]
+          enum: [requests, tokens, cost_usd, storage_bytes]
         window:
           type: string
-          enum: [rolling_1m, rolling_1h, rolling_24h, calendar_month]
+          enum:
+            [rolling_1m, rolling_1h, rolling_24h, calendar_month, current]
+          description: >-
+            The window the metric is aggregated over; `current` on
+            storage_bytes, which caps a stored total and never resets.
         limit:
           type: number
         mode:
@@ -355,7 +380,9 @@ components:
           description: >-
             Current fixed-window usage for the requests metric. Null for
             token/cost quotas (which aggregate the usage meter at check time
-            rather than keeping a counter) and in list responses.
+            rather than keeping a counter), null for storage_bytes (a stored
+            total has no window and no counter — read the footprint from the
+            storage meter), and null in list responses.
           properties:
             window_key:
               type: string

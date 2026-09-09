@@ -18,6 +18,7 @@ import {
   compilePolicy,
   registerResourceFieldMap,
 } from './policyCompiler';
+import { assertStorageQuota } from './quotaStorage';
 import { mergeTags } from './tags';
 import { rethrowAsConflict } from './uniqueViolation';
 
@@ -127,6 +128,11 @@ export const uploadFile = async (args: {
   contentType?: string;
   metadata?: string;
 }) => {
+  await assertStorageQuota({
+    projectId: args.projectId,
+    addedBytes: args.fileBuffer.length,
+  });
+
   const provider = getActiveStorageProvider();
 
   const normalizedPath =
@@ -321,6 +327,13 @@ export const createFile = async (args: {
   size?: number;
   metadata?: string;
 }) => {
+  // Metadata-only, but the declared `size` is what the storage meter sums for
+  // this row, so the cap has to see it like any other byte.
+  await assertStorageQuota({
+    projectId: args.projectId,
+    addedBytes: args.size ?? 0,
+  });
+
   // A metadata-only record carries the active backend's storageType with an
   // empty storagePath, filled in when bytes are uploaded.
   const normalizedPath = buildPath({

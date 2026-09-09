@@ -9,11 +9,24 @@
 
 import { validateMeterType } from './quotaMeterScope';
 import { validateOnUnpriced } from './quotaPricingPosture';
-import { QUOTA_WINDOWS } from './quotaWindows';
+import { QUOTA_WINDOWS, STOCK_QUOTA_WINDOW } from './quotaWindows';
 
 export const QUOTA_SCOPES = ['project', 'api_key', 'agent', 'actor'] as const;
-export const QUOTA_METRICS = ['requests', 'tokens', 'cost_usd'] as const;
+export const QUOTA_METRICS = [
+  'requests',
+  'tokens',
+  'cost_usd',
+  'storage_bytes',
+] as const;
 export const QUOTA_MODES = ['enforce', 'monitor'] as const;
+
+/**
+ * The metrics that measure a **stock** rather than a flow. A flow accumulates
+ * inside a window and empties when it rolls; a stock is what the project holds
+ * right now, so it carries `window: 'current'` and none of the window math
+ * (#1249).
+ */
+export const QUOTA_STOCK_METRICS = ['storage_bytes'] as const;
 
 export type QuotaScope = (typeof QUOTA_SCOPES)[number];
 export type QuotaMetric = (typeof QUOTA_METRICS)[number];
@@ -28,9 +41,14 @@ export const isOneOf = <T extends readonly string[]>(
   );
 };
 
+export const isStockMetric = (metric: QuotaMetric): boolean => {
+  return (QUOTA_STOCK_METRICS as readonly string[]).includes(metric);
+};
+
 /**
- * `limit` must be a number > 0. For `requests` and `tokens` it must be a
- * positive integer; fractional limits are valid only for `cost_usd`.
+ * `limit` must be a number > 0. For every metric but `cost_usd` it must be a
+ * positive integer — requests, tokens and bytes are all counted in whole
+ * units; fractional limits are valid only for money.
  */
 export const validateQuotaLimit = (args: {
   metric: QuotaMetric;
@@ -63,6 +81,10 @@ export const validateQuotaLimit = (args: {
  * - `tokens` / `cost_usd` aggregate the usage meter, which carries project,
  *   agent, and end-user (actor) attribution — but no API-key attribution, so
  *   `api_key` is excluded.
+ * - `storage_bytes` reads the storage snapshot, which measures files, document
+ *   chunks and memory entries per **project** and nothing narrower: a stored
+ *   byte carries no agent, actor or api-key attribution, so `project` is the
+ *   only scope it can be aggregated by.
  *
  * Widening a row here is backward-compatible; narrowing one is not.
  */
@@ -70,6 +92,29 @@ const SCOPES_BY_METRIC: Record<QuotaMetric, readonly QuotaScope[]> = {
   requests: ['project', 'api_key'],
   tokens: ['project', 'agent', 'actor'],
   cost_usd: ['project', 'agent', 'actor'],
+  storage_bytes: ['project'],
+};
+
+/**
+ * The `window` rule, fail-closed in both directions. A windowed stock quota
+ * would never be evaluated (nothing keys a counter or a window start off a
+ * footprint), and `current` on a flow metric names no window to aggregate over
+ * — either one stored is a cap that reads healthy through the API while
+ * enforcing nothing, which is exactly what `SCOPES_BY_METRIC` above exists to
+ * make unrepresentable.
+ */
+const validateQuotaWindow = (args: {
+  metric: QuotaMetric;
+  window: unknown;
+}): string | null => {
+  if (isStockMetric(args.metric)) {
+    return args.window === STOCK_QUOTA_WINDOW
+      ? null
+      : `window must be "${STOCK_QUOTA_WINDOW}" for metric "${args.metric}", which caps a stored total rather than a windowed one.`;
+  }
+  return isOneOf(QUOTA_WINDOWS, args.window)
+    ? null
+    : `window must be one of ${QUOTA_WINDOWS.join(' / ')}.`;
 };
 
 /**
@@ -92,9 +137,11 @@ export const validateQuotaShape = (args: {
   if (!isOneOf(QUOTA_METRICS, args.metric)) {
     return `metric must be one of ${QUOTA_METRICS.join(' / ')}.`;
   }
-  if (!isOneOf(QUOTA_WINDOWS, args.window)) {
-    return `window must be one of ${QUOTA_WINDOWS.join(' / ')}.`;
-  }
+  const windowError = validateQuotaWindow({
+    metric: args.metric,
+    window: args.window,
+  });
+  if (windowError) return windowError;
   if (!isOneOf(QUOTA_MODES, args.mode)) {
     return `mode must be one of ${QUOTA_MODES.join(' / ')}.`;
   }
