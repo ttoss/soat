@@ -130,7 +130,10 @@ describe('formationsApply', () => {
     ).resolves.toEqual({});
   });
 
-  test('resolveFormationOutputs resolves a ref_attr for a real resource attribute', async () => {
+  // The write refuses this template, so only one stored before the rule reaches
+  // resolution — and it re-resolves on every re-deploy, which is why the value
+  // is refused here too and not only at the write.
+  test('resolveFormationOutputs refuses a ref_attr naming a credential', async () => {
     const webhook = await createWebhook({
       projectId,
       name: uniqueName('formations-apply-webhook'),
@@ -160,7 +163,7 @@ describe('formationsApply', () => {
       projectId
     );
 
-    expect(result.webhookSecret).toBe(webhook.secret);
+    expect(result.webhookSecret).toBeUndefined();
   });
 
   test('resolveFormationOutputs resolves ref_attr expressions using getAttributes', async () => {

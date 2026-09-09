@@ -274,6 +274,23 @@ export type FormationModule = {
     properties: Record<string, unknown>
   ) => Record<string, unknown>;
   /**
+   * Property names whose value is credential material: sent to provision the
+   * resource, never read back out of it. Declaring them is what lets one rule
+   * keep them out of `lastAppliedProperties`, out of a stored template's read,
+   * and out of a plan diff, instead of each surface remembering separately.
+   */
+  writeOnlyProperties?: readonly string[];
+  /**
+   * `getAttributes` names that carry credential material and therefore may not
+   * be resolved into a formation output — an output is a readable surface by
+   * definition, and a signing secret has its own permission-gated route.
+   *
+   * Declared even by a module that exposes no such attribute at all: naming it
+   * is what turns the refusal into a message that says which attribute and why,
+   * rather than a silent "attribute not found".
+   */
+  sensitiveAttributes?: readonly string[];
+  /**
    * True for resources whose live state cannot be read back at all (e.g. a
    * secret's value is encrypted at rest), so `read` always returns null
    * structurally rather than as a "resource deleted externally" signal. When

@@ -284,9 +284,11 @@ const buildCapabilityMembers = (args: {
   const writeOnlyMember: Partial<FormationModule> =
     registration.writeOnlyProperties.size > 0
       ? {
-          // The engine's own hook for this, and the same one every built-in
-          // secret-bearing type uses. It runs on the way to storage only —
-          // the handler has already been sent the full bag.
+          // The engine's own declaration for this, and the same one every
+          // built-in secret-bearing type makes. It governs storage and every
+          // read of a stored template — the handler has already been sent the
+          // full bag.
+          writeOnlyProperties: [...registration.writeOnlyProperties],
           sanitizeLastAppliedProperties: (properties) => {
             const kept: Record<string, unknown> = {};
             for (const [key, value] of Object.entries(properties)) {

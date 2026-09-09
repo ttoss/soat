@@ -13,6 +13,7 @@ import {
   registerFormationResourceTypes,
   unregisterFormationResourceTypes,
 } from 'src/lib/formationsRegistry';
+import { resolveFormationOutputs } from 'src/lib/formationsResolve';
 import { validateFormationTemplate } from 'src/lib/formationsValidation';
 import { validateFormationTemplateAsync } from 'src/lib/formationsValidationAsync';
 
@@ -931,5 +932,77 @@ describe('the module contract holds for a direct caller too', () => {
     }).validatePropertiesAsync?.({ properties: 'nope', basePath: 'p' });
 
     expect(handler.recorded[0].body.properties).toEqual({});
+  });
+});
+
+// ── ref_attr resolution ─────────────────────────────────────────────────────
+
+/**
+ * A registered type is the only remaining consumer of `ref_attr`: the two
+ * built-ins that exposed an attribute exposed a signing secret, and an output
+ * carrying one is refused. So the resolution path is exercised here, where the
+ * handler that publishes the attribute lives.
+ */
+describe('resolveFormationOutputs against a registered type', () => {
+  const template = (refAttr: string) => {
+    return {
+      resources: {
+        Chan: {
+          type: 'test_channel',
+          properties: { name: 'Support', kind: 'whatsapp' },
+        },
+      },
+      outputs: { value: { ref_attr: refAttr } },
+    };
+  };
+
+  const resolvedIds = new Map([['Chan', 'chn_42']]);
+
+  beforeEach(() => {
+    registerFormationResourceTypes({
+      registrations: [handler.registration({ capabilities: ['read'] })],
+    });
+    handler.replies.read = {
+      status: 200,
+      body: {
+        exists: true,
+        physical_resource_id: 'chn_42',
+        properties: { name: 'Support', kind: 'whatsapp' },
+        outputs: { webhook_url: 'https://hook' },
+      },
+    };
+  });
+
+  afterEach(() => {
+    unregisterFormationResourceTypes({ names: ['test_channel'] });
+  });
+
+  test('resolves an attribute the handler publishes', async () => {
+    await expect(
+      resolveFormationOutputs(
+        template('Chan.webhook_url'),
+        resolvedIds,
+        projectId
+      )
+    ).resolves.toEqual({ value: 'https://hook' });
+  });
+
+  test('skips an attribute the handler does not publish', async () => {
+    await expect(
+      resolveFormationOutputs(template('Chan.missing'), resolvedIds, projectId)
+    ).resolves.toEqual({});
+  });
+
+  test('skips a resource type that exposes no attributes at all', async () => {
+    await expect(
+      resolveFormationOutputs(
+        {
+          resources: { Mem: { type: 'memory', properties: { name: 'notes' } } },
+          outputs: { value: { ref_attr: 'Mem.anything' } },
+        },
+        new Map([['Mem', 'mem_1']]),
+        projectId
+      )
+    ).resolves.toEqual({});
   });
 });

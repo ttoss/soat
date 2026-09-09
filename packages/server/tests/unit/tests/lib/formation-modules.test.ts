@@ -1072,45 +1072,12 @@ describe('apiKeysFormationModule', () => {
 // ── trigger starter/target + secret + shape rules ───────────────────────────
 
 describe('triggersFormationModule', () => {
-  test('webhook trigger exposes its signing secret via getAttributes', async () => {
-    const id = await applyCreateResource({
-      actingUserId: internalUserId,
-      resourceType: 'trigger',
-      projectId: internalProjectId,
-      resolvedProperties: {
-        name: 'FM Webhook Trigger',
-        type: 'webhook',
-        target_type: 'agent',
-        target_id: agentId,
-      },
-    });
-
-    const attrs = await readModule('trigger').getAttributes?.({
-      projectId: internalProjectId,
-      physicalResourceId: id,
-    });
-    expect(typeof attrs?.secret).toBe('string');
-    expect(attrs?.secret.length).toBeGreaterThan(0);
-  });
-
-  test('a non-webhook trigger exposes no secret attribute', async () => {
-    const id = await applyCreateResource({
-      actingUserId: internalUserId,
-      resourceType: 'trigger',
-      projectId: internalProjectId,
-      resolvedProperties: {
-        name: 'FM Manual Trigger NoSecret',
-        type: 'manual',
-        target_type: 'agent',
-        target_id: agentId,
-      },
-    });
-
-    const attrs = await readModule('trigger').getAttributes?.({
-      projectId: internalProjectId,
-      physicalResourceId: id,
-    });
-    expect(attrs).toEqual({});
+  // A firing is authenticated with this secret, so no formation surface may
+  // hand it back: the module exposes no attribute at all, and names it so the
+  // refusal on an output can say which attribute and why.
+  test('the signing secret is not an attribute the module exposes', () => {
+    expect(readModule('trigger').getAttributes).toBeUndefined();
+    expect(readModule('trigger').sensitiveAttributes).toEqual(['secret']);
   });
 
   test('schedule trigger create computes next_fire_at and reads back cron', async () => {
@@ -2277,27 +2244,12 @@ describe('ingestionRulesFormationModule', () => {
   });
 });
 
-// ── webhook getAttributes ───────────────────────────────────────────────────
+// ── webhook signing secret ──────────────────────────────────────────────────
 
 describe('webhooksFormationModule', () => {
-  test('getAttributes returns the generated signing secret', async () => {
-    const webhookId = await applyCreateResource({
-      actingUserId: internalUserId,
-      resourceType: 'webhook',
-      projectId: internalProjectId,
-      resolvedProperties: {
-        name: 'Signed Hook',
-        url: 'https://example.com/signed',
-        events: ['conversation.created'],
-      },
-    });
-
-    const attrs = await readModule('webhook').getAttributes?.({
-      projectId: internalProjectId,
-      physicalResourceId: webhookId,
-    });
-    expect(typeof attrs?.secret).toBe('string');
-    expect(attrs?.secret.length).toBeGreaterThan(0);
+  test('the signing secret is not an attribute the module exposes', () => {
+    expect(readModule('webhook').getAttributes).toBeUndefined();
+    expect(readModule('webhook').sensitiveAttributes).toEqual(['secret']);
   });
 
   test('validateProperties normalizes camelCase keys before field validation', () => {

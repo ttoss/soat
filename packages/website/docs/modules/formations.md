@@ -329,6 +329,55 @@ The main use case is embedding a [secret reference](./secrets.md#secret-referenc
 
 After deployment the tool's stored header is `Bearer {{secret:sec_01HXYZ}}` — the decrypted value is only substituted server-side when the tool is called, and is never echoed back by any API response.
 
+### Secrets in Templates
+
+A formation is readable by anyone holding `formations:GetFormation`, which is a much wider audience than `secrets:GetSecret` or `triggers:GetTriggerSecret`. So neither of the two ways a formation comes to hold credential material reaches that surface.
+
+**A declared credential is masked on every read.** A `secret` resource's `value` — and any property a [custom resource type](#custom-resource-types) declares `write_only` — reads back as `{ "no_echo": true }`, both in the stored `template` and in a `plan-formation` diff. The same list keeps it out of the `lastAppliedProperties` snapshot the planner diffs against, where it is dropped rather than masked:
+
+```json
+{
+  "resources": {
+    "ApiSecret": {
+      "type": "secret",
+      "properties": { "name": "third-party-api-key", "value": { "no_echo": true } }
+    }
+  }
+}
+```
+
+The placeholder is an object rather than a masking string on purpose. A read-edit-write round trip of a stored template would otherwise send the mask back as the new secret and silently rotate one; an object fails the schema's `type: string` check, so the mistake is a `400` instead.
+
+The stored template itself keeps the value it was given, because an update that supplies no new template re-applies the stored one — that is what makes "change only the parameters" and "retry a failed deploy" work. Declare the value through a `no_echo` parameter to keep it out of the database as well:
+
+```yaml
+parameters:
+  ApiKey: { type: string, no_echo: true, use_previous_value: true }
+resources:
+  ApiSecret:
+    type: secret
+    properties: { name: third-party-api-key, value: { param: ApiKey } }
+```
+
+`no_echo` masks the value in `resolved_parameters`, and `use_previous_value` lets a later deploy omit it entirely — the stored encrypted secret is reused rather than re-supplied.
+
+**A generated signing secret is not an output.** A `trigger` or `webhook` resource's `secret` cannot be named by a `ref_attr` output:
+
+```json
+"outputs": { "hookSecret": { "ref_attr": "MyWebhook.secret" } }
+```
+
+Validation, `plan-formation`, `create-formation` and `update-formation` all answer `400 VALIDATION_FAILED` naming the attribute. Read the secret from its own permission-gated route instead — [`GET /api/v1/webhooks/{webhook_id}/secret`](/docs/api/webhooks/get-webhook-secret) or [`GET /api/v1/triggers/{trigger_id}/secret`](/docs/api/triggers/get-trigger-secret).
+
+Formations deployed before this refusal wrote the plaintext secret into `outputs`. It is dropped from every API response, but the row still holds it, so an operator clears the rows once and then **rotates every trigger and webhook secret a formation published** — the value was readable for as long as the row existed:
+
+```bash
+PURGE_DRY_RUN=1 pnpm --filter @soat/server purge-formation-secret-outputs
+pnpm --filter @soat/server purge-formation-secret-outputs
+```
+
+The sweep is idempotent: what it clears is derived from each formation's own stored template, not from a marker.
+
 ### Metadata Substitution
 
 The template's top-level `metadata` block is a substitution site, exactly like `outputs`: `{ "ref": "logicalId" }`, `{ "param": "Name" }`, and `{ "sub": "text ${Name}" }` are resolved at deploy time. The raw expressions stay in `template.metadata` (so a re-deploy re-resolves them against new parameter values), and the resolved values are exposed on the formation's `resolved_metadata` field. The parameter values used on the last deploy are recorded on `resolved_parameters`, with `no_echo: true` values masked (`***`).
@@ -494,7 +543,7 @@ alongside `logical_id`, `resource_type`, `action`, and `physical_resource_id`:
 
 | Field           | Type          | Description                                                                          |
 | --------------- | ------------- | ------------------------------------------------------------------------------------- |
-| `diff.desired`  | object        | Resolved desired-state properties, after parameter and `ref`/`sub` substitution        |
+| `diff.desired`  | object        | Resolved desired-state properties, after parameter and `ref`/`sub` substitution — credential-bearing properties read as `{ "no_echo": true }`, see [Secrets in Templates](#secrets-in-templates) |
 | `diff.current`  | object \| null | Current properties being compared against — `null` when there is nothing to compare (a `create`, an unregistered resource type, or a failed read) |
 
 For a resource type whose live state can be read back (most), `diff.current`
@@ -718,6 +767,9 @@ the way to storage:
 ```json
 "write_only_properties": ["access_token"]
 ```
+
+The same list is what masks the property on every read of a stored template and
+in a plan diff — see [Secrets in Templates](#secrets-in-templates).
 
 The handler still receives the value in full — stripping is about what is kept,
 never about what is sent. Each name must be a property the `schema` declares; a

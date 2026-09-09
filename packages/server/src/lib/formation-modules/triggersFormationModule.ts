@@ -8,7 +8,6 @@ import {
   createTrigger,
   deleteTrigger,
   findTrigger,
-  findTriggerSecret,
   updateTrigger,
   validateCronExpression,
   validateEventPattern,
@@ -156,10 +155,9 @@ export const triggersFormationModule = defineFormationModule({
     return findTrigger({ id: physicalResourceId });
   },
 
-  getAttributes: async ({ physicalResourceId }) => {
-    const result = await findTriggerSecret({ id: physicalResourceId });
-    const attrs: Record<string, string> = {};
-    if (result) attrs.secret = result.secret;
-    return attrs;
-  },
+  // Declared with no `getAttributes` behind it: the signing secret is what a
+  // firing is authenticated with, and an output is readable by anyone holding
+  // `formations:GetFormation`. Naming it here is what makes the refusal say
+  // which attribute and why, instead of "attribute not found".
+  sensitiveAttributes: ['secret'],
 });

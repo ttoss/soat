@@ -37,10 +37,5 @@ export const secretsFormationModule = defineFormationModule({
 
   writeOnly: true,
 
-  // Strip the plaintext value before it is stored in lastAppliedProperties so
-  // it is never persisted unencrypted in the formation_resources table.
-  sanitizeLastAppliedProperties: (properties) => {
-    const { value: _value, ...rest } = properties;
-    return rest;
-  },
+  writeOnlyProperties: ['value'],
 });

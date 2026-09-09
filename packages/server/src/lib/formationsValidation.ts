@@ -1,14 +1,11 @@
 import { load } from 'js-yaml';
 
-import {
-  buildDependencyGraph,
-  collectParamRefs,
-  collectRefAttrs,
-  collectRefs,
-  parseRefAttr,
-  topologicalSort,
-} from './formationsHelpers';
+import { buildDependencyGraph, topologicalSort } from './formationsHelpers';
 import { normalizeDeclaredProperties } from './formationsProperties';
+import {
+  validateOutputRefs,
+  validateRefAndParamTokens,
+} from './formationsRefValidation';
 import {
   getFormationModule,
   supportedResourceTypes,
@@ -89,42 +86,6 @@ const validateDependsOn = (args: {
       errors.push({
         path: `${basePath}.depends_on`,
         message: `depends_on references unknown resource '${dep}'`,
-      });
-    }
-  }
-  return errors;
-};
-
-// ── Ref / Param Token Validation ──────────────────────────────────────────
-
-// Validates `ref` and `param`/`sub` tokens anywhere within `value`, attributing
-// every error to `path`. Shared by resource `properties`, the top-level
-// `outputs`, and `metadata` substitution sites.
-const validateRefAndParamTokens = (
-  value: unknown,
-  path: string,
-  logicalIds: Set<string>,
-  paramNames: Set<string>
-): ValidationError[] => {
-  const errors: ValidationError[] = [];
-  for (const ref of collectRefs(value)) {
-    if (!logicalIds.has(ref)) {
-      errors.push({
-        path,
-        message: `Referenced resource '${ref}' does not exist in template`,
-      });
-    }
-  }
-  for (const ref of collectParamRefs(value)) {
-    // body.xxx refs are runtime tool-argument interpolations, not formation params
-    if (ref.startsWith('body.')) continue;
-    // A sub token may also name a resource logical id (resolved to the
-    // physical id at apply time).
-    if (logicalIds.has(ref)) continue;
-    if (!paramNames.has(ref)) {
-      errors.push({
-        path,
-        message: `'${ref}' is neither a parameter nor a resource logical id`,
       });
     }
   }
@@ -262,39 +223,6 @@ const validateResourceDeclaration = (args: {
   }
 
   return { errors, warnings };
-};
-
-// ── Output Ref Validation ─────────────────────────────────────────────────
-
-const validateOutputRefs = (
-  outputs: Record<string, unknown>,
-  logicalIds: Set<string>,
-  paramNames: Set<string>
-): ValidationError[] => {
-  const errors: ValidationError[] = [];
-  for (const [outputName, outputValue] of Object.entries(outputs)) {
-    const path = `outputs.${outputName}`;
-    errors.push(
-      ...validateRefAndParamTokens(outputValue, path, logicalIds, paramNames)
-    );
-    for (const refAttr of collectRefAttrs(outputValue)) {
-      const parsed = parseRefAttr(refAttr);
-      if (!parsed) {
-        errors.push({
-          path,
-          message: `ref_attr '${refAttr}' must be in the form '<ResourceName>.<attribute>'`,
-        });
-        continue;
-      }
-      if (!logicalIds.has(parsed.logicalId)) {
-        errors.push({
-          path,
-          message: `Referenced resource '${parsed.logicalId}' does not exist in template`,
-        });
-      }
-    }
-  }
-  return errors;
 };
 
 // ── Parameters Section Validation ─────────────────────────────────────────
@@ -437,7 +365,9 @@ export const validateFormationTemplate = (
 
   const outputs = getPlainObjectField(tmpl, 'outputs');
   if (outputs) {
-    errors.push(...validateOutputRefs(outputs, logicalIds, paramNames));
+    errors.push(
+      ...validateOutputRefs({ outputs, resources, logicalIds, paramNames })
+    );
   }
 
   const metadata = getPlainObjectField(tmpl, 'metadata');
