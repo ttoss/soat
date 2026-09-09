@@ -1,11 +1,8 @@
 import { jsonSchema, Output } from 'ai';
-import { Ajv, type ValidateFunction } from 'ajv';
-import createDebug from 'debug';
 
 import { DomainError } from '../errors';
+import { compileJsonSchema, describeSchemaErrors } from './jsonSchemaValidator';
 import { isPlainObject } from './plainObject';
-
-const log = createDebug('soat:generation');
 
 const MARKDOWN_JSON_FENCE = /^\s*```(?:json)?\s*\n?([\s\S]*?)\n?\s*```\s*$/i;
 
@@ -38,57 +35,6 @@ export const validateOutputSchema = (schema: unknown): void => {
   }
 };
 
-/**
- * `strict: false` because an `output_schema` is author-written and routinely
- * carries keywords ajv does not know — provider-specific hints, `$comment`,
- * vendor `x-*` extensions. In strict mode ajv *throws* on those at compile
- * time, which would turn a harmless annotation into a failed generation.
- * `allErrors` so the thrown message names every violated field, not just the
- * first: the message is what a board author reads to fix their agent.
- *
- * `format` is deliberately left unimplemented (no `ajv-formats`). In JSON
- * Schema, `format` is an annotation unless a validator opts into asserting it;
- * turning every existing `format` into an assertion would reject output that
- * the schema's author never claimed was invalid.
- */
-const ajv = new Ajv({ allErrors: true, strict: false });
-
-/**
- * Compiled validators, keyed by the schema's serialization. An `output_schema`
- * comes from an agent row (or an archived version snapshot), so the key set is
- * bounded by the project's agents rather than by traffic; the cap is a backstop
- * against a pathological caller, not an expected path.
- */
-const validatorCache = new Map<string, ValidateFunction | null>();
-const VALIDATOR_CACHE_MAX = 500;
-
-/**
- * A schema ajv cannot compile is an **authoring** bug, not a bad generation.
- * Failing every generation on it would turn one malformed agent config into an
- * outage, so the generation proceeds unvalidated and the compile failure is
- * logged. `null` marks "known-uncompilable" so the throw is not repaid on
- * every subsequent generation.
- */
-const compileValidator = (schema: Record<string, unknown>) => {
-  const key = JSON.stringify(schema);
-  const cached = validatorCache.get(key);
-  if (cached !== undefined) return cached;
-
-  let compiled: ValidateFunction | null = null;
-  try {
-    compiled = ajv.compile(schema);
-  } catch (error) {
-    log(
-      'compileValidator: output_schema could not be compiled, generations will not be validated against it: %s',
-      error instanceof Error ? error.message : String(error)
-    );
-  }
-
-  if (validatorCache.size >= VALIDATOR_CACHE_MAX) validatorCache.clear();
-  validatorCache.set(key, compiled);
-  return compiled;
-};
-
 export type StructuredOutputValidation =
   { success: true; value: unknown } | { success: false; error: Error };
 
@@ -110,21 +56,15 @@ export const validateStructuredOutput = (schema: unknown) => {
   return (value: unknown): StructuredOutputValidation => {
     if (!isPlainObject(schema)) return { success: true, value };
 
-    const validate = compileValidator(schema);
+    const validate = compileJsonSchema(schema);
     if (!validate) return { success: true, value };
 
     if (validate(value)) return { success: true, value };
 
-    const detail = (validate.errors ?? [])
-      .map((entry) => {
-        const path = entry.instancePath || '(root)';
-        return `${path} ${entry.message ?? 'is invalid'}`;
-      })
-      .join('; ');
     return {
       success: false,
       error: new Error(
-        `output does not satisfy output_schema: ${detail || 'unknown violation'}`
+        `output does not satisfy output_schema: ${describeSchemaErrors(validate.errors)}`
       ),
     };
   };

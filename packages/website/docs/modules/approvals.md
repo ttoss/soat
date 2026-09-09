@@ -193,8 +193,11 @@ Evidence goes stale, so expiry is enforced server-side in **both directions**:
   item has its frozen or edited arguments executed by the platform, and the
   result flows into the [continuation generation](#how-producers-suspend-and-resume).
 - **Edit-then-approve** replaces the arguments via the `arguments` field on the
-  approve call. Edited arguments must be a JSON object; the original proposal is
-  preserved in `proposed_action`, and the edit is recorded in `edited_arguments`.
+  approve call. Edited arguments must be a JSON object and must satisfy the
+  tool's own `parameters` schema (`400 APPROVAL_INVALID_EDIT` otherwise); the
+  original proposal is preserved in `proposed_action`, and the edit is recorded
+  in `edited_arguments`. Editing also takes more authority than approving — see
+  [Who may resolve](#who-may-resolve).
 - **Reject** requires a `reason`, preserved on the item.
 
 ### Decision output
@@ -229,6 +232,23 @@ Any principal with `approvals:ResolveApproval` in the project may resolve any of
 the project's items. There is no per-item targeting or assignment — the guardrail
 policy decides *what* needs a human, and the project policy layer decides *who*
 counts as one. Per-approver routing is a deferred future phase.
+
+**Editing the arguments takes more than resolving.** Approving as proposed
+adjudicates a call somebody else's agent composed; editing composes a new one,
+and the approved action executes under the **proposing** generation's principal
+rather than the approver's. So an edit additionally requires what making the
+call would require:
+
+| Proposal | Also required to edit |
+| --- | --- |
+| any tool | `tools:CallTool` on that tool |
+| a `builtin` tool | the proposed action's own IAM action, anywhere in the project |
+
+The second row is there because a builtin action is dispatched in-process, where
+the route re-checks it against whichever credential is on the request — the
+proposer's. Nothing else on that path asks whether the *approver* could have
+performed it. An edit that fails either check answers `403 FORBIDDEN`; approving
+the same item as proposed is unaffected.
 
 ## Examples
 

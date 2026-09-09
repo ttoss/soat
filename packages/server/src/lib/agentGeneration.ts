@@ -7,30 +7,17 @@ import {
   buildGenerationContext,
   type GenerationContext,
 } from './agentGenerationContext';
-import { pendingGenerations } from './agentGenerationHelpers';
 import {
   buildDepthGuardResult,
-  recoverPendingFromDb,
   resolveAgentForGeneration,
 } from './agentGenerationRecovery';
 import { type GenerationResult } from './agentGenerationTypes';
-import {
-  buildSyntheticToolResultMessages,
-  buildToolResultMessages as buildToolResultMessagesFromOutputs,
-  loadOutputMappingsByToolName,
-  resolveToolOutputsResult,
-  runNonStreamGeneration,
-  runToolOutputsGeneration,
-} from './agentNonStreamGeneration';
+import { runNonStreamGeneration } from './agentNonStreamGeneration';
 import { runStreamGeneration } from './agentStreamGeneration';
 import { type ChainLineage, resolveChainOrRefuse } from './generationChain';
 import { type GenerationInputMessage } from './generationInputMessages';
 import { recordGenerationFailure } from './generationLifecycle';
 import { createGenerationRecord } from './generations';
-import {
-  collectSystemInstructions,
-  withoutSystemMessages,
-} from './modelMessages';
 import { resolveStartingPrincipal } from './orchestrationRunToken';
 import { assertStreamingSupportsOutputSchema } from './outputSchema';
 import { startedByPrincipalColumns } from './principals';
@@ -451,66 +438,6 @@ export const startGeneration = async (
   return { id: ctx.generationId, traceId, status: 'accepted' };
 };
 
-// ── Submit Tool Outputs ───────────────────────────────────────────────────
-
-export const submitToolOutputs = async (args: {
-  projectIds?: number[];
-  agentId: string;
-  generationId: string;
-  toolOutputs: Array<{ toolCallId: string; output: unknown }>;
-  authHeader?: string;
-}): Promise<GenerationResult> => {
-  let pending = pendingGenerations.get(args.generationId);
-
-  // If not in memory (e.g. server restarted), recover from DB.
-  if (!pending) {
-    pending = await recoverPendingFromDb({
-      generationId: args.generationId,
-      agentId: args.agentId,
-      projectIds: args.projectIds,
-      authHeader: args.authHeader,
-    });
-  }
-  if (!pending || pending.agentId !== args.agentId) {
-    throw new DomainError(
-      'GENERATION_NOT_FOUND',
-      `Generation '${args.generationId}' not found or does not belong to agent '${args.agentId}'.`
-    );
-  }
-
-  pendingGenerations.delete(args.generationId);
-
-  const toolResultMessages = buildToolResultMessagesFromOutputs({
-    toolOutputs: args.toolOutputs,
-    pendingToolCalls: pending.pendingToolCalls,
-    outputMappingsByToolName: await loadOutputMappingsByToolName(pending),
-  });
-  // Merge the results the guardrail gate synthesized for client calls it did not
-  // release (class D / tripwire / pending_approval). They belong to the same
-  // assistant turn, so the provider needs them alongside the client's outputs.
-  const syntheticMessages = buildSyntheticToolResultMessages(
-    pending.syntheticToolResults ?? []
-  );
-  const allMessages = [
-    ...pending.messages,
-    ...toolResultMessages,
-    ...syntheticMessages,
-  ];
-  const system = collectSystemInstructions(pending.messages);
-  const nonSystemMessages = withoutSystemMessages(allMessages);
-
-  const result = await runToolOutputsGeneration({
-    generationId: args.generationId,
-    pending,
-    system,
-    nonSystemMessages,
-  });
-
-  return resolveToolOutputsResult({
-    generationId: args.generationId,
-    agentId: args.agentId,
-    pending,
-    allMessages,
-    result,
-  });
-};
+// Re-exported so `rest/v1/agentGeneration.ts` and `sessionOperations.ts` keep
+// importing the two halves of a generation from one module.
+export { submitToolOutputs } from './agentToolOutputs';

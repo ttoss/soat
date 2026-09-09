@@ -765,6 +765,96 @@ describe('Agent Generation Routes', () => {
       expect(response.body.output.content).toBe('final answer');
     });
 
+    /**
+     * A tool result is not caller data: it enters the conversation as the
+     * output of a call the model itself made, and the model reasons on it with
+     * that standing. So the ids open for a result are the ones the pause
+     * recorded — anything else is a result for a call that was never made.
+     *
+     * The guardrail gate is the sharper half. It parks or blocks a client call
+     * by leaving it out of `pendingToolCalls` and synthesizing its result
+     * instead; a caller submitting that id anyway would answer a call the gate
+     * refused to release.
+     */
+    test('tool-outputs refuses an id the pause never opened', async () => {
+      await createGenerationRecord({
+        publicId: 'gen_unknown_id',
+        projectId: projectDbId,
+        agentId,
+        traceId: 'trc_unknown_id',
+      });
+      await updateGenerationRecord({
+        publicId: 'gen_unknown_id',
+        pendingState: {
+          pendingToolCalls: [
+            { toolCallId: 'tc_open', toolName: 'noop', args: {} },
+          ],
+          messages: [{ role: 'user', content: 'hello' }],
+          steps: [],
+          parentTraceId: null,
+          rootTraceId: null,
+          toolContext: null,
+          remainingDepth: null,
+        },
+      });
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate/gen_unknown_id/tool-outputs`)
+        .send({
+          tool_outputs: [{ tool_call_id: 'tc_never_made', output: 'injected' }],
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toMatch(/tc_never_made/);
+    });
+
+    // One bad id fails the whole submission: the outputs share an assistant
+    // turn, so accepting the good half would resume the loop with a turn the
+    // caller only partly answered.
+    test('tool-outputs refuses a batch where any id was never opened', async () => {
+      await createGenerationRecord({
+        publicId: 'gen_mixed_ids',
+        projectId: projectDbId,
+        agentId,
+        traceId: 'trc_mixed_ids',
+      });
+      await updateGenerationRecord({
+        publicId: 'gen_mixed_ids',
+        pendingState: {
+          pendingToolCalls: [
+            { toolCallId: 'tc_open', toolName: 'noop', args: {} },
+          ],
+          messages: [{ role: 'user', content: 'hello' }],
+          steps: [],
+          parentTraceId: null,
+          rootTraceId: null,
+          toolContext: null,
+          remainingDepth: null,
+        },
+      });
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate/gen_mixed_ids/tool-outputs`)
+        .send({
+          tool_outputs: [
+            { tool_call_id: 'tc_open', output: 'ok' },
+            { tool_call_id: 'tc_withheld', output: 'injected' },
+          ],
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+
+      // The refusal left the generation resumable rather than consuming it.
+      const retry = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate/gen_mixed_ids/tool-outputs`)
+        .send({ tool_outputs: [{ tool_call_id: 'tc_open', output: 'ok' }] });
+
+      expect(retry.status).toBe(200);
+      expect(retry.body.status).toBe('completed');
+    });
+
     // The continuation completes down a different path than a direct
     // completion, and only the latter used to meter usage — so a generation
     // that paused for a client tool never got a usage event.

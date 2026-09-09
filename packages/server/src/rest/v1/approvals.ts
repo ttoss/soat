@@ -1,5 +1,6 @@
 import { Router } from '@ttoss/http-server';
-import type { Context } from 'src/Context';
+import type { AuthUser, Context } from 'src/Context';
+import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 import {
   approveApproval,
@@ -7,8 +8,10 @@ import {
   listApprovalRecurrences,
   listApprovals,
   rejectApproval,
+  type WireProposedAction,
 } from 'src/lib/approvals';
 import { buildSrn } from 'src/lib/iam';
+import { soatTools } from 'src/lib/soatTools';
 
 import type { ProjectOwned } from './helpers';
 import { parsePagination, requireAuth, resolveReadProjectIds } from './helpers';
@@ -29,6 +32,104 @@ const approvalSrn = (approval: { id: string } & ProjectOwned): string => {
     resourceType: 'approval',
     resourceId: approval.id,
   });
+};
+
+/**
+ * The IAM action a `builtin` proposal would perform, or `undefined` when the
+ * proposal is not one — an `http`/`mcp`/`client`/`pipeline` tool, a tool that
+ * no longer exists, or a builtin naming an action the catalog does not know.
+ */
+const proposedBuiltinIamAction = async (args: {
+  projectPublicId: string;
+  proposed: NonNullable<WireProposedAction>;
+}): Promise<string | undefined> => {
+  if (!args.proposed.action) return undefined;
+
+  const project = await db.Project.findOne({
+    where: { publicId: args.projectPublicId },
+    attributes: ['id'],
+  });
+  if (!project) return undefined;
+
+  const tool = await db.Tool.findOne({
+    where: { publicId: args.proposed.tool_id, projectId: project.id },
+    attributes: ['type'],
+  });
+  if (tool?.type !== 'builtin') return undefined;
+
+  return soatTools.find((def) => {
+    return def.name === args.proposed.action;
+  })?.iamAction;
+};
+
+/**
+ * The authority an **edit** needs, on top of the right to resolve.
+ *
+ * Approving as proposed adjudicates a call somebody else's agent composed;
+ * editing composes a new one — and the approved action executes under the
+ * *proposing* generation's principal, not the approver's. Without this, an
+ * approver holding nothing but `approvals:ResolveApproval` could turn another
+ * principal's agent into a machine for running whatever they wrote.
+ *
+ * So an editor must hold what making the call themselves would need:
+ * `tools:CallTool` on the tool, and for a `builtin` proposal the action's own
+ * IAM action as well — that dispatch re-checks the action against whoever's
+ * credential is on the request, which here is the proposer's, so nothing else
+ * on this path asks whether the approver could have performed it.
+ *
+ * The tool row is consulted only for the second half; `tools:CallTool` is
+ * answered from the proposal alone, so a proposal naming a tool that has since
+ * been deleted is still bounded.
+ */
+const assertMayEditProposedAction = async (args: {
+  authUser: AuthUser;
+  approval: {
+    project_id?: string | null;
+    proposed_action?: WireProposedAction;
+  };
+}): Promise<void> => {
+  const proposed = args.approval.proposed_action;
+  const projectPublicId = args.approval.project_id;
+  if (!proposed?.tool_id || !projectPublicId) return;
+
+  const refuse = () => {
+    throw new DomainError(
+      'FORBIDDEN',
+      'Editing the proposed arguments requires permission to make the call yourself; approving it as proposed does not.'
+    );
+  };
+
+  const mayCall = await args.authUser.isAllowed({
+    projectPublicId,
+    action: 'tools:CallTool',
+    resource: buildSrn({
+      projectPublicId,
+      resourceType: 'tool',
+      resourceId: proposed.tool_id,
+    }),
+  });
+  if (!mayCall) refuse();
+
+  const iamAction = await proposedBuiltinIamAction({
+    projectPublicId,
+    proposed,
+  });
+  if (!iamAction) return;
+
+  const mayAct = await args.authUser.isAllowed({
+    projectPublicId,
+    action: iamAction,
+    // The edit names its own target inside the arguments, so what is asked is
+    // whether the approver may perform this action anywhere in the project. A
+    // narrower grant cannot be shown to cover the edited target, and is
+    // refused rather than assumed.
+    resource: buildSrn({
+      projectPublicId,
+      resourceType: '*',
+      resourceId: '*',
+    }),
+  });
+  if (!mayAct) refuse();
 };
 
 approvalsRouter.get('/approvals', async (ctx: Context) => {
@@ -114,6 +215,13 @@ approvalsRouter.post(
     }
 
     const body = ctx.request.body as { arguments?: object };
+
+    if (body.arguments != null) {
+      await assertMayEditProposedAction({
+        authUser: ctx.authUser,
+        approval,
+      });
+    }
 
     const { item } = await approveApproval({
       id: ctx.params.approval_id,

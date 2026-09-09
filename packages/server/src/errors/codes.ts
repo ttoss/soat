@@ -525,7 +525,7 @@ export const ERROR_CODES = {
   APPROVAL_INVALID_EDIT: {
     httpStatus: 400,
     description:
-      'The edited arguments supplied on edit-then-approve must be a JSON object.',
+      "The edited arguments supplied on edit-then-approve must be a JSON object, and must satisfy the tool's own `parameters` schema.",
   },
   ACTIVITY_INVALID_CURSOR: {
     httpStatus: 400,
