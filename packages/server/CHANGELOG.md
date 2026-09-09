@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.44.0](https://github.com/ttoss/soat/compare/v0.43.0...v0.44.0) (2026-09-09)
+
+### Bug Fixes
+
+* **server:** a bedrock or vertex provider must carry its own credential ([#1246](https://github.com/ttoss/soat/issues/1246)) ([ac29b3b](https://github.com/ttoss/soat/commit/ac29b3b94bfeb0e30a3d73036d30013a380bb7d9)), closes [#1241](https://github.com/ttoss/soat/issues/1241)
+* **server:** a pinned ai_provider_id must belong to the pinning project ([#1248](https://github.com/ttoss/soat/issues/1248)) ([07cb9cc](https://github.com/ttoss/soat/commit/07cb9cc6c736573441d491b41d8c766b331d84e7))
+* **server:** withhold credential and authorization actions from agents ([#1251](https://github.com/ttoss/soat/issues/1251)) ([fbe27de](https://github.com/ttoss/soat/commit/fbe27de526962dab57206223d8b5d4e74c85510b))
+
+### Features
+
+* **server:** cap the stored corpus with a storage_bytes quota metric ([#1252](https://github.com/ttoss/soat/issues/1252)) ([c804b9f](https://github.com/ttoss/soat/commit/c804b9f8e30d1d88e72f879ea9a50bf22f8dfad9)), closes [#1249](https://github.com/ttoss/soat/issues/1249)
+* **usage:** meter what evaluations store in the storage footprint ([#1250](https://github.com/ttoss/soat/issues/1250)) ([f419497](https://github.com/ttoss/soat/commit/f419497527962f4fb4a075f6b026b50669360b3b)), closes [#1247](https://github.com/ttoss/soat/issues/1247)
+
 # [0.43.0](https://github.com/ttoss/soat/compare/v0.42.0...v0.43.0) (2026-09-08)
 
 ### Bug Fixes
