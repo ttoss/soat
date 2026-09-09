@@ -301,6 +301,7 @@ const resolveToolOutputContent = async (args: {
   }
 
   const toolResult = await callTool({
+    guardrails: 'apply',
     projectIds: args.projectIds,
     id: args.content.tool_id,
     action: args.content.action,

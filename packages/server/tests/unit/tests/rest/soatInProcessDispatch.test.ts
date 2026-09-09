@@ -331,6 +331,7 @@ describe('SOAT in-process dispatch', () => {
     expect(authHeader).toBeDefined();
 
     const result = await callTool({
+      guardrails: 'apply',
       id: toolRes.body.id,
       action: 'transition-task',
       input: { task_id: taskRes.body.id, transition: 'to_pong' },
@@ -363,6 +364,7 @@ describe('SOAT in-process dispatch', () => {
     // Sharing the process must never imply sharing the caller's authority.
     await expect(
       callTool({
+        guardrails: 'apply',
         id: toolRes.body.id,
         action: 'list-tools',
         input: {},

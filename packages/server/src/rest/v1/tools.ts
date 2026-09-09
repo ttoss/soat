@@ -378,6 +378,7 @@ toolsRouter.post('/tools/:tool_id/call', async (ctx: Context) => {
   const authHeader = ctx.request.headers.authorization;
 
   const result = await callTool({
+    guardrails: 'apply',
     projectIds,
     id: ctx.params.tool_id,
     action: typeof action === 'string' ? action : undefined,

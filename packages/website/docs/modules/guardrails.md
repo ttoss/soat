@@ -198,6 +198,37 @@ An [orchestration](./orchestrations.md) `tool` node is gated at dispatch just li
 - **C** — the run **parks** on the node with a `requires_action` of `type: "approval"`, filing an [`ApprovalItem`](./approvals.md) (`origin: node`). On approval the node re-dispatches with the frozen (or edited) arguments — the guardrail is **not** re-evaluated; on rejection or expiry the tool never runs and only a matching decision edge (`condition: "rejected"` / `"expired"`) follows.
 - **D / tripwire** — a **routable `blocked` outcome**, not a run failure: the node records a `{ status, reason }` artifact and branches by label, so an edge conditioned on `blocked` (or `tripwire`) routes to a fallback path. An unlabeled success edge does **not** auto-follow a blocked node.
 
+### Direct calls and pipeline steps
+
+A tool-scoped guardrail governs its tool *wherever it is used*, so the gate also
+sits on the dispatches that involve no agent and no orchestration graph:
+[`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool), every step of
+a `pipeline` tool, a [trigger](./triggers.md) whose target is a tool, an
+[ingestion rule](./ingestion-rules.md) converter, an
+[eval](./evaluations.md) tool scorer, and a `tool_id` embedded in a message.
+Like an orchestration node these compose **project + tool** scope only.
+
+None of them can await a decision, because there is no turn to return a pending
+result into and no run to park:
+
+- **A / passing B** — the call runs with the cleaned arguments.
+- **C / D / tripwire** — the call is refused with
+  `422 TOOL_DISPATCH_FAILED`, whose `meta` carries the `tool_id` and the
+  `outcome` that settled it. Inside a pipeline the step's own
+  `PIPELINE_STEP_FAILED` names which step was settled.
+
+A gated pipeline is adjudicated **before its first step runs**, so a refusal
+never leaves half a pipeline applied. Reach an approval-gated tool through an
+agent or an orchestration instead: both can park on the sign-off and resume from
+it.
+
+The one dispatch that is deliberately not gated is a guardrail's own
+[context fetch](#guards-and-guardrail-context) — gating it would run the
+guardrails that decide a call in order to decide that call. An
+[approved](./approvals.md) call is not re-gated either: the guardrail that filed
+the approval is what classified it, and a human then signed off on those exact
+arguments.
+
 ### Running a tighter posture in one project
 
 There is no separate override resource. A project runs a stricter posture by [attaching](#attachment) a tighter guardrail at its **project** scope — e.g. `{ "class": "C" }` forces sign-off on every call its agents make — or at one tool's scope to tighten just that tool. Stricter-wins guarantees the attachment can only tighten, and other projects are untouched.

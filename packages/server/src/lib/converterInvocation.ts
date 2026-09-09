@@ -165,6 +165,7 @@ const invokeToolConverter = async (args: {
   let raw: unknown;
   try {
     raw = await callTool({
+      guardrails: 'apply',
       projectIds: [args.projectId],
       id: args.rule.tool_id!,
       action: args.rule.action ?? undefined,

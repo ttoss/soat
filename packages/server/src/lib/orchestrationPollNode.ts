@@ -64,6 +64,9 @@ export const executePollNode = async (args: {
 
   const inputs = applyInputMapping(node.inputMapping, state);
   const lastResponse = await callTool({
+    // A poll node calls the same tool its `tool` sibling does, so the same
+    // guardrails govern it.
+    guardrails: 'apply',
     projectIds,
     id: toolId,
     action: node.operationId,

@@ -13,6 +13,7 @@ import { makeResourceAccessor } from './resourceAccessor';
 import { assertSecretRefsExist } from './secrets';
 import { validateSoatActions } from './soatActionValidation';
 import { validateExecuteAuth } from './toolAuth';
+import type { ToolCallGuardrailMode } from './toolCallGuardrail';
 import { assertValidToolContextAllowlist } from './toolContext';
 import {
   type CallableToolDefinition,
@@ -419,6 +420,12 @@ const toCallableTool = (tool: MappedTool): CallableToolDefinition => {
 export const callTool = async (args: {
   projectIds?: number[];
   id: string;
+  /**
+   * Whether a guardrail gate has already adjudicated this call — see
+   * {@link ToolCallGuardrailMode}. Required so no dispatch path can reach a
+   * tool without stating it.
+   */
+  guardrails: ToolCallGuardrailMode;
   action?: string;
   input?: Record<string, unknown>;
   authHeader?: string;
@@ -440,6 +447,9 @@ export const callTool = async (args: {
   return callResolvedTool({
     tool: toCallableTool(foundTool),
     toolProjectId: toolInstance.projectId,
+    guardrails: args.guardrails,
+    toolPublicId: foundTool.id,
+    toolGuardrailIds: foundTool.guardrail_ids,
     action: args.action,
     input: args.input,
     authHeader: args.authHeader,
