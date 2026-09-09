@@ -464,6 +464,7 @@ paths:
         yet may be dated now or earlier, so a new provider is never live and
         unpriced.
       operationId: updateAiProviderPrices
+      x-soat-agent-exclude: true
       parameters:
         - name: ai_provider_id
           in: path

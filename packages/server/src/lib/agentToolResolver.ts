@@ -955,6 +955,7 @@ const resolveToolByType = async (
     parentTraceId?: string | null;
     rootTraceId?: string | null;
     remainingDepth?: number;
+    projectPublicId?: string;
   }
 ): Promise<Record<string, Tool>> => {
   const toolType = typedTool.type;
@@ -994,6 +995,7 @@ const resolveToolByType = async (
         typedTool,
         boundaryPolicy: args.boundaryPolicy,
         authHeader: args.authHeader,
+        projectPublicId: args.projectPublicId,
         toolContext: args.toolContext,
         traceId: args.traceId,
         parentTraceId: args.parentTraceId,
@@ -1187,6 +1189,12 @@ export const resolveAgentTools = async (args: {
   toolIds: string[];
   tools?: InlineToolDefinition[] | null;
   projectId?: number;
+  /**
+   * The generation's project on the wire. Pins `project_id` on every builtin
+   * action that names one, so the model cannot move the call to another
+   * project the caller's bearer happens to reach.
+   */
+  projectPublicId?: string;
   projectIds?: number[];
   boundaryPolicy?: unknown;
   authHeader?: string;

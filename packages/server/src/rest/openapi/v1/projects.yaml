@@ -380,6 +380,7 @@ paths:
         corrections ship as new future-dated rows. A first price, with no row for
         the project or the global default, may be dated now or earlier.
       operationId: updateProjectPrices
+      x-soat-agent-exclude: true
       parameters:
         - name: project_id
           in: path

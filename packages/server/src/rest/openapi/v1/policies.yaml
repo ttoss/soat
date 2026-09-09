@@ -83,6 +83,7 @@ paths:
       summary: Create a policy
       description: Creates a new global policy. Requires admin role.
       operationId: createPolicy
+      x-soat-agent-exclude: true
       requestBody:
         required: true
         content:
@@ -151,6 +152,7 @@ paths:
       summary: Update a policy
       description: Updates an existing global policy. Requires admin role.
       operationId: updatePolicy
+      x-soat-agent-exclude: true
       parameters:
         - name: policy_id
           in: path
@@ -199,6 +201,7 @@ paths:
       summary: Delete a policy
       description: Deletes a global policy. Requires admin role.
       operationId: deletePolicy
+      x-soat-agent-exclude: true
       parameters:
         - name: policy_id
           in: path

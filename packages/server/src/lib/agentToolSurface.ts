@@ -61,6 +61,7 @@ export const resolveAgentToolSurface = async (args: {
     }),
     tools: bound.tools,
     projectId,
+    projectPublicId: args.typedAgent.project.publicId,
     projectIds: args.projectIds,
     boundaryPolicy: args.typedAgent.boundaryPolicy,
     authHeader: args.authHeader,
