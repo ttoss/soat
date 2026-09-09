@@ -56,7 +56,7 @@ To start work **inside** SOAT when an event fires, do not wire a webhook subscri
 | `attempts`        | number                             | Number of delivery attempts made           |
 | `last_attempt_at` | string \| null                     | Timestamp of the most recent attempt       |
 | `next_attempt_at` | string \| null                     | When the next attempt becomes due; null once the delivery succeeded or exhausted its attempts |
-| `response_body`   | string \| null                     | Response body returned by the receiver      |
+| `response_body`   | string \| null                     | First 1 KB of the response body returned by the receiver, or the reason a delivery was closed without an attempt |
 | `created_at`      | string                             | ISO 8601 creation timestamp                |
 | `updated_at`      | string                             | ISO 8601 last-updated timestamp            |
 
@@ -90,6 +90,25 @@ When an event matches a webhook, the server sends an HTTP POST to the webhook UR
 Deliveries are retried up to three times. Each attempt and its outcome are recorded in a delivery log queryable through the API. To watch a real delivery arrive and inspect its outcome, see [Chat with an LLM - Step 11 (Verify delivery)](/docs/tutorials/chat-with-llm#step-11---verify-delivery-and-final-assistant-message).
 
 Before pointing `url` at a real endpoint, use [`soat listen`](../cli/usage.md#testing-webhooks-locally) to receive and inspect deliveries on your local machine.
+
+### Where a webhook may point
+
+`url` must be an absolute `http`/`https` URL, and must not carry a username or
+password — a credential written into a URL is echoed by every log line and error
+that names it. Anything else is refused with `400 VALIDATION_FAILED` on create
+and update.
+
+A delivery is a request the server makes to an address you chose, so it passes
+the deployment's egress rule: the address the hostname **resolves to** is
+checked, and again on every redirect hop. A URL that resolves inside the
+deployment's own network — loopback, RFC1918, link-local (cloud metadata), CGNAT,
+IPv6 ULA — is refused unless the operator lists it in
+[`TOOL_EGRESS_ALLOWED_HOSTS`](../self-hosting/configuration.md#outbound-egress).
+
+Such a delivery is closed as `failed` immediately rather than retried, with the
+reason in `response_body` and `attempts` still `0`: no retry changes where the
+URL points. `response_body` also holds at most the first kilobyte of a real
+endpoint's answer — enough to see why it rejected the call.
 
 ### Delivery durability
 

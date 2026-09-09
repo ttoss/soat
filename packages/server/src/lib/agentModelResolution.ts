@@ -26,8 +26,9 @@ import {
  *
  * - `no_binding` — the agent has neither a route nor a pinned provider. The
  *   write-time guards make this unreachable through any write path.
- * - `provider_unresolvable` — the pinned provider row or its secret is gone
- *   (a delete racing the agent load).
+ * - `provider_unresolvable` — the pinned provider row is gone (a delete racing
+ *   the agent load), or it belongs to another project, which the write-time
+ *   guards refuse but a row stored before them can still hold.
  */
 export type AgentModelResolutionFailure =
   'no_binding' | 'provider_unresolvable';
@@ -52,7 +53,10 @@ export const resolveAgentModel = async (
   });
   if (route) {
     return {
-      model: await buildRoutedModel({ route }),
+      model: await buildRoutedModel({
+        route,
+        projectId: typedAgent.project.id as number,
+      }),
       provider: ROUTED_PROVIDER_LABEL,
     };
   }
@@ -65,11 +69,9 @@ export const resolveAgentModel = async (
 
   const resolved = await resolveAiProviderSecret({
     aiProviderId: typedAgent.aiProvider.publicId,
+    projectId: typedAgent.project.id as number,
   });
 
-  // TOCTOU guard: reachable only if the provider row is deleted between the
-  // agent load and this lookup.
-  /* istanbul ignore next */
   if (!resolved) return { failure: 'provider_unresolvable' };
 
   return {

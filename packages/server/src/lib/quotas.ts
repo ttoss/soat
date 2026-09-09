@@ -35,6 +35,12 @@ export {
   QUOTA_IMMUTABLE_FIELDS,
   validateQuotaImmutableFields,
 } from './quotaImmutability';
+// The meter scope lives in `quotaMeterScope.ts`, same arrangement.
+export {
+  USAGE_METER_TYPES,
+  type UsageMeterType,
+  validateMeterType,
+} from './quotaMeterScope';
 // The pricing posture lives in `quotaPricingPosture.ts`, same arrangement.
 export {
   QUOTA_ON_UNPRICED,
@@ -73,6 +79,8 @@ const mapQuota = (quota: QuotaInstance, currentUsage: CurrentUsage) => {
     window: quota.window,
     limit: Number(quota.limit),
     mode: quota.mode,
+    // Null is every meter, which is also what a pre-column row carries.
+    meter_type: quota.meterType,
     // Resolved for display so a pre-column row reads as the posture it is
     // actually held to; metrics with no pricing dependency stay null.
     on_unpriced:
@@ -218,6 +226,7 @@ export const createQuota = async (args: {
   limit: unknown;
   mode?: string;
   onUnpriced?: string;
+  meterType?: string | null;
 }): Promise<ReturnType<typeof mapQuota>> => {
   const mode = args.mode ?? 'enforce';
   log(
@@ -236,6 +245,7 @@ export const createQuota = async (args: {
     mode,
     limit: args.limit,
     onUnpriced: args.onUnpriced,
+    meterType: args.meterType,
   });
   if (shapeError) {
     throw new DomainError('VALIDATION_FAILED', shapeError);
@@ -249,7 +259,11 @@ export const createQuota = async (args: {
   });
 
   // Duplicate = pure redundancy under the all-enforce precedence rule. A quota
-  // is uniquely identified by (project, scope, scope_ref, metric, window).
+  // is uniquely identified by
+  // (project, scope, scope_ref, metric, window, meter_type). The meter scope is
+  // part of it because two caps over the same window measuring different meters
+  // are two budgets, not one restated.
+  const meterType = args.meterType ?? null;
   const existing = await db.Quota.findOne({
     where: {
       projectId: args.projectId,
@@ -257,13 +271,14 @@ export const createQuota = async (args: {
       scopeRef,
       metric: args.metric,
       window: args.window,
+      meterType,
     },
     attributes: ['id'],
   });
   if (existing) {
     throw new DomainError(
       'QUOTA_CONFLICT',
-      'A quota with the same scope, scope_ref, metric, and window already exists in this project.'
+      'A quota with the same scope, scope_ref, metric, window, and meter_type already exists in this project.'
     );
   }
 
@@ -279,6 +294,7 @@ export const createQuota = async (args: {
     // itself; other metrics have no pricing dependency and stay null.
     onUnpriced:
       args.metric === 'cost_usd' ? resolveOnUnpriced(args.onUnpriced) : null,
+    meterType,
   });
 
   log('createQuota: created id=%s', quota.publicId);
@@ -344,6 +360,7 @@ export const updateQuota = async (args: {
   scopeRef?: unknown;
   metric?: unknown;
   window?: unknown;
+  meterType?: unknown;
 }): Promise<ReturnType<typeof mapQuota>> => {
   log('updateQuota: id=%s', args.id);
 
@@ -360,12 +377,14 @@ export const updateQuota = async (args: {
       scopeRef: args.scopeRef,
       metric: args.metric,
       window: args.window,
+      meterType: args.meterType,
     },
     current: {
       scope: quota.scope,
       scopeRef: quota.scopeRef,
       metric: quota.metric,
       window: quota.window,
+      meterType: quota.meterType,
     },
   });
   if (immutableError) {

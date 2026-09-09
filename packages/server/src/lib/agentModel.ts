@@ -12,6 +12,9 @@ import type { AiProviderSlug } from '@soat/postgresdb';
 import type { LanguageModel } from 'ai';
 
 import { DomainError } from '../errors';
+import { readUrlConfigValue } from './aiProviderConfigValidation';
+import { assertAmbientCredentialsAllowed } from './ambientCredentials';
+import { egressGuardedFetch } from './egressFetch';
 import { loadAwsExternalAccountAuthClient } from './vertexAwsCredentials';
 
 type BuildModelArgs = {
@@ -65,13 +68,24 @@ const parseBedrockSecret = (secretValue: string | null): BedrockSecret => {
  * default credential chain (`fromNodeProviderChain`) so role-based auth works.
  * `@ai-sdk/amazon-bedrock` does NOT walk that chain on its own (vercel/ai#2216)
  * — passing no credentials makes it throw a SigV4 error instead.
+ *
+ * That chain resolves the *deployment's* credentials, so for a tenant-written
+ * provider record it is gated on the operator's opt-in. `allowAmbientCredentials`
+ * is for the embedding stack alone, whose region and key are operator settings
+ * no tenant writes — an instance role is the intended credential there.
  */
 export const resolveBedrockCredentials = (args: {
   secretValue: string | null;
   config?: Record<string, unknown>;
+  allowAmbientCredentials?: boolean;
 }): BedrockCredentials => {
   const secret = parseBedrockSecret(args.secretValue);
-  const region = (args.config?.region as string | undefined) ?? 'us-east-1';
+  const region =
+    readUrlConfigValue({
+      provider: 'bedrock',
+      key: 'region',
+      value: args.config?.region,
+    }) ?? 'us-east-1';
   // config.apiKey is accepted as a credential fallback when no secret is linked
   const configApiKey = args.config?.apiKey as string | undefined;
   const resolvedApiKey = secret.apiKey ?? configApiKey;
@@ -86,12 +100,17 @@ export const resolveBedrockCredentials = (args: {
       sessionToken: secret.sessionToken,
     };
   }
+  if (!args.allowAmbientCredentials) {
+    assertAmbientCredentialsAllowed({ provider: 'bedrock' });
+  }
   return { region, credentialProvider: fromNodeProviderChain() };
 };
 
 const buildBedrockModel = (args: BuildModelArgs): LanguageModel => {
   const options = resolveBedrockCredentials(args);
-  return createAmazonBedrock(options)(args.model);
+  return createAmazonBedrock({ ...options, fetch: egressGuardedFetch })(
+    args.model
+  );
 };
 
 /**
@@ -152,6 +171,30 @@ const readServiceAccountAuth = (
 };
 
 /**
+ * A service-account key file names its own project, so linking one is enough —
+ * `config.project` only has to be set to override it, or where the deployment
+ * lets a record authenticate with its own credentials.
+ */
+const resolveVertexProject = (args: {
+  secret: VertexSecret;
+  config?: Record<string, unknown>;
+}): string => {
+  const project =
+    readUrlConfigValue({
+      provider: 'vertex',
+      key: 'project',
+      value: args.config?.project,
+    }) ?? args.secret.project_id;
+  if (!project) {
+    throw new DomainError(
+      'AI_PROVIDER_MISCONFIGURED',
+      "A 'vertex' AI provider needs a Google Cloud project: set config.project, or link a secret holding the service-account key file."
+    );
+  }
+  return project;
+};
+
+/**
  * Resolves which of Vertex's three authentication modes a provider record asks
  * for. Pulled out of `buildVertexModel` for the same reason as
  * `resolveBedrockCredentials`: the model object the AI SDK returns does not
@@ -160,8 +203,9 @@ const readServiceAccountAuth = (
  * An API key selects Vertex "express mode", which talks to a project-less
  * global endpoint, so `project` and `location` are meaningless there and are
  * left out of the returned settings. Otherwise the request is signed with the
- * linked service account, or with Application Default Credentials when none is
- * linked, which `google-auth-library` resolves on its own.
+ * linked service account, or — where the operator allows a record to use the
+ * deployment's own credentials — with Application Default Credentials, which
+ * `google-auth-library` resolves on its own.
  */
 export const resolveVertexSettings = (args: {
   secretValue: string | null;
@@ -174,22 +218,22 @@ export const resolveVertexSettings = (args: {
     return { apiKey };
   }
 
-  // A service-account key file names its own project, so linking one is
-  // enough — config.project only has to be set to override it or when
-  // authenticating through ADC.
-  const project =
-    (args.config?.project as string | undefined) ?? secret.project_id;
-  if (!project) {
-    throw new DomainError(
-      'AI_PROVIDER_MISCONFIGURED',
-      "A 'vertex' AI provider needs a Google Cloud project: set config.project, or link a secret holding the service-account key file."
-    );
+  const googleAuthOptions = readServiceAccountAuth(secret);
+  if (!googleAuthOptions) {
+    // Neither an express-mode key nor a service-account key file: whatever
+    // signs this request comes from the deployment, not from the record.
+    assertAmbientCredentialsAllowed({ provider: 'vertex' });
   }
 
-  const location =
-    (args.config?.location as string | undefined) ?? DEFAULT_VERTEX_LOCATION;
+  const project = resolveVertexProject({ secret, config: args.config });
 
-  const googleAuthOptions = readServiceAccountAuth(secret);
+  const location =
+    readUrlConfigValue({
+      provider: 'vertex',
+      key: 'location',
+      value: args.config?.location,
+    }) ?? DEFAULT_VERTEX_LOCATION;
+
   return googleAuthOptions
     ? { project, location, googleAuthOptions }
     : { project, location };
@@ -219,51 +263,85 @@ const withAwsWorkloadIdentity = (settings: VertexSettings): VertexSettings => {
 };
 
 const buildVertexModel = (args: BuildModelArgs): LanguageModel => {
-  return createVertex(withAwsWorkloadIdentity(resolveVertexSettings(args)))(
-    args.model
-  );
+  return createVertex({
+    ...withAwsWorkloadIdentity(resolveVertexSettings(args)),
+    fetch: egressGuardedFetch,
+  })(args.model);
 };
 
+/**
+ * The guard applies to the destination a **tenant** named, not to the one the
+ * deployment did: `OLLAMA_BASE_URL` — and the loopback it defaults to — is an
+ * operator's own decision about their own network, already made when they set
+ * it. A `base_url` on the provider record is the tenant-written half, and that
+ * is what an allowlist has to answer for.
+ */
 const buildOllamaModel = (args: BuildModelArgs): LanguageModel => {
   const base =
     args.baseUrl ?? process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434';
-  return createOpenAI({ apiKey: 'ollama', baseURL: `${base}/v1` }).chat(
-    args.model
-  );
+  return createOpenAI({
+    apiKey: 'ollama',
+    baseURL: `${base}/v1`,
+    ...(args.baseUrl ? { fetch: egressGuardedFetch } : {}),
+  }).chat(args.model);
 };
 
 const buildAzureModel = (args: BuildModelArgs): LanguageModel => {
   const apiKey = args.secretValue ?? '';
-  const resourceName = (args.config?.resourceName as string | undefined) ?? '';
-  return createAzure({ apiKey, resourceName })(args.model);
+  const resourceName =
+    readUrlConfigValue({
+      provider: 'azure',
+      key: 'resourceName',
+      value: args.config?.resourceName,
+    }) ?? '';
+  return createAzure({ apiKey, resourceName, fetch: egressGuardedFetch })(
+    args.model
+  );
 };
 
 const buildSimpleOpenAiCompatModel = (args: BuildModelArgs): LanguageModel => {
   const apiKey = args.secretValue ?? '';
-  return createOpenAI({ apiKey, baseURL: args.baseUrl }).chat(args.model);
+  return createOpenAI({
+    apiKey,
+    baseURL: args.baseUrl,
+    fetch: egressGuardedFetch,
+  }).chat(args.model);
 };
 
 type ProviderBuilder = (args: BuildModelArgs) => LanguageModel;
 
 const PROVIDER_BUILDERS: Partial<Record<AiProviderSlug, ProviderBuilder>> = {
   openai: (a) => {
-    return createOpenAI({ apiKey: a.secretValue ?? '', baseURL: a.baseUrl })(
-      a.model
-    );
+    return createOpenAI({
+      apiKey: a.secretValue ?? '',
+      baseURL: a.baseUrl,
+      fetch: egressGuardedFetch,
+    })(a.model);
   },
   anthropic: (a) => {
-    return createAnthropic({ apiKey: a.secretValue ?? '', baseURL: a.baseUrl })(
-      a.model
-    );
+    return createAnthropic({
+      apiKey: a.secretValue ?? '',
+      baseURL: a.baseUrl,
+      fetch: egressGuardedFetch,
+    })(a.model);
   },
   google: (a) => {
-    return createGoogleGenerativeAI({ apiKey: a.secretValue ?? '' })(a.model);
+    return createGoogleGenerativeAI({
+      apiKey: a.secretValue ?? '',
+      fetch: egressGuardedFetch,
+    })(a.model);
   },
   xai: (a) => {
-    return createXai({ apiKey: a.secretValue ?? '' })(a.model);
+    return createXai({
+      apiKey: a.secretValue ?? '',
+      fetch: egressGuardedFetch,
+    })(a.model);
   },
   groq: (a) => {
-    return createGroq({ apiKey: a.secretValue ?? '' })(a.model);
+    return createGroq({
+      apiKey: a.secretValue ?? '',
+      fetch: egressGuardedFetch,
+    })(a.model);
   },
   azure: buildAzureModel,
   bedrock: buildBedrockModel,

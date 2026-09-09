@@ -40,7 +40,17 @@ export const wakeDueRuns = createSweep({
   claim: async ({ row: run }) => {
     const [claimed] = await db.OrchestrationRun.update(
       { status: 'running', wakeAt: null, leaseExpiresAt: newLeaseExpiry() },
-      { where: { id: run.id as number, wakeAt: { [Op.ne]: null } } }
+      {
+        where: {
+          id: run.id as number,
+          // Guarded on the status too, not just `wakeAt`: an operator pause
+          // parks a sleeping run as `awaiting_input` while keeping its wake, so
+          // without this the claim would flip a paused run to `running` and
+          // drive it (#1237).
+          status: 'sleeping',
+          wakeAt: { [Op.ne]: null },
+        },
+      }
     );
     return claimed > 0;
   },

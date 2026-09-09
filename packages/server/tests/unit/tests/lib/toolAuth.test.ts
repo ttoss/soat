@@ -682,6 +682,68 @@ describe('toolAuth', () => {
       }
     });
 
+    // The token endpoint comes out of the tenant's own service-account JSON, so
+    // it is a URL a tenant chose and the server requests — the same shape as a
+    // tool target, and behind the same guard.
+    test('refuses a token endpoint naming the deployment network', async () => {
+      let caught: unknown;
+      try {
+        await applyHttpToolAuth({
+          auth: {
+            type: 'gcp_service_account',
+            credentials: JSON.stringify({
+              client_email: 'metadata@p.iam.gserviceaccount.com',
+              private_key: privateKey,
+              token_uri: 'http://169.254.169.254/token',
+            }),
+            scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+          },
+          method: 'GET',
+          url: 'https://compute.googleapis.com/x',
+          headers: {},
+          now: AWS_EXAMPLE.date,
+        });
+      } catch (error) {
+        caught = error;
+      }
+
+      expect(caught).toBeInstanceOf(DomainError);
+      expect((caught as DomainError).code).toBe('TOOL_EGRESS_BLOCKED');
+    });
+
+    // Whatever the named endpoint answered is the read half of an SSRF, so the
+    // status comes back and the body does not.
+    test('does not relay the token endpoint response body', async () => {
+      tokenResponse = {
+        status: 403,
+        body: { detail: 'secret-from-an-internal-service' },
+      };
+
+      let caught: unknown;
+      try {
+        await applyHttpToolAuth({
+          auth: {
+            type: 'gcp_service_account',
+            credentials: credentialsFor('nobody@p.iam.gserviceaccount.com'),
+            scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+          },
+          method: 'GET',
+          url: 'https://compute.googleapis.com/x',
+          headers: {},
+          now: AWS_EXAMPLE.date,
+        });
+      } catch (error) {
+        caught = error;
+      }
+
+      const meta = (caught as DomainError).meta ?? {};
+      expect(meta).toMatchObject({ upstream_status: 403 });
+      expect(meta).not.toHaveProperty('upstream_body');
+      expect(JSON.stringify(caught)).not.toContain(
+        'secret-from-an-internal-service'
+      );
+    });
+
     test('rejects a token response with no access_token', async () => {
       tokenResponse = { status: 200, body: { token_type: 'Bearer' } };
 

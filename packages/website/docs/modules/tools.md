@@ -282,6 +282,29 @@ A platform action that responds non-2xx **fails the tool call** — `502 TOOL_HT
 
 An operation whose response cannot be a tool result is rejected at create time with `400 VALIDATION_FAILED`: `download-file` (raw bytes — use `download-file-base64`) and `export-audit-entries` (unbounded NDJSON — use `list-audit-entries`). Both remain available over REST, the SDK, and the CLI. For the same reason, `create-agent-generation` is callable as a `builtin` action but without `stream`, and returns the completed generation.
 
+#### Actions an agent may not be given
+
+Some platform actions are withheld from the agent surface whatever the caller's credential allows, and naming one in `actions` returns `400 VALIDATION_FAILED` on create and update:
+
+| Actions | Why |
+| --- | --- |
+| `approve-approval`, `reject-approval` | An [approval](./approvals.md) exists to put a person between an agent and an action; an agent that settles its own has removed them |
+| `create-api-key`, `update-api-key`, `delete-api-key`, `get-api-key`, `login-user`, `bootstrap-user` | Mint or return a credential |
+| `get-trigger-secret`, `rotate-trigger-secret`, `get-webhook-secret`, `rotate-webhook-secret` | Return or replace signing secrets |
+| `create-secret`, `update-secret`, `delete-secret` | Write [secret](./secrets.md) material. `get-secret` stays available: it answers `has_value`, never the value |
+| `attach-user-policies`, `create-policy`, `update-policy`, `delete-policy`, `create-user`, `delete-user`, `list-users`, `get-user` | Change or enumerate who may do what |
+| `update-ai-provider-prices`, `update-project-prices` | Rewrite the price book its own spend is metered against. The `get-*` twins stay available |
+
+The difference is who chooses the arguments. Over [MCP](../mcp/introduction.md) these are ordinary operations — the caller is a person acting as themselves — so they are withheld from agents only. A tool row created before an action joined this list keeps the action stored, and the agent's surface leaves it out.
+
+Because the exclusion is per surface, an `mcp` tool pointed at this deployment's own MCP endpoint reaches them again. That is one more reason to prefer a `builtin` tool over pointing a tool back at your own API: it dispatches in-process under the caller's permissions, and it is the surface these rules apply to.
+
+#### The project a builtin action acts on
+
+`project_id` is supplied by the server, not by the model: on every action that takes one it is pinned to the **agent's own project** and removed from the schema the model sees. A credential that reaches several projects is ordinary, so without this an agent could act on any of them.
+
+The pin outranks a [preset parameter](#preset-parameters) naming a different project, and applies to an agent's tool calls. A direct [`POST /tools/{tool_id}/call`](/docs/api/tools/call-tool) is unaffected — that caller is acting as themselves, exactly as they would by calling the route.
+
 #### How a builtin action is executed
 
 The action runs **in the server process**, dispatching through the same middleware stack and route handler a client request goes through — no network hop, so nothing depends on the server being reachable at a particular address. The route's permission check runs per call against the caller's policies, and strict field validation, audit logging, metering and quotas, and the snake_case response contract all apply exactly as for a client request.
@@ -389,7 +412,7 @@ dropped when a redirect changes origin. So a public-looking hostname pointing at
 `302 Location: http://169.254.169.254/…`, are both refused.
 
 To reach an internal service on purpose, the operator lists it in
-[`TOOL_EGRESS_ALLOWED_HOSTS`](../self-hosting/configuration.md#tool-egress) —
+[`TOOL_EGRESS_ALLOWED_HOSTS`](../self-hosting/configuration.md#outbound-egress) —
 a deployment-wide setting, not a per-project one. When the destination is SOAT's
 own API, use a [`builtin` tool](#builtin) instead of an `http` tool pointed at
 your own base URL: it dispatches in-process under the caller's own permissions

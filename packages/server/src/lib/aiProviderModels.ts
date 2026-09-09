@@ -2,9 +2,22 @@ import type { AiProviderSlug } from '@soat/postgresdb';
 import createDebug from 'debug';
 import { GoogleAuth } from 'google-auth-library';
 
+import { db } from '../db';
 import { DomainError } from '../errors';
 import type { VertexSettings } from './agentModel';
 import { resolveBedrockCredentials, resolveVertexSettings } from './agentModel';
+import { readUrlConfigValue } from './aiProviderConfigValidation';
+import {
+  ANTHROPIC_VERSION,
+  asArray,
+  asRecord,
+  asString,
+  type FetchLike,
+  lowercaseAll,
+  nodeFetch,
+  readJson,
+  requireSecret,
+} from './aiProviderModelsHttp';
 import { resolveAiProviderSecret } from './aiProviders';
 import type {
   BedrockListArgs,
@@ -15,7 +28,6 @@ import { loadAwsExternalAccountAuthClient } from './vertexAwsCredentials';
 
 const log = createDebug('soat:provider-models');
 
-const ANTHROPIC_VERSION = '2023-06-01';
 const GOOGLE_CLOUD_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
 
 /**
@@ -35,23 +47,10 @@ export type ProviderModel = {
   inference_types?: string[];
 };
 
-/**
- * The slice of `fetch` this module uses. Narrow on purpose: it is the seam the
- * tests replace, and a narrow shape is one a fake can satisfy without pulling
- * in the whole `Response` surface.
- */
-export type FetchLike = (
-  url: string,
-  init?: { method?: string; headers?: Record<string, string> }
-) => Promise<{
-  ok: boolean;
-  status: number;
-  text: () => Promise<string>;
-}>;
-
 // Re-exported so a caller enumerating models needs only this module, while the
 // AWS SDK adapter itself stays in a file that can be read without it.
 export type { BedrockListArgs, BedrockModelSummary };
+export type { FetchLike } from './aiProviderModelsHttp';
 
 /**
  * The Google auth options a Vertex access token is minted from. Derived from
@@ -77,89 +76,6 @@ export type EnumerateProviderModelsArgs = {
   listFoundationModels?: (
     args: BedrockListArgs
   ) => Promise<BedrockModelSummary[]>;
-};
-
-/** Adapts the platform `fetch` to the narrow shape above. */
-const nodeFetch: FetchLike = (url, init) => {
-  return globalThis.fetch(url, init);
-};
-
-const asRecord = (value: unknown): Record<string, unknown> | null => {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return null;
-  }
-  return value as Record<string, unknown>;
-};
-
-const asArray = (value: unknown): unknown[] => {
-  return Array.isArray(value) ? value : [];
-};
-
-const asString = (value: unknown): string | undefined => {
-  return typeof value === 'string' && value.length > 0 ? value : undefined;
-};
-
-const configString = (
-  config: Record<string, unknown> | undefined,
-  key: string
-): string | undefined => {
-  return asString(config?.[key]);
-};
-
-/** Provider vocabulary is SHOUTING; ours is not. */
-const lowercaseAll = (values: unknown): string[] | undefined => {
-  const mapped = asArray(values)
-    .map((value) => {
-      return asString(value)?.toLowerCase();
-    })
-    .filter((value): value is string => {
-      return value !== undefined;
-    });
-  return mapped.length > 0 ? mapped : undefined;
-};
-
-const readJson = async (args: {
-  fetchImpl: FetchLike;
-  url: string;
-  headers: Record<string, string>;
-  provider: AiProviderSlug;
-}): Promise<Record<string, unknown>> => {
-  const response = await args.fetchImpl(args.url, {
-    method: 'GET',
-    headers: args.headers,
-  });
-  const body = await response.text();
-
-  if (!response.ok) {
-    // The provider's own message is the only useful part of this failure, so it
-    // is carried through rather than flattened into a generic "listing failed".
-    throw new DomainError(
-      'MODEL_LISTING_FAILED',
-      `The ${args.provider} provider rejected the model listing request (HTTP ${response.status}): ${body.slice(0, 500)}`
-    );
-  }
-
-  try {
-    return asRecord(JSON.parse(body)) ?? {};
-  } catch {
-    throw new DomainError(
-      'MODEL_LISTING_FAILED',
-      `The ${args.provider} provider answered the model listing request with a body that is not JSON.`
-    );
-  }
-};
-
-const requireSecret = (args: {
-  secretValue?: string | null;
-  provider: AiProviderSlug;
-}): string => {
-  if (!args.secretValue) {
-    throw new DomainError(
-      'AI_PROVIDER_MISCONFIGURED',
-      `Listing models from a ${args.provider} provider needs its API key: link a secret to the provider first.`
-    );
-  }
-  return args.secretValue;
 };
 
 /**
@@ -420,7 +336,11 @@ const enumerateBedrock = async (
   args: EnumerateProviderModelsArgs
 ): Promise<ProviderModel[]> => {
   const region =
-    configString(args.config, 'region') ??
+    readUrlConfigValue({
+      provider: 'bedrock',
+      key: 'region',
+      value: args.config?.region,
+    }) ??
     process.env.AWS_REGION ??
     process.env.AWS_DEFAULT_REGION;
   if (!region) {
@@ -548,9 +468,23 @@ export const enumerateProviderModels = async (
 export const listAiProviderModels = async (args: {
   aiProviderId: string;
 }): Promise<{ provider: AiProviderSlug; models: ProviderModel[] }> => {
+  // The provider is this route's subject rather than something another
+  // project's record points at, and the caller was authorized against the
+  // provider's own project — so that project is the scope.
+  const owner = await db.AiProvider.findOne({
+    where: { publicId: args.aiProviderId },
+    attributes: ['projectId'],
+  });
+  if (!owner) {
+    throw new DomainError('RESOURCE_NOT_FOUND', 'AI provider not found');
+  }
+
   const resolved = await resolveAiProviderSecret({
     aiProviderId: args.aiProviderId,
+    projectId: owner.projectId,
   });
+  /* istanbul ignore next -- the row was just read; only a delete racing this
+     call resolves it away. */
   if (!resolved) {
     throw new DomainError('RESOURCE_NOT_FOUND', 'AI provider not found');
   }

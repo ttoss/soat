@@ -1448,7 +1448,7 @@ echo "=== Orchestrations ==="
 echo "--- Creating orchestration-scoped auth ---"
 ORCH_POLICY_RESP=$($SOAT_CLI create-policy \
   --name smoke-orchestration-policy \
-  --document '{"statement":[{"effect":"Allow","action":["orchestrations:CreateOrchestration","orchestrations:ValidateOrchestration","orchestrations:ListOrchestrations","orchestrations:GetOrchestration","orchestrations:UpdateOrchestration","orchestrations:DeleteOrchestration","orchestrations:ListOrchestrationVersions","orchestrations:GetOrchestrationVersion","orchestrations:RestoreOrchestrationVersion","orchestrations:StartRun","orchestrations:ListRuns","orchestrations:GetRun","orchestrations:CancelRun","orchestrations:SubmitHumanInput","orchestrations:ResumeRun"]}]}' )
+  --document '{"statement":[{"effect":"Allow","action":["orchestrations:CreateOrchestration","orchestrations:ValidateOrchestration","orchestrations:ListOrchestrations","orchestrations:GetOrchestration","orchestrations:UpdateOrchestration","orchestrations:DeleteOrchestration","orchestrations:ListOrchestrationVersions","orchestrations:GetOrchestrationVersion","orchestrations:RestoreOrchestrationVersion","orchestrations:StartRun","orchestrations:ListRuns","orchestrations:GetRun","orchestrations:CancelRun","orchestrations:PauseRun","orchestrations:SubmitHumanInput","orchestrations:ResumeRun"]}]}' )
 ORCH_POLICY_ID=$(printf '%s\n' "$ORCH_POLICY_RESP" | jq -r '.id')
 if [ -z "$ORCH_POLICY_ID" ] || [ "$ORCH_POLICY_ID" = "null" ]; then
   echo "Failed to create orchestration policy"
@@ -1974,6 +1974,24 @@ if ! printf '%s\n' "$NESTED_CHILDREN_ALL" | jq -e '(.data | length) > 0 and all(
 fi
 echo "Nested run attribution: OK"
 
+# The filter a consumer of the pause needs: the runs still driving, without
+# paging every run the project ever started (#1242).
+LIVE_RUNS=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestration-runs \
+  --status queued --status running --status sleeping --status awaiting_input \
+  --limit 100)
+if ! printf '%s\n' "$LIVE_RUNS" | jq -e 'all(.data[]; .status | IN("queued","running","sleeping","awaiting_input"))' >/dev/null 2>&1; then
+  echo "the repeated status filter returned a run outside the requested set"
+  printf '%s\n' "$LIVE_RUNS"
+  exit 1
+fi
+SETTLED_RUNS=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestration-runs --status succeeded --limit 100)
+if ! printf '%s\n' "$SETTLED_RUNS" | jq -e --arg id "$ORCH_RUN_ID" '(.data | map(.id) | index($id)) != null and all(.data[]; .status == "succeeded")' >/dev/null 2>&1; then
+  echo "status=succeeded did not return exactly the settled runs"
+  printf '%s\n' "$SETTLED_RUNS"
+  exit 1
+fi
+echo "Run status filter: OK"
+
 echo "--- Listing runs ---"
 ORCH_RUN_LIST_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestration-runs --orchestration-id "$ORCH_ID")
 if ! printf '%s\n' "$ORCH_RUN_LIST_RESP" | jq -e --arg id "$ORCH_RUN_ID" '.data | map(.id) | index($id) != null' >/dev/null 2>&1; then
@@ -2051,6 +2069,58 @@ if ! printf '%s\n' "$HUMAN_RESUME_RESP" | jq -e '.status == "awaiting_input" and
   exit 1
 fi
 echo "Resume run: OK"
+
+echo "--- Pausing and resuming a run (#1237) ---"
+PAUSE_CANDIDATE_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
+  --orchestration-id "$HUMAN_ORCH_ID" \
+  --input '{}' \
+  --wait true)
+PAUSE_RUN_ID=$(printf '%s\n' "$PAUSE_CANDIDATE_RESP" | jq -r '.id')
+if ! printf '%s\n' "$PAUSE_CANDIDATE_RESP" | jq -e '.status == "awaiting_input"' >/dev/null 2>&1; then
+  echo "Expected pause candidate run to be parked on its human node"
+  printf '%s\n' "$PAUSE_CANDIDATE_RESP"
+  exit 1
+fi
+PAUSE_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI pause-orchestration-run \
+  --orchestration-run-id "$PAUSE_RUN_ID" \
+  --reason "smoke: operator stop")
+# The node's own required_action stands; the pause is recorded beside it.
+if ! printf '%s\n' "$PAUSE_RESP" | jq -e '.required_action.type == "human_input" and .pause_reason == "smoke: operator stop" and .pause_requested_at != null' >/dev/null 2>&1; then
+  echo "pause-orchestration-run did not record the pause as expected"
+  printf '%s\n' "$PAUSE_RESP"
+  exit 1
+fi
+# A tenant cannot lift the operator's stop by satisfying the node behind it.
+set +e
+PAUSED_INPUT_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI submit-human-input \
+  --orchestration-run-id "$PAUSE_RUN_ID" \
+  --node-id approval \
+  --output '{"choice":"approve"}' 2>&1)
+PAUSED_INPUT_EXIT=$?
+set -e
+if [ "$PAUSED_INPUT_EXIT" -eq 0 ] || ! printf '%s\n' "$PAUSED_INPUT_RESP" \
+  | jq -e '.status == 409 and .error.code == "ORCHESTRATION_RUN_PAUSED"' >/dev/null 2>&1; then
+  echo "submit-human-input was not refused while the run was paused"
+  printf '%s\n' "$PAUSED_INPUT_RESP"
+  exit 1
+fi
+PAUSE_RESUME_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI resume-orchestration-run \
+  --orchestration-run-id "$PAUSE_RUN_ID")
+if ! printf '%s\n' "$PAUSE_RESUME_RESP" | jq -e '.pause_requested_at == null' >/dev/null 2>&1; then
+  echo "resume-orchestration-run did not lift the pause"
+  printf '%s\n' "$PAUSE_RESUME_RESP"
+  exit 1
+fi
+PAUSE_INPUT_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI submit-human-input \
+  --orchestration-run-id "$PAUSE_RUN_ID" \
+  --node-id approval \
+  --output '{"choice":"approve"}')
+if ! printf '%s\n' "$PAUSE_INPUT_RESP" | jq -e '.status == "succeeded"' >/dev/null 2>&1; then
+  echo "submit-human-input did not succeed after the pause was lifted"
+  printf '%s\n' "$PAUSE_INPUT_RESP"
+  exit 1
+fi
+echo "Pause and resume run: OK"
 
 echo "--- Cancelling a paused run ---"
 CANCEL_CANDIDATE_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
@@ -2225,9 +2295,11 @@ AI_PROVIDER_RESP=$($SOAT_CLI create-ai-provider \
 AI_PROVIDER_ID=$(printf '%s\n' "$AI_PROVIDER_RESP" | jq -r '.id')
 echo "AI Provider id: $AI_PROVIDER_ID"
 
-# 16a. Model routes — ordered failover. The first target points at a port with
-# nothing listening, so the attempt fails at the connection level
-# (provider_error) and the route falls through to the working Ollama target.
+# 16a. Model routes — ordered failover. The first target points at loopback,
+# which the egress guard refuses (it is not in TOOL_EGRESS_ALLOWED_HOSTS), so
+# the attempt is classed provider_error — a target this deployment cannot reach
+# is one the route cannot use — and the route falls through to the working
+# Ollama target.
 echo "--- Creating model route (dead primary, healthy fallback) ---"
 DEAD_PROVIDER_RESP=$($SOAT_CLI create-ai-provider \
   --project_id "$PROJECT_PUBLIC_ID" \
@@ -5904,6 +5976,33 @@ fi
 $SOAT_CLI transition-task --task-id "$TASK_ID" --transition to_review >/dev/null
 echo "Backward move: OK (review -> drafting -> review)"
 
+# Operator pause (#1237): a paused task still transitions, and the pause is
+# lifted only by resume-task.
+PAUSE_TASK_RESP=$($SOAT_CLI pause-task --task-id "$TASK_ID" --reason "smoke: operator stop")
+if ! printf '%s\n' "$PAUSE_TASK_RESP" | jq -e '.pause_requested_at != null and .pause_reason == "smoke: operator stop"' >/dev/null 2>&1; then
+  echo "ERROR: pause-task did not record the pause" >&2
+  printf '%s\n' "$PAUSE_TASK_RESP" >&2
+  exit 1
+fi
+# Idempotent: a second pause keeps the first instant and reason.
+PAUSE_TASK_AGAIN=$($SOAT_CLI pause-task --task-id "$TASK_ID" --reason "smoke: second")
+if [ "$(printf '%s\n' "$PAUSE_TASK_AGAIN" | jq -r '.pause_reason')" != "smoke: operator stop" ]; then
+  echo "ERROR: pause-task was not idempotent" >&2
+  printf '%s\n' "$PAUSE_TASK_AGAIN" >&2
+  exit 1
+fi
+# A move costs nothing while dispatches are suppressed, so the board stays usable.
+$SOAT_CLI transition-task --task-id "$TASK_ID" --transition revise >/dev/null
+$SOAT_CLI transition-task --task-id "$TASK_ID" --transition to_review >/dev/null
+RESUME_TASK_RESP=$($SOAT_CLI resume-task --task-id "$TASK_ID")
+if ! printf '%s\n' "$RESUME_TASK_RESP" | jq -e '.pause_requested_at == null' >/dev/null 2>&1; then
+  echo "ERROR: resume-task did not lift the pause" >&2
+  printf '%s\n' "$RESUME_TASK_RESP" >&2
+  exit 1
+fi
+expect_cli_error_status 409 resume-task --task-id "$TASK_ID"
+echo "Task pause and resume: OK"
+
 # A false guard rejects the transition.
 expect_cli_error_status 400 transition-task --task-id "$TASK_ID" --transition publish
 echo "Transition guard: OK (400 TASK_GUARD_REJECTED as expected)"
@@ -5948,6 +6047,23 @@ echo "Transition history principal_kind: OK"
 
 # Board query by state/status.
 $SOAT_CLI list-tasks --project-id "$PROJECT_PUBLIC_ID" --workflow-id "$WORKFLOW_ID" --status closed >/dev/null
+
+# Which of the open cards has an automation of its own under way — the question
+# `status` cannot answer (#1242). `none` names the cards that never entered a
+# state with one.
+IDLE_TASKS=$($SOAT_CLI list-tasks --project-id "$PROJECT_PUBLIC_ID" --workflow-id "$WORKFLOW_ID" --automation-status none --limit 100)
+if ! printf '%s\n' "$IDLE_TASKS" | jq -e 'all(.data[]; .automation_status == null)' >/dev/null 2>&1; then
+  echo "automation_status=none returned a task carrying an automation status"
+  printf '%s\n' "$IDLE_TASKS" >&2
+  exit 1
+fi
+DRIVING_TASKS=$($SOAT_CLI list-tasks --project-id "$PROJECT_PUBLIC_ID" --workflow-id "$WORKFLOW_ID" --automation-status running --automation-status paused --limit 100)
+if ! printf '%s\n' "$DRIVING_TASKS" | jq -e 'all(.data[]; .automation_status | IN("running","paused"))' >/dev/null 2>&1; then
+  echo "the repeated automation_status filter returned a task outside the requested set"
+  printf '%s\n' "$DRIVING_TASKS" >&2
+  exit 1
+fi
+echo "Task automation_status filter: OK"
 
 # ── on_enter tool dispatch (#1039) ──
 # A state whose work is a single tool call dispatches it directly, with no
@@ -6537,6 +6653,37 @@ expect_cli_error_status 409 create-agent-generation --wait true \
 echo "Cost cap over an unpriced AI window refuses: OK"
 
 $SOAT_CLI delete-quota --quota-id "$COST_QUOTA_ID"
+
+# A cost cap may name the meter it answers for. The scope is part of the quota's
+# identity, so a second meter over the same scope/window is a second budget
+# rather than a 409 — which is what keeps a priced platform meter out of the
+# project's one AI spend cap. An unrecorded meter type matches no event, so it
+# is refused rather than stored as a cap that can never fire.
+AI_METER_QUOTA_ID=$($SOAT_CLI create-quota \
+  --project-id "$PROJECT_PUBLIC_ID" --scope project --metric cost_usd \
+  --window rolling_1h --limit 30 --meter_type llm_tokens | jq -r '.id')
+if [ "$($SOAT_CLI get-quota --quota-id "$AI_METER_QUOTA_ID" | jq -r '.meter_type')" != "llm_tokens" ]; then
+  echo "ERROR: Expected meter_type=llm_tokens on the meter-scoped quota" >&2
+  exit 1
+fi
+STORAGE_METER_QUOTA_ID=$($SOAT_CLI create-quota \
+  --project-id "$PROJECT_PUBLIC_ID" --scope project --metric cost_usd \
+  --window rolling_1h --limit 30 --meter_type storage | jq -r '.id')
+if [ -z "$STORAGE_METER_QUOTA_ID" ] || [ "$STORAGE_METER_QUOTA_ID" = "null" ]; then
+  echo "ERROR: A second meter scope must not collide with the first" >&2
+  exit 1
+fi
+expect_cli_error_status 409 create-quota \
+  --project-id "$PROJECT_PUBLIC_ID" --scope project --metric cost_usd \
+  --window rolling_1h --limit 30 --meter_type storage
+expect_cli_error_status 400 create-quota \
+  --project-id "$PROJECT_PUBLIC_ID" --scope project --metric cost_usd \
+  --window rolling_24h --limit 30 --meter_type llm_token
+expect_cli_error_status 400 create-quota \
+  --project-id "$PROJECT_PUBLIC_ID" --scope project --metric tokens \
+  --window rolling_24h --limit 30 --meter_type storage
+$SOAT_CLI delete-quota --quota-id "$AI_METER_QUOTA_ID"
+$SOAT_CLI delete-quota --quota-id "$STORAGE_METER_QUOTA_ID"
 
 # scope=api_key + metric=tokens/cost_usd is rejected (400) — no attribution.
 expect_cli_error_status 400 create-quota \

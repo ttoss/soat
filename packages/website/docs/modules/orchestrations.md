@@ -61,7 +61,9 @@ An orchestration is a pipeline that _ends_; a [workflow](./workflows.md) is a st
 | `node_executions`  | array          | Per-node execution records (see [Node Executions](#node-executions)) |
 | `usage`            | object         | What the run cost: token/cost roll-up (`input_tokens`, `output_tokens`, `cached_tokens`, `reasoning_tokens`, `cost_usd`) summed across this run's generations **and every run it started** through `loop` / `sub_orchestration` nodes, at any depth (see [Run usage](#run-usage)). Present on the single-run read; omitted from run list responses |
 | `usage_own`        | object         | The same roll-up restricted to **this run's own nodes**, excluding nested runs. Equal to `usage` for a run with no children. Present on the single-run read; omitted from run list responses |
-| `required_action`  | object \| null | Present when status is `awaiting_input` (see [Human Nodes](#human-nodes)) |
+| `required_action`  | object \| null | Present when status is `awaiting_input` — why the run is parked (see [Human Nodes](#human-nodes) and [Pausing a run](#pausing-a-run)) |
+| `pause_requested_at` | string \| null | ISO 8601 instant an operator pause was requested, or `null` when none is in force. Independent of `status` (see [Pausing a run](#pausing-a-run)) |
+| `pause_reason`     | string \| null | The reason supplied with the pause, when one was               |
 | `trace_id`         | string \| null | Linked observability trace, if any                                |
 | `input`            | object \| null | Initial input provided at run creation                            |
 | `tool_context`     | object \| null | Caller context forwarded as `X-Soat-Context-*` headers on the tool calls of the run — every `agent` node's generation, and every `tool` / `poll` node's call (see [Run Tool Context](#run-tool-context)) |
@@ -256,6 +258,7 @@ Runs execute in a **queue-backed durable worker**, detached from the HTTP reques
 - `start-orchestration-run` persists the run, enqueues a `continue` task, and returns immediately with `status: "queued"` — no node executes inside the request. Observe progress with `get-orchestration-run` or via run lifecycle [webhook](./webhooks.md) events. (The single-process default runs the worker loop inside the API process, so the run starts draining right away.)
 - `delay` and `poll` waits park the run as **`sleeping`** — pure DB state, no worker, no memory. The wake time is persisted and the scheduler enqueues a `wake` task when due, so a run containing `delay: "2h"` survives a restart and completes on schedule.
 - `human` and `webhook (mode: receive)` nodes park the run as **`awaiting_input`**; satisfy the pause with `submit-human-input`, which applies the submitted payload, drives the run inline, and returns the settled result. `resume-orchestration-run` only re-drives an `awaiting_input` run from its last checkpoint — it carries no `node_id` or payload, so it cannot satisfy a pause and will simply re-park on the same node.
+- An **operator** can park a run the same way with [`POST /api/v1/orchestration-runs/{orchestration_run_id}/pause`](/docs/api/orchestrations/pause-orchestration-run) — see [Pausing a run](#pausing-a-run).
 
 **Run identity.** A run outlives the request that started it. Each run persists the principal that started it (the user or API key), and every background drive re-mints a short-lived **run-as token** from it, confined to the run's project — this is what lets a [`builtin` tool](./tools.md#builtin) node call the platform from a durable run.
 
@@ -289,6 +292,39 @@ Postgres needs no infrastructure beyond the database. Choose `sqs` when a deploy
 At-least-once delivery means a node executor must tolerate replay. Each **side-effecting** node execution (`agent`, `tool`, `memory_write`, `emit_event`, `sub_orchestration`, `loop`) is written with a run-scoped idempotency key `{orchestration_run_id}:{node_id}:{attempt}`, inserted `running` **before** the side effect runs and updated in place afterward. A **redelivery** of the same `(run, node, attempt)` finds the key `completed` and reuses the stored output; a **retry** (a new attempt) is a new key and runs for real.
 
 The honest boundary: a worker that crashes *between* firing the side effect and marking the key `completed` leaves a `running` key; the redelivering worker re-executes under the same key. To let downstream services dedupe that window, an `http` tool node forwards its key verbatim as an **`Idempotency-Key`** request header. Pure nodes (`condition`, `transform`, `delay`, `human`, `approval`, `webhook`) are unkeyed.
+
+### Pausing a run
+
+[`POST /api/v1/orchestration-runs/{orchestration_run_id}/pause`](/docs/api/orchestrations/pause-orchestration-run) parks a run in flight at its next **checkpoint** and [`POST /api/v1/orchestration-runs/{orchestration_run_id}/resume`](/docs/api/orchestrations/resume-orchestration-run) re-drives it from there. It is the stop that [`POST /api/v1/orchestration-runs/{orchestration_run_id}/cancel`](/docs/api/orchestrations/cancel-orchestration-run) cannot be: cancelling a 50-node run at its 40th node discards the 39 nodes' work, while a pause keeps the checkpoint and defers the rest — the same deferral a `human` node already gives.
+
+The parked run carries `required_action.type: "paused"` with the operator's `reason`, which is how a consumer tells an operator pause from a node's own. `pause_requested_at` is set independently of `status`, so a `running` run reads as paused-but-still-running until the round in flight reaches its checkpoint.
+
+| The run was… | What pause does |
+| --- | --- |
+| `running` | The round in flight finishes; the loop parks the **frontier** — the nodes that had not started — at the checkpoint after it. Nothing after that runs |
+| `queued` | Parked immediately, with the graph's start nodes as the frontier. Nothing has executed |
+| `sleeping` | Parked immediately, **keeping the wake it was due**. The scheduler only claims a `sleeping` run, so the wake finds a parked run and does nothing; resuming puts it back to `sleeping` at the instant it already was |
+| `awaiting_input` | The node's own `required_action` stands, unchanged. The pause is still recorded, which is what refuses `submit-human-input` below |
+
+Pausing is **idempotent** — a second pause answers with the run unchanged, so a reconciliation loop that pauses on every tick writes once — and a run that has already settled answers `409 ORCHESTRATION_RUN_NOT_PAUSABLE`.
+
+**`resume` is the only thing that lifts a pause.** While one is in force, `submit-human-input` answers `409 ORCHESTRATION_RUN_PAUSED` and an [approval](./approvals.md) decision does not drive the run — an operator pause must not be liftable by satisfying the node behind it. Resolving the item still records the decision; resume then re-drives the parked node, which files a fresh proposal.
+
+**A pause fans out to nested runs; a resume does not.** Every `loop` / `sub_orchestration` descendant is flagged too and parks at its own next checkpoint — without that a parent's pause would bound nothing, since a child drives its own graph. A child started *after* the pause is born paused for the same reason. Resuming is per run: each parked descendant is resumed by its own id, reachable through `parent_orchestration_run_id`.
+
+**What a pause does not reach** is the unit of work already in flight when it arrives — the current round's nodes, including a nested child started in it. That is the same bound the checkpoint gives: a pause defers what has not started, it does not interrupt what has.
+
+### Listing the runs still driving
+
+[`GET /api/v1/orchestration-runs`](/docs/api/orchestrations/list-orchestration-runs) filters on `status` beside `orchestration_id`, `parent_orchestration_run_id` and `nested`. The parameter **repeats**, and the values are ORed:
+
+```
+GET /api/v1/orchestration-runs?status=queued&status=running&status=sleeping&status=awaiting_input
+```
+
+Runs accumulate and the listing is newest-first, so without this a consumer looking for live work — a job pausing what a stopped account is still spending, for one — has to page every run the project ever started: a long-running old run sits behind any number of newer terminal ones, which makes an early exit on the newest page unsound.
+
+There is deliberately no `non_terminal` shorthand. Which statuses count as live is the caller's policy: a run parked `awaiting_input` spends nothing until someone hands it back, so a consumer bounding spend leaves it alone while a dashboard would not. A value outside the [status enum](#orchestrationrun) — empty string included — is a `400 VALIDATION_FAILED` rather than a silently unfiltered listing.
 
 ### Concurrency limits
 
@@ -593,7 +629,7 @@ When a `human` node is reached, the run pauses and the GET run response includes
 }
 ```
 
-`required_action.type` discriminates why the run paused: `human_input` for a `human` node, `webhook_receive` for a `webhook` node in `mode: "receive"`. Both are resumed the same way — [`POST /orchestration-runs/{id}/human-input`](/docs/api/orchestrations/submit-human-input) with the paused node's `node_id` — there is no separate, independently-authenticated callback endpoint for webhook-receive nodes.
+`required_action.type` discriminates why the run paused: `human_input` for a `human` node, `webhook_receive` for a `webhook` node in `mode: "receive"`, `paused` for an [operator pause](#pausing-a-run) (which names no node and carries a `reason` instead). The first two are resumed the same way — [`POST /orchestration-runs/{id}/human-input`](/docs/api/orchestrations/submit-human-input) with the paused node's `node_id` — there is no separate, independently-authenticated callback endpoint for webhook-receive nodes.
 
 ### Approval Nodes
 
@@ -617,8 +653,10 @@ Expiry is enforced server-side (see [Approvals — Expiry is a hard gate](./appr
 | `ORCHESTRATION_POLL_EXHAUSTED`     | —      | A `poll` node's `max_iterations` was reached with `failOnTimeout: true`                       | Raise `max_iterations`/`interval`, or handle `conditionMet: false` downstream instead of setting `failOnTimeout` — see [Polling](#polling) |
 | `ORCHESTRATION_RUN_DEPTH_LIMIT`    | `409`  | Starting the next `loop` / `sub_orchestration` child would nest past the effective bound — usually a graph naming itself, directly or through a cycle of two graphs | Walk `parent_orchestration_run_id` up from the failed run to find the node that re-enters a graph already in the chain; raise the project's `max_orchestration_run_depth` only if the composition is legitimately that deep — see [Nesting depth](#nesting-depth) |
 | `ORCHESTRATION_NESTED_RUN_FAILED`  | `422`  | A `loop` / `sub_orchestration` child settled `failed`/`cancelled`/`expired` carrying no code of its own | Read the child run (`parent_orchestration_run_id` points back at this one) — a child that *does* carry a code fails its parent under that code instead — see [A child run's failure fails its parent](#a-child-runs-failure-fails-its-parent) |
+| `ORCHESTRATION_RUN_NOT_PAUSABLE`   | `409`  | The run has already settled, so there is nothing left to pause                                | Nothing to do — a settled run keeps its result; pause only applies while a run is `queued`, `running`, `sleeping` or `awaiting_input` — see [Pausing a run](#pausing-a-run) |
+| `ORCHESTRATION_RUN_PAUSED`         | `409`  | `submit-human-input` was called while an operator pause is in force                           | Resume the run first, then submit the payload — an operator pause is not liftable by satisfying the node behind it — see [Pausing a run](#pausing-a-run) |
 
-**A run appears stuck in a non-terminal state:** `queued` means no worker has claimed its task yet — confirm a worker is running (the API process runs one unless `ORCHESTRATION_WORKER_DISABLED=true`). `sleeping` is a parked `delay`/`poll` wait or retry backoff (`active_nodes` names the node) and resumes on its own. `awaiting_input` waits for `submit-human-input`. `running` for far longer than expected self-heals: the reaper reclaims any run whose lease has expired within `ORCHESTRATION_RUN_LEASE_TTL_MS` — see [Durable Background Execution](#durable-background-execution).
+**A run appears stuck in a non-terminal state:** `queued` means no worker has claimed its task yet — confirm a worker is running (the API process runs one unless `ORCHESTRATION_WORKER_DISABLED=true`). `sleeping` is a parked `delay`/`poll` wait or retry backoff (`active_nodes` names the node) and resumes on its own. `awaiting_input` waits for `submit-human-input`, or — when `required_action.type` is `paused` — for [`resume-orchestration-run`](#pausing-a-run). `running` for far longer than expected self-heals: the reaper reclaims any run whose lease has expired within `ORCHESTRATION_RUN_LEASE_TTL_MS` — see [Durable Background Execution](#durable-background-execution).
 
 ## Configuration
 
@@ -763,6 +801,52 @@ curl -X POST https://api.example.com/api/v1/orchestration-runs \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"orchestration_id": "orch_01", "input": {"query": "summarize Q1 revenue"}, "wait": true}'
+```
+
+</TabItem>
+</Tabs>
+
+### Pause and resume a run
+
+Parks a run in flight at its next checkpoint and re-drives it from there — see [Pausing a run](#pausing-a-run).
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat pause-orchestration-run \
+  --orchestration-run-id orch_run_01 \
+  --reason "credit balance went negative"
+
+soat resume-orchestration-run --orchestration-run-id orch_run_01
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.orchestrations.pauseOrchestrationRun({
+  path: { orchestration_run_id: 'orch_run_01' },
+  body: { reason: 'credit balance went negative' },
+});
+if (error) throw new Error(JSON.stringify(error));
+
+await soat.orchestrations.resumeOrchestrationRun({
+  path: { orchestration_run_id: 'orch_run_01' },
+});
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/orchestration-runs/orch_run_01/pause \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"reason": "credit balance went negative"}'
+
+curl -X POST https://api.example.com/api/v1/orchestration-runs/orch_run_01/resume \
+  -H "Authorization: Bearer <token>"
 ```
 
 </TabItem>

@@ -165,6 +165,17 @@ export class OrchestrationRun extends Model {
   @Column({ type: DataType.DATE, allowNull: true })
   declare leaseExpiresAt: Date | null;
 
+  // Set while an operator pause is in force, and the single answer to "is this
+  // run paused?" — the run loop reads it at each checkpoint and parks, and the
+  // queued/wake/redrive drivers read it before driving. It outlives the park
+  // itself so satisfying a human node cannot lift a pause the operator has not
+  // (#1237); `resume` is the only thing that clears it.
+  @Column({ type: DataType.DATE, allowNull: true })
+  declare pauseRequestedAt: Date | null;
+
+  @Column({ type: DataType.STRING(256), allowNull: true })
+  declare pauseReason: string | null;
+
   @Column({ type: DataType.JSONB, allowNull: true })
   declare input: object | null;
 

@@ -14,6 +14,7 @@ import {
   recordSkippedNodeExecutions,
 } from './orchestrationNodeRecorder';
 import type { RequiredAction, ScheduledWait } from './orchestrationNodeTypes';
+import { readRunPause } from './orchestrationRunPause';
 import type {
   MappedOrchestrationRun,
   OrchestrationEdge,
@@ -58,12 +59,76 @@ const writeRunCheckpoint = async (args: {
   await args.runRecord.update({ leaseExpiresAt: newLeaseExpiry() });
 };
 
+/**
+ * The operator pause to stop at this round's checkpoint, or null.
+ *
+ * The checkpoint is the pause's boundary: the round's work is durable, so the
+ * frontier can be parked and re-driven without repeating any of it (#1237). The
+ * flag is re-read here rather than taken off the loaded row, because a request
+ * writes it while this loop runs.
+ *
+ * A node's own park and a scheduled wait take precedence — the node has already
+ * said what the run waits for, and the pause stays in force behind it
+ * (`submitHumanInput` refuses while it does, and the caller parks a scheduled
+ * wait on the pause). So does a settled frontier: pausing a run with nothing
+ * left to activate would strand one that has finished.
+ */
+const readPauseAtCheckpoint = async (args: {
+  runRecord: InstanceType<typeof db.OrchestrationRun>;
+  runStatus: 'running' | 'awaiting_input';
+  scheduledWait: ScheduledWait | null;
+  nextRound: string[];
+}): Promise<{ reason: string | null } | null> => {
+  if (args.runStatus !== 'running') return null;
+  if (args.scheduledWait !== null) return null;
+  if (args.nextRound.length === 0) return null;
+  const pause = await readRunPause({
+    orchestrationRunId: args.runRecord.id as number,
+  });
+  return pause.paused ? { reason: pause.reason } : null;
+};
+
 type RunBatchResult = {
   nextActiveNodeIds: string[];
   runStatus: 'running' | 'awaiting_input';
   requiredAction: RequiredAction | null;
   scheduledWait: ScheduledWait | null;
   traceId: string | null;
+  /**
+   * Set when an operator pause was in force at this round's checkpoint, so the
+   * caller parks the run instead of activating `nextActiveNodeIds`. The reason
+   * travels with it because the caller writes the `required_action`.
+   */
+  pauseReason: { reason: string | null } | null;
+};
+
+/** Executes this round's activated nodes concurrently, recording each. */
+const executeActiveNodes = (args: {
+  activeNodeIds: string[];
+  runRecord: InstanceType<typeof db.OrchestrationRun>;
+  nodes: OrchestrationNode[];
+  state: Record<string, unknown>;
+  projectIds: number[];
+  traceId: string | null;
+  authHeader?: string;
+  pollAttempts: Map<string, number>;
+  retryAttempts: Map<string, number>;
+}) => {
+  return Promise.all(
+    args.activeNodeIds.map((nodeId) => {
+      return executeAndRecordNode({
+        nodeId,
+        runRecord: args.runRecord,
+        nodes: args.nodes,
+        state: args.state,
+        projectIds: args.projectIds,
+        traceId: args.traceId,
+        authHeader: args.authHeader,
+        pollAttempt: args.pollAttempts.get(nodeId),
+        retryAttempt: args.retryAttempts.get(nodeId),
+      });
+    })
+  );
 };
 
 const executeRunBatch = async (args: {
@@ -86,39 +151,19 @@ const executeRunBatch = async (args: {
   const {
     activeNodeIds,
     runRecord,
-    nodes,
     edges,
     state,
     artifacts,
-    projectIds,
-    traceId,
-    authHeader,
     completedNodes,
     conditionLabels,
     activatedNodes,
     iterationCount,
-    pollAttempts,
-    retryAttempts,
   } = args;
 
   log('executeRun: activeNodes=%o', activeNodeIds);
   enforceMaxIterations({ activeNodeIds, iterationCount });
 
-  const nodeResults = await Promise.all(
-    activeNodeIds.map((nodeId) => {
-      return executeAndRecordNode({
-        nodeId,
-        runRecord,
-        nodes,
-        state,
-        projectIds,
-        traceId,
-        authHeader,
-        pollAttempt: pollAttempts.get(nodeId),
-        retryAttempt: retryAttempts.get(nodeId),
-      });
-    })
-  );
+  const nodeResults = await executeActiveNodes(args);
 
   const batch = processNodeResultBatch({
     nodeResults,
@@ -141,6 +186,13 @@ const executeRunBatch = async (args: {
   const lastNodeId = activeNodeIds[activeNodeIds.length - 1];
   await writeRunCheckpoint({ runRecord, nodeId: lastNodeId, state, artifacts });
 
+  const pause = await readPauseAtCheckpoint({
+    runRecord,
+    runStatus,
+    scheduledWait: batch.scheduledWait,
+    nextRound: batch.nextRound,
+  });
+
   // An awaiting_input pause (or a scheduled wait) stops this loop: no further
   // nodes activate this round. The wait is handled by the caller (persisted for
   // the scheduler, or slept through inline in synchronous mode).
@@ -152,6 +204,7 @@ const executeRunBatch = async (args: {
     requiredAction,
     scheduledWait: batch.scheduledWait,
     traceId: batch.traceId,
+    pauseReason: pause,
   };
 };
 
@@ -219,6 +272,28 @@ export type RunLoopResult = {
   runError: object | null;
   scheduledWait: ScheduledWait | null;
   traceId: string | null;
+  /**
+   * The frontier and reason to park on when an operator pause stopped the loop,
+   * or null when nothing paused it. Carried out rather than persisted here so
+   * one place settles a run (#1237).
+   */
+  pause: { reason: string | null; frontier: string[] } | null;
+};
+
+/**
+ * The status a settled segment carries. A segment that fell out of the loop
+ * still `running` has exhausted its frontier and succeeded — unless it stopped
+ * on a scheduled wait or an operator pause, both of which the caller persists
+ * as their own resting point.
+ */
+const settledRunStatus = (args: {
+  runStatus: MappedOrchestrationRun['status'];
+  scheduledWait: ScheduledWait | null;
+  pause: RunLoopResult['pause'];
+}): MappedOrchestrationRun['status'] => {
+  if (args.runStatus !== 'running') return args.runStatus;
+  if (args.scheduledWait || args.pause) return args.runStatus;
+  return 'succeeded';
 };
 
 /**
@@ -254,6 +329,7 @@ export const executeRunLoop = async (args: {
   let runError: object | null = null;
   let requiredAction: RequiredAction | null = null;
   let scheduledWait: ScheduledWait | null = null;
+  let pause: RunLoopResult['pause'] = null;
   // The run's own trace id if already set, otherwise the first trace id produced
   // by a traced node (e.g. an `agent` node) — captured so it can be persisted
   // onto the run and used as the parent for subsequent nodes.
@@ -288,9 +364,16 @@ export const executeRunLoop = async (args: {
       // A scheduled wait leaves the run 'running' but must break the loop so the
       // caller can offload the wait to the scheduler.
       if (scheduledWait) break;
+      if (batchResult.pauseReason) {
+        pause = {
+          reason: batchResult.pauseReason.reason,
+          frontier: activeNodeIds,
+        };
+        break;
+      }
     }
 
-    if (runStatus === 'running' && !scheduledWait) runStatus = 'succeeded';
+    runStatus = settledRunStatus({ runStatus, scheduledWait, pause });
     if (runStatus === 'succeeded') {
       await recordSkippedNodeExecutions({ runRecord, nodes });
     }
@@ -298,8 +381,9 @@ export const executeRunLoop = async (args: {
     runStatus = 'failed';
     runError = buildRunError(error);
     scheduledWait = null;
+    pause = null;
     log('executeRun error %o', runError);
   }
 
-  return { runStatus, requiredAction, runError, scheduledWait, traceId };
+  return { runStatus, requiredAction, runError, scheduledWait, traceId, pause };
 };

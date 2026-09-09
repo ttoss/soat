@@ -6,6 +6,9 @@ import { paginatedList } from 'src/lib/pagination';
 import { makeResourceAccessor } from 'src/lib/resourceAccessor';
 import { decryptValue } from 'src/lib/secrets';
 
+import { assertAiProviderConfig } from './aiProviderConfigValidation';
+import { assertAiProviderCarriesCredential } from './ambientCredentials';
+
 const getAiProviderIncludes = () => {
   return [
     { model: db.Project, as: 'project' },
@@ -77,6 +80,17 @@ export const createAiProvider = async (args: {
   baseUrl?: string;
   config?: Record<string, unknown>;
 }) => {
+  assertAiProviderConfig({
+    provider: args.provider,
+    baseUrl: args.baseUrl,
+    config: args.config,
+  });
+  assertAiProviderCarriesCredential({
+    provider: args.provider,
+    secretId: args.secretId,
+    config: args.config,
+  });
+
   const instance = await db.AiProvider.create({
     projectId: args.projectId,
     secretId: args.secretId ?? null,
@@ -108,6 +122,20 @@ export const updateAiProvider = async (args: {
   if (args.baseUrl !== undefined) instance.baseUrl = args.baseUrl;
   if (args.config !== undefined) instance.config = args.config;
   if (args.secretId !== undefined) instance.secretId = args.secretId;
+
+  // Read off the instance rather than off `args`: an update that changes only
+  // `config` still has to be checked against the provider the record already
+  // is, and one that changes only `provider` against the config it already has.
+  assertAiProviderConfig({
+    provider: instance.provider,
+    baseUrl: instance.baseUrl,
+    config: instance.config,
+  });
+  assertAiProviderCarriesCredential({
+    provider: instance.provider,
+    secretId: instance.secretId,
+    config: instance.config,
+  });
 
   await instance.save();
   return mapAiProvider(await aiProviders.reload(instance));
@@ -233,11 +261,21 @@ export const deleteAiProvider = async (args: {
   return 'deleted' as const;
 };
 
+/**
+ * The provider's credential, for the project that is about to generate with it.
+ *
+ * `projectId` is required rather than optional because this is the one funnel
+ * that hands out a decrypted provider secret: an optional filter is one a new
+ * caller can leave off, and the write-time guards it backs up cannot reach a
+ * row that is already stored. A provider in another project resolves to `null`,
+ * exactly as one that does not exist.
+ */
 export const resolveAiProviderSecret = async (args: {
   aiProviderId: string;
+  projectId: number;
 }) => {
   const instance = await db.AiProvider.findOne({
-    where: { publicId: args.aiProviderId },
+    where: { publicId: args.aiProviderId, projectId: args.projectId },
   });
   if (!instance) return null;
 

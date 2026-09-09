@@ -25,8 +25,9 @@ paths:
   /api/v1/tasks:
     get:
       description: >-
-        Lists tasks (the board query). Filter by workflow, state, status, or
-        assignee — `GET /tasks?workflow_id=...&state=...` is one board column.
+        Lists tasks (the board query). Filter by workflow, state, status,
+        automation status, or assignee — `GET /tasks?workflow_id=...&state=...`
+        is one board column.
       tags:
         - Tasks
       summary: List tasks
@@ -55,6 +56,33 @@ paths:
             enum:
               - open
               - closed
+        - name: automation_status
+          in: query
+          required: false
+          description: >-
+            Filter by the current state's dispatch status. Repeat the parameter
+            to OR values. `none` selects the tasks whose `automation_status` is
+            `null` — the ones that never entered a state with an automation. It
+            is a value a task really holds, so it is a value of the filter too;
+            the parameter's own absence already means "every task".
+
+
+            A value outside the enum, empty string included, is a `400`.
+          schema:
+            type: array
+            items:
+              type: string
+              enum:
+                - running
+                - completed
+                - failed
+                - unrouted
+                - paused
+                - none
+          style: form
+          explode: true
+          example:
+            - running
         - name: assignee
           in: query
           required: false
@@ -271,6 +299,95 @@ paths:
         '409':
           description: A concurrent transition made this one invalid, or the task is closed
 
+  /api/v1/tasks/{task_id}/pause:
+    post:
+      description: >-
+        Pauses a task's automation. While a pause is in force no state's
+        `on_enter` dispatches and no retry chain continues — an agent
+        generation, a tool call and a sub-orchestration alike — so the task
+        stops spending without losing its place.
+
+        A workflow has no run object, so this is the workflow half of
+        pause-orchestration-run: the pause lands on the instance, which is the
+        task. Transitions are deliberately still allowed — a move costs nothing
+        while every dispatch it would start is suppressed — so a board stays
+        usable under a pause. Entering a state whose dispatch is suppressed
+        records `automation_status: paused`, which resume-task reads to know that
+        state still owes its work.
+
+        A dispatch already in flight is left to finish, and its outcome still
+        routes; only what would start after it is suppressed.
+
+        Idempotent: pausing an already-paused task answers with it unchanged.
+      tags:
+        - Tasks
+      summary: Pause a task
+      operationId: pauseTask
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PauseTaskRequest'
+      responses:
+        '200':
+          description: The paused task
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Task not found
+        '409':
+          description: The task is closed, so it has no automation left to pause
+
+  /api/v1/tasks/{task_id}/resume:
+    post:
+      description: >-
+        Lifts a task's pause. When the pause suppressed the current state's
+        `on_enter` — `automation_status: paused` — that dispatch is started now,
+        as the caller resuming rather than as whoever last moved the task. A
+        state whose dispatch had already completed, or that declares none, is
+        left alone, so a resume never re-spends work the pause did not stop.
+
+        This is the only way a pause is lifted; a task that is merely idle is
+        advanced by firing a transition instead.
+      tags:
+        - Tasks
+      summary: Resume a task
+      operationId: resumeTask
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The resumed task
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Task not found
+        '409':
+          description: The task carries no pause to lift
+
   /api/v1/tasks/{task_id}/history:
     get:
       description: Returns the append-only transition history of a task.
@@ -380,10 +497,23 @@ components:
             - completed
             - failed
             - unrouted
+            - paused
             - null
           description: >-
             Status of the current state's dispatch. `null` until a state with an
-            automation is entered.
+            automation is entered. `paused` means an operator pause suppressed
+            this state's `on_enter` before it ran, so resume-task will start it.
+        pause_requested_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: >-
+            When an operator paused this task's automation, or null when no
+            pause is in force.
+        pause_reason:
+          type: string
+          nullable: true
+          description: The reason supplied with the pause, when one was.
         automation_chain_depth:
           type: integer
           description: >-
@@ -560,6 +690,15 @@ components:
         assignee:
           type: string
           nullable: true
+    PauseTaskRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 256
+          description: Why the task is being paused, surfaced on `pause_reason`.
+      additionalProperties: false
+
     TransitionTaskRequest:
       type: object
       required:

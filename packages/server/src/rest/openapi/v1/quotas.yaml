@@ -87,8 +87,10 @@ paths:
         only. Any other scope/metric pair is rejected with 400 (no attribution
         exists to enforce it). An `actor` quota caps one end user's spend,
         matched from the generation's session; a null `scope_ref` means one
-        budget *per* actor rather than a pooled project total. A duplicate quota
-        (same project, scope, scope_ref, metric, window) is rejected with 409.
+        budget *per* actor rather than a pooled project total. A `cost_usd`
+        quota may name one `meter_type` to cap; omitting it caps every priced
+        meter. A duplicate quota (same project, scope, scope_ref, metric,
+        window, meter_type) is rejected with 409.
 
 
         `storage_bytes` caps a stored total rather than a windowed one, so it
@@ -186,6 +188,19 @@ paths:
                     blackout: no posture refuses it, it is enforced on its
                     priced total, and it files the same exception.
                   example: block
+                meter_type:
+                  type: string
+                  enum: [llm_tokens, compute_execution, api_request, storage]
+                  description: >-
+                    Only for metric cost_usd (400 on any other metric). The
+                    meter this cap answers for. Omit it and the cap sums every
+                    priced meter, which is the existing behaviour; name one and
+                    only that meter's cost counts, so an AI spend cap is not
+                    consumed by platform meters the operator prices (and vice
+                    versa). Part of the quota's identity, so two meter scopes
+                    can share a scope/metric/window and neither conflicts with
+                    an unscoped cap. Immutable after creation — replace the
+                    quota to change it.
       responses:
         '201':
           description: Quota created successfully
@@ -342,6 +357,13 @@ components:
         mode:
           type: string
           enum: [enforce, monitor]
+        meter_type:
+          type: string
+          enum: [llm_tokens, compute_execution, api_request, storage, null]
+          nullable: true
+          description: >-
+            The meter a cost_usd cap answers for. Null is every priced meter,
+            which is what a quota created without one carries.
         on_unpriced:
           type: string
           enum: [block, allow, null]

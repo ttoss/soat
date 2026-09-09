@@ -12,6 +12,7 @@ describe('Chats', () => {
   let userToken: string;
   let projectId: string;
   let otherProjectId: string;
+  let otherProjectAiProviderId: string;
   let aiProviderId: string;
   let rejectingProviderId: string;
   let noPermToken: string;
@@ -86,6 +87,16 @@ describe('Chats', () => {
       });
     aiProviderId = aiProvRes.body.id;
 
+    const otherAiProvRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/ai-providers')
+      .send({
+        project_id: otherProjectId,
+        name: 'Chats Other Project Provider',
+        provider: 'ollama',
+        default_model: 'llama3.2',
+      });
+    otherProjectAiProviderId = otherAiProvRes.body.id;
+
     const rejectingRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/ai-providers')
       .send({
@@ -123,6 +134,20 @@ describe('Chats', () => {
 
       expect(response.status).toBe(400);
       expect(response.body.error).toBeDefined();
+    });
+
+    // A chat resolves its completion through its pinned provider, so a pin
+    // across the boundary would complete on another project's credential.
+    test('an ai_provider_id from another project returns 400', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .post('/api/v1/chats')
+        .send({
+          ai_provider_id: otherProjectAiProviderId,
+          project_id: projectId,
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('AI_PROVIDER_NOT_FOUND');
     });
 
     test('user without project access returns 403', async () => {

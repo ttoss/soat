@@ -41,6 +41,11 @@ describe('webhookDispatcher', () => {
     return res;
   };
 
+  const headerOf = (init: unknown, name: string): string | null => {
+    const { headers } = init as { headers?: HeadersInit };
+    return new Headers(headers).get(name);
+  };
+
   const callsToUrl = (url: string) => {
     return fetchMock.mock.calls.filter(([calledUrl]) => {
       return calledUrl === url;
@@ -56,8 +61,7 @@ describe('webhookDispatcher', () => {
    */
   const callsToUrlForEvent = (url: string, eventType: string) => {
     return callsToUrl(url).filter(([, init]) => {
-      const { headers } = init as { headers: Record<string, string> };
-      return headers['X-Soat-Event'] === eventType;
+      return headerOf(init, 'X-Soat-Event') === eventType;
     });
   };
 
@@ -154,7 +158,7 @@ describe('webhookDispatcher', () => {
       { method: string; headers: Record<string, string> },
     ];
     expect(init.method).toBe('POST');
-    expect(init.headers['X-Soat-Event']).toBe('files.created');
+    expect(headerOf(init, 'X-Soat-Event')).toBe('files.created');
   });
 
   test('delivery envelope is snake_case, like every other SOAT surface', async () => {
@@ -236,7 +240,7 @@ describe('webhookDispatcher', () => {
       string,
       { headers: Record<string, string> },
     ];
-    expect(init.headers['X-Soat-Event']).toBe('agents.generation.completed');
+    expect(headerOf(init, 'X-Soat-Event')).toBe('agents.generation.completed');
   });
 
   test('a wildcard subscriber receives audit.entry_created carrying the full entry', async () => {
@@ -316,7 +320,7 @@ describe('webhookDispatcher', () => {
       string,
       { headers: Record<string, string> },
     ];
-    expect(init.headers['X-Soat-Event']).toBe(
+    expect(headerOf(init, 'X-Soat-Event')).toBe(
       'agents.generation.requires_action'
     );
   });
@@ -451,6 +455,89 @@ describe('webhookDispatcher', () => {
     // The request itself must never have been made — an unsigned delivery is
     // worse than none.
     expect(callsToUrl('https://example.com/hook-bad-secret')).toHaveLength(0);
+  });
+
+  test('a webhook naming the deployment network is abandoned, never requested', async () => {
+    // A webhook URL is tenant-written and the server requests it, so it reaches
+    // the network through the same guard a tool target does. The refusal ends
+    // the delivery rather than retrying it: no retry changes where the URL
+    // points, and each attempt would be another probe of an internal host.
+    const created = await createWebhook({
+      project_id: projectId,
+      name: 'Metadata Endpoint Webhook',
+      url: 'http://169.254.169.254/latest/meta-data/',
+      events: ['files.created'],
+    });
+
+    const row = await db.Webhook.findOne({
+      where: { publicId: created.body.id },
+    });
+
+    emitEvent({
+      type: 'files.created',
+      projectId: projectInternalId ?? 1,
+      projectPublicId: projectId,
+      resourceType: 'file',
+      resourceId: 'fil_egress_blocked',
+      data: {},
+      timestamp: new Date().toISOString(),
+    });
+
+    await waitFor(async () => {
+      const delivery = await db.WebhookDelivery.findOne({
+        where: { webhookId: row!.id },
+      });
+      return delivery?.status === 'failed';
+    });
+
+    const delivery = await db.WebhookDelivery.findOne({
+      where: { webhookId: row!.id },
+    });
+    expect(delivery!.attempts).toBe(0);
+    expect(delivery!.statusCode).toBeNull();
+    expect(delivery!.responseBody).toMatch(/not publicly routable/i);
+    expect(callsToUrl('http://169.254.169.254/latest/meta-data/')).toHaveLength(
+      0
+    );
+  });
+
+  test('a delivery response body is not stored without bound', async () => {
+    // A fresh Response per call: a body can only be read once, and the
+    // sentinel subscriber reads the first one.
+    fetchMock.mockImplementation(() => {
+      return Promise.resolve(new Response('x'.repeat(50_000), { status: 500 }));
+    });
+    const created = await createWebhook({
+      project_id: projectId,
+      name: 'Chatty Endpoint Webhook',
+      url: 'https://example.com/hook-chatty',
+      events: ['files.created'],
+    });
+    const row = await db.Webhook.findOne({
+      where: { publicId: created.body.id },
+    });
+
+    emitEvent({
+      type: 'files.created',
+      projectId: projectInternalId ?? 1,
+      projectPublicId: projectId,
+      resourceType: 'file',
+      resourceId: 'fil_chatty',
+      data: {},
+      timestamp: new Date().toISOString(),
+    });
+
+    await waitFor(async () => {
+      const delivery = await db.WebhookDelivery.findOne({
+        where: { webhookId: row!.id },
+      });
+      return (delivery?.attempts ?? 0) > 0;
+    });
+
+    const delivery = await db.WebhookDelivery.findOne({
+      where: { webhookId: row!.id },
+    });
+    expect(delivery!.responseBody!.length).toBeLessThanOrEqual(1024);
   });
 
   test('dispatcher clears the per-attempt delivery timeout even when fetch rejects', async () => {

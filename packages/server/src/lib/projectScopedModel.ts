@@ -57,7 +57,7 @@ export const resolveProjectScopedModel = async (args: {
       route.id
     );
     return {
-      model: await buildRoutedModel({ route }),
+      model: await buildRoutedModel({ route, projectId: args.projectId }),
       modelName: route.id,
       attribution: null,
     };
@@ -85,6 +85,7 @@ export const resolveProjectScopedModel = async (args: {
 
   const resolved = await resolveAiProviderSecret({
     aiProviderId: args.aiProviderId,
+    projectId: args.projectId,
   });
   if (!resolved) {
     throw new DomainError(

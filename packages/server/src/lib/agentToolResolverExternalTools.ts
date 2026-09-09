@@ -5,6 +5,7 @@ import createDebug from 'debug';
 import { buildSoatRequestBody } from './agentToolResolverSoatBody';
 import { HttpToolError } from './httpToolError';
 import { dispatchApiRequestOrThrow, withCallTimeout } from './inProcessApi';
+import { withoutAgentExcludedActions } from './soatAgentActions';
 import { soatTools } from './soatTools';
 import { buildSoatActionTarget } from './soatToolsHelpers';
 import { fetchWithEgressGuard } from './toolEgress';
@@ -297,11 +298,30 @@ export const executeSoatTool = async (args: {
   }
 };
 
+/**
+ * The generation's project, pinned onto every builtin action that names one.
+ *
+ * `project_id` decides which project the call acts on, and a bearer spanning
+ * several is ordinary — so left to the model it is a choice, and the agent can
+ * act outside the project it was invoked in. Merged after the tool's own
+ * presets so neither the model's argument nor an operator's preset can move it,
+ * and stripped from the schema so it is not something to guess at.
+ *
+ * Only the keys an operation declares are read when the request is built, so
+ * this is inert on an action that names no project.
+ */
+const pinnedProjectParameters = (
+  projectPublicId?: string
+): Record<string, unknown> => {
+  return projectPublicId ? { project_id: projectPublicId } : {};
+};
+
 const buildSoatActionTool = (args: {
   toolName: string;
   toolDescription: string | null;
   def: (typeof soatTools)[number];
   presetParameters?: Record<string, unknown>;
+  projectPublicId?: string;
   boundaryPolicy?: unknown;
   authHeader?: string;
   toolContext?: Record<string, string>;
@@ -320,9 +340,10 @@ const buildSoatActionTool = (args: {
   }) => boolean;
   logToolCallingError: LogToolCallingError;
 }): Tool => {
+  const pinned = pinnedProjectParameters(args.projectPublicId);
   const effectiveInputSchema = stripPresetKeysFromSchema(
     args.def.inputSchema as JSONSchema7,
-    args.presetParameters
+    { ...args.presetParameters, ...pinned }
   );
   return tool({
     description: args.toolDescription ?? args.def.description,
@@ -338,12 +359,15 @@ const buildSoatActionTool = (args: {
         return { error: `Forbidden: boundary policy denies ${iamAction}` };
       }
       const rawArgs = mergePresetParameters({
-        presetParameters: resolvePresetParametersForCall({
-          presetParameters: args.presetParameters,
-          toolContext: args.toolContext,
-          toolName: args.toolName,
-          schema: args.def.inputSchema,
-        }),
+        presetParameters: {
+          ...resolvePresetParametersForCall({
+            presetParameters: args.presetParameters,
+            toolContext: args.toolContext,
+            toolName: args.toolName,
+            schema: args.def.inputSchema,
+          }),
+          ...pinned,
+        },
         input: toolArgs,
       });
       return executeSoatTool({
@@ -373,6 +397,8 @@ export const resolveSoatTools = (args: {
   };
   boundaryPolicy?: unknown;
   authHeader?: string;
+  /** The project the generation runs in; see `pinnedProjectParameters`. */
+  projectPublicId?: string;
   toolContext?: Record<string, string>;
   contextKeys?: string[] | null;
   traceId?: string;
@@ -390,7 +416,14 @@ export const resolveSoatTools = (args: {
   logToolCallingError: LogToolCallingError;
 }): Record<string, Tool> => {
   const result: Record<string, Tool> = {};
-  for (const action of args.typedTool.actions ?? []) {
+  // A row written before an action was excluded still names it, and the write
+  // that refuses it now cannot reach what is already stored — so the surface
+  // is filtered here too rather than trusting the binding.
+  const actions = withoutAgentExcludedActions({
+    actions: args.typedTool.actions ?? [],
+    toolName: args.typedTool.name,
+  });
+  for (const action of actions) {
     const def = soatTools.find((t) => {
       return t.name === action;
     });
@@ -401,6 +434,7 @@ export const resolveSoatTools = (args: {
       toolDescription: args.typedTool.description,
       def,
       presetParameters: args.typedTool.presetParameters ?? undefined,
+      projectPublicId: args.projectPublicId,
       boundaryPolicy: args.boundaryPolicy,
       authHeader: args.authHeader,
       toolContext: args.toolContext,

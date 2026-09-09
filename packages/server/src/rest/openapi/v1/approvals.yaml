@@ -213,6 +213,7 @@ paths:
         item. Expiry is re-checked at decision time — an expired item can never
         be approved.
       operationId: approveApproval
+      x-soat-agent-exclude: true
       parameters:
         - $ref: '#/components/parameters/approval_id'
       requestBody:
@@ -249,6 +250,7 @@ paths:
       summary: Reject an approval item
       description: Rejects the item. A reason is required and preserved on the item.
       operationId: rejectApproval
+      x-soat-agent-exclude: true
       parameters:
         - $ref: '#/components/parameters/approval_id'
       requestBody:

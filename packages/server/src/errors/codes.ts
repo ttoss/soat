@@ -116,7 +116,7 @@ export const ERROR_CODES = {
   AI_PROVIDER_MISCONFIGURED: {
     httpStatus: 400,
     description:
-      'The AI provider record is missing configuration the provider type requires — for example a `vertex` provider with no Google Cloud project in `config.project` and no service-account key file linked as its secret.',
+      "The AI provider record is missing configuration the provider type requires — for example a `vertex` provider with no Google Cloud project in `config.project` and no service-account key file linked as its secret, or a `bedrock`/`vertex` record that links no credential at all on a deployment that does not let a record use the deployment's own.",
   },
   MODEL_LISTING_UNSUPPORTED: {
     httpStatus: 400,
@@ -250,6 +250,16 @@ export const ERROR_CODES = {
   ORCHESTRATION_RUN_NOT_AWAITING_INPUT: {
     httpStatus: 409,
     description: 'The orchestration run is not awaiting input.',
+  },
+  ORCHESTRATION_RUN_NOT_PAUSABLE: {
+    httpStatus: 409,
+    description:
+      "The orchestration run has already settled, so there is nothing left to pause. Unlike cancel, a pause keeps the run's last checkpoint and the existing resume route re-drives it from there — so it only applies to a run that is queued, running, sleeping or awaiting input (#1237).",
+  },
+  ORCHESTRATION_RUN_PAUSED: {
+    httpStatus: 409,
+    description:
+      'An operator pause is in force on the run, so the requested action was refused. An operator pause has no payload to supply, and a pause standing behind a human or approval node must not be lifted by satisfying it — resume the run first, then submit (#1237).',
   },
   ORCHESTRATION_HUMAN_NODE_MISMATCH: {
     httpStatus: 400,
@@ -413,7 +423,7 @@ export const ERROR_CODES = {
   TOOL_EGRESS_BLOCKED: {
     httpStatus: 403,
     description:
-      "An http- or mcp-type tool's target is not publicly routable — a loopback, private, link-local (cloud metadata), CGNAT or IPv6 ULA address — and the deployment's TOOL_EGRESS_ALLOWED_HOSTS does not list it. Also returned when a hostname resolves to such an address, when a redirect leads to one, when the scheme is not http/https, or when the redirect chain is too long. The error `meta` carries `tool_url` and, when known, the offending `tool_address`.",
+      "An outbound request the deployment makes to a URL a tenant chose — an http- or mcp-type tool's target, a webhook's `url`, an AI provider's `base_url`, a service-account key file's `token_uri` — names a destination that is not publicly routable: a loopback, private, link-local (cloud metadata), CGNAT or IPv6 ULA address, and the deployment's TOOL_EGRESS_ALLOWED_HOSTS does not list it. Also returned when a hostname resolves to such an address, when a redirect leads to one, when the scheme is not http/https, or when the redirect chain is too long. The error `meta` carries `tool_url` and, when known, the offending `tool_address`. A webhook delivery refused this way is closed rather than retried, with the reason on the delivery row.",
   },
   TOOL_HTTP_ERROR: {
     httpStatus: 502,
@@ -562,6 +572,16 @@ export const ERROR_CODES = {
     httpStatus: 409,
     description:
       'A concurrent change made the requested transition invalid from the current state, or the task is already closed.',
+  },
+  TASK_NOT_PAUSABLE: {
+    httpStatus: 409,
+    description:
+      'The task is closed, so there is no automation left to pause. A workflow has no run object, so an operator pause lands on its instance — the task — and suppresses every state dispatch until it is resumed (#1237).',
+  },
+  TASK_NOT_PAUSED: {
+    httpStatus: 409,
+    description:
+      'The task carries no operator pause, so there is nothing to resume. Resuming is only how a pause is lifted; a task that is merely idle is advanced by firing a transition (#1237).',
   },
   TASK_AUTOMATION_PROVENANCE_MISSING: {
     httpStatus: 500,

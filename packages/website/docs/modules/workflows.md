@@ -110,7 +110,9 @@ escape hatch. Define an explicit any-state transition (listing every state in
 | `last_result`       | any \| null      | Server-owned, read-only: the result of the current state's last completed dispatch, overwritten on every dispatch. Guards read it as `task.last_result` |
 | `assignee`          | string \| null   | Informational in v1 (a user or actor public ID; not interpreted by the engine) |
 | `active_dispatch`   | object \| null   | `{ kind, id, status }` of the current state's dispatch, if any — plus `attempt` while a `retry` policy is in effect. `kind` is `generation`, `orchestration_run` or `tool_call`; a `tool_call` always carries a null `id`, since a direct tool call leaves no addressable record |
-| `automation_status` | string \| null   | `running` \| `completed` \| `failed` \| `unrouted` for the current state's dispatch |
+| `automation_status` | string \| null   | `running` \| `completed` \| `failed` \| `unrouted` for the current state's dispatch, or `paused` when an operator pause suppressed it before it ran (see [Pausing a task](#pausing-a-task)) |
+| `pause_requested_at` | string \| null  | ISO 8601 instant an operator paused this task's automation, or `null` when no pause is in force (see [Pausing a task](#pausing-a-task)) |
+| `pause_reason`      | string \| null   | The reason supplied with the pause, when one was                        |
 | `automation_chain_depth` | integer     | Server-owned, read-only: how many machine-driven transitions have run back-to-back with no outside intervention. Reset to `0` by any move a person, a plain API key, or an approval resolution makes. See [The automation chain budget](#the-automation-chain-budget) |
 | `pending_transition`| string \| null   | Name of a `requires_approval` transition parked awaiting a human decision; null otherwise |
 | `tool_context`      | object           | **Write-only.** Caller context for the task's automation dispatches, accepted on `create-task` and `transition-task` and never returned by a read. See [Dispatch tool context](#dispatch-tool-context) |
@@ -314,6 +316,63 @@ Dispatches of `kind: agent` are not reconciled — a generation parked in
 `requires_action` awaiting client tool outputs is legitimately outstanding and
 must not be routed as if it had settled.
 
+### Pausing a task
+
+A workflow has no run object — its instance is the task — so the stop an
+[orchestration run](./orchestrations.md#pausing-a-run) gets lands there instead.
+[`POST /api/v1/tasks/{task_id}/pause`](/docs/api/tasks/pause-task) suppresses
+every state's `on_enter` dispatch and every retry chain behind one, which is the
+only work a task drives on its own;
+[`POST /api/v1/tasks/{task_id}/resume`](/docs/api/tasks/resume-task) lifts it.
+
+**A paused task still transitions.** A move costs nothing while every dispatch it
+would start is suppressed, so a board stays usable under a pause rather than
+freezing. Entering a state whose dispatch is suppressed records
+`automation_status: paused` — that is what a resume reads to know the state's
+`on_enter` still owes its work, and what keeps a resume from re-spending a
+dispatch that had already completed.
+
+**The dispatch that resumes runs as whoever resumed**, not as whoever last moved
+the task: the resume is the decision to spend, and the move that scheduled the
+work may be weeks old. Mirrors the rule that a human or API-key move names
+itself.
+
+**A dispatch already in flight is left to finish**, and its outcome still routes
+— entering a state whose own dispatch is then suppressed. Only what would start
+after it is stopped, the same bound an orchestration pause accepts for the round
+in flight. A task-dispatched orchestration run is not paused with its task; pause
+that run through its own route when the run itself needs to stop.
+
+Pausing is **idempotent** — a second pause answers with the task unchanged — a
+closed task answers `409 TASK_NOT_PAUSABLE`, and resuming a task that carries no
+pause answers `409 TASK_NOT_PAUSED`.
+
+### Finding the tasks whose automation is running
+
+[`GET /api/v1/tasks`](/docs/api/tasks/list-tasks) filters on
+`automation_status` beside `status`, `state`, `workflow_id` and `assignee`. The
+two answer different questions: `status=open` narrows a board to the cards still
+in play, while `automation_status` says which of those has a dispatch of its own
+under way — the set a consumer that pauses spend has to find without paging the
+whole board.
+
+The parameter **repeats**, and the values are ORed:
+
+```
+GET /api/v1/tasks?status=open&automation_status=running&automation_status=paused
+```
+
+`none` selects the cards whose `automation_status` is `null` — the ones that
+never entered a state with an automation. That absence is a value a task really
+holds, so it is a value of the filter too; omitting the parameter already means
+"every task". It is spelled `none` rather than `null` because the CLI reads the
+token `null` as JSON null for every nullable field it has, and one spelling has
+to work in all three clients.
+
+A value outside `running` / `completed` / `failed` / `unrouted` / `paused` /
+`none` — empty string included — is a `400 VALIDATION_FAILED` rather than a
+silently unfiltered listing.
+
 ### Versioning
 
 A workflow's state machine is versioned by the same append-only archive that
@@ -506,6 +565,8 @@ expressions.
 | `TOOL_DISPATCH_FAILED` | 422 | A `tool` dispatch's call was settled before it ran — blocked by a guardrail, or routed to human approval, which a task dispatch cannot park on |
 | `INVALID_TOOL_CONTEXT_KEY`  | 400    | A `tool_context` key on `create-task` / `transition-task` is not a valid header name, or two keys collide on one header. See [Dispatch tool context](#dispatch-tool-context) |
 | `TASK_AUTOMATION_CHAIN_LIMIT` | 409 | The task has run `TASK_AUTOMATION_CHAIN_LIMIT` machine-driven transitions with no outside intervention; the next one is refused. See [The automation chain budget](#the-automation-chain-budget) |
+| `TASK_NOT_PAUSABLE`        | 409    | The task is closed, so it has no automation left to pause. See [Pausing a task](#pausing-a-task) |
+| `TASK_NOT_PAUSED`          | 409    | The task carries no operator pause to lift; advance an idle task by firing a transition instead. See [Pausing a task](#pausing-a-task) |
 
 ## Webhook events
 
@@ -519,6 +580,8 @@ expressions.
 | `tasks.automation_retrying`  | A dispatch attempt failed and a `retry` attempt remains (carries `attempt`, `max_attempts`, the error, and the failed generation/run id) |
 | `tasks.stalled`              | An open task sat in a state past its `stalled_after` (once per episode) |
 | `tasks.approval_failed`      | An approved gated transition could no longer apply at resolution time (guard or conflict) |
+| `tasks.paused`               | An operator paused a task's automation                   |
+| `tasks.resumed`              | An operator lifted a task's pause                        |
 
 ## Examples
 
@@ -676,6 +739,49 @@ APPROVAL_ID=$(curl -s "$SOAT_URL/api/v1/approvals?project_id=$PROJECT_ID&status=
 
 curl -s -X POST "$SOAT_URL/api/v1/approvals/$APPROVAL_ID/approve" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{}'
+```
+
+</TabItem>
+</Tabs>
+
+### Pause and resume a task's automation
+
+Suppresses every state dispatch until resumed — see [Pausing a task](#pausing-a-task).
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat pause-task --task-id "$TASK_ID" --reason "credit balance went negative"
+
+# Lifts the pause and dispatches the current state's on_enter if it was suppressed.
+soat resume-task --task-id "$TASK_ID"
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: paused, error } = await soat.tasks.pauseTask({
+  path: { task_id: TASK_ID },
+  body: { reason: 'credit balance went negative' },
+});
+if (error) throw new Error(JSON.stringify(error));
+
+// paused.automation_status === 'paused' once a suppressed state is entered.
+await soat.tasks.resumeTask({ path: { task_id: TASK_ID } });
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -s -X POST "$SOAT_URL/api/v1/tasks/$TASK_ID/pause" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"reason":"credit balance went negative"}'
+
+curl -s -X POST "$SOAT_URL/api/v1/tasks/$TASK_ID/resume" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 </TabItem>

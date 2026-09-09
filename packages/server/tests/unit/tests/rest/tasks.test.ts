@@ -97,6 +97,8 @@ describe('Tasks', () => {
         'tasks:GetTask',
         'tasks:UpdateTask',
         'tasks:TransitionTask',
+        'tasks:PauseTask',
+        'tasks:ResumeTask',
         'tasks:DeleteTask',
         'approvals:ListApprovals',
         'approvals:GetApproval',
@@ -630,6 +632,138 @@ describe('Tasks', () => {
     });
   });
 
+  // The stop side of a spend gate has to find the cards whose automation is
+  // still dispatching. `status=open` narrows a board; it does not say which of
+  // those cards is costing anything (#1242).
+  describe('GET /api/v1/tasks — automation_status filter', () => {
+    let filterWorkflowId: string;
+    let pausedTaskId: string;
+    let idleTaskId: string;
+
+    beforeAll(async () => {
+      filterWorkflowId = (
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/workflows')
+          .send({
+            project_id: projectId,
+            name: 'automation-status-filter',
+            states: [
+              { name: 'idea', initial: true },
+              {
+                name: 'writing',
+                on_enter: {
+                  dispatch: {
+                    kind: 'agent',
+                    agent_id: agentId,
+                    input_mapping: { prompt: 'write' },
+                  },
+                },
+              },
+            ],
+            transitions: [{ name: 'to_writing', from: ['idea'], to: 'writing' }],
+          })
+      ).body.id;
+
+      const create = () => {
+        return authenticatedTestClient(userToken).post('/api/v1/tasks').send({
+          project_id: projectId,
+          workflow_id: filterWorkflowId,
+          title: 'filter card',
+        });
+      };
+
+      idleTaskId = (await create()).body.id;
+
+      // Paused rather than dispatched: the suppression is what records a
+      // non-null `automation_status` without spending a generation.
+      const paused = (await create()).body;
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/tasks/${paused.id}/pause`)
+        .send({});
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/tasks/${paused.id}/transitions`)
+        .send({ transition: 'to_writing' });
+      await pollTask({
+        token: userToken,
+        taskId: paused.id,
+        predicate: (t) => {
+          return t.automation_status === 'paused';
+        },
+      });
+      pausedTaskId = paused.id;
+    });
+
+    const listByAutomationStatus = (query: string) => {
+      return authenticatedTestClient(userToken).get(
+        `/api/v1/tasks?limit=100&workflow_id=${filterWorkflowId}&${query}`
+      );
+    };
+
+    test('a single value narrows the listing to it', async () => {
+      const res = await listByAutomationStatus('automation_status=paused');
+      expect(res.status).toBe(200);
+      expect(
+        res.body.data.map((t: { id: string }) => {
+          return t.id;
+        })
+      ).toEqual([pausedTaskId]);
+    });
+
+    // A task that never entered a state with an automation carries `null`, so
+    // the value has to be expressible or that half of the board is unaskable.
+    test('`none` selects the tasks with no automation status', async () => {
+      const res = await listByAutomationStatus('automation_status=none');
+      expect(res.status).toBe(200);
+      expect(
+        res.body.data.every((t: { automation_status: string | null }) => {
+          return t.automation_status === null;
+        })
+      ).toBe(true);
+      const ids = res.body.data.map((t: { id: string }) => {
+        return t.id;
+      });
+      expect(ids).toContain(idleTaskId);
+      expect(ids).not.toContain(pausedTaskId);
+    });
+
+    test('the parameter repeats, ORing the values including `none`', async () => {
+      const res = await listByAutomationStatus(
+        'automation_status=running&automation_status=paused&automation_status=none'
+      );
+      expect(res.status).toBe(200);
+      const ids = res.body.data.map((t: { id: string }) => {
+        return t.id;
+      });
+      expect(ids).toContain(pausedTaskId);
+      expect(ids).toContain(idleTaskId);
+    });
+
+    test('it composes with the status filter', async () => {
+      const res = await listByAutomationStatus(
+        'status=open&automation_status=paused'
+      );
+      expect(res.status).toBe(200);
+      expect(
+        res.body.data.map((t: { id: string }) => {
+          return t.id;
+        })
+      ).toEqual([pausedTaskId]);
+    });
+
+    test('a value outside the enum is rejected', async () => {
+      const res = await listByAutomationStatus('automation_status=dispatching');
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toMatch(/dispatching/);
+    });
+
+    test('an empty value is rejected', async () => {
+      const res = await listByAutomationStatus('automation_status=');
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+  });
+
   describe('GET /api/v1/tasks/:id', () => {
     test('returns a single task to a permitted user', async () => {
       const task = (await createTask({ topic: 'x' })).body;
@@ -761,6 +895,247 @@ describe('Tasks', () => {
         .patch(`/api/v1/tasks/${task.id}`)
         .send({ title: 'x' });
       expect(res.status).toBe(401);
+    });
+  });
+
+  // ── Operator pause (#1237) ──────────────────────────────────────────────
+  //
+  // A workflow has no run object, so the pause an orchestration run gets lands
+  // on the instance: the task. What it stops is every state's `on_enter`
+  // dispatch — the only spend a task drives on its own.
+
+  describe('POST /api/v1/tasks/:id/pause and /resume', () => {
+    let pauseWorkflowId: string;
+
+    beforeAll(async () => {
+      pauseWorkflowId = (
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/workflows')
+          .send({
+            project_id: projectId,
+            name: 'pause-pipeline',
+            states: [
+              { name: 'idea', initial: true },
+              {
+                name: 'writing',
+                on_enter: {
+                  dispatch: {
+                    kind: 'agent',
+                    agent_id: agentId,
+                    input_mapping: {
+                      prompt: {
+                        cat: ['Write about ', { var: 'task.payload.topic' }],
+                      },
+                    },
+                  },
+                  on_complete: [{ when: true, transition: 'to_done' }],
+                },
+              },
+              {
+                // No `on_complete` rule matches, so the dispatch completes and
+                // the task stays open — the only shape in which a resume could
+                // re-spend work the pause never stopped.
+                name: 'polish',
+                on_enter: {
+                  dispatch: {
+                    kind: 'agent',
+                    agent_id: agentId,
+                    input_mapping: { prompt: 'polish it' },
+                  },
+                },
+              },
+              { name: 'done', terminal: true },
+            ],
+            transitions: [
+              { name: 'to_writing', from: ['idea'], to: 'writing' },
+              { name: 'to_polish', from: ['idea'], to: 'polish' },
+              { name: 'to_done', from: ['writing'], to: 'done' },
+            ],
+          })
+      ).body.id;
+    });
+
+    afterEach(() => {
+      jest.clearAllMocks();
+    });
+
+    const createPauseTask = () => {
+      return authenticatedTestClient(userToken)
+        .post('/api/v1/tasks')
+        .send({
+          project_id: projectId,
+          workflow_id: pauseWorkflowId,
+          title: 'pause card',
+          payload: { topic: 'winter' },
+        });
+    };
+
+    const pause = (taskId: string, body: object = {}) => {
+      return authenticatedTestClient(userToken)
+        .post(`/api/v1/tasks/${taskId}/pause`)
+        .send(body);
+    };
+
+    const resume = (taskId: string) => {
+      return authenticatedTestClient(userToken).post(
+        `/api/v1/tasks/${taskId}/resume`
+      );
+    };
+
+    test('a paused task still transitions, but its state dispatch is suppressed until resumed', async () => {
+      mockCreateGeneration.mockResolvedValue({
+        id: 'gen_paused_1',
+        traceId: 'trc_paused_1',
+        status: 'completed',
+        output: { model: 'm', content: 'a post', finishReason: 'stop' },
+      });
+
+      const task = (await createPauseTask()).body;
+
+      const paused = await pause(task.id, { reason: 'balance went negative' });
+      expect(paused.status).toBe(200);
+      expect(paused.body.pause_requested_at).not.toBeNull();
+      expect(paused.body.pause_reason).toBe('balance went negative');
+
+      // A move costs nothing while every dispatch it would start is suppressed,
+      // so the board stays usable — but nothing generates.
+      const moved = await authenticatedTestClient(userToken)
+        .post(`/api/v1/tasks/${task.id}/transitions`)
+        .send({ transition: 'to_writing' });
+      expect(moved.status).toBe(200);
+      expect(moved.body.state).toBe('writing');
+
+      const suppressed = await pollTask({
+        token: userToken,
+        taskId: task.id,
+        predicate: (t) => {
+          return t.automation_status === 'paused';
+        },
+      });
+      expect(suppressed.state).toBe('writing');
+      expect(suppressed.active_dispatch).toBeNull();
+      expect(mockCreateGeneration).not.toHaveBeenCalled();
+
+      // Resuming is what dispatches the state's on_enter, which then routes.
+      const resumed = await resume(task.id);
+      expect(resumed.status).toBe(200);
+      expect(resumed.body.pause_requested_at).toBeNull();
+
+      const settled = await pollTask({
+        token: userToken,
+        taskId: task.id,
+        predicate: (t) => {
+          return t.state === 'done';
+        },
+      });
+      expect(settled.status).toBe('closed');
+      expect(mockCreateGeneration).toHaveBeenCalledTimes(1);
+    });
+
+    test('resuming a task whose dispatch already completed does not re-dispatch it', async () => {
+      mockCreateGeneration.mockResolvedValue({
+        id: 'gen_paused_2',
+        traceId: 'trc_paused_2',
+        status: 'completed',
+        output: { model: 'm', content: 'a post', finishReason: 'stop' },
+      });
+
+      const task = (await createPauseTask()).body;
+      const moved = await authenticatedTestClient(userToken)
+        .post(`/api/v1/tasks/${task.id}/transitions`)
+        .send({ transition: 'to_polish' });
+      expect(moved.status).toBe(200);
+
+      await pollTask({
+        token: userToken,
+        taskId: task.id,
+        predicate: (t) => {
+          return t.automation_status === 'completed';
+        },
+      });
+      expect(mockCreateGeneration).toHaveBeenCalledTimes(1);
+
+      expect((await pause(task.id)).status).toBe(200);
+      const resumed = await resume(task.id);
+      expect(resumed.status).toBe(200);
+      expect(resumed.body.automation_status).toBe('completed');
+
+      await new Promise((r) => {
+        return setTimeout(r, 100);
+      });
+      expect(mockCreateGeneration).toHaveBeenCalledTimes(1);
+    });
+
+    test('pausing a closed task returns 409', async () => {
+      mockCreateGeneration.mockResolvedValue({
+        id: 'gen_paused_3',
+        traceId: 'trc_paused_3',
+        status: 'completed',
+        output: { model: 'm', content: 'a post', finishReason: 'stop' },
+      });
+
+      const task = (await createPauseTask()).body;
+      expect(
+        (
+          await authenticatedTestClient(userToken)
+            .post(`/api/v1/tasks/${task.id}/transitions`)
+            .send({ transition: 'to_writing' })
+        ).status
+      ).toBe(200);
+
+      await pollTask({
+        token: userToken,
+        taskId: task.id,
+        predicate: (t) => {
+          return t.status === 'closed';
+        },
+      });
+
+      const paused = await pause(task.id);
+      expect(paused.status).toBe(409);
+      expect(paused.body.error.code).toBe('TASK_NOT_PAUSABLE');
+    });
+
+    test('pausing an already-paused task is idempotent', async () => {
+      const task = (await createPauseTask()).body;
+      const first = await pause(task.id, { reason: 'first' });
+      expect(first.status).toBe(200);
+      const second = await pause(task.id, { reason: 'second' });
+      expect(second.status).toBe(200);
+      expect(second.body.pause_requested_at).toBe(
+        first.body.pause_requested_at
+      );
+      expect(second.body.pause_reason).toBe('first');
+    });
+
+    test('resuming a task that carries no pause returns 409', async () => {
+      const task = (await createPauseTask()).body;
+      const res = await resume(task.id);
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe('TASK_NOT_PAUSED');
+    });
+
+    test('pausing an unknown task returns 404', async () => {
+      const res = await pause('tsk_nonexistent00000000');
+      expect(res.status).toBe(404);
+    });
+
+    test('403 for a user without permission', async () => {
+      const task = (await createPauseTask()).body;
+      const res = await authenticatedTestClient(noPermToken)
+        .post(`/api/v1/tasks/${task.id}/pause`)
+        .send({});
+      expect(res.status).toBe(403);
+    });
+
+    test('401 for unauthenticated requests', async () => {
+      const task = (await createPauseTask()).body;
+      expect(
+        (await testClient.post(`/api/v1/tasks/${task.id}/pause`)).status
+      ).toBe(401);
+      expect(
+        (await testClient.post(`/api/v1/tasks/${task.id}/resume`)).status
+      ).toBe(401);
     });
   });
 

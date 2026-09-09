@@ -247,6 +247,7 @@ paths:
         - Triggers
       summary: Get trigger secret
       operationId: getTriggerSecret
+      x-soat-agent-exclude: true
       parameters:
         - name: trigger_id
           in: path
@@ -276,6 +277,7 @@ paths:
         - Triggers
       summary: Rotate trigger secret
       operationId: rotateTriggerSecret
+      x-soat-agent-exclude: true
       parameters:
         - name: trigger_id
           in: path

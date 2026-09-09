@@ -1711,8 +1711,8 @@ components:
         (`monitor`) when a windowed aggregate is exceeded. `requests` quotas are
         enforced by the request middleware; `tokens`/`cost_usd` quotas at the
         pre-generation check. Mirrors the quotas REST contract; `scope`,
-        `metric`, and `window` are immutable after creation (only `limit`,
-        `mode`, and `on_unpriced` update).
+        `metric`, `window`, and `meter_type` are immutable after creation (only
+        `limit`, `mode`, and `on_unpriced` update).
       type: object
       additionalProperties: false
       required:
@@ -1763,6 +1763,12 @@ components:
             blackout — block (the default) refuses generations with 409
             QUOTA_UNENFORCEABLE, allow accepts the unmeasurable spend. See the
             quotas REST contract.
+        meter_type:
+          type: string
+          enum: [llm_tokens, compute_execution, api_request, storage]
+          description: >-
+            Only for metric cost_usd. The meter this cap answers for; omit it
+            and the cap sums every priced meter. See the quotas REST contract.
 
     GuardrailResourceProperties:
       description: >-

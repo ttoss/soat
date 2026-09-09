@@ -131,7 +131,7 @@ A daily snapshot writes one `storage` event per project per UTC day, carrying tw
 
 The snapshot also runs once at server startup, so a deployment that restarts more often than the interval still meters every day it is up. Being idempotent per project per UTC day, a restart re-samples the current day rather than writing a second event for it.
 
-`gb_day` sums five terms:
+`gb_day` sums seven terms:
 
 | Term | Source |
 | --- | --- |
@@ -140,10 +140,19 @@ The snapshot also runs once at server startup, so a deployment that restarts mor
 | Chunk embeddings | the stored width of each chunk's vector |
 | Memory entry text | [memory entry](./memories.md) `content` |
 | Memory entry embeddings | the stored width of each entry's vector |
+| Dataset item payloads | [dataset item](./evaluations.md) `input`, `expected_output`, `metadata` |
+| Eval result payloads | [eval result](./evaluations.md) `input`, `expected_output`, `scores`, `output` |
 
 `chunk_count` counts the rows behind two of them — [document](./documents.md)
 chunks plus [memory entries](./memories.md) — embedded or not, since a row joins
-the vector index as soon as its embedding is written.
+the vector index as soon as its embedding is written. A dataset item and an eval
+result carry no vector, so neither joins that index and neither is counted there.
+
+**The evaluations corpus grows with runs, not with the dataset.** An eval result
+[freezes its own copy](./evaluations.md#frozen-inputs) of the item it scored, so
+a 100-item dataset run ten times stores eleven copies of every payload. Content
+[retention](./evaluations.md#retention-and-erasure) clears a result's `output`
+and nothing else of it, so the rest accumulates for the life of the project.
 
 **The snapshot is also what bounds the corpus.** A `storage_bytes`
 [quota](./quotas.md#storage-enforcement) caps a project's footprint against the

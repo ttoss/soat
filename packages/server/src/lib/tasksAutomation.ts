@@ -14,6 +14,7 @@ import {
 } from './tasksAutomationLocking';
 import { runDispatchWithRetry } from './tasksAutomationRetry';
 import { type DispatchResult, failedDispatchIds } from './tasksDispatch';
+import { isTaskPaused, markDispatchPaused } from './tasksPause';
 import type { OnEnter, WorkflowDispatch } from './workflowsValidation';
 
 const log = createDebug('soat:tasks');
@@ -359,6 +360,33 @@ const markDispatchRunning = (args: {
   });
 };
 
+/**
+ * Whether an operator pause suppressed this state's dispatch before it started.
+ *
+ * `runStateAutomation` is the one place every state dispatch passes through, so
+ * the check here stops all of them at once — an agent generation, a tool call
+ * and a sub-orchestration alike (#1237). Recorded rather than silently skipped,
+ * so `resumeTask` knows this state's `on_enter` still owes its work.
+ */
+const suppressIfPaused = async (args: {
+  task: TaskWithWorkflow;
+  stateName: string;
+  token: number;
+}): Promise<boolean> => {
+  if (!isTaskPaused(args.task)) return false;
+  const taskPublicId = args.task.publicId as string;
+  log(
+    'runStateAutomation: task=%s is paused, suppressing dispatch',
+    taskPublicId
+  );
+  await markDispatchPaused({
+    taskPublicId,
+    stateName: args.stateName,
+    token: args.token,
+  });
+  return true;
+};
+
 export const runStateAutomation = async (args: {
   taskPublicId: string;
   projectId: number;
@@ -372,6 +400,9 @@ export const runStateAutomation = async (args: {
   const task = await loadTask(args.taskPublicId);
   if (!task || task.state !== args.stateName) return;
   const token = (task.enteredStateAt as Date).getTime();
+
+  if (await suppressIfPaused({ task, stateName: args.stateName, token }))
+    return;
 
   const context = buildTaskContext(task);
   const inputs = applyInputMapping(dispatch.inputMapping, context);

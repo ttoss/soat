@@ -176,6 +176,24 @@ export type MappedNodeExecution = {
   created_at: Date;
 };
 
+/**
+ * Every status a run can hold, in one list so the listing's `status` filter and
+ * the wire type cannot describe different sets.
+ */
+export const ORCHESTRATION_RUN_STATUSES = [
+  'queued',
+  'running',
+  'sleeping',
+  'awaiting_input',
+  'succeeded',
+  'failed',
+  'cancelled',
+  'expired',
+] as const;
+
+export type OrchestrationRunStatus =
+  (typeof ORCHESTRATION_RUN_STATUSES)[number];
+
 export type MappedOrchestrationRun = {
   id: string;
   orchestration_id: string;
@@ -184,20 +202,19 @@ export type MappedOrchestrationRun = {
   // graph — the only thing there is to fall back to.
   orchestration_version: number | null;
   project_id: string;
-  status:
-    | 'queued'
-    | 'running'
-    | 'sleeping'
-    | 'awaiting_input'
-    | 'succeeded'
-    | 'failed'
-    | 'cancelled'
-    | 'expired';
+  status: OrchestrationRunStatus;
   state: Record<string, unknown>;
   active_nodes: string[];
   artifacts: Record<string, unknown>;
   error: object | null;
   required_action: object | null;
+  /**
+   * When an operator pause was requested, and why. Set independently of
+   * `status`: a `running` run keeps running until its next checkpoint, and a run
+   * parked on a node keeps that node's `required_action` (#1237).
+   */
+  pause_requested_at: Date | null;
+  pause_reason: string | null;
   trace_id: string | null;
   input: Record<string, unknown> | null;
   // The caller context the run carries for its whole lifetime, forwarded as
@@ -291,19 +308,23 @@ export const mapRequiredAction = (raw: unknown): object | null => {
   };
 
   const optional = Object.entries({
+    // A node pause names the node it waits at; an operator pause has no node of
+    // its own and carries a `reason` instead (#1237), so these are per-kind
+    // rather than universal.
+    node_id: field('nodeId', 'node_id'),
+    prompt: action.prompt,
+    context: action.context,
+    reason: action.reason,
     options: action.options,
     approval_spec: field('approvalSpec', 'approval_spec'),
     approval_id: field('approvalId', 'approval_id'),
     expires_at: field('expiresAt', 'expires_at'),
   }).filter(([, value]) => {
-    return value !== undefined && value !== null;
+    return value !== undefined;
   });
 
   return {
     type: action.type,
-    node_id: field('nodeId', 'node_id'),
-    prompt: action.prompt,
-    context: action.context,
     ...Object.fromEntries(optional),
   };
 };
@@ -329,6 +350,8 @@ export const mapOrchestrationRun = (
     artifacts: run.artifacts as Record<string, unknown>,
     error: run.error,
     required_action: mapRequiredAction(run.requiredAction),
+    pause_requested_at: run.pauseRequestedAt,
+    pause_reason: run.pauseReason,
     trace_id: run.traceId,
     input: run.input as Record<string, unknown> | null,
     tool_context: run.toolContext ?? null,
@@ -632,6 +655,10 @@ export const listOrchestrationRuns = async (args: {
   // Makes an aggregate over runs safe: `usage` is transitive, so summing it
   // across a list mixing parents and children counts the children twice.
   nested?: boolean;
+  // ORed. Without it, finding the runs still driving means paging every run the
+  // project ever started: a long-running old run sits behind any number of
+  // newer terminal ones, so an early exit on the newest page is unsound (#1242).
+  statuses?: OrchestrationRunStatus[];
   projectIds?: number[];
   limit?: number;
   offset?: number;
@@ -642,6 +669,7 @@ export const listOrchestrationRuns = async (args: {
 
   const where: Record<string, unknown> = {};
   if (args.projectIds) where['projectId'] = args.projectIds;
+  if (args.statuses?.length) where['status'] = args.statuses;
   if (args.parentRunId !== undefined) {
     where['parentRunId'] = args.parentRunId;
   } else if (args.nested !== undefined) {
@@ -695,6 +723,7 @@ export { startOrchestrationRun } from './orchestrationEngine';
 export type { MappedOrchestrationCheckpoint } from './orchestrationRunActions';
 export {
   cancelOrchestrationRun,
+  pauseOrchestrationRun,
   resumeOrchestrationRun,
   submitHumanInput,
 } from './orchestrationRunActions';

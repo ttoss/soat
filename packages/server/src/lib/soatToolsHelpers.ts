@@ -36,6 +36,8 @@ export interface ToolDefinition {
   iamAction?: string;
   /** snake_case names of every top-level request body property this operation's schema declares, including server-managed ones. */
   acceptedBodyFields: string[];
+  /** See `x-soat-agent-exclude` on {@link OperationSpec}. */
+  agentExcluded?: boolean;
 }
 
 /**
@@ -99,6 +101,20 @@ export interface OperationSpec {
   'x-iam-action'?: string;
   /** When true, the operation is excluded from the MCP tool surface. */
   'x-soat-mcp-exclude'?: boolean;
+  /**
+   * When true, an **agent** may not be bound to this operation, though an MCP
+   * client still can.
+   *
+   * The two surfaces differ in who chooses the arguments. An MCP client is a
+   * person acting as themselves; an agent's builtin tool is an LLM acting
+   * inside a generation, under a bearer somebody else handed it. So an
+   * operation that mints a credential, rewrites authorization, reads secret
+   * material or settles an approval is one the agent surface withholds even
+   * where that bearer would allow it — the approval gate in particular exists
+   * to put a person between an agent and an action, and an agent that can
+   * resolve its own approval has removed them.
+   */
+  'x-soat-agent-exclude'?: boolean;
 }
 
 export const resolveSchema = (
@@ -463,6 +479,10 @@ export const processOperation = (args: {
       args.operation['x-iam-action'] ??
       getActionForOperation(args.operation.operationId),
     acceptedBodyFields,
+    // Kept in the catalog rather than dropped like an MCP exclusion: the
+    // operation is still an MCP tool, and the write-time refusal needs to tell
+    // an excluded action apart from one that does not exist.
+    ...(args.operation['x-soat-agent-exclude'] ? { agentExcluded: true } : {}),
   };
 };
 

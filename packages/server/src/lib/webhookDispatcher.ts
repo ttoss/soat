@@ -2,11 +2,13 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 import { db } from 'src/db';
 
+import { DomainError } from '../errors';
 import type { SoatEvent } from './eventBus';
 import { onEvent, recordDroppedEvent } from './eventBus';
 import { evaluateEventPolicy, matchesEvent } from './eventMatching';
 import { hmacHex, timestampedSignature } from './hmacSignature';
 import { createScheduler, createSweep } from './scheduler';
+import { fetchWithEgressGuard } from './toolEgress';
 import { retryTransient } from './transientRetry';
 import { decryptWebhookSecret } from './webhooks';
 
@@ -14,6 +16,15 @@ const log = createDebug('soat:webhooks');
 
 const MAX_ATTEMPTS = 3;
 const DELIVERY_TIMEOUT_MS = 10_000;
+
+/**
+ * How much of a subscriber's answer is kept on the delivery row. The field is
+ * there so an operator can see why an endpoint rejected a call, which the first
+ * kilobyte says; what it is not is a place to accumulate whatever a named host
+ * returns, since the URL is tenant-written and the body is readable back
+ * through `GET /webhook-deliveries/{delivery_id}`.
+ */
+const MAX_RESPONSE_BODY_CHARS = 1024;
 
 /** First retry lands ~1s out, then ~2s, capped so a long outage stays polite. */
 const BASE_BACKOFF_MS = 1_000;
@@ -239,7 +250,11 @@ const attemptDelivery = async (args: { delivery: DeliveryRow }) => {
   }, DELIVERY_TIMEOUT_MS);
 
   try {
-    const response = await fetch(webhook.url, {
+    // Guarded, like every other request the server makes to a URL a tenant
+    // wrote: the address is checked after resolution and on every redirect hop,
+    // so a public hostname cannot bounce the delivery into the deployment's own
+    // network (`toolEgress.ts`).
+    const response = await fetchWithEgressGuard(webhook.url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -251,9 +266,14 @@ const attemptDelivery = async (args: { delivery: DeliveryRow }) => {
       signal: controller.signal,
     });
 
-    const responseBody = await response.text().catch(() => {
-      return null;
-    });
+    const responseBody = await response
+      .text()
+      .then((text) => {
+        return text.slice(0, MAX_RESPONSE_BODY_CHARS);
+      })
+      .catch(() => {
+        return null;
+      });
 
     if (response.ok) {
       await writeOutcome({
@@ -283,6 +303,13 @@ const attemptDelivery = async (args: { delivery: DeliveryRow }) => {
       responseBody,
     });
   } catch (error) {
+    // A refused destination is not a transient failure: no retry moves the URL,
+    // and each attempt would be one more probe of the host it names. So the
+    // delivery is closed with the reason, the way an unsignable one is.
+    if (error instanceof DomainError && error.code === 'TOOL_EGRESS_BLOCKED') {
+      await abandonDelivery({ delivery, reason: error.message });
+      return;
+    }
     await recordFailedAttempt({
       delivery,
       attempt,

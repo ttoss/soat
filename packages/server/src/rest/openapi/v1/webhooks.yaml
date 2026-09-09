@@ -287,6 +287,7 @@ paths:
         - Webhooks
       summary: Get webhook secret
       operationId: getWebhookSecret
+      x-soat-agent-exclude: true
       parameters:
         - name: webhook_id
           in: path
@@ -314,6 +315,7 @@ paths:
         - Webhooks
       summary: Rotate webhook secret
       operationId: rotateWebhookSecret
+      x-soat-agent-exclude: true
       parameters:
         - name: webhook_id
           in: path

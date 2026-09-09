@@ -142,11 +142,14 @@ services:
       DATABASE_NAME: soat_test
       DATABASE_USER: soat_user
       DATABASE_PASSWORD: soat_password
-      # Tool egress is default-deny for non-public destinations (see
+      # Egress is default-deny for non-public destinations (see
       # packages/server/src/lib/toolEgress.ts). These suites point http and mcp
-      # tools at sibling containers, which is exactly the case an operator has
-      # to declare.
-      TOOL_EGRESS_ALLOWED_HOSTS: server:50477
+      # tools, and the AI providers they create, at sibling containers — which
+      # is exactly the case an operator has to declare. `ollama` covers a local
+      # run that does not override OLLAMA_URL.
+      # `127.0.0.1:1` is deliberately absent: the model-route suite points its
+      # dead target there and needs it refused.
+      TOOL_EGRESS_ALLOWED_HOSTS: server:50477,ollama-tool-choice:11434,ollama:11434
       SECRETS_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       JWT_SECRET: smoke-test-jwt-secret
       FILES_STORAGE_DIR: /data/files
@@ -208,11 +211,14 @@ services:
       DATABASE_NAME: soat_test
       DATABASE_USER: soat_user
       DATABASE_PASSWORD: soat_password
-      # Tool egress is default-deny for non-public destinations (see
+      # Egress is default-deny for non-public destinations (see
       # packages/server/src/lib/toolEgress.ts). These suites point http and mcp
-      # tools at sibling containers, which is exactly the case an operator has
-      # to declare.
-      TOOL_EGRESS_ALLOWED_HOSTS: server:50477
+      # tools, and the AI providers they create, at sibling containers — which
+      # is exactly the case an operator has to declare. `ollama` covers a local
+      # run that does not override OLLAMA_URL.
+      # `127.0.0.1:1` is deliberately absent: the model-route suite points its
+      # dead target there and needs it refused.
+      TOOL_EGRESS_ALLOWED_HOSTS: server:50477,ollama-tool-choice:11434,ollama:11434
       SECRETS_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       JWT_SECRET: smoke-test-jwt-secret
       FILES_STORAGE_DIR: /data/files

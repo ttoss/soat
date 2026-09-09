@@ -38,6 +38,10 @@ const buildBedrockEmbeddingModel = (args: {
   const credentials = resolveBedrockCredentials({
     secretValue: process.env.EMBEDDING_API_KEY ?? null,
     config: { region: process.env.EMBEDDING_REGION ?? process.env.AWS_REGION },
+    // The whole embedding stack is configured by the operator, so an instance
+    // role is the intended credential here. The opt-in that gates the same
+    // fallback answers for tenant-written provider records, which this is not.
+    allowAmbientCredentials: true,
   });
   return createAmazonBedrock(credentials).textEmbeddingModel(args.model);
 };

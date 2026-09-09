@@ -44,6 +44,8 @@ type StoredFootprint = {
     files: number;
     documentChunks: number;
     memoryEntries: number;
+    datasetItems: number;
+    evalResults: number;
     total: number;
   };
   counts: {
@@ -63,18 +65,25 @@ const readStoredFootprint = (rows: unknown[]): StoredFootprint => {
     chunk_rows: string | number;
     memory_bytes: string | number;
     memory_rows: string | number;
+    dataset_item_bytes: string | number;
+    eval_result_bytes: string | number;
   }>;
   const files = Number(row.file_bytes);
   const chunkBytes = Number(row.chunk_bytes);
   const memoryBytes = Number(row.memory_bytes);
   const chunkRows = Number(row.chunk_rows);
   const memoryRows = Number(row.memory_rows);
+  const datasetItemBytes = Number(row.dataset_item_bytes);
+  const evalResultBytes = Number(row.eval_result_bytes);
   return {
     bytes: {
       files,
       documentChunks: chunkBytes,
       memoryEntries: memoryBytes,
-      total: files + chunkBytes + memoryBytes,
+      datasetItems: datasetItemBytes,
+      evalResults: evalResultBytes,
+      total:
+        files + chunkBytes + memoryBytes + datasetItemBytes + evalResultBytes,
     },
     counts: {
       documentChunks: chunkRows,
@@ -98,6 +107,11 @@ const readStoredFootprint = (rows: unknown[]): StoredFootprint => {
  * The inner `COALESCE` is load-bearing: an un-embedded row's `pg_column_size`
  * is null, and `text + null` would discard that row's *content* too.
  *
+ * The evaluations corpus is measured the same way, and it is the term that
+ * grows on its own: an eval result freezes its own copy of the item it scored,
+ * so a dataset run N times stores N+1 copies of every payload, and the content
+ * retention sweep clears only a result's `output` (#1247).
+ *
  * Each vector-bearing term is counted by the same scan that sums it, so the
  * count costs no extra pass over either table.
  *
@@ -116,7 +130,9 @@ const projectStoredFootprint = async (
             chunks.chunk_bytes,
             chunks.chunk_rows,
             memories.memory_bytes,
-            memories.memory_rows
+            memories.memory_rows,
+            dataset_items.dataset_item_bytes,
+            eval_results.eval_result_bytes
        FROM (SELECT COALESCE(SUM(f."size"), 0) AS file_bytes
                FROM "files" f
               WHERE f."project_id" = :projectId) files
@@ -138,7 +154,27 @@ const projectStoredFootprint = async (
                     COUNT(*) AS memory_rows
                FROM "memory_entries" me
                JOIN "memories" m ON me."memory_id" = m."id"
-              WHERE m."project_id" = :projectId) memories`,
+              WHERE m."project_id" = :projectId) memories
+       CROSS JOIN
+            (SELECT COALESCE(SUM(
+                      pg_column_size(di."input")
+                      + COALESCE(OCTET_LENGTH(di."expected_output"), 0)
+                      + COALESCE(pg_column_size(di."metadata"), 0)
+                    ), 0) AS dataset_item_bytes
+               FROM "dataset_items" di
+               JOIN "datasets" ds ON di."dataset_id" = ds."id"
+              WHERE ds."project_id" = :projectId) dataset_items
+       CROSS JOIN
+            (SELECT COALESCE(SUM(
+                      pg_column_size(er."input")
+                      + COALESCE(OCTET_LENGTH(er."expected_output"), 0)
+                      + pg_column_size(er."scores")
+                      + COALESCE(OCTET_LENGTH(er."output"), 0)
+                    ), 0) AS eval_result_bytes
+               FROM "eval_results" er
+               JOIN "eval_runs" ers ON er."eval_run_id" = ers."id"
+               JOIN "evals" e ON ers."eval_id" = e."id"
+              WHERE e."project_id" = :projectId) eval_results`,
     { replacements: { projectId } }
   );
   return readStoredFootprint(rows);
@@ -347,12 +383,14 @@ export const snapshotProjectStorage = async (args: {
     costUsd,
   });
   log(
-    'snapshotProjectStorage: project=%s bytes=%d files=%d chunks=%d memories=%d rows=%d chunkRows=%d memoryRows=%d created=%s costUsd=%s',
+    'snapshotProjectStorage: project=%s bytes=%d files=%d chunks=%d memories=%d datasetItems=%d evalResults=%d rows=%d chunkRows=%d memoryRows=%d created=%s costUsd=%s',
     args.projectPublicId,
     footprint.bytes.total,
     footprint.bytes.files,
     footprint.bytes.documentChunks,
     footprint.bytes.memoryEntries,
+    footprint.bytes.datasetItems,
+    footprint.bytes.evalResults,
     footprint.counts.total,
     footprint.counts.documentChunks,
     footprint.counts.memoryEntries,

@@ -162,11 +162,11 @@ Production requirement
 `SECRETS_ENCRYPTION_KEY` must be set in production. Changing it after secrets have been stored will make those secrets, as well as webhook and trigger signing secrets, unreadable.
 :::
 
-### Tool Egress
+### Outbound Egress
 
 | Variable                    | Default        | Description                                                                       |
 | --------------------------- | -------------- | --------------------------------------------------------------------------------- |
-| `TOOL_EGRESS_ALLOWED_HOSTS` | _(unset)_      | Comma-separated non-public destinations `http`/`mcp` tools may reach               |
+| `TOOL_EGRESS_ALLOWED_HOSTS` | _(unset)_      | Comma-separated non-public destinations the server may request on a tenant's behalf |
 
 An [`http` or `mcp` tool](../modules/tools.md) is a request **the server makes on
 the agent's behalf**, so by default its target may only be a publicly routable
@@ -175,8 +175,23 @@ address. Everything that is not — loopback, RFC1918 (`10/8`, `172.16/12`,
 service lives), CGNAT, IPv6 ULA — is refused with `403 TOOL_EGRESS_BLOCKED`
 unless this variable lists it.
 
-Unset, tools still reach the whole public internet; only your own network is
-closed. List what a tool legitimately needs:
+A tool target is not the only such destination, and the same rule covers each
+one:
+
+| Destination                                                       | Refused how |
+| ----------------------------------------------------------------- | ----------- |
+| An `http`/`mcp` [tool](../modules/tools.md) target                 | `403 TOOL_EGRESS_BLOCKED` on the call |
+| A [webhook](../modules/webhooks.md)'s `url`                        | the delivery is closed as `failed`, with the reason on the row |
+| An [AI provider](../modules/ai-providers.md)'s `base_url`          | the generation or model listing fails |
+| A GCP service-account key file's `token_uri`, on an `http` tool    | `403 TOOL_EGRESS_BLOCKED` on the call |
+
+What it does **not** cover is a destination the deployment itself chose:
+`OLLAMA_BASE_URL`, `EMBEDDING_BASE_URL` and the embedding stack are operator
+settings, already an operator's decision about their own network, and they keep
+working when they point at localhost.
+
+Unset, these requests still reach the whole public internet; only your own
+network is closed. List what a tool legitimately needs:
 
 ```yaml
 environment:
@@ -211,6 +226,38 @@ prefer a [`builtin` tool](../modules/tools.md) over an `http` tool pointed at
 your own base URL — it dispatches in-process under the caller's own
 permissions instead of leaving the network at all.
 :::
+
+### Provider Credentials
+
+| Variable                                 | Default | Description                                                                                    |
+| ---------------------------------------- | ------- | ---------------------------------------------------------------------------------------------- |
+| `AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS`  | `false` | Whether an AI provider record that links no credential may sign with the deployment's own       |
+
+`bedrock` and `vertex` are the two [AI provider](../modules/ai-providers.md)
+types whose SDK reaches for a credential nobody put on the record: Bedrock walks
+the AWS default credential chain (environment, instance or task role), Vertex
+resolves [Application Default Credentials](https://cloud.google.com/docs/authentication/application-default-credentials).
+Those are the **deployment's** credentials, and a provider record is written by
+a tenant — so unless this is set to `true`, a `bedrock` or `vertex` record must
+carry a credential of its own:
+
+- `400 VALIDATION_FAILED` when such a record is created or updated with neither
+  a linked secret nor a `config.apiKey`, and
+- `400 AI_PROVIDER_MISCONFIGURED` when such a record is used to generate or to
+  list models, so one that reached the table some other way fails closed rather
+  than signing with credentials it was never given.
+
+Set it to `true` on a **single-tenant** deployment, where the account the server
+runs as is the account its projects are meant to bill — a server on an EC2
+instance profile or an ECS task role serving only your own team. Leave it off
+wherever a project may be created by someone you would not hand those
+credentials to: without it, such a record generates on the deployment's cloud
+account, against the deployment's quotas, with whatever IAM the deployment's
+role holds.
+
+The embedding stack is unaffected: `EMBEDDING_PROVIDER` and its region are
+operator settings that no tenant writes, so `bedrock` embeddings keep using the
+AWS credential chain whatever this is set to.
 
 ### File Storage
 

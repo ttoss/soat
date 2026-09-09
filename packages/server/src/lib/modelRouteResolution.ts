@@ -89,9 +89,11 @@ const buildRoutedTarget = async (args: {
   target: ModelRouteTarget;
   index: number;
   routeId: string;
+  projectId: number;
 }): Promise<RoutedTarget> => {
   const resolved = await resolveAiProviderSecret({
     aiProviderId: args.target.ai_provider_id,
+    projectId: args.projectId,
   });
   if (!resolved) {
     throw new DomainError(
@@ -130,10 +132,17 @@ const buildRoutedTarget = async (args: {
  */
 export const buildRoutedModel = async (args: {
   route: ModelRouteConfig;
+  /** The project consuming the route, which owns every target it may name. */
+  projectId: number;
 }): Promise<LanguageModel> => {
   const targets = await Promise.all(
     args.route.targets.map((target, index) => {
-      return buildRoutedTarget({ target, index, routeId: args.route.id });
+      return buildRoutedTarget({
+        target,
+        index,
+        routeId: args.route.id,
+        projectId: args.projectId,
+      });
     })
   );
 

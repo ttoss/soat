@@ -429,7 +429,8 @@ paths:
       summary: List orchestration runs
       description: >-
         Returns orchestration runs the caller can access, optionally filtered by
-        orchestration, by parent run, or by whether the run has a parent at all.
+        orchestration, by parent run, by status, or by whether the run has a
+        parent at all.
 
 
         Note when aggregating: a run's `usage` covers its whole subtree, so
@@ -468,6 +469,37 @@ paths:
             is a `400`; any value other than `true` or `false` is a `400`.
           schema:
             type: boolean
+        - name: status
+          in: query
+          required: false
+          description: >-
+            Filter by run status. Repeat the parameter to OR values —
+            `status=queued&status=running&status=sleeping&status=awaiting_input`
+            is the set still driving, which is how a caller finds live work
+            without paging every run the project ever started.
+
+
+            There is no `non_terminal` shorthand on purpose: which statuses
+            count as live is the caller's policy. A value outside the enum,
+            empty string included, is a `400`.
+          schema:
+            type: array
+            items:
+              type: string
+              enum:
+                - queued
+                - running
+                - sleeping
+                - awaiting_input
+                - succeeded
+                - failed
+                - cancelled
+                - expired
+          style: form
+          explode: true
+          example:
+            - queued
+            - running
         - name: limit
           in: query
           required: false
@@ -535,6 +567,58 @@ paths:
         '409':
           description: Run is already in a terminal state
 
+  /api/v1/orchestration-runs/{orchestration_run_id}/pause:
+    post:
+      tags:
+        - Orchestrations
+      summary: Pause an orchestration run
+      description: >-
+        Parks a run in flight as `awaiting_input` at its next checkpoint, with a
+        `required_action` of type `paused` naming the pause as operator-initiated
+        rather than a node's. Unlike cancel, the run keeps its last checkpoint
+        and resume-orchestration-run re-drives it from there — so work already
+        done is deferred rather than discarded.
+
+        A `queued` or `sleeping` run is parked immediately (a sleeping run keeps
+        the wake it was due, and resuming hands it back to the scheduler at that
+        instant). A `running` run keeps running until the round in flight
+        reaches its checkpoint, so the response may still read `running` while
+        `pause_requested_at` is set. A run already parked on a human, webhook or
+        approval node keeps that node's `required_action`; the pause is still
+        recorded, which is what makes submit-human-input refuse until the run is
+        resumed.
+
+        The pause fans out to the run's `loop` / `sub_orchestration` descendants
+        — each parks at its own next checkpoint — because otherwise a parent's
+        pause would bound nothing. Resuming does not fan out: each parked
+        descendant is resumed by its own id.
+
+        Idempotent: pausing an already-paused run answers with it unchanged.
+      operationId: pauseOrchestrationRun
+      parameters:
+        - $ref: '#/components/parameters/orchestration_run_id'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PauseOrchestrationRunRequest'
+      responses:
+        '200':
+          description: Paused run
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrchestrationRun'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+        '409':
+          description: Run has already settled
+
   /api/v1/orchestration-runs/{orchestration_run_id}/human-input:
     post:
       tags:
@@ -566,7 +650,7 @@ paths:
         '404':
           description: Not found
         '409':
-          description: Run is not awaiting input
+          description: Run is not awaiting input, or an operator pause is in force
 
   /api/v1/orchestration-runs/{orchestration_run_id}/resume:
     post:
@@ -579,6 +663,11 @@ paths:
         payload, so a run parked on a human or webhook-receive node re-parks on
         the same node. Use submit-human-input to supply the awaited payload and
         advance the run.
+
+        It is also the only thing that lifts an operator pause
+        (pause-orchestration-run): a run parked with `required_action.type` of
+        `paused` re-drives the frontier that had not run yet, and one paused
+        mid-timer goes back to `sleeping` for the wake it was already due.
       operationId: resumeOrchestrationRun
       parameters:
         - $ref: '#/components/parameters/orchestration_run_id'
@@ -1313,6 +1402,19 @@ components:
           allOf:
             - $ref: '#/components/schemas/RequiredAction'
           nullable: true
+        pause_requested_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: >-
+            When an operator pause was requested, or null when none is in force.
+            Independent of `status`: a `running` run keeps running until its next
+            checkpoint, and a run parked on a node keeps that node's
+            `required_action`.
+        pause_reason:
+          type: string
+          nullable: true
+          description: The reason supplied with the pause, when one was.
         started_at:
           type: string
           format: date-time
@@ -1407,12 +1509,13 @@ components:
 
     RequiredAction:
       type: object
-      description: Details for an awaiting_input run waiting for human input.
+      description: >-
+        Why an awaiting_input run is parked. `node_id`, `prompt` and `context`
+        describe a node's own pause and are present for every kind but `paused`,
+        which is an operator pause with no node of its own and carries `reason`
+        instead.
       required:
         - type
-        - node_id
-        - prompt
-        - context
       properties:
         type:
           type: string
@@ -1420,16 +1523,26 @@ components:
             - human_input
             - webhook_receive
             - approval
+            - paused
           description: >-
             Discriminator identifying the kind of pause. Open enum — new pause
             kinds may be added in minor releases; clients must tolerate unknown
             values.
         node_id:
           type: string
+          description: >-
+            The node the run is parked at. Absent for a `paused` action, which
+            no node produced.
         prompt:
           type: string
         context:
           type: object
+        reason:
+          type: string
+          nullable: true
+          description: >-
+            Present for `paused` — the reason the operator gave, or null when
+            they gave none.
         options:
           type: array
           items:
@@ -1449,6 +1562,17 @@ components:
           type: string
           format: date-time
           description: Present for `approval` pauses — when the item expires.
+
+    PauseOrchestrationRunRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 256
+          description: >-
+            Why the run is being paused, surfaced on the parked run's
+            `required_action.reason` and on `pause_reason`.
+      additionalProperties: false
 
     HumanInputRequest:
       type: object

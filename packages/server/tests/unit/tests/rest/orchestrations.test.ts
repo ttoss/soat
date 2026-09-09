@@ -124,6 +124,7 @@ describe('Orchestrations', () => {
         'orchestrations:ListRuns',
         'orchestrations:GetRun',
         'orchestrations:CancelRun',
+        'orchestrations:PauseRun',
         'orchestrations:SubmitHumanInput',
         'orchestrations:ResumeRun',
       ],
@@ -2670,6 +2671,136 @@ describe('Orchestrations', () => {
     });
   });
 
+  // A background job stopping async spend has to find the runs still driving.
+  // Without this filter the only correct read is every run the project ever
+  // started, since a long-running old run sits behind any number of newer
+  // terminal ones (#1242).
+  describe('GET /api/v1/orchestration-runs — status filter', () => {
+    let statusOrchId: string;
+    let succeededRunId: string;
+    let awaitingRunId: string;
+
+    beforeAll(async () => {
+      const orch = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          ...simpleOrchestration,
+          name: 'Status Filter Pipeline',
+          project_id: projectId,
+        });
+      expect(orch.status).toBe(201);
+      statusOrchId = orch.body.id;
+
+      const succeeded = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: statusOrchId, input: {} });
+      expect(succeeded.status).toBe(201);
+      expect(succeeded.body.status).toBe('succeeded');
+      succeededRunId = succeeded.body.id;
+
+      const humanOrch = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          ...humanNodeOrchestration,
+          name: 'Status Filter Human Pipeline',
+          project_id: projectId,
+        });
+      expect(humanOrch.status).toBe(201);
+      const awaiting = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: humanOrch.body.id, input: {} });
+      expect(awaiting.status).toBe(201);
+      expect(awaiting.body.status).toBe('awaiting_input');
+      awaitingRunId = awaiting.body.id;
+    });
+
+    const listByStatus = (query: string) => {
+      return authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs?limit=100&${query}`
+      );
+    };
+
+    test('a single status narrows the listing to it', async () => {
+      const res = await listByStatus('status=awaiting_input');
+      expect(res.status).toBe(200);
+      expect(
+        res.body.data.every((r: { status: string }) => {
+          return r.status === 'awaiting_input';
+        })
+      ).toBe(true);
+      expect(
+        res.body.data.some((r: { id: string }) => {
+          return r.id === awaitingRunId;
+        })
+      ).toBe(true);
+    });
+
+    // Which statuses count as live is the caller's policy, not the runtime's,
+    // so the parameter repeats rather than naming a "non-terminal" set.
+    test('the parameter repeats, ORing the values', async () => {
+      const live = 'queued,running,sleeping,awaiting_input'.split(',');
+      const res = await listByStatus(
+        live
+          .map((s) => {
+            return `status=${s}`;
+          })
+          .join('&')
+      );
+      expect(res.status).toBe(200);
+      expect(
+        res.body.data.every((r: { status: string }) => {
+          return live.includes(r.status);
+        })
+      ).toBe(true);
+      expect(
+        res.body.data.some((r: { id: string }) => {
+          return r.id === awaitingRunId;
+        })
+      ).toBe(true);
+      expect(
+        res.body.data.some((r: { id: string }) => {
+          return r.id === succeededRunId;
+        })
+      ).toBe(false);
+    });
+
+    test('it composes with the other filters', async () => {
+      const res = await listByStatus(
+        `status=succeeded&orchestration_id=${statusOrchId}&nested=false`
+      );
+      expect(res.status).toBe(200);
+      expect(
+        res.body.data.every(
+          (r: { status: string; parent_orchestration_run_id: string | null }) => {
+            return (
+              r.status === 'succeeded' && r.parent_orchestration_run_id === null
+            );
+          }
+        )
+      ).toBe(true);
+      expect(
+        res.body.data.some((r: { id: string }) => {
+          return r.id === succeededRunId;
+        })
+      ).toBe(true);
+    });
+
+    test('a status outside the enum is rejected', async () => {
+      const res = await listByStatus('status=running&status=finished');
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toMatch(/finished/);
+    });
+
+    // An unset client-side variable interpolates to nothing, and answering it
+    // with every run is the full scan this filter exists to avoid.
+    test('an empty status value is rejected', async () => {
+      const res = await listByStatus('status=');
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+  });
+
   describe('DELETE /api/v1/orchestrations/:orchestration_id', () => {
     test('admin can delete an orchestration without project scoping', async () => {
       const createRes = await authenticatedTestClient(userToken)
@@ -3178,10 +3309,12 @@ describe('Orchestrations', () => {
         const call = callTo();
         expect(call).toBeDefined();
         const init = call![1] as {
-          headers: Record<string, string>;
+          headers: HeadersInit;
           body: string;
         };
-        expect(init.headers['X-Soat-Event']).toBe('guardrail.exception');
+        expect(new Headers(init.headers).get('X-Soat-Event')).toBe(
+          'guardrail.exception'
+        );
         const body = JSON.parse(init.body);
         expect(body.event).toBe('guardrail.exception');
         expect(body.resource_type ?? body.resourceType).toBe(
@@ -3976,6 +4109,349 @@ describe('Orchestrations', () => {
       const finalExecs = execsFor(finalRes.body);
       expect(finalExecs).toHaveLength(1);
       expect(finalExecs[0].status).toBe('completed');
+    });
+  });
+
+  // ── Operator pause (#1237) ────────────────────────────────────────────────
+
+  describe('POST /api/v1/orchestration-runs/:orchestration_run_id/pause', () => {
+    const getRun = (orchestrationRunId: string) => {
+      return authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs/${orchestrationRunId}`
+      );
+    };
+
+    const pause = (orchestrationRunId: string, body: object = {}) => {
+      return authenticatedTestClient(userToken)
+        .post(`/api/v1/orchestration-runs/${orchestrationRunId}/pause`)
+        .send(body);
+    };
+
+    const resume = (orchestrationRunId: string) => {
+      return authenticatedTestClient(userToken).post(
+        `/api/v1/orchestration-runs/${orchestrationRunId}/resume`
+      );
+    };
+
+    const createOrch = async (body: Record<string, unknown>) => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({ ...body, project_id: projectId });
+      expect(res.status).toBe(201);
+      return res.body.id as string;
+    };
+
+    // A tool node hitting a local server is the only deterministic way to be
+    // inside a round: the handler pauses the run before answering, so the flag
+    // is set while the loop is mid-node and read at the checkpoint after it.
+    const startPausingServer = async (args: {
+      onRequest: () => Promise<void>;
+    }) => {
+      const server = createServer((req, res) => {
+        req.resume();
+        req.on('end', () => {
+          void args.onRequest().then(() => {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true }));
+          });
+        });
+      });
+      await new Promise<void>((resolve) => {
+        server.listen(0, '127.0.0.1', resolve);
+      });
+      const address = server.address();
+      const port =
+        address && typeof address === 'object' ? address.port : undefined;
+      return { server, port };
+    };
+
+    test('a pause mid-round parks the frontier at the next checkpoint, and resume runs exactly it', async () => {
+      let runId: string | null = null;
+      const { server, port } = await startPausingServer({
+        onRequest: async () => {
+          if (!runId) return;
+          const res = await pause(runId, { reason: 'balance went negative' });
+          expect(res.status).toBe(200);
+          // Nothing is parked yet: the run is still driving its own round.
+          expect(res.body.status).toBe('running');
+          expect(res.body.pause_requested_at).not.toBeNull();
+        },
+      });
+
+      try {
+        const toolRes = await authenticatedTestClient(adminToken)
+          .post('/api/v1/tools')
+          .send({
+            project_id: projectId,
+            name: 'pauseMidRunTool',
+            type: 'http',
+            parameters: { type: 'object', properties: {} },
+            execute: { url: `http://127.0.0.1:${port}/v1/do`, method: 'POST' },
+          });
+        expect(toolRes.status).toBe(201);
+
+        const orchId = await createOrch({
+          name: 'Pause Mid Round',
+          nodes: [
+            { id: 'nodeA', type: 'tool', tool_id: toolRes.body.id },
+            {
+              id: 'nodeB',
+              type: 'transform',
+              expression: 'after',
+              state_mapping: { 'state.after': { var: 'output.result' } },
+            },
+          ],
+          edges: [{ from: 'nodeA', to: 'nodeB' }],
+        });
+
+        // The run must exist before the tool fires, and `wait: true` answers
+        // only after it parks — so the id is taken from a queued start and the
+        // pause is issued from inside the node.
+        const startRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestration-runs')
+          .send({ orchestration_id: orchId, input: {}, wait: false });
+        expect(startRes.status).toBe(201);
+        runId = startRes.body.id as string;
+
+        const parked = await (async () => {
+          for (let i = 0; i < 200; i += 1) {
+            const res = await getRun(runId!);
+            if (res.body.status === 'awaiting_input') return res.body;
+            if (['succeeded', 'failed'].includes(res.body.status as string)) {
+              throw new Error(`run settled as ${res.body.status}`);
+            }
+            await new Promise((r) => {
+              return setTimeout(r, 20);
+            });
+          }
+          throw new Error('run never parked');
+        })();
+
+        expect(parked.required_action.type).toBe('paused');
+        expect(parked.required_action.reason).toBe('balance went negative');
+        expect(parked.required_action.node_id).toBeUndefined();
+        expect(parked.pause_reason).toBe('balance went negative');
+        // The pause deferred rather than discarded: nodeA's work is kept and
+        // nodeB — the frontier — is what resume must re-drive.
+        expect(parked.active_nodes).toEqual(['nodeB']);
+        expect(parked.artifacts.nodeA).toBeDefined();
+        expect(parked.state.after).toBeUndefined();
+
+        const resumed = await resume(runId);
+        expect(resumed.status).toBe(200);
+        expect(resumed.body.status).toBe('succeeded');
+        expect(resumed.body.pause_requested_at).toBeNull();
+        expect(resumed.body.required_action).toBeNull();
+        expect(resumed.body.state.after).toBe('after');
+      } finally {
+        server.close();
+      }
+    });
+
+    test('a sleeping run keeps the wake it was due, and resume hands it back to the scheduler', async () => {
+      const orchId = await createOrch({
+        name: 'Pause While Sleeping',
+        nodes: [
+          {
+            id: 'delay',
+            type: 'delay',
+            duration: '1s',
+            state_mapping: { 'state.waited': { var: 'output.waited' } },
+          },
+          {
+            id: 'after',
+            type: 'transform',
+            expression: 'done',
+            state_mapping: { 'state.after': { var: 'output.result' } },
+          },
+        ],
+        edges: [{ from: 'delay', to: 'after' }],
+      });
+
+      const startRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ orchestration_id: orchId, input: {} });
+      expect(startRes.status).toBe(201);
+      const runId = startRes.body.id as string;
+
+      for (let i = 0; i < 200; i += 1) {
+        const res = await getRun(runId);
+        if (res.body.status === 'sleeping') break;
+        await new Promise((r) => {
+          return setTimeout(r, 20);
+        });
+      }
+      expect((await getRun(runId)).body.status).toBe('sleeping');
+
+      const paused = await pause(runId);
+      expect(paused.status).toBe(200);
+      expect(paused.body.status).toBe('awaiting_input');
+      expect(paused.body.required_action.type).toBe('paused');
+      expect(paused.body.active_nodes).toEqual(['delay']);
+
+      // The pause wins over the scheduled wake: the sweep finds nothing due.
+      const claimed = await wakeDueRuns({ now: new Date(Date.now() + 5000) });
+      expect(claimed).toBe(0);
+      expect((await getRun(runId)).body.status).toBe('awaiting_input');
+
+      const resumed = await resume(runId);
+      expect(resumed.status).toBe(200);
+      expect(resumed.body.status).toBe('sleeping');
+      expect(resumed.body.pause_requested_at).toBeNull();
+
+      expect(
+        await wakeDueRuns({ now: new Date(Date.now() + 5000) })
+      ).toBeGreaterThanOrEqual(1);
+
+      for (let i = 0; i < 200; i += 1) {
+        const res = await getRun(runId);
+        if (res.body.status === 'succeeded') break;
+        await new Promise((r) => {
+          return setTimeout(r, 20);
+        });
+      }
+      const settled = await getRun(runId);
+      expect(settled.body.status).toBe('succeeded');
+      expect(settled.body.state.after).toBe('done');
+    });
+
+    test('a run parked on a human node keeps that action, and human input is refused until it is resumed', async () => {
+      const orchId = await createOrch(humanNodeOrchestration);
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: orchId, input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('awaiting_input');
+      const runId = runRes.body.id as string;
+
+      const paused = await pause(runId, { reason: 'plan downgraded' });
+      expect(paused.status).toBe(200);
+      // The node already said what the run waits for; the pause stands behind it.
+      expect(paused.body.required_action.type).toBe('human_input');
+      expect(paused.body.pause_requested_at).not.toBeNull();
+
+      const refused = await authenticatedTestClient(userToken)
+        .post(`/api/v1/orchestration-runs/${runId}/human-input`)
+        .send({ node_id: 'approval', output: { choice: 'approve' } });
+      expect(refused.status).toBe(409);
+      expect(refused.body.error.code).toBe('ORCHESTRATION_RUN_PAUSED');
+
+      const resumed = await resume(runId);
+      expect(resumed.status).toBe(200);
+      expect(resumed.body.pause_requested_at).toBeNull();
+
+      const accepted = await authenticatedTestClient(userToken)
+        .post(`/api/v1/orchestration-runs/${runId}/human-input`)
+        .send({ node_id: 'approval', output: { choice: 'approve' } });
+      expect(accepted.status).toBe(200);
+    });
+
+    // Edge case 3 of #1237: without this a parent's pause bounds nothing, since
+    // a `sub_orchestration` child drives its own graph and its own spend.
+    test('flags a nested descendant, which parks at its own next checkpoint', async () => {
+      const childId = await createOrch({
+        ...humanNodeOrchestration,
+        name: 'Pause Fan-out Child',
+      });
+      const parentId = await createOrch({
+        name: 'Pause Fan-out Parent',
+        nodes: [
+          { id: 'child', type: 'sub_orchestration', orchestration_id: childId },
+          {
+            id: 'gate',
+            type: 'human',
+            prompt: 'Parent gate.',
+          },
+        ],
+        edges: [{ from: 'child', to: 'gate' }],
+      });
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: parentId, input: {} });
+      expect(runRes.status).toBe(201);
+      // The child parked on its own human node, so the parent carried on to its
+      // own gate — both runs are non-terminal when the pause arrives.
+      expect(runRes.body.status).toBe('awaiting_input');
+      const parentRunId = runRes.body.id as string;
+
+      const children = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs?parent_orchestration_run_id=${parentRunId}`
+      );
+      expect(children.status).toBe(200);
+      expect(children.body.data).toHaveLength(1);
+      const childRunId = children.body.data[0].id as string;
+      expect(children.body.data[0].pause_requested_at).toBeNull();
+
+      const paused = await pause(parentRunId, { reason: 'stop the tree' });
+      expect(paused.status).toBe(200);
+
+      const childRun = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs/${childRunId}`
+      );
+      expect(childRun.status).toBe(200);
+      expect(childRun.body.pause_requested_at).not.toBeNull();
+      expect(childRun.body.pause_reason).toBe('stop the tree');
+
+      // Resuming the parent is deliberately not a cascade: the child keeps its
+      // pause and is resumed by its own id.
+      expect((await resume(parentRunId)).status).toBe(200);
+      const childAfter = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs/${childRunId}`
+      );
+      expect(childAfter.body.pause_requested_at).not.toBeNull();
+    });
+
+    test('pausing an already-paused run is idempotent', async () => {
+      const orchId = await createOrch(humanNodeOrchestration);
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: orchId, input: {} });
+      const runId = runRes.body.id as string;
+
+      const first = await pause(runId, { reason: 'first' });
+      expect(first.status).toBe(200);
+      const second = await pause(runId, { reason: 'second' });
+      expect(second.status).toBe(200);
+      expect(second.body.pause_requested_at).toBe(
+        first.body.pause_requested_at
+      );
+      expect(second.body.pause_reason).toBe('first');
+    });
+
+    test('pausing a settled run returns 409', async () => {
+      const orchId = await createOrch({
+        ...simpleOrchestration,
+        name: 'Pause Settled',
+      });
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: orchId, input: {} });
+      expect(runRes.body.status).toBe('succeeded');
+
+      const response = await pause(runRes.body.id as string);
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('ORCHESTRATION_RUN_NOT_PAUSABLE');
+    });
+
+    test('pausing a non-existent run returns 404', async () => {
+      const response = await pause('run_nonexistent0000000');
+      expect(response.status).toBe(404);
+      expect(response.body.error.code).toBe('ORCHESTRATION_RUN_NOT_FOUND');
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const response = await testClient.post(
+        `/api/v1/orchestration-runs/someid/pause`
+      );
+      expect(response.status).toBe(401);
+    });
+
+    test('user without permission returns 403', async () => {
+      const response = await authenticatedTestClient(noPermToken)
+        .post(`/api/v1/orchestration-runs/someid/pause`)
+        .send({});
+      expect(response.status).toBe(403);
     });
   });
 
