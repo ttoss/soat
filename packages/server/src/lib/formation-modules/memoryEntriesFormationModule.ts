@@ -3,6 +3,7 @@ import { db } from 'src/db';
 
 import { lookupMemoryInternalId } from '../formationsHelpers';
 import {
+  assertMemoryEntryStorageQuota,
   createMemoryEntry,
   deleteMemoryEntry,
   getMemoryEntry,
@@ -27,9 +28,12 @@ export const memoryEntriesFormationModule = defineFormationModule({
       projectId,
     });
 
+    const content = properties.content as string;
+    await assertMemoryEntryStorageQuota({ memoryId, content });
+
     return createMemoryEntry({
       memoryId,
-      content: properties.content as string,
+      content,
       sourceType: toOptionalString(properties.source_type) as
         MemoryEntrySource | undefined,
       tags: Array.isArray(properties.tags)

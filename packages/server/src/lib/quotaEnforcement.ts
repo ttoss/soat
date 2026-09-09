@@ -2,12 +2,12 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
-import { DomainError } from '../errors';
 import {
   type PricingCoverage,
   pricingCoverage,
   type UnpricedRow,
 } from './costEnforceability';
+import type { WindowedQuotaBreach } from './quotaBreach';
 import { fireQuotaExceeded, reportUnpricedCostQuota } from './quotaEvents';
 import type { QuotaWindow } from './quotas';
 import {
@@ -19,6 +19,17 @@ import {
 } from './quotas';
 
 const log = createDebug('soat:quotas');
+
+export type { UnpricedRow };
+// The breach vocabulary and its response body live in `quotaBreach.ts`;
+// re-exported here so every enforcement point keeps reaching them through the
+// module it already imports.
+export {
+  type QuotaBreach,
+  quotaBreachError,
+  type QuotaBreachReason,
+  type WindowedQuotaBreach,
+} from './quotaBreach';
 
 type QuotaInstance = InstanceType<(typeof db)['Quota']>;
 
@@ -42,33 +53,6 @@ const windowScopeWhere = (
   return where;
 };
 
-/**
- * Why the quota refused the work.
- *
- * `limit_exceeded` is the ordinary case: the window aggregate reached the cap.
- * `unpriced_usage` is a `cost_usd` cap the platform cannot evaluate at all —
- * the window metered usage and priced none of it, so the aggregate is 0 no
- * matter what was actually spent. The two are not interchangeable: the first
- * clears when the window rolls, the second only when pricing is configured.
- */
-export type QuotaBreachReason = 'limit_exceeded' | 'unpriced_usage';
-
-export type { UnpricedRow };
-
-export type QuotaBreach = {
-  quotaId: string;
-  scope: string;
-  scopeRef: string | null;
-  metric: string;
-  window: string;
-  limit: number;
-  resetsAt: Date;
-  retryAfter: number;
-  reason: QuotaBreachReason;
-  /** Populated only on an `unpriced_usage` breach — the rows to price. */
-  unpricedRows?: UnpricedRow[];
-};
-
 // Which scope to report when several quotas breach at once — the most specific
 // wins. `actor` outranks `agent` because it names one end user, the most
 // actionable thing to tell a caller who was just blocked.
@@ -77,48 +61,6 @@ const scopeRank = (scope: string): number => {
   if (scope === 'agent') return 3;
   if (scope === 'api_key') return 2;
   return 1;
-};
-
-/**
- * The DomainError for a breach — the shared source of the response body across
- * every enforcement point (the request middleware and the token/cost generation
- * gate). Error meta keys are snake_case to match the external REST contract.
- *
- * An `unpriced_usage` refusal is deliberately **not** a 429: waiting for the
- * window to reset changes nothing, so the `Retry-After` contract a 429 carries
- * would be a lie. It reports the unenforceable configuration instead, and omits
- * `resets_at` for the same reason.
- */
-export const quotaBreachError = (breach: QuotaBreach): DomainError => {
-  if (breach.reason === 'unpriced_usage') {
-    return new DomainError(
-      'QUOTA_UNENFORCEABLE',
-      `Cost quota ${breach.quotaId} cannot be enforced: the current window metered usage but priced none of it.`,
-      {
-        quota_id: breach.quotaId,
-        metric: breach.metric,
-        limit: breach.limit,
-        window: breach.window,
-        // The operator's next action is to price exactly these. Without them
-        // the refusal reports that a price is missing but not which (#1213).
-        unpriced_rows: breach.unpricedRows ?? [],
-      }
-    );
-  }
-
-  return new DomainError(
-    'QUOTA_EXCEEDED',
-    `Quota exceeded for ${breach.scope}${
-      breach.scopeRef ? ` ${breach.scopeRef}` : ''
-    }.`,
-    {
-      quota_id: breach.quotaId,
-      metric: breach.metric,
-      limit: breach.limit,
-      window: breach.window,
-      resets_at: breach.resetsAt.toISOString(),
-    }
-  );
 };
 
 /**
@@ -169,14 +111,14 @@ const incrementCounter = async (args: {
   return count;
 };
 
-// Builds the QuotaBreach attribution record for a breached quota.
+// Builds the QuotaBreach attribution record for a breached windowed quota.
 const buildBreach = (args: {
   quota: QuotaInstance;
   window: QuotaWindow;
   now: Date;
-  reason: QuotaBreachReason;
+  reason: WindowedQuotaBreach['reason'];
   unpricedRows?: UnpricedRow[];
-}): QuotaBreach => {
+}): WindowedQuotaBreach => {
   const resetsAt = windowResetsAt({ window: args.window, now: args.now });
   return {
     quotaId: args.quota.publicId,
@@ -198,7 +140,7 @@ const buildBreach = (args: {
 const evaluateRequestQuota = async (args: {
   quota: QuotaInstance;
   now: Date;
-}): Promise<QuotaBreach | null> => {
+}): Promise<WindowedQuotaBreach | null> => {
   const { quota, now } = args;
   const window = quota.window as QuotaWindow;
   const windowKey = windowKeyFor({ window, now });
@@ -234,7 +176,7 @@ const evaluateRequestQuota = async (args: {
 export const evaluateRequestQuotas = async (args: {
   projectId: number;
   apiKeyPublicId: string | null;
-}): Promise<QuotaBreach | null> => {
+}): Promise<WindowedQuotaBreach | null> => {
   const now = new Date();
 
   const quotas = (await db.Quota.findAll({
@@ -250,7 +192,7 @@ export const evaluateRequestQuotas = async (args: {
     return false; // agent scope never matches the requests metric
   });
 
-  const breaches: QuotaBreach[] = [];
+  const breaches: WindowedQuotaBreach[] = [];
   for (const quota of matching) {
     const breach = await evaluateRequestQuota({ quota, now });
     if (breach) breaches.push(breach);
@@ -422,7 +364,7 @@ const blackoutBreach = (args: {
   window: QuotaWindow;
   now: Date;
   coverage: PricingCoverage;
-}): QuotaBreach | null => {
+}): WindowedQuotaBreach | null => {
   const { quota } = args;
   const refuses =
     quota.mode === 'enforce' &&
@@ -446,7 +388,7 @@ const evaluateGenerationQuota = async (args: {
   actorInternalId: number | null;
   projectId: number;
   now: Date;
-}): Promise<QuotaBreach | null> => {
+}): Promise<WindowedQuotaBreach | null> => {
   const { quota, now } = args;
   const window = quota.window as QuotaWindow;
   const scopeToAgent = quota.scope === 'agent' && quota.scopeRef != null;
@@ -521,7 +463,7 @@ export const evaluateGenerationQuotas = async (args: {
   agentId: string;
   projectIds?: number[];
   sessionId?: string;
-}): Promise<QuotaBreach | null> => {
+}): Promise<WindowedQuotaBreach | null> => {
   const now = new Date();
 
   const agentWhere: Record<string, unknown> = { publicId: args.agentId };
@@ -554,7 +496,7 @@ export const evaluateGenerationQuotas = async (args: {
     return false; // api_key token/cost is never aggregatable
   });
 
-  const breaches: QuotaBreach[] = [];
+  const breaches: WindowedQuotaBreach[] = [];
   for (const quota of matching) {
     const breach = await evaluateGenerationQuota({
       quota,
@@ -584,7 +526,7 @@ export const checkGenerationQuota = async (args: {
   agentId: string;
   projectIds?: number[];
   sessionId?: string;
-}): Promise<QuotaBreach | null> => {
+}): Promise<WindowedQuotaBreach | null> => {
   try {
     return await evaluateGenerationQuotas(args);
   } catch (error) {

@@ -7,6 +7,7 @@ import { DomainError } from 'src/errors';
 import { buildSrn } from 'src/lib/iam';
 import { getMemory } from 'src/lib/memories';
 import {
+  assertMemoryEntryStorageQuota,
   deleteMemoryEntry,
   getMemoryEntry,
   listMemoryEntries,
@@ -177,6 +178,11 @@ memoryEntriesRouter.post('/memory-entries', async (ctx: Context) => {
     'memories:CreateMemoryEntry'
   );
   if (memoryRowId === null) return;
+
+  await assertMemoryEntryStorageQuota({
+    memoryId: memoryRowId,
+    content: body.content,
+  });
 
   const result = await writeMemoryEntry({
     memoryId: memoryRowId,

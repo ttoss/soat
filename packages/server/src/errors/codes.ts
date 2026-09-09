@@ -593,6 +593,11 @@ export const ERROR_CODES = {
     description:
       'An enforced `cost_usd` quota with `on_unpriced: "block"` (the default) cannot be evaluated: the current window holds a pricing blackout — several metered events, none of them priced — so the aggregate is `0` however much was actually spent. The cap refuses the generation rather than waving through spend it cannot measure. No `Retry-After` is sent — the window resetting changes nothing; configure pricing for the models in use, or set the quota\'s `on_unpriced` to `"allow"` to accept unmeasurable spend explicitly.',
   },
+  QUOTA_STORAGE_EXCEEDED: {
+    httpStatus: 409,
+    description:
+      "An enforced `storage_bytes` quota is exceeded: the project's stored footprint — files, document chunks (text and vector) and memory entries — is already over the byte limit, and the write would have added to it. No `Retry-After` is sent, and the refusal is a 409 rather than a 429, because a stock is not a rate: no window reset clears it and waiting changes nothing. The error meta carries `current_bytes` (the last daily snapshot plus the request's own delta) beside `limit`, so the caller knows how much to delete. Raised at the corpus write paths — file upload/create, document create, document ingest and re-ingest, memory-entry create.",
+  },
   QUOTA_CONFLICT: {
     httpStatus: 409,
     description:

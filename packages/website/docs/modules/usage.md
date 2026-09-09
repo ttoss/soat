@@ -145,6 +145,13 @@ The snapshot also runs once at server startup, so a deployment that restarts mor
 chunks plus [memory entries](./memories.md) — embedded or not, since a row joins
 the vector index as soon as its embedding is written.
 
+**The snapshot is also what bounds the corpus.** A `storage_bytes`
+[quota](./quotas.md#storage-enforcement) caps a project's footprint against the
+newest `storage` event plus the request's own delta, and refuses the corpus write
+paths with `409 QUOTA_STORAGE_EXCEEDED`. Enforcing against the snapshot rather
+than a live scan is what keeps the check off the per-upload path, at the cost of
+up to a day of staleness.
+
 **Embeddings dominate.** A vector is four bytes per dimension, so at
 `EMBEDDING_DIMENSIONS=1024` one embedding is ~4 KB against the ~1 KB of text it
 encodes. A row with no embedding yet contributes its text and nothing more. Both

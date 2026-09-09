@@ -16,6 +16,7 @@ import {
 import { mapDocument } from './documentMapper';
 import { normalizePath } from './filePaths';
 import { resolveIngestionRule } from './ingestionRules';
+import { assertStorageQuota } from './quotaStorage';
 import {
   resolveSourcePages,
   SUPPORTED_CONTENT_TYPES,
@@ -286,6 +287,12 @@ export const enqueueDocumentIngestion = async (args: {
     assertSyncIngestible(file);
   }
 
+  // No delta: the source file is already stored and already measured. What
+  // ingestion adds is chunk text and vectors, produced after this answer and
+  // measured by the next snapshot — so the refusal is on the footprint as last
+  // measured, which is what stops an over-cap project from indexing more.
+  await assertStorageQuota({ projectId: args.projectId, addedBytes: 0 });
+
   const filename = file.filename ?? 'document';
   const docPath = normalizePath(
     args.pathPrefix
@@ -371,6 +378,8 @@ export const reingestDocument = async (args: {
   if (!runAsync) {
     assertSyncIngestible(file);
   }
+
+  await assertStorageQuota({ projectId: file.projectId, addedBytes: 0 });
 
   log(
     'reingestDocument: id=%s wait=%s strategy=%s',

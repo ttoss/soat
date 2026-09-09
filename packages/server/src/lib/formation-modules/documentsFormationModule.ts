@@ -6,6 +6,7 @@ import {
   getDocumentSourceContent,
   updateDocument,
 } from '../documents';
+import { assertStorageQuota, contentBytes } from '../quotaStorage';
 import {
   toNullableNumber,
   toNullableObject,
@@ -31,10 +32,16 @@ export const documentsFormationModule = defineFormationModule({
     delete: 'documents:DeleteDocument',
   },
 
-  create: ({ properties, projectId }) => {
+  create: async ({ properties, projectId }) => {
+    const content = properties.content as string;
+    await assertStorageQuota({
+      projectId,
+      addedBytes: contentBytes(content),
+    });
+
     return createDocument({
       projectId,
-      content: properties.content as string,
+      content,
       path: toOptionalString(properties.path) ?? undefined,
       filename: toOptionalString(properties.filename) ?? undefined,
       title: toOptionalString(properties.title) ?? undefined,

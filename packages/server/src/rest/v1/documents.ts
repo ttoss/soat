@@ -15,6 +15,7 @@ import {
 } from 'src/lib/documents';
 import { buildSrn } from 'src/lib/iam';
 import { compilePolicy } from 'src/lib/policyCompiler';
+import { assertStorageQuota, contentBytes } from 'src/lib/quotaStorage';
 
 import type { ProjectOwned } from './helpers';
 import {
@@ -181,6 +182,13 @@ documentsRouter.post('/documents', async (ctx: Context) => {
     projectPublicId: body.project_id,
     action: 'documents:CreateDocument',
     resourceType: 'document',
+  });
+  // Asserted here rather than inside `createDocument`: every conversation
+  // message is a Document too, and that path must never be refused mid-turn
+  // (#1249).
+  await assertStorageQuota({
+    projectId: Number(targetProjectId),
+    addedBytes: contentBytes(body.content),
   });
   const doc = await createDocument({
     projectId: Number(targetProjectId),

@@ -1735,17 +1735,22 @@ components:
             actor rather than a pooled total across all actors.
         metric:
           type: string
-          enum: [requests, tokens, cost_usd]
+          enum: [requests, tokens, cost_usd, storage_bytes]
           description: The metric being capped
         window:
           type: string
-          enum: [rolling_1m, rolling_1h, rolling_24h, calendar_month]
-          description: The window over which the metric is aggregated
+          enum:
+            [rolling_1m, rolling_1h, rolling_24h, calendar_month, current]
+          description: >-
+            The window over which the metric is aggregated. storage_bytes caps
+            a stored total rather than a windowed one, so it takes current and
+            refuses every other value; current is refused for every other
+            metric.
         limit:
           type: number
           description: >-
-            The cap. Positive integer for requests/tokens; fractional allowed for
-            cost_usd.
+            The cap. Positive integer for requests/tokens/storage_bytes (bytes);
+            fractional allowed for cost_usd.
         mode:
           type: string
           enum: [enforce, monitor]

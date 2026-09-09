@@ -162,6 +162,12 @@ paths:
           description: Forbidden
         '404':
           description: Memory not found
+        '409':
+          description: >-
+            The project's `storage_bytes` quota is exceeded
+            (`QUOTA_STORAGE_EXCEEDED`). Delete stored content, or raise the
+            quota — no window reset clears a stored total, so no `Retry-After`
+            is sent.
         '500':
           description: Internal server error
   /api/v1/memory-entries/{entry_id}:

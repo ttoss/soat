@@ -6543,6 +6543,60 @@ expect_cli_error_status 400 create-quota \
   --project-id "$PROJECT_PUBLIC_ID" --scope api_key --metric tokens \
   --window calendar_month --limit 1000
 
+# storage_bytes is a stock, not a flow: it takes window=current, keeps no
+# counter, and refuses a corpus write with 409 rather than 429. Run on its own
+# project so an enforcing byte cap cannot starve the ingest steps above.
+STORAGE_PROJECT_ID=$($SOAT_CLI create-project \
+  --name smoke-storage-quota-project | jq -r '.id')
+if [ -z "$STORAGE_PROJECT_ID" ] || [ "$STORAGE_PROJECT_ID" = "null" ]; then
+  echo "ERROR: Failed to create the storage-quota project" >&2
+  exit 1
+fi
+
+STORAGE_QUOTA_ID=$($SOAT_CLI create-quota \
+  --project-id "$STORAGE_PROJECT_ID" --scope project --metric storage_bytes \
+  --window current --limit 1 | jq -r '.id')
+if [ -z "$STORAGE_QUOTA_ID" ] || [ "$STORAGE_QUOTA_ID" = "null" ]; then
+  echo "ERROR: Failed to create storage_bytes quota" >&2
+  exit 1
+fi
+if [ "$($SOAT_CLI get-quota --quota-id "$STORAGE_QUOTA_ID" | jq -r '.current_usage')" != "null" ]; then
+  echo "ERROR: Expected null current_usage on a storage_bytes quota" >&2
+  exit 1
+fi
+
+# A single document larger than the whole cap is refused even before the first
+# daily snapshot — the request's own delta is measurable on its own.
+expect_cli_error_status 409 create-document \
+  --project_id "$STORAGE_PROJECT_ID" --content "over the one-byte cap"
+echo "storage_bytes cap refuses a corpus write: OK"
+
+# Both halves of the window rule fail closed: a windowed stock cap and
+# window=current on a flow metric are each rejected with 400.
+expect_cli_error_status 400 create-quota \
+  --project-id "$STORAGE_PROJECT_ID" --scope project --metric storage_bytes \
+  --window calendar_month --limit 1000
+expect_cli_error_status 400 create-quota \
+  --project-id "$STORAGE_PROJECT_ID" --scope project --metric tokens \
+  --window current --limit 1000
+# A stored byte carries no agent attribution, so only project scope is storable.
+expect_cli_error_status 400 create-quota \
+  --project-id "$STORAGE_PROJECT_ID" --scope agent --metric storage_bytes \
+  --window current --limit 1000
+
+# Raising the cap clears the refusal immediately — no window to wait for.
+$SOAT_CLI update-quota --quota-id "$STORAGE_QUOTA_ID" --limit 1000000000
+STORAGE_DOC_ID=$($SOAT_CLI create-document \
+  --project_id "$STORAGE_PROJECT_ID" --content "under the raised cap" | jq -r '.id')
+if [ -z "$STORAGE_DOC_ID" ] || [ "$STORAGE_DOC_ID" = "null" ]; then
+  echo "ERROR: Expected a corpus write to succeed under the raised cap" >&2
+  exit 1
+fi
+
+$SOAT_CLI delete-quota --quota-id "$STORAGE_QUOTA_ID"
+$SOAT_CLI delete-project --project-id "$STORAGE_PROJECT_ID" --force true
+echo "storage_bytes quota lifecycle verified."
+
 # scope=actor caps one end user's spend, matched from the generation's session: a
 # named scope_ref caps that actor, a null one is a budget per actor. Needs its own
 # actor — the one above is deleted there, and scope_ref is validated live.

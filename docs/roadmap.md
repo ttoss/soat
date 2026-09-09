@@ -84,7 +84,9 @@ not stored data.
 
 - [ ] **Event-driven storage byte accounting** — replace the daily storage
       snapshot with incremental byte deltas on file/document mutation,
-      eliminating intra-day sampling drift.
+      eliminating intra-day sampling drift. Also what would make the
+      `storage_bytes` quota exact: the cap reads the last snapshot plus the
+      request's own delta, so today it accepts up to a day of staleness.
 
 ---
 

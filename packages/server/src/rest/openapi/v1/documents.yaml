@@ -173,6 +173,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: >-
+            The project's `storage_bytes` quota is exceeded
+            (`QUOTA_STORAGE_EXCEEDED`). Delete stored content, or raise the
+            quota — no window reset clears a stored total, so no `Retry-After`
+            is sent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/documents/ingest:
     post:
       tags:
@@ -273,7 +283,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '409':
-          description: The file already backs a Document (a file can only be ingested once). Use `POST /documents/{document_id}/ingest` to re-process the existing document, or upload a new copy of the file to ingest it separately.
+          description: The file already backs a Document (a file can only be ingested once — use `POST /documents/{document_id}/ingest` to re-process the existing document, or upload a new copy of the file to ingest it separately), or the project's `storage_bytes` quota is exceeded (`QUOTA_STORAGE_EXCEEDED`; delete stored content or raise the quota — no `Retry-After` is sent, since no window reset clears a stored total).
           content:
             application/json:
               schema:
@@ -550,6 +560,16 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Document not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: >-
+            The project's `storage_bytes` quota is exceeded
+            (`QUOTA_STORAGE_EXCEEDED`). Delete stored content, or raise the
+            quota — no window reset clears a stored total, so no `Retry-After`
+            is sent.
           content:
             application/json:
               schema:
