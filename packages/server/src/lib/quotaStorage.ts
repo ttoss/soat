@@ -173,3 +173,17 @@ export const assertStorageQuota = async (args: {
 export const contentBytes = (content: string | undefined | null): number => {
   return content ? Buffer.byteLength(content, 'utf8') : 0;
 };
+
+/**
+ * Byte length of a caller-supplied value the corpus stores as `jsonb`.
+ *
+ * An approximation: the snapshot measures the column's real stored width with
+ * `pg_column_size`, which is not the serialization's length. It is the same
+ * approximation a document's `content` delta already is — the derived weight
+ * lands in the next snapshot either way — and it is worth more than counting
+ * zero, which would let one enormous payload past a fresh cap.
+ */
+export const jsonBytes = (value: unknown): number => {
+  if (value === undefined || value === null) return 0;
+  return Buffer.byteLength(JSON.stringify(value) ?? '', 'utf8');
+};

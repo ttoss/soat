@@ -22,6 +22,7 @@ import {
 import { getGenerationTurn } from './generationTurn';
 import type { ResourceIncludes } from './modelIncludes';
 import { paginatedList, type PaginatedResult } from './pagination';
+import { assertStorageQuota, contentBytes, jsonBytes } from './quotaStorage';
 import { makeResourceAccessor } from './resourceAccessor';
 import { rethrowAsConflict } from './uniqueViolation';
 
@@ -246,6 +247,30 @@ export const findDatasetItemById = async (args: {
   return item ? mapDatasetItem(item) : null;
 };
 
+/**
+ * The bytes a fixture adds to the project's footprint, in the three columns the
+ * storage snapshot sums for a `dataset_items` row (#1250).
+ *
+ * A dataset item is a corpus write like a document or a memory entry, so the
+ * project's `storage_bytes` cap bounds it (#1249). An `eval_results` row is
+ * not: those are written while a run executes, where a refusal would abandon a
+ * run already under way — the same reason a conversation message and a
+ * mid-turn memory write are exempt.
+ */
+const datasetItemBytes = (args: {
+  input: unknown;
+  expectedOutput: unknown;
+  metadata: unknown;
+}): number => {
+  return (
+    jsonBytes(args.input) +
+    contentBytes(
+      typeof args.expectedOutput === 'string' ? args.expectedOutput : null
+    ) +
+    jsonBytes(args.metadata)
+  );
+};
+
 export const createDatasetItem = async (args: {
   projectIds?: number[];
   datasetId: string;
@@ -262,6 +287,15 @@ export const createDatasetItem = async (args: {
 
   assertValid(validateDatasetItemInput(args.input));
   assertValid(validateItemMetadata(args.metadata));
+
+  await assertStorageQuota({
+    projectId: dataset.projectId,
+    addedBytes: datasetItemBytes({
+      input: args.input,
+      expectedOutput: args.expectedOutput,
+      metadata: args.metadata,
+    }),
+  });
 
   const item = await db.DatasetItem.create({
     datasetId: dataset.id as number,
@@ -345,6 +379,16 @@ export const createDatasetItemFromGeneration = async (args: {
     args.expectedOutput,
     'expected_output'
   );
+
+  await assertStorageQuota({
+    projectId: dataset.projectId,
+    addedBytes: datasetItemBytes({
+      input: turn.inputMessages,
+      expectedOutput:
+        expectedOutput === undefined ? turn.outputText : expectedOutput,
+      metadata: args.metadata,
+    }),
+  });
 
   const item = await db.DatasetItem.create({
     datasetId: dataset.id as number,

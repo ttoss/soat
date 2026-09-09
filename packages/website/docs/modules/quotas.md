@@ -89,7 +89,7 @@ The `window` field is validated the same way, and in both directions: `storage_b
 
 ### Storage enforcement
 
-`storage_bytes` caps what a project **holds**, not what it spends. It is the only metric that bounds an ingesting project: [files](./files.md), document chunks (text *and* vector) and memory entries are all [metered](./usage.md#storage-metering), and without a cap over that figure a project that ingests grows until the disk says no.
+`storage_bytes` caps what a project **holds**, not what it spends. It is the only metric that bounds an ingesting project: [files](./files.md), document chunks (text *and* vector), memory entries and the [evaluations](./evaluations.md) corpus are all [metered](./usage.md#storage-metering), and without a cap over that figure a project that ingests grows until the disk says no.
 
 A stock shares almost none of the windowed machinery, and the differences are the contract:
 
@@ -130,10 +130,11 @@ Enforcement is on the caller-facing corpus writes, all of them creates — so a 
 | [`POST /api/v1/documents`](/docs/api/documents/create-document) | the `content` bytes |
 | [`POST /api/v1/documents/ingest`](/docs/api/documents/ingest-document), [`POST /api/v1/documents/{document_id}/ingest`](/docs/api/documents/reingest-document) | none — the source file is already stored and measured; what ingestion adds is chunk text and vectors, produced after the response |
 | [`POST /api/v1/memory-entries`](/docs/api/memory-entries/create-memory-entry) | the `content` bytes |
+| [`POST /api/v1/datasets/{dataset_id}/items`](/docs/api/evaluations/create-dataset-item), [`/items/from-generation`](/docs/api/evaluations/create-dataset-item-from-generation) | the serialized `input`, `expected_output` and `metadata` |
 
-The `document`, `memory_entry` and `file` [formation](./formations.md) resources are held to the same cap, so a template cannot declare what these routes refuse.
+The `file`, `document`, `memory_entry` and `dataset_item` [formation](./formations.md) resources are held to the same cap, so a template cannot declare what these routes refuse.
 
-**What a generation drives from the inside is deliberately exempt.** Every [conversation](./conversations.md) message is a `Document` with its own chunks and embeddings, and the `write_memory` tool, [automatic extraction](./memories.md) and an [orchestration](./orchestrations.md) `memory_write` node all write memory entries mid-turn. A refusal there would fail a turn already under way and leave it half persisted, which is exactly what the enforcement points above are chosen to avoid. So the cap bounds the ingest surface a tenant drives deliberately, and `monitor`-mode data is what should say whether that is enough.
+**What a generation or a run drives from the inside is deliberately exempt.** Every [conversation](./conversations.md) message is a `Document` with its own chunks and embeddings; the `write_memory` tool, [automatic extraction](./memories.md) and an [orchestration](./orchestrations.md) `memory_write` node all write memory entries mid-turn; and an [`eval_results`](./evaluations.md) row is written while a run executes. A refusal there would fail a turn or a run already under way and leave it half persisted, which is exactly what the enforcement points above are chosen to avoid. So the cap bounds the ingest surface a tenant drives deliberately, and `monitor`-mode data is what should say whether that is enough.
 
 #### Measured against the last snapshot
 
@@ -148,7 +149,7 @@ Two consequences:
 
 #### Recovering
 
-Delete stored content — [files](./files.md), [documents](./documents.md), [memory entries](./memories.md) — and the next snapshot clears the breach. Deletes are never refused. Raising the cap with [`PATCH /api/v1/quotas/{quota_id}`](/docs/api/quotas/update-quota) clears it immediately, and so does switching the quota to `monitor`. Note that a **re-ingest is refused too**: it re-indexes and can grow the corpus, so it is not an escape from a full one.
+Delete stored content — [files](./files.md), [documents](./documents.md), [memory entries](./memories.md), [dataset items](./evaluations.md) — and the next snapshot clears the breach. Deletes are never refused. Raising the cap with [`PATCH /api/v1/quotas/{quota_id}`](/docs/api/quotas/update-quota) clears it immediately, and so does switching the quota to `monitor`. Note that a **re-ingest is refused too**: it re-indexes and can grow the corpus, so it is not an escape from a full one.
 
 ### Unpriced usage
 

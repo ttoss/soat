@@ -6718,6 +6718,19 @@ expect_cli_error_status 409 create-document \
   --project_id "$STORAGE_PROJECT_ID" --content "over the one-byte cap"
 echo "storage_bytes cap refuses a corpus write: OK"
 
+# A dataset item is summed by the same storage snapshot, so the cap bounds it
+# like any other corpus write.
+STORAGE_DATASET_ID=$($SOAT_CLI create-dataset \
+  --project_id "$STORAGE_PROJECT_ID" --name smoke-storage-dataset | jq -r '.id')
+if [ -z "$STORAGE_DATASET_ID" ] || [ "$STORAGE_DATASET_ID" = "null" ]; then
+  echo "ERROR: Failed to create the dataset for the storage cap check" >&2
+  exit 1
+fi
+expect_cli_error_status 409 create-dataset-item \
+  --dataset_id "$STORAGE_DATASET_ID" \
+  --input '[{"role":"user","content":"over the one-byte cap"}]'
+echo "storage_bytes cap refuses a dataset item: OK"
+
 # Both halves of the window rule fail closed: a windowed stock cap and
 # window=current on a flow metric are each rejected with 400.
 expect_cli_error_status 400 create-quota \

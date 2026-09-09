@@ -24,6 +24,7 @@ describe('Quotas — the storage_bytes stock cap', () => {
   let projectId: string;
   let projectInternalId: number;
   let memoryId: string;
+  let datasetId: string;
 
   beforeAll(async () => {
     const setup = await setupProjectWithUsers({
@@ -45,6 +46,8 @@ describe('Quotas — the storage_bytes stock cap', () => {
         'conversations:CreateConversation',
         'conversations:UpdateConversation',
         'conversations:GetConversation',
+        'evaluations:CreateDataset',
+        'evaluations:GetDataset',
       ],
       createNoPermUser: false,
     });
@@ -61,6 +64,11 @@ describe('Quotas — the storage_bytes stock cap', () => {
       .post('/api/v1/memories')
       .send({ project_id: projectId, name: 'storage cap memory' });
     memoryId = memoryRes.body.id;
+
+    const datasetRes = await authenticatedTestClient(userToken)
+      .post('/api/v1/datasets')
+      .send({ project_id: projectId, name: 'storage cap dataset' });
+    datasetId = datasetRes.body.id;
   });
 
   // The cap reads the last snapshot, so a test that needs a footprint seeds a
@@ -253,6 +261,35 @@ describe('Quotas — the storage_bytes stock cap', () => {
 
       expect(response.status).toBe(409);
       expect(response.body.error.code).toBe('QUOTA_STORAGE_EXCEEDED');
+    });
+
+    // A `dataset_items` row is summed by the storage snapshot (#1250), so a
+    // fixture is a corpus write the cap has to bound like any other.
+    test('a dataset-item create over the cap is refused', async () => {
+      await enforceOverCap();
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/datasets/${datasetId}/items`)
+        .send({ input: [{ role: 'user', content: 'over the cap' }] });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('QUOTA_STORAGE_EXCEEDED');
+    });
+
+    test('a dataset-item create under the cap is admitted', async () => {
+      await createQuotaRow({
+        projectInternalId,
+        scope: 'project',
+        metric: 'storage_bytes',
+        window: 'current',
+        limit: 500 * ONE_MB,
+      });
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/datasets/${datasetId}/items`)
+        .send({ input: [{ role: 'user', content: 'under the cap' }] });
+
+      expect(response.status).toBe(201);
     });
 
     test('an ingest of an already-stored file is refused', async () => {
