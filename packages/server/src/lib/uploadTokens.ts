@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import createDebug from 'debug';
 
 import { db } from '../db';
@@ -5,6 +7,17 @@ import { DomainError } from '../errors';
 import { buildPath } from './files';
 
 const log = createDebug('soat:upload-tokens');
+
+/**
+ * A token is the credential this route authenticates with, so the log carries a
+ * short hash of it instead: enough to follow one token through a log, never
+ * enough to replay it. Debug logs are enabled per namespace by an operator and
+ * land wherever the process's stderr goes, which is not a place a live
+ * credential belongs.
+ */
+const fingerprintToken = (token: string): string => {
+  return `sha256:${createHash('sha256').update(token).digest('hex').slice(0, 12)}`;
+};
 
 /** Default upload-token lifetime: 15 minutes. */
 const UPLOAD_TOKEN_TTL_MS = 15 * 60 * 1000;
@@ -40,7 +53,7 @@ export const createPresignedUrl = async (args: {
     expiresAt,
   });
 
-  log('createPresignedUrl: created token=%s', token.publicId);
+  log('createPresignedUrl: created token=%s', fingerprintToken(token.publicId));
 
   const baseUrl = process.env.SOAT_BASE_URL?.replace(/\/$/, '') ?? '';
   return {
@@ -56,7 +69,7 @@ export const createPresignedUrl = async (args: {
  * (single-use) and its metadata is returned for the upload to proceed.
  */
 export const consumeUploadToken = async (args: { token: string }) => {
-  log('consumeUploadToken: token=%s', args.token);
+  log('consumeUploadToken: token=%s', fingerprintToken(args.token));
 
   const token = await db.UploadToken.findOne({
     where: { publicId: args.token },
@@ -66,27 +79,30 @@ export const consumeUploadToken = async (args: { token: string }) => {
   if (!token) {
     throw new DomainError(
       'UPLOAD_TOKEN_NOT_FOUND',
-      `Upload token '${args.token}' not found.`
+      'The upload token was not found.'
     );
   }
 
   if (token.usedAt) {
     throw new DomainError(
       'UPLOAD_TOKEN_USED',
-      `Upload token '${args.token}' has already been used.`
+      'The upload token has already been used.'
     );
   }
 
   if (token.expiresAt.getTime() <= Date.now()) {
     throw new DomainError(
       'UPLOAD_TOKEN_EXPIRED',
-      `Upload token '${args.token}' has expired.`
+      'The upload token has expired.'
     );
   }
 
   await token.update({ usedAt: new Date() });
 
-  log('consumeUploadToken: consumed token=%s', token.publicId);
+  log(
+    'consumeUploadToken: consumed token=%s',
+    fingerprintToken(token.publicId)
+  );
 
   return {
     projectId: token.projectId,

@@ -396,6 +396,14 @@ That is what lets one tool serve many tenants: the credential and the scope it m
 
 Presets and model-supplied arguments reach the action wherever the OpenAPI operation declares the parameter — path, query string, or request body. A `list-*` action's `project_id`, filters, and pagination arguments are query parameters, so a preset like `{ "project_id": "proj_abc123" }` is the way to lock a `builtin` tool to one project. An argument the caller omits is left out of the request entirely rather than sent as an empty value.
 
+### Literal Credentials Are Masked on Read
+
+A tool definition is readable by anyone holding `tools:GetTool`, which is a wider audience than whoever wrote a credential into it. So a credential written as a **literal** is stored and still sent on every call, but never echoed: `secret_access_key`, `session_token` and `credentials` under `execute.auth`, and any credential-named `headers` value in `execute` or `mcp` (`Authorization`, `Cookie`, or a name containing `api-key` / `token` / `secret` / `password`) come back as `{"no_echo": true}`.
+
+The mask is an object rather than a masked string so that a read-edit-write round trip fails the schema's `type: string` check instead of quietly writing the placeholder in as the credential.
+
+A value carrying a `{{secret:...}}` reference stays readable — the reference is the wiring, not the credential, and hiding it would leave a reader unable to see which secret a tool uses, or that it uses one at all. Use a reference rather than a literal: it is what keeps the credential out of the row as well as out of the response.
+
 ### Where a Tool May Reach (Egress)
 
 An `http` or `mcp` tool is a request **the server makes**, so its target is

@@ -595,6 +595,18 @@ components:
             stored reference is what is echoed back, never the resolved value.
 
 
+            A credential written as a **literal** is stored and still sent on
+            every call, but it is masked on every read: `secret_access_key`,
+            `session_token` and `credentials` under `auth`, and any
+            credential-named `headers` value (`Authorization`, `Cookie`, or a
+            name containing `api-key`/`token`/`secret`/`password`), come back as
+            `{"no_echo": true}`. The mask is an object rather than a string so a
+            read-edit-write round trip fails the schema check instead of writing
+            the placeholder in as the credential. A value carrying a
+            `{{secret:...}}` reference is the wiring, not the credential, and
+            stays readable.
+
+
             `headers` values additionally accept `{{context:<key>}}` references,
             resolved per call from the caller's `tool_context`, so a per-user
             credential can be placed in the real header the target expects
@@ -611,6 +623,8 @@ components:
             MCP server config (`url`, `headers`). `headers` values accept
             `{{secret:...}}` and `{{context:<key>}}` references, resolved right
             before the outbound MCP request; `url` accepts `{{secret:...}}` only.
+            A literal credential in `headers` is masked on read, exactly as in
+            `execute`.
         actions:
           type: array
           nullable: true
@@ -779,6 +793,18 @@ components:
             stored reference is what is echoed back, never the resolved value.
 
 
+            A credential written as a **literal** is stored and still sent on
+            every call, but it is masked on every read: `secret_access_key`,
+            `session_token` and `credentials` under `auth`, and any
+            credential-named `headers` value (`Authorization`, `Cookie`, or a
+            name containing `api-key`/`token`/`secret`/`password`), come back as
+            `{"no_echo": true}`. The mask is an object rather than a string so a
+            read-edit-write round trip fails the schema check instead of writing
+            the placeholder in as the credential. A value carrying a
+            `{{secret:...}}` reference is the wiring, not the credential, and
+            stays readable.
+
+
             `headers` values additionally accept `{{context:<key>}}` references,
             resolved per call from the caller's `tool_context`, so a per-user
             credential can be placed in the real header the target expects
@@ -794,6 +820,8 @@ components:
             MCP server config (`url`, `headers`). `headers` values accept
             `{{secret:...}}` and `{{context:<key>}}` references, resolved right
             before the outbound MCP request; `url` accepts `{{secret:...}}` only.
+            A literal credential in `headers` is masked on read, exactly as in
+            `execute`.
         actions:
           type: array
           items:
@@ -926,6 +954,18 @@ components:
             stored reference is what is echoed back, never the resolved value.
 
 
+            A credential written as a **literal** is stored and still sent on
+            every call, but it is masked on every read: `secret_access_key`,
+            `session_token` and `credentials` under `auth`, and any
+            credential-named `headers` value (`Authorization`, `Cookie`, or a
+            name containing `api-key`/`token`/`secret`/`password`), come back as
+            `{"no_echo": true}`. The mask is an object rather than a string so a
+            read-edit-write round trip fails the schema check instead of writing
+            the placeholder in as the credential. A value carrying a
+            `{{secret:...}}` reference is the wiring, not the credential, and
+            stays readable.
+
+
             `headers` values additionally accept `{{context:<key>}}` references,
             resolved per call from the caller's `tool_context`, so a per-user
             credential can be placed in the real header the target expects
@@ -942,6 +982,8 @@ components:
             MCP server config (`url`, `headers`). `headers` values accept
             `{{secret:...}}` and `{{context:<key>}}` references, resolved right
             before the outbound MCP request; `url` accepts `{{secret:...}}` only.
+            A literal credential in `headers` is masked on read, exactly as in
+            `execute`.
         actions:
           type: array
           nullable: true
