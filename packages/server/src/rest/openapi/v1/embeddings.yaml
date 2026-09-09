@@ -54,7 +54,12 @@ paths:
                   example: 'The quick brown fox jumps over the lazy dog.'
                 inputs:
                   type: array
-                  description: Batch of texts to embed.
+                  description: >-
+                    Batch of texts to embed. At most 256 per request — each
+                    input is one call to the embedding model, so a larger batch
+                    is refused (`VALIDATION_FAILED`) rather than queued. Split
+                    it across requests.
+                  maxItems: 256
                   items:
                     type: string
                   example:

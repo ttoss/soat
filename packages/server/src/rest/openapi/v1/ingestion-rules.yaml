@@ -101,7 +101,11 @@ paths:
                   example: proj_V1StGXR8Z5jdHi6B
                 content_type_glob:
                   type: string
-                  description: MIME type glob matched against a file's content_type
+                  description: >-
+                    MIME type glob matched against a file's content_type. At
+                    most 4 wildcards and 255 characters — a MIME glob needs one
+                    on each side of the slash at most.
+                  maxLength: 255
                   example: image/*
                 tool_id:
                   x-soat-ref: tools
@@ -209,6 +213,10 @@ paths:
               properties:
                 content_type_glob:
                   type: string
+                  description: >-
+                    MIME type glob matched against a file's content_type. At
+                    most 4 wildcards and 255 characters.
+                  maxLength: 255
                 tool_id:
                   x-soat-ref: tools
                   type: string

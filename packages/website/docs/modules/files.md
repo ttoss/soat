@@ -121,6 +121,7 @@ curl -F "file=@/path/to/large-report.pdf" "$BASE_URL/api/v1/files/upload/upt_xxx
 | `FILES_S3_KEY_PREFIX` | No      | Key prefix prepended to every object, to namespace files within a shared bucket (e.g. `soat/`). |
 | `FILES_S3_ENDPOINT`  | No       | Custom endpoint URL for S3-compatible stores (e.g. MinIO, Cloudflare R2). Omit for AWS S3. |
 | `FILES_S3_FORCE_PATH_STYLE` | No | Set to `true` to use path-style bucket addressing (required by some S3-compatible stores). |
+| `FILE_UPLOAD_MAX_BYTES` | No    | Ceiling on a multipart upload, in bytes. Defaults to `26214400` (25 MB). A larger body is refused with `UPLOAD_TOO_LARGE` (`413`) while it is still streaming, so nothing is buffered or stored. |
 | `SOAT_BASE_URL`      | No       | Public base URL of the server (e.g. `https://api.example.com`). When set, the presigned-URL flow returns an absolute `upload_url`; otherwise the URL is relative. A trailing slash is trimmed. |
 
 AWS credentials for the `s3` backend are resolved through the standard AWS SDK credential chain (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`, a shared profile, or an instance/task role).

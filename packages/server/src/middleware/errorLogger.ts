@@ -113,6 +113,21 @@ const isBodyParseError = (
 };
 
 /**
+ * Multer aborts a stream that breaks one of its `limits` with an error of its
+ * own class, which carries neither `status` nor `expose` — so an upload over
+ * the ceiling answered `500` and blamed the server for a client's oversized
+ * request. Recognised by shape rather than by importing multer's class, which
+ * `@koa/multer` does not re-export.
+ */
+const isMulterLimitError = (
+  error: unknown
+): error is Error & { code: string } => {
+  if (!(error instanceof Error) || error.name !== 'MulterError') return false;
+  const candidate: Record<string, unknown> = { ...error };
+  return typeof candidate.code === 'string';
+};
+
+/**
  * Maps errors that are really client faults onto the one error contract, so
  * everything below this line handles a single shape.
  */
@@ -122,6 +137,12 @@ const normalizeError = (error: unknown): unknown => {
       'VALIDATION_FAILED',
       `Malformed request body: ${error.message}`
     );
+  }
+
+  if (isMulterLimitError(error)) {
+    return error.code === 'LIMIT_FILE_SIZE'
+      ? new DomainError('UPLOAD_TOO_LARGE', error.message)
+      : new DomainError('VALIDATION_FAILED', error.message);
   }
 
   return error;

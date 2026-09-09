@@ -36,6 +36,10 @@ The embedding model is configured server-side via environment variables (`EMBEDD
 - **`openai`** — the [OpenAI](https://platform.openai.com/docs/guides/embeddings) embeddings API (or any OpenAI-compatible endpoint via `EMBEDDING_BASE_URL`), authenticated with `EMBEDDING_API_KEY`.
 - **`bedrock`** — [Amazon Bedrock](https://docs.aws.amazon.com/bedrock/latest/userguide/titan-embedding-models.html) embedding models. Authenticate with an `ABSK…` bearer token in `EMBEDDING_API_KEY`, or leave it unset to use the standard AWS credential chain (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`).
 
+### Batch size
+
+`inputs` accepts at most **256** values per request — each one is a call to the embedding model. A larger batch is refused with `VALIDATION_FAILED` (`400`) rather than queued; split it across requests.
+
 ## Data Model
 
 The endpoint is stateless — it does not store embeddings. The response shape depends on which input fields are provided.

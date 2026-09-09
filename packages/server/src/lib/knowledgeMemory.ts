@@ -3,6 +3,7 @@ import { Op } from '@ttoss/postgresdb';
 import { db } from '../db';
 import type { EmbeddingBillingProjectId } from './embedding';
 import { getEmbedding } from './embedding';
+import { clampKnowledgeSearchLimit } from './requestBounds';
 import { withIterativeVectorScan } from './vectorSearch';
 
 export type MemoryQueryConfig = {
@@ -260,7 +261,7 @@ export const resolveMemorySearch = async (args: {
   const memoryWhere: Record<string, unknown> = {};
   if (projectIds && projectIds.length > 0) memoryWhere.projectId = projectIds;
 
-  const limit = config.limit ?? 10;
+  const limit = clampKnowledgeSearchLimit(config.limit);
 
   if (config.search) {
     return resolveMemorySearchBySemantic({

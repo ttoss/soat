@@ -6,6 +6,7 @@ import { DomainError } from 'src/errors';
 import { createFile, listFiles, uploadFile } from 'src/lib/files';
 import { buildSrn } from 'src/lib/iam';
 import { compilePolicy } from 'src/lib/policyCompiler';
+import { getUploadMaxBytes } from 'src/lib/requestBounds';
 import { consumeUploadToken, createPresignedUrl } from 'src/lib/uploadTokens';
 
 import { registerFileAccessRoutes } from './fileAccessRoutes';
@@ -15,7 +16,30 @@ import {
   resolveWriteProjectId,
 } from './helpers';
 
-const upload = multer({ storage: multer.memoryStorage() });
+type Next = () => Promise<unknown>;
+
+/**
+ * Buffers the `file` part of a multipart upload, bounded. The instance is built
+ * per request because multer fixes its limits at construction, so a module-level
+ * one would pin the ceiling to whatever the environment held at import time.
+ */
+const uploadSingleFile = (ctx: Context, next: Next) => {
+  return multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: getUploadMaxBytes(), files: 1 },
+  }).single('file')(ctx, next);
+};
+
+/**
+ * Runs ahead of the parser, so an anonymous caller is answered before the body
+ * is read into memory rather than after — `requireAuth` inside the handler is
+ * too late to keep an unauthenticated request from buffering a whole file.
+ */
+const requireAuthBeforeUpload = (ctx: Context, next: Next) => {
+  requireAuth(ctx);
+  return next();
+};
+
 const filesRouter = new Router<Context>();
 
 const listFilesWithPolicy = async (args: {
@@ -114,7 +138,8 @@ filesRouter.post('/files', async (ctx: Context) => {
 
 filesRouter.post(
   '/files/upload',
-  upload.single('file'),
+  requireAuthBeforeUpload,
+  uploadSingleFile,
   async (ctx: Context) => {
     requireAuth(ctx);
     const body = ctx.request.body as {
@@ -233,7 +258,7 @@ filesRouter.post('/files/presigned-url', async (ctx: Context) => {
  */
 filesRouter.post(
   '/files/upload/:token',
-  upload.single('file'),
+  uploadSingleFile,
   async (ctx: Context) => {
     const tokenValue = ctx.params.token;
 

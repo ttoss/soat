@@ -6,12 +6,10 @@ import type { EmbeddingBillingProjectId } from './embedding';
 import { getEmbedding } from './embedding';
 import type { MemoryKnowledgeResult } from './knowledgeMemory';
 import { resolveMemorySearch } from './knowledgeMemory';
+import { clampKnowledgeSearchLimit } from './requestBounds';
 import { withIterativeVectorScan } from './vectorSearch';
 
 export type { MemoryQueryConfig } from './knowledgeMemory';
-
-/** Results returned by a knowledge search when the caller names no `limit`. */
-const DEFAULT_SEARCH_TOP_K = 10;
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -308,7 +306,7 @@ export const resolveDocumentSearch = async (args: {
   policyWhere?: Record<string, any>;
 }): Promise<QueryDocumentResult[]> => {
   const { config, projectIds } = args;
-  const limit = config.limit ?? 10;
+  const limit = clampKnowledgeSearchLimit(config.limit);
 
   if (projectIds !== undefined && projectIds.length === 0) {
     return [];
@@ -393,6 +391,10 @@ export const searchKnowledge = async (
   args: SearchKnowledgeArgs
 ): Promise<KnowledgeResult[]> => {
   const { hasDocumentSearch, hasMemorySearch } = getSearchFlags(args);
+  // Clamped here rather than at the route: every caller — the search route,
+  // agent knowledge injection and the orchestration node — reaches the vector
+  // scan through this one function.
+  const limit = clampKnowledgeSearchLimit(args.limit);
 
   const [docs, memoryEntries] = await Promise.all([
     !hasMemorySearch || hasDocumentSearch
@@ -403,7 +405,7 @@ export const searchKnowledge = async (
           config: {
             search: args.query,
             minScore: args.minScore,
-            limit: args.limit,
+            limit,
             paths: args.paths,
             documentIds: args.documentIds,
           },
@@ -418,7 +420,7 @@ export const searchKnowledge = async (
             memoryTags: args.memoryTags,
             search: args.query,
             minScore: args.minScore,
-            limit: args.limit,
+            limit,
           },
         })
       : Promise.resolve([]),
@@ -460,6 +462,5 @@ export const searchKnowledge = async (
 
   // Top-k of an in-memory similarity search, not a page — named so it reads as
   // distinct from the `limit`/`offset` list envelope.
-  const topK = args.limit ?? DEFAULT_SEARCH_TOP_K;
-  return allResults.slice(0, topK);
+  return allResults.slice(0, limit);
 };

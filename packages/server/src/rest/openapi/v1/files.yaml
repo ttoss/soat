@@ -198,6 +198,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '413':
+          description: >-
+            The upload is over this deployment's byte ceiling
+            (`UPLOAD_TOO_LARGE`; `FILE_UPLOAD_MAX_BYTES`, 25 MB by default).
+            The request is refused while the body is still streaming, so
+            nothing was stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/v1/files/upload/base64:
     post:
       tags:
@@ -344,6 +354,16 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '410':
           description: Upload token expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '413':
+          description: >-
+            The upload is over this deployment's byte ceiling
+            (`UPLOAD_TOO_LARGE`; `FILE_UPLOAD_MAX_BYTES`, 25 MB by default).
+            The request is refused while the body is still streaming, so
+            nothing was stored.
           content:
             application/json:
               schema:
