@@ -1,72 +1,32 @@
 # Common Instructions
 
-These instructions are essential for ensuring that agents add the correct instructions when modifying or creating code in the codebase.
+ttoss ecosystem conventions: https://ttoss.dev/ttoss-instructions.txt
 
-## ttoss Ecosystem Context
+## Code style
 
-This project uses the ttoss ecosystem. Fetch and follow the instructions at https://ttoss.dev/ttoss-instructions.txt for available packages, conventions, and patterns.
+- Functions take one `args` object: `const fn = (args: { a: string }) => …`.
+- Prefer functions over classes.
+- kebab-case folders, camelCase files/variables/functions, PascalCase types,
+  UPPER_SNAKE constants, `<file>.test.ts` for tests.
+- Comment only for a non-obvious why: hidden constraint, invariant, workaround
+  (reference the issue). Never restate the code, leave commented-out code,
+  `TODO`/`FIXME`, or task narration. Applies to every package and to tests.
+- Lint a file: `pnpm eslint --fix path/to/file`.
+- Schema changes: follow `packages/postgresdb/README.md`; a dev database that
+  will not `--alter` may be dropped and recreated.
+- Docs are English, for developers: concise, code over prose.
 
-## Function Arguments
+## Implementation checklist
 
-When defining functions, use an object for arguments instead of individual parameters: `const myFunction = (args: { arg1: string }) => { ... }`.
-
-## Functions vs Classes
-
-Prefer using functions instead of classes for better simplicity and composability.
-
-## Naming Conventions
-
-- User kebab-case for folder names (e.g., `my-folder`).
-- Use camelCase for file names (e.g., `myFile.ts`).
-- Use camelCase for variable and function names (e.g., `myVariable`, `myFunction`).
-- Use PascalCase for type and interface names (e.g., `MyType`, `MyInterface`).
-- Use uppercase with underscores for constants (e.g., `MY_CONSTANT`).
-- For test files, use the same name as the file being tested with `.test` appended before the extension (e.g., `myFile.test.ts`).
-
-## Code Comments
-
-Add a comment only when it is strictly necessary — when the **why** is not
-obvious from the code itself: a hidden constraint, a non-obvious invariant, a
-workaround for a specific bug (reference the issue/PR when one exists), or
-behavior that would otherwise surprise a future reader.
-
-- **Never** write a comment that restates **what** the code does — well-named
-  identifiers already say that.
-- **Never** leave commented-out code, dead `TODO`/`FIXME` markers, or
-  narration of the current task/fix in a comment (that belongs in the commit
-  message or PR description, and rots as the codebase evolves).
-- Keep a necessary comment as short as it can be while still conveying the
-  why. If removing it would not confuse a future reader, don't write it in
-  the first place.
-- This applies to every package in this repo — `server`, `app`, `cli`, `sdk`,
-  `postgresdb`, `website` — and to test files.
-
-## Linting
-
-To fix ESLint issues in a specific file, run `pnpm eslint --fix path/to/file`.
-
-## Database
-
-If you need to change the database schema, read the instructions in `packages/postgresdb/README.md` about how to sync the database schema. You can remove the dev database and start a new one if sync with `--alter` does not work.
-
-## Documentation
-
-All documentation must be written in English. The target audience is developers with technical skills — write concisely and precisely, assume familiarity with REST APIs, JWT, and common backend concepts, and prefer code examples over prose descriptions.
-
-## Implementation Checklist
-
-Every implementation — whether adding a new feature or changing existing behavior — must complete all of the following steps before being considered done:
-
-1. **Implement business logic** — Write or update code in `packages/server/src/lib/<module>.ts`. All database access goes here; route handlers must stay free of direct DB calls.
-
-2. **REST API** — Add or update route handlers in `packages/server/src/rest/v1/<module>.ts`. Every handler must have an `@openapi` JSDoc block and the corresponding OpenAPI spec in `packages/server/src/rest/openapi/v1/<module>.yaml` must be kept in sync.
-
-   The OpenAPI spec is also the source of truth for the generated SDK, generated CLI route manifest, and MCP tool surface. After changing any file in `packages/server/src/rest/openapi/v1/`, regenerate the clients with `pnpm --filter @soat/sdk generate` and `pnpm --filter @soat/cli generate`. MCP tools are derived automatically from the OpenAPI specs at runtime via `packages/server/src/lib/soatTools.ts`.
-
-3. **Module docs** — Update the module documentation page at `packages/website/docs/modules/<module>.md`, including any changes to the data model, key concepts, or the `## Permissions` table.
-
-4. **MCP tool surface** — If the change affects a resource that is exposed through the MCP server, update the OpenAPI spec so the generated MCP tool surface stays correct. Do not add per-module MCP tool files for REST-backed resources in this repo; the MCP server derives them automatically from `packages/server/src/rest/openapi/v1/*.yaml` via `packages/server/src/lib/soatTools.ts`.
-
-5. **Tests** — Add or update tests in `packages/server/tests/unit/tests/<module>.test.ts`. Every new route and every changed lib function must have coverage (happy path, `401`, `403`, and relevant edge cases).
-
-6. **Smoke test** (when applicable) — If the change introduces a new user-facing flow (e.g., a new resource lifecycle), add the corresponding steps to `tests/smoke-test.sh`. Run it with `pnpm run -w smoke-test` to verify end-to-end behaviour against a live server.
+1. Business logic in `packages/server/src/lib/<module>.ts`; all DB access there.
+2. Routes in `packages/server/src/rest/v1/<module>.ts` with `@openapi` JSDoc;
+   spec in `packages/server/src/rest/openapi/v1/<module>.yaml` kept in sync.
+   After a spec change: `pnpm --filter @soat/sdk generate` and
+   `pnpm --filter @soat/cli generate`. MCP tools derive from the specs at
+   runtime (`packages/server/src/lib/soatTools.ts`); never add per-module MCP
+   files.
+3. Module docs: `packages/website/docs/modules/<module>.md`.
+4. Tests in `packages/server/tests/unit/tests/rest/<module>.test.ts`: happy
+   path, `401`, `403`, edge cases, for every new route and changed lib function.
+5. New user-facing flow: add steps to `tests/smoke-tests.sh`; run
+   `pnpm run -w smoke-tests`.
