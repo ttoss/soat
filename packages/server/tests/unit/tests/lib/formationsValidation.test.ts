@@ -597,7 +597,10 @@ describe('validateFormationTemplate', () => {
     ).toBe(true);
   });
 
-  test('returns valid for a ref_attr output referencing a known resource', () => {
+  // The one attribute a built-in resource exposes is its signing secret, and an
+  // output is readable by anyone holding `formations:GetFormation` — so naming
+  // it is exactly the shape this refuses.
+  test('returns invalid for a ref_attr output resolving a signing secret', () => {
     const result = validateFormationTemplate({
       resources: {
         MyWebhook: {
@@ -610,6 +613,30 @@ describe('validateFormationTemplate', () => {
         },
       },
       outputs: { webhookSecret: { ref_attr: 'MyWebhook.secret' } },
+    });
+    expect(result.valid).toBe(false);
+    expect(
+      result.errors.some((e) => {
+        return (
+          e.path === 'outputs.webhookSecret' && e.message.includes("'secret'")
+        );
+      })
+    ).toBe(true);
+  });
+
+  test('another attribute of the same resource is still allowed', () => {
+    const result = validateFormationTemplate({
+      resources: {
+        MyWebhook: {
+          type: 'webhook',
+          properties: {
+            name: 'hook',
+            url: 'https://example.com',
+            events: ['*'],
+          },
+        },
+      },
+      outputs: { webhookUrl: { ref_attr: 'MyWebhook.url' } },
     });
     expect(result.valid).toBe(true);
     expect(result.errors).toHaveLength(0);

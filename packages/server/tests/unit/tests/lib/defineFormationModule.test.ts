@@ -364,17 +364,17 @@ describe('defineFormationModule — read', () => {
     const module = buildModule();
     expect(module.writeOnly).toBeUndefined();
     expect(module.getAttributes).toBeUndefined();
+    expect(module.writeOnlyProperties).toBeUndefined();
     expect(module.sanitizeLastAppliedProperties).toBeUndefined();
+    expect(module.sensitiveAttributes).toBeUndefined();
   });
 
-  test('getAttributes and sanitizeLastAppliedProperties pass through', async () => {
+  test('getAttributes and sensitiveAttributes pass through', async () => {
     const module = buildModule({
       getAttributes: async () => {
         return { secret: 'shh' };
       },
-      sanitizeLastAppliedProperties: ({ value: _value, ...rest }) => {
-        return rest;
-      },
+      sensitiveAttributes: ['secret'],
     });
 
     expect(
@@ -383,6 +383,15 @@ describe('defineFormationModule — read', () => {
         physicalResourceId: 'qta_1',
       })
     ).toEqual({ secret: 'shh' });
+    expect(module.sensitiveAttributes).toEqual(['secret']);
+  });
+
+  // One declaration, two guarantees: a module that names a credential property
+  // cannot keep it out of the wire but leave it in the stored snapshot.
+  test('writeOnlyProperties derives the last-applied sanitizer', () => {
+    const module = buildModule({ writeOnlyProperties: ['value'] });
+
+    expect(module.writeOnlyProperties).toEqual(['value']);
     expect(
       module.sanitizeLastAppliedProperties!({ name: 'n', value: 'v' })
     ).toEqual({ name: 'n' });

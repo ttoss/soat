@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import { isRefAttr, parseRefAttr, resolveRefs } from './formationsHelpers';
 import { getFormationModule } from './formationsRegistry';
+import { isSensitiveAttribute } from './formationsSensitive';
 import type { FormationTemplate } from './formationsTypes';
 
 const log = createDebug('soat:formations');
@@ -32,6 +33,16 @@ const resolveRefAttrOutput = async (
   }
   const resourceType = template.resources[logicalId]?.type;
   if (!resourceType) return undefined;
+  // The write refuses this shape, so only a template stored before the rule can
+  // reach here — and it reaches here on every re-deploy of that formation.
+  if (isSensitiveAttribute({ resourceType, attrName })) {
+    log(
+      'resolveFormationOutputs: refusing ref_attr "%s" — "%s" is a credential',
+      refAttrStr,
+      attrName
+    );
+    return undefined;
+  }
   const mod = getFormationModule({ resourceType });
   if (!mod?.getAttributes) {
     log(

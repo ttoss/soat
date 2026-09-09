@@ -528,6 +528,12 @@ components:
             Map of output names to values. Values may use `{ "ref": "logicalId" }`
             to reference physical IDs of created resources, or `{ "param": "ParamName" }`
             and `{ "sub": "text ${ParamName}" }` to embed parameter values.
+            `{ "ref_attr": "LogicalId.attribute" }` resolves a named attribute of
+            a created resource, except one carrying credential material — a
+            trigger's or webhook's `secret` is refused with 400
+            VALIDATION_FAILED, since a formation is readable by anyone holding
+            `formations:GetFormation`. Read those from the resource's own secret
+            route instead.
           nullable: true
         metadata:
           type: object
@@ -1932,13 +1938,22 @@ components:
           type: string
           description: Human-readable formation name
         template:
-          $ref: '#/components/schemas/FormationTemplate'
+          allOf:
+            - $ref: '#/components/schemas/FormationTemplate'
+          description: >
+            The template as deployed. Credential-bearing properties — a `secret`
+            resource's `value`, and any property a custom resource type declares
+            `write_only` — read back as `{ "no_echo": true }` rather than the
+            value that was supplied.
         outputs:
           type: object
           additionalProperties:
             type: string
           nullable: true
-          description: Resolved output values after stack deployment
+          description: >
+            Resolved output values after stack deployment. An output that
+            resolved a credential attribute on a formation deployed before those
+            were refused is omitted.
         status:
           type: string
           enum:

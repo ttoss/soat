@@ -135,9 +135,15 @@ export type FormationModuleDefinition<TResource> = {
    */
   read?: (resource: TResource) => Record<string, unknown>;
   writeOnly?: boolean;
-  sanitizeLastAppliedProperties?: (
-    properties: Record<string, unknown>
-  ) => Record<string, unknown>;
+  /**
+   * Property names carrying credential material. One declaration drives every
+   * place such a value would otherwise surface — the `lastAppliedProperties`
+   * snapshot, a stored template's read, a plan diff — so a module says it once
+   * rather than each surface remembering.
+   */
+  writeOnlyProperties?: readonly string[];
+  /** `getAttributes` names that may not be resolved into a formation output. */
+  sensitiveAttributes?: readonly string[];
   getAttributes?: (args: {
     physicalResourceId: string;
   }) => Promise<Record<string, string>>;
@@ -302,6 +308,21 @@ const buildOperations = <TResource>(args: {
 };
 
 /**
+ * Removes the named keys outright rather than masking them: the planner diffs
+ * the resolved template against this snapshot, and a mask would read as a value
+ * that had been applied.
+ */
+const dropProperties = (names: readonly string[]) => {
+  return (properties: Record<string, unknown>): Record<string, unknown> => {
+    const kept: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(properties)) {
+      if (!names.includes(key)) kept[key] = value;
+    }
+    return kept;
+  };
+};
+
+/**
  * The members a module only has when it declares them — present as keys or
  * absent entirely, because the planner and the apply pipeline branch on
  * `module.writeOnly` / `module.getAttributes` being undefined.
@@ -311,7 +332,8 @@ const buildOptionalMembers = <TResource>(
 ): Partial<FormationModule> => {
   const {
     warnChecks,
-    sanitizeLastAppliedProperties,
+    writeOnlyProperties,
+    sensitiveAttributes,
     getAttributes,
     deletionBlocker,
   } = definition;
@@ -330,7 +352,16 @@ const buildOptionalMembers = <TResource>(
         }
       : {}),
     ...(definition.writeOnly ? { writeOnly: true } : {}),
-    ...(sanitizeLastAppliedProperties ? { sanitizeLastAppliedProperties } : {}),
+    // Derived, not declared per module: the same list that names a credential
+    // property is what must not reach the snapshot, so a module cannot keep one
+    // and forget the other.
+    ...(writeOnlyProperties
+      ? {
+          writeOnlyProperties,
+          sanitizeLastAppliedProperties: dropProperties(writeOnlyProperties),
+        }
+      : {}),
+    ...(sensitiveAttributes ? { sensitiveAttributes } : {}),
     ...(getAttributes ? { getAttributes } : {}),
   };
 };

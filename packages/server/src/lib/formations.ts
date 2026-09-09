@@ -12,17 +12,12 @@ import { applyFormationTemplate } from './formationsApply';
 import {
   assertResourceActionsAuthorized,
   collectApplyAuthorizationRequests,
-  collectAuthorizationDenials,
 } from './formationsAuthorization';
 import {
-  buildDependencyGraph,
-  buildResolvedParamsMap,
-  topologicalSort,
-} from './formationsHelpers';
-import {
-  computeOrphanedPlanChanges,
-  planResourceChange,
-} from './formationsPlanHelpers';
+  redactPlanChanges,
+  redactSensitiveOutputs,
+  redactTemplateSecrets,
+} from './formationsSensitive';
 import {
   type FormationAuthorizer,
   type FormationError,
@@ -32,7 +27,6 @@ import {
   type MappedFormation,
   type MappedFormationOperation,
   type MappedFormationResource,
-  type PlanChange,
   type PlanResult,
   planResultToWire,
 } from './formationsTypes';
@@ -42,6 +36,9 @@ import { makeResourceAccessor } from './resourceAccessor';
 const log = createDebug('soat:formations');
 
 export { getMissingParams } from './formationsHelpers';
+// Plan lives next to its own helpers: it shares no query, no mapper and no
+// authorization step with the three write paths here.
+export { planFormation } from './formationsPlan';
 // Teardown lives in its own module; re-exported so callers keep one entry point
 // for the formation surface.
 export { detectStaticMetadataViolations } from './formationsMetadata';
@@ -88,12 +85,19 @@ const mapFormation = (
       })
     : undefined;
 
+  const template = instance.template as FormationTemplate | null;
+
   return {
     id: instance.publicId,
     project_id: instance.project?.publicId ?? '',
     name: instance.name,
-    template: instance.template as FormationTemplate | null,
-    outputs: instance.outputs,
+    template: template ? redactTemplateSecrets({ template }) : template,
+    // Outputs written before a `ref_attr` to a signing secret was refused are
+    // dropped on the way out too: the refusal keeps new ones from being written,
+    // and `purge-formation-secret-outputs` clears the rows themselves.
+    outputs: template
+      ? redactSensitiveOutputs({ template, outputs: instance.outputs })
+      : instance.outputs,
     status: instance.status,
     metadata: instance.metadata,
     resolved_metadata: instance.resolvedMetadata,
@@ -134,85 +138,6 @@ const formations = makeResourceAccessor<FormationRow>({
 const NOT_DELETED = { status: { [Op.ne]: 'deleted' } };
 
 // ── Public API ────────────────────────────────────────────────────────────
-
-export const planFormation = async (args: {
-  projectId: number;
-  template: FormationTemplate;
-  formationId?: string;
-  parameters?: Record<string, string>;
-  authorize: FormationAuthorizer;
-}): Promise<PlanResult> => {
-  const graph = buildDependencyGraph(args.template);
-  const sortedOrder = topologicalSort(graph) ?? [];
-
-  const existingMap = new Map<string, string>();
-  const lastAppliedMap = new Map<string, Record<string, unknown> | null>();
-  let existingResources: InstanceType<(typeof db)['FormationResource']>[] = [];
-  if (args.formationId) {
-    const formation = await db.Formation.findOne({
-      where: { publicId: args.formationId },
-    });
-    if (formation) {
-      existingResources = await db.FormationResource.findAll({
-        where: {
-          formationId: formation.id as number,
-        },
-      });
-      for (const r of existingResources) {
-        if (r.physicalResourceId)
-          existingMap.set(r.logicalId, r.physicalResourceId);
-        lastAppliedMap.set(
-          r.logicalId,
-          r.lastAppliedProperties as Record<string, unknown> | null
-        );
-      }
-    }
-  }
-
-  const resolvedParams = buildResolvedParamsMap(args.template, args.parameters);
-  const templateResourceKeys = new Set(Object.keys(args.template.resources));
-
-  const changes: PlanChange[] = await Promise.all(
-    sortedOrder.map((logicalId) => {
-      return planResourceChange({
-        logicalId,
-        decl: args.template.resources[logicalId],
-        physicalResourceId: existingMap.get(logicalId),
-        projectId: args.projectId,
-        resolvedParams,
-        existingMap,
-        templateResourceKeys,
-        lastAppliedProperties: lastAppliedMap.get(logicalId),
-      });
-    })
-  );
-
-  // Surface resources the ledger still tracks but the new template no longer
-  // declares — they are about to be orphaned/deleted on `update-formation` —
-  // so `plan` and `update` agree on the same set of changes.
-  const orphanedChanges = computeOrphanedPlanChanges({
-    templateResourceKeys,
-    existingResources,
-  });
-
-  // A plan is read-only, so it *reports* what an apply would refuse rather than
-  // becoming a refusal itself (#1181) — naming every action at once beats an
-  // apply that fails at resource seven and rolls the rest back.
-  const unauthorizedActions = await collectAuthorizationDenials({
-    authorize: args.authorize,
-    requests: collectApplyAuthorizationRequests({
-      template: args.template,
-      existingResources,
-    }),
-  });
-
-  // Omitted rather than empty, so a plan a caller may fully apply is byte
-  // identical to what it was before this field existed.
-  return {
-    changes: [...changes, ...orphanedChanges],
-    ...(unauthorizedActions.length > 0 ? { unauthorizedActions } : {}),
-  };
-};
 
 const assertNameAvailable = async (args: {
   projectId: number;
@@ -453,7 +378,12 @@ export const listFormationEvents = async (args: {
         operation_type: op.operationType,
         status: op.status,
         events: events ? events.map(formationEventToWire) : null,
-        plan: plan ? planResultToWire(plan) : null,
+        plan: plan
+          ? planResultToWire({
+              ...plan,
+              changes: redactPlanChanges({ changes: plan.changes }),
+            })
+          : null,
         error: op.error,
         created_at: op.createdAt,
         updated_at: op.updatedAt,
