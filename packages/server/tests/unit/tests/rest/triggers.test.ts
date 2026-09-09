@@ -1824,6 +1824,127 @@ describe('Triggers', () => {
 
   // by-id handlers must authorize against a project SRN — not the implicit `*`
   // default — or such a principal can list but never get/update/delete.
+  /**
+   * A firing runs with the creator's authority, so the target is what decides
+   * what a trigger can do. Repointing it is therefore the same privilege
+   * question the create route already asks — and asking it only when
+   * `target_type` changed left the far more ordinary move, swapping one
+   * orchestration for another, unchecked.
+   */
+  describe('repointing a trigger re-checks the target-start action', () => {
+    let repointToken: string;
+    let allowedOrchestrationId: string;
+    let forbiddenOrchestrationId: string;
+    let triggerId: string;
+
+    const createOrchestration = async (name: string) => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          project_id: projectId,
+          name,
+          nodes: [
+            {
+              id: 'start',
+              type: 'transform',
+              expression: { var: '' },
+              state_mapping: { 'state.result': { var: 'output.output' } },
+            },
+          ],
+          edges: [],
+        });
+      return res.body.id as string;
+    };
+
+    beforeAll(async () => {
+      allowedOrchestrationId = await createOrchestration('repoint-allowed');
+      forbiddenOrchestrationId = await createOrchestration('repoint-forbidden');
+
+      const createUserRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/users')
+        .send({ username: 'triggersrepoint', password: 'repointpass' });
+
+      // May start exactly one orchestration, and may update any trigger.
+      const policyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [
+              {
+                effect: 'Allow',
+                action: [
+                  'triggers:GetTrigger',
+                  'triggers:UpdateTrigger',
+                  'triggers:CreateTrigger',
+                ],
+                resource: ['*'],
+              },
+              {
+                effect: 'Allow',
+                action: ['orchestrations:StartRun'],
+                resource: [
+                  `srn:${projectId}:orchestration:${allowedOrchestrationId}`,
+                ],
+              },
+            ],
+          },
+        });
+      await authenticatedTestClient(adminToken)
+        .put(`/api/v1/users/${createUserRes.body.id}/policies`)
+        .send({ policy_ids: [policyRes.body.id] });
+      repointToken = await loginAs('triggersrepoint', 'repointpass');
+
+      triggerId = (
+        await authenticatedTestClient(adminToken)
+          .post('/api/v1/triggers')
+          .send({
+            project_id: projectId,
+            name: 'repoint-subject',
+            type: 'manual',
+            target_type: 'orchestration',
+            target_id: allowedOrchestrationId,
+          })
+      ).body.id;
+    });
+
+    test('refuses a repoint to a target the updater cannot start', async () => {
+      const res = await authenticatedTestClient(repointToken)
+        .patch(`/api/v1/triggers/${triggerId}`)
+        .send({ target_id: forbiddenOrchestrationId });
+
+      expect(res.status).toBe(403);
+    });
+
+    test('the trigger still points at the target it was created with', async () => {
+      const res = await authenticatedTestClient(adminToken).get(
+        `/api/v1/triggers/${triggerId}`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.target_id).toBe(allowedOrchestrationId);
+    });
+
+    test('allows a repoint to a target the updater can start', async () => {
+      const res = await authenticatedTestClient(repointToken)
+        .patch(`/api/v1/triggers/${triggerId}`)
+        .send({ target_id: allowedOrchestrationId });
+
+      expect(res.status).toBe(200);
+      expect(res.body.target_id).toBe(allowedOrchestrationId);
+    });
+
+    // An update that names neither field must not pay for a permission check
+    // against a target it is not touching.
+    test('leaves an update that does not touch the target alone', async () => {
+      const res = await authenticatedTestClient(repointToken)
+        .patch(`/api/v1/triggers/${triggerId}`)
+        .send({ name: 'repoint-subject-renamed' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.name).toBe('repoint-subject-renamed');
+    });
+  });
+
   describe('SRN-scoped principal (project-scoped credential)', () => {
     let scopedToken: string;
 

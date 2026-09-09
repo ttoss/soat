@@ -1,5 +1,5 @@
 import { Router } from '@ttoss/http-server';
-import type { Context } from 'src/Context';
+import type { AuthUser, Context } from 'src/Context';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 import { buildSrn } from 'src/lib/iam';
@@ -144,6 +144,49 @@ triggersRouter.post('/triggers', async (ctx: Context) => {
   ctx.body = trigger;
 });
 
+/**
+ * A firing runs with the *creator's* authority, so the target is what decides
+ * what a trigger can do — which makes repointing one the same privilege
+ * question the create route asks.
+ *
+ * Both halves of the target count. Asking only when `target_type` changed left
+ * the ordinary shape of a repoint — swapping one orchestration for another —
+ * unchecked, so a principal holding `UpdateTrigger` plus `FireTrigger` could
+ * aim someone else's trigger at a target they could not start themselves.
+ *
+ * The check reads the *effective* pair, so a request that changes only the id
+ * is still checked against the type the trigger already has.
+ */
+const assertMayStartUpdatedTarget = async (args: {
+  authUser: AuthUser;
+  trigger: { project_id?: string; target_type?: unknown; target_id?: unknown };
+  body: { target_type?: string; target_id?: string };
+}): Promise<void> => {
+  const { authUser, trigger, body } = args;
+  const retypes =
+    body.target_type !== undefined && body.target_type !== trigger.target_type;
+  const repoints =
+    body.target_id !== undefined && body.target_id !== trigger.target_id;
+  if (!retypes && !repoints) return;
+
+  const projectPublicId = trigger.project_id!;
+  const targetType = body.target_type ?? (trigger.target_type as string);
+  const targetId = body.target_id ?? (trigger.target_id as string);
+
+  const canStartTarget = await authUser.isAllowed({
+    projectPublicId,
+    action: targetStartAction(targetType),
+    resource: buildSrn({
+      projectPublicId,
+      resourceType: targetType,
+      resourceId: targetId,
+    }),
+  });
+  if (!canStartTarget) {
+    throw new DomainError('FORBIDDEN', 'Forbidden');
+  }
+};
+
 triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
   requireAuth(ctx);
 
@@ -175,24 +218,7 @@ triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
     policy_id?: string | null;
   };
 
-  // Re-check the target-start action when the target type changes.
-  if (
-    body.target_type !== undefined &&
-    body.target_type !== trigger.target_type
-  ) {
-    const canStartTarget = await ctx.authUser.isAllowed({
-      projectPublicId: trigger.project_id!,
-      action: targetStartAction(body.target_type),
-      resource: buildSrn({
-        projectPublicId: trigger.project_id!,
-        resourceType: body.target_type,
-        resourceId: body.target_id ?? (trigger.target_id as string),
-      }),
-    });
-    if (!canStartTarget) {
-      throw new DomainError('FORBIDDEN', 'Forbidden');
-    }
-  }
+  await assertMayStartUpdatedTarget({ authUser: ctx.authUser, trigger, body });
 
   const policyId =
     body.policy_id === undefined

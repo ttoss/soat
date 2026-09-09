@@ -96,11 +96,13 @@ Key creation is self-service — any authenticated caller may mint a key for the
 | [`POST /api-keys`](/docs/api/api-keys/create-api-key) with `project_id: null` | `403` — minting an **unscoped** key requires an unscoped credential |
 | `GET` / `PUT` / [`DELETE /api-keys/{id}`](/docs/api/api-keys/delete-api-key) for a key in `proj_B`, or for an unscoped key | `403 API_KEY_PROJECT_SCOPE` |
 | [`PUT /api-keys/{id}`](/docs/api/api-keys/update-api-key) moving a `proj_A` key to `proj_B`, or clearing its scope | `403` — both ends of a re-scope are checked |
-| [`GET /api-keys`](/docs/api/api-keys/list-api-keys) (list) | Returns only keys scoped to `proj_A` |
+| [`GET /api-keys`](/docs/api/api-keys/list-api-keys) (list) | Returns the caller's own keys in `proj_A`, or every key in `proj_A` when the credential holds `api-keys:ListApiKeys` on the project |
 
 Without this, the boundary would be exactly one call deep: a key confined to `proj_A` could mint an unscoped key for the same owning user and operate anywhere. Rotation still works — a scoped key can mint and delete keys **within its own project**.
 
 Owner-or-admin still applies on top: the project check decides *which* keys a credential can see, and the owner check decides whether it may act on them.
+
+That applies to the listing as well as the item routes. Being confined to a project is not authority over it — a key's metadata names its owner, its prefix and the policies attached to it, so the collection is narrowed to the caller's own keys by default. A credential that genuinely holds `api-keys:ListApiKeys` on the project reads the whole project's inventory, which is what a project operator taking stock of outstanding credentials needs.
 
 ### Policy Attachment
 

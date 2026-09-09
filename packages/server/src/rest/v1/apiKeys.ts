@@ -9,6 +9,7 @@ import {
   listApiKeys,
   updateApiKey,
 } from 'src/lib/apiKeys';
+import { buildSrn } from 'src/lib/iam';
 import { recordAuthorizationDecision } from 'src/middleware/audit';
 
 import {
@@ -126,6 +127,8 @@ apiKeysRouter.get('/api-keys', async (ctx: Context) => {
   // project-scoped OAuth token carries its project as a public id rather than
   // `apiKeyProjectId`, so it is filtered here too instead of falling through to
   // the owner-wide branch.
+  const scopedProjectPublicId =
+    ctx.authUser.apiKeyProjectPublicId ?? ctx.authUser.oauthProjectPublicId;
   const scopedProjectId =
     ctx.authUser.apiKeyProjectId ??
     (await resolveScopedProjectId({
@@ -133,8 +136,26 @@ apiKeysRouter.get('/api-keys', async (ctx: Context) => {
     }));
 
   if (scopedProjectId !== undefined) {
+    // Confinement to a project is not authority over it. Every item route on
+    // this module is owner-or-admin, so the collection is narrowed the same
+    // way unless the principal actually holds the project-wide list action —
+    // otherwise a credential with no authority over anyone reads the whole
+    // project's key inventory: prefixes, owners and policy attachments.
+    const mayListProject =
+      scopedProjectPublicId !== undefined &&
+      (await ctx.authUser.isAllowed({
+        projectPublicId: scopedProjectPublicId,
+        action: 'api-keys:ListApiKeys',
+        resource: buildSrn({
+          projectPublicId: scopedProjectPublicId,
+          resourceType: 'apiKey',
+          resourceId: '*',
+        }),
+      }));
+
     ctx.body = await listApiKeys({
       projectId: scopedProjectId,
+      ...(mayListProject ? {} : { userId: ctx.authUser.id }),
       ...parsePagination(ctx),
     });
     return;

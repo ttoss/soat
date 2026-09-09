@@ -28,7 +28,11 @@ paths:
         Lists API keys accessible to the caller.
         - JWT admin: returns all API keys.
         - JWT regular user: returns only the user's own API keys.
-        - Project-scoped credential (API key or OAuth token): returns only API keys scoped to that project.
+        - Project-scoped credential (API key or OAuth token): returns the caller's own
+          keys scoped to that project, or every key scoped to it when the credential
+          holds `api-keys:ListApiKeys` on the project. Confinement to a project is not
+          authority over it, and a key's metadata names its owner, prefix and attached
+          policies.
       operationId: listApiKeys
       security:
         - bearerAuth: []

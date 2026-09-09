@@ -57,6 +57,28 @@ const assertToolOutputsWereOpened = (args: {
   );
 };
 
+/**
+ * Whether a paused generation is one this caller may answer.
+ *
+ * `recoverPendingFromDb` scopes its own lookup, so this is the in-memory
+ * branch's half of the same rule: the pending map is process-wide and keyed by
+ * generation id alone, so without it any caller who could name a generation
+ * could resume one belonging to another project. What that resumes is not
+ * merely a read — the pending entry holds tool closures built with the original
+ * caller's auth header, so the continuation runs on their credentials.
+ *
+ * `undefined` is the unrestricted principal, exactly as everywhere else the
+ * project scope is threaded, and is what the session path relies on: it
+ * authorizes the session first and names no project set here.
+ */
+const isWithinProjectScope = (args: {
+  projectIds?: number[];
+  projectId: number;
+}): boolean => {
+  if (args.projectIds === undefined) return true;
+  return args.projectIds.includes(args.projectId);
+};
+
 export const submitToolOutputs = async (args: {
   projectIds?: number[];
   agentId: string;
@@ -75,7 +97,14 @@ export const submitToolOutputs = async (args: {
       authHeader: args.authHeader,
     });
   }
-  if (!pending || pending.agentId !== args.agentId) {
+  if (
+    !pending ||
+    pending.agentId !== args.agentId ||
+    !isWithinProjectScope({
+      projectIds: args.projectIds,
+      projectId: pending.projectId,
+    })
+  ) {
     throw new DomainError(
       'GENERATION_NOT_FOUND',
       `Generation '${args.generationId}' not found or does not belong to agent '${args.agentId}'.`
