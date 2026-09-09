@@ -954,22 +954,28 @@ describe('Tools', () => {
           type: 'mcp',
           mcp: {
             url: 'https://mcp.example.com/sse',
-            headers: { Authorization: 'Bearer plain-token' },
+            headers: {
+              Authorization: 'Bearer plain-token',
+              'X-Custom-Trace': 'Keep-This-Casing',
+            },
           },
         });
 
+      // The credential-shaped header keeps its key and loses its literal
+      // value; every other header round-trips key and value verbatim.
+      const expectedHeaders = {
+        Authorization: { no_echo: true },
+        'X-Custom-Trace': 'Keep-This-Casing',
+      };
+
       expect(createRes.status).toBe(201);
-      expect(createRes.body.mcp.headers).toEqual({
-        Authorization: 'Bearer plain-token',
-      });
+      expect(createRes.body.mcp.headers).toEqual(expectedHeaders);
 
       const getRes = await authenticatedTestClient(adminToken).get(
         `/api/v1/tools/${createRes.body.id}`
       );
       expect(getRes.status).toBe(200);
-      expect(getRes.body.mcp.headers).toEqual({
-        Authorization: 'Bearer plain-token',
-      });
+      expect(getRes.body.mcp.headers).toEqual(expectedHeaders);
     });
 
     test('creating an mcp tool with an invalid secret ref in mcp.headers returns 400', async () => {
@@ -1015,6 +1021,32 @@ describe('Tools', () => {
       expect(lastRequest.authorization).toBe('Bearer sk-live-topsecret');
       expect(lastRequest.apiKey).toBe('sk-live-topsecret');
       expect(lastRequest.url).toContain('key=sk-live-topsecret');
+    });
+
+    test('a literal credential is masked on read yet still sent on a call', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'literal-credential-call-tool',
+          type: 'http',
+          execute: {
+            url: `${echoServerUrl}/convert`,
+            method: 'POST',
+            headers: { Authorization: 'Bearer literal-not-a-reference' },
+          },
+        });
+      expect(createRes.status).toBe(201);
+      expect(createRes.body.execute.headers.Authorization).toEqual({
+        no_echo: true,
+      });
+
+      const callRes = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${createRes.body.id}/call`)
+        .send({ input: { q: 'hello' } });
+
+      expect(callRes.status).toBe(200);
+      expect(lastRequest.authorization).toBe('Bearer literal-not-a-reference');
     });
   });
 

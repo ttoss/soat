@@ -57,9 +57,12 @@ const toDatabaseErrorDetails = (
           table?: string;
         })
       | undefined;
+    // `parameters` — the values the statement was bound with — is deliberately
+    // not logged: a failed insert binds whatever the request carried, which on
+    // these tables is a secret value, a token or a password hash. The statement
+    // text names the columns without carrying anyone's data.
     return {
       sql: error.sql,
-      parameters: error.parameters,
       dbError: {
         message: original?.message,
         detail: original?.detail,

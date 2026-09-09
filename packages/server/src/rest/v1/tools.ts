@@ -11,6 +11,7 @@ import {
   listTools,
   updateTool,
 } from 'src/lib/tools';
+import { redactToolSecrets } from 'src/lib/toolSecretRedaction';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
 import {
@@ -154,7 +155,7 @@ toolsRouter.post('/tools', async (ctx: Context) => {
   });
 
   ctx.status = 201;
-  ctx.body = result;
+  ctx.body = redactToolSecrets(result);
 });
 
 /**
@@ -175,7 +176,8 @@ toolsRouter.get('/tools', async (ctx: Context) => {
     resourceType: 'tool',
   });
 
-  ctx.body = await listTools({ projectIds, ...parsePagination(ctx) });
+  const page = await listTools({ projectIds, ...parsePagination(ctx) });
+  ctx.body = { ...page, data: page.data.map(redactToolSecrets) };
 });
 
 /**
@@ -198,7 +200,7 @@ toolsRouter.get('/tools/:tool_id', async (ctx: Context) => {
     id: ctx.params.tool_id,
   });
 
-  ctx.body = result;
+  ctx.body = redactToolSecrets(result);
 });
 
 /**
@@ -279,7 +281,7 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
     guardrailIds: nextGuardrailIds,
   });
 
-  ctx.body = result;
+  ctx.body = redactToolSecrets(result);
 });
 
 /**

@@ -11,15 +11,28 @@ import { requireAuth, requireProjectAccess } from './helpers';
  * implement, held to it by the shared conformance suite — so the conversion
  * happens here, at the one place a snapshot reaches a client.
  */
-const mapQueueStats = (stats: QueueStats) => {
+const mapQueueStats = (args: { stats: QueueStats; restricted: boolean }) => {
+  const { stats, restricted } = args;
+  // A restricted principal is answered about its own scope only. `perProject`
+  // is already scoped by the driver, so the two totals are summed from it; the
+  // oldest-task age and the claim-latency ring describe the whole deployment
+  // and cannot be narrowed, so they are withheld rather than approximated —
+  // reporting another tenant's backlog to this one is the leak being closed.
+  const scopedDepth = stats.perProject.reduce((total, entry) => {
+    return total + entry.queued;
+  }, 0);
+  const scopedClaimed = stats.perProject.reduce((total, entry) => {
+    return total + entry.claimed;
+  }, 0);
+
   return {
     driver: stats.driver,
-    queue_depth: stats.queueDepth,
-    claimed_tasks: stats.claimedTasks,
-    oldest_queued_age_seconds: stats.oldestQueuedAgeSeconds,
+    queue_depth: restricted ? scopedDepth : stats.queueDepth,
+    claimed_tasks: restricted ? scopedClaimed : stats.claimedTasks,
+    oldest_queued_age_seconds: restricted ? null : stats.oldestQueuedAgeSeconds,
     claim_latency_ms: {
-      p50: stats.claimLatencyMs.p50,
-      p95: stats.claimLatencyMs.p95,
+      p50: restricted ? null : stats.claimLatencyMs.p50,
+      p95: restricted ? null : stats.claimLatencyMs.p95,
       window_seconds: stats.claimLatencyMs.windowSeconds,
     },
     per_project: stats.perProject.map((entry) => {
@@ -55,10 +68,11 @@ orchestrationQueueRouter.get(
       action: 'orchestrations:GetQueueStats',
       resourceType: 'orchestration',
     });
-    ctx.body = mapQueueStats(
-      await getOrchestrationQueueDriver().stats({
+    ctx.body = mapQueueStats({
+      stats: await getOrchestrationQueueDriver().stats({
         projectIds: projectIds ?? undefined,
-      })
-    );
+      }),
+      restricted: projectIds !== null && projectIds !== undefined,
+    });
   }
 );

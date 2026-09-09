@@ -335,7 +335,9 @@ Parallelism is bounded on two axes:
 
 ### Queue metrics
 
-[`GET /api/v1/orchestrations/queue/stats`](/docs/api/orchestrations/get-queue-stats) returns a point-in-time snapshot of the run queue — waiting vs. claimed task counts, the oldest waiting task's age, recent claim-latency percentiles (computed in-process over a rolling 5-minute window), and a per-project breakdown. `driver` names the active backend; under `sqs`, `oldest_queued_age_seconds` / `per_project` are `null` / empty. Guarded by the `orchestrations:GetQueueStats` action; a project-scoped caller sees only their own projects under `per_project`.
+[`GET /api/v1/orchestrations/queue/stats`](/docs/api/orchestrations/get-queue-stats) returns a point-in-time snapshot of the run queue — waiting vs. claimed task counts, the oldest waiting task's age, recent claim-latency percentiles (computed in-process over a rolling 5-minute window), and a per-project breakdown. `driver` names the active backend; under `sqs`, `oldest_queued_age_seconds` / `per_project` are `null` / empty. Guarded by the `orchestrations:GetQueueStats` action.
+
+Every figure is scoped to what the caller may see. A project-scoped caller gets `per_project` for their own projects only, `queue_depth` and `claimed_tasks` summed over those same projects, and `null` for `oldest_queued_age_seconds` and both `claim_latency_ms` percentiles — each describes the whole deployment and cannot be narrowed, so it is withheld rather than approximated. An unrestricted caller — the action granted on every project — gets the deployment-wide figures.
 
 ### State and Mappings
 
