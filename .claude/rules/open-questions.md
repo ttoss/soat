@@ -1,48 +1,41 @@
 # Open Questions Gate
 
-Every open question raised while implementing — a design choice, an "option A vs option B", an ambiguity in the task — must be run through the two Guardian tests below **before** being forwarded to the user. A question that either test resolves is answered on the spot and recorded; only questions that survive both tests are forwarded.
+Run every open question (design choice, option A vs B, ambiguity) through two
+tests before forwarding it to the user. Criteria come from
+`.claude/skills/guardian/` (`SKILL.md` **Fix classification**,
+`reference/methodology.md`); running `/guardian` itself is not required.
 
-The criteria come from the Guardian skill installed at `.claude/skills/guardian/` (see its `SKILL.md` **Fix classification** section and `reference/methodology.md` for the 8 dimensions). This rule applies the criteria to open questions during any implementation; it does not require running `/guardian` itself.
+## Test 1 — Pareto optimum
 
-## Test 1 — Pareto optimum (dominant option)
+An option is dominant when it improves at least one of the 8 methodology
+dimensions and you checked in this session that it worsens nothing (name what
+was checked; an unverified premise is a cost). Exactly one dominant option →
+choose it. Uncertain → Test 2.
 
-Apply Guardian's fix classification to the options:
+## Test 2 — Long-term health
 
-- An option is **dominant** (a Pareto improvement) when it improves at least one of the 8 methodology dimensions and the **"worsens nothing"** claim was actually checked in this session — name what was checked. An unverified premise the option depends on is a cost, never neutral.
-- If exactly one option is dominant over the alternatives → **choose it**. The question is answered; do not forward it.
-- When uncertain whether an option worsens something, it is **not** dominant — fall through to Test 2.
+Prefer: deterministic enforcement (types, schemas, tests, CI) > path-scoped
+context > procedure > prose; debt that is modular, visible, observable, cheap to
+repay; no replication of an existing antipattern; intact package/layer/ownership
+boundaries. A clear winner → choose it.
 
-## Test 2 — Best for the long term
+## Forward only
 
-If no option is dominant, judge the options against the project's long-term health using Guardian's structural criteria:
-
-- **Durability ladder** — prefer the option whose guarantees live higher on the ladder: deterministic enforcement (types, schemas, tests, CI) > path-scoped context > procedure > prose.
-- **Debt containment** — accept only debt that is modular, visible, observable, and cheap to repay. An option that introduces invisible or systemic debt loses.
-- **Pattern hygiene** — an option that replicates or strengthens an existing antipattern loses; agents replicate whatever they see.
-- **Boundary integrity** — an option that erodes package, layer, or ownership boundaries loses.
-
-If one option clearly wins on these criteria → **choose it**. The question is answered; do not forward it.
-
-## Forwarding — only what the two tests do not satisfy
-
-Forward a question to the user only when it falls into one of these classes:
-
-| Class | Why it forwards |
+| Class | Why |
 |---|---|
-| Genuine trade | Every option worsens something another improves, and no clear long-term winner exists |
-| Unverifiable premise | The decision hinges on a fact that cannot be checked in this session |
-| Product intent | Language, theme, scope, stack, business rules — humans own these (Guardian's Authority section); never auto-resolve them |
-| High-risk class | Security, auth, permissions, privacy, billing, data loss/deletion, migrations, public API contracts — always forwarded, even when a test appears to resolve it |
+| Genuine trade | Every option worsens something another improves |
+| Unverifiable premise | Hinges on a fact not checkable this session |
+| Product intent | Language, theme, scope, stack, business rules |
+| High-risk | Security, auth, permissions, privacy, billing, data loss, migrations, public API contracts — always forwarded |
 
-When forwarding, use the trade format: state each option, what it worsens, the open premise the choice depends on, and a recommendation with its activation condition (`worth doing when <pain observed>`).
+Forward in trade format: each option, what it worsens, the open premise, a
+recommendation with its activation condition (`worth doing when <pain>`).
 
-## Recording
+## Record
 
-Every self-answered question must be recorded where the work is delivered (final response and/or PR description):
+Every self-answered question goes in the final response and/or PR description:
 
 ```txt
-Q: <the question>
-A: <chosen option> — resolved by <pareto|long-term>; checked: <what was verified this session>
+Q: <question>
+A: <chosen option> — resolved by <pareto|long-term>; checked: <what was verified>
 ```
-
-A question resolved silently — without a recorded entry — does not count as resolved.
