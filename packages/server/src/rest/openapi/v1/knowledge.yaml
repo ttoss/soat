@@ -56,7 +56,12 @@ paths:
                   example: 0.5
                 limit:
                   type: integer
-                  description: Maximum number of results to return (default 10)
+                  description: >-
+                    Maximum number of results to return (default 10). A value
+                    above 100 is clamped to 100 — the ceiling bounds the vector
+                    scan this one request performs, so a larger `limit` returns
+                    everything there is up to that many rows rather than being
+                    refused.
                   minimum: 1
                   example: 10
                 memory_ids:

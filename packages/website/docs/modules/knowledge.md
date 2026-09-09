@@ -165,6 +165,10 @@ and documents may influence what it tries to do.
 
 `project_id` is optional. When omitted, the server resolves accessible projects from the caller's identity (API key project scope, admin wildcard, or the projects granted by the caller's policies).
 
+### Result ceiling
+
+`limit` defaults to 10 and is clamped to **100**. The ceiling bounds the vector scan one request performs, so a larger `limit` returns everything there is up to 100 rows rather than being refused.
+
 ## Configuration
 
 | Environment Variable   | Required | Description                                                  |

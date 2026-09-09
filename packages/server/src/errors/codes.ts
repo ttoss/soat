@@ -351,6 +351,11 @@ export const ERROR_CODES = {
     description:
       'The model wrote a tool invocation as plain assistant text (e.g. a ```json block containing {"name": "<a bound tool>", "arguments": {…}}) instead of making a structured tool call, so the tool never ran. Upstream-caused like AI_PROVIDER_ERROR: returning that text as the answer would be a silent data-integrity failure, so the generation fails instead.',
   },
+  UPLOAD_TOO_LARGE: {
+    httpStatus: 413,
+    description:
+      'The multipart upload exceeds the byte ceiling this deployment accepts (`FILE_UPLOAD_MAX_BYTES`, 25 MB by default). The request is refused while the body is still streaming, so nothing was stored. Send a smaller file, or ask the operator to raise the ceiling.',
+  },
   FILE_TOO_LARGE_FOR_SYNC: {
     httpStatus: 413,
     description:

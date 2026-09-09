@@ -47,6 +47,8 @@ Rules are per-project. SOAT does not perform OCR or transcription itself — the
 
 `project_id + content_type_glob` is unique within a project — one rule per glob. Exactly one of `tool_id` / `agent_id` must be set.
 
+A glob carries at most **4** wildcards and **255** characters; a MIME glob needs one on each side of the slash at most, and a longer pattern is refused with `INGESTION_RULE_VALIDATION_FAILED`.
+
 ## Key Concepts
 
 ### Content-Type Matching

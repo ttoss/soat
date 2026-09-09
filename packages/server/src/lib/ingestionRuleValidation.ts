@@ -1,7 +1,16 @@
+import {
+  MAX_CONTENT_TYPE_GLOB_LENGTH,
+  MAX_CONTENT_TYPE_GLOB_WILDCARDS,
+} from './requestBounds';
+
 const CONTENT_TYPE_GLOB_PATTERN = /^[a-zA-Z0-9*.+-]+\/[a-zA-Z0-9*.+-]+$/;
 
 const isValidContentTypeGlob = (glob: string): boolean => {
-  return CONTENT_TYPE_GLOB_PATTERN.test(glob);
+  return (
+    glob.length <= MAX_CONTENT_TYPE_GLOB_LENGTH &&
+    (glob.match(/\*/g) ?? []).length <= MAX_CONTENT_TYPE_GLOB_WILDCARDS &&
+    CONTENT_TYPE_GLOB_PATTERN.test(glob)
+  );
 };
 
 const validateConverterToolType = (args: {
@@ -77,7 +86,7 @@ export const validateIngestionRule = (args: {
     return toolTypeError;
   }
   if (!isValidContentTypeGlob(args.contentTypeGlob)) {
-    return 'content_type_glob must be a valid MIME type glob (e.g. "image/*", "image/png", "*/*")';
+    return `content_type_glob must be a valid MIME type glob (e.g. "image/*", "image/png", "*/*"), at most ${MAX_CONTENT_TYPE_GLOB_LENGTH} characters and ${MAX_CONTENT_TYPE_GLOB_WILDCARDS} wildcards`;
   }
   const presetParametersError = validatePresetParameters(args.presetParameters);
   if (presetParametersError) {

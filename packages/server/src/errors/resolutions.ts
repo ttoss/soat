@@ -83,6 +83,8 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'This upload token has already been redeemed. Request a new one for another upload.',
   UNSUPPORTED_FILE_TYPE:
     "The file's media type has no parser on this deployment. Convert it to a supported type, or add an ingestion rule that does.",
+  UPLOAD_TOO_LARGE:
+    "The upload is over this deployment's byte ceiling. Send a smaller file, or ask the operator to raise `FILE_UPLOAD_MAX_BYTES`.",
   FILE_TOO_LARGE_FOR_SYNC:
     'The file is too large to parse inside the request. Call the same operation without `wait=true` and poll the handle it returns.',
   BOOTSTRAP_ALREADY_COMPLETED:
