@@ -171,6 +171,17 @@ export class Session extends Model {
   @Column({ type: DataType.DATE, allowNull: true, field: 'last_activity_at' })
   declare lastActivityAt: Date | null;
 
+  /**
+   * Agent config version that served the session's most recent generation.
+   *
+   * Denormalized from `generations.agent_version`, which stays the per-turn
+   * record: a staged rollout promoted mid-conversation moves this on the next
+   * turn, so it names what the session runs now, not what it has ever run.
+   * Null until the session has generated.
+   */
+  @Column({ type: DataType.INTEGER, allowNull: true, field: 'agent_version' })
+  declare agentVersion: number | null;
+
   @Column({
     type: DataType.INTEGER,
     allowNull: true,

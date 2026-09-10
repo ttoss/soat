@@ -4177,6 +4177,15 @@ if [ "$EUA_SESSION_USAGE_OK" != "true" ]; then
   exit 1
 fi
 
+# The session names the agent config that served it. Asserted as "some version"
+# rather than 1: the agent is shared with earlier steps that may have bumped it.
+EUA_SESSION_VERSION_OK=$(printf '%s\n' "$EUA_SESSION_GET" | jq -r '(.agent_version | type) == "number" and (.agent_version >= 1)')
+if [ "$EUA_SESSION_VERSION_OK" != "true" ]; then
+  echo "ERROR: get-session did not report the agent version that served it" >&2
+  printf '%s\n' "$EUA_SESSION_GET" >&2
+  exit 1
+fi
+
 $SOAT_CLI delete-session --session-id "$EUA_SESSION_ID" >/dev/null
 echo "End-user usage attribution: OK"
 

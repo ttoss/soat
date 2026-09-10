@@ -615,6 +615,8 @@ When the gate is met, the run that cleared it is recorded as `eval_run_id` on th
 
 Every generation record carries the version that served it as the top-level `agent_version` field, so [traces](./traces.md) and post-hoc comparisons can attribute behavior to a specific config. It is a server-owned field, not a `metadata` key, so a caller cannot set it.
 
+A [session](./sessions.md#which-version-is-serving) carries the same number for its most recent turn, so a running conversation reads back without listing its generations.
+
 Two agent fields are read from the live agent even during a rollout, because they are consumed outside the generation path: `single_session_per_actor` (evaluated once, when a session is created) and `max_context_messages` (applied by the conversation path before it dispatches).
 
 ### Deletion

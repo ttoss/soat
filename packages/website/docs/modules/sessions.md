@@ -31,6 +31,7 @@ Sessions are a top-level resource at `/sessions`. Each session belongs to an [Ag
 | ------------------------ | --------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `id`                     | string          | Public identifier prefixed with `sess_`                                                                          |
 | `agent_id`               | string          | Public ID of the agent this session belongs to                                                                   |
+| `agent_version`          | integer \| null | Agent config version that served the most recent generation; `null` until the session has generated. See [Which version is serving](#which-version-is-serving) |
 | `conversation_id`        | string          | Public ID of the underlying conversation                                                                         |
 | `status`                 | string          | `open` (default), `closed`, or `expired`                                                                         |
 | `name`                   | string          | Optional display name                                                                                            |
@@ -75,6 +76,15 @@ An optional `idempotency_key` string can be included with either variant — see
 ### The Session's End User (Actor)
 
 A session has an end user only when `actor_id` is supplied on create. [Actors](./actors.md) are created separately and are never auto-created here. This matters beyond naming: end-user attribution on the resulting [usage](./usage.md#end-user-attribution) events is derived from the session's actor, so a session without one produces generations that match no `actor`-scoped [quota](./quotas.md#actor-scope). Attach an actor before relying on a per-user spend cap.
+
+### Which version is serving
+
+`agent_version` names the agent config that served the session's most recent generation — the number [`GET /api/v1/agents/{agent_id}/versions/{version}`](/docs/api/agents/get-agent-version) reads back as a full config snapshot.
+
+It is a pointer, not a pin. The session does not choose its version: [staged rollout](./agents.md#versioning-and-staged-rollout) assigns each turn, keyed on the session's actor where it has one and on the session itself otherwise, and this records what that assignment resolved to. Promote a canary mid-conversation and the next turn moves the session with it.
+
+- **`null` until the session generates**, and on a [fork](#forking), which runs nothing until it is generated into and may run a different agent entirely.
+- **Per-turn history stays on the generations.** A session that spans a promotion served two versions; `agent_version` names only the latest. [`GET /api/v1/generations?session_id=…`](/docs/api/generations/list-generations) has one `agent_version` per turn.
 
 ### Session cost
 

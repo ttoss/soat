@@ -19,6 +19,7 @@ import { mapGeneration, type PersistedGeneration } from './generationMapper';
 import { findOrCreateTrace, findTraceDbId } from './generationTrace';
 import { emptyPage, paginatedList } from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
+import { recordSessionAgentVersion } from './sessionAgentVersion';
 
 // The row → wire mapper lives in its own module; re-exported so the many
 // existing `from './generations'` imports of the type keep working.
@@ -211,6 +212,14 @@ export const createGenerationRecord = async (
   if (args.rootGenerationId) {
     await recordChainGrowth({ rootGenerationId: args.rootGenerationId });
   }
+
+  // The session's own copy of what this turn ran against. Every path that
+  // dispatches into a session lands here, so this is the one place the two
+  // stamps cannot come apart.
+  await recordSessionAgentVersion({
+    sessionDbId: endUser.sessionId,
+    agentVersion: args.agentVersion,
+  });
 
   const fullGeneration = await db.Generation.findByPk(gen.id, {
     include: generationIncludes(),

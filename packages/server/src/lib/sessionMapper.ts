@@ -35,6 +35,7 @@ const extractSessionOptional = (session: SessionRow) => {
     last_activity_at: session.lastActivityAt ?? null,
     message_delay_seconds: session.messageDelaySeconds ?? null,
     forked_from_position: session.forkedFromPosition ?? null,
+    agent_version: session.agentVersion ?? null,
   };
 };
 

@@ -628,6 +628,16 @@ components:
           type: string
           description: Agent public ID
           example: agent_V1StGXR8Z5jdHi6B
+        agent_version:
+          type: integer
+          nullable: true
+          description: >
+            Agent config version that served this session's most recent
+            generation, or null before it has generated. A staged rollout
+            promoted mid-conversation moves this on the next turn, so it names
+            what the session runs now; the per-turn record stays on each
+            generation's own `agent_version`.
+          example: 2
         conversation_id:
           x-soat-ref: conversations
           type: string
