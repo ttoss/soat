@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.46.0](https://github.com/ttoss/soat/compare/v0.45.0...v0.46.0) (2026-09-10)
+
+* feat(server)!: narrow usage cost by any id or value, and validate query strings (#1265) ([d8c656d](https://github.com/ttoss/soat/commit/d8c656d1410c38292a84551f521bba3b9cd197fc)), closes [#1265](https://github.com/ttoss/soat/issues/1265)
+
+### BREAKING CHANGES
+
+* the usage aggregate's `meter_type`, `session_id` and
+  `actor_id` move from the response's top level into a `filters` object
+  carrying all thirteen narrowings, null when unset. At thirteen they would
+  have outnumbered the figures, and a top-level `ai_provider_id` would have
+  sat beside a per-group `ai_provider_id` meaning something else. Read
+  `filters.meter_type` where `meter_type` was read before.
+
 # [0.45.0](https://github.com/ttoss/soat/compare/v0.44.0...v0.45.0) (2026-09-09)
 
 ### Bug Fixes
