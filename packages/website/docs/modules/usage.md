@@ -11,7 +11,7 @@ Usage events record the cost of every metered occurrence, with the measured quan
 
 ## Overview
 
-Every metered occurrence writes one **usage event** plus its **component** rows: an event captures attribution and total cost; each component captures one priced dimension. Four meter types share the shape — `llm_tokens`, `compute_execution`, `storage`, and `api_request`. Events and components are **append-only and immutable**, and writes are **idempotent**, so historical usage never changes and a replayed completion never double-counts. Every event links back to the [generation](./generations.md), [agent](./agents.md), [trace](./traces.md), [AI provider](./ai-providers.md), [project](./projects.md), and — when applicable — the [trigger](./triggers.md) or [orchestration](./orchestrations.md) run behind it.
+Every metered occurrence writes one **usage event** (attribution, total cost) plus **component** rows (one priced dimension each). Four meter types share the shape: `llm_tokens`, `compute_execution`, `storage`, `api_request`. Events and components are **append-only and immutable**; writes are **idempotent**, so a replayed completion never double-counts. Each event links to its [generation](./generations.md), [agent](./agents.md), [trace](./traces.md), [AI provider](./ai-providers.md), [project](./projects.md), and, when applicable, [trigger](./triggers.md) or [orchestration](./orchestrations.md) run.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -80,7 +80,7 @@ A versioned unit price for one billable **component** of a SKU. Three scopes liv
 
 ### UsageThreshold
 
-A per-project alert rule on windowed usage. When the project's `metric` over `window` crosses `threshold`, a `usage.threshold_crossed` [webhook](./webhooks.md) fires. Thresholds are immutable apart from deletion — to change one, delete and recreate it (which resets its fire state).
+A per-project alert rule: when `metric` over `window` crosses `threshold`, a `usage.threshold_crossed` [webhook](./webhooks.md) fires. Immutable apart from deletion; delete and recreate to change one (resets its fire state).
 
 | Field              | Type            | Description                                                                       |
 | ------------------ | --------------- | -------------------------------------------------------------------------------- |
@@ -104,9 +104,9 @@ A per-project alert rule on windowed usage. When the project's `metric` over `wi
 | `api_request`    | A batch of API requests served for a project        | `request`                                         |
 | `storage`        | One project's stored footprint for one day          | `gb_day`, `chunk_count`                           |
 
-For platform meter types the `(provider, model)` pair is a **SKU**: `provider` is `soat` and `model` names the billable unit (e.g. `compute-second`, `gb-day`, `request`).
+For platform meter types `(provider, model)` is a **SKU**: `provider` is `soat`, `model` the billable unit (`compute-second`, `gb-day`, `request`).
 
-Token components are disjoint and additive: `input_tokens` is the **uncached** input, so full prompt tokens = `input_tokens` + `cached_tokens`. `reasoning_tokens` is a non-billable subset of `output_tokens`. Cached and reasoning components are recorded only when the provider reports them.
+Token components are disjoint and additive: `input_tokens` is **uncached** input, so full prompt tokens = `input_tokens` + `cached_tokens`; `reasoning_tokens` is a non-billable subset of `output_tokens`. Cached and reasoning components are recorded only when the provider reports them.
 
 ### Coverage
 
@@ -117,19 +117,17 @@ Token components are disjoint and additive: `input_tokens` is the **uncached** i
 | Agent generations | Agent generate (non-streaming, streaming, and the tool-outputs continuation), [conversations](./conversations.md), and [orchestration](./orchestrations.md) agent nodes | Full chain: `generation_id`, `agent_id`, `trace_id`, plus `orchestration_run_id`/`node_id` inside a run |
 | Standalone completions | [Chat](./chats.md) completions (stateless and chat-scoped) and [memory](./memories.md) fact extraction and consolidation | `generation_id` and `trace_id` are `null` — these calls create no generation. `agent_id` is set for memory passes, `null` for chats |
 
-Idempotency keys: inside a run the key is scoped to the node execution **attempt** (`run:<orchestration_run_id>:node:<node_id>:attempt:<n>`), so a replayed node is a no-op while a **retry** meters for real — a second attempt is a second generation that reached the provider, and dropping it would under-report the node. The same identity keys the `compute_execution` meter and the node-execution record, so all three agree on what one attempt is. Standalone completions have no replay identity, so their key is unique per call (`completion:<source>:<uuid>`). A **streamed** completion is metered when the stream finishes; a stream the client abandons mid-way is not metered.
+Idempotency keys: inside a run, the node execution **attempt** (`run:<orchestration_run_id>:node:<node_id>:attempt:<n>`), so a replayed node is a no-op while a **retry** meters for real; the same identity keys the `compute_execution` meter and the node-execution record. Standalone completions have no replay identity: `completion:<source>:<uuid>`. A **streamed** completion is metered when the stream finishes; one the client abandons is not.
 
-A turn that ends `failed` is metered when it spent something. The case that matters is a generation the model *answered* — the text just did not satisfy the agent's [`output_schema`](./agents.md), so the turn fails with `OUTPUT_SCHEMA_VALIDATION_FAILED` — because the provider billed for those tokens either way and the counts come back on the failure. A request that never reached the model (a provider `4xx`/`5xx`, a network fault) burned nothing and writes no event, so a failed generation with no usage row means the call never landed rather than that metering was skipped.
+A `failed` turn is metered when it spent something: a generation the model *answered* but that failed the agent's [`output_schema`](./agents.md) with `OUTPUT_SCHEMA_VALIDATION_FAILED` was billed, and the counts come back on the failure. A request that never reached the model (provider `4xx`/`5xx`, network fault) writes no event, so a failed generation with no usage row means the call never landed.
 
 ### Compute metering
 
-Every orchestration node execution that actively ran writes one `compute_execution` event carrying a `compute_second` component with the node's wall-clock seconds (`completed_at − started_at`). Non-agent nodes still meter compute; an agent node produces both an `llm_tokens` and a `compute_execution` event. Attribution is at the run/node level (`generation_id`, `agent_id`, `trace_id` are `null`). Priced from a `soat`/`compute-second` SKU when one is effective; idempotent on `compute:<orchestration_run_id>:node:<node_id>:attempt:<n>`. A skipped node is not metered.
+Every orchestration node execution that actively ran writes one `compute_execution` event with a `compute_second` component of wall-clock seconds (`completed_at − started_at`). Non-agent nodes meter compute too; an agent node produces both an `llm_tokens` and a `compute_execution` event. Attribution is run/node level (`generation_id`, `agent_id`, `trace_id` `null`). Priced from a `soat`/`compute-second` SKU when effective; idempotent on `compute:<orchestration_run_id>:node:<node_id>:attempt:<n>`. A skipped node is not metered.
 
 ### Storage metering
 
-A daily snapshot writes one `storage` event per project per UTC day, carrying two components measured in the same statement: `gb_day` (the project's stored gigabytes) and `chunk_count` (the indexed rows behind them). No principal/agent/run attribution. Both are priced from the `soat`/`gb-day` SKU, each from its own component row, and the event's cost is their sum; idempotent on `storage:<project>:<YYYY-MM-DD>`. Intra-day churn between samples meters zero. Either component may be left unpriced — it still records its quantity, with `cost_usd` null.
-
-The snapshot also runs once at server startup, so a deployment that restarts more often than the interval still meters every day it is up. Being idempotent per project per UTC day, a restart re-samples the current day rather than writing a second event for it.
+A daily snapshot writes one `storage` event per project per UTC day with two components measured in one statement: `gb_day` (stored gigabytes) and `chunk_count` (indexed rows behind them). No principal/agent/run attribution. Both are priced from the `soat`/`gb-day` SKU, each from its own component row; the event's cost is their sum. Idempotent on `storage:<project>:<YYYY-MM-DD>`, so the run at server startup re-samples the current day; intra-day churn meters zero; an unpriced component records its quantity with `cost_usd` null.
 
 `gb_day` sums seven terms:
 
@@ -143,62 +141,25 @@ The snapshot also runs once at server startup, so a deployment that restarts mor
 | Dataset item payloads | [dataset item](./evaluations.md) `input`, `expected_output`, `metadata` |
 | Eval result payloads | [eval result](./evaluations.md) `input`, `expected_output`, `scores`, `output` |
 
-`chunk_count` counts the rows behind two of them — [document](./documents.md)
-chunks plus [memory entries](./memories.md) — embedded or not, since a row joins
-the vector index as soon as its embedding is written. A dataset item and an eval
-result carry no vector, so neither joins that index and neither is counted there.
+`chunk_count` counts [document](./documents.md) chunks plus [memory entries](./memories.md), embedded or not (a row joins the vector index once its embedding is written). Dataset items and eval results carry no vector and are not counted.
 
-**The evaluations corpus grows with runs, not with the dataset.** An eval result
-[freezes its own copy](./evaluations.md#frozen-inputs) of the item it scored, so
-a 100-item dataset run ten times stores eleven copies of every payload. Content
-[retention](./evaluations.md#retention-and-erasure) clears a result's `output`
-and nothing else of it, so the rest accumulates for the life of the project.
-
-**The snapshot is also what bounds the corpus.** A `storage_bytes`
-[quota](./quotas.md#storage-enforcement) caps a project's footprint against the
-newest `storage` event plus the request's own delta, and refuses the corpus write
-paths with `409 QUOTA_STORAGE_EXCEEDED`. Enforcing against the snapshot rather
-than a live scan is what keeps the check off the per-upload path, at the cost of
-up to a day of staleness.
-
-**Embeddings dominate.** A vector is four bytes per dimension, so at
-`EMBEDDING_DIMENSIONS=1024` one embedding is ~4 KB against the ~1 KB of text it
-encodes. A row with no embedding yet contributes its text and nothing more. Both
-vector widths are measured from the stored value rather than computed from
-`EMBEDDING_DIMENSIONS`, so the figure follows that setting without being pinned
-to it.
-
-**Physical overhead is excluded from `gb_day`, deliberately.** That component is
-the logical bytes a project stored: index pages (including the HNSW graphs over
-both vector columns), TOAST chunk and tuple headers, and table bloat are not
-counted. None of it is attributable to a single project, and it moves with vacuum
-state, so including it would make one project's figure depend on every other
-project's write history. Real disk use is therefore higher than `gb_day` reports —
-by a factor that depends on the deployment, not on the project.
-
-**`chunk_count` is what that overhead is priced against.** Most of what a chunk
-costs is fixed per row rather than proportional to its text: at
-`EMBEDDING_DIMENSIONS=1024` an HNSW element occupies a whole 8 KiB page — a
-4 KB vector plus its neighbour list leaves no room for a second element — on top
-of the ~5.5 KB the vector itself stores out of line. Measured against a mirrored
-schema, a 25× change in chunk size moves the cost of a chunk by 17%, so the same
-corpus re-chunked meters between 2.2× and 7.4× its own source size on `gb_day`
-alone while costing roughly the same to store. A count does not drift with a
-[`chunk_strategy`](./documents.md) the caller picks, and it is also the figure
-that says whether a project is a few large documents or a million tiny chunks —
-two corpora that read alike on `gb_day` and behave nothing alike on search.
+- **The evaluations corpus grows with runs, not the dataset.** An eval result [freezes its own copy](./evaluations.md#frozen-inputs) of the item it scored: a 100-item dataset run ten times stores eleven copies of every payload. [Retention](./evaluations.md#retention-and-erasure) clears a result's `output` only.
+- **The snapshot bounds the corpus.** A `storage_bytes` [quota](./quotas.md#storage-enforcement) caps the footprint against the newest `storage` event plus the request's delta, refusing corpus writes with `409 QUOTA_STORAGE_EXCEEDED`; this keeps the check off the per-upload path at up to a day of staleness.
+- **Embeddings dominate.** Four bytes per dimension: at `EMBEDDING_DIMENSIONS=1024` one embedding is ~4 KB against ~1 KB of text. A row without an embedding contributes its text only. Vector widths are measured from the stored value, not computed from `EMBEDDING_DIMENSIONS`.
+- **Physical overhead is excluded from `gb_day`.** Index pages (including the HNSW graphs over both vector columns), TOAST chunk and tuple headers, and table bloat are not counted: none is attributable to one project and it moves with vacuum state. Real disk use is higher by a deployment-dependent factor.
+- **`chunk_count` is what that overhead is priced against.** Most of a chunk's cost is fixed per row: at `EMBEDDING_DIMENSIONS=1024` an HNSW element occupies a whole 8 KiB page (4 KB vector plus neighbour list) on top of the ~5.5 KB stored out of line. On a mirrored schema, a 25× change in chunk size moves a chunk's cost by 17%, while the same corpus re-chunked meters between 2.2× and 7.4× its source size on `gb_day`. A count does not drift with the caller's [`chunk_strategy`](./documents.md), and distinguishes a few large documents from a million tiny chunks, alike on `gb_day` and unlike on search.
 
 ### API-request metering
 
-Requests are counted in memory per (project, API key) and a periodic flush writes one `api_request` event per counter per window — deliberately never one row per request. Counting scope mirrors [quotas](./quotas.md#which-project-a-request-counts-against) exactly: only API-key-authenticated requests count, a project-scoped key counts against its bound project, an unscoped key against the project the route resolved and authorized, and a request that resolves to no single project is not counted. Enforcement stays with quotas — this only prices (from a `soat`/`request` SKU). The flush-window idempotency key includes a per-instance id; the last still-open window is lost on an unclean shutdown (a bounded undercount).
+Requests are counted in memory per (project, API key); a periodic flush writes one `api_request` event per counter per window, never one row per request. Counting scope mirrors [quotas](./quotas.md#which-project-a-request-counts-against): only API-key-authenticated requests count, a project-scoped key against its bound project, an unscoped key against the project the route resolved and authorized, none when no single project resolves. Enforcement stays with quotas; this only prices (`soat`/`request` SKU). The flush-window idempotency key includes a per-instance id; the last open window is lost on an unclean shutdown (a bounded undercount).
 
 ### Trigger and action attribution
 
-`action_id` is a caller-supplied label passed on the generate request, persisted on the [generation](./generations.md) and copied onto its event. `trigger_id` is set automatically when a [trigger](./triggers.md) initiates the generation — directly or via an orchestration run the trigger started. Filter the event list by either (`?trigger_id=` / `?action_id=`).
+`action_id` is a caller-supplied label on the generate request, persisted on the [generation](./generations.md) and copied onto its event. `trigger_id` is set when a [trigger](./triggers.md) initiates the generation, directly or via an orchestration run it started. Filter the event list by either (`?trigger_id=` / `?action_id=`).
 
 ### Workload source
 
-`source` names the workload that produced the spend, so verification and background work are separable from user-serving traffic:
+`source` names the workload behind the spend, separating verification and background work from user-serving traffic:
 
 | `source` | What produced the event |
 | --- | --- |
@@ -209,17 +170,15 @@ Requests are counted in memory per (project, API key) and a periodic flush write
 | `memory_extraction` / `memory_consolidation` | A [memory](./memories.md) pass |
 | `embedding` | An [embedding](./embeddings.md#metering) call — the endpoint, document ingestion, a memory write, or a search's query vector |
 
-`source` is set by the platform at the metering choke point — a caller cannot bill eval spend as production. It both filters ([`GET /api/v1/usage/events?source=eval`](/docs/api/usage/list-usage-events)) and groups (`group_by=source`); ordinary traffic collapses into the `null` bucket, so groups still sum to the project total.
+Set by the platform at the metering choke point; a caller cannot bill eval spend as production. Filters ([`GET /api/v1/usage/events?source=eval`](/docs/api/usage/list-usage-events)) and groups (`group_by=source`); ordinary traffic is the `null` bucket, so groups sum to the project total.
 
 ### Provider attribution
 
-An event bills against the provider that served it: the target a [model route](./model-routes.md) picked for the turn, or the agent's pinned provider when it has one. The route's choice is read from what the turn actually did, so a generation that failed over meters against the target that answered rather than the one it abandoned. Because a routed agent pins nothing, this is also what keeps routed spend priced at all — an event with no provider resolves no price row and reports the `unknown` provider slug.
+An event bills against the provider that served it: the target a [model route](./model-routes.md) picked (read from what the turn did, so a failed-over generation meters against the target that answered), or the agent's pinned provider. An event with no provider resolves no price row and reports the `unknown` provider slug.
 
 ### End-user attribution
 
-An event carries the [actor](./actors.md) and [session](./sessions.md) it was produced for, copied from the generation at write time and **frozen** — renaming or deleting either never rewrites recorded spend. Attribution is set on the session path only; direct agent generations, trigger-initiated work, orchestration nodes, and standalone completions record `null` for both. The actor is **derived from the session**, never taken from the request (`tool_context` is caller-writable and is not read for attribution). Events recorded before this shipped carry `null`.
-
-There are three ways to read the resulting spend, in increasing order of how much shaping they let you do:
+An event carries the [actor](./actors.md) and [session](./sessions.md) it was produced for, copied from the generation at write time and **frozen**; renaming or deleting either never rewrites spend. Set on the session path only; direct agent generations, trigger-initiated work, orchestration nodes, and standalone completions record `null` for both. The actor is **derived from the session**, never from the request (`tool_context` is caller-writable and not read). Events recorded before this shipped carry `null`.
 
 | Question | Read |
 | --- | --- |
@@ -228,19 +187,15 @@ There are three ways to read the resulting spend, in increasing order of how muc
 | Which sessions or users are the biggest spenders? | The same endpoint with `group_by=session` or `group_by=actor` |
 | Which turns made up that spend? | [`GET /api/v1/generations`](/docs/api/generations/list-generations) with `session_id=` or `actor_id=` |
 
-`session_id` and `actor_id` are two of the [thirteen narrowings](#narrowing-a-rollup) the rollup takes; both narrow the **whole** rollup, so they compose with any `group_by`. `actor_id` is the figure behind an `actor`-scoped `cost_usd` [quota](./quotas.md#actor-scope): what the actor has spent, against the cap it is held to.
-
-The same pair is on the generation record itself (`session_id`, `actor_id` on [`GET /api/v1/generations/{generation_id}`](/docs/api/generations/get-generation)), filters the generation listing, and filters the raw event listing (`?actor_id=` / `?session_id=` on [`GET /api/v1/usage/events`](/docs/api/usage/list-usage-events)), so a consumer that wants to price the turns itself can walk session → generation → components without recording the link on its own side.
+`session_id` and `actor_id` are two of the [thirteen narrowings](#narrowing-a-rollup); both narrow the **whole** rollup and compose with any `group_by`. `actor_id` is the figure behind an `actor`-scoped `cost_usd` [quota](./quotas.md#actor-scope). The same pair is on the generation record ([`GET /api/v1/generations/{generation_id}`](/docs/api/generations/get-generation)), filters the generation listing, and filters the raw event listing (`?actor_id=` / `?session_id=` on [`GET /api/v1/usage/events`](/docs/api/usage/list-usage-events)), so a consumer can walk session → generation → components without recording the link itself.
 
 ### Pricing
 
-Each component's cost is computed at write time from the effective price row for its `(provider, model, component)`, resolved most-specific first: AI provider instance → project + provider-slug → global default. Costs are frozen onto the components; later price changes never alter them. `cached_tokens` falls back to the `input_tokens` rate when no cached price is set. A `null` `cost_usd` means no price row covered the component — the quantity is still captured. Each component records `price_id`, so a receipt is auditable to the precise price applied.
+Each component's cost is computed at write time from the effective price row for its `(provider, model, component)`, most-specific first: AI provider instance → project + provider-slug → global default. Costs are frozen; later price changes never alter them. `cached_tokens` falls back to the `input_tokens` rate when no cached price is set. A `null` `cost_usd` means no row covered the component; the quantity is still captured. Each component records `price_id`, so a receipt is auditable to the price applied.
 
-**`cached_tokens` is a component in its own right, not a slice of `input_tokens`.** The `input_tokens` *component* holds uncached input only, and the two are priced independently — so pricing both is correct and double-counts nothing. What does include cached input is the reconstructed `input_tokens` *field* on a receipt's or an aggregate's totals, which is the provider's full prompt count (`input_tokens` component + `cached_tokens` component). Price the components; read the fields.
-
-**Pricing is not retroactive.** Cost is frozen when the event is written, so a component metered before any row priced it stays `cost_usd: null` permanently — a project that sets its prices on day 30 can never cost its first 29 days, and there is no backfill or re-pricing pass. The [first-price exception](#pricing) exists for exactly this: while a `(provider, model, component)` is unpriced in every scope it resolves through, `effective_from` may be dated now or earlier, so the way to avoid the gap is to write the first row before the traffic rather than to correct it after. The quantities survive either way, so an unpriced window can still be costed outside the platform from the component counts.
-
-**Embeddings are the one exception.** No tier prices an embedding call — it carries no provider record, and its rate is deployment configuration (`EMBEDDING_INPUT_1M_TOKEN_PRICE_USD`), so a price book row naming the embedding model is ignored. See [Pricing embeddings](./embeddings.md#pricing-embeddings).
+- **`cached_tokens` is a component in its own right, not a slice of `input_tokens`.** The `input_tokens` *component* is uncached input only, so pricing both double-counts nothing; the reconstructed `input_tokens` *field* on receipt and aggregate totals is the full prompt count (`input_tokens` + `cached_tokens` components). Price the components; read the fields.
+- **Pricing is not retroactive.** A component metered before any row priced it stays `cost_usd: null`; there is no backfill. The [first-price exception](#pricing) lets the first row be dated now or earlier, so write it before the traffic. Quantities survive, so an unpriced window can still be costed outside the platform.
+- **Embeddings are the one exception.** No tier prices an embedding call: it carries no provider record and its rate is deployment configuration (`EMBEDDING_INPUT_1M_TOKEN_PRICE_USD`), so a price book row naming the embedding model is ignored. See [Pricing embeddings](./embeddings.md#pricing-embeddings).
 
 SOAT ships **no default prices**. Prices are managed where their scope lives:
 
@@ -248,32 +203,32 @@ SOAT ships **no default prices**. Prices are managed where their scope lives:
 - **Project + provider-slug** — project members via [`PUT /api/v1/projects/{project_id}/prices`](./projects.md).
 - **Per-provider override** — project members via [`PUT /api/v1/ai-providers/{ai_provider_id}/prices`](./ai-providers.md#price-overrides).
 
-Past-effective prices are immutable — corrections ship as new future-dated rows. A **first** price is the exception: when nothing prices a `(provider, model, component)` yet, in the scope being written or any broader one it resolves through, `effective_from` may be now or earlier. There is no row to rewrite and no cost frozen against one, and forcing a future date would leave the scope live and unpriced until it lands — a component metered in that window is charged `null` permanently, since cost is frozen when the event is written. Prices can also be **declared in a formation** with the `project_price` resource type, keyed on `(provider, model, component, effective_from)`; there `effective_from` is optional and defaults to deploy time. See [Formations Types → Project Price](/docs/formations-types/project-price).
+Past-effective prices are immutable; corrections ship as future-dated rows. A **first** price is the exception: when nothing prices a `(provider, model, component)` in the scope being written or any broader one it resolves through, `effective_from` may be now or earlier (a forced future date would charge `null` until it lands). Prices can also be **declared in a formation** with the `project_price` resource type, keyed on `(provider, model, component, effective_from)`, where `effective_from` is optional and defaults to deploy time. See [Formations Types → Project Price](/docs/formations-types/project-price).
 
-Each `PUT` takes a batch and stops at the first row it refuses. Both refusals — an unparseable `effective_from`, and a now-or-past-dated write onto a `(provider, model, component)` that is already priced — return `400 VALIDATION_FAILED` with the failing row in `error.meta` as `provider`, `model`, `component` and `effective_from`. Read the row from there rather than from the message.
+Each `PUT` takes a batch and stops at the first refused row. Both refusals, an unparseable `effective_from` and a now-or-past-dated write onto an already priced `(provider, model, component)`, return `400 VALIDATION_FAILED` with the failing row in `error.meta` as `provider`, `model`, `component` and `effective_from`.
 
 ### Receipts and reconciliation
 
-[`GET /api/v1/usage/receipt?generation_id=…`](/docs/api/usage/get-usage-receipt) returns a billing **receipt** for a completed generation: one line item per usage event, a `by_meter_type` cost split, reconstructed token totals (`input_tokens` is uncached input + cached), and a grand total. Because every component carries its price-book version and frozen cost, receipts are reproducible and meant to reconcile against the provider's invoice within a small tolerance (target ±2%).
+[`GET /api/v1/usage/receipt?generation_id=…`](/docs/api/usage/get-usage-receipt) returns a billing **receipt** for a completed generation: one line item per usage event, a `by_meter_type` cost split, reconstructed token totals (`input_tokens` is uncached input + cached), and a grand total. Every component carries its price-book version and frozen cost, so receipts are reproducible and reconcile against the provider's invoice within a small tolerance (target ±2%).
 
-[`GET /api/v1/usage/receipt?orchestration_run_id=…`](/docs/api/usage/get-usage-receipt) returns the same shape for an entire [orchestration](./orchestrations.md) run, summed across every node. The run's roll-up is also surfaced inline as a `usage` object on [`GET /api/v1/orchestration-runs/{orchestration_run_id}`](/docs/api/orchestrations/get-orchestration-run).
+[`GET /api/v1/usage/receipt?orchestration_run_id=…`](/docs/api/usage/get-usage-receipt) returns the same shape for an [orchestration](./orchestrations.md) run, summed across every node; the roll-up is also the `usage` object on [`GET /api/v1/orchestration-runs/{orchestration_run_id}`](/docs/api/orchestrations/get-orchestration-run).
 
-Every line item carries the `node_id` that produced it, so a run receipt is also the **per-node cost breakdown** — group the lines by `node_id` and each node's spend is the sum of its lines. Both meters appear under the node: an `agent` node's `llm_tokens` line and the `compute_execution` line of every node execution, so a pure node (a `transform`, a `condition`) shows up with its execution cost alone. Two things to know when reading it:
+Every line item carries its `node_id`, so a run receipt is also the **per-node cost breakdown**: an `agent` node's `llm_tokens` line plus the `compute_execution` line of every node execution, so a pure node (a `transform`, a `condition`) shows its execution cost alone.
 
-- **A retried node's attempts share one `node_id`.** Each attempt meters as its own event, so a retried node contributes one line per attempt; the event itself records no attempt number, so the lines group under a single `node_id`. That is the intended reading for spend — a retry is real money, so it belongs in the node's total.
+- **A retried node's attempts share one `node_id`**: one line per attempt, no attempt number on the event. A retry is real money, so it belongs in the node's total.
 - **A `null` `node_id`** means no node produced the event: a standalone generation on a per-generation receipt, or a run-level meter.
 
-A run whose graph contains a `loop` or `sub_orchestration` node is covered by the receipt only for its **own** nodes: those nodes start child runs, whose events are attributed to the child, so the parent's receipt shows the starting node's execution cost and not what the children spent. That is deliberate — the line items carry a `node_id`, and merging a child's nodes in would mix node ids from two graphs under one list. The run's own `usage` field does span the subtree, so read that for the delegated total, `usage_own` for the run's own nodes, and the `parent_orchestration_run_id` filter for the children themselves; all three are described in [Run usage](./orchestrations.md#run-usage).
+A `loop` or `sub_orchestration` node starts child runs whose events are attributed to the child, so the parent's receipt covers its **own** nodes only: the starting node's execution cost, not what the children spent (merging would mix node ids from two graphs). The run's `usage` field spans the subtree; `usage_own` is the run's own nodes; the `parent_orchestration_run_id` filter lists the children. See [Run usage](./orchestrations.md#run-usage).
 
 ### Aggregation
 
-[`GET /api/v1/usage/aggregate?project_id=…`](/docs/api/usage/get-usage-aggregate) rolls a project's usage up over an optional `[from, to]` window (inclusive ISO-8601 bounds on `created_at`), optionally bucketed by one dimension — `model`, `ai_provider`, `agent`, `orchestration_run`, `day`, `meter_type`, `actor`, `session`, or [`source`](#workload-source). `ai_provider` buckets on the provider the spend was billed against (see [Provider attribution](#provider-attribution)). Each group and the grand `totals` carry an `event_count`, summed token counts and `cost_usd` (`null` when no event in the bucket was priced). An event a dimension does not apply to collapses into a `null`-keyed group, so groups always sum to the project total. Requires `usage:GetAggregate` on the project.
+[`GET /api/v1/usage/aggregate?project_id=…`](/docs/api/usage/get-usage-aggregate) rolls a project's usage up over an optional `[from, to]` window (inclusive ISO-8601 bounds on `created_at`), optionally bucketed by one dimension: `model`, `ai_provider`, `agent`, `orchestration_run`, `day`, `meter_type`, `actor`, `session`, or [`source`](#workload-source). `ai_provider` buckets on the provider billed (see [Provider attribution](#provider-attribution)). Each group and the grand `totals` carry `event_count`, summed token counts and `cost_usd` (`null` when nothing in the bucket was priced). An event a dimension does not apply to falls in a `null`-keyed group, so groups always sum to the project total. Requires `usage:GetAggregate` on the project.
 
-**`group_by` is optional.** Omit it and `group_by` echoes back `null`, `groups` is an empty page, and `totals` still describes the whole window — which is what "what did this one agent cost" asks, without picking a bucketing to discard. A value naming no dimension is still a `400`.
+**`group_by` is optional.** Omitted, it echoes back `null`, `groups` is an empty page, and `totals` describes the whole window. A value naming no dimension is a `400`.
 
 #### Narrowing a rollup
 
-Thirteen filters narrow the rollup before it is bucketed. They intersect, and each applies to the **whole** rollup — every bucket, `totals` and `totals.distinct` alike — so any of them composes with any `group_by`: `session_id` with `group_by=day` is one conversation's spend per day, the same `session_id` with `group_by=model` is that spend split by model.
+Thirteen filters narrow the rollup before bucketing. They intersect and apply to the **whole** rollup (every bucket, `totals`, `totals.distinct`), so each composes with any `group_by`: `session_id` with `group_by=day` is one conversation's spend per day, with `group_by=model` the same spend by model.
 
 | Filter | Selects |
 | --- | --- |
@@ -284,21 +239,21 @@ Thirteen filters narrow the rollup before it is bucketed. They intersect, and ea
 | `meter_type`, `model`, `source` | One meter, one as-billed SKU, one [workload source](#workload-source) |
 | `trigger_id`, `action_id` | The spend one trigger initiated; one caller-supplied action label |
 
-The two rows differ in how a value that matches nothing behaves. The **eight naming a resource** are resolved against the project first, and an id naming nothing there empties the rollup rather than dropping the filter — a mistyped id must never read back as the project's whole spend. The **five carrying a value** are matched exactly as the event recorded them, so an unrecognised meter, model or source simply selects no events; that is also why `trigger_id` and `action_id` are values rather than ids, since the event stores them denormalized and the spend outlives the trigger that incurred it.
+The **eight naming a resource** are resolved against the project first; an id naming nothing empties the rollup rather than dropping the filter, so a mistyped id never reads back as the project's whole spend. The **five carrying a value** are matched as the event recorded them, so an unrecognised meter, model or source selects no events; `trigger_id` and `action_id` are values because the event stores them denormalized and the spend outlives the trigger.
 
-`orchestration_id` selects the runs that orchestration started **itself**, never the subtree a `loop` or `sub_orchestration` node started under it — those are metered against the child orchestration, where they were incurred. That keeps the figure additive: summed across a project's orchestrations it reaches the project total exactly once. For one invocation's subtree, read `usage` on the run ([Run usage](./orchestrations.md#run-usage)).
+`orchestration_id` selects the runs that orchestration started **itself**, never the subtree a `loop` or `sub_orchestration` node started (metered against the child orchestration), so summed across a project's orchestrations it reaches the project total exactly once. For one invocation's subtree, read `usage` on the run ([Run usage](./orchestrations.md#run-usage)).
 
-Every narrowing is echoed back under `filters` on the response, `null` when unset, because a rollup of zeros is otherwise indistinguishable from a project that spent nothing. The same filters (plus `limit`/`offset`) narrow the raw event listing at [`GET /api/v1/usage/events`](/docs/api/usage/list-usage-events), so a rollup and the events behind it are addressed the same way.
+Every narrowing is echoed under `filters` on the response, `null` when unset, so a rollup of zeros is distinguishable from a project that spent nothing. The same filters (plus `limit`/`offset`) narrow the raw event listing at [`GET /api/v1/usage/events`](/docs/api/usage/list-usage-events).
 
-**An unrecognised query parameter is a `400`** here as on every documented route, rather than being ignored. Ignoring one is not a missing answer but a wrong one: before `model` was a filter, `?group_by=day&model=…` returned the project-wide total under the caller's belief that it was one model's. The accepted names are listed in the error message.
+**An unrecognised query parameter is a `400`**, not ignored (`?group_by=day&model=…` once returned the project-wide total as if it were one model's). The accepted names are in the error message.
 
-The rollup is computed by the database — the window is grouped and summed in SQL, with one join for the chosen dimension — so the cost of a request tracks the buckets it answers with rather than the events behind them.
+The rollup is grouped and summed in SQL with one join for the chosen dimension, so request cost tracks the buckets answered, not the events behind them.
 
 #### Counting entities
 
-**`groups.total` counts buckets, not entities.** A dimension that does not apply to an event puts it in a `null`-keyed bucket, and that bucket is real: a project whose traffic is direct agent generations, eval items and trigger firings has exactly **one** `group_by=orchestration_run` bucket whether the window held ten events or a million. `actor`, `session`, `agent` and `source` each carry the same null bucket.
+**`groups.total` counts buckets, not entities.** The `null`-keyed bucket is real: a project whose traffic is direct agent generations, eval items and trigger firings has exactly **one** `group_by=orchestration_run` bucket whether the window held ten events or a million. `actor`, `session`, `agent` and `source` carry the same null bucket.
 
-To count entities, send `include=distinct` and read `totals.distinct` — one `COUNT(DISTINCT …)` per attribution column on the event:
+To count entities, send `include=distinct` and read `totals.distinct`, one `COUNT(DISTINCT …)` per attribution column:
 
 ```bash
 GET /api/v1/usage/aggregate?project_id=…&group_by=day&limit=1&include=distinct
@@ -322,13 +277,11 @@ GET /api/v1/usage/aggregate?project_id=…&group_by=day&limit=1&include=distinct
 }
 ```
 
-Nulls are not counted, which is the wanted reading throughout: a generation-less completion (`chat`, `memory_extraction`, `memory_consolidation`, `eval_judge`) moves `event_count` and nothing in `distinct`; a standalone generation counts under `generations` and not under `orchestration_runs`; a retried orchestration node — a second event and a second generation — counts once as a run.
+Nulls are not counted: a generation-less completion (`chat`, `memory_extraction`, `memory_consolidation`, `eval_judge`) moves `event_count` and nothing in `distinct`; a standalone generation counts under `generations`, not `orchestration_runs`; a retried orchestration node counts once as a run.
 
-Three things to know before relying on it:
-
-- **It is opt-in because it costs.** Each key makes the database sort the window once more, so the default response keeps its cost whatever the event table grows to carry. A caller counting entities sends one request at `limit=1&include=distinct`; a caller walking pages for spend sends no `include` and pays nothing.
-- **It is on `totals` only.** Groups never carry `distinct`: filling it per bucket would mean a `COUNT(DISTINCT)` per bucket on the page query.
-- **These figures describe one window and none of them add.** Two adjacent windows' `distinct.sessions` overlap wherever a session spans the boundary, and a run that straddles midnight is in two `day` windows. A wider figure is a wider query, never a sum of narrower ones.
+- **Opt-in because it costs**: each key sorts the window once more. Count entities with one request at `limit=1&include=distinct`; page for spend with no `include`.
+- **On `totals` only**; groups never carry `distinct` (a `COUNT(DISTINCT)` per bucket).
+- **Figures describe one window and do not add**: adjacent windows' `distinct.sessions` overlap where a session spans the boundary, and a run straddling midnight is in two `day` windows. A wider figure is a wider query.
 
 Any `include` value other than `distinct` is a `400`.
 
@@ -336,18 +289,16 @@ Any `include` value other than `distinct` is a `400`.
 
 `groups` is the standard paginated envelope (`data`, `total`, `limit`, `offset`), where `total` is the bucket count described above.
 
-Two guarantees worth relying on:
+- **`totals` and `groups.total` always describe the whole `[from, to]` window**, never the page.
+- **Groups are ordered by `cost_usd` descending**, ties by `key` then `ai_provider_id` ascending, nulls last: the first page is the biggest spenders, and paging never repeats or skips a bucket, even in a window nothing has priced.
 
-- **`totals` and `groups.total` always describe the whole `[from, to]` window**, never the page above them. A page-scoped total read against an allowance would understate spend by however much the caller did not page through.
-- **Groups are ordered by `cost_usd` descending**, ties broken by `key` then `ai_provider_id` ascending, nulls last. So the first page is the biggest spenders, and paging never repeats or skips a bucket — including in a window nothing has priced yet, where the key order is what keeps it deterministic.
+`limit` defaults to 50 and is clamped to 100, as everywhere in the API.
 
-`limit` defaults to 50 and is clamped to 100, as everywhere else in the API.
+Every group carries a `components` array, the measured dimensions summed over the bucket, so an infra meter aggregates to what it measured rather than all-zero tokens. Entries are keyed by `component` **and** `unit`, sorted; quantities are summed as exact decimals.
 
-Every group also carries a `components` array — the measured dimensions summed over the bucket — so an infra meter aggregates to what it measured rather than reading as all-zero tokens. Entries are keyed by `component` **and** `unit` and sorted, and quantities are summed as exact decimals (no float drift).
+For platform meter types `group_by=model` mixes model ids with SKUs; add `meter_type=llm_tokens` (or another meter type) to narrow. The filter is echoed as `filters.meter_type`; an unrecognized value yields an empty rollup, not an error.
 
-For platform meter types `group_by=model` mixes model ids with SKUs; add `meter_type=llm_tokens` (or another meter type) to narrow to one meter. The applied filter is echoed back as `filters.meter_type` on the response; an unrecognized value yields an empty rollup rather than an error.
-
-Under `group_by=model` every group also carries `ai_provider_id` — the [AI provider](./ai-providers.md) that served the bucket's model, `null` on every other dimension. A model id does not identify its provider on its own: one project can hold two providers serving byte-identical model names, so a consumer that presents its own model names cannot translate a bucket it cannot attribute. The model dimension therefore buckets on the model id **and** its provider, so one model name served by two providers is two groups repeating the same `key` with different `ai_provider_id`. The groups still sum to `totals`.
+Under `group_by=model` every group also carries `ai_provider_id`, the [AI provider](./ai-providers.md) that served it (`null` on every other dimension), because one project can hold two providers serving byte-identical model names: the dimension buckets on model id **and** provider, so one name served by two providers is two groups with the same `key` and different `ai_provider_id`. Groups still sum to `totals`.
 
 ### Spend guards
 
@@ -360,10 +311,10 @@ Both read live at evaluation time and fail closed. Unlike [thresholds](#threshol
 
 ### Thresholds and alerts
 
-After **each** usage-event write, every [`UsageThreshold`](#usagethreshold) on the event's project is evaluated against its windowed aggregate, and a `usage.threshold_crossed` [webhook](./webhooks.md) fires for any that cross. Re-fire hysteresis:
+After **each** usage-event write, every [`UsageThreshold`](#usagethreshold) on the project is evaluated against its windowed aggregate; `usage.threshold_crossed` [webhook](./webhooks.md) fires for any that cross. Re-fire hysteresis:
 
-- **`calendar_month`** — fires at most once per window; `fired_window_key` blocks re-fire until the `YYYY-MM` key changes.
-- **`rolling_24h`** — re-arms only once the value drops below 90% of the threshold, then may fire again.
+- **`calendar_month`** — at most once per window; `fired_window_key` blocks re-fire until the `YYYY-MM` key changes.
+- **`rolling_24h`** — re-arms once the value drops below 90% of the threshold.
 
 The webhook payload (`data`) is:
 
@@ -492,9 +443,7 @@ curl "https://api.example.com/api/v1/usage/aggregate?project_id=proj_V1StGXR8Z5j
 </TabItem>
 </Tabs>
 
-Count the runs in a billing cycle without listing them — `totals.distinct` is
-the answer (`groups.total` would count buckets, not runs), so `limit=1` keeps
-the response small however many runs there were:
+Count the runs in a billing cycle without listing them: `totals.distinct` is the answer (`groups.total` counts buckets, not runs), and `limit=1` keeps the response small:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>

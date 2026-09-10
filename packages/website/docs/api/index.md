@@ -7,23 +7,17 @@ slug: /api
 
 # REST API Reference
 
-The SOAT REST API provides standard HTTP endpoints for all platform operations. Every endpoint is versioned, authenticated, and returns JSON responses.
-
 ## Base URL
 
 ```
 https://your-soat-server.com
 ```
 
-Replace `your-soat-server.com` with your SOAT instance URL. For development, use `http://localhost:3000`.
+For development, `http://localhost:3000`.
 
 ## Authentication
 
-The API supports two authentication methods:
-
 ### User Authentication (JWT Bearer Token)
-
-For user accounts, authenticate using JWT bearer tokens obtained after login:
 
 ```bash
 # 1. Bootstrap the first admin user
@@ -46,8 +40,6 @@ JWT tokens expire after 7 days.
 
 ### Project Key Authentication
 
-For programmatic access to a specific project, use API keys (project keys). Create a project key through the API, then authenticate requests with it:
-
 ```bash
 # Create a project key (requires user authentication first)
 curl -X POST https://your-soat-server.com/api/v1/project-keys \
@@ -61,13 +53,13 @@ curl https://your-soat-server.com/api/v1/projects/proj_xyz/files \
   -H "Authorization: Bearer sk_..."
 ```
 
-Project keys are scoped to a single project and inherit permissions from the associated policy.
+Project keys inherit the associated policy's permissions.
 
 ## Common Patterns
 
 ### Error Responses
 
-All errors return a 4xx or 5xx status code. Most business-logic errors use a structured shape with a stable `code`:
+Errors return a 4xx or 5xx status with a structured body:
 
 ```json
 {
@@ -81,16 +73,13 @@ All errors return a 4xx or 5xx status code. Most business-logic errors use a str
 }
 ```
 
-`code` is stable and safe to branch on; `message` describes this occurrence.
-`hint` says what to do about the failure, and `docs_url` addresses the section
-for that code on the [Error Codes](/docs/error-codes) page — together they mean a
-caller meeting a code for the first time can act without leaving the response.
-`meta` is optional and present only for some error codes.
+`code` is stable and safe to branch on; `message` describes this occurrence;
+`hint` says what to do; `docs_url` points at that code's section on the
+[Error Codes](/docs/error-codes) page; `meta` is optional, present only for
+some codes.
 
-**Every** error response uses this shape, with no exceptions — `error` is always
-an object with a `code` and a `message`, so a client can read `error.code`
-without first testing what it got. That includes the responses most likely to be
-special-cased:
+**Every** error response uses this shape (`error` is always an object with a
+`code` and a `message`), including:
 
 | Situation                                 | Status | Body                                                                                   |
 | ----------------------------------------- | ------ | -------------------------------------------------------------------------------------- |
@@ -100,19 +89,13 @@ special-cased:
 | Rejected by the HTTP layer before routing | varies | `code: "REQUEST_REJECTED"`                          |
 | Unhandled server failure                  | `500`  | `code: "INTERNAL_ERROR"`, `message: "Internal Server Error"`        |
 
-Each of these carries its own `hint` and `docs_url` as well; only `code` and
-`message` are shown above.
+Each also carries `hint` and `docs_url`.
 
-The full catalog of codes — every `error.code` the API can return, with its HTTP
-status, what it means, and what to do about it — is published as JSON at
-[/errors.json](/errors.json), as the `x-error-codes` extension of
-[/openapi.json](/openapi.json), and as a page at
-[Error Codes](/docs/error-codes). All three are generated from the server
-source, so a client can branch on codes without scraping this page.
-
-`INTERNAL_ERROR` always carries exactly that message: the underlying exception is
-logged server-side and never forwarded to the client, so the body carries no
-detail to act on beyond retrying.
+The full catalog (every `error.code`, its HTTP status, meaning and remedy) is
+generated from the server source and published at [/errors.json](/errors.json),
+as the `x-error-codes` extension of [/openapi.json](/openapi.json), and on the
+[Error Codes](/docs/error-codes) page. `INTERNAL_ERROR` always carries exactly
+that message; the underlying exception is logged server-side, never forwarded.
 
 Common status codes:
 
@@ -127,8 +110,8 @@ Common status codes:
 
 ### Pagination
 
-**Every** `GET` list endpoint returns the same paginated envelope and accepts
-`limit`/`offset` query parameters:
+**Every** `GET` list endpoint returns the same envelope and accepts
+`limit`/`offset`:
 
 ```jsonc
 {
@@ -144,16 +127,14 @@ curl 'https://your-soat-server.com/api/v1/agents?project_id=proj_abc&limit=25&of
   -H "Authorization: Bearer <token>"
 ```
 
-- `limit` — Number of results per page. Defaults to `50` and is clamped to a maximum of `100`; a larger requested `limit` is capped, not rejected.
-- `offset` — Number of results to skip (default `0`).
-- Every list endpoint answers with `{ data, total, limit, offset }` — read the items from `response.data`, never the top-level body.
-- There is no `cursor`, `page`, or `sort`/`order` query parameter on any endpoint. Sort order (when defined) is fixed per endpoint — check that resource's module doc — and is not client-configurable.
+- `limit` — results per page. Default `50`, clamped to `100` (a larger value is capped, not rejected).
+- `offset` — results to skip (default `0`).
+- Items are in `response.data`, never the top-level body.
+- No `cursor`, `page`, or `sort`/`order` parameter. Sort order, when defined, is fixed per endpoint (see the module doc).
 
-There are currently no per-project or per-API-key request-rate limits, quotas, or throttling enforced by the server — every authenticated request is processed immediately, bounded only by the resource limits described above and the [1 MiB inbound webhook body cap](../modules/triggers.md#inbound-webhook-endpoint).
+The server enforces no per-project or per-API-key request-rate limits or throttling; every authenticated request is processed immediately, bounded only by the limits above and the [1 MiB inbound webhook body cap](../modules/triggers.md#inbound-webhook-endpoint).
 
 ### Path and Query Parameters
-
-Path parameters are replaced in the URL; query parameters are appended:
 
 ```bash
 # Path parameter: file ID in the URL
@@ -167,7 +148,7 @@ curl 'https://your-soat-server.com/api/v1/files?projectPublicId=proj_123&limit=1
 
 ### Request Body
 
-`POST` and `PUT` requests accept JSON request bodies with `Content-Type: application/json`:
+`POST` and `PUT` bodies are JSON with `Content-Type: application/json`:
 
 ```bash
 curl -X POST https://your-soat-server.com/api/v1/files \
@@ -179,7 +160,7 @@ curl -X POST https://your-soat-server.com/api/v1/files \
   }'
 ```
 
-File uploads use `multipart/form-data` instead:
+File uploads use `multipart/form-data`:
 
 ```bash
 curl -X POST https://your-soat-server.com/api/v1/files/upload \
@@ -189,8 +170,6 @@ curl -X POST https://your-soat-server.com/api/v1/files/upload \
 ```
 
 ## Modules
-
-The REST API is organized into modules, each covering a specific resource:
 
 | Module                                                      | Description                                  |
 | ----------------------------------------------------------- | -------------------------------------------- |
@@ -208,7 +187,7 @@ The REST API is organized into modules, each covering a specific resource:
 
 ## TypeScript SDK
 
-For TypeScript projects, use the [`@soat/sdk`](/docs/sdk) package to interact with the REST API with full type safety and autocompletion:
+[`@soat/sdk`](/docs/sdk) wraps the REST API with typing:
 
 ```ts
 import { createSoatClient } from '@soat/sdk';
@@ -225,14 +204,10 @@ const { data: page } = await soat.GET('/api/v1/files', {
 const files = page?.data;
 ```
 
-Every endpoint, parameter, and response schema is fully typed.
-
 ## OpenAPI Specification
-
-The REST API is defined in OpenAPI 3.1 format. Download the spec:
 
 ```
 GET https://your-soat-server.com/openapi.yaml
 ```
 
-Use this spec to generate clients in any language or integrate with API documentation tools.
+OpenAPI 3.1; use it to generate clients in any language.

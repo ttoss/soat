@@ -22,6 +22,9 @@ Every tutorial is validated end-to-end against a live dev server via the CLI
   `new SoatClient({ baseUrl: 'http://localhost:5047', token })` for the SDK.
   Never append `/api/v1`; never `SOAT_URL`.
 - Numbered `## Step N`; sub-steps `### 3a` only for variants.
+- Prose between blocks follows `website.md` **Prose**: one or two sentences
+  saying what the step does and linking its doc; no commentary on the output
+  beyond the fields the next step reads.
 - Every step links at least one doc (`/docs/modules/<module>`, a subsection
   anchor, or a third-party doc). Link a concept once, where it is introduced.
 - A step creating a local Ollama provider points to

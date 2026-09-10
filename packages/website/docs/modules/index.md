@@ -7,9 +7,7 @@ slug: /modules
 
 # Platform
 
-SOAT's functionality is organized into **modules** — named resources exposed through the [REST API](/docs/api), the [MCP server](/docs/mcp), the [CLI](/docs/cli), and the [SDK](/docs/sdk). Each module page describes what the resource does, its data model, key concepts, and usage examples on every client surface.
-
-The modules fall into seven groups:
+SOAT's functionality is organized into **modules**: named resources exposed through the [REST API](/docs/api), [MCP server](/docs/mcp), [CLI](/docs/cli), and [SDK](/docs/sdk). Each page covers the resource, its data model, key concepts, and examples on every client surface.
 
 ## Identity & Access
 
@@ -45,7 +43,7 @@ The generation engine and its building blocks.
 - [Chats](./chats.md) — raw LLM completions without an agent
 - [Actors](./actors.md) — participant identities in conversations
 - [Generations](./generations.md) — generation records and async jobs
-- [Chains](./chains.md) — continuation chains: the linked tree a resumed turn grows into, and the ceilings that stop it
+- [Chains](./chains.md) — continuation chains and the ceilings that stop them
 
 ## Orchestration & Automation
 
@@ -64,9 +62,7 @@ Composing agents into workflows and reacting to events.
 
 ## Improvement & Adaptation
 
-How the system changes, and what proves a change was an improvement. See
-[The Layers of an Agent System](../agent-system-layers.md#layer-4--the-ratchet)
-for how this group fits the rest of the platform.
+How the system changes and what proves it improved; see [The Layers of an Agent System](../agent-system-layers.md#layer-4--the-ratchet).
 
 - [Evaluations](./evaluations.md) — datasets, scorers, and scored runs comparable against a baseline (coming soon)
 - [Agent versions](./agents.md#versioning-and-staged-rollout) — append-only config history with staged canary rollout

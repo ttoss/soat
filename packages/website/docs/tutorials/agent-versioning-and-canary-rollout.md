@@ -15,20 +15,15 @@ import TabItem from '@theme/TabItem';
 
 # Agent Versioning and Canary Rollout
 
-An agent's `instructions` are production code — they decide what every user gets told — but in most stacks they are edited in place. A bad prompt reaches 100% of traffic the moment the save button returns, and the only rollback is retyping the old wording from memory.
-
-SOAT versions the config instead. Every write that changes an [agent](/docs/modules/agents) archives an immutable snapshot, and a **release** can serve two archived versions side by side so a change is tried on a slice of traffic before it reaches everyone. Assignment is deterministic per end user, so nobody flip-flops between two personas mid-conversation.
+Every write that changes an [agent](/docs/modules/agents) archives an immutable version, and a release serves two versions side by side so a prompt change reaches a slice of traffic first. Assignment is deterministic per end user.
 
 You will version an agent, run a 50/50 canary release, verify sticky assignment, then promote and roll back.
 
 ## Prerequisites
 
-- SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide to bring the stack up with Docker Compose.
-- [Ollama](https://ollama.com) running locally with `qwen2.5:0.5b` available. This tutorial uses a local provider so it runs without external credentials — to connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
-- New to SOAT? Read [Key Concepts](/docs/getting-started/concepts) to understand projects, agents, and sessions first.
-- CLI installed and configured, or SDK set up. See [CLI](/docs/cli) or [SDK](/docs/sdk).
-- For production hardening (secrets, env vars), see [Configuration](/docs/self-hosting/configuration).
-- Server is at `http://localhost:5047`.
+- SOAT running locally ([Quick Start](/docs/getting-started)); [Key Concepts](/docs/getting-started/concepts); [Configuration](/docs/self-hosting/configuration).
+- [Ollama](https://ollama.com) with `qwen2.5:0.5b`; other providers: [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
+- [CLI](/docs/cli) or [SDK](/docs/sdk); server at `http://localhost:5047`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -58,7 +53,7 @@ export SOAT_BASE_URL=http://localhost:5047
 
 ## Step 1 — Log in as admin
 
-Admin is the built-in superuser role. See [Users](/docs/modules/users#examples) for authentication details.
+See [Users](/docs/modules/users#examples) for authentication.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -100,7 +95,7 @@ ADMIN_TOKEN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users/login" \
 
 ## Step 2 — Create an agent (version 1)
 
-Version 1 is archived **on create**, so an agent has recoverable history from the moment it exists rather than from its first edit. See [Projects](/docs/modules/projects) and [AI Providers](/docs/modules/ai-providers) for the resources it depends on.
+Version 1 is archived on create. See [Projects](/docs/modules/projects) and [AI Providers](/docs/modules/ai-providers).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -194,7 +189,7 @@ Expected output:
 
 ## Step 3 — Edit the prompt and label the change
 
-`version_label` tags the version the write archives. It annotates the version only — it is not stored on the agent and is not part of the config, so labelling a change is never itself a change. See [Agents — Versioning and Staged Rollout](/docs/modules/agents#versioning-and-staged-rollout).
+`version_label` annotates the archived version only; it is not part of the config, so a label is never itself a change. See [Agents — Versioning and Staged Rollout](/docs/modules/agents#versioning-and-staged-rollout).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -245,13 +240,13 @@ curl -s "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/versions/1" \
 </TabItem>
 </Tabs>
 
-Snapshots are written by the shared business-logic layer, not by the REST handlers, so a `PUT`, a `PATCH`, and a [formation](/docs/modules/formations) apply all leave identical history.
+`PUT`, `PATCH` and a [formation](/docs/modules/formations) apply leave identical history.
 
 ---
 
 ## Step 4 — A write that changes nothing creates no version
 
-The comparison runs on the serialized config, not on which fields the request named. Send the instructions the agent already holds and the counter stays where it is.
+The comparison runs on the serialized config, not on the fields named. Resending the current instructions leaves the counter unchanged.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -295,7 +290,7 @@ Expected output — still `2`:
 { "version": 2 }
 ```
 
-This is what makes `restore` safe to call repeatedly: restoring the config an agent already holds is a genuine no-op rather than an endless version chain.
+Restoring the config an agent already holds is therefore a no-op.
 
 ---
 
@@ -354,7 +349,7 @@ Expected output:
 
 ## Step 6 — Run traffic and read which version served it
 
-Assignment hashes the [actor](/docs/modules/actors) behind the request's [session](/docs/modules/sessions), falling back to the session itself. Create two end users and run a turn for each.
+Assignment hashes the [actor](/docs/modules/actors) behind the request's [session](/docs/modules/sessions), falling back to the session. Create two end users and run a turn each.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -382,7 +377,7 @@ soat get-generation --generation-id "$ADA_GEN_ID" | jq '{actor: "Ada", agent_ver
 soat get-generation --generation-id "$BLAKE_GEN_ID" | jq '{actor: "Blake", agent_version}'
 ```
 
-Assignment is **sticky**: run a second turn for the same actor and it lands on the same version.
+Assignment is sticky: a second turn for the same actor lands on the same version.
 
 ```bash
 soat add-session-message --session-id "$ADA_SESSION_ID" \
@@ -453,13 +448,13 @@ curl -s "$SOAT_BASE_URL/api/v1/generations/$ADA_GEN_ID" \
 </TabItem>
 </Tabs>
 
-`agent_version` is a server-owned field on the [generation](/docs/modules/generations) record, so "which config produced this answer?" is answerable after the fact. For assignment edge cases (anonymous requests, live-read fields), see [Agents — Staged Rollout](/docs/modules/agents#staged-rollout).
+`agent_version` is a server-owned field on the [generation](/docs/modules/generations). Assignment edge cases (anonymous requests, live-read fields): [Agents — Staged Rollout](/docs/modules/agents#staged-rollout).
 
 ---
 
 ## Step 7 — Keep editing while the canary runs
 
-While a release is active the agent's live columns act as a **draft**. Edits archive new versions without disturbing either side of the running split, so you can keep iterating while a canary is being observed.
+While a release is active the agent's live columns are a draft: edits archive new versions without disturbing either side of the split.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -500,13 +495,13 @@ curl -s -X PUT "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID" \
 </TabItem>
 </Tabs>
 
-Version 3 exists in history, but no traffic serves it: the split still runs 1 against 2.
+Version 3 is in history but serves no traffic; the split still runs 1 against 2.
 
 ---
 
 ## Step 8 — Promote the canary (or abort it)
 
-Ending a rollout is one call. `promote` makes the canary's config live; `abort` puts the stable config back.
+`promote` makes the canary's config live; `abort` restores the stable one.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -538,9 +533,9 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/release/promote" \
 </TabItem>
 </Tabs>
 
-Both `promote` and `abort` write the winning version's config before clearing the pointer, so the version 3 draft from Step 7 stays in history as an unreleased version — neither promoted by accident nor left serving traffic.
+Both write the winning version's config before clearing the pointer; the version 3 draft stays in history unreleased.
 
-Ending a rollout that is not running is a conflict, not a silent no-op:
+Ending a rollout that is not running is a conflict:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -575,7 +570,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/release/abort" \
 
 ## Step 9 — Roll back by restoring a version
 
-`restore-agent-version` copies an archived config onto the agent as a **new** version rather than rewinding the counter. History stays append-only, the versions in between remain retrievable, and "undo the undo" is just another restore.
+`restore-agent-version` copies an archived config onto the agent as a new version; history stays append-only and undoing a restore is another restore.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -611,13 +606,11 @@ curl -s "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/versions" \
 </TabItem>
 </Tabs>
 
-Two properties make restore safe to reach for under pressure:
-
-- **The restored config fully replaces the current one.** A field the archived version did not set is cleared, not merged — so a restore cannot leave half of a bad change behind.
-- **It re-validates.** A [tool](/docs/modules/tools), provider, or [guardrail](/docs/modules/guardrails) deleted since the snapshot was taken fails the request loudly instead of writing a broken agent.
+- The restored config fully replaces the current one: fields the archived version did not set are cleared, not merged.
+- It re-validates: a [tool](/docs/modules/tools), provider or [guardrail](/docs/modules/guardrails) deleted since the snapshot fails the request.
 
 ---
 
 ## What's next
 
-Read next: [Agents — Versioning and Staged Rollout](/docs/modules/agents#versioning-and-staged-rollout), [Generations](/docs/modules/generations), and [Debug Session, Generation, and Trace History](/docs/tutorials/debug-session-generation-trace-history) for tracing a specific answer back to the config that produced it.
+[Agents — Versioning and Staged Rollout](/docs/modules/agents#versioning-and-staged-rollout), [Generations](/docs/modules/generations), [Debug Session, Generation, and Trace History](/docs/tutorials/debug-session-generation-trace-history).

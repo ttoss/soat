@@ -5,7 +5,7 @@ sidebar_position: 2
 
 # Usage Examples
 
-Examples for common operations across all SOAT modules. All examples assume a `SoatClient` instance — see [introduction](./introduction.md) for setup.
+All examples assume a `SoatClient` instance ([setup](./introduction.md)).
 
 ```ts
 import { SoatClient } from '@soat/sdk';
@@ -18,7 +18,7 @@ const soat = new SoatClient({
 
 ## Users
 
-Bootstrap the first admin user, then create additional users. → [Full Users API](/docs/api/users/list-users)
+→ [Users API](/docs/api/users/list-users)
 
 ```ts
 const { error: bootstrapError } = await soat.users.bootstrapUser({
@@ -36,7 +36,7 @@ if (error) throw new Error(JSON.stringify(error));
 
 ## Files
 
-Upload and download files. → [Full Files API](/docs/api/files/list-files)
+→ [Files API](/docs/api/files/list-files)
 
 ```ts
 const form = new FormData();
@@ -57,7 +57,7 @@ if (downloadError) throw new Error(JSON.stringify(downloadError));
 
 ## Documents
 
-Create and semantically search text documents. → [Full Documents API](/docs/api/documents/list-documents)
+→ [Documents API](/docs/api/documents/list-documents)
 
 ```ts
 const { error: createError } = await soat.documents.createDocument({
@@ -76,7 +76,7 @@ if (searchError) throw new Error(JSON.stringify(searchError));
 
 ## Conversations
 
-Multi-turn conversations with AI-generated replies. → [Full Conversations API](/docs/api/conversations/list-conversations)
+→ [Conversations API](/docs/api/conversations/list-conversations)
 
 ```ts
 const { data: conv, error: convError } =
@@ -109,7 +109,7 @@ if (reply.status === 'completed') {
 
 ## Chats
 
-Stateless one-shot completions or stateful chat sessions. → [Full Chats API](/docs/api/chats/list-chats)
+→ [Chats API](/docs/api/chats/list-chats)
 
 ```ts
 // Stateless
@@ -140,7 +140,7 @@ if (replyError) throw new Error(JSON.stringify(replyError));
 
 ## Agents
 
-Autonomous AI workers with tool use and multi-step execution. → [Full Agents API](/docs/modules/agents)
+→ [Agents](/docs/modules/agents)
 
 ```ts
 const { data: agent, error: agentError } = await soat.agents.createAgent({
@@ -176,7 +176,7 @@ if (gen.status === 'requires_action') {
 
 ## Actors
 
-Participants (human or AI) that can be attached to conversations. → [Full Actors API](/docs/api/actors/list-actors)
+→ [Actors API](/docs/api/actors/list-actors)
 
 ```ts
 const { data: actor, error } = await soat.actors.createActor({

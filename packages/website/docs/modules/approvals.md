@@ -7,33 +7,26 @@ import TabItem from '@theme/TabItem';
 
 # Approvals
 
-A centralized queue of human decisions. When an agent proposes a risky action,
-the platform files an **approval item** carrying the frozen proposed action, the
-supporting evidence, and a hard expiry — then a human approves, edits-then-approves,
-or rejects it.
+A queue of human decisions. When an agent proposes a risky action, the platform
+files an **approval item** with the frozen proposed action, supporting evidence
+and a hard expiry; a human approves, edits-then-approves, or rejects it.
 
 ## Overview
 
-Approvals are producer-agnostic: anything that can propose a risky action files
-into the same queue, with one item model, one expiry enforcement path, and one
-decision output shape.
+Approvals are producer-agnostic: one item model, one expiry path, one decision
+output shape. Items are **created by the platform only**; there is no public
+create endpoint. Producers:
 
-Items are **created by the platform only** — there is no public create endpoint.
-Three producers file items today:
+- the [`approval` orchestration node](./orchestrations.md) (`origin: node`);
+- **tool-call interception**: a [guardrail](./guardrails.md) on a project,
+  agent, or tool gates tool calls in chat sessions, direct generations and MCP
+  (`origin: tool_call`);
+- **approval-gated task transitions**: a workflow transition declaring
+  [`requires_approval`](./workflows.md#approval-gated-transitions)
+  (`origin: task_transition`). The item carries no `proposed_action`; it gates
+  the transition named by `task_transition` on `task_id`.
 
-- the [`approval` orchestration node](./orchestrations.md) — declarative
-  placement in a DAG (`origin: node`);
-- **tool-call interception** — a [guardrail](./guardrails.md) attached to a
-  project, agent, or tool gates tool calls on every execution surface: chat
-  sessions, direct generations, MCP (`origin: tool_call`);
-- **approval-gated task transitions** — a workflow transition declaring
-  [`requires_approval`](./workflows.md#approval-gated-transitions) parks a task
-  move behind an approval (`origin: task_transition`). The item carries no
-  `proposed_action`; it gates the transition named by `task_transition` on
-  `task_id`.
-
-The `origin` field records which producer filed an item, for analytics and
-filtering only — the lifecycle never branches on it.
+`origin` is for filtering only; the lifecycle never branches on it.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -41,7 +34,7 @@ filtering only — the lifecycle never branches on it.
 
 - [Approval Gates - Step 7 (Approve it — the run resumes)](/docs/tutorials/approval-gate#step-7--approve-it--the-run-resumes)
 - [Gate a Dangerous Tool with Guardrails - Step 9 (A class-C call parks for sign-off)](/docs/tutorials/gate-a-tool-with-guardrails#step-9--class-c-the-run-parks-for-sign-off)
-- [Close the Monthly Books - Step 11 (Sign off: the human decides, the guard has the last word)](/docs/tutorials/close-the-monthly-books#step-11--sign-off-the-human-decides-the-guard-has-the-last-word) — an item raised by a `requires_approval` workflow transition, where the guard is re-evaluated at resolution time.
+- [Close the Monthly Books - Step 11 (Sign off: the human decides, the guard has the last word)](/docs/tutorials/close-the-monthly-books#step-11--sign-off-the-human-decides-the-guard-has-the-last-word) — a `requires_approval` transition item.
 
 ## Data Model
 
@@ -76,135 +69,110 @@ filtering only — the lifecycle never branches on it.
 
 ### Snapshot at emit time
 
-All of an item's evidence (`proposed_action`, `reasoning`, `evidence`,
-`predicted_impact`) is resolved against run/call state at emit time and **frozen**
-onto the item. Later state changes never alter what the approver sees — a decision
-is made on exactly the evidence the agent had.
+`proposed_action`, `reasoning`, `evidence` and `predicted_impact` are resolved
+at emit time and **frozen** onto the item; later state changes never alter what
+the approver sees.
 
 ### How producers suspend and resume
 
-The two producers share the item lifecycle but suspend differently:
-
-- **`approval` node — the run parks.** Orchestration runs are durable: the node
-  emits the item and parks the run as `awaiting_input`. Resolution re-enqueues
-  the run with the [decision output](#decision-output) as the node result,
-  routing `approved` / `rejected` / `on_expired` edges.
-- **Task transition — the gate parks.** A `requires_approval` transition files
-  the item and sets `pending_transition` on the task; the task keeps its state
-  and no other transition may fire until the item resolves. Approval fires the
-  transition as the `approval` principal (guard re-evaluated then); rejection or
-  expiry clears the gate and appends a note to the task's history. See
-  [Workflows](./workflows.md#approval-gated-transitions).
-- **Tool-call interception — return-pending.** A synchronous generation cannot
-  be held open for hours. The intercepted call files the item and returns
+- **`approval` node: the run parks.** The node emits the item and parks the
+  run as `awaiting_input`. Resolution re-enqueues the run with the
+  [decision output](#decision-output) as the node result, routing
+  `approved` / `rejected` / `on_expired` edges.
+- **Task transition: the gate parks.** The transition files the item and sets
+  `pending_transition` on the task; no other transition may fire until it
+  resolves. Approval fires the transition as the `approval` principal (guard
+  re-evaluated then); rejection or expiry clears the gate and appends a note to
+  the task's history. See [Workflows](./workflows.md#approval-gated-transitions).
+- **Tool-call interception: return-pending.** The intercepted call files the
+  item and returns
   `{ "status": "pending_approval", "approval_id": "apr_…", "expires_at": "…" }`
-  as the **tool result**; the generation completes its turn normally (the model
-  reads the result and closes with "queued for your approval"). On resolution,
-  the platform starts a **continuation generation** — linked to the original
-  via `initiator_generation_id` — feeding the decision output back into the
-  agent's context. On approval the platform first executes the frozen (or
-  edited) arguments and includes the tool's output as the decision's `result`;
-  on rejection nothing executes and the continuation carries the decision. An
-  **expiry ends the chain instead of continuing it**, unless the agent sets
-  `on_approval_expiry: "react"` — nobody was at the wheel, so there is nobody
-  to report to, and the `expired` row, the `approvals.expired` event and the
-  auto-filed exception are already the whole record. See
-  [Agents → Approval Expiry](./agents.md#approval-expiry); a reacting agent's
-  continuation carries `{ "decision": "expired" }`, the exact counterpart of
-  the node path's `on_expired` edge. When the original generation ran in a
-  session or conversation, the continuation's messages append there.
-- **The continuation runs the agent's own config.** That includes
-  [`tool_choice`](./agents.md#tool-choice): an agent that forces a tool reports
-  the decision by reaching its declared `has_tool_call`
+  as the **tool result**; the generation completes its turn. On resolution the
+  platform starts a **continuation generation** (linked via
+  `initiator_generation_id`) feeding the decision output back to the agent. On
+  approval the frozen (or edited) arguments execute first and the tool's output
+  becomes the decision's `result`; on rejection nothing executes. **Expiry ends
+  the chain** unless the agent sets `on_approval_expiry: "react"`, in which case
+  the continuation carries `{ "decision": "expired" }` (see
+  [Agents → Approval Expiry](./agents.md#approval-expiry)); the `expired` row,
+  the `approvals.expired` event and the auto-filed exception are the record.
+  When the original generation ran in a session or conversation, the
+  continuation's messages append there.
+- **The continuation runs the agent's own config**, including
+  [`tool_choice`](./agents.md#tool-choice): a forcing agent reports the
+  decision by reaching its `has_tool_call`
   [stop condition](./agents.md#stop-conditions), which is why that condition is
-  mandatory for a forcing agent rather than optional.
+  mandatory for it.
 
 ### Continuation identity
 
-A continuation runs **as the principal that started the chain** — never as the
-approver. The approver decided *whether* the proposed action happens, not *as
-whom*; acting as them would silently widen the chain to that person's access.
-
-Because an item can sit pending for days, identity comes from the row rather
-than from the request that resolved it: the platform reads the principal
-persisted on the proposing generation
+A continuation runs **as the principal that started the chain**, never as the
+approver. The platform reads the principal persisted on the proposing
+generation
 ([`started_by_principal_type` / `started_by_principal_id`](./generations.md#starting-principal))
-and re-mints a short-lived run-as token from it. That token is what the
-continuation's [`builtin` tools](./tools.md#builtin) authenticate with, and what the
-approved action itself executes with. It asserts identity only — authorization
-is still evaluated per request, so a chain a scoped API key started can never
-reach past that key's policies, and revoking the key stops the chain even
-mid-flight.
+and re-mints a short-lived run-as token; the continuation's
+[`builtin` tools](./tools.md#builtin) and the approved action execute with it.
+The token asserts identity only; authorization is evaluated per request, so a
+chain started by a scoped API key never exceeds that key's policies, and
+revoking the key stops the chain mid-flight.
 
-The continuation records the same principal on its own generation, so a further
-approval in the same chain re-mints from there in turn, however many hops later.
-A chain with no recorded principal — one started by a trigger or an OAuth token,
-which carry their boundary in the token rather than in the principal — gets no
-credential, and its self-calls stay unauthenticated.
+The continuation records the same principal on its own generation, so later
+approvals in the chain re-mint from there. A chain with no recorded principal
+(started by a trigger or an OAuth token) gets no credential; its self-calls
+stay unauthenticated.
 
 ### Duplicate proposals (dedup)
 
-An agent retrying a proposal must not spam the queue. Tool-call items carry a
-`dedup_key` derived from the proposing agent, tool, action, and resolved
-arguments: while a matching item is `pending`, a duplicate emit files nothing
-and returns the existing item — the agent's tool result carries the existing
-`approval_id`. Once the item resolves (approved, rejected, or expired), the
-same proposal files a fresh item. Node-produced items are not deduplicated —
-each run pauses exactly once per `approval` node.
-
-When the fresh item follows a **rejected** one with the same `dedup_key`, it is
-admitted rather than suppressed and its `previous_item_id` links back to that
-rejected item, so approvers see the recurrence.
+Tool-call items carry a `dedup_key` derived from agent, tool, action and
+resolved arguments. While a matching item is `pending`, a duplicate emit
+returns the existing item (its `approval_id` in the tool result). Once it
+resolves, the same proposal files a fresh item; after a **rejected** one, the
+fresh item's `previous_item_id` links back to it. Node-produced items are not
+deduplicated; each run pauses once per `approval` node.
 
 ### Recurrence view
 
-[`GET /api/v1/approvals/recurrences`](/docs/api/approvals/list-approval-recurrences) is a **read-only** rollup answering "what
-keeps coming back?". It groups items by `dedup_key` and returns those recurring
-at least `min_count` times (default `2`), most-recurrent first. Each group
-carries the `agent_id`, `tool_id`, `count`, the ordered item `chain` (the
-`previous_item_id` thread, oldest → newest), and the `reasons` in order.
+[`GET /api/v1/approvals/recurrences`](/docs/api/approvals/list-approval-recurrences)
+is a **read-only** rollup grouping items by `dedup_key`, most-recurrent first.
+Each group carries `agent_id`, `tool_id`, `count`, the ordered item `chain`
+(the `previous_item_id` thread, oldest → newest), and `reasons` in order.
 
-- `status` (default `rejected`) selects the lifecycle state groups are built
-  from — recurring *rejections* are the primary signal.
+- `status` (default `rejected`) selects the lifecycle state grouped.
 - `min_count` (default `2`) is the floor for a group to be returned.
-- Grouping is **exact-key only** — no semantic clustering.
+- Grouping is **exact-key only**; no semantic clustering.
 
-A recurring correction has two durable homes: a [guardrail](./guardrails.md)
-`deny` (it must never happen again) or the agent's `instructions`
+A recurring correction belongs in a [guardrail](./guardrails.md) `deny` or the
+agent's `instructions`
 ([agent versions](./agents.md#versioning-and-staged-rollout) archive every
-write). It is not a fact about the world, so it does not belong in
-[memories](./memories.md#what-belongs-in-a-memory).
+write), not in [memories](./memories.md#what-belongs-in-a-memory).
 
 ### Expiry is a hard gate
 
-Evidence goes stale, so expiry is enforced server-side in **both directions**:
+Expiry is enforced server-side in **both directions**:
 
 - A background sweeper flips overdue `pending` items to `expired` and emits
   `approvals.expired`.
-- The resolution path re-checks `expires_at` at decision time, closing the
-  sweep-vs-approve race. An expired item can never be approved or executed — even
-  a click a millisecond after expiry returns `409 APPROVAL_EXPIRED`.
+- The resolution path re-checks `expires_at` at decision time; an expired item
+  returns `409 APPROVAL_EXPIRED` and never executes.
 
 ### Approve, reject, edit-then-approve
 
-- **Approve** resolves the item and resumes its producer with the decision — an
-  `approval` orchestration node routes down its `approved` edge (where a
-  downstream `tool` node acts on the frozen or edited arguments); a tool-call
-  item has its frozen or edited arguments executed by the platform, and the
-  result flows into the [continuation generation](#how-producers-suspend-and-resume).
-- **Edit-then-approve** replaces the arguments via the `arguments` field on the
-  approve call. Edited arguments must be a JSON object and must satisfy the
-  tool's own `parameters` schema (`400 APPROVAL_INVALID_EDIT` otherwise); the
-  original proposal is preserved in `proposed_action`, and the edit is recorded
-  in `edited_arguments`. Editing also takes more authority than approving — see
-  [Who may resolve](#who-may-resolve).
+- **Approve** resolves the item and resumes its producer: an `approval` node
+  routes down its `approved` edge (a downstream `tool` node acts on the
+  arguments); a tool-call item has its arguments executed by the platform, the
+  result flowing into the
+  [continuation generation](#how-producers-suspend-and-resume).
+- **Edit-then-approve** replaces the arguments via `arguments` on the approve
+  call. They must be a JSON object satisfying the tool's `parameters` schema
+  (`400 APPROVAL_INVALID_EDIT` otherwise); the original stays in
+  `proposed_action`, the edit in `edited_arguments`. Editing needs more
+  authority; see [Who may resolve](#who-may-resolve).
 - **Reject** requires a `reason`, preserved on the item.
 
 ### Decision output
 
-Resolution produces a producer-agnostic decision artifact — the `approval`
-orchestration node consumes it as its node result; a tool-call continuation
-consumes it as the tool result. Identical shape for both:
+The `approval` node consumes the decision as its node result; a tool-call
+continuation as the tool result. Same shape:
 
 ```json
 {
@@ -221,34 +189,24 @@ consumes it as the tool result. Identical shape for both:
 - `resolved_by` — resolving user's public ID; `null` on expiry
 - `edited_args` — `null` unless edit-then-approve
 - `reason` — required (non-null) on rejection
-- `result` — the executed tool output on approval. For `tool_call` items the
-  platform executes the frozen (or edited) arguments at resolution time and
-  populates it; for `node` items execution belongs to the downstream `tool`
-  node, so it stays `null` in the node result
+- `result` — the executed tool output on approval for `tool_call` items;
+  `null` for `node` items (execution belongs to the downstream `tool` node)
 
 ### Who may resolve
 
-Any principal with `approvals:ResolveApproval` in the project may resolve any of
-the project's items. There is no per-item targeting or assignment — the guardrail
-policy decides *what* needs a human, and the project policy layer decides *who*
-counts as one. Per-approver routing is a deferred future phase.
+Any principal with `approvals:ResolveApproval` in the project may resolve any
+of its items; there is no per-item assignment.
 
-**Editing the arguments takes more than resolving.** Approving as proposed
-adjudicates a call somebody else's agent composed; editing composes a new one,
-and the approved action executes under the **proposing** generation's principal
-rather than the approver's. So an edit additionally requires what making the
-call would require:
+**Editing the arguments takes more than resolving**, since the approved action
+executes under the **proposing** generation's principal. An edit additionally
+requires what making the call would require:
 
 | Proposal | Also required to edit |
 | --- | --- |
 | any tool | `tools:CallTool` on that tool |
 | a `builtin` tool | the proposed action's own IAM action, anywhere in the project |
 
-The second row is there because a builtin action is dispatched in-process, where
-the route re-checks it against whichever credential is on the request — the
-proposer's. Nothing else on that path asks whether the *approver* could have
-performed it. An edit that fails either check answers `403 FORBIDDEN`; approving
-the same item as proposed is unaffected.
+A builtin action is dispatched in-process against the proposer's credential, so nothing else checks the approver. An edit failing either check answers `403 FORBIDDEN`; approving as proposed is unaffected.
 
 ## Examples
 

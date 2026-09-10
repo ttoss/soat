@@ -13,25 +13,11 @@ descend from one root because each declared the previous one as its
 
 ## Overview
 
-Chains are how work outlives the request that started it. An
-[approval](./approvals.md) decided three days later resumes the turn that
-proposed the call — as a new generation, linked back. That resumption can propose
-another gated call, approved later still, and so on; the chain is the whole tree
-that grows out of the first turn.
+Chains are how work outlives its request: an [approval](./approvals.md) decided days later resumes the proposing turn as a new generation, linked back; that resumption can propose another gated call, and so on. The chain is the whole tree.
 
-This module is the record of that tree: how large it has grown, whether it is
-still alive, and why it stopped. It is **read-only** — a chain is written by the
-continuation path, never by a caller — and it is created **lazily by its first
-continuation**, so a generation that never continues another is not a chain and
-gets no record. The table holds runaway candidates, not one row per turn.
+This module is the record of that tree: size, liveness, why it stopped. **Read-only**, written by the continuation path, and created **lazily by the first continuation**, so a generation that never continues another has no record.
 
-The behavior that produces a chain lives with the agent: see
-[Continuation chains](./agents.md#continuation-chains) for how a resumption is
-linked and bounded. A chain is **not** the same thing as a
-[trace tree](./traces.md#trace-ancestry-model) — that one runs inward through the
-calls a single turn makes, while a chain runs forward in time through turns
-resumed after their request is gone; that section spells out the difference and
-why the two are kept independent.
+How a resumption is linked and bounded: [Continuation chains](./agents.md#continuation-chains). A chain is **not** a [trace tree](./traces.md#trace-ancestry-model), which runs inward through one turn's calls; a chain runs forward in time through resumed turns.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -48,16 +34,9 @@ why the two are kept independent.
 | `created_at` | string | Creation timestamp |
 | `updated_at` | string | Last update timestamp |
 
-`agent_id` names the agent that *opened* the chain, not an owner — a chain can
-span agents. It is held as a plain id rather than a maintained reference, so
-deleting that agent leaves the chain's record, and the evidence of what it did,
-intact.
+`agent_id` is the agent that *opened* the chain, not an owner; a chain can span agents. It is a plain id, so deleting the agent leaves the record intact.
 
-There is no `root_generation_id` on the wire: the root is the chain's internal
-key, and exposing it would create a second handle for the same thing. Every
-generation in a chain carries `chain_id` instead — including the root — so
-filtering generations by that id returns the chain's members, and
-`generation_count` is exactly how many that filter returns.
+There is no `root_generation_id` on the wire; the root is the internal key. Every member generation, root included, carries `chain_id`, so filtering generations by it returns exactly `generation_count` rows.
 
 ## Key Concepts
 
@@ -70,31 +49,17 @@ filtering generations by that id returns the chain's members, and
 | `expired` | A held approval lapsed and nothing resumed the chain |
 | `budget_exhausted` | A resumption was refused by the chain budget |
 
-`concluded` is **not terminal**. A chain is quiescent, not finished: an approval
-resolved months from now spawns another hop and the chain returns to `active`.
-The status answers the operator's actual question — *which chains might still be
-spending?* — for which a value that could only ever be set once would be useless.
+`concluded` is **not terminal**: an approval resolved months later spawns another hop and the chain returns to `active`. The status answers *which chains might still be spending?*
 
-`expired` is distinguished from `concluded` because nothing *chose* to stop: a
-deadline did. See [Approval Expiry](./agents.md#approval-expiry) for when an
-expired approval ends a chain instead of reporting to the agent.
+`expired` differs from `concluded` because a deadline, not a choice, stopped it. See [Approval Expiry](./agents.md#approval-expiry).
 
 ### Status is observability, not a gate
 
-The budget is enforced by counting a chain's member generations directly, never
-by reading this record. A chain row that is missing, stale, or wrong therefore
-cannot let a runaway through — and every write to it is best-effort, because
-failing a generation in order to record a status about it would trade the thing
-that matters for the thing that describes it.
-
-Trust `status` and `generation_count` for triage; do not build enforcement on
-them.
+The budget is enforced by counting member generations directly, never by reading this record; a missing, stale, or wrong row cannot let a runaway through, and every write to it is best-effort. Use `status` and `generation_count` for triage, not enforcement.
 
 ### Bounding a chain
 
-A chain is unbounded by construction — each hop is a fresh turn with a fresh step
-budget, so `max_call_depth`, which bounds recursion *within* a request, never
-sees it. Three ceilings apply, and the **smallest** wins:
+Each hop is a fresh turn with a fresh step budget, so `max_call_depth` (recursion *within* a request) never sees a chain. Three ceilings apply; the **smallest** wins:
 
 | Ceiling | Set on | Scope |
 | --- | --- | --- |
@@ -102,27 +67,11 @@ sees it. Three ceilings apply, and the **smallest** wins:
 | `max_chain_generations` | the [project](./projects.md) | every chain in one project |
 | `MAX_CONTINUATION_CHAIN_GENERATIONS` | the deployment's environment | every chain |
 
-Each narrower scope can be stricter than the one above it but never looser: an
-agent author can cap their own chains below their project's number, and a project
-owner can cap every chain in the project without that author's cooperation, but
-neither can raise a ceiling. The outer bound stays a backstop, which is the one
-thing it cannot be if an inner scope could raise it — the agent that runs away is
-precisely the one whose configuration is wrong.
+A narrower scope can be stricter than the one above, never looser, so the outer bound stays a backstop. Where two scopes name the same number, the **broader** one is reported as the source.
 
-Where two scopes name the same number the **broader** one is reported as the
-source, since raising the narrower one alone would not move the budget.
+All three are read from *current* configuration at each hop, so lowering one stops a running chain.
 
-All three are read from the *current* configuration each time a hop is spawned,
-not captured when the chain started, so lowering any of them can stop a chain
-that is already running.
-
-When a resumption is refused, three things happen: the chain moves to
-`budget_exhausted`, the refused turn is recorded on a [trace](./traces.md) with
-`stop_reason: "chain_limit"`, and a
-[`chain_limit` exception](./exceptions.md#producers) is filed against the chain's
-root. The exception is what actually reaches a human — a chain is usually resumed
-by a background sweep with nobody waiting on the answer — and it names which of
-the three ceilings refused the turn, so the fix is unambiguous.
+On refusal: the chain moves to `budget_exhausted`, the refused turn is recorded on a [trace](./traces.md) with `stop_reason: "chain_limit"`, and a [`chain_limit` exception](./exceptions.md#producers) is filed against the root, naming which ceiling refused it.
 
 ## Examples
 

@@ -14,17 +14,16 @@ import TabItem from '@theme/TabItem';
 
 # Orchestration Control Flow: Delay, Poll, and Loop
 
-This tutorial focuses on the **control-flow nodes** of the [Orchestrations](/docs/modules/orchestrations) module — the ones that pace, wait, repeat, and branch a run rather than call an LLM. You will build a sub-orchestration, a [builtin tool](/docs/modules/tools) for the `poll` node, and a main orchestration wiring `delay → poll → loop → condition → transform`, then run it and inspect the per-node executions.
+The **control-flow nodes** of the [Orchestrations](/docs/modules/orchestrations) module pace, wait, repeat and branch a run without calling an LLM. You will build a sub-orchestration, a [builtin tool](/docs/modules/tools) for the `poll` node, and a main orchestration wiring `delay → poll → loop → condition → transform`, then inspect the per-node executions.
 
-Everything here is deterministic — **no AI provider is required**. For `agent` nodes (LLM calls), see [Orchestrate a Sonnet](/docs/tutorials/orchestrate-a-sonnet); a [reference table](#every-node-type) at the end maps every node type to where it is demonstrated.
+Everything is deterministic; **no AI provider is required**. For `agent` nodes see [Orchestrate a Sonnet](/docs/tutorials/orchestrate-a-sonnet); the [reference table](#every-node-type) maps every node type to where it is demonstrated.
 
 ## Prerequisites
 
-- SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide to bring the stack up with Docker Compose.
-- New to SOAT? Read [Key Concepts](/docs/getting-started/concepts) to understand projects, tools, and runs first.
-- CLI installed and configured, or SDK set up. See [CLI](/docs/cli) or [SDK](/docs/sdk).
-- For production hardening (secrets, env vars), see [Configuration](/docs/self-hosting/configuration).
-- Server is at `http://localhost:5047`.
+- SOAT running locally at `http://localhost:5047` ([Quick Start](/docs/getting-started)).
+- [Key Concepts](/docs/getting-started/concepts) if new to SOAT.
+- [CLI](/docs/cli) or [SDK](/docs/sdk) set up.
+- [Configuration](/docs/self-hosting/configuration) for production hardening.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -54,7 +53,7 @@ export SOAT_BASE_URL=http://localhost:5047
 
 ## Step 1 — Log in as admin
 
-Admin is the built-in superuser role. See [Users](/docs/modules/users#examples) for authentication details.
+Admin is the built-in superuser role ([Users](/docs/modules/users#examples)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -134,7 +133,7 @@ echo "PROJECT_ID: $PROJECT_ID"
 
 ## Step 3 — Create the per-item sub-orchestration
 
-The `loop` node runs a whole [orchestration](/docs/modules/orchestrations#loops-collection-iteration) once per item in a collection. Create a tiny child orchestration that receives one `item` and echoes it through a `transform` node. The loop injects each element under the `item` variable, seeded into the sub-run's input namespace, so the child reads it with `{"var": "input.item"}`.
+The `loop` node runs a child [orchestration](/docs/modules/orchestrations#loops-collection-iteration) once per collection item, injecting each element as `item` in the sub-run's input namespace. This child echoes it through a `transform` node, reading it with `{"var": "input.item"}`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -189,7 +188,7 @@ echo "SUB_ORCH_ID: $SUB_ORCH_ID"
 
 ## Step 4 — Create the tool the poll node calls
 
-A `poll` node repeatedly calls a [Tool](/docs/modules/tools#examples) until a JSON Logic exit condition on its response holds. Create a [builtin tool](/docs/modules/tools) that reads this project back via the `get-project` action. Polling a resource until a field reaches an expected value is the canonical use of a `poll` node — here the project is already readable, so the loop exits on the first attempt.
+A `poll` node calls a [Tool](/docs/modules/tools#examples) until a JSON Logic exit condition on its response holds. This [builtin tool](/docs/modules/tools) reads the project back via `get-project`; it is already readable, so the poll exits on the first attempt.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -243,11 +242,11 @@ echo "CHECK_TOOL_ID: $CHECK_TOOL_ID"
 
 This [orchestration](/docs/modules/orchestrations#node-types) chains the control-flow nodes:
 
-- **`delay`** — waits a fixed `duration`. Accepts the friendly suffix form (`1s`, `5m`, `2h`) or ISO 8601 (`PT1S`).
-- **`poll`** — calls the tool each attempt and stops when `exit_condition` is truthy, bounded by `interval` + `max_iterations`. The condition is evaluated against the run state plus `response` (the latest tool result) and `attempt`. See [Polling](/docs/modules/orchestrations#polling).
-- **`loop`** — runs `orchestration_id` once per element of `collection`, injecting each as `item_variable`. This is the *same* `orchestration_id` field the standalone `sub_orchestration` node uses. See [Loops](/docs/modules/orchestrations#loops-collection-iteration).
+- **`delay`** — waits `duration`: suffix form (`1s`, `5m`, `2h`) or ISO 8601 (`PT1S`).
+- **`poll`** — calls the tool each attempt until `exit_condition` is truthy, bounded by `interval` + `max_iterations`; evaluated against run state plus `response` (latest tool result) and `attempt`. See [Polling](/docs/modules/orchestrations#polling).
+- **`loop`** — runs `orchestration_id` (the same field `sub_orchestration` uses) once per element of `collection`, injected as `item_variable`. See [Loops](/docs/modules/orchestrations#loops-collection-iteration).
 - **`condition`** — emits a label; outgoing edges select a branch with `condition: "<label>"`.
-- **`transform`** — the terminal node on each branch.
+- **`transform`** — terminal node on each branch.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -358,7 +357,7 @@ echo "ORCHESTRATION_ID: $ORCHESTRATION_ID"
 
 ## Step 6 — Run it
 
-Start a [run](/docs/modules/orchestrations#examples) with a list of items. The `loop` processes each through the sub-orchestration, and the `condition` routes to `summary-processed` because the results are non-empty.
+Start a [run](/docs/modules/orchestrations#examples) with a list of items; the `condition` routes to `summary-processed` because the results are non-empty.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -423,7 +422,7 @@ echo "RUN_ID: $RUN_ID"
 
 ## Step 7 — Inspect the per-node executions
 
-`get-orchestration-run` returns the run [state](/docs/modules/orchestrations#state-and-mappings) and one record per executed node. Note that `summary-none` shows `skipped` — the `condition` routed away from it.
+`get-orchestration-run` returns the run [state](/docs/modules/orchestrations#state-and-mappings) and one record per executed node.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -435,9 +434,9 @@ soat get-orchestration-run \
 
 Look for:
 
-- `state.results` — one entry per item, each the sub-orchestration's output.
-- `state.summary` — `"Items were processed."` (written by the branch the `condition` selected).
-- `node_executions` — `wait-ready` completed after one attempt; `summary-none` is `skipped`.
+- `state.results` — one entry per item, the sub-orchestration's output.
+- `state.summary` — `"Items were processed."`, written by the selected branch.
+- `node_executions` — `wait-ready` completed after one attempt; `summary-none` is `skipped` (the `condition` routed away from it).
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
@@ -474,17 +473,13 @@ curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$RUN_ID" \
 
 ## How It Works
 
-Each node type's full semantics are documented in
-[Orchestrations — Node Types](/docs/modules/orchestrations#node-types). Two details
-worth calling out here: `poll` exhausts `max_iterations` by completing with
-`condition_met: false` unless `fail_on_timeout: true`, and `condition` records the
-unselected branch as `skipped`.
+Full semantics: [Orchestrations — Node Types](/docs/modules/orchestrations#node-types). `poll` exhausts `max_iterations` by completing with `condition_met: false` unless `fail_on_timeout: true`; `condition` records the unselected branch as `skipped`.
 
-To see the `none` branch, run again with `--input '{"items":[]}'`: the empty collection makes `loop` produce `[]`, the `condition` evaluates to `none`, and `summary-none` runs instead.
+To see the `none` branch, run again with `--input '{"items":[]}'`: `loop` produces `[]`, the `condition` evaluates to `none`, and `summary-none` runs.
 
 ## Every node type
 
-This tutorial exercises the control-flow nodes. The full set of [node types](/docs/modules/orchestrations#node-types):
+All [node types](/docs/modules/orchestrations#node-types):
 
 | Node | Where to see it |
 | --- | --- |

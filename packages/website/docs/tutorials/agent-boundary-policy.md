@@ -14,22 +14,18 @@ import TabItem from '@theme/TabItem';
 
 # Bound an Agent with a Boundary Policy
 
-When a caller runs an agent, SOAT forwards that caller's credential into every `builtin` action the agent performs. Permissions are re-checked live at each hop, so **an agent can never grant power** — a chain is capped by whatever the original caller's token allows.
+SOAT forwards the caller's credential into every `builtin` action an agent performs, so a chain is capped by the caller's token. That cap is not least privilege: a read-only summarizer running under a caller who may write documents executes at the caller's ceiling.
 
-That cap alone is not least privilege. A summarizer agent that only needs to _read_ documents still executes under a caller who may also _write_ them, so a prompt injection in that agent's context runs at the caller's full ceiling.
+`boundary_policy` is a policy document stored on the agent that limits which `builtin` actions that agent may perform, whoever calls it. Effective permission = caller policy ∩ agent boundary, as with [API keys](/docs/modules/api-keys#permission-inheritance).
 
-`boundary_policy` closes the gap. It is a policy document stored on the agent that limits which `builtin` actions **that agent** may perform, whoever calls it. The effective permission is the **intersection** of the caller's policy and the agent's boundary — the same pattern as [API keys](/docs/modules/api-keys#permission-inheritance).
-
-In this tutorial you give alice broad document permissions, bind an agent to a document-writing tool, and then watch the agent be refused the write anyway — because its boundary allows reads only. Alice then performs the same write directly, proving the ceiling that stopped the agent was the agent's, not her token's.
+You give alice broad document permissions, bind an agent to a document-writing tool, watch the agent's write be refused by a read-only boundary, then perform the same write directly as alice.
 
 ## Prerequisites
 
-- SOAT running locally with Ollama. Follow the [Quick Start](/docs/getting-started) guide.
-- New to SOAT? Read [Key Concepts](/docs/getting-started/concepts) for projects, users, and the IAM model before starting.
-- An [Ollama](https://ollama.com) instance accessible at `http://ollama:11434` with model `qwen2.5:0.5b` pulled (`ollama pull qwen2.5:0.5b`).
-- CLI, SDK, or curl available. The server is at `http://localhost:5047`.
-- For production hardening (secrets, env vars), see [Configuration](/docs/self-hosting/configuration).
-- Familiar with [builtin tools](/docs/modules/tools#builtin) and `preset_parameters`? If not, run [Agent SOAT Tools](/docs/tutorials/agent-soat-tools) first — this tutorial reuses both.
+- SOAT running locally ([Quick Start](/docs/getting-started)); [Key Concepts](/docs/getting-started/concepts); [Configuration](/docs/self-hosting/configuration).
+- [Ollama](https://ollama.com) at `http://ollama:11434` with `qwen2.5:0.5b` pulled (`ollama pull qwen2.5:0.5b`).
+- CLI, SDK, or curl; server at `http://localhost:5047`.
+- [Builtin tools](/docs/modules/tools#builtin) and `preset_parameters` — see [Agent SOAT Tools](/docs/tutorials/agent-soat-tools).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -59,7 +55,7 @@ export SOAT_BASE_URL=http://localhost:5047
 
 ## Step 1 — Log in as admin
 
-Admin is the built-in superuser role and bypasses policy evaluation entirely — see [IAM — Authentication](/docs/modules/iam#authentication).
+Admin bypasses policy evaluation — see [IAM — Authentication](/docs/modules/iam#authentication).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -101,7 +97,7 @@ ADMIN_TOKEN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users/login" \
 
 ## Step 2 — Create a project and an AI provider
 
-Every resource lives inside a [project](/docs/modules/projects#examples). The [AI provider](/docs/modules/ai-providers#examples) here is a local Ollama instance so the tutorial runs without external credentials. To connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
+A [project](/docs/modules/projects#examples) and a local Ollama [AI provider](/docs/modules/ai-providers#examples). For other providers see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -164,7 +160,7 @@ echo "Provider: $PROVIDER_ID"
 
 ## Step 3 — Create the document the agent will try to overwrite
 
-Create a [document](/docs/modules/documents#examples) and note its exact content. Step 7 asserts it is still there.
+Create a [document](/docs/modules/documents#examples); Step 7 asserts its content is unchanged.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -216,9 +212,7 @@ echo "Document: $DOC_ID"
 
 ## Step 4 — Create alice with **broad** document permissions
 
-This is the part that makes the demo meaningful. Alice is not restricted: she may read _and_ write every document in the project. She is the "my full token" caller.
-
-See [Users](/docs/modules/users#examples) and [Policies](/docs/modules/policies#examples) for the resources involved, and [IAM — SOAT Resource Names (SRNs)](/docs/modules/iam#soat-resource-names-srns) for the `resource` scoping used below.
+Alice may read and write every document in the project. See [Users](/docs/modules/users#examples), [Policies](/docs/modules/policies#examples) and [SRNs](/docs/modules/iam#soat-resource-names-srns) for the `resource` scoping.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -344,7 +338,7 @@ ALICE_TOKEN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users/login" \
 
 ## Step 5 — Bind a write tool to the agent
 
-The agent gets a real [builtin tool](/docs/modules/tools#builtin) for `update-document`, with `document_id` pinned by `preset_parameters` so the model cannot aim it anywhere else. Nothing here is restricted yet — the tool is fully functional.
+A [builtin tool](/docs/modules/tools#builtin) for `update-document`, with `document_id` pinned by `preset_parameters`. The tool itself is unrestricted.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -399,10 +393,8 @@ echo "Write tool: $WRITE_TOOL_ID"
 
 ## Step 6 — Create the agent with a read-only boundary
 
-Two fields carry the whole lesson:
-
-- **`boundary_policy`** allows `documents:GetDocument` and nothing else. Boundaries are **deny-by-default**: anything the document does not allow is refused, so the bound `update-document` tool is dead on arrival.
-- **`step_rules`** forces the tool call on step 1. Without it, whether the model volunteers the call is up to `qwen2.5:0.5b` — and this tutorial is demonstrating the refusal, not the model's judgment. See [Step Rules](/docs/modules/agents#step-rules).
+- `boundary_policy` allows `documents:GetDocument` only. Boundaries are deny-by-default, so the bound `update-document` tool is refused.
+- `step_rules` forces the tool call on step 1 so the refusal does not depend on `qwen2.5:0.5b` volunteering it. See [Step Rules](/docs/modules/agents#step-rules).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -488,14 +480,14 @@ echo "Agent: $AGENT_ID"
 </Tabs>
 
 :::tip Write boundaries as allow-lists
-A boundary that allows only what the agent needs stays correct as the agent gains tools: bind a new `builtin` action tomorrow and it is refused until someone widens the boundary on purpose. A boundary written as a list of denials has the opposite property — every action nobody thought to deny is permitted.
+An allow-list stays correct as the agent gains tools: a newly bound `builtin` action is refused until the boundary is widened. A deny-list permits every action nobody thought to deny.
 :::
 
 ---
 
 ## Step 7 — Run the agent as alice, and watch the write fail
 
-Alice may write this document. The agent may not. The boundary is evaluated before the action is dispatched, so the tool returns an error result instead of performing the update — the [generation](/docs/modules/agents#soat-action-permissions) itself still completes.
+The boundary is evaluated before dispatch: the tool returns an error result and the [generation](/docs/modules/agents#soat-action-permissions) still completes.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -558,19 +550,17 @@ echo "Content after the agent ran: $CONTENT"
 </TabItem>
 </Tabs>
 
-The tool result the model received names the action that was refused:
+The tool result the model received:
 
 ```json
 { "error": "Forbidden: boundary policy denies update-document" }
 ```
 
-Nothing about alice changed. The agent was refused because of what **the agent** is allowed to do.
-
 ---
 
 ## Step 8 — Prove the ceiling was the agent's, not alice's
 
-Same user, same token, same document — performed directly against [Documents](/docs/modules/documents#examples) instead of through the agent.
+Same user, token and document, written directly via [Documents](/docs/modules/documents#examples).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -614,13 +604,13 @@ curl -s -X PATCH "$SOAT_BASE_URL/api/v1/documents/$DOC_ID" \
 </TabItem>
 </Tabs>
 
-That is the whole point. The forwarded credential caps the chain from above; the boundary caps each agent from below. A prompt injection reaching the summarizer inherits the summarizer's ceiling, not alice's.
+The forwarded credential caps the chain from above; the boundary caps each agent from below. A prompt injection inherits the agent's ceiling, not alice's.
 
 ---
 
 ## Step 9 — A mistyped action is rejected at write time
 
-Boundaries fail closed on a typo only if the typo is caught. Action strings are validated when an agent is created or updated, so a mis-named action cannot be quietly accepted and then match nothing at evaluation time.
+Action strings are validated on agent create and update, so a mis-named action is rejected instead of silently matching nothing.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -677,7 +667,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/agents" \
 </TabItem>
 </Tabs>
 
-See the [Permissions Reference](/docs/permissions) for the enforceable `module:Operation` action names.
+Action names: [Permissions Reference](/docs/permissions).
 
 ---
 
@@ -689,13 +679,13 @@ See the [Permissions Reference](/docs/permissions) for the enforceable `module:O
 | The built-in `write_memory` tool | **Yes** — fails closed when the boundary denies the memory write actions |
 | `http`, `mcp`, `client` tools    | **No** — these execute outside the platform                              |
 
-For the tool types the boundary cannot reach, use [Guardrails](/docs/tutorials/gate-a-tool-with-guardrails) to gate the call, and [Approvals](/docs/tutorials/approval-gate) to put a human in front of it.
+For tool types the boundary cannot reach, use [Guardrails](/docs/tutorials/gate-a-tool-with-guardrails) or [Approvals](/docs/tutorials/approval-gate).
 
-A boundary is per agent, so it applies **per hop**. When an orchestrator calls a sub-agent through `create-agent-generation`, the sub-agent's own generation resolves its tools under its own boundary — the orchestrator's permissions do not widen it.
+A boundary applies per hop: a sub-agent called through `create-agent-generation` resolves its tools under its own boundary; the orchestrator's permissions do not widen it.
 
 ## Next Steps
 
-- [Agents — SOAT Action Permissions](/docs/modules/agents#soat-action-permissions) — the field reference for `boundary_policy`
-- [Permissions in Practice](/docs/tutorials/permissions) — policies, users, and project-scoped API keys
-- [Multi-Agent Sonnet with Nested Agent Calls](/docs/tutorials/multi-agent-orchestration) — put a boundary on each sub-agent in a real graph
-- [Gate a Tool with Guardrails](/docs/tutorials/gate-a-tool-with-guardrails) — gating for the tool types a boundary does not cover
+- [Agents — SOAT Action Permissions](/docs/modules/agents#soat-action-permissions) — `boundary_policy` reference
+- [Permissions in Practice](/docs/tutorials/permissions)
+- [Multi-Agent Sonnet with Nested Agent Calls](/docs/tutorials/multi-agent-orchestration) — a boundary per sub-agent
+- [Gate a Tool with Guardrails](/docs/tutorials/gate-a-tool-with-guardrails)

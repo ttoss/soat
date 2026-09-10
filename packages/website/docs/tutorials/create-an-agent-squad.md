@@ -14,7 +14,7 @@ import TabItem from '@theme/TabItem';
 
 # Create an Agent Squad
 
-An **agent squad** is a team of agents plus the flow that coordinates them, deployed as a single [Formation](/docs/modules/formations) stack — see the [Agent Squad example](/docs/modules/orchestrations#agent-squad). This tutorial builds a small marketing content squad end to end: a researcher gathers facts, a writer and a reviewer work in parallel from those facts, a human approves the result, and only then does it "publish". You will design the squad, declare it in one formation template, validate and deploy it, run it through the human approval, add a member, and tear it down.
+An **agent squad** is a team of agents plus the flow that coordinates them, deployed as one [Formation](/docs/modules/formations) stack (see the [Agent Squad example](/docs/modules/orchestrations#agent-squad)). This tutorial builds a marketing content squad: a researcher gathers facts, a writer and a reviewer work in parallel, a human approves, then it "publishes". You declare it in one template, deploy it, run it through approval, add a member, and tear it down.
 
 ## Prerequisites
 
@@ -56,7 +56,7 @@ export SOAT_URL=http://localhost:5047
 
 ## Step 1 — Log in as admin
 
-Admin is the built-in superuser. See [Users](/docs/modules/users#examples) for full authentication details.
+Admin is the built-in superuser. See [Users](/docs/modules/users#examples).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -142,15 +142,15 @@ The squad has three [agents](/docs/modules/agents) plus a human checkpoint, wire
 | `approve`   | human   | Pauses the run so a person can approve the draft before it "publishes"          |
 | `publish`   | transform | Combines the approved draft into the final artifact                          |
 
-`research` fans out to `write` and `review`, which fan back in at `approve` using an [activation group](/docs/modules/orchestrations#activation-groups-fan-in) — `approve` only activates once **both** finish. Because an orchestration is a formation resource type, the agents and the orchestration are declared and deployed together in the next step.
+`research` fans out to `write` and `review`, which fan back in at `approve` through an [activation group](/docs/modules/orchestrations#activation-groups-fan-in): `approve` activates once both finish. An orchestration is a formation resource type, so agents and orchestration deploy together in the next step.
 
 ---
 
 ## Step 4 — Write the formation template
 
-A [formation template](/docs/modules/formations#formation-template) is a JSON object with a `resources` map and an `outputs` map. `ContentSquad`'s nodes reference `Researcher`, `Writer`, and `Reviewer` with `{ "ref": "LogicalId" }` — SOAT resolves each to its physical `agent_...` ID before creating the orchestration, in dependency order. See [Ref Expressions](/docs/modules/formations#ref-expressions).
+A [formation template](/docs/modules/formations#formation-template) is a JSON object with a `resources` map and an `outputs` map. `ContentSquad`'s nodes reference `Researcher`, `Writer`, and `Reviewer` with `{ "ref": "LogicalId" }`; SOAT resolves each to its physical `agent_...` ID in dependency order. See [Ref Expressions](/docs/modules/formations#ref-expressions).
 
-This tutorial uses a local Ollama provider so it can run without external credentials. To connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
+This tutorial uses a local Ollama provider. To connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -537,7 +537,7 @@ curl -s -X POST "$SOAT_URL/api/v1/formations/plan" \
 
 ## Step 6 — Deploy the squad
 
-Deploy the formation. SOAT provisions the provider, all three agents, and the orchestration in dependency order, and resolves every `ref` expression. See [Formations — Examples](/docs/modules/formations#examples).
+SOAT provisions the provider, the three agents, and the orchestration in dependency order, resolving every `ref`. See [Formations — Examples](/docs/modules/formations#examples).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -742,7 +742,7 @@ curl -s "$SOAT_URL/api/v1/orchestration-runs/$RUN_ID" \
 
 ## Step 9 — Add a squad member and redeploy
 
-Add a `Proofreader` agent that also runs in parallel with `write` and `review`, feeding the same `approve` fan-in. Update the template's `resources` and the `approve` node's edges, then redeploy — SOAT diffs the new template against the current stack and applies only the required changes. See [Formations — Update a formation](/docs/modules/formations#update-a-formation).
+Add a `Proofreader` agent running in parallel with `write` and `review`, feeding the same `approve` fan-in. Update `resources` and the `approve` node's edges, then redeploy; SOAT diffs the template against the stack and applies only the changes. See [Formations — Update a formation](/docs/modules/formations#update-a-formation).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -861,7 +861,7 @@ curl -s -X PUT "$SOAT_URL/api/v1/formations/$FORMATION_ID" \
 
 ## Step 10 — Tear down
 
-Deleting a formation removes managed resources in reverse dependency order — but not resources the platform guards on their own. The run above put every squad member to work, so each agent now has generation history and teardown stops rather than destroying it implicitly: the delete fails `409 FORMATION_DELETE_FAILED` with the blocking agents named in `error.meta.failures`, leaving the stack in `delete_failed`. See [Formations — Resource Lifecycle](/docs/modules/formations#resource-lifecycle).
+Deleting a formation removes managed resources in reverse dependency order, except resources the platform guards. Each agent now has generation history, so the delete fails `409 FORMATION_DELETE_FAILED` with the blocking agents in `error.meta.failures` and the stack stays `delete_failed`. See [Formations — Resource Lifecycle](/docs/modules/formations#resource-lifecycle).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -898,10 +898,9 @@ curl -s -X DELETE "$SOAT_URL/api/v1/formations/$FORMATION_ID" \
 </TabItem>
 </Tabs>
 
-To finish the teardown, discard each agent's history explicitly
+To finish, discard each agent's history explicitly
 (`soat delete-agent --agent-id "$AGENT_ID" --force true`) and delete the formation
-again — or declare the agents with `deletion_policy: retain` so the stack leaves them
-standing.
+again, or declare the agents with `deletion_policy: retain`.
 
 ---
 

@@ -8,13 +8,13 @@ Project-scoped failover for completion models: a named, ordered list of provider
 
 ## Overview
 
-An agent normally pins one [AI provider](./ai-providers.md) and one model. A single provider outage or a sustained `429` then stalls every generation that references it — with schedules and the [durable orchestration queue](./orchestrations.md#durable-background-execution) running work unattended, nobody is there to retry by hand.
+An agent normally pins one [AI provider](./ai-providers.md) and one model; a provider outage or sustained `429` then stalls every generation referencing it, including unattended schedules and the [durable orchestration queue](./orchestrations.md#durable-background-execution).
 
-A model route replaces that pin with an ordered list of targets. The first target is tried first; a **retryable** failure is retried up to that target's `max_retries` and then falls through to the next target. A **deterministic** failure (400-class, auth, content policy) fails immediately — it would fail identically on every target.
+A route replaces the pin with an ordered list of targets. A **retryable** failure is retried up to the target's `max_retries`, then falls through to the next target. A **deterministic** failure (400-class, auth, content policy) fails immediately.
 
-Routing is opt-in and byte-identical for anything that does not use it: a consumer that pins an `ai_provider_id` resolves exactly as before. A consumer that names **neither** a route nor a provider inherits its project's [`default_model_route_id`](#project-default-route), which is how chats and memory completions get failover without a per-consumer field.
+Routing is opt-in: a consumer pinning `ai_provider_id` resolves as before. A consumer naming **neither** a route nor a provider inherits the project's [`default_model_route_id`](#project-default-route), which is how chats and memory completions get failover.
 
-> This is not a replacement for an external gateway. The `gateway` provider slug still lets you front providers with LiteLLM/OpenRouter. A model route is the SOAT-native alternative: the credentials stay in the [secrets](./secrets.md) module, the config lives inside SOAT's IAM and [formations](./formations.md), and the [generation](./generations.md) records which target actually answered.
+> Not a replacement for an external gateway: the `gateway` provider slug still fronts LiteLLM/OpenRouter. A route keeps credentials in [secrets](./secrets.md), config in IAM and [formations](./formations.md), and records the answering target on the [generation](./generations.md).
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -55,7 +55,7 @@ soat create-model-route \
 
 ### Route or pin — at most one
 
-A consumer sets **at most one** of `model_route_id` and `ai_provider_id` (+ `model`). Resolution is a lookup, not a precedence puzzle:
+A consumer sets **at most one** of `model_route_id` and `ai_provider_id` (+ `model`):
 
 | Consumer state         | Resolves through                     |
 | ---------------------- | ------------------------------------ |
@@ -64,11 +64,11 @@ A consumer sets **at most one** of `model_route_id` and `ai_provider_id` (+ `mod
 | neither set            | the project's `default_model_route_id` |
 | both set               | rejected `400`                       |
 
-An explicit binding always wins; the project default only fills the gap. A project-wide default is never allowed to override a deliberate pin.
+An explicit binding always wins; the project default only fills the gap.
 
-`model` cannot accompany a route — named *or* inherited — because each target names its own model.
+`model` cannot accompany a route, named or inherited: each target names its own model.
 
-The invariant is enforced on every write path — REST, and [formations](./formations.md) — by one exported validator, so `ai_provider_id` never lingers as dead config next to a route that overrides it.
+One exported validator enforces this on every write path (REST and [formations](./formations.md)).
 
 To switch a pinned agent to a route, clear the pin in the same request:
 
@@ -78,32 +78,32 @@ soat update-agent --agent_id agent_… --model_route_id route_… --ai_provider_
 
 ### Project default route
 
-A project's `default_model_route_id` is the route inherited by every consumer in it that binds nothing. It is the switch that turns failover on for a whole project without editing each consumer:
+`default_model_route_id` is inherited by every consumer in the project that binds nothing, turning failover on project-wide without editing each consumer:
 
 ```bash
 soat update-project --project-id proj_… --default_model_route_id route_…
 ```
 
-Repointing it from one route to another is free and deliberately changes behavior for every inheriting consumer — that is the feature. It differs from putting fallbacks on the AI provider in the two ways that matter: it is a single project-scoped switch rather than a side effect of editing a credential, and it cannot silently override a consumer that bound itself explicitly.
+Repointing it to another route is free and changes behavior for every inheriting consumer. Unlike fallbacks on the AI provider, it is a single project-scoped switch, not a side effect of editing a credential, and it cannot override an explicit binding.
 
-Two write-time guards keep "this consumer has no model at all" unrepresentable, so runtime resolution is a total function rather than a new failure mode:
+Two write-time guards keep "no model at all" unrepresentable:
 
 1. Creating or updating a consumer that binds **neither** field returns `400 VALIDATION_FAILED` unless the project has a `default_model_route_id`.
 2. **Clearing** `default_model_route_id` returns `409 PROJECT_DEFAULT_ROUTE_INHERITED` while any consumer inherits it, naming the count and a sample. Bind those consumers explicitly first, or repoint the default instead.
 
-The route must belong to the project (`400` otherwise), mirroring the same-project guard on targets. The field lives on the existing project update surface and is governed by `projects:UpdateProject` — no new permission, no new endpoint.
+The route must belong to the project (`400`). The field is on the project update surface, governed by `projects:UpdateProject`.
 
 ### The routing layer is a composite model
 
-A route resolves to a **composite language model** holding one inner model per target. The failover happens around the *individual LLM call*, not around the whole generation.
+A route resolves to a **composite language model**, one inner model per target; failover wraps the *individual LLM call*, not the whole generation.
 
-That distinction is the point. Agent generation is a multi-step loop whose tools have real side effects (HTTP, MCP, SOAT actions, `write_memory`). Retrying the *generation* on another provider would re-execute every tool call that already succeeded. Failing over one call keeps steps 1…n−1's tool results in the message history — a provider failure on the step-5 LLM call is invisible to the tools.
+Agent generation is a multi-step loop whose tools have side effects (HTTP, MCP, SOAT actions, `write_memory`). Retrying the whole generation would re-execute succeeded tool calls; failing over one call keeps steps 1…n−1 in the message history.
 
 ### Retry ownership
 
-The route config is the **only** retry authority. The AI SDK's own `maxRetries` (default `2`) is set to `0` for routed calls, so a route with `max_retries: 2` issues 3 attempts per target — not 9. Non-routed calls keep the SDK default untouched.
+The route is the **only** retry authority: the AI SDK's `maxRetries` (default `2`) is `0` for routed calls, so `max_retries: 2` means 3 attempts per target, not 9. Non-routed calls keep the SDK default.
 
-The total attempt budget — `Σ (1 + max_retries)` over all targets — is capped at **10** and validated at create/update time, rejecting with a `400` that names the computed total. There is no runtime clamp: silently truncating configured behavior would be worse than refusing to store it.
+The total budget, `Σ (1 + max_retries)` over all targets, is capped at **10**, validated at create/update with a `400` naming the computed total. There is no runtime clamp.
 
 ### Error classification
 
@@ -116,33 +116,33 @@ The class assigned to a failure decides whether it fails over. First match wins:
 | Provider returned `5xx`, marked the error retryable, or the connection failed outright  | `provider_error` | yes         |
 | Everything else — 400-class, auth, content policy, schema validation                    | *(deterministic)* | no — fails fast |
 
-A class **not listed** in the route's `retry_on` is treated as terminal too: `retry_on` is the failover-eligibility list, not just a retry filter.
+A class **not listed** in `retry_on` is terminal: `retry_on` is the failover-eligibility list.
 
-A **caller-initiated abort** (the caller's own signal fired) aborts the run and never fails over, even though it looks like a per-target timeout.
+A **caller-initiated abort** aborts the run and never fails over.
 
 ### Per-target timeout
 
-`timeout_seconds` is enforced with a per-attempt `AbortSignal` composed with the caller's signal, so both can cancel the attempt — but only the timeout is a failover.
+`timeout_seconds` is a per-attempt `AbortSignal` composed with the caller's signal; only the timeout is a failover.
 
 ### Circuit breaker
 
 After `failure_threshold` consecutive retryable failures, a target is skipped for `cooldown_seconds` and then probed again.
 
-Breaker state is **in-process per node**, not in the database: provider health is a hot-path hint with a half-life of seconds, and persisting it would add a write to every completion and a read before every attempt for a fact that is stale by the time it commits. A cold node re-learns an outage within `failure_threshold` requests, and nodes may briefly disagree about a target's health.
+Breaker state is **in-process per node**, not persisted (provider health is a hot-path hint stale within seconds). A cold node re-learns an outage within `failure_threshold` requests; nodes may briefly disagree.
 
-State is keyed by `(provider, model)` and therefore **shared across routes** — a dead backend is dead regardless of which route noticed. The *counter* is shared; the *policy* (`failure_threshold` / `cooldown_seconds`) belongs to the route evaluating the target, so two routes may legitimately start skipping at different points.
+State is keyed by `(provider, model)` and **shared across routes**; the *policy* (`failure_threshold` / `cooldown_seconds`) belongs to the evaluating route, so two routes may start skipping at different points.
 
-If the breaker would skip *every* target, the first one is probed anyway: refusing to call would turn a transient outage into a hard `cooldown_seconds` outage even after the provider recovered.
+If the breaker would skip *every* target, the first is probed anyway, so a transient outage does not become a hard `cooldown_seconds` outage.
 
 ### Streaming
 
-Fallback applies **before the first token only**. Once a stream has started, a mid-response failure surfaces to the caller as an error. Replaying a partial stream on another provider would duplicate tool side effects, re-bill the prefix, and splice two models' outputs into one message.
+Fallback applies **before the first token only**; a mid-stream failure surfaces as an error. Replaying a partial stream would duplicate tool side effects, re-bill the prefix, and splice two models' outputs.
 
 ### Observability and metering
 
-The [generation](./generations.md) records the model that actually served it, so [usage metering](./usage.md) prices the completion against the provider that answered — no metering change, and no wrong attribution.
+The [generation](./generations.md) records the serving model, so [usage metering](./usage.md) prices against the provider that answered.
 
-Every routed call writes a `routing` object onto the generation, so a trace explains which provider actually answered and what the earlier attempts failed with:
+Every routed call writes a `routing` object onto the generation:
 
 ```json
 {
@@ -158,15 +158,15 @@ Every routed call writes a `routing` object onto the generation, so a trace expl
 }
 ```
 
-`target_index` is the target that served the call, `fallbacks` is how many targets were exhausted before it, and each entry in `attempts` carries the [`error_class`](#error-classification) it failed with — absent on the attempt that succeeded. `routing` is a server-owned field on the generation, not a `metadata` key, so a caller cannot forge it.
+`target_index` is the serving target, `fallbacks` how many were exhausted before it; each `attempts` entry carries its [`error_class`](#error-classification), absent on the successful one. `routing` is server-owned, not a `metadata` key.
 
-Internal completions (chats, memory extraction/consolidation) resolve their metering attribution *before* the call, which a composite cannot satisfy — it does not know which target will serve. Those paths therefore read the served target back from the routing record once the call returns, so a routed chat turn is still metered on `(ai_provider_id, model)` of the target that answered and never on the route.
+Internal completions (chats, memory extraction/consolidation) resolve metering attribution *before* the call, so they read the served target back from the routing record afterwards; a routed chat turn is metered on the answering `(ai_provider_id, model)`, never on the route.
 
-**Known gap:** a *failed* attempt that burned tokens before erroring is not metered. Providers typically return no usage alongside an error, so the data to price it does not exist; the attempt is still visible rather than silent.
+**Known gap:** a *failed* attempt that burned tokens is not metered; providers return no usage alongside an error. The attempt is still visible.
 
 ### Deleting a route
 
-`DELETE` returns `409 MODEL_ROUTE_HAS_DEPENDENTS` while an agent still references the route, or while it is a project's `default_model_route_id` — a routed agent has no pinned provider to fall back on, and an inherited default backs every consumer that binds nothing, so a dangling reference would break their completions. The error `meta` reports both counts and a sample of the referencing IDs.
+`DELETE` returns `409 MODEL_ROUTE_HAS_DEPENDENTS` while an agent references the route or it is a project's `default_model_route_id`; `meta` reports both counts and a sample of referencing IDs.
 
 ## Consumers
 
@@ -177,8 +177,8 @@ Internal completions (chats, memory extraction/consolidation) resolve their mete
 | Chats (chat-scoped completions)                     | the chat's pin, else the project default |
 | Stateless [`POST /chat/completions`](/docs/api/chats/create-chat-completion)                  | its per-request `ai_provider_id` only — it belongs to no project of its own, so there is no default to inherit |
 
-Chats deliberately have **no** `model_route_id` column: a project default plus explicit pins already covers "most consumers routed, some pinned". A per-consumer column is only needed for *two different routes in one project*, and is worth adding when that is actually requested.
+Chats have **no** `model_route_id` column; a project default plus explicit pins covers the cases. A per-consumer column would only serve *two routes in one project*.
 
 ## Behavioral drift
 
-Failover changes the answering model mid-conversation and, with per-call failover, potentially mid-*run* between steps of one generation. Order same-family models when output shape matters. This is documented, not enforced.
+Failover changes the answering model mid-conversation and, per call, mid-*run*. Order same-family models when output shape matters. Documented, not enforced.

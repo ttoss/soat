@@ -15,7 +15,7 @@ import TabItem from '@theme/TabItem';
 
 # Debug Session, Generation, and Trace History
 
-This tutorial builds a traceable conversation and keeps a deterministic mapping between session_id, generation_id, and trace_id — retrieving all messages and generations for a session, inspecting each trace and trace tree, and reverse-looking-up from trace_id back to generation and session. It uses [Sessions debugging links](/docs/modules/sessions#debugging-session-generation-trace), [Agent traces](/docs/modules/traces), [Trace debugging joins](/docs/modules/traces#debugging-joins-trace-generation-session), and [Files examples](/docs/modules/files#examples).
+Build a conversation with a deterministic mapping between session_id, generation_id, and trace_id: list a session's messages and generations, inspect each trace and trace tree, and reverse-look-up from trace_id to generation and session. Uses [Sessions debugging links](/docs/modules/sessions#debugging-session-generation-trace), [Agent traces](/docs/modules/traces), [Trace debugging joins](/docs/modules/traces#debugging-joins-trace-generation-session), and [Files examples](/docs/modules/files#examples).
 
 ## Prerequisites
 
@@ -95,9 +95,7 @@ ADMIN_TOKEN=$(curl -s -X POST "$SOAT_URL/api/v1/users/login" \
 
 ## Step 2 - Create project, AI provider, agent, and session
 
-Create the minimum resources from [Projects examples](/docs/modules/projects#examples), [AI Providers examples](/docs/modules/ai-providers#examples), [Agents examples](/docs/modules/agents#examples), and [Sessions examples](/docs/modules/sessions#examples).
-
-This tutorial uses a local Ollama provider so it can run without external credentials. To connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
+Create the minimum resources from [Projects examples](/docs/modules/projects#examples), [AI Providers examples](/docs/modules/ai-providers#examples), [Agents examples](/docs/modules/agents#examples), and [Sessions examples](/docs/modules/sessions#examples). The provider is local Ollama; for xAI, OpenAI, Anthropic, or Amazon Bedrock see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -194,7 +192,7 @@ CONV_ID=$(printf '%s' "$SESSION_RESP" | jq -r '.conversation_id')
 
 ## Step 3 - Run two generations and capture generation_id + trace_id
 
-Use [Sessions debugging links](/docs/modules/sessions#debugging-session-generation-trace) and [Sessions background generation](/docs/modules/sessions#background-generation) endpoints to produce assistant replies and capture the correlation IDs.
+Produce assistant replies and capture the correlation IDs ([Sessions debugging links](/docs/modules/sessions#debugging-session-generation-trace), [Sessions background generation](/docs/modules/sessions#background-generation)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -297,7 +295,7 @@ printf '%s\n' "$GEN_2" | jq '{generation_id, trace_id, status}'
 
 ## Step 4 - Retrieve the full session message timeline
 
-Use [Sessions key concepts](/docs/modules/sessions#key-concepts) and [Sessions examples](/docs/modules/sessions#examples) to inspect the canonical conversation history.
+Inspect the canonical conversation history ([Sessions key concepts](/docs/modules/sessions#key-concepts), [Sessions examples](/docs/modules/sessions#examples)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -339,7 +337,7 @@ curl -s "$SOAT_URL/api/v1/conversations/$CONV_ID/messages?limit=50&offset=0" \
 
 ## Step 5 - Inspect traces for each generation
 
-Use [Traces key concepts](/docs/modules/traces#key-concepts), [Trace ancestry model](/docs/modules/traces#trace-ancestry-model), and [Traces examples](/docs/modules/traces#examples) to inspect metadata and tree structure.
+Inspect metadata and tree structure ([Traces key concepts](/docs/modules/traces#key-concepts), [Trace ancestry model](/docs/modules/traces#trace-ancestry-model), [Traces examples](/docs/modules/traces#examples)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -380,7 +378,7 @@ curl -s "$SOAT_URL/api/v1/traces/$(printf '%s\n' "$GEN_1" | jq -r '.trace_id')/t
 
 ## Step 6 - Download raw trace steps using file_id
 
-Use [Files key concepts](/docs/modules/files#key-concepts) and [Files examples](/docs/modules/files#examples) to inspect raw trace payloads.
+Raw trace payloads are files ([Files key concepts](/docs/modules/files#key-concepts), [Files examples](/docs/modules/files#examples)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -424,7 +422,7 @@ curl -s "$SOAT_URL/api/v1/files/$TRACE_FILE_ID/download/base64" \
 
 ## Step 7 - Build a reusable debug ledger (reverse lookup)
 
-Use [Trace debugging joins](/docs/modules/traces#debugging-joins-trace-generation-session) to resolve `trace_id -> generation_id[]` directly, then keep a lightweight ledger only for `generation_id -> session_id` correlation.
+[Trace debugging joins](/docs/modules/traces#debugging-joins-trace-generation-session) resolve `trace_id -> generation_id[]` directly; keep a ledger only for `generation_id -> session_id`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>

@@ -9,11 +9,11 @@ import TabItem from '@theme/TabItem';
 
 ## Overview
 
-The Knowledge module provides unified semantic search across all knowledge sources in a project — documents and memory entries. A single endpoint searches across these sources simultaneously, ranks results by vector similarity, and returns an interleaved list tagged by source type.
+Unified semantic search across a project's documents and memory entries: one endpoint, ranked by vector similarity, interleaved and tagged by source.
 
-Each result carries a `source_type` discriminant (`"document"` or `"memory"`) so callers know where each piece of knowledge came from. This is the same search layer agents use internally for retrieval — see it wired into an agent in [Agent with Persistent Memory — Step 8 (Create an agent with knowledge_config)](/docs/tutorials/memories-agent#step-8--create-an-agent-with-knowledge_config), and the [Memory & Knowledge Engine](../advanced/memory-and-knowledge-engine.md) deep dive for the full retrieval pipeline and its extension points.
+Each result carries `source_type` (`"document"` or `"memory"`). Agents use the same layer for retrieval: [Agent with Persistent Memory — Step 8 (Create an agent with knowledge_config)](/docs/tutorials/memories-agent#step-8--create-an-agent-with-knowledge_config) and the [Memory & Knowledge Engine](../advanced/memory-and-knowledge-engine.md) deep dive.
 
-The module follows SOAT's [engine & algorithms pattern](../advanced/engines-and-algorithms.md): the two stores, the unified search function, and injection are the **engine**; chunking and ranking are the **algorithms**, and [ingestion rules](./ingestion-rules.md) are the seam for bringing your own extraction algorithm as a [tool](./tools.md).
+In the [engine & algorithms pattern](../advanced/engines-and-algorithms.md): the two stores, the search function, and injection are the **engine**; chunking and ranking are the **algorithms**; [ingestion rules](./ingestion-rules.md) are the seam for a bring-your-own extraction [tool](./tools.md).
 
 See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -28,7 +28,7 @@ See the [Permissions Reference](../permissions.md) for the IAM action strings fo
 
 ### KnowledgeResult
 
-A `KnowledgeResult` is a discriminated union on `source_type`. All results share common fields; source-specific fields are only present for the matching type.
+A `KnowledgeResult` is a discriminated union on `source_type`; source-specific fields appear only for the matching type.
 
 #### Common fields (all source types)
 
@@ -67,7 +67,7 @@ A `KnowledgeResult` is a discriminated union on `source_type`. All results share
 
 ### Search Modes
 
-The [`POST /knowledge/search`](/docs/api/knowledge/search-knowledge) endpoint accepts the following filters. At least one must be provided.
+The [`POST /knowledge/search`](/docs/api/knowledge/search-knowledge) filters (at least one required):
 
 | Parameter        | Type       | Description                                                                                |
 | ---------------- | ---------- | ------------------------------------------------------------------------------------------ |
@@ -77,97 +77,53 @@ The [`POST /knowledge/search`](/docs/api/knowledge/search-knowledge) endpoint ac
 | `document_paths` | `string[]` | Filter document results to paths starting with these prefixes                              |
 | `document_ids`   | `string[]` | Filter document results to specific document IDs                                           |
 
-When `query` is set, results include `score` and `similarity_score` and are ordered by descending `score`; `min_score` and `limit` apply additional controls. For a walkthrough, see [Agent with Persistent Memory — Step 12 (Query the knowledge layer directly)](/docs/tutorials/memories-agent#step-12--query-the-knowledge-layer-directly).
+With `query`, results carry `score` and `similarity_score`, ordered by descending `score`; `min_score` and `limit` apply. Walkthrough: [Agent with Persistent Memory — Step 12 (Query the knowledge layer directly)](/docs/tutorials/memories-agent#step-12--query-the-knowledge-layer-directly).
 
-Which sources a request searches follows from its filters: document results are included whenever `query`, `document_paths`, or `document_ids` is passed; memory entries whenever `memory_ids` or `memory_tags` is passed. Passing a `query` together with a memory filter searches both sources at once — the result sets are merged and ranked together by descending similarity before `limit` is applied. `memory_ids` and `memory_tags` combine with union semantics.
+Sources follow from the filters: documents when `query`, `document_paths`, or `document_ids` is passed; memory entries when `memory_ids` or `memory_tags` is. A `query` plus a memory filter searches both, merged and ranked by descending similarity before `limit`. `memory_ids` and `memory_tags` union.
 
 `memory_tags` matches at **entry granularity**: an entry is returned when its parent memory's tags match the globs or when the entry's own `tags` match — see [Memories — Entry-Level Tag Filtering](./memories.md#entry-level-tag-filtering).
 
 ### Relevance scoring
 
-Two fields come back on every result of a `query` search, and they are **not** the same
-contract:
+Two fields on every `query` result, with different contracts:
 
 | Field | Contract |
 | --- | --- |
 | `score` | **Implementation-defined** relevance ranking, higher is better. The *ordering* it produces is the contract; the absolute value is not. Results are sorted by it and `min_score` filters on it. |
 | `similarity_score` | Raw **cosine similarity** (0–1) between the query embedding and the result. Pinned to that meaning — it is never redefined. |
 
-Today the ranking is single-signal, so the two are equal. That is an implementation
-detail, not a guarantee: a later hybrid ranking would fuse several signals into `score`
-while `similarity_score` keeps reporting the cosine value for debugging.
+Today the ranking is single-signal, so the two are equal; a later hybrid ranking would fuse signals into `score` while `similarity_score` keeps the cosine value.
 
-What this means in practice:
-
-- **Compare, don't interpret.** `score` is meaningful *relative to other results in the
-  same response*. Do not persist it, compare it across releases, or show it to end users
-  as a percentage.
-- **`min_score` is a deployment-tuned knob, not a portable constant.** It filters on
-  `score`, so a threshold tuned against today's ranking is not guaranteed to select the
-  same results after the ranking changes. Pin the value per deployment and re-tune it when
-  you upgrade.
-- **Need a stable number?** Read `similarity_score`.
+- `score` is comparable only *within one response*. Do not persist it, compare it across releases, or show it as a percentage.
+- `min_score` filters on `score`, so a threshold tuned against one ranking may not survive an upgrade; pin it per deployment and re-tune.
+- For a stable number, read `similarity_score`.
 
 ### Ranking is approximate
 
-Both vector columns carry an HNSW index, so `query` search is **approximate nearest
-neighbour**: it reads a bounded candidate list out of the index graph instead of comparing
-the query against every vector in scope. That is what keeps search cost sub-linear as a
-corpus grows — an exact scan reads every vector on every search, so its cost and latency
-grow with the corpus until they fall off a cliff at whatever size stops fitting in the
-database's memory.
+Both vector columns carry an HNSW index, so `query` search is **approximate nearest neighbour**: it reads a bounded candidate list from the index instead of scanning every vector, keeping cost sub-linear in corpus size. The cost is exactness:
 
-What it costs is exactness:
+- **Recall against the true top-k is below 1.0.** A result that would rank 10th can be missed. Both fields keep their meaning; the set being ordered is not guaranteed to be the exact best k.
+- **`min_score` needs re-tuning**: the candidate set feeding it changed.
+- **Filters do not silently shrink the result set.** Scope, `paths`, `document_ids` and permission filters apply *after* the index proposes candidates, so a narrow scope could return fewer than `limit` rows; SOAT enables pgvector's iterative index scan on every search, widening the candidate list until `limit` is satisfied post-filter.
 
-- **Recall against the true top-k is no longer 1.0.** A result that would have ranked
-  10th can be missed. Both fields keep their documented meaning — `similarity_score` is
-  still the raw cosine value of whatever comes back, and results are still ordered by
-  descending `score` — but the set being ordered is no longer guaranteed to be the exact
-  best k.
-- **`min_score` needs re-tuning.** It filters on `score`, and the candidate set feeding it
-  changed. Re-tune it per deployment, as its own note above already advises.
-- **Filters do not silently shrink the result set.** Scope, `paths`, `document_ids` and
-  permission filters are applied *after* the index proposes candidates, so a narrow scope
-  could return fewer than `limit` rows even when more exist. SOAT enables pgvector's
-  iterative index scan for every search, which keeps widening the candidate list until
-  `limit` is satisfied post-filter.
-
-That last guarantee needs **pgvector 0.8 or newer**, which is where
-`hnsw.iterative_scan` was added. On an older extension PostgreSQL discards the setting
-with a warning and search still answers, but a filtered search can come back short — see
-[Configuration](../self-hosting/configuration.md).
+The last guarantee needs **pgvector 0.8 or newer** (`hnsw.iterative_scan`). On an older extension PostgreSQL discards the setting with a warning and a filtered search can come back short; see [Configuration](../self-hosting/configuration.md).
 
 ### Injected knowledge is untrusted input
 
-Retrieved knowledge is partly **user-derived** — a memory entry written by
-[automatic extraction](./memories.md#automatic-extraction) contains whatever the user
-said in the turn it was extracted from. The platform treats it as data, never as
-instruction, and enforces that in two places:
+Retrieved knowledge is partly **user-derived** (an entry written by [automatic extraction](./memories.md#automatic-extraction) contains what the user said). It is treated as data, never instruction:
 
-- **It is never injected with the `system` role.** [Agent knowledge injection](./agents.md#knowledge-config)
-  delivers results as a `user` message inside a fenced `<knowledge>` block, preceded by a
-  preamble framing the contents as reference material. The agent's own `instructions`
-  remain the only system-authored input. Without this, a phrase a user said once could
-  come back as a system-level instruction in every later generation — a persistent
-  escalation path, not a one-turn prompt injection.
-- **Extraction runs tool-less.** The fact-extraction completion is a plain text completion
-  with no tools and no knowledge injection of its own, so text quoted from a conversation
-  cannot trigger an agent side effect while it is being turned into memory entries.
+- **Never injected with the `system` role.** [Agent knowledge injection](./agents.md#knowledge-config) delivers results as a `user` message inside a fenced `<knowledge>` block with a preamble framing it as reference material; the agent's `instructions` remain the only system input. Otherwise a phrase a user said once could become a persistent system-level instruction.
+- **Extraction runs tool-less**: a plain completion with no tools and no injection, so quoted text cannot trigger a side effect while becoming memory entries.
 
-**What this does not do:** it does not make retrieved content safe to act on. A tool call
-an agent makes after reading injected knowledge is still authorized only by that agent's
-[boundary policy](./agents.md) and [guardrails](./guardrails.md) — the fencing lowers the
-chance a model treats retrieved text as an instruction, it does not authorize anything.
-Scope an agent's boundary policy on the assumption that anything in its reachable memories
-and documents may influence what it tries to do.
+This does not make retrieved content safe to act on: a tool call made after reading it is still authorized only by the agent's [boundary policy](./agents.md) and [guardrails](./guardrails.md). Scope the boundary policy assuming anything in reachable memories and documents may influence the agent.
 
 ### Project Scoping
 
-`project_id` is optional. When omitted, the server resolves accessible projects from the caller's identity (API key project scope, admin wildcard, or the projects granted by the caller's policies).
+`project_id` is optional; when omitted, accessible projects come from the caller's identity (API key scope, admin wildcard, or policy grants).
 
 ### Result ceiling
 
-`limit` defaults to 10 and is clamped to **100**. The ceiling bounds the vector scan one request performs, so a larger `limit` returns everything there is up to 100 rows rather than being refused.
+`limit` defaults to 10 and is clamped to **100**; a larger value returns up to 100 rows rather than being refused.
 
 ## Configuration
 

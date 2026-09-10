@@ -7,41 +7,16 @@ import TabItem from '@theme/TabItem';
 
 # Workflows & Tasks
 
-Define a **state machine** — named states, transitions, guards, and per-state
-automation (a **workflow**) — and run durable **tasks** through it that move
-between states over time, including backward.
+A **workflow** is a state machine (states, transitions, guards, per-state automation); a **task** is a durable item moving through it over time, backward included.
 
 ## Overview
 
-A **workflow** is the versioned _definition_; a **task** is a durable _instance_
-bound to it that does not terminate on its own and can revisit states. Where an
-[orchestration](./orchestrations.md) is a forward-only DAG that runs and ends, a
-workflow is a state graph a task _lives_ in — statuses, guarded transitions, a
-kanban board, backward moves. The two compose: a state may **dispatch** an
-orchestration, an agent, or a single tool call to do its work. See
-[Choosing an Automation Model](/docs/advanced/choosing-an-automation-model)
-for the full comparison and composition patterns — starting with
-[whether the work needs a graph at all](/docs/advanced/choosing-an-automation-model#step-0--you-may-need-neither),
-since a workflow is the [graph layer](/docs/agent-system-layers) and the graph is
-the layer to build last.
+The workflow is the versioned definition; the task is a durable instance that does not terminate on its own and can revisit states. An [orchestration](./orchestrations.md) is a forward-only DAG that runs and ends; a workflow is a state graph a task lives in (statuses, guarded transitions, a kanban board, backward moves). They compose: a state may **dispatch** an orchestration, an agent or a single tool call. [Choosing an Automation Model](/docs/advanced/choosing-an-automation-model) compares them, starting with [whether the work needs a graph at all](/docs/advanced/choosing-an-automation-model#step-0--you-may-need-neither); a workflow is the [graph layer](/docs/agent-system-layers), built last.
 
-A workflow's two lists are the whole model:
+- **`states`** — board columns. Exactly one is `initial`; any number are `terminal` (entering one closes the task). A `kind: human` state never dispatches: the task parks until a principal fires a transition. A state may declare `on_enter` automation ([Per-state automation](#per-state-automation-on_enter)).
+- **`transitions`** — named, directional moves `from` listed states `to` one destination. Backward moves are ordinary transitions.
 
-- **`states`** — the named columns of a board. Exactly one is `initial`; any
-  number are `terminal` (entering one closes the task). A `kind: human` state
-  never dispatches; the task parks there until a principal fires a transition.
-  A state may declare `on_enter` automation (see [Per-state automation](#per-state-automation-on_enter)).
-- **`transitions`** — the named, directional moves between states, each valid
-  `from` listed states `to` a single destination. Backward moves are just
-  transitions — cycles are the point, not an error.
-
-Creating a task places it in the workflow's `initial` state (or a named `state`
-— see [Alternate entry points](#alternate-entry-points)) and fires that state's
-`on_enter`. From then on, every state change — human, API, agent (via MCP), or
-automation outcome — routes through the single **transition** operation, so
-guards and the audit trail can never be bypassed. A task's `state` is never
-directly writable. The board is the point: [`GET /tasks?workflow_id=…&state=…`](/docs/api/tasks/list-tasks)
-is one column, with zero application-side state.
+Creating a task places it in the `initial` state (or a named `state`, [Alternate entry points](#alternate-entry-points)) and fires its `on_enter`. Every later move (human, API, agent via MCP, automation outcome) goes through the single **transition** operation, so guards and the audit trail cannot be bypassed; `state` is never directly writable. [`GET /tasks?workflow_id=…&state=…`](/docs/api/tasks/list-tasks) is one board column.
 
 > See the [Permissions Reference](../permissions.md#workflows) for the
 > `workflows:` action strings and [#tasks](../permissions.md#tasks) for the
@@ -49,8 +24,8 @@ is one column, with zero application-side state.
 
 ## Related Tutorials
 
-- [Write a Sonnet with a Workflow](/docs/tutorials/orchestrate-a-sonnet-with-workflows) — a task flows through agent-driven states and a human review, with a backward move a DAG would reject.
-- [Close the Monthly Books - Step 8 (Define the close period as a workflow)](/docs/tutorials/close-the-monthly-books#step-8--define-the-close-period-as-a-workflow) — a guarded, approval-gated transition alongside an orchestration that does each state's work.
+- [Write a Sonnet with a Workflow](/docs/tutorials/orchestrate-a-sonnet-with-workflows) — agent-driven states, a human review, a backward move
+- [Close the Monthly Books - Step 8 (Define the close period as a workflow)](/docs/tutorials/close-the-monthly-books#step-8--define-the-close-period-as-a-workflow) — a guarded, approval-gated transition beside an orchestration
 
 ## Data Model
 
@@ -90,9 +65,7 @@ is one column, with zero application-side state.
 | `guard`             | object \| null | [JSON Logic](https://jsonlogic.com) over `{task, transition, principal}`; a false result rejects the move with `TASK_GUARD_REJECTED` |
 | `requires_approval` | boolean        | Gate the move behind a human approval. Firing it parks a pending approval instead of transitioning. See [Approval-gated transitions](#approval-gated-transitions). |
 
-A transition not defined here cannot be fired by anyone — there is no free-move
-escape hatch. Define an explicit any-state transition (listing every state in
-`from`) if a workflow needs one.
+Only defined transitions fire; an any-state transition lists every state in `from`.
 
 ### Task
 
@@ -122,8 +95,7 @@ escape hatch. Define an explicit any-state transition (listing every state in
 
 #### Transition history
 
-Every move appends one append-only `TaskTransition` record — the audited
-contract for a task. [`GET /tasks/{id}/history`](/docs/api/tasks/get-task-history) returns them oldest-first.
+Every move appends one `TaskTransition` record; [`GET /tasks/{id}/history`](/docs/api/tasks/get-task-history) returns them oldest-first.
 
 | Field           | Type            | Description                                                        |
 | --------------- | --------------- | ----------------------------------------------------------------- |
@@ -142,31 +114,14 @@ contract for a task. [`GET /tasks/{id}/history`](/docs/api/tasks/get-task-histor
 
 ## Key Concepts
 
-- **Single transition path.** Human, API, agent-via-MCP, and automation outcomes
-  all call the same transition operation. A transition must exist in the workflow
-  and be valid from the task's current state; its guard must pass.
-- **Atomicity & conflicts.** The state change happens under a row lock;
-  concurrent transitions on one task serialize. A transition that is no longer
-  valid from the committed state — or a transition on a `closed` task — returns
-  `TASK_TRANSITION_CONFLICT` (409). The post-dispatch write (`active_dispatch`,
-  `automation_status`, `last_result`, `payload_writes`) re-validates under the
-  same lock; a stale write is discarded instead of clobbering the new state.
-- **Delete is guarded.** A workflow with one or more **open** tasks cannot be
-  deleted (`WORKFLOW_HAS_OPEN_TASKS`). Once every task is closed (terminal),
-  deleting the workflow also removes those closed tasks and their transition
-  history.
-- **Payload is working data.** [`PATCH /tasks/{id}`](/docs/api/tasks/update-task) updates `payload`, `title`, or
-  `assignee`. `payload` is **shallow-merged** over the current payload (keys the
-  request omits are kept) and validated against `payload_schema`. The payload is
-  100% caller-owned; the automation result lives in the read-only `last_result`
-  field, which no patch can reach — a guard on `task.last_result` is only ever
-  satisfied by a value an automation wrote. Transitions are the audited
-  contract; payload writes are not versioned.
+- **Single transition path.** The transition must exist, be valid from the current state, and its guard must pass, whoever fires it.
+- **Atomicity & conflicts.** The state change runs under a row lock; concurrent transitions on one task serialize. A transition no longer valid from the committed state, or on a `closed` task, is `TASK_TRANSITION_CONFLICT` (409). The post-dispatch write (`active_dispatch`, `automation_status`, `last_result`, `payload_writes`) re-validates under the same lock; a stale write is discarded.
+- **Delete is guarded.** A workflow with **open** tasks cannot be deleted (`WORKFLOW_HAS_OPEN_TASKS`); once every task is closed, deleting it removes those tasks and their history.
+- **Payload is working data.** [`PATCH /tasks/{id}`](/docs/api/tasks/update-task) updates `payload`, `title` or `assignee`. `payload` is **shallow-merged** (omitted keys kept) and validated against `payload_schema`. No patch reaches read-only `last_result`, so a guard on `task.last_result` is satisfied only by a value an automation wrote. Payload writes are not versioned.
 
 ### Per-state automation (`on_enter`)
 
-A state's `on_enter` dispatches **at most one** agent generation or orchestration
-run when a task enters it, and routes the outcome back into a transition:
+`on_enter` dispatches **at most one** agent generation, orchestration run or tool call on entry and routes the outcome into a transition:
 
 ```json
 {
@@ -193,51 +148,16 @@ run when a task enters it, and routes the outcome back into a transition:
 }
 ```
 
-- **`dispatch`** — one agent (`kind: agent`, `agent_id`), orchestration
-  (`kind: orchestration`, `orchestration_id`) or tool call (`kind: tool`,
-  `tool_id`, optional `operation_id` to select an operation on a
-  multi-operation tool). `input_mapping` is JSON Logic
-  over `{task}` resolving the dispatch input from the task payload — for a
-  `tool` dispatch it resolves the tool's arguments.
-  `payload_writes` (optional) is JSON Logic over `{task, result}`, written into
-  named `task.payload` keys atomically with `last_result` when the dispatch
-  completes — a named, deterministic channel that survives past the one hop
-  `last_result` lives. Each write is a raw overwrite of its key, so in a loop
-  a value from an earlier pass lingers until the state dispatches again.
-- **`on_complete`** — labeled rules evaluated in order against `{task, result}`;
-  the first match fires its transition **as the `automation` principal**
-  (subject to the same guards). An agent dispatch exposes its generation output
-  under `{result}`; an orchestration dispatch exposes its final run state; a
-  tool dispatch exposes the tool's own return value. The
-  result is also written to the server-owned `task.last_result`. No rule
-  matches → the task stays put with `automation_status: completed` and a
-  `tasks.automation_unrouted` event fires. A matched rule whose transition is
-  rejected (guard fails for `automation`, or a concurrent move invalidated it)
-  → the task stays put with `automation_status: unrouted` and a
-  `tasks.automation_rejected` event fires (carrying the matched `transition`
-  and the rejection `errorCode`) — never silently stuck.
-- **`retry`** (optional) — a retry policy for the dispatch's **execution**
-  failures, never for `on_complete` routing. `max_attempts` counts the first
-  attempt (1–10); the delay before attempt `n` is
-  `backoff_seconds * backoff_multiplier^(n - 2)` (defaults: 0, 1). `on_failure`
-  — or the parked `automation_status: failed` — fires only after the last
-  attempt. If the task leaves the state between attempts, the remaining ones
-  are abandoned. Each attempt is recorded as `active_dispatch.attempt`, and
-  every retried failure emits a `tasks.automation_retrying` event (carrying
-  `attempt`, `max_attempts`, the error, and the failed
-  `generation_id`/`orchestration_run_id`).
-- **`on_failure`** — a transition to fire when the dispatch fails terminally.
-  Omitted → the task stays in the state with `automation_status: failed` for a
-  human to resolve.
+- **`dispatch`** — `kind: agent` (`agent_id`), `kind: orchestration` (`orchestration_id`) or `kind: tool` (`tool_id`, optional `operation_id` for a multi-operation tool). `input_mapping` is JSON Logic over `{task}` resolving the dispatch input (a `tool` dispatch's arguments). `payload_writes` (optional) is JSON Logic over `{task, result}`, written into named `task.payload` keys atomically with `last_result` on completion, so a value outlives the one hop `last_result` covers. Each write overwrites its key; in a loop an earlier pass's value lingers until the state dispatches again.
+- **`on_complete`** — rules evaluated in order against `{task, result}`; the first match fires its transition **as the `automation` principal** (same guards). `{result}` is the generation output (agent), the final run state (orchestration) or the return value (tool), also written to `task.last_result`. No match → `automation_status: completed` and a `tasks.automation_unrouted` event. A matched transition rejected (guard fails for `automation`, or a concurrent move invalidated it) → `automation_status: unrouted` and a `tasks.automation_rejected` event carrying the matched `transition` and the rejection `errorCode`.
+- **`retry`** (optional) — covers **execution** failures, never `on_complete` routing. `max_attempts` counts the first attempt (1–10); the delay before attempt `n` is `backoff_seconds * backoff_multiplier^(n - 2)` (defaults: 0, 1). `on_failure`, or the parked `automation_status: failed`, fires only after the last attempt; leaving the state between attempts abandons the rest. Each attempt is `active_dispatch.attempt`; every retried failure emits `tasks.automation_retrying` (`attempt`, `max_attempts`, the error, the failed `generation_id`/`orchestration_run_id`).
+- **`on_failure`** — transition fired on terminal dispatch failure. Omitted → the task stays with `automation_status: failed` for a human.
 
-Entering a state cancels any dispatch still running from the state the task is
-leaving — including a genuinely in-flight orchestration run — because task state
-is the source of truth.
+Entering a state cancels any dispatch still running from the state left, an in-flight orchestration run included: task state is the source of truth.
 
 #### Tool dispatch
 
-A state whose work is a single tool call dispatches it directly, with no
-orchestration in between:
+A single tool call dispatches directly:
 
 ```json
 {
@@ -253,33 +173,16 @@ orchestration in between:
 }
 ```
 
-`input_mapping` resolves the tool's arguments from the task context, and the
-tool's return value becomes `{result}` and `task.last_result`. The call is
-adjudicated by the **same guardrails** as the identical call made from an
-orchestration `tool` node — a workflow dispatch is not a way around them — and
-is recorded in the activity feed the same way.
+`input_mapping` resolves the arguments; the return value becomes `{result}` and `task.last_result`. The call passes the **same guardrails** as the identical call from an orchestration `tool` node and lands in the activity feed the same way. It settles within the dispatch: `active_dispatch.kind: tool_call` with a null `id`, and the resulting transition carries `tool_id` as provenance.
 
-Because a tool call settles within the dispatch, there is nothing to poll: the
-move is recorded with `active_dispatch.kind: tool_call` and a null `id` (a tool
-call leaves no addressable record), and the transition it causes carries
-`tool_id` as its provenance.
+Two cases fail the dispatch with `TOOL_DISPATCH_FAILED` and belong behind an **orchestration** dispatch:
 
-Two cases belong behind an **orchestration** dispatch instead, and fail a `tool`
-dispatch with `TOOL_DISPATCH_FAILED` rather than pretending to work:
-
-- a tool a guardrail routes to **human approval** (class C) — a task dispatch has
-  no run to park and resume;
-- a call a guardrail **blocks** (class D, or a class-B tripwire) — the call never
-  ran, so it is a dispatch failure, routable through `on_failure`.
+- a guardrail routes the tool to **human approval** (class C): a task dispatch has no run to park and resume;
+- a guardrail **blocks** the call (class D, or a class-B tripwire): it never ran, so it is a dispatch failure routable through `on_failure`.
 
 #### Waiting, polling, and multi-step work
 
-`on_enter` dispatches **one** thing. When a state needs to wait a fixed
-duration, repeat a call until a condition holds, or run several steps, dispatch
-an **orchestration** and put the work in its graph — `delay`, `poll`, and the
-rest of the [node types](./orchestrations.md) are already there, and a task
-dispatch deliberately starts the run in durable mode so those waits are owned by
-the background scheduler rather than held open in a request:
+`on_enter` dispatches **one** thing. To wait, poll or run several steps, dispatch an **orchestration** and use its [node types](./orchestrations.md) (`delay`, `poll`, …). A task dispatch starts the run in durable mode, so the background scheduler owns the wait:
 
 ```json
 {
@@ -291,110 +194,45 @@ the background scheduler rather than held open in a request:
 }
 ```
 
-The run parks as `sleeping` for the length of the wait and resumes on its own;
-the task sits in the state with `automation_status: running` until the run
-settles, then routes through `on_complete` / `on_failure` as usual. There is no
-`kind: delay` or `kind: poll` — a one-node orchestration is the supported way to
-express it.
+The run parks `sleeping` and resumes on its own; the task sits with `automation_status: running` until the run settles, then routes through `on_complete` / `on_failure`. There is no `kind: delay` or `kind: poll`; a one-node orchestration expresses it.
 
 #### Recovery after a restart
 
-The run behind a dispatch is durable, but the wait for its outcome is not: it is
-held in the process that started it. If the server restarts while a dispatch is
-outstanding — most plausibly while an orchestration run is `sleeping` through a
-long `delay` or `poll` interval — the run still finishes on the scheduler, and a
-background reconciler routes the task when it does.
+The run behind a dispatch is durable, but the wait for its outcome lives in the process that started it. If the server restarts with a dispatch outstanding (typically a run `sleeping` through a long `delay` or `poll`), the run still finishes on the scheduler and a background reconciler routes the task when it does.
 
-The reconciler only considers a dispatch that has read `running` for longer than
-a grace window (`TASKS_DISPATCH_RECONCILE_GRACE_MS`, default `60000`), so a
-healthy in-process hand-off is never raced. The recovered outcome is
-indistinguishable from a live one: the same `on_complete` / `on_failure` rules
-fire, as the same `automation` principal, with the run recorded as the move's
-cause.
+The reconciler considers only a dispatch that has read `running` longer than `TASKS_DISPATCH_RECONCILE_GRACE_MS` (default `60000`), so a healthy in-process hand-off is never raced. The recovered outcome routes like a live one: same `on_complete` / `on_failure` rules, same `automation` principal, the run as cause.
 
-Dispatches of `kind: agent` are not reconciled — a generation parked in
-`requires_action` awaiting client tool outputs is legitimately outstanding and
-must not be routed as if it had settled.
+`kind: agent` dispatches are not reconciled: a generation parked in `requires_action` awaiting client tool outputs is legitimately outstanding.
 
 ### Pausing a task
 
-A workflow has no run object — its instance is the task — so the stop an
-[orchestration run](./orchestrations.md#pausing-a-run) gets lands there instead.
-[`POST /api/v1/tasks/{task_id}/pause`](/docs/api/tasks/pause-task) suppresses
-every state's `on_enter` dispatch and every retry chain behind one, which is the
-only work a task drives on its own;
-[`POST /api/v1/tasks/{task_id}/resume`](/docs/api/tasks/resume-task) lifts it.
+[`POST /api/v1/tasks/{task_id}/pause`](/docs/api/tasks/pause-task) suppresses every state's `on_enter` dispatch and every retry chain behind one (the task-level counterpart of [pausing an orchestration run](./orchestrations.md#pausing-a-run)); [`POST /api/v1/tasks/{task_id}/resume`](/docs/api/tasks/resume-task) lifts it.
 
-**A paused task still transitions.** A move costs nothing while every dispatch it
-would start is suppressed, so a board stays usable under a pause rather than
-freezing. Entering a state whose dispatch is suppressed records
-`automation_status: paused` — that is what a resume reads to know the state's
-`on_enter` still owes its work, and what keeps a resume from re-spending a
-dispatch that had already completed.
+**A paused task still transitions.** Entering a state whose dispatch is suppressed records `automation_status: paused`; resume reads it to know the `on_enter` still owes its work, and never re-spends a completed dispatch.
 
-**The dispatch that resumes runs as whoever resumed**, not as whoever last moved
-the task: the resume is the decision to spend, and the move that scheduled the
-work may be weeks old. Mirrors the rule that a human or API-key move names
-itself.
+**The resumed dispatch runs as whoever resumed**, not whoever last moved the task.
 
-**A dispatch already in flight is left to finish**, and its outcome still routes
-— entering a state whose own dispatch is then suppressed. Only what would start
-after it is stopped, the same bound an orchestration pause accepts for the round
-in flight. A task-dispatched orchestration run is not paused with its task; pause
-that run through its own route when the run itself needs to stop.
+**A dispatch in flight finishes**, and its outcome still routes (into a state whose own dispatch is then suppressed). A task-dispatched orchestration run is not paused with its task; pause it through its own route.
 
-Pausing is **idempotent** — a second pause answers with the task unchanged — a
-closed task answers `409 TASK_NOT_PAUSABLE`, and resuming a task that carries no
-pause answers `409 TASK_NOT_PAUSED`.
+Pausing is **idempotent**; a closed task answers `409 TASK_NOT_PAUSABLE`, and resuming with no pause in force answers `409 TASK_NOT_PAUSED`.
 
 ### Finding the tasks whose automation is running
 
-[`GET /api/v1/tasks`](/docs/api/tasks/list-tasks) filters on
-`automation_status` beside `status`, `state`, `workflow_id` and `assignee`. The
-two answer different questions: `status=open` narrows a board to the cards still
-in play, while `automation_status` says which of those has a dispatch of its own
-under way — the set a consumer that pauses spend has to find without paging the
-whole board.
-
-The parameter **repeats**, and the values are ORed:
+[`GET /api/v1/tasks`](/docs/api/tasks/list-tasks) filters on `automation_status` beside `status`, `state`, `workflow_id` and `assignee`; `status=open` narrows to the cards in play. The parameter **repeats**; values are ORed:
 
 ```
 GET /api/v1/tasks?status=open&automation_status=running&automation_status=paused
 ```
 
-`none` selects the cards whose `automation_status` is `null` — the ones that
-never entered a state with an automation. That absence is a value a task really
-holds, so it is a value of the filter too; omitting the parameter already means
-"every task". It is spelled `none` rather than `null` because the CLI reads the
-token `null` as JSON null for every nullable field it has, and one spelling has
-to work in all three clients.
-
-A value outside `running` / `completed` / `failed` / `unrouted` / `paused` /
-`none` — empty string included — is a `400 VALIDATION_FAILED` rather than a
-silently unfiltered listing.
+`none` selects a `null` `automation_status` (never entered a state with an automation); omitted means every task. It is `none`, not `null`, because the CLI reads the token `null` as JSON null. A value outside `running` / `completed` / `failed` / `unrouted` / `paused` / `none`, empty string included, is `400 VALIDATION_FAILED`.
 
 ### Versioning
 
-A workflow's state machine is versioned by the same append-only archive that
-backs [agent versions](./agents.md#versioning-and-staged-rollout),
-[guardrail versions](./guardrails.md#versioning) and
-[orchestration versions](./orchestrations.md#versioning). Version 1 is written
-on create, and every subsequent write that **changes** the definition
-increments `version` and archives it as a `WorkflowVersion`. The versioned
-surface is `states`, `transitions` and `payload_schema`.
+The state machine is versioned by the same append-only archive as [agent versions](./agents.md#versioning-and-staged-rollout), [guardrail versions](./guardrails.md#versioning) and [orchestration versions](./orchestrations.md#versioning). Version 1 is written on create; every write that **changes** the definition increments `version` and archives a `WorkflowVersion`. Versioned surface: `states`, `transitions`, `payload_schema`.
 
-**A task runs on the version it entered on.** [`POST /tasks`](/docs/api/tasks/create-task) stamps the
-workflow's current `version` onto the task as `workflow_version`, and every
-later read of the definition — validating a transition, parking an approval
-gate, validating a payload patch — resolves it from that version. Editing a
-workflow never re-shapes a task already in flight; the live columns are a
-draft for tasks created from now on.
+**A task runs on the version it entered on.** [`POST /tasks`](/docs/api/tasks/create-task) stamps `version` onto the task as `workflow_version`; validating a transition, parking an approval gate and validating a payload patch all read that version. Editing never re-shapes a task in flight; the live definition is a draft for tasks created from now on.
 
-Three writes archive nothing: a metadata-only edit (`name`, `description`);
-re-writing the definition the workflow already holds (compared structurally);
-restoring the version that is already live. `version_label` on a create or
-update annotates the version that write archives; labelling a change is never
-itself a change.
+Archive nothing: a metadata-only edit (`name`, `description`); re-writing the definition already held (compared structurally); restoring the live version. `version_label` on a create or update annotates the archived version and is never itself a change.
 
 | Operation | Endpoint |
 | --- | --- |
@@ -402,58 +240,28 @@ itself a change.
 | Fetch one version | [`GET /api/v1/workflows/{workflow_id}/versions/{version}`](/docs/api/workflows/get-workflow-version) |
 | Roll back to a version | [`POST /api/v1/workflows/{workflow_id}/versions/{version}/restore`](/docs/api/workflows/restore-workflow-version) |
 
-**Restore appends, it does not rewind.** Restoring v1 of a workflow at v2
-writes v1's definition back as **v3**; a task pinned to v2 still runs on the
-machine it entered on. Only the definition rolls back — `name` and
-`description` are untouched. A restored definition goes through the same
-validation as an authored one, including resolving every `on_enter` dispatch
-target, so restoring a version whose agent or orchestration has since been
-deleted fails with `WORKFLOW_VALIDATION_FAILED` (400).
+**Restore appends, it does not rewind.** Restoring v1 at v2 writes v1's definition back as **v3**; a task pinned to v2 still runs on it. Only the definition rolls back; `name` and `description` are untouched. A restored definition passes the same validation, including resolving every `on_enter` dispatch target, so a version whose agent or orchestration was deleted fails with `WORKFLOW_VALIDATION_FAILED` (400).
 
 ### Alternate entry points
 
-[`POST /tasks`](/docs/api/tasks/create-task) accepts an optional `state`, naming a declared state to create
-the task in directly instead of the `initial` state. Entering the named state
-behaves exactly like arriving via a transition — `entered_state_at` is set,
-`on_enter` fires, the stall clock arms — and history records the placement as
-a single entry (`from_state: null`, `transition: null`). This lets a caller
-that already knows which state and payload a task belongs at start it there
-deterministically. An unknown `state` name is rejected with
-`TASK_STATE_NOT_FOUND` (400).
+[`POST /tasks`](/docs/api/tasks/create-task) accepts an optional `state` to create the task in instead of `initial`. Entry behaves like a transition (`entered_state_at` set, `on_enter` fires, the stall clock arms) with one history entry (`from_state: null`, `transition: null`). An unknown `state` is `TASK_STATE_NOT_FOUND` (400).
 
 ### Approval-gated transitions
 
-A transition with `requires_approval: true` is a **human gate**. Firing it (by
-a user, API key, or automation outcome) does **not** move the task — it parks a
-pending [ApprovalItem](./approvals.md) (`origin: task_transition`, carrying the
-`task_id` and `task_transition`) and returns the task with `pending_transition`
-set. No other transition may fire while the gate is open
-(`TASK_TRANSITION_CONFLICT`, 409); one gate at a time per task.
+Firing a `requires_approval: true` transition (user, API key or automation outcome) does **not** move the task: it parks a pending [ApprovalItem](./approvals.md) (`origin: task_transition`, carrying `task_id` and `task_transition`) and returns the task with `pending_transition` set. No other transition fires while the gate is open (`TASK_TRANSITION_CONFLICT`, 409); one gate per task. Resolve it through the [approvals](./approvals.md) endpoints:
 
-Resolve the gate through the standard [approvals](./approvals.md) endpoints:
-
-- **Approve** → the transition fires **as the `approval` principal** through
-  the same single transition path. Its guard is **re-evaluated at resolution
-  time**; if the move is no longer valid, the gate is cleared and a
-  `tasks.approval_failed` event fires carrying the `transition` and
-  `errorCode`.
-- **Reject** → the gate is cleared and a note is appended to history
-  (`principal_kind: approval`, `transition: null`). The task never moved.
-- **Expire** → the approvals module's expiry sweeper clears the gate and
-  appends an expiry note to history.
+- **Approve** → the transition fires **as the `approval` principal** through the single transition path, guard **re-evaluated at resolution time**; if no longer valid, the gate clears and `tasks.approval_failed` fires with `transition` and `errorCode`.
+- **Reject** → the gate clears; history gets a note (`principal_kind: approval`, `transition: null`). The task never moved.
+- **Expire** → the approvals expiry sweeper clears the gate and appends an expiry note.
 
 ### Task metadata
 
-`create-task` accepts a `metadata` bag — caller-owned key/value annotations, stored on the task and returned verbatim by every read of it, the list included. Use it for anything that is not task data: which of your own tenants the task belongs to, the ticket that raised it, the import batch that created it.
+`create-task` accepts a `metadata` bag: caller-owned annotations (tenant, originating ticket, import batch) stored on the task and returned verbatim by every read, the list included.
 
-It is deliberately not `payload`, and the difference is not cosmetic:
+- **`payload` is part of the machine**: guards read `task.payload`, dispatch `input_mapping`s read it, `payload_writes` overwrite keys in it.
+- **`metadata` is inert**: no guard, mapping or engine write touches it. Everything the engine decides (`state`, `status`, `workflow_version`, `last_result`, `active_dispatch`, the automation fields) is a field of its own.
 
-- **`payload` is part of the machine.** Every guard reads it as `task.payload`, dispatch `input_mapping`s read it, and the workflow's declared `payload_writes` can overwrite keys in it. A label parked there is visible to the state machine and not safe from it.
-- **`metadata` is inert.** No guard sees it, no mapping reads it, and the engine never writes into it. Everything the engine decides about a task — `state`, `status`, `workflow_version`, `last_result`, `active_dispatch`, the automation fields — is a field of its own, so no key here can reach it.
-
-It also differs from `tool_context` in the other direction: `tool_context` is write-only, because it carries a credential and a task is long-lived and multi-actor. A label is not a credential, so `metadata` is readable — and it survives every transition, since a transition supplies no metadata of its own.
-
-A non-object `metadata` is rejected with `400 VALIDATION_FAILED` and no task is created.
+Unlike write-only `tool_context`, `metadata` is readable, and it survives every transition (a transition supplies none). A non-object `metadata` is `400 VALIDATION_FAILED`; no task is created.
 
 ```bash
 soat create-task \
@@ -462,21 +270,13 @@ soat create-task \
   --metadata '{"tenant_account_id":"42","source":"zendesk"}'
 ```
 
-Filtering tasks by a metadata key is not supported — fetch and filter client-side.
+Filtering tasks by a metadata key is not supported; filter client-side.
 
 ### Dispatch tool context
 
-A task's automations are a generation entry point like any other, so they can
-carry a [`tool_context`](../advanced/tool-context.md) — a flat
-`Record<string, string>` forwarded as context headers on every `http`, `mcp`
-and `builtin` tool call the task's dispatches make. It reaches all three
-dispatch kinds: an `agent` dispatch's generation, a `tool` dispatch's call
-(where it also resolves the tool's own `{{context:}}`
-[headers and pinned parameters](../advanced/tool-context.md#pinning-a-parameter-to-the-runs-value)),
-and an `orchestration` dispatch's run — which carries it to every node and
-child run, see [Run Tool Context](./orchestrations.md#run-tool-context).
+A task carries a [`tool_context`](../advanced/tool-context.md): a flat `Record<string, string>` forwarded as context headers on every `http`, `mcp` and `builtin` tool call its dispatches make: an `agent` dispatch's generation, a `tool` dispatch's call (also resolving the tool's `{{context:}}` [headers and pinned parameters](../advanced/tool-context.md#pinning-a-parameter-to-the-runs-value)), and an `orchestration` dispatch's run, on to every node and child run ([Run Tool Context](./orchestrations.md#run-tool-context)).
 
-**It attaches per move** — creation is the first move:
+**It attaches per move**; creation is the first move:
 
 | Request | Effect on the stored bag |
 | --- | --- |
@@ -486,37 +286,17 @@ child run, see [Run Tool Context](./orchestrations.md#run-tool-context).
 | `transition-task --tool-context '{}'` | Clears it, without closing the task |
 | Any transition into a `terminal` state | Cleared — a closed task holds no credential |
 
-The credential a dispatch runs with belongs to whoever last moved the task.
-Moves that supply no bag preserve it: automated hops (`on_complete` /
-`on_failure` routing), `retry` attempts (identical across attempts), and
-approval resolutions (the bag the *gated* move supplied is stored when the
-gate parks and used when it resolves). A [stall](#stall-detection) is an
-event, not a move, and leaves it untouched.
+A dispatch runs with the credential of whoever last moved the task. Moves supplying no bag preserve it: automated hops (`on_complete` / `on_failure`), `retry` attempts, approval resolutions (the *gated* move's bag is stored when the gate parks and used when it resolves). A [stall](#stall-detection) is an event, not a move.
 
-The reserved identity keys are stripped and re-derived server-side, and an
-invalid key is rejected with `INVALID_TOOL_CONTEXT_KEY` (400) — see
-[Validation](../advanced/tool-context.md#validation). **The bag is
-write-only**: a task never returns its `tool_context`, since a task is
-long-lived and read by everyone who can see the board. Confine a key to the
-tools that need it with
-[`context_keys`](./tools.md#scoping-which-context-keys-reach-a-tool).
+Reserved identity keys are stripped and re-derived server-side; an invalid key is `INVALID_TOOL_CONTEXT_KEY` (400) ([Validation](../advanced/tool-context.md#validation)). **The bag is write-only**: no read returns it. Confine a key to the tools that need it with [`context_keys`](./tools.md#scoping-which-context-keys-reach-a-tool).
 
 ### Stall detection
 
-A state may declare `stalled_after` (seconds). A background sweeper emits a
-`tasks.stalled` webhook event when an **open** task has sat in that state
-longer than the threshold. It is an **event, not a transition** — the task
-does not move; routing on a stall stays the author's choice via a webhook or
-trigger. The event fires once per stall episode and is re-armed on the next
-transition.
+A state may declare `stalled_after` (seconds). A sweeper emits a `tasks.stalled` webhook event when an **open** task has sat in the state longer. An **event, not a transition**: the task does not move; route on it via a webhook or trigger. Fires once per stall episode, re-armed by the next transition.
 
 ### The automation chain budget
 
-Cycles are healthy; a cycle that turns entirely on its own — a state
-dispatches, the outcome routes the task back in, it dispatches again, nobody
-in the loop — is not. The task engine bounds the **chain**: every task carries
-an `automation_chain_depth`, and a transition either increments it or resets
-it to zero:
+A cycle turning on its own (dispatch, outcome routes back, dispatch again) is bounded by `automation_chain_depth`; each transition increments or resets it:
 
 | The move | Effect |
 | --- | --- |
@@ -524,23 +304,11 @@ it to zero:
 | A `transition-task` call from a dispatched run or agent, made with its run-as token | increments |
 | A person, a plain API key, or an approval resolution | resets to `0` |
 
-Once the depth would exceed the limit (`TASK_AUTOMATION_CHAIN_LIMIT`, default
-`50`), the transition is refused with `TASK_AUTOMATION_CHAIN_LIMIT` —
-**before** the state change, so the next `on_enter` never fires. The task
-parks with `automation_status: unrouted` and a `tasks.automation_rejected`
-event fires. A dispatched run or agent is recognized by its
-[run-as token](./orchestrations.md#durable-background-execution), not its
-principal. Any human touch starts the budget over, so a task that revisits
-states for months is bounded only by how far it can travel untouched.
+When the depth would exceed `TASK_AUTOMATION_CHAIN_LIMIT` (default `50`), the transition is refused with `TASK_AUTOMATION_CHAIN_LIMIT` **before** the state change, so the next `on_enter` never fires; the task parks `automation_status: unrouted` and `tasks.automation_rejected` fires. A dispatched run or agent is recognized by its [run-as token](./orchestrations.md#durable-background-execution), not its principal. Any human touch restarts the budget.
 
 ### Deploying as a formation
 
-A workflow is a [formation](./formations.md) resource type (`workflow`), so it
-deploys declaratively alongside the agents and orchestrations its states
-dispatch. The resource `properties` mirror the REST body — `name`,
-`description`, `states`, `transitions`, `payload_schema` — and an `on_enter`
-dispatch's `agent_id` / `orchestration_id` accept `{ "ref": "LogicalId" }`
-expressions.
+[Formation](./formations.md) resource type `workflow`; `properties` mirror the REST body (`name`, `description`, `states`, `transitions`, `payload_schema`), and an `on_enter` dispatch's `agent_id` / `orchestration_id` accept `{ "ref": "LogicalId" }`.
 
 ## Configuration
 
@@ -689,8 +457,7 @@ curl -s -X POST "$SOAT_URL/api/v1/tasks/$TASK_ID/transitions" \
 
 ### Fire an approval-gated transition
 
-Firing a `requires_approval` transition parks a pending approval; approving it
-applies the move. See [Approvals](./approvals.md) for the resolution endpoints.
+See [Approval-gated transitions](#approval-gated-transitions).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -746,7 +513,7 @@ curl -s -X POST "$SOAT_URL/api/v1/approvals/$APPROVAL_ID/approve" \
 
 ### Pause and resume a task's automation
 
-Suppresses every state dispatch until resumed — see [Pausing a task](#pausing-a-task).
+See [Pausing a task](#pausing-a-task).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>

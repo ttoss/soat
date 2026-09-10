@@ -7,13 +7,11 @@ import TabItem from '@theme/TabItem';
 
 # AI Providers
 
-The AI Providers module lets you register and manage LLM provider configurations for a project. Each provider record stores the model slug, optional base URL, optional configuration, and an optional link to a [Secret](./secrets.md) that supplies the API key.
+Per-project LLM provider configurations: model slug, optional base URL, optional configuration, and an optional link to a [Secret](./secrets.md) that supplies the API key.
 
 ## Overview
 
-An AI provider is a named configuration that tells the system how to reach a specific LLM endpoint. A project can have multiple providers — for example, one for GPT-4o and another for Claude 3.5.
-
-When a provider is linked to a secret the secret's encrypted value is retrieved and passed as the API key when calling the LLM. The key is never exposed through the API. See it end to end in [Connect Third-Party LLMs - Step 4 (Create provider records)](/docs/tutorials/connect-third-party-llms#step-4--create-provider-records).
+An AI provider is a named configuration that tells the system how to reach a specific LLM endpoint. A project can have several providers. When a provider is linked to a secret, the secret's decrypted value is passed as the API key when calling the LLM; the key is never exposed through the API. See [Connect Third-Party LLMs - Step 4 (Create provider records)](/docs/tutorials/connect-third-party-llms#step-4--create-provider-records).
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -42,30 +40,25 @@ When a provider is linked to a secret the secret's encrypted value is retrieved 
 
 `base_url` and `config` decide the URL the server requests, so both are bounded.
 
-For `azure`, `bedrock` and `vertex` there is no `base_url` at all: the SDK
-builds the endpoint out of the record — `<location>-aiplatform.googleapis.com`,
-`bedrock-runtime.<region>.amazonaws.com`,
-`<resourceName>.openai.azure.com`. A value carrying a dot, a slash or an `@`
-would therefore name a **different server**, and the request that lands there
-carries whatever credential the record authenticates with. So `config.location`,
-`config.project`, `config.region` and `config.resourceName` must each be a
-single name — letters, digits and hyphens — and anything else is refused with
-`400 VALIDATION_FAILED` on create and update, and `400
-AI_PROVIDER_MISCONFIGURED` when such a record is used, so a value that reached
-the table some other way cannot reach the host it names.
+`azure`, `bedrock` and `vertex` have no `base_url`: the SDK builds the endpoint out of
+the record — `<location>-aiplatform.googleapis.com`,
+`bedrock-runtime.<region>.amazonaws.com`, `<resourceName>.openai.azure.com`. A value
+carrying a dot, a slash or an `@` would name a **different server**, reached with the
+record's credential. So `config.location`, `config.project`, `config.region` and
+`config.resourceName` must each be a single name (letters, digits and hyphens); anything
+else is refused with `400 VALIDATION_FAILED` on create and update, and `400
+AI_PROVIDER_MISCONFIGURED` when such a record is used.
 
-`base_url` names its endpoint outright, so it is checked for shape instead: an
-absolute `http`/`https` URL, with no username or password in it (link a secret
-for the credential). Whether the endpoint may be **reached** is the deployment's
-egress rule, evaluated per request against the resolved address — a `base_url`
-inside your own network is refused unless the operator lists it in
-[`TOOL_EGRESS_ALLOWED_HOSTS`](../self-hosting/configuration.md#outbound-egress),
-exactly as an `http` tool's target is.
+`base_url` is checked for shape: an absolute `http`/`https` URL with no username or
+password (link a secret for the credential). Whether the endpoint may be **reached** is
+the deployment's egress rule, evaluated per request against the resolved address: a
+`base_url` inside your own network is refused unless the operator lists it in
+[`TOOL_EGRESS_ALLOWED_HOSTS`](../self-hosting/configuration.md#outbound-egress), as for
+an `http` tool's target.
 
-A model listing that the provider rejects answers `MODEL_LISTING_FAILED` with
-the provider's status. The provider's response **body** is not relayed: the host
-that wrote it is one the record named, so returning it would answer a caller
-with whatever that host said. It goes to the server log instead.
+A model listing the provider rejects answers `MODEL_LISTING_FAILED` with the provider's
+status. The provider's response **body** goes to the server log, not to the caller: the
+host that wrote it is one the record named.
 
 ### Provider Slugs
 
@@ -85,15 +78,15 @@ Valid values for the `provider` field:
 | `gateway`   | Generic API gateway        |
 | `custom`    | Custom / self-hosted model |
 
-A local `ollama` provider needs no linked secret — it uses the server's `OLLAMA_BASE_URL` instead. See it end to end in [Chat with an LLM - Step 3 (Create a local AI provider)](/docs/tutorials/chat-with-llm#step-3--create-a-local-ai-provider).
+A local `ollama` provider needs no linked secret; it uses the server's `OLLAMA_BASE_URL`. See [Chat with an LLM - Step 3 (Create a local AI provider)](/docs/tutorials/chat-with-llm#step-3--create-a-local-ai-provider).
 
 ## Key Concepts
 
 ### Bedrock authentication
 
-The `bedrock` provider supports two authentication modes, determined by the shape of the linked secret's JSON value:
+The `bedrock` provider supports two authentication modes, determined by the shape of the linked secret's JSON value.
 
-**IAM credentials** — pass `accessKeyId`, `secretAccessKey`, and optionally `sessionToken`. The client signs requests with AWS SigV4.
+**IAM credentials** — `accessKeyId`, `secretAccessKey`, and optionally `sessionToken`. The client signs requests with AWS SigV4.
 
 ```json
 {
@@ -103,25 +96,25 @@ The `bedrock` provider supports two authentication modes, determined by the shap
 }
 ```
 
-**Bedrock API key** — pass `apiKey` only (format `ABSK…`). The client uses Bearer token authentication via `AWS_BEARER_TOKEN_BEDROCK`. This is the [new authentication mechanism introduced for Amazon Bedrock in 2025](https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys.html).
+**Bedrock API key** — `apiKey` only (format `ABSK…`). The client uses Bearer token authentication via `AWS_BEARER_TOKEN_BEDROCK` ([Amazon Bedrock API keys](https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys.html)).
 
 ```json
 { "apiKey": "ABSK..." }
 ```
 
-> **Important:** Store the secret value as a **JSON object** (shown above) — the only form that supports IAM credentials. As a convenience, a bare `ABSK…` string is also accepted and treated as `{ "apiKey": "<value>" }`.
+> **Important:** Store the secret value as a **JSON object** (shown above) — the only form that supports IAM credentials. A bare `ABSK…` string is also accepted and treated as `{ "apiKey": "<value>" }`.
 
-If neither field is present the default AWS credential chain (environment variables, instance profile, etc.) would be used — the **deployment's** credentials rather than the record's, which a deployment allows only by setting [`AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS`](../self-hosting/configuration.md#provider-credentials). Without it, a `bedrock` record that links no secret is refused at create and update with `400 VALIDATION_FAILED`, and with `400 AI_PROVIDER_MISCONFIGURED` when such a record is used, so one that reached the table some other way fails closed rather than signing with credentials it was never given.
+If neither field is present the default AWS credential chain (environment variables, instance profile, etc.) would be used — the **deployment's** credentials — which a deployment allows only by setting [`AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS`](../self-hosting/configuration.md#provider-credentials). Without it, a `bedrock` record that links no secret is refused at create and update with `400 VALIDATION_FAILED`, and with `400 AI_PROVIDER_MISCONFIGURED` when such a record is used.
 
-The `region` field in the provider's `config` object defaults to `us-east-1`. An `apiKey` in `config` (without a linked secret) also works — useful for quick testing; link a secret in production.
+The `region` field in `config` defaults to `us-east-1`. An `apiKey` in `config` (without a linked secret) also works for quick testing; link a secret in production.
 
 ### Vertex AI authentication
 
-The `vertex` provider reaches Gemini models through [Google Vertex AI](https://cloud.google.com/vertex-ai/generative-ai/docs), which is a different surface from the `google` provider — `google` calls the Gemini Developer API with a plain API key, while `vertex` calls a Google Cloud project's regional endpoint and bills through that project. Use `vertex` when the models must run under your own GCP project, VPC, and quota.
+The `vertex` provider reaches Gemini models through [Google Vertex AI](https://cloud.google.com/vertex-ai/generative-ai/docs): `google` calls the Gemini Developer API with a plain API key; `vertex` calls a Google Cloud project's regional endpoint and bills through that project (your own GCP project, VPC, and quota).
 
-Like `bedrock`, the authentication mode is determined by the shape of the linked secret's value:
+As with `bedrock`, the authentication mode is determined by the shape of the linked secret's value.
 
-**Service account** — store the JSON key file verbatim as the secret value. The key file already names its project, so no extra configuration is needed:
+**Service account** — store the JSON key file verbatim as the secret value. The key file names its project, so no extra configuration is needed:
 
 ```json
 {
@@ -134,15 +127,15 @@ Like `bedrock`, the authentication mode is determined by the shape of the linked
 
 **Express-mode API key** — store the key on its own (no JSON wrapper), or as `{ "apiKey": "AIza..." }`. [Vertex AI in express mode](https://cloud.google.com/vertex-ai/generative-ai/docs/start/express-mode/overview) targets a global, project-less endpoint, so `project` and `location` are ignored for this mode.
 
-**Application Default Credentials** — link no secret at all and the server falls back to [ADC](https://cloud.google.com/docs/authentication/application-default-credentials): `GOOGLE_APPLICATION_CREDENTIALS`, Workload Identity, the GCE/GKE metadata server, or a local `gcloud auth application-default login`. No key material is stored anywhere, which makes it the natural mode when SOAT itself runs on Google Cloud.
+**Application Default Credentials** — link no secret and the server falls back to [ADC](https://cloud.google.com/docs/authentication/application-default-credentials): `GOOGLE_APPLICATION_CREDENTIALS`, Workload Identity, the GCE/GKE metadata server, or a local `gcloud auth application-default login`. No key material is stored.
 
-Those are the deployment's credentials, though, and a provider record is written by a tenant — so this mode is available only where the operator set [`AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS`](../self-hosting/configuration.md#provider-credentials). Without it, a `vertex` record that links no secret is refused at create and update with `400 VALIDATION_FAILED`, and with `400 AI_PROVIDER_MISCONFIGURED` when such a record is used. It is a setting for a single-tenant deployment: on any other, it lets one project's record generate on the account the server runs as.
+Those are the deployment's credentials, so this mode is available only where the operator set [`AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS`](../self-hosting/configuration.md#provider-credentials). Without it, a `vertex` record that links no secret is refused at create and update with `400 VALIDATION_FAILED`, and with `400 AI_PROVIDER_MISCONFIGURED` when such a record is used. It is a setting for a single-tenant deployment: on any other, it lets one project's record generate on the account the server runs as.
 
 #### Federating an AWS identity (SOAT on ECS or EC2)
 
-ADC also covers SOAT running on **AWS** reaching Vertex through [workload identity federation](https://cloud.google.com/iam/docs/workload-identity-federation-with-other-clouds): point `GOOGLE_APPLICATION_CREDENTIALS` at the configuration `gcloud iam workload-identity-pools create-cred-config --aws` writes (it holds no secret material) and SOAT exchanges the task's own AWS identity for a Google access token. SOAT supplies the AWS half from the **AWS default credential chain** rather than the file's `credential_source`, so an ECS task role (delivered on the container credentials endpoint, which `google-auth-library` cannot read) works and is not silently replaced by the EC2 instance role.
+ADC also covers SOAT running on **AWS** reaching Vertex through [workload identity federation](https://cloud.google.com/iam/docs/workload-identity-federation-with-other-clouds): point `GOOGLE_APPLICATION_CREDENTIALS` at the configuration `gcloud iam workload-identity-pools create-cred-config --aws` writes (it holds no secret material) and SOAT exchanges the task's own AWS identity for a Google access token. SOAT supplies the AWS half from the **AWS default credential chain** rather than the file's `credential_source`, so an ECS task role (delivered on the container credentials endpoint, which `google-auth-library` cannot read) works and is not replaced by the EC2 instance role.
 
-Requirements: `AWS_REGION` (or `AWS_DEFAULT_REGION`) must be set on the server process — without it, generations fail with `AI_PROVIDER_MISCONFIGURED` — and the pool provider's attribute condition must admit whichever role the credential chain resolves to (on ECS, the task role). This applies only to the ADC path with an AWS-sourced `external_account` configuration; every other mode behaves as before.
+Requirements: `AWS_REGION` (or `AWS_DEFAULT_REGION`) must be set on the server process (otherwise generations fail with `AI_PROVIDER_MISCONFIGURED`), and the pool provider's attribute condition must admit whichever role the credential chain resolves to (on ECS, the task role). Applies only to the ADC path with an AWS-sourced `external_account` configuration.
 
 The provider's `config` object accepts two fields:
 
@@ -155,17 +148,15 @@ The provider's `config` object accepts two fields:
 { "project": "my-gcp-project", "location": "europe-west4" }
 ```
 
-`config.project` overrides the key file's `project_id`, which is how one service account can serve models from several projects. When no project can be resolved — no `config.project`, and either no secret or one without `project_id` — creating a generation fails with `AI_PROVIDER_MISCONFIGURED` (`400`) rather than a generic error.
+`config.project` overrides the key file's `project_id`, so one service account can serve models from several projects. When no project can be resolved (no `config.project`, and either no secret or one without `project_id`), creating a generation fails with `AI_PROVIDER_MISCONFIGURED` (`400`).
 
-An `apiKey` in `config` is accepted as an express-mode fallback when no secret is linked, the same as for `bedrock`.
+An `apiKey` in `config` is accepted as an express-mode fallback when no secret is linked, as for `bedrock`.
 
 ### Listing the models a provider can run
 
-[`GET /api/v1/ai-providers/{ai_provider_id}/models`](/docs/api/ai-providers/list-ai-provider-models) asks the provider which models it can run, using that provider record's own configuration and credentials, and returns provider-native ids — the same strings `default_model` and an agent's `model` carry. Which models are reachable is a property of the **credential**, not of the slug (two providers of the same slug can return different lists), which is why the listing hangs off a provider.
+[`GET /api/v1/ai-providers/{ai_provider_id}/models`](/docs/api/ai-providers/list-ai-provider-models) asks the provider which models it can run, using that record's configuration and credentials, and returns provider-native ids — the same strings `default_model` and an agent's `model` carry. Reachable models are a property of the **credential**, not the slug.
 
 Each entry carries what the provider reports: `id`, and optionally `display_name`, `vendor`, `input_modalities`, `output_modalities`, `streaming`, `lifecycle` (`active` / `legacy` / `deprecated`) and `inference_types`. A `lifecycle` other than `active` still serves but should not be pinned by anything new. A Bedrock model whose `inference_types` offers only `inference_profile` must be invoked through a cross-region profile id.
-
-Not every provider type can answer:
 
 | Provider | Listing | Credential the listing uses |
 |---|---|---|
@@ -176,20 +167,18 @@ Not every provider type can answer:
 | `bedrock` | `ListFoundationModels` in the provider's `config.region` | the linked secret's IAM keys or API key, else the AWS default credential chain |
 | `azure`, `ollama` | **unsupported** — Azure lists deployments an operator named, and Ollama lists whatever was pulled onto that host, so neither answers "which models can this provider run" | — |
 
-Listing resolves credentials exactly the way generation does, so a record that can generate can list — the deployment's own credentials included, on the same terms: a `bedrock` or `vertex` record that links none cannot list either, unless the operator set [`AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS`](../self-hosting/configuration.md#provider-credentials).
+Listing resolves credentials exactly as generation does, so a record that can generate can list — the deployment's own credentials included, on the same terms: a `bedrock` or `vertex` record that links none cannot list either, unless the operator set [`AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS`](../self-hosting/configuration.md#provider-credentials).
 
-Two consequences worth knowing:
+- **A Vertex record needs no `config.project` when its secret is a service-account key**; the key file names its project. `config.project` still overrides it.
+- **Vertex express mode cannot list.** The publisher-model listing rejects API keys (Google answers `401 UNAUTHENTICATED`, "API keys are not supported by this API") and an express-mode record holds no other credential. Listing returns `MODEL_LISTING_UNSUPPORTED` naming the reason rather than forwarding that 401.
+- **The Vertex list is a per-location publisher catalogue, not a per-project reachability check.** The listing is rooted at `publishers/google`, so `config.location` selects the endpoint and the credential's project decides only who is billed and quota'd. Every location Vertex serves can be listed, including the non-regional ones: `global`, where several current Gemini models are served and which 404s in a region, and the `eu` / `us` data-residency multi-regions. A listed model can still fail at generation time if that project cannot serve it.
+- **The Vertex list is advisory.** The endpoint publishes embedding, TTS and classification models next to Gemini with no field distinguishing them, so nothing is filtered out; a listed id can 404 at generation time. For `vertex`, `input_modalities` and `output_modalities` are never reported (the API has no modality field), `streaming` is never reported, and `lifecycle` is `active` only for a model Google marks `GA` — a preview or experimental model reports no `lifecycle`.
 
-- **A Vertex record needs no `config.project` when its secret is a service-account key**, because the key file names its own project. `config.project` still overrides it.
-- **Vertex express mode cannot list.** The publisher-model listing rejects API keys outright — Google answers one with `401 UNAUTHENTICATED`, "API keys are not supported by this API" — and an express-mode record holds no other credential. Listing returns `MODEL_LISTING_UNSUPPORTED` naming the reason rather than forwarding that 401.
-- **The Vertex list is a per-location publisher catalogue, not a per-project reachability check.** Google's publisher-model listing is rooted at `publishers/google`, so `config.location` selects the endpoint and the credential's project decides only who is billed and quota'd, not what the result contains. Every location Vertex serves can be listed, including the non-regional ones — `global`, where several current Gemini models are served and which 404s in a region, and the `eu` / `us` data-residency multi-regions. A model that appears in the list can still fail at generation time if that project cannot serve it, so treat the answer as "what this location publishes", not "what this project is entitled to".
-- **The Vertex list is advisory.** Beyond project reachability, presence in it does not imply chat capability: the same endpoint publishes embedding, TTS and classification models next to Gemini, and it carries no field distinguishing them, so nothing is filtered out. Generation is the source of truth — a listed id can 404 at generation time, and the only way to know a model serves in a given project and location is to call it. Concretely, for `vertex`: `input_modalities` and `output_modalities` are never reported (the API has no modality field), `streaming` is never reported, and `lifecycle` is `active` only for a model Google marks `GA` — a preview or experimental model reports no `lifecycle` rather than being claimed active.
-
-Errors: `MODEL_LISTING_UNSUPPORTED` (400) for `azure`, `ollama`, and Vertex express mode; `AI_PROVIDER_MISCONFIGURED` (400) when the record lacks what the listing needs (a Vertex project from either `config.project` or the key file, a Bedrock region, or — for the API-key providers above — a linked secret); `MODEL_LISTING_FAILED` (502) when the provider rejects the request or answers with something other than JSON — its own status and message are carried in the error message. Authorized by `ai-providers:ListAiProviderModels` on the provider's project.
+Errors: `MODEL_LISTING_UNSUPPORTED` (400) for `azure`, `ollama`, and Vertex express mode; `AI_PROVIDER_MISCONFIGURED` (400) when the record lacks what the listing needs (a Vertex project from either `config.project` or the key file, a Bedrock region, or, for the API-key providers above, a linked secret); `MODEL_LISTING_FAILED` (502) when the provider rejects the request or answers with something other than JSON — its own status and message are carried in the error message. Authorized by `ai-providers:ListAiProviderModels` on the provider's project.
 
 #### Listing models before you hold credentials
 
-On a deployment that set [`AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS`](../self-hosting/configuration.md#provider-credentials), a `bedrock` or `vertex` record with **no linked secret** can still list models, because it signs with the server's own credentials. Browsing a vendor's live catalogue before any key is provisioned therefore needs no separate endpoint — create a credential-less record naming only the region (or GCP project) and list against it:
+On a deployment that set [`AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS`](../self-hosting/configuration.md#provider-credentials), a `bedrock` or `vertex` record with **no linked secret** lists with the server's own credentials, so a vendor's live catalogue can be browsed before any key is provisioned: create a credential-less record naming only the region (or GCP project) and list against it:
 
 ```bash
 soat create-ai-provider \
@@ -202,18 +191,16 @@ soat create-ai-provider \
 soat list-ai-provider-models --ai-provider-id aip_01
 ```
 
-The record supplies the region and the IAM scope; the credential comes from the server's instance role. This is the supported way to keep a model catalogue current instead of vendoring a static list that drifts whenever the vendor ships a model.
-
-Without that setting the record is refused at creation, and the same browse is one linked secret away: give the record a key that can call `ListFoundationModels` (or the Vertex publisher listing) and it lists against its own credential instead of the server's.
+The record supplies the region and the IAM scope; the credential comes from the server's instance role. Without that setting the record is refused at creation; give it a key that can call `ListFoundationModels` (or the Vertex publisher listing) and it lists against its own credential.
 
 ### Price overrides
 
-A project can price its own provider instances without a global admin. A **per-provider price override** is a [price-book](./usage.md#pricebook) row bound to a specific AI provider — an enterprise-negotiated rate or a gateway with markup — that wins over the global default when [usage](./usage.md) cost is computed for that provider. Manage them with:
+A **per-provider price override** is a [price-book](./usage.md#pricebook) row bound to a specific AI provider (an enterprise-negotiated rate, a gateway with markup) that wins over the global default when [usage](./usage.md) cost is computed for that provider. Manage them with:
 
 - [`GET /api/v1/ai-providers/{ai_provider_id}/prices`](/docs/api/ai-providers/get-ai-provider-prices) — list this provider's overrides
 - [`PUT /api/v1/ai-providers/{ai_provider_id}/prices`](/docs/api/ai-providers/update-ai-provider-prices) — upsert them, keyed on `(model, effective_from)`
 
-Both are authorized by the caller's access to the provider's own project (`ai-providers:GetAiProviderPrices` / `ai-providers:ManageAiProviderPrices`), so one project never sees another's negotiated rates. The `provider` slug is taken from the AI provider itself — you supply just the model, rates, and `effective_from`. It must be in the future once the `(model, component)` has a price row (past prices are immutable; ship corrections as new future-dated rows), but a **first** price for a `(model, component)` nothing prices yet may be dated now or earlier — otherwise a provider is live and unpriced until the row lands, and a generation in that window is metered at zero permanently. A refused row is named in `error.meta` (`provider`, `model`, `component`, `effective_from`), so a batch that fails does not have to be narrowed down by hand. See [Usage - Pricing](./usage.md#pricing) for how the effective price is chosen and frozen onto each meter.
+Both are authorized by the caller's access to the provider's own project (`ai-providers:GetAiProviderPrices` / `ai-providers:ManageAiProviderPrices`), so one project never sees another's rates. The `provider` slug is taken from the AI provider itself; supply the model, rates, and `effective_from`. `effective_from` must be in the future once the `(model, component)` has a price row (past prices are immutable; ship corrections as new future-dated rows), but a **first** price for a `(model, component)` nothing prices yet may be dated now or earlier, so a generation before the row lands is not metered at zero permanently. A refused row is named in `error.meta` (`provider`, `model`, `component`, `effective_from`). See [Usage - Pricing](./usage.md#pricing) for how the effective price is chosen and frozen onto each meter.
 
 ### Deleting a provider
 
@@ -244,7 +231,7 @@ A delete with no dependents (or `force=true` and only soft dependents) returns `
 }
 ```
 
-`forcible` is `true` only when the block comes solely from soft dependents — i.e. a `force=true` retry would succeed. The `*Ids` arrays sample up to 20 offending IDs so you can act on them directly; the `*Count` fields always report the true totals.
+`forcible` is `true` only when the block comes solely from soft dependents, so a `force=true` retry would succeed. The `*Ids` arrays sample up to 20 offending IDs; the `*Count` fields report the true totals.
 
 ## Examples
 

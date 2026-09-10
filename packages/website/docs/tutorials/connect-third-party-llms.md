@@ -15,14 +15,13 @@ import TabItem from '@theme/TabItem';
 
 # Connect Third-Party LLMs
 
-This tutorial connects SOAT to hosted LLM providers such as xAI, OpenAI, Anthropic, and Amazon Bedrock, showing how [Secrets](/docs/modules/secrets#examples), [AI Providers](/docs/modules/ai-providers#examples), [Agents](/docs/modules/agents#examples), and [Sessions](/docs/modules/sessions#examples) work together for externally hosted models.
+Connect SOAT to xAI, OpenAI, Anthropic or Amazon Bedrock with [Secrets](/docs/modules/secrets#examples), [AI Providers](/docs/modules/ai-providers#examples), [Agents](/docs/modules/agents#examples) and [Sessions](/docs/modules/sessions#examples).
 
 ## Prerequisites
 
-- SOAT running locally. Follow [Quick Start](/docs/getting-started) if needed.
-- CLI installed and configured, or SDK set up. See [CLI](/docs/cli) or [SDK](/docs/sdk).
-- Server is at `http://localhost:5047`.
-- Valid credentials for at least one third-party provider.
+- SOAT running locally ([Quick Start](/docs/getting-started)).
+- [CLI](/docs/cli) or [SDK](/docs/sdk); server at `http://localhost:5047`.
+- Credentials for at least one provider.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -52,7 +51,7 @@ export SOAT_BASE_URL=http://localhost:5047
 
 ## Step 1 — Log in as admin
 
-Admin is the built-in superuser role. It bypasses policy evaluation entirely. See [Users](/docs/modules/users#examples) for full authentication and user management details.
+Admin bypasses policy evaluation. See [Users](/docs/modules/users#examples).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -96,7 +95,7 @@ ADMIN_TOKEN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users/login" \
 
 ## Step 2 — Create a project
 
-Every resource in SOAT lives inside a [project](/docs/modules/projects#examples). Create one to hold the provider and agent.
+Every resource lives inside a [project](/docs/modules/projects#examples).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -136,7 +135,7 @@ PROJECT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/projects" \
 
 ## Step 3 — Store provider credentials as secrets
 
-[Secrets](/docs/modules/secrets#examples) store sensitive values encrypted; providers reference them by ID. Create one secret per provider credential set.
+[Secrets](/docs/modules/secrets#examples) are stored encrypted and referenced by ID. One secret per provider credential set.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -225,7 +224,7 @@ XAI_SECRET_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/secrets" \
 
 ## Step 4 — Create provider records
 
-Each provider points to a hosted model endpoint. See [AI Providers](/docs/modules/ai-providers#examples) for the full list of supported providers and configuration options. Choose the provider that matches your hosted model:
+Supported providers and options: [AI Providers](/docs/modules/ai-providers#examples). Pick the one matching your model:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -319,7 +318,7 @@ OPENAI_PROVIDER_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/ai-providers" \
 
 ## Step 5 — Create an agent
 
-Once the provider exists, create an [agent](/docs/modules/agents#examples) that points at it.
+An [agent](/docs/modules/agents#examples) pointing at the provider.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -365,7 +364,7 @@ AGENT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents" \
 
 ## Step 6 — Start a conversation
 
-Create a [session](/docs/modules/sessions#examples) and send a message through the provider-backed agent.
+A [session](/docs/modules/sessions#examples) on the provider-backed agent.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -414,6 +413,6 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$SESSION_ID/messages" \
 
 ## What's next
 
-- **Provider rotation**: Create multiple provider records in the same project and switch agents between them.
-- **Custom gateways**: Use the `gateway` or `custom` provider types when you have an OpenAI-compatible upstream.
-- **Production secrets**: Rotate provider secrets by creating a new secret and updating the provider's `secret_id`.
+- Provider rotation: several provider records in one project; switch agents between them.
+- Custom gateways: `gateway` or `custom` provider types for an OpenAI-compatible upstream.
+- Secret rotation: create a new secret and update the provider's `secret_id`.

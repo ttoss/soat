@@ -5,8 +5,6 @@ sidebar_position: 2
 
 # Connecting an MCP Client
 
-SOAT's MCP endpoint uses Streamable HTTP transport. Most modern MCP clients support this transport.
-
 ## Prerequisites
 
 - A running SOAT server (default port `5047`)
@@ -14,26 +12,23 @@ SOAT's MCP endpoint uses Streamable HTTP transport. Most modern MCP clients supp
 
 ## Claude (OAuth connector)
 
-Clients that support remote MCP connectors (e.g. Claude's custom connectors) can
-authenticate via OAuth — no manually provisioned token required. Add the server
-by its URL alone:
+Remote MCP connectors (e.g. Claude's custom connectors) authenticate via OAuth;
+no provisioned token is needed. Add the server by URL:
 
 ```
 https://<your-soat-host>/mcp
 ```
 
-The MCP endpoint challenges every request (including the `initialize`
-handshake) with `401` + `WWW-Authenticate`, which triggers the client's OAuth
-flow: it discovers the authorization server via
+The endpoint challenges every request (including `initialize`) with `401` +
+`WWW-Authenticate`. The client discovers the authorization server via
 `/.well-known/oauth-protected-resource`, registers dynamically, and runs the
-authorize + PKCE flow against the SOAT consent screen. After you pick a project
-and grant permissions, the connector receives a scoped access token and the
-tools appear. See [OAuth](/docs/modules/oauth) for the full flow.
+authorize + PKCE flow against the SOAT consent screen; after you pick a project
+and grant permissions it receives a scoped access token and the tools appear.
+Full flow: [OAuth](/docs/modules/oauth).
 
-> Because the handshake is authenticated, tools are listed only **after** OAuth
-> completes. A connector that never prompts for sign-in and reports "no tools
-> available" is talking to a server whose MCP endpoint is left unauthenticated —
-> SOAT's is not.
+> Tools are listed only **after** OAuth completes. A connector that never
+> prompts for sign-in and reports "no tools available" is not talking to SOAT's
+> endpoint.
 
 ## Claude Desktop
 
@@ -59,11 +54,11 @@ Add a server entry to `~/Library/Application Support/Claude/claude_desktop_confi
 }
 ```
 
-> `mcp-remote` is a lightweight proxy that bridges the SSE transport expected by Claude Desktop to the Streamable HTTP transport used by SOAT. Install it automatically via `npx`.
+> `mcp-remote` bridges the SSE transport Claude Desktop expects to Streamable HTTP.
 
 ## VS Code (GitHub Copilot / MCP extension)
 
-Add the following to your VS Code `settings.json` or `.vscode/mcp.json`:
+In `settings.json` or `.vscode/mcp.json`:
 
 ```json
 {
@@ -81,8 +76,6 @@ Add the following to your VS Code `settings.json` or `.vscode/mcp.json`:
 
 ## Generic HTTP client
 
-Any client that supports Streamable HTTP transport can connect directly:
-
 ```bash
 curl -X POST http://localhost:5047/mcp \
   -H "Content-Type: application/json" \
@@ -93,9 +86,9 @@ curl -X POST http://localhost:5047/mcp \
 
 ## Using Project Keys
 
-For long-lived or machine-to-machine access, use a project-scoped API key instead of a session token:
+For long-lived or machine-to-machine access:
 
-1. Create a key via `POST /api/v1/project-keys` — the response includes the raw `sk_`-prefixed key (shown once only).
+1. Create a key via `POST /api/v1/project-keys`; the response includes the raw `sk_`-prefixed key (shown once).
 2. Pass it as the Bearer token: `Authorization: Bearer sk_...`
 
-Project keys are scoped to a project and inherit project-level permissions. See [Projects module](/docs/modules/projects) for details.
+Project keys inherit project-level permissions ([Projects](/docs/modules/projects)).

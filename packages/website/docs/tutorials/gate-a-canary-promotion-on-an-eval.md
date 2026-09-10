@@ -15,28 +15,17 @@ import TabItem from '@theme/TabItem';
 
 # Gate a Canary Promotion on an Eval
 
-A **promotion gate** makes a [canary rollout](/docs/tutorials/agent-versioning-and-canary-rollout) decision evidential: a release names an [eval](/docs/modules/evaluations), and `promote-agent-release` refuses until that eval has a run that finished `completed`, with `passed: true`, **pinned to the canary version**.
+A **promotion gate** names an [eval](/docs/modules/evaluations) on a [canary release](/docs/tutorials/agent-versioning-and-canary-rollout); `promote-agent-release` refuses until that eval has a run that finished `completed`, `passed: true`, pinned to the canary version.
 
-You will:
+You will deploy an agent and its suite as one [formation](/docs/modules/formations), change the prompt through the template, start a gated canary release, see `PROMOTION_GATE_UNMET`, see a green run of the wrong version fail to open the gate, produce the run that does, promote, then add a nightly scheduled run and a webhook.
 
-1. Deploy an agent **and its test suite together** as a [formation](/docs/modules/formations) — the suite ships with the thing it verifies.
-2. Change the prompt through the same template, archiving a canary candidate.
-3. Start a canary release that names the eval as its `promotion_gate`.
-4. Watch promotion be refused with `PROMOTION_GATE_UNMET`.
-5. Watch a **green run of the wrong version** fail to open the gate — the reason pinning exists.
-6. Produce the run that does open it, and promote.
-7. Add a nightly scheduled run and a webhook, so the gate keeps being fed after you stop watching.
-
-This tutorial assumes you have been through [Evaluate an Agent](/docs/tutorials/evaluate-an-agent).
+Assumes [Evaluate an Agent](/docs/tutorials/evaluate-an-agent).
 
 ## Prerequisites
 
-- SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide to bring the stack up with Docker Compose.
-- [Ollama](https://ollama.com) running locally with `qwen2.5:0.5b` available. This tutorial uses a local provider so it runs without external credentials — to connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
-- New to SOAT? Read [Key Concepts](/docs/getting-started/concepts) to understand projects, agents, and evaluations first.
-- CLI installed and configured, or SDK set up. See [CLI](/docs/cli) or [SDK](/docs/sdk).
-- For production hardening (secrets, env vars), see [Configuration](/docs/self-hosting/configuration).
-- Server is at `http://localhost:5047`.
+- SOAT running locally at `http://localhost:5047` ([Quick Start](/docs/getting-started)); [Key Concepts](/docs/getting-started/concepts); [Configuration](/docs/self-hosting/configuration).
+- [Ollama](https://ollama.com) with `qwen2.5:0.5b`. For xAI, OpenAI, Anthropic, or Amazon Bedrock see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
+- [CLI](/docs/cli) or [SDK](/docs/sdk).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -66,7 +55,7 @@ export SOAT_BASE_URL=http://localhost:5047
 
 ## Step 1 — Log in as admin
 
-Admin is the built-in superuser role. See [Users](/docs/modules/users#examples) for authentication details, and [Projects](/docs/modules/projects) for the container everything below lives in.
+See [Users](/docs/modules/users#examples) and [Projects](/docs/modules/projects).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -119,7 +108,7 @@ PROJECT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/projects" \
 
 ## Step 2 — Ship the agent and its suite in one template
 
-Datasets, their items, and evals are all [formation](/docs/modules/formations) resource types, so the suite that verifies an agent lives in the same template as the agent. Test cases are their own resource rather than a list inside the dataset — see [Memories](/docs/modules/memories) for the same shape.
+Datasets, dataset items, and evals are [formation](/docs/modules/formations) resource types, so the suite lives in the agent's template. Test cases are their own resource, not a list inside the dataset (same shape as [Memories](/docs/modules/memories)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -314,13 +303,13 @@ EVAL_ID=$(printf '%s' "$STACK" | jq -r '.outputs.eval_id')
 </TabItem>
 </Tabs>
 
-The gate's only scorer asserts the agent answered at all. That is deliberately weak for a tutorial — it keeps the gate's *mechanism* the thing under observation rather than what a 0.5B-parameter model happens to write. A real gate uses the scorers from [Evaluate an Agent](/docs/tutorials/evaluate-an-agent) and a judge from [Judge Open-Ended Answers](/docs/tutorials/judge-open-ended-answers).
+The only scorer asserts the agent answered at all, so the gate mechanism, not the 0.5B model's output, is under observation. A real gate uses the scorers from [Evaluate an Agent](/docs/tutorials/evaluate-an-agent) and a judge from [Judge Open-Ended Answers](/docs/tutorials/judge-open-ended-answers).
 
 ---
 
 ## Step 3 — Change the prompt through the template
 
-Version snapshots are written by the shared business-logic layer, not by the REST handlers, so a formation apply archives a version exactly as a `PUT` would — see [Agents — Versioning and Staged Rollout](/docs/modules/agents#versioning-and-staged-rollout). Editing through the template keeps the formation the source of truth — an out-of-band `update-agent` on a formation-managed agent is drift the next apply will undo.
+A formation apply archives a version exactly as a `PUT` would ([Agents — Versioning and Staged Rollout](/docs/modules/agents#versioning-and-staged-rollout)). An out-of-band `update-agent` on a formation-managed agent is drift the next apply undoes.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -378,7 +367,7 @@ Version 2 now exists in history. No traffic serves it yet.
 
 ## Step 4 — Start a gated canary release
 
-`--promotion-gate` is the only new part of an otherwise ordinary canary release ([Agents — Staged Rollout](/docs/modules/agents#staged-rollout)): 20% of traffic on version 2, and the eval that must go green before version 2 can become everyone's.
+An ordinary canary release ([Agents — Staged Rollout](/docs/modules/agents#staged-rollout)), 20% of traffic on version 2, plus `--promotion-gate`: the eval that must go green before promotion.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -435,7 +424,7 @@ Expected output:
 
 ## Step 5 — Promotion is refused until there is evidence
 
-With no qualifying run on record, `promote` is a `409` and changes nothing. See [Agents — Eval-gated promotion](/docs/modules/agents#eval-gated-promotion).
+With no qualifying run, `promote` is a `409` and changes nothing ([Agents — Eval-gated promotion](/docs/modules/agents#eval-gated-promotion)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -467,7 +456,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/release/promote" \
 </TabItem>
 </Tabs>
 
-Expected output — a `409`, with the rollout left running untouched:
+Expected output (the rollout keeps running):
 
 ```json
 {
@@ -480,7 +469,7 @@ Expected output — a `409`, with the rollout left running untouched:
 
 ## Step 6 — A green run of the wrong version does not count
 
-Run the eval **without** `agent_version`. During an active release an unpinned run uses the active release's *stable* version — so this measures version 1, the config you are trying to replace.
+Run the eval without `agent_version`. During an active release an unpinned run uses the stable version, so this measures version 1.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -524,13 +513,13 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/release/promote" \
 </TabItem>
 </Tabs>
 
-A passing run, and the gate stays shut: **a green run against another version is not evidence about the canary.** A run resolves exactly one version at start, stamps it on `agent_version`, and every item executes against it — see [Evaluations — Version pinning](/docs/modules/evaluations#version-pinning) for why unpinned runs resolve to the stable version.
+The run passes and the gate stays shut: a green run against another version is not evidence about the canary. A run resolves one version at start, stamps it on `agent_version`, and every item executes against it ([Evaluations — Version pinning](/docs/modules/evaluations#version-pinning)).
 
 ---
 
 ## Step 7 — Produce the run that opens the gate
 
-Same eval, same scorers — this time pinned to the canary version, which is what [Evaluations — Version pinning](/docs/modules/evaluations#version-pinning) exists for.
+Same eval, pinned to the canary version ([Evaluations — Version pinning](/docs/modules/evaluations#version-pinning)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -579,7 +568,7 @@ curl -s "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/versions" \
 </TabItem>
 </Tabs>
 
-Expected output — the promoted version records **which run cleared it**:
+Expected output (the promoted version records which run cleared it):
 
 ```json
 [
@@ -588,11 +577,11 @@ Expected output — the promoted version records **which run cleared it**:
 ]
 ```
 
-That `eval_run_id` field is the audit trail: "why was version 2 promoted?" has an answer with per-item scores behind it.
+`eval_run_id` is the audit trail, with per-item scores behind it.
 
-:::note[The gate cannot be argued with, only satisfied]
+:::note
 
-`abort-agent-release` is ungated — rolling *back* to the stable config is always allowed. Only promotion needs evidence, which is the asymmetry you want under pressure.
+`abort-agent-release` is ungated: rolling back to the stable config is always allowed. Only promotion needs evidence.
 
 :::
 
@@ -600,9 +589,7 @@ That `eval_run_id` field is the audit trail: "why was version 2 promoted?" has a
 
 ## Step 8 — Keep feeding the gate after you stop watching
 
-A [trigger](/docs/modules/triggers) with `target_type: "eval"` runs the suite on a cadence — the nightly regression nobody has to remember to start. Declare it in the same template, and subscribe a [webhook](/docs/modules/webhooks) to the verdict.
-
-Creating an eval-target trigger requires `evaluations:RunEval` on top of `triggers:CreateTrigger`: a trigger may only start what its creator could start directly.
+A [trigger](/docs/modules/triggers) with `target_type: "eval"` runs the suite on a cadence. Declare it in the same template and subscribe a [webhook](/docs/modules/webhooks) to the verdict. Creating an eval-target trigger requires `evaluations:RunEval` on top of `triggers:CreateTrigger`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -674,7 +661,7 @@ TRIGGER_ID=$(curl -s -X PUT "$SOAT_BASE_URL/api/v1/formations/$FORMATION_ID" \
 </TabItem>
 </Tabs>
 
-Rather than waiting until 03:00, fire it now. A firing always starts a **queued** run (see [sync vs async](/docs/advanced/sync-and-async)); its `result.result_id` is the `evrun_…` to poll.
+Fire it now. A firing always starts a queued run ([sync vs async](/docs/advanced/sync-and-async)); `result.result_id` is the `evrun_…` to poll.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -731,7 +718,7 @@ curl -s "$SOAT_BASE_URL/api/v1/webhooks/deliveries?webhook_id=$WEBHOOK_ID" \
 </TabItem>
 </Tabs>
 
-The run records where it came from in `trigger_id`, and keeps it even if that trigger is later deleted. The delivered payload carries the verdict **inline**:
+The run records its origin in `trigger_id`, kept even if the trigger is deleted. The delivered payload carries the verdict inline:
 
 ```json
 {
@@ -746,18 +733,20 @@ The run records where it came from in `trigger_id`, and keeps it even if that tr
 }
 ```
 
-Exactly one event fires per terminal run, so anything automating the next step can act on this payload alone.
+Exactly one event fires per terminal run.
 
-:::note[The URL above is deliberately unroutable]
+:::note[The URL above is unroutable]
 
-`http://127.0.0.1:9/…` cannot accept a POST, so the delivery attempt fails and retries — which is exactly why it is useful here: the delivery *record* still carries the event type and full payload, so you can inspect what SOAT sent without standing up a listener. Point this at a real endpoint and verify the signature; see [Webhooks](/docs/modules/webhooks).
+`http://127.0.0.1:9/…` cannot accept a POST, so delivery fails and retries, but the delivery record still carries the event type and full payload. Point it at a real endpoint and verify the signature; see [Webhooks](/docs/modules/webhooks).
 
 :::
 
-The trigger's `input` may also carry `agent_version` and `baseline_run_id`, which are passed to every run it starts. Both are validated at fire time, so a nightly schedule naming a version that no longer exists fails the **firing** — with the reason on the firing record — instead of creating a run that could never execute.
+The trigger's `input` may also carry `agent_version` and `baseline_run_id`, passed to every run it starts and validated at fire time: a schedule naming a version that no longer exists fails the firing, with the reason on the firing record.
 
 ---
 
 ## Next steps
 
-Read next: [Agent Versioning and Canary Rollout](/docs/tutorials/agent-versioning-and-canary-rollout) for the rollout mechanics this builds on, [Formations](/docs/tutorials/formations) for declarative stacks, and [Evaluations](/docs/modules/evaluations) for the module reference.
+- [Agent Versioning and Canary Rollout](/docs/tutorials/agent-versioning-and-canary-rollout) — rollout mechanics.
+- [Formations](/docs/tutorials/formations) — declarative stacks.
+- [Evaluations](/docs/modules/evaluations) — module reference.

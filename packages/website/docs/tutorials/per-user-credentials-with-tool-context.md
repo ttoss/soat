@@ -15,23 +15,22 @@ import TabItem from '@theme/TabItem';
 
 # Pass Per-User Credentials to Tools with Tool Context
 
-A scheduled or orchestrated flow often acts *on behalf of a user*: the tools a run's agents call must authenticate as that user, not as the platform. [`tool_context`](/docs/advanced/tool-context) is the channel for that — a flat key/value bag attached to the run, forwarded as request headers on every tool call.
+When a run acts on behalf of a user, its tools must authenticate as that user. [`tool_context`](/docs/advanced/tool-context) is a flat key/value bag attached to the run and forwarded as request headers on every tool call.
 
 You will:
 
 1. Create an `http` tool whose `Authorization` header is a [`{{context:userToken}}`](/docs/advanced/expressions-and-templating#context-references-context) token, confined with [`context_keys`](/docs/modules/tools#scoping-which-context-keys-reach-a-tool).
 2. Start an [orchestration run](/docs/modules/orchestrations#run-tool-context) with a `tool_context`, pause at a human node, and resume.
-3. Inspect the exact headers that reached the endpoint, and see the fail-closed `MISSING_TOOL_CONTEXT_KEY` path.
+3. Inspect the headers that reached the endpoint, and the fail-closed `MISSING_TOOL_CONTEXT_KEY` path.
 
-The tool endpoint is a local header-echo listener, so no external services are needed beyond Ollama.
+The tool endpoint is a local header-echo listener; only Ollama is needed.
 
 ## Prerequisites
 
-- SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide to bring the stack up with Docker Compose.
-- New to SOAT? Read [Key Concepts](/docs/getting-started/concepts) to understand projects, agents, tools, and runs first.
-- CLI installed and configured, or SDK set up. See [CLI](/docs/cli) or [SDK](/docs/sdk).
-- [Ollama](https://ollama.com) reachable by the server with the `qwen2.5:0.5b` model pulled, as in the [orchestration tutorial](/docs/tutorials/orchestrate-a-sonnet).
-- Server is at `http://localhost:5047`.
+- SOAT running locally at `http://localhost:5047` ([Quick Start](/docs/getting-started)).
+- [Key Concepts](/docs/getting-started/concepts) if new to SOAT.
+- [CLI](/docs/cli) or [SDK](/docs/sdk) set up.
+- [Ollama](https://ollama.com) reachable by the server with `qwen2.5:0.5b` pulled, as in the [orchestration tutorial](/docs/tutorials/orchestrate-a-sonnet).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -61,7 +60,7 @@ export SOAT_BASE_URL=http://localhost:5047
 
 ## Step 1 — Log in as admin
 
-Admin is the built-in superuser role. See [Users](/docs/modules/users#examples) for authentication details.
+Admin is the built-in superuser role ([Users](/docs/modules/users#examples)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -103,7 +102,7 @@ ADMIN_TOKEN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users/login" \
 
 ## Step 2 — Create a project
 
-Everything in this tutorial lives inside one [project](/docs/modules/projects).
+Everything lives inside one [project](/docs/modules/projects).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -141,7 +140,7 @@ echo "PROJECT_ID: $PROJECT_ID"
 
 ## Step 3 — Create an AI provider
 
-Set up a local [AI provider](/docs/modules/ai-providers#examples) backed by Ollama, so the tutorial runs without external credentials. To connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
+Create a local Ollama [AI provider](/docs/modules/ai-providers#examples). For xAI, OpenAI, Anthropic, or Amazon Bedrock, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -189,9 +188,9 @@ echo "AI_PROVIDER_ID: $AI_PROVIDER_ID"
 
 ## Step 4 — Start a header-echo endpoint
 
-The tool needs somewhere to call, and the whole point of this tutorial is to inspect **exactly which headers arrive there**. Start a tiny local HTTP listener that writes the headers of the last request it received to `tool-echo.json`.
+A local HTTP listener writes the headers of the last request it received to `tool-echo.json`.
 
-In the automated tutorial tests, `SOAT_TOOL_ECHO_BASE_URL` is injected so the server container can reach this listener — the same mechanism the [webhooks tutorial](/docs/tutorials/chat-with-llm) uses for its own listener. Running the SOAT server in Docker against a listener on your host? Use `http://host.docker.internal:8788` as the base instead of `localhost`.
+The automated tutorial tests inject `SOAT_TOOL_ECHO_BASE_URL` so the server container can reach the listener, as the [webhooks tutorial](/docs/tutorials/chat-with-llm) does. With the SOAT server in Docker and the listener on the host, use `http://host.docker.internal:8788` instead of `localhost`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -219,7 +218,7 @@ echo "Echo listener PID: $ECHO_PID"
 node -e 'require("http").get("http://localhost:8788/health", (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on("error", () => process.exit(1))'
 ```
 
-The readiness probe is a `GET`, and the listener only records `POST` bodies — so probing never overwrites the header record the assertions in Step 10 read.
+The readiness probe is a `GET`; the listener records only `POST`s, so probing never overwrites the record Step 10 reads.
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
@@ -268,10 +267,10 @@ ECHO_PID=$!
 
 ## Step 5 — Create the tool: a `{{context:...}}` header plus a `context_keys` allowlist
 
-This one [tool definition](/docs/modules/tools#examples) carries both halves of the credential story:
+One [tool definition](/docs/modules/tools#examples) carries both halves:
 
-- **`Authorization: Bearer {{context:userToken}}`** — a [context reference](/docs/advanced/expressions-and-templating#context-references-context): at call time the server substitutes the `userToken` key of the run's `tool_context` into this header.
-- **`context_keys: ["tenant"]`** — the [containment allowlist](/docs/modules/tools#scoping-which-context-keys-reach-a-tool): only `tenant` is forwarded as a prefixed `X-Soat-Context-*` header, so the raw `userToken` context header is never sent.
+- **`Authorization: Bearer {{context:userToken}}`** — a [context reference](/docs/advanced/expressions-and-templating#context-references-context); at call time the server substitutes the run's `tool_context.userToken`.
+- **`context_keys: ["tenant"]`** — the [containment allowlist](/docs/modules/tools#scoping-which-context-keys-reach-a-tool); only `tenant` is forwarded as a prefixed `X-Soat-Context-*` header, so the raw `userToken` header is never sent.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -330,7 +329,7 @@ echo "ORDER_TOOL_ID: $ORDER_TOOL_ID"
 </TabItem>
 </Tabs>
 
-The token is resolved at the point of use, never at rest: reading the tool back returns the literal template, exactly like a [`{{secret:...}}`](/docs/advanced/expressions-and-templating) reference.
+Resolution happens at call time: reading the tool back returns the literal template, like a [`{{secret:...}}`](/docs/advanced/expressions-and-templating) reference.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -364,7 +363,7 @@ curl -s "$SOAT_BASE_URL/api/v1/tools/$ORDER_TOOL_ID" \
 
 :::note[Why not put the token in `tool_context` under the key `Authorization`?]
 
-A `tool_context` key always lands under the context prefix, so a caller-supplied key can never name (or overwrite) a standard header. See [Placing a value in a real header](/docs/advanced/tool-context#placing-a-value-in-a-real-header).
+A `tool_context` key always lands under the context prefix, so it can never name or overwrite a standard header ([Placing a value in a real header](/docs/advanced/tool-context#placing-a-value-in-a-real-header)).
 
 :::
 
@@ -372,7 +371,7 @@ A `tool_context` key always lands under the context prefix, so a caller-supplied
 
 ## Step 6 — Create the agent
 
-A small agent that carries the tool. A step-1 [`step_rules`](/docs/modules/agents) entry forces the first model call to invoke `record_order`, so the tool call — the thing this tutorial asserts on — does not depend on what a small local model feels like doing. See [client tools](/docs/tutorials/client-tools#step-5--create-the-agent) for the forcing semantics.
+A step-1 [`step_rules`](/docs/modules/agents) entry forces the first model call to invoke `record_order`, so the asserted tool call does not depend on the small local model ([client tools](/docs/tutorials/client-tools#step-5--create-the-agent) for the forcing semantics).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -429,7 +428,7 @@ echo "AGENT_ID: $AGENT_ID"
 
 ## Step 7 — Create the orchestration: a pause before the tool call
 
-Two nodes: a [`human` node](/docs/modules/orchestrations#human-nodes) that parks the run, then the `agent` node that makes the tool call. A paused run has no request in flight that could carry a `tool_context`, so resuming with the bag intact proves it is stored on the run itself ([Run Tool Context](/docs/modules/orchestrations#run-tool-context)). The token appears nowhere in the graph — the graph is reusable for every user; the credential arrives per run.
+A [`human` node](/docs/modules/orchestrations#human-nodes) parks the run, then an `agent` node makes the tool call. Resuming with the bag intact proves `tool_context` is stored on the run ([Run Tool Context](/docs/modules/orchestrations#run-tool-context)). The token appears nowhere in the graph; the credential arrives per run.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -493,7 +492,7 @@ echo "ORCHESTRATION_ID: $ORCHESTRATION_ID"
 
 ## Step 8 — Start the run with the user's credential
 
-Pass `tool_context` when starting the run ([Run Tool Context](/docs/modules/orchestrations#run-tool-context)). In production the caller is whoever holds the per-user token. With `--wait`, the call returns as soon as the run parks at the `confirm` node.
+Pass `tool_context` when starting the run ([Run Tool Context](/docs/modules/orchestrations#run-tool-context)). With `--wait`, the call returns when the run parks at `confirm`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -542,7 +541,7 @@ printf '%s\n' "$RUN" | jq '{status, required_action}'
 </TabItem>
 </Tabs>
 
-Expected output — the run is parked, holding the bag, with no generation started yet:
+Expected output (parked, holding the bag, no generation yet):
 
 ```json
 {
@@ -560,7 +559,7 @@ Expected output — the run is parked, holding the bag, with no generation start
 
 ## Step 9 — Resume, and let the tool call happen
 
-Submit the human decision with [`submit-human-input`](/docs/modules/orchestrations#human-nodes). The resume request carries **no `tool_context` of its own** — the run re-reads the bag it stored at start. The `record` agent node then runs: the model is forced to call `record_order`, and the server builds the outbound request — substituting `{{context:userToken}}` into `Authorization` and forwarding the allowlisted `tenant` key as a context header.
+[`submit-human-input`](/docs/modules/orchestrations#human-nodes) carries **no `tool_context` of its own**; the run re-reads the bag stored at start. The `record` node then calls `record_order`, substituting `{{context:userToken}}` into `Authorization` and forwarding the allowlisted `tenant` key as a context header.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -618,11 +617,11 @@ curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$RUN_ID" \
 
 ## Step 10 — Inspect what actually reached the endpoint
 
-The echo listener recorded the headers of the tool call. Three assertions, one per guarantee:
+Three assertions on the recorded headers:
 
-1. **The credential arrived in the real header** — `Authorization: Bearer alice-token-123`, substituted from the run's `tool_context` by the tool's `{{context:userToken}}` token.
-2. **The allowlisted key arrived as a context header** — `x-soat-context-tenant: acme`. (Header names arrive lowercased; [read them case-insensitively](/docs/advanced/tool-context#read-the-header-case-insensitively).)
-3. **The raw token did not** — no `x-soat-context-usertoken` header, because `context_keys: ["tenant"]` does not list it. The credential exists at this endpoint only where the tool declared it, and would not reach any other tool at all.
+1. **Credential in the real header** — `Authorization: Bearer alice-token-123`, substituted by `{{context:userToken}}`.
+2. **Allowlisted key as a context header** — `x-soat-context-tenant: acme`. Header names arrive lowercased; [read them case-insensitively](/docs/advanced/tool-context#read-the-header-case-insensitively).
+3. **Raw token absent** — no `x-soat-context-usertoken`, because `context_keys: ["tenant"]` does not list it. The credential reaches only the header this tool declared, and no other tool.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -669,7 +668,7 @@ Expected output:
 
 :::tip[Self-hosting under your own brand?]
 
-The `X-Soat-Context-` prefix is deployment configuration: set [`TOOL_CONTEXT_HEADER_PREFIX`](/docs/advanced/tool-context#configuring-the-header-prefix) (e.g. `X-Acme-Context-`) and every context header is emitted under your name instead. The `{{context:...}}` mechanism is unaffected — it never uses the prefix.
+Set [`TOOL_CONTEXT_HEADER_PREFIX`](/docs/advanced/tool-context#configuring-the-header-prefix) (e.g. `X-Acme-Context-`) to rename the `X-Soat-Context-` prefix. `{{context:...}}` never uses the prefix.
 
 :::
 
@@ -677,7 +676,7 @@ The `X-Soat-Context-` prefix is deployment configuration: set [`TOOL_CONTEXT_HEA
 
 ## Step 11 — The fail-closed path: a call with no context at all
 
-When substitution has no `userToken` to resolve, the tool call **fails** with `MISSING_TOOL_CONTEXT_KEY` — naming the key and the header — instead of sending an empty `Authorization: Bearer `. The shortest way to see it is [`call-tool`](/docs/modules/tools#examples), which invokes a tool directly with no run behind it and therefore no `tool_context` (an orchestration `tool` node behaves the same — see the [rules table](/docs/advanced/tool-context#placing-a-value-in-a-real-header)).
+With no `userToken` to resolve, the call fails with `MISSING_TOOL_CONTEXT_KEY` (naming the key and the header) instead of sending an empty `Authorization: Bearer `. [`call-tool`](/docs/modules/tools#examples) invokes a tool with no run and so no `tool_context`; an orchestration `tool` node behaves the same ([rules table](/docs/advanced/tool-context#placing-a-value-in-a-real-header)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -711,13 +710,13 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/tools/$ORDER_TOOL_ID/call" \
 </TabItem>
 </Tabs>
 
-Expected output — the call is refused before anything reaches the endpoint:
+Expected output (refused before anything reaches the endpoint):
 
 ```json
 "MISSING_TOOL_CONTEXT_KEY"
 ```
 
-A tool that declares a `{{context:...}}` token must therefore be reached through a path that carries context: an agent generation, a session, or an orchestration `agent` node — as in Steps 8 and 9.
+A tool declaring a `{{context:...}}` token must be reached through a path that carries context: an agent generation, a session, or an orchestration `agent` node (Steps 8 and 9).
 
 ---
 
@@ -755,7 +754,7 @@ kill $ECHO_PID
 
 ## Where to go next
 
-- [Tool Context](/docs/advanced/tool-context) — the canonical contract and security notes.
-- [Expressions & Templating](/docs/advanced/expressions-and-templating) — how `{{context:...}}` and `{{secret:...}}` compose.
-- [Run Tool Context](/docs/modules/orchestrations#run-tool-context) — why the bag survives every way a run is driven.
-- [Cap spend per end user](/docs/tutorials/cap-spend-per-end-user) — sessions and actors, where identity keys in `tool_context` are auto-populated.
+- [Tool Context](/docs/advanced/tool-context) — contract and security notes.
+- [Expressions & Templating](/docs/advanced/expressions-and-templating) — `{{context:...}}` and `{{secret:...}}`.
+- [Run Tool Context](/docs/modules/orchestrations#run-tool-context) — the bag across every way a run is driven.
+- [Cap spend per end user](/docs/tutorials/cap-spend-per-end-user) — identity keys auto-populated in `tool_context`.

@@ -5,19 +5,11 @@ sidebar_position: 2
 
 # Key Concepts
 
-This page explains the mental model behind SOAT and how its core resources fit together.
-
 ## Projects
 
-A **project** is the primary resource boundary. Almost everything — AI providers, agents, files, documents, conversations, sessions, secrets, webhooks, memories — belongs to a project. Access control, API keys, and trace records are all scoped to projects.
-
-Every API call that touches project-owned resources must carry credentials authorized for that project: a user JWT, a personal API key with the right policies, or a project-scoped API key.
-
-See the [Projects module](/docs/modules/projects).
+A **project** is the primary resource boundary: AI providers, agents, files, documents, conversations, sessions, secrets, webhooks, memories, access control, API keys and trace records are project-scoped. Every call touching them needs credentials authorized for that project: a user JWT, a personal API key with the right policies, or a project-scoped API key. See [Projects](/docs/modules/projects).
 
 ## Users, IAM & Policies
-
-SOAT uses a role-based + policy-based access model.
 
 | Role            | Scope   | Description                                                |
 | --------------- | ------- | ---------------------------------------------------------- |
@@ -25,17 +17,11 @@ SOAT uses a role-based + policy-based access model.
 | `project_admin` | Project | Manage members, keys, and all resources within a project   |
 | `project_user`  | Project | Read and write project resources; cannot manage membership |
 
-Roles cover the common cases. For finer-grained access, attach **policy documents** ([Policies module](/docs/modules/policies)) to users or API keys. Policies grant or deny specific `resource:Action` strings such as `documents:CreateDocument` or `agents:RunAgent`. The same permission is enforced across REST, MCP, CLI, and SDK.
-
-See the [IAM module](/docs/modules/iam) for the evaluation rules and [Permissions Reference](/docs/permissions) for the full action list.
+For finer-grained access, attach **policy documents** ([Policies](/docs/modules/policies)) to users or API keys. Policies grant or deny `resource:Action` strings such as `documents:CreateDocument` or `agents:RunAgent`, enforced identically across REST, MCP, CLI, and SDK. Evaluation rules: [IAM](/docs/modules/iam); action list: [Permissions Reference](/docs/permissions).
 
 ## Secrets & AI Providers
 
-An **AI provider** is a configured connection to an LLM service — Ollama, OpenAI, Anthropic, or any OpenAI-compatible endpoint. Providers are scoped to a project and store their credentials as encrypted [secrets](/docs/modules/secrets).
-
-Once a provider is registered, agents and chat completions reference it by ID. No credentials in request bodies, no environment-variable juggling per agent.
-
-See [AI Providers](/docs/modules/ai-providers) and [Secrets](/docs/modules/secrets).
+An **AI provider** is a project-scoped connection to an LLM service (Ollama, OpenAI, Anthropic, or any OpenAI-compatible endpoint) whose credentials are stored as encrypted [secrets](/docs/modules/secrets). Agents and chat completions reference it by ID; no credentials travel in request bodies. See [AI Providers](/docs/modules/ai-providers).
 
 ## Files, Documents & Memories — RAG building blocks
 
@@ -45,13 +31,9 @@ See [AI Providers](/docs/modules/ai-providers) and [Secrets](/docs/modules/secre
 | **Document** | A semantically searchable record extracted from a file or created directly  |
 | **Memory**   | A named container for memory entries that stores durable context for agents |
 
-Documents and memory entries are embedded with pgvector and queryable by semantic similarity. Agents can retrieve this context through [knowledge search](/docs/modules/knowledge) using `knowledge_config` and can write new facts via memory-aware tools.
-
-See [Files](/docs/modules/files), [Documents](/docs/modules/documents), and [Memories](/docs/modules/memories).
+Documents and memory entries are embedded with pgvector and queryable by semantic similarity. Agents retrieve them through [knowledge search](/docs/modules/knowledge) via `knowledge_config` and write facts via memory-aware tools. See [Files](/docs/modules/files), [Documents](/docs/modules/documents), [Memories](/docs/modules/memories).
 
 ## Three ways to talk to a model
-
-SOAT exposes three layers, from lowest to highest level:
 
 | Layer       | What it is                                                      | Use it when                                              |
 | ----------- | --------------------------------------------------------------- | -------------------------------------------------------- |
@@ -59,32 +41,26 @@ SOAT exposes three layers, from lowest to highest level:
 | **Agent**   | Reasoning-and-acting loop with tools, step rules, and policies. | Tool-calling, multi-step tasks, MCP-backed assistants    |
 | **Session** | 1 user ↔ 1 agent. Conversation, actors, and history hidden.     | Default user-facing flow — two API calls and you're done |
 
-Sessions are a top-level resource (`/sessions`, each tied to an agent via `agent_id`) and use [conversations](/docs/modules/conversations) under the hood. Drop into the conversation API directly when you need multi-party dialogue or full control.
-
-See [Chats](/docs/modules/chats), [Agents](/docs/modules/agents), [Sessions](/docs/modules/sessions), and [Conversations](/docs/modules/conversations).
+Sessions are a top-level resource (`/sessions`, tied to an agent via `agent_id`) built on [conversations](/docs/modules/conversations); use the conversation API directly for multi-party dialogue. See [Chats](/docs/modules/chats), [Agents](/docs/modules/agents), [Sessions](/docs/modules/sessions).
 
 ## Agents & tools
 
-An **agent** is a named, reusable AI assistant inside a project. It references an AI provider, carries instructions, and is extended with tools. SOAT supports four tool types:
+An **agent** is a named, reusable assistant in a project: an AI provider reference, instructions, and tools. Four tool types:
 
 - **`http`** — call any HTTP endpoint
 - **`mcp`** — connect to an external MCP server
 - **`client`** — pause for client-side execution and resume with the result
-- **`builtin`** — call SOAT platform actions (including invoking other agents — multi-agent workflows)
+- **`builtin`** — call SOAT platform actions, including invoking other agents
 
-Tools are first-class resources, shareable across agents. Agents support `tool_choice`, `step_rules`, `active_tool_ids`, `boundary_policy`, and `max_steps` for fine-grained control over the reasoning loop.
-
-Generations are **asynchronous by default**: kick one off, poll for status, or hand off to a webhook when it completes.
+Tools are shared across agents. The reasoning loop is controlled by `tool_choice`, `step_rules`, `active_tool_ids`, `boundary_policy`, and `max_steps`. Generations are **asynchronous by default**: start one, poll for status, or receive a webhook on completion.
 
 ## Agent Formations
 
-When you need reproducible deployments, use [Agent Formations](/docs/modules/formations). A formation template declares providers, memories, tools, agents, and related resources in one place. SOAT resolves references, provisions resources in dependency order, and stores an operation/event log for each create, update, or delete.
+[Agent Formations](/docs/modules/formations): a template declares providers, memories, tools, agents, and related resources; SOAT resolves references, provisions in dependency order, and logs operations and events for each create, update, or delete.
 
 ## Observability
 
-Every generation produces a **trace** record with the model, tool calls, durations, and finish reason. Combined with project-scoped webhooks (HMAC-signed, retried up to three times), this gives you the hooks you need to wire SOAT into existing observability and event pipelines.
-
-See [Webhooks](/docs/modules/webhooks).
+Every generation produces a **trace** record with the model, tool calls, durations, and finish reason. Project-scoped [webhooks](/docs/modules/webhooks) (HMAC-signed, retried up to three times) feed external observability and event pipelines.
 
 ## Resource hierarchy at a glance
 
@@ -110,16 +86,14 @@ SOAT instance
 
 ## CLI flag mapping
 
-The CLI exposes REST fields as kebab-case flags. Body and query fields mirror the REST contract; path parameters keep resource-specific names. Commands use flags such as `--project-id`, `--agent-id`, `--session-id`, `--conversation-id`, and `--file-id` instead of a generic `--id`.
-
-See the [CLI commands reference](/docs/cli/commands) for the full surface.
+REST fields become kebab-case flags; path parameters keep resource-specific names (`--project-id`, `--agent-id`, `--session-id`, `--conversation-id`, `--file-id`), never a generic `--id`. Full surface: [CLI commands reference](/docs/cli/commands).
 
 ## What's next
 
 | Topic                                       | Description                          |
 | ------------------------------------------- | ------------------------------------ |
-| [Choosing a Client Surface](/docs/client-surfaces) | Which of the four surfaces — REST, SDK, CLI, MCP — fits where your code runs |
-| [The Layers of an Agent System](/docs/agent-system-layers) | Which layer owns a failure, which modules own each layer, and how a change is proven to be an improvement |
+| [Choosing a Client Surface](/docs/client-surfaces) | REST, SDK, CLI or MCP |
+| [The Layers of an Agent System](/docs/agent-system-layers) | Which layer and modules own a failure; how a change is proven an improvement |
 | [Configuration](/docs/self-hosting/configuration)          | Production environment variables     |
 | [Platform modules](/docs/modules)           | Deep-dives into every resource type  |
 | [API Reference](/docs/api)                  | OpenAPI-generated endpoint reference |

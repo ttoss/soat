@@ -14,34 +14,26 @@ import TabItem from '@theme/TabItem';
 
 # Close the Monthly Books
 
-Every company closes its books. The process is a good fit for SOAT because it is
-made of parts that belong to different layers, and this tutorial is where those
-layers meet:
+A month-end close spans four layers:
 
-- The **reconciliation pass** is a pipeline that runs and ends — an
-  [orchestration](/docs/modules/orchestrations). Several accounts reconcile in
-  parallel, the variances converge, and a branch decides what happens next.
-- The **close period** is an entity that lives for days and can move *backward*
-  when the controller sends it back — a [workflow](/docs/modules/workflows).
-- The **cadence** is the first of the month — a
-  [trigger](/docs/modules/triggers).
-- The **sign-off** is a human decision recorded for audit — an
-  [approval](/docs/modules/approvals).
+- **Reconciliation pass** — an [orchestration](/docs/modules/orchestrations):
+  accounts reconcile in parallel, variances converge, a branch decides.
+- **Close period** — a [workflow](/docs/modules/workflows): lives for days and
+  moves backward when the controller sends it back.
+- **Cadence** — a [trigger](/docs/modules/triggers) on the first of the month.
+- **Sign-off** — an [approval](/docs/modules/approvals) recorded for audit.
 
-The key design choice is *where the model sits*: every routing decision is
-arithmetic evaluated by [JSON Logic](https://jsonlogic.com); the
-[agent](/docs/modules/agents) only writes the controller a readable note. The
-books never depend on what a model decides.
+Every routing decision is arithmetic evaluated by
+[JSON Logic](https://jsonlogic.com); the [agent](/docs/modules/agents) only
+writes the controller a readable note.
 
-This tutorial assumes you already know how a graph is wired. If you do not, read
-[Conditional Branching](/docs/tutorials/conditional-orchestration) and
-[Orchestration Control Flow](/docs/tutorials/orchestration-control-flow) first —
-this one composes those pieces rather than re-teaching them.
+Read [Conditional Branching](/docs/tutorials/conditional-orchestration) and
+[Orchestration Control Flow](/docs/tutorials/orchestration-control-flow) first;
+this tutorial composes those pieces.
 
-> The figures here are fixtures chosen to make the arithmetic legible. This
-> tutorial teaches the mechanics of a governed process; it is not accounting
-> guidance, and a real close would pull balances from your ledger through
-> [tool](/docs/modules/tools) nodes instead of run input.
+> The figures are fixtures, not accounting guidance. A real close would pull
+> balances from your ledger through [tool](/docs/modules/tools) nodes instead of
+> run input.
 
 ## Prerequisites
 
@@ -161,12 +153,12 @@ echo "PROJECT_ID: $PROJECT_ID"
 ## Step 3 — Create the AI provider and the variance-memo agent
 
 One [AI provider](/docs/modules/ai-providers#examples) and one
-[agent](/docs/modules/agents#examples). The agent turns a number into a sentence
-a controller can act on — it never decides whether the books balance, and it has
-no `output_schema` because nothing downstream parses its text.
+[agent](/docs/modules/agents#examples). The agent turns a number into a sentence;
+it never decides whether the books balance and has no `output_schema` because
+nothing downstream parses its text.
 
-This tutorial uses a local Ollama provider so it can run without external
-credentials. To connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see
+This tutorial uses a local Ollama provider. To connect xAI, OpenAI, Anthropic, or
+Amazon Bedrock instead, see
 [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
 
 <Tabs groupId="client">
@@ -241,10 +233,10 @@ echo "MEMO_AGENT_ID: $MEMO_AGENT_ID"
 
 ## Step 4 — Validate and create the reconciliation graph
 
-Seven nodes. Three reconciliations have no incoming edges, so they are all start
-nodes and run in the same round — in parallel. Their edges share an
-`activation_group` with `activation_condition: "all"`, which makes
-`total_variance` a **join barrier**: it waits for all three.
+Seven nodes. The three reconciliations have no incoming edges, so they are start
+nodes and run in parallel. Their edges share an `activation_group` with
+`activation_condition: "all"`, making `total_variance` a join barrier that waits
+for all three.
 
 ```mermaid
 flowchart TB
@@ -266,15 +258,14 @@ flowchart TB
 | `clean_summary` | `transform` | The `clean` branch — records that the period tied out |
 | `draft_memo` | `agent` | The `exception` branch — writes the controller a note |
 
-Two things to notice in the JSON Logic. First, JSON Logic has no absolute-value
-operator, so each reconciliation uses `if` to pick whichever subtraction order is
-positive. Second, **run input and run state are different namespaces**: read
-input as `{"var": "input.tolerance"}`, and read a state key an upstream node
-wrote as a bare `{"var": "total_variance"}`.
+JSON Logic has no absolute-value operator, so each reconciliation uses `if` to
+pick the positive subtraction order. Run input and run state are different
+namespaces: read input as `{"var": "input.tolerance"}` and a state key written
+upstream as a bare `{"var": "total_variance"}`.
 
-`validate-orchestration` statically checks the graph without persisting
+`validate-orchestration` checks the graph statically without persisting
 anything. See [Orchestrations](/docs/modules/orchestrations#node-types) for the
-full node reference.
+node reference.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -559,16 +550,14 @@ echo "CLOSE_ORCH_ID: $CLOSE_ORCH_ID"
 ## Step 5 — Run a clean close
 
 Start a [run](/docs/modules/orchestrations#examples) with books that balance. All
-three reconciliations return `0`, the total is `0`, and `0 <= 1` routes down the
-`clean` edge. `draft_memo` is never reached, so it is recorded as `skipped` — no
-model was called at all on this path.
+three reconciliations return `0`, `0 <= 1` routes down the `clean` edge, and
+`draft_memo` is recorded as `skipped`: no model was called.
 
-**A run starts asynchronously.** `start-orchestration-run` enqueues the run and
-returns immediately with `status: "queued"` and an empty `state` — a worker drives
-it. Read the results from `get-orchestration-run` once the run reaches a terminal
-status, rather than from the start response. Below, `# → retry N` re-runs a
-`jq -e` assertion until the run settles; `jq -e` supplies the exit code the runner
-needs.
+A run starts asynchronously: `start-orchestration-run` enqueues it and returns
+`status: "queued"` with an empty `state`; a worker drives it. Read results from
+`get-orchestration-run` once the run reaches a terminal status. Below,
+`# → retry N` re-runs a `jq -e` assertion until the run settles; `jq -e`
+supplies the exit code the runner needs.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -679,9 +668,9 @@ curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$CLEAN_RUN_ID" \
 
 Same graph, one changed figure: the bank statement is `127200.25` against ledger
 cash of `128450.25`. `bank_recon` returns `1250`, the total exceeds the
-tolerance of `1`, and `gate_check` routes down `exception` — so the
-[agent](/docs/modules/agents#examples) runs and writes the memo. This time
-`clean_summary` is the skipped node.
+tolerance of `1`, `gate_check` routes down `exception`, and the
+[agent](/docs/modules/agents#examples) writes the memo. `clean_summary` is the
+skipped node.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -779,11 +768,10 @@ curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$EXCEPTION_RUN_ID" \
 
 ## Step 7 — Put the close on a schedule
 
-A close has a cadence, which makes it the natural home for a
-[trigger](/docs/modules/triggers#examples). Create a `manual` trigger to fire the
-pass on demand, and a `schedule` trigger for 02:00 UTC on the first of each
-month. Firing returns a terminal firing record whose `result.result_id` is the
-orchestration run it started.
+Create a `manual` [trigger](/docs/modules/triggers#examples) to fire the pass on
+demand and a `schedule` trigger for 02:00 UTC on the first of each month. Firing
+returns a terminal firing record whose `result.result_id` is the orchestration
+run it started.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -821,8 +809,8 @@ MONTHLY_TRIGGER_ID=$(soat create-trigger \
 soat get-trigger --trigger-id "$MONTHLY_TRIGGER_ID" | jq '{name, cron, next_fire_at}'
 ```
 
-The fire-time `input` is merged over the trigger's static `input`, which is why
-the period can be supplied per firing while the figures stay on the trigger. See
+The fire-time `input` is merged over the trigger's static `input`, so the period
+is supplied per firing while the figures stay on the trigger. See
 [Triggers — Schedules and Misfire Coalescing](/docs/modules/triggers#schedules-and-misfire-coalescing).
 
 </TabItem>
@@ -902,24 +890,22 @@ curl -s "$SOAT_BASE_URL/api/v1/triggers/$MONTHLY_TRIGGER_ID" \
 
 ## Step 8 — Define the close period as a workflow
 
-The reconciliation pass ends. The **period** does not — it can sit in review for
-days and be sent back. That is a [workflow](/docs/modules/workflows#examples):
-named states, and named transitions between them.
+The period can sit in review for days and be sent back, so it is a
+[workflow](/docs/modules/workflows#examples): named states and named transitions.
 
 Two transitions carry the governance:
 
-- `request_rework` moves `controller_review` → `reconciling`, i.e. **backward**.
-  A DAG cannot express this at all; it is the reason the period is a workflow and
-  not another orchestration.
-- `close_period` carries both gates. Its `guard` is JSON Logic over the task —
-  the period cannot close unless `payload.reconciled` is `true` — and
-  `requires_approval: true` parks a human decision instead of moving the task.
-  The deterministic check runs first, and the human is only asked about
-  something that already passed it.
+- `request_rework` moves `controller_review` → `reconciling`, backward. A DAG
+  cannot express this; it is why the period is a workflow, not another
+  orchestration.
+- `close_period` carries both gates: a JSON Logic `guard` over the task
+  (`payload.reconciled` must be `true`) and `requires_approval: true`, which
+  parks a human decision instead of moving the task. The deterministic check
+  runs first.
 
-`controller_review` is a `human` state, so it never dispatches automation; it
-parks until someone fires a transition. Its `stalled_after` emits a
-`tasks.stalled` event if the period sits there longer than two days — see
+`controller_review` is a `human` state: it never dispatches automation and parks
+until someone fires a transition. Its `stalled_after` emits a `tasks.stalled`
+event after two days — see
 [Stall detection](/docs/modules/workflows#stall-detection).
 
 <Tabs groupId="client">
@@ -1006,10 +992,9 @@ echo "WORKFLOW_ID: $WORKFLOW_ID"
 
 ## Step 9 — Open the period and record what the run found
 
-Create a [task](/docs/modules/workflows#task) — one card, one period — and move
-it into `reconciling`. Then write the variance the exception run produced into the
-card's `payload` and submit it for review. The `payload` is caller-owned, so this
-is where the pipeline's finding becomes the period's state.
+Create a [task](/docs/modules/workflows#task) for the period and move it into
+`reconciling`. Then write the variance the exception run produced into the
+caller-owned `payload` and submit it for review.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -1109,15 +1094,14 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/tasks/$TASK_ID/transitions" \
 
 ## Step 10 — The controller sends it back
 
-The books do not balance — `payload.reconciled` is `false` — so the controller
-does not try to close the period. They fire `request_rework`, which moves it
-**backward** into `reconciling`. The team finds the missing deposit, the
-corrected pass ties out, and the card goes forward again with `reconciled: true`.
+`payload.reconciled` is `false`, so the controller fires `request_rework`, moving
+the period backward into `reconciling`. After the corrected pass ties out, the
+card goes forward again with `reconciled: true`.
 
 Order matters: an approval-gated transition parks an approval item first and
-evaluates the guard when that item **resolves** (see
+evaluates the guard when that item resolves (see
 [Approval-gated transitions](/docs/modules/workflows#approval-gated-transitions)),
-and while an approval is pending no other transition may fire — so the rework
+and no other transition may fire while an approval is pending, so the rework
 move must happen before the sign-off is requested.
 
 <Tabs groupId="client">
@@ -1187,16 +1171,15 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/tasks/$TASK_ID/transitions" \
 
 ## Step 11 — Sign off: the human decides, the guard has the last word
 
-`payload.reconciled` is now `true`, so both gates will let the period close.
-Firing `close_period` does **not** move the card: `requires_approval: true` parks
-a pending item in the [Approvals](/docs/modules/approvals#examples) queue, and the
-task exposes `pending_transition` until someone resolves it.
+`payload.reconciled` is now `true`. Firing `close_period` does not move the
+card: `requires_approval: true` parks a pending item in the
+[Approvals](/docs/modules/approvals#examples) queue and the task exposes
+`pending_transition` until someone resolves it.
 
-The guard is then re-evaluated **at resolution time**, as the `approval`
-principal — the approval is a request to close; the guard decides whether
-closing is still legal. It is the same queue and audit trail that an
-orchestration [`approval` node](/docs/tutorials/approval-gate) uses; each item
-carries an `origin`.
+The guard is re-evaluated at resolution time as the `approval` principal. It is
+the same queue and audit trail an orchestration
+[`approval` node](/docs/tutorials/approval-gate) uses; each item carries an
+`origin`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -1281,10 +1264,8 @@ curl -s "$SOAT_BASE_URL/api/v1/tasks/$TASK_ID" \
 
 ## Step 12 — Read the audit trail
 
-The period's history is a first-class record: every transition, who fired it, and
-when. The rework loop is visible, and the closing move is attributed to the
-`approval` principal rather than to whoever typed the command — which is exactly
-what an auditor asks for.
+Every transition is recorded with who fired it and when. The closing move is
+attributed to the `approval` principal rather than to whoever typed the command.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -1295,9 +1276,9 @@ soat get-task-history --task-id "$TASK_ID" \
 ```
 
 You should see `start_reconciliation`, `submit_for_review`, `request_rework`,
-`submit_for_review` again, and `close_period` — the backward move preserved in
-the record, not overwritten. Project-wide activity is available through
-[Activity](/docs/modules/activity) and the [Audit Log](/docs/modules/audit-log).
+`submit_for_review` again, and `close_period`; the backward move is preserved.
+Project-wide activity: [Activity](/docs/modules/activity) and
+[Audit Log](/docs/modules/audit-log).
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
@@ -1332,8 +1313,8 @@ curl -s "$SOAT_BASE_URL/api/v1/tasks/$TASK_ID/history" \
 
 ## Next Steps
 
-- Deploy this whole stack declaratively — agents, orchestration, and workflow in one document — with [Formations](/docs/tutorials/formations) and [Create an Agent Squad](/docs/tutorials/create-an-agent-squad).
-- Automate the handoff between the layers: a state's `on_enter` can dispatch the reconciliation orchestration when the period enters `reconciling`. See [Workflows & Tasks](/docs/modules/workflows).
-- Add `delay`, `poll`, and `loop` steps to the pass — for example, waiting on a bank feed — with [Orchestration Control Flow](/docs/tutorials/orchestration-control-flow).
-- Gate a real posting call behind a tripwire with [Guardrails](/docs/tutorials/gate-a-tool-with-guardrails).
-- Route the `tasks.stalled` event to a channel with [Webhooks](/docs/modules/webhooks) so a period that sits in review too long pages someone.
+- Deploy agents, orchestration, and workflow in one document with [Formations](/docs/tutorials/formations) and [Create an Agent Squad](/docs/tutorials/create-an-agent-squad).
+- A state's `on_enter` can dispatch the reconciliation orchestration when the period enters `reconciling`: [Workflows & Tasks](/docs/modules/workflows).
+- Add `delay`, `poll`, and `loop` steps with [Orchestration Control Flow](/docs/tutorials/orchestration-control-flow).
+- Gate a real posting call with [Guardrails](/docs/tutorials/gate-a-tool-with-guardrails).
+- Route `tasks.stalled` to a channel with [Webhooks](/docs/modules/webhooks).
