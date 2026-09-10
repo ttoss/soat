@@ -241,6 +241,15 @@ soat list-generations --orchestration-run-id run_abc123 --node-id summarize
 
 From a generation reached this way, the rest of the graph is already reachable: `trace_id` opens the [trace](./traces.md) for that turn, `initiator_generation_id` walks down into any [sub-agent invocations](#sub-agent-invocations) it made, `chain_id` opens the [continuation chain](./chains.md) it belongs to — filtering generations by that id returns every member of the chain — and `session_id` / `actor_id` name the [session](./sessions.md) and end user it ran for, the same pair its usage event is attributed to.
 
+`session_id` and `actor_id` also **filter** the listing, so the turns behind a conversation's or an end user's [cost](./usage.md#end-user-attribution) are one call away from the figure:
+
+```bash
+soat list-generations --session-id sess_abc123
+soat list-generations --actor-id actor_abc123
+```
+
+An id naming nothing in scope yields an empty page, never an unfiltered one.
+
 ### Tool context
 
 The generation-creation endpoints ([`POST /agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation), and the session and conversation generate endpoints) accept an optional `tool_context` object. Its entries are forwarded as `X-Soat-Context-*` request headers on every `http`, `mcp` and `builtin` tool call the generation makes, and an invalid key is rejected with `400 INVALID_TOOL_CONTEXT_KEY` before the provider is called. It is not persisted on the Generation record. See the [Tool Context reference](../advanced/tool-context.md).

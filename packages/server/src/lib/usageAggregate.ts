@@ -1,6 +1,5 @@
 import createDebug from 'debug';
 
-import { db } from '../db';
 import { DomainError } from '../errors';
 import type { PaginatedResult } from './pagination';
 import { resolvePagination } from './pagination';
@@ -20,12 +19,19 @@ import {
   loadWindowTotals,
   USAGE_GROUP_BY,
 } from './usageAggregateSql';
+import type { UsageAggregateFilters, UsageNarrowings } from './usageNarrowings';
+import {
+  echoedFilters,
+  resolveIdNarrowings,
+  valueNarrowings,
+} from './usageNarrowings';
 import type { UsageTotals } from './usageReceipt';
 
 const log = createDebug('soat:usage');
 
 export type { UsageDistinctCounts, UsageGroupBy } from './usageAggregateSql';
 export { USAGE_GROUP_BY } from './usageAggregateSql';
+export type { UsageAggregateFilters, UsageNarrowings } from './usageNarrowings';
 
 const isGroupBy = (value: string): value is UsageGroupBy => {
   return (USAGE_GROUP_BY as readonly string[]).includes(value);
@@ -83,14 +89,11 @@ export type UsageAggregate = {
   project_id: string;
   from: string | null;
   to: string | null;
-  group_by: UsageGroupBy;
-  // The meter-type filter applied, echoed back; null when unfiltered.
-  meter_type: string | null;
-  // The end-user narrowings applied, echoed back; null when unfiltered. Echoed
-  // because a rollup of zeros is otherwise indistinguishable from a project
-  // that spent nothing.
-  session_id: string | null;
-  actor_id: string | null;
+  // Null when the caller asked for no bucketing: `totals` answers "what did
+  // this cost" without forcing a dimension it does not care about, and
+  // `groups` is then an empty page.
+  group_by: UsageGroupBy | null;
+  filters: UsageAggregateFilters;
   // Paginated: a dimension like `orchestration_run` has one entry per run in
   // the window, so the collection is walked rather than returned whole.
   // `total` is the number of distinct buckets — bucket cardinality, never an
@@ -169,13 +172,15 @@ const parseBound = (value: string | undefined, label: string): Date | null => {
   return date;
 };
 
-const parseGroupBy = (value: string | undefined): UsageGroupBy => {
-  if (value === undefined || !isGroupBy(value)) {
+// Optional: "what did agent X cost" wants `totals`, and requiring a dimension
+// there only forces the caller to pick one it will discard. A value that names
+// no dimension is still a 400 — that is a typo, not an omission.
+const parseGroupBy = (value: string | undefined): UsageGroupBy | null => {
+  if (value === undefined || value === '') return null;
+  if (!isGroupBy(value)) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      `group_by must be one of ${USAGE_GROUP_BY.join(', ')} (got '${
-        value ?? ''
-      }').`
+      `group_by must be one of ${USAGE_GROUP_BY.join(', ')} (got '${value}').`
     );
   }
   return value;
@@ -203,91 +208,14 @@ const parseInclude = (value: string | undefined): boolean => {
   return true;
 };
 
-/**
- * Resolves an end-user narrowing (`session_id` / `actor_id`) to the internal id
- * the event table keys on, scoped to the project the rollup is for.
- *
- * `undefined` means "not asked for"; `null` means "asked for, and no such
- * resource in this project".
- */
-const resolveNarrowing = async (args: {
-  projectId: number;
-  publicId: string | undefined;
-  find: (where: {
-    publicId: string;
-    projectId: number;
-  }) => Promise<{ id?: number } | null>;
-}): Promise<number | null | undefined> => {
-  if (args.publicId === undefined) return undefined;
-  const row = await args.find({
-    publicId: args.publicId,
-    projectId: args.projectId,
-  });
-  return row?.id ?? null;
-};
-
-/**
- * Both end-user narrowings as the event filter takes them, or `null` when one
- * names nothing in this project — which empties the rollup rather than dropping
- * the filter, since a total the caller reads as one session's must never turn
- * out to be the project's.
- */
-const resolveEndUserFilter = async (args: {
-  projectId: number;
-  sessionId?: string;
-  actorId?: string;
-}): Promise<Pick<EventFilter, 'actorId' | 'sessionId'> | null> => {
-  const [sessionId, actorId] = await Promise.all([
-    resolveNarrowing({
-      projectId: args.projectId,
-      publicId: args.sessionId,
-      find: (where) => {
-        return db.Session.findOne({ where });
-      },
-    }),
-    resolveNarrowing({
-      projectId: args.projectId,
-      publicId: args.actorId,
-      find: (where) => {
-        return db.Actor.findOne({ where });
-      },
-    }),
-  ]);
-
-  if (sessionId === null || actorId === null) return null;
-
-  return {
-    ...(sessionId === undefined ? {} : { sessionId }),
-    ...(actorId === undefined ? {} : { actorId }),
-  };
-};
-
-/** The narrowings echoed back on the response, exactly as the caller sent them. */
-type EchoedFilters = Pick<
-  UsageAggregate,
-  'actor_id' | 'meter_type' | 'session_id'
->;
-
-const echoedFilters = (args: {
-  meterType?: string;
-  sessionId?: string;
-  actorId?: string;
-}): EchoedFilters => {
-  return {
-    meter_type: args.meterType ?? null,
-    session_id: args.sessionId ?? null,
-    actor_id: args.actorId ?? null,
-  };
-};
-
 // The rollup a narrowing that matched nothing answers with: the window and the
 // filters the caller sent, and no measured anything.
 const emptyAggregate = (args: {
   projectPublicId: string;
   from: Date | null;
   to: Date | null;
-  groupBy: UsageGroupBy;
-  echoed: EchoedFilters;
+  groupBy: UsageGroupBy | null;
+  filters: UsageAggregateFilters;
   limit: number;
   offset: number;
 }): UsageAggregate => {
@@ -296,44 +224,37 @@ const emptyAggregate = (args: {
     from: args.from ? args.from.toISOString() : null,
     to: args.to ? args.to.toISOString() : null,
     group_by: args.groupBy,
-    ...args.echoed,
+    filters: args.filters,
     groups: { data: [], total: 0, limit: args.limit, offset: args.offset },
     totals: totalsFrom({ costUsd: null, eventCount: 0, components: [] }),
   };
 };
 
 /**
- * The five reads behind a rollup, and their shaping, once the filter is settled.
+ * The bucketed page of a rollup: its buckets, their component sums, and how
+ * many buckets the window holds in total.
  *
- * Independent aggregates over the same indexed window — none reads another's
- * result, so they go in one round trip's worth of wall clock.
+ * Three of the five reads behind a rollup, and the three a dimensionless
+ * request skips entirely — `group_by` is what they are all keyed on.
  */
-const buildAggregate = async (args: {
+const loadGroups = async (args: {
   filter: EventFilter;
-  groupBy: UsageGroupBy;
-  includeDistinct: boolean;
-  projectPublicId: string;
-  echoed: EchoedFilters;
+  groupBy: UsageGroupBy | null;
   limit: number;
   offset: number;
-}): Promise<UsageAggregate> => {
+}): Promise<PaginatedResult<UsageAggregateGroup>> => {
   const { filter, groupBy, limit, offset } = args;
+  if (groupBy === null) {
+    return { data: [], total: 0, limit, offset };
+  }
 
-  const [
-    windowTotals,
-    windowComponents,
-    groupCount,
-    groupRows,
-    pageComponents,
-  ] = await Promise.all([
-    loadWindowTotals(filter, { distinct: args.includeDistinct }),
-    loadWindowComponents(filter),
+  const [groupCount, groupRows, pageComponents] = await Promise.all([
     countGroups({ filter, groupBy }),
     loadGroupPage({ filter, groupBy, limit, offset }),
     loadPageComponents({ filter, groupBy, limit, offset }),
   ]);
 
-  const groups: UsageAggregateGroup[] = groupRows.map((row) => {
+  const data: UsageAggregateGroup[] = groupRows.map((row) => {
     return {
       key: row.key,
       ai_provider_id: row.aiProviderId,
@@ -345,13 +266,39 @@ const buildAggregate = async (args: {
     };
   });
 
+  return { data, total: groupCount, limit, offset };
+};
+
+/**
+ * The reads behind a rollup, and their shaping, once the filter is settled.
+ *
+ * Independent aggregates over the same indexed window — none reads another's
+ * result, so they go in one round trip's worth of wall clock.
+ */
+const buildAggregate = async (args: {
+  filter: EventFilter;
+  groupBy: UsageGroupBy | null;
+  includeDistinct: boolean;
+  projectPublicId: string;
+  filters: UsageAggregateFilters;
+  limit: number;
+  offset: number;
+}): Promise<UsageAggregate> => {
+  const { filter, groupBy, limit, offset } = args;
+
+  const [windowTotals, windowComponents, groups] = await Promise.all([
+    loadWindowTotals(filter, { distinct: args.includeDistinct }),
+    loadWindowComponents(filter),
+    loadGroups({ filter, groupBy, limit, offset }),
+  ]);
+
   return {
     project_id: args.projectPublicId,
     from: filter.from ? filter.from.toISOString() : null,
     to: filter.to ? filter.to.toISOString() : null,
     group_by: groupBy,
-    ...args.echoed,
-    groups: { data: groups, total: groupCount, limit, offset },
+    filters: args.filters,
+    groups,
     totals: {
       ...totalsFrom({
         costUsd: windowTotals.costUsd,
@@ -395,18 +342,21 @@ export const rollUpUsageTotals = async (
 };
 
 /**
- * Rolls a project's usage up over an optional `[from, to]` window, bucketed by
- * one dimension (`model` | `ai_provider` | `agent` | `orchestration_run` |
- * `day` | `meter_type` | `actor` | `session` | `source`), optionally narrowed
- * to a single `meterType`, `sessionId` or `actorId`. Each group and the grand
- * total carry an event count, summed token counts, a measured `quantity` per
- * component, and `cost_usd` (null when no event in the bucket was priced).
- * `include=distinct` adds `totals.distinct`, the distinct-entity counters a
- * "how many" question reads.
+ * Rolls a project's usage up over an optional `[from, to]` window, optionally
+ * bucketed by one dimension (`model` | `ai_provider` | `agent` |
+ * `orchestration_run` | `day` | `meter_type` | `actor` | `session` | `source`)
+ * and narrowed by any combination of the thirteen filters in
+ * `UsageNarrowings`. Each group and the grand total carry an event count,
+ * summed token counts, a measured `quantity` per component, and `cost_usd`
+ * (null when no event in the bucket was priced). `include=distinct` adds
+ * `totals.distinct`, the distinct-entity counters a "how many" question reads.
  *
- * `sessionId` / `actorId` are public ids resolved against this project; one
- * naming nothing here empties the rollup, so a mistyped id reads as zero rather
- * than as the project's whole spend.
+ * Narrowings intersect, and apply to the whole rollup — every bucket, the
+ * window totals and the distinct counters alike. The eight that name a
+ * resource are public ids resolved against this project; one naming nothing
+ * here empties the rollup, so a mistyped id reads as zero rather than as the
+ * project's whole spend. The other five are matched as the event recorded
+ * them.
  *
  * Aggregated by Postgres, not in memory: the window is grouped and summed in
  * SQL with one join for the chosen dimension, and only the requested page of
@@ -414,19 +364,18 @@ export const rollUpUsageTotals = async (
  * window regardless of the page. `projectId` is the internal id the caller has
  * already resolved (and authorized).
  */
-export const aggregateUsage = async (args: {
-  projectId: number;
-  projectPublicId: string;
-  from?: string;
-  to?: string;
-  groupBy?: string;
-  meterType?: string;
-  sessionId?: string;
-  actorId?: string;
-  include?: string;
-  limit?: number;
-  offset?: number;
-}): Promise<UsageAggregate> => {
+export const aggregateUsage = async (
+  args: UsageNarrowings & {
+    projectId: number;
+    projectPublicId: string;
+    from?: string;
+    to?: string;
+    groupBy?: string;
+    include?: string;
+    limit?: number;
+    offset?: number;
+  }
+): Promise<UsageAggregate> => {
   const groupBy = parseGroupBy(args.groupBy);
   const includeDistinct = parseInclude(args.include);
   const from = parseBound(args.from, 'from');
@@ -436,34 +385,31 @@ export const aggregateUsage = async (args: {
     offset: args.offset,
   });
 
-  const echoed = echoedFilters(args);
+  const filters = echoedFilters(args);
 
   log(
-    'aggregateUsage: projectId=%d groupBy=%s from=%s to=%s meterType=%s sessionId=%s actorId=%s limit=%d offset=%d',
+    'aggregateUsage: projectId=%d groupBy=%s from=%s to=%s filters=%o limit=%d offset=%d',
     args.projectId,
     groupBy,
     from?.toISOString() ?? null,
     to?.toISOString() ?? null,
-    echoed.meter_type,
-    echoed.session_id,
-    echoed.actor_id,
+    filters,
     limit,
     offset
   );
 
-  const endUser = await resolveEndUserFilter({
+  const ids = await resolveIdNarrowings({
     projectId: args.projectId,
-    sessionId: args.sessionId,
-    actorId: args.actorId,
+    narrowings: args,
   });
 
-  if (!endUser) {
+  if (!ids) {
     return emptyAggregate({
       projectPublicId: args.projectPublicId,
       from,
       to,
       groupBy,
-      echoed,
+      filters,
       limit,
       offset,
     });
@@ -474,13 +420,13 @@ export const aggregateUsage = async (args: {
       projectId: args.projectId,
       from,
       to,
-      meterType: args.meterType,
-      ...endUser,
+      ...valueNarrowings(args),
+      ...ids,
     },
     groupBy,
     includeDistinct,
     projectPublicId: args.projectPublicId,
-    echoed,
+    filters,
     limit,
     offset,
   });

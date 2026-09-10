@@ -313,6 +313,8 @@ export const listGenerations = async (args: {
   projectIds?: number[];
   agentId?: string;
   traceId?: string;
+  sessionId?: string;
+  actorId?: string;
   initiatorGenerationId?: string;
   chainId?: string;
   orchestrationRunId?: string;
@@ -332,6 +334,8 @@ export const listGenerations = async (args: {
   const resolved = await applyGenerationScopeFilters(where, {
     agentId: args.agentId,
     traceId: args.traceId,
+    sessionId: args.sessionId,
+    actorId: args.actorId,
     initiatorGenerationId: args.initiatorGenerationId,
     projectIds: args.projectIds,
   });

@@ -56,6 +56,24 @@ paths:
           description: Filter by trace public ID
           schema:
             type: string
+        - name: session_id
+          in: query
+          required: false
+          description: >
+            Return only the generations dispatched through one session — the
+            turns behind that conversation's spend. A session that does not
+            exist in scope yields an empty page.
+          schema:
+            type: string
+        - name: actor_id
+          in: query
+          required: false
+          description: >
+            Return only the generations one end user started, across every
+            session they appear in. An actor that does not exist in scope
+            yields an empty page.
+          schema:
+            type: string
         - name: initiator_generation_id
           in: query
           required: false

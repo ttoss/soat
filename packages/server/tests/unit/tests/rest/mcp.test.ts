@@ -136,7 +136,7 @@ describe('MCP tools - happy path', () => {
     // Measured quantities per component, so infra meters are not reported as
     // all-zero buckets. Nothing metered here, so the list is empty.
     expect(result.totals.components).toEqual([]);
-    expect(result.meter_type).toBeNull();
+    expect(result.filters.meter_type).toBeNull();
   });
 
   test('get-usage-aggregate narrows the rollup to one meter type', async () => {
@@ -147,7 +147,7 @@ describe('MCP tools - happy path', () => {
     });
     expect(res.status).toBe(200);
     const result = parseResult(res);
-    expect(result.meter_type).toBe('storage');
+    expect(result.filters.meter_type).toBe('storage');
     expect(result.groups.data).toEqual([]);
   });
 

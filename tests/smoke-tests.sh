@@ -3957,7 +3957,7 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
       and ([$g[0].components[] | select(.component == "compute_second")
              | select(.quantity > 0) | select(.unit == "compute_second")]
            | length == 1)
-      and (.meter_type == null)')
+      and (.filters.meter_type == null)')
   if [ "$USAGE_QTY_OK" != "true" ]; then
     echo "ERROR: get-usage-aggregate reported the compute_execution meter without a measured quantity" >&2
     echo "$USAGE_AGG_RESP" >&2
@@ -3972,7 +3972,7 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
     --group-by meter_type \
     --meter-type compute_execution | sanitize_json)
   USAGE_FILTERED_OK=$(printf '%s\n' "$USAGE_FILTERED_RESP" | jq -r '
-    (.meter_type == "compute_execution")
+    (.filters.meter_type == "compute_execution")
       and ((.groups.data | map(.key)) == ["compute_execution"])
       and ((.totals.components | map(.component)) == ["compute_second"])')
   if [ "$USAGE_FILTERED_OK" != "true" ]; then
@@ -4102,7 +4102,7 @@ fi
 EUA_AGG_NARROWED=$($SOAT_CLI get-usage-aggregate \
   --project-id "$PROJECT_PUBLIC_ID" --group-by model \
   --session-id "$EUA_SESSION_ID" | sanitize_json)
-EUA_AGG_NARROWED_OK=$(printf '%s\n' "$EUA_AGG_NARROWED" | jq -r --arg session "$EUA_SESSION_ID" '(.session_id == $session) and (.totals.event_count >= 1) and (.totals.output_tokens > 0)')
+EUA_AGG_NARROWED_OK=$(printf '%s\n' "$EUA_AGG_NARROWED" | jq -r --arg session "$EUA_SESSION_ID" '(.filters.session_id == $session) and (.totals.event_count >= 1) and (.totals.output_tokens > 0)')
 if [ "$EUA_AGG_NARROWED_OK" != "true" ]; then
   echo "ERROR: get-usage-aggregate --session-id did not narrow the rollup to the session" >&2
   printf '%s\n' "$EUA_AGG_NARROWED" >&2
@@ -4112,7 +4112,7 @@ fi
 EUA_AGG_ACTOR=$($SOAT_CLI get-usage-aggregate \
   --project-id "$PROJECT_PUBLIC_ID" --group-by day \
   --actor-id "$EUA_ACTOR_ID" | sanitize_json)
-EUA_AGG_ACTOR_OK=$(printf '%s\n' "$EUA_AGG_ACTOR" | jq -r --arg actor "$EUA_ACTOR_ID" '(.actor_id == $actor) and (.totals.event_count >= 1)')
+EUA_AGG_ACTOR_OK=$(printf '%s\n' "$EUA_AGG_ACTOR" | jq -r --arg actor "$EUA_ACTOR_ID" '(.filters.actor_id == $actor) and (.totals.event_count >= 1)')
 if [ "$EUA_AGG_ACTOR_OK" != "true" ]; then
   echo "ERROR: get-usage-aggregate --actor-id did not narrow the rollup to the actor" >&2
   printf '%s\n' "$EUA_AGG_ACTOR" >&2
@@ -4127,6 +4127,37 @@ EUA_AGG_UNKNOWN_OK=$(printf '%s\n' "$EUA_AGG_UNKNOWN" | jq -r '(.totals.event_co
 if [ "$EUA_AGG_UNKNOWN_OK" != "true" ]; then
   echo "ERROR: get-usage-aggregate with an unknown --session-id did not return an empty rollup" >&2
   printf '%s\n' "$EUA_AGG_UNKNOWN" >&2
+  exit 1
+fi
+
+# Without a bucketing at all: the window's totals are what "what did this cost"
+# asks for, and they must not depend on a dimension the caller had to invent.
+EUA_AGG_UNGROUPED=$($SOAT_CLI get-usage-aggregate \
+  --project-id "$PROJECT_PUBLIC_ID" --actor-id "$EUA_ACTOR_ID" | sanitize_json)
+EUA_AGG_UNGROUPED_OK=$(printf '%s\n' "$EUA_AGG_UNGROUPED" | jq -r --argjson grouped "$(printf '%s\n' "$EUA_AGG_ACTOR" | jq -c '.totals')" '(.group_by == null) and ((.groups.data | length) == 0) and (.totals.event_count == $grouped.event_count) and (.totals.output_tokens == $grouped.output_tokens)')
+if [ "$EUA_AGG_UNGROUPED_OK" != "true" ]; then
+  echo "ERROR: get-usage-aggregate without --group-by did not report the window totals" >&2
+  printf '%s\n' "$EUA_AGG_UNGROUPED" >&2
+  exit 1
+fi
+
+# The narrowings the events and generation listings share with the rollup, so
+# a figure and the rows behind it are addressed the same way.
+EUA_GENS=$($SOAT_CLI list-generations --session-id "$EUA_SESSION_ID" | sanitize_json)
+EUA_GENS_OK=$(printf '%s\n' "$EUA_GENS" | jq -r --arg session "$EUA_SESSION_ID" '((.data | length) >= 1) and all(.data[]; .session_id == $session)')
+if [ "$EUA_GENS_OK" != "true" ]; then
+  echo "ERROR: list-generations --session-id did not narrow to the session" >&2
+  printf '%s\n' "$EUA_GENS" >&2
+  exit 1
+fi
+
+EUA_EVENT_MODEL=$(printf '%s\n' "$EUA_EVENTS" | jq -r '.data[0].model')
+EUA_EVENTS_MODEL=$($SOAT_CLI list-usage-events \
+  --session-id "$EUA_SESSION_ID" --model "$EUA_EVENT_MODEL" | sanitize_json)
+EUA_EVENTS_MODEL_OK=$(printf '%s\n' "$EUA_EVENTS_MODEL" | jq -r --arg model "$EUA_EVENT_MODEL" '((.data | length) >= 1) and all(.data[]; .model == $model)')
+if [ "$EUA_EVENTS_MODEL_OK" != "true" ]; then
+  echo "ERROR: list-usage-events --model did not narrow to the model" >&2
+  printf '%s\n' "$EUA_EVENTS_MODEL" >&2
   exit 1
 fi
 

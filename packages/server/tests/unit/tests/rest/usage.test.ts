@@ -108,6 +108,7 @@ describe('Usage', () => {
         'agents:SendSessionMessage',
         'actors:CreateActor',
         'generations:GetGeneration',
+        'generations:ListGenerations',
         'usage:ListEvents',
         'usage:GetReceipt',
         'usage:GetAggregate',
@@ -552,7 +553,7 @@ describe('Usage', () => {
         `/api/v1/usage/aggregate?project_id=${projectId}&group_by=model&session_id=${sessionId}`
       );
       expect(res.status).toBe(200);
-      expect(res.body.session_id).toBe(sessionId);
+      expect(res.body.filters.session_id).toBe(sessionId);
       expect(res.body.totals.event_count).toBe(1);
       expect(res.body.totals.output_tokens).toBe(20);
     });
@@ -562,7 +563,7 @@ describe('Usage', () => {
         `/api/v1/usage/aggregate?project_id=${projectId}&group_by=day&actor_id=${actorId}`
       );
       expect(res.status).toBe(200);
-      expect(res.body.actor_id).toBe(actorId);
+      expect(res.body.filters.actor_id).toBe(actorId);
       expect(res.body.totals.event_count).toBe(1);
       expect(res.body.totals.output_tokens).toBe(20);
     });
@@ -594,6 +595,252 @@ describe('Usage', () => {
   });
 
   /**
+   * Every dimension the rollup buckets on, readable as a narrowing too (#1265).
+   *
+   * Grouping answers "how is this project's spend split"; narrowing answers
+   * "what did *this one thing* cost", which is the question an invoice line, a
+   * per-customer margin or a runaway-agent hunt actually asks. The two classes
+   * differ in how a value that names nothing behaves: an id is resolved against
+   * the project and empties the rollup when it resolves to nothing, while a
+   * literal is matched as recorded and simply selects no events.
+   */
+  describe('narrowing the aggregate by id and by value', () => {
+    test('narrows to one generation', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=model&generation_id=${generationId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.filters.generation_id).toBe(generationId);
+      expect(res.body.totals.event_count).toBeGreaterThanOrEqual(1);
+      expect(res.body.totals.output_tokens).toBe(20);
+    });
+
+    test('narrows to one trace', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=model&trace_id=${traceId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.filters.trace_id).toBe(traceId);
+      expect(res.body.totals.output_tokens).toBe(20);
+    });
+
+    test('narrows to one agent', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=day&agent_id=${agentId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.filters.agent_id).toBe(agentId);
+      // The standalone generation and the session-driven one, at least.
+      expect(res.body.totals.output_tokens).toBeGreaterThanOrEqual(40);
+    });
+
+    test('narrows to one ai provider', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=model&ai_provider_id=${aiProviderId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.filters.ai_provider_id).toBe(aiProviderId);
+      expect(res.body.totals.output_tokens).toBeGreaterThanOrEqual(40);
+    });
+
+    /**
+     * The exact call the report named: `?model=` was accepted and ignored, so
+     * a one-model question was answered with the project total.
+     */
+    test('a model filter narrows the rollup instead of being ignored', async () => {
+      const all = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=meter_type`
+      );
+      expect(all.status).toBe(200);
+
+      const oneModel = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=meter_type&model=stub-model`
+      );
+      expect(oneModel.status).toBe(200);
+      expect(oneModel.body.filters.model).toBe('stub-model');
+      expect(oneModel.body.totals.event_count).toBeGreaterThanOrEqual(1);
+      expect(oneModel.body.totals.event_count).toBeLessThan(
+        all.body.totals.event_count
+      );
+
+      const noSuchModel = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=meter_type&model=not-a-model`
+      );
+      expect(noSuchModel.status).toBe(200);
+      expect(noSuchModel.body.totals.event_count).toBe(0);
+    });
+
+    test('a source filter selects only the traffic labelled with it', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=model&source=eval`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.filters.source).toBe('eval');
+      expect(res.body.totals.event_count).toBe(0);
+    });
+
+    test('narrowings intersect rather than replace one another', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=day` +
+          `&session_id=${sessionId}&model=not-a-model`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.totals.event_count).toBe(0);
+    });
+
+    test('an id naming nothing in the project empties the rollup', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=model&agent_id=agt_doesnotexist`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.totals.event_count).toBe(0);
+      expect(res.body.totals.cost_usd).toBeNull();
+      expect(res.body.groups.data).toEqual([]);
+      expect(res.body.filters.agent_id).toBe('agt_doesnotexist');
+    });
+
+    /**
+     * Always complete, so a caller reading one key can tell "not filtered"
+     * from "this endpoint does not know that filter".
+     */
+    test('every narrowing is echoed back, null when unset', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=model&trigger_id=trg_x&action_id=act-x`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.filters).toEqual({
+        meter_type: null,
+        model: null,
+        source: null,
+        trigger_id: 'trg_x',
+        action_id: 'act-x',
+        session_id: null,
+        actor_id: null,
+        agent_id: null,
+        ai_provider_id: null,
+        orchestration_run_id: null,
+        orchestration_id: null,
+        generation_id: null,
+        trace_id: null,
+      });
+    });
+
+    /**
+     * "What did agent X cost" wants `totals` and no bucketing; requiring a
+     * dimension only made the caller pick one it would discard.
+     */
+    test('group_by is optional and yields totals with no buckets', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${projectId}&agent_id=${agentId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.group_by).toBeNull();
+      expect(res.body.groups).toEqual({
+        data: [],
+        total: 0,
+        limit: expect.any(Number),
+        offset: expect.any(Number),
+      });
+
+      const bucketed = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=day&agent_id=${agentId}`
+      );
+      expect(bucketed.status).toBe(200);
+      // The bucketing decides nothing about the window's figures.
+      expect(res.body.totals.event_count).toBe(
+        bucketed.body.totals.event_count
+      );
+      expect(res.body.totals.output_tokens).toBe(
+        bucketed.body.totals.output_tokens
+      );
+    });
+
+    test('a group_by that names no dimension is still a 400', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=sessions`
+      );
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+  });
+
+  /**
+   * "List this session's generations" is the click after "what did this
+   * session cost", and the columns behind it are the ones the usage event
+   * copies. Asserted here because this file holds the only session-driven
+   * generation fixture.
+   */
+  describe('filtering the generation listing by session and actor', () => {
+    test('filters by session_id', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/generations?session_id=${sessionId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.total).toBeGreaterThanOrEqual(1);
+      for (const generation of res.body.data) {
+        expect(generation.session_id).toBe(sessionId);
+      }
+    });
+
+    test('filters by actor_id', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/generations?actor_id=${actorId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.total).toBeGreaterThanOrEqual(1);
+      for (const generation of res.body.data) {
+        expect(generation.actor_id).toBe(actorId);
+      }
+    });
+
+    test('an unknown session_id returns an empty page', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        '/api/v1/generations?session_id=sess_doesnotexist'
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual([]);
+      expect(res.body.total).toBe(0);
+    });
+  });
+
+  /**
+   * The same filter set on the raw listing, so a rollup and the events behind
+   * it are addressed the same way.
+   */
+  describe('filtering the events listing by id and by value', () => {
+    test('filters by ai_provider_id', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/events?ai_provider_id=${aiProviderId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.total).toBeGreaterThanOrEqual(2);
+      for (const event of res.body.data) {
+        expect(event.ai_provider_id).toBe(aiProviderId);
+      }
+    });
+
+    test('filters by model', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        '/api/v1/usage/events?model=stub-model'
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.total).toBeGreaterThanOrEqual(1);
+      for (const event of res.body.data) {
+        expect(event.model).toBe('stub-model');
+      }
+    });
+
+    test('an unknown ai_provider_id returns an empty page', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        '/api/v1/usage/events?ai_provider_id=aip_doesnotexist'
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual([]);
+      expect(res.body.total).toBe(0);
+    });
+  });
+
+  /**
    * A filter the endpoint does not know is a wrong answer, not a missing one:
    * `?model=` names a real dimension of the rollup, so ignoring it returns the
    * project-wide total under the caller's belief that it is one model's.
@@ -601,11 +848,11 @@ describe('Usage', () => {
   describe('unrecognised query parameters', () => {
     test('the aggregate rejects an unknown parameter instead of ignoring it', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=model&model=stub-model`
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=model&conversation_id=conv_nope`
       );
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
-      expect(res.body.error.message).toContain('model');
+      expect(res.body.error.message).toContain('conversation_id');
     });
 
     test('the events listing rejects an unknown parameter', async () => {
@@ -619,7 +866,12 @@ describe('Usage', () => {
 
     test('every documented parameter is still accepted', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=model&meter_type=llm_tokens&include=distinct&limit=5&offset=0&session_id=${sessionId}&actor_id=${actorId}`
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=model` +
+          `&meter_type=llm_tokens&include=distinct&limit=5&offset=0` +
+          `&session_id=${sessionId}&actor_id=${actorId}&agent_id=${agentId}` +
+          `&ai_provider_id=${aiProviderId}&generation_id=${sessionGenerationId}` +
+          `&trace_id=${traceId}&model=stub-model&source=eval&trigger_id=trg_x` +
+          `&action_id=labelled`
       );
       expect(res.status).toBe(200);
     });
@@ -1321,12 +1573,14 @@ describe('Usage', () => {
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
 
-    test('missing group_by returns 400', async () => {
+    test('missing group_by rolls the window up without bucketing', async () => {
       const res = await authenticatedTestClient(userToken).get(
         `/api/v1/usage/aggregate?project_id=${projectId}`
       );
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.status).toBe(200);
+      expect(res.body.group_by).toBeNull();
+      expect(res.body.groups.data).toEqual([]);
+      expect(res.body.totals.event_count).toBeGreaterThanOrEqual(1);
     });
 
     test('invalid from timestamp returns 400', async () => {
@@ -1858,9 +2112,9 @@ describe('Usage', () => {
       // Exactly 0.3 — not 0.30000000000000004. `toBe` on purpose: the point is
       // the serialized figure, which `toBeCloseTo` would not catch.
       expect(gbDay!.quantity).toBe(0.3);
-      expect(findComponent(res.body.totals.components, 'gb_day')!.quantity).toBe(
-        0.3
-      );
+      expect(
+        findComponent(res.body.totals.components, 'gb_day')!.quantity
+      ).toBe(0.3);
     });
 
     test('a storage bucket reports its measured gb_day quantity, not zero', async () => {
@@ -1930,7 +2184,7 @@ describe('Usage', () => {
         `/api/v1/usage/aggregate?project_id=${projectId}&group_by=model&meter_type=storage`
       );
       expect(res.status).toBe(200);
-      expect(res.body.meter_type).toBe('storage');
+      expect(res.body.filters.meter_type).toBe('storage');
       // Only the platform SKU remains — no LLM model ids in the dimension.
       expect(
         res.body.groups.data.map((g: { key: string | null }) => {
@@ -1950,7 +2204,7 @@ describe('Usage', () => {
         `/api/v1/usage/aggregate?project_id=${projectId}&group_by=meter_type`
       );
       expect(res.status).toBe(200);
-      expect(res.body.meter_type).toBeNull();
+      expect(res.body.filters.meter_type).toBeNull();
       expect(res.body.groups.data.length).toBeGreaterThanOrEqual(2);
     });
 
@@ -2630,6 +2884,7 @@ describe('Usage', () => {
 
   describe('orchestration run attribution and receipt', () => {
     let orchestrationRunId: string;
+    let orchestrationId: string;
     const nodeId = 'metered-agent';
 
     // Runs a one-agent-node orchestration to completion so its node dispatches a
@@ -2644,6 +2899,7 @@ describe('Usage', () => {
           project_id: projectId,
         });
       expect(createRes.status).toBe(201);
+      orchestrationId = createRes.body.id;
 
       const runRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestration-runs')
@@ -2750,6 +3006,94 @@ describe('Usage', () => {
       expect(after.body.totals.distinct.orchestration_runs).toBe(
         before.body.totals.distinct.orchestration_runs
       );
+    });
+
+    test('narrows the aggregate to one orchestration run', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=meter_type` +
+          `&orchestration_run_id=${orchestrationRunId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.filters.orchestration_run_id).toBe(orchestrationRunId);
+      expect(res.body.totals.output_tokens).toBeGreaterThanOrEqual(20);
+
+      // Narrowed to the run, so the project's standalone traffic is out.
+      const project = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=meter_type`
+      );
+      expect(project.status).toBe(200);
+      expect(res.body.totals.event_count).toBeLessThan(
+        project.body.totals.event_count
+      );
+    });
+
+    /**
+     * The orchestration's own runs, not the subtree its nodes started: summed
+     * across every orchestration in a project the figures reach the project
+     * total exactly once, which a filter that swallowed sub-runs could not do.
+     */
+    test('narrows the aggregate to every run of one orchestration', async () => {
+      const byOrchestration = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=meter_type` +
+          `&orchestration_id=${orchestrationId}`
+      );
+      expect(byOrchestration.status).toBe(200);
+      expect(byOrchestration.body.filters.orchestration_id).toBe(
+        orchestrationId
+      );
+
+      const byRun = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=meter_type` +
+          `&orchestration_run_id=${orchestrationRunId}`
+      );
+      expect(byRun.status).toBe(200);
+      // This orchestration has been run exactly once, so the two agree.
+      expect(byOrchestration.body.totals.event_count).toBe(
+        byRun.body.totals.event_count
+      );
+      expect(byOrchestration.body.totals.output_tokens).toBe(
+        byRun.body.totals.output_tokens
+      );
+    });
+
+    test('an unknown orchestration_id empties the rollup', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/aggregate?project_id=${projectId}&group_by=meter_type` +
+          `&orchestration_id=orc_doesnotexist`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.totals.event_count).toBe(0);
+    });
+
+    test('filters the events listing by orchestration_run_id', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/events?orchestration_run_id=${orchestrationRunId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.total).toBeGreaterThanOrEqual(1);
+      for (const event of res.body.data) {
+        expect(event.orchestration_run_id).toBe(orchestrationRunId);
+      }
+    });
+
+    test('filters the events listing by orchestration_id', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/events?orchestration_id=${orchestrationId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.total).toBeGreaterThanOrEqual(1);
+      for (const event of res.body.data) {
+        expect(event.orchestration_run_id).toBe(orchestrationRunId);
+      }
+    });
+
+    test('an unknown orchestration_id returns an empty page', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        '/api/v1/usage/events?orchestration_id=orc_doesnotexist'
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual([]);
+      expect(res.body.total).toBe(0);
     });
 
     test('groups usage by orchestration_run', async () => {

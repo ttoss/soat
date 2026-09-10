@@ -1,14 +1,19 @@
 import { db } from '../db';
 import { emptyPage, paginatedList } from './pagination';
+import type { ScopedIdResource } from './scopedIdFilters';
+import { applyScopedIdFilters, resolveScopedIds } from './scopedIdFilters';
+import { VALUE_NARROWING_KEYS } from './usageNarrowings';
 
 // The write path is split across three modules and re-exported here, so the
 // module's public surface is one import. This file owns the read path.
 export type {
   UsageAggregate,
   UsageAggregateComponent,
+  UsageAggregateFilters,
   UsageAggregateGroup,
   UsageAggregateTotals,
   UsageGroupBy,
+  UsageNarrowings,
 } from './usageAggregate';
 export {
   aggregateUsage,
@@ -141,70 +146,31 @@ const mapUsageEvent = (
   };
 };
 
-// Resolves a project-scoped resource publicId (agent/generation/trace) to its
-// internal id. Returns null when it does not exist in scope so the caller can
-// yield an empty page instead of leaking cross-tenant rows.
-const resolveScopedId = async (
-  find: (where: {
-    publicId: string;
-    projectId?: number[];
-  }) => Promise<{ id?: number } | null>,
-  publicId: string,
-  projectIds?: number[]
-): Promise<number | null> => {
-  const where: { publicId: string; projectId?: number[] } = { publicId };
-  if (projectIds !== undefined) where.projectId = projectIds;
-  const row = await find(where);
-  return row?.id ?? null;
-};
-
 type ScopedFilterArgs = {
   agentId?: string;
   generationId?: string;
   traceId?: string;
   actorId?: string;
   sessionId?: string;
+  aiProviderId?: string;
+  orchestrationRunId?: string;
 };
 
 // The publicId filters that resolve to an internal FK on the event, and the
-// model each one resolves against. Adding a filter is one entry here.
-const SCOPED_FILTERS: Array<{
+// table each one resolves against. Adding a filter is one entry here.
+// `orchestrationId` is not among them: the event carries no such column, so it
+// narrows through the run association instead (see `eventIncludes`).
+const SCOPED_FILTERS: ReadonlyArray<{
   key: keyof ScopedFilterArgs;
-  find: (where: {
-    publicId: string;
-    projectId?: number[];
-  }) => Promise<{ id?: number } | null>;
+  resource: ScopedIdResource;
 }> = [
-  {
-    key: 'agentId',
-    find: (w) => {
-      return db.Agent.findOne({ where: w });
-    },
-  },
-  {
-    key: 'generationId',
-    find: (w) => {
-      return db.Generation.findOne({ where: w });
-    },
-  },
-  {
-    key: 'traceId',
-    find: (w) => {
-      return db.Trace.findOne({ where: w });
-    },
-  },
-  {
-    key: 'actorId',
-    find: (w) => {
-      return db.Actor.findOne({ where: w });
-    },
-  },
-  {
-    key: 'sessionId',
-    find: (w) => {
-      return db.Session.findOne({ where: w });
-    },
-  },
+  { key: 'agentId', resource: 'agent' },
+  { key: 'generationId', resource: 'generation' },
+  { key: 'traceId', resource: 'trace' },
+  { key: 'actorId', resource: 'actor' },
+  { key: 'sessionId', resource: 'session' },
+  { key: 'aiProviderId', resource: 'aiProvider' },
+  { key: 'orchestrationRunId', resource: 'orchestrationRun' },
 ];
 
 // Resolves the publicId filters into `where` (mutating it). Returns false when
@@ -215,18 +181,47 @@ const applyUsageScopeFilters = async (
   where: Record<string, any>,
   args: ScopedFilterArgs & { projectIds?: number[] }
 ): Promise<boolean> => {
-  for (const filter of SCOPED_FILTERS) {
-    const publicId = args[filter.key];
-    if (publicId === undefined) continue;
-    const resolved = await resolveScopedId(
-      filter.find,
-      publicId,
-      args.projectIds
-    );
-    if (resolved === null) return false;
-    where[filter.key] = resolved;
-  }
-  return true;
+  return applyScopedIdFilters({
+    where,
+    filters: SCOPED_FILTERS.map((filter) => {
+      return {
+        key: filter.key,
+        resource: filter.resource,
+        publicId: args[filter.key],
+      };
+    }),
+    ...(args.projectIds !== undefined ? { projectIds: args.projectIds } : {}),
+  });
+};
+
+// The associations every returned event hydrates. `orchestrationId` is the one
+// narrowing with no column on the event — the orchestration is the run's — so
+// it is applied by making the run join required rather than by a subquery.
+const eventIncludes = (args: { orchestrationId?: number }) => {
+  return [
+    { model: db.Project, as: 'project' },
+    { model: db.Agent, as: 'agent' },
+    { model: db.Generation, as: 'generation' },
+    {
+      model: db.OrchestrationRun,
+      as: 'orchestrationRun',
+      ...(args.orchestrationId === undefined
+        ? {}
+        : {
+            where: { orchestrationId: args.orchestrationId },
+            required: true,
+          }),
+    },
+    { model: db.Trace, as: 'trace' },
+    { model: db.Actor, as: 'actor' },
+    { model: db.Session, as: 'session' },
+    { model: db.AiProvider, as: 'aiProvider' },
+    {
+      model: db.UsageComponent,
+      as: 'components',
+      include: [{ model: db.PriceBook, as: 'price' }],
+    },
+  ];
 };
 
 export const listUsageEvents = async (args: {
@@ -236,9 +231,13 @@ export const listUsageEvents = async (args: {
   traceId?: string;
   actorId?: string;
   sessionId?: string;
+  aiProviderId?: string;
+  orchestrationRunId?: string;
+  orchestrationId?: string;
   triggerId?: string;
   actionId?: string;
   meterType?: string;
+  model?: string;
   source?: string;
   limit?: number;
   offset?: number;
@@ -251,10 +250,10 @@ export const listUsageEvents = async (args: {
     where.projectId = args.projectIds;
   }
 
-  if (args.triggerId !== undefined) where.triggerId = args.triggerId;
-  if (args.actionId !== undefined) where.actionId = args.actionId;
-  if (args.meterType !== undefined) where.meterType = args.meterType;
-  if (args.source !== undefined) where.source = args.source;
+  for (const key of VALUE_NARROWING_KEYS) {
+    const value = args[key];
+    if (value !== undefined) where[key] = value;
+  }
 
   const resolved = await applyUsageScopeFilters(where, {
     agentId: args.agentId,
@@ -262,9 +261,23 @@ export const listUsageEvents = async (args: {
     traceId: args.traceId,
     actorId: args.actorId,
     sessionId: args.sessionId,
+    aiProviderId: args.aiProviderId,
+    orchestrationRunId: args.orchestrationRunId,
     projectIds: args.projectIds,
   });
   if (!resolved) return emptyPage(args);
+
+  const orchestration = await resolveScopedIds({
+    filters: [
+      {
+        key: 'orchestrationId' as const,
+        resource: 'orchestration' as const,
+        publicId: args.orchestrationId,
+      },
+    ],
+    ...(args.projectIds !== undefined ? { projectIds: args.projectIds } : {}),
+  });
+  if (!orchestration) return emptyPage(args);
 
   return paginatedList({
     limit: args.limit,
@@ -272,21 +285,7 @@ export const listUsageEvents = async (args: {
     query: ({ limit, offset }) => {
       return db.UsageEvent.findAndCountAll({
         where: Object.keys(where).length > 0 ? where : undefined,
-        include: [
-          { model: db.Project, as: 'project' },
-          { model: db.Agent, as: 'agent' },
-          { model: db.Generation, as: 'generation' },
-          { model: db.OrchestrationRun, as: 'orchestrationRun' },
-          { model: db.Trace, as: 'trace' },
-          { model: db.Actor, as: 'actor' },
-          { model: db.Session, as: 'session' },
-          { model: db.AiProvider, as: 'aiProvider' },
-          {
-            model: db.UsageComponent,
-            as: 'components',
-            include: [{ model: db.PriceBook, as: 'price' }],
-          },
-        ],
+        include: eventIncludes(orchestration),
         order: [['createdAt', 'DESC']],
         limit,
         offset,
