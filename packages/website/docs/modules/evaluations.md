@@ -11,17 +11,15 @@ output, and runs that produce a pass/fail verdict.
 
 A **dataset** holds test cases, an **eval** binds an agent to a dataset and a list of
 **scorers**, and a **run** executes the real agent against every case and scores the
-outputs. Where [traces](./traces.md) and [guardrails](./guardrails.md) deal with runs that
-already happened or are happening, an evaluation answers whether a *change* to the agent —
-a reworded instruction, a swapped model, a new tool — improved the distribution of runs.
-Evaluations is the foundation of the ratchet layer described in
+outputs. Where [traces](./traces.md) and [guardrails](./guardrails.md) deal with individual
+runs, an evaluation answers whether a change to the agent improved the distribution of
+runs. It is the ratchet layer of
 [The Layers of an Agent System](../agent-system-layers.md#layer-4--the-ratchet).
 
-The module follows SOAT's [engine & algorithms pattern](../advanced/engines-and-algorithms.md):
-the **engine** is the mechanics — running items, freezing inputs, aggregating, settling —
-and the **scorers** are the algorithm layer on top, including
-[custom scorers](#custom-scorers-tool) you implement as a [tool](./tools.md). The
-[boundary section](#the-engine-and-the-scorers) below maps which is which.
+The module follows the [engine & algorithms pattern](../advanced/engines-and-algorithms.md):
+the **engine** runs items, freezes inputs, aggregates and settles; the **scorers** are the
+algorithm layer, including [custom scorers](#custom-scorers-tool) implemented as a
+[tool](./tools.md). See [the boundary section](#the-engine-and-the-scorers).
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -114,26 +112,21 @@ One row per dataset item per run.
 
 ### The engine and the scorers
 
-The two layers of the [engine & algorithms pattern](../advanced/engines-and-algorithms.md)
-map onto this module like so:
-
 | Layer | What it covers here | Where it is documented |
 | --- | --- | --- |
 | **The engine** — mechanics, not configurable, no opinions | Executing every item against the real agent, [freezing inputs](#frozen-inputs), [version pinning](#version-pinning), [pass semantics](#pass-semantics) and aggregation, [error handling](#errors-are-not-zeros), [sync/queued execution](#synchronous-and-queued-runs), [cancelation](#canceling-a-run), [scheduling](#scheduled-runs), [baseline deltas](#baseline-deltas), [webhooks](#lifecycle-webhooks), [metering](#eval-spend-is-separable-from-production-spend), [retention](#retention-and-erasure) | The sections named at left |
 | **The algorithms** — opinionated, swappable | The [scorers](#scorers): what "good output" means for an item | [Scorers](#scorers), [LLM judge](#llm-judge) |
 | **Bring your own** | A scorer whose grading logic is your code | [Custom scorers](#custom-scorers-tool) |
 
-The engine's guarantees — a run settles, an errored item is never a 0, frozen inputs keep
-runs comparable — hold identically for built-in and custom scorers.
+The engine's guarantees hold identically for built-in and custom scorers.
 
 ### Scorers
 
 `scorers` is a discriminated union on `type`. Every scorer produces
-`{ score: 0–1, passed: boolean }` — binary scorers emit 0 or 1 — so aggregation,
-thresholds, and baseline deltas never care which algorithm produced a score. Each built-in
-type may appear **at most once** per eval; `tool` scorers may appear several times, each
-under a distinct `name` (outcomes and aggregate scores key on the type, or on the `name`
-for `tool` scorers).
+`{ score: 0–1, passed: boolean }` (binary scorers emit 0 or 1), so aggregation, thresholds
+and baseline deltas are scorer-agnostic. Each built-in type may appear **at most once** per
+eval; `tool` scorers may appear several times, each under a distinct `name` (outcomes and
+aggregate scores key on the type, or on the `name` for `tool` scorers).
 
 | `type` | Config | Scores |
 | --- | --- | --- |
@@ -145,9 +138,9 @@ for `tool` scorers).
 | `llm_judge` | `prompt`, `pass_threshold`, `ai_provider_id` (optional), `model` (optional) | The judge's 0–1 score; see [LLM judge](#llm-judge) |
 | `tool` | `name`, `tool_id`, `action` (builtin/mcp tools), `preset_parameters` (optional), `pass_threshold` (optional) | Whatever your algorithm answers; see [Custom scorers](#custom-scorers-tool) |
 
-`exact_match`, `contains`, `embedding_similarity` and `llm_judge` read the final **text**; `output_schema`
-validates the **structured object** the platform already parsed. `json_logic` sees both,
-through these variables:
+`exact_match`, `contains`, `embedding_similarity` and `llm_judge` read the final **text**;
+`output_schema` validates the **structured object** the platform parsed. `json_logic` sees
+both, through these variables:
 
 | Var | Value |
 | --- | --- |
@@ -158,44 +151,35 @@ through these variables:
 | `item.metadata` | The item's metadata bag |
 
 An `output_schema` scorer is rejected with `400` unless the **agent under test** carries an
-`output_schema` — even when the scorer supplies its own `schema` — because the platform only
-produces structured output when the agent's schema constrains the model. The check runs at
-eval-create (best-effort) and again at run start (authoritative).
+`output_schema`, even when the scorer supplies its own `schema`: structured output is only
+produced when the agent's schema constrains the model. Checked at eval-create (best-effort)
+and at run start (authoritative).
 
 ### Embedding similarity
 
-An `embedding_similarity` scorer grades semantic closeness instead of literal overlap: it
-embeds the output text and the item's `expected_output` with the platform's configured
-embedding model — the `EMBEDDING_PROVIDER` / `EMBEDDING_MODEL` environment variables, the
-same stack [document ingestion](./documents.md) uses — and scores their **cosine
-similarity**, clamped to 0–1. It sits between the deterministic text scorers and the
-judge: cheaper and more repeatable than an LLM judge (an embedding call per item instead
-of a completion), while tolerating paraphrases `exact_match` would fail.
+An `embedding_similarity` scorer embeds the output text and the item's `expected_output`
+with the platform's configured embedding model (`EMBEDDING_PROVIDER` / `EMBEDDING_MODEL`,
+the stack [document ingestion](./documents.md) uses) and scores their **cosine
+similarity**, clamped to 0–1. It is cheaper and more repeatable than an LLM judge while
+tolerating paraphrases `exact_match` would fail.
 
-`pass_threshold` is **required** on the scorer, with no default, for the same reason as
-the judge's: cosine similarity is a continuous score, and nothing about it says where
-"close enough" is for your domain — 0.85 can be strict for one embedding model and
-permissive for another, so calibrate it against your own data.
+`pass_threshold` is **required** on the scorer, with no default: the score is continuous
+and its meaning differs per embedding model, so calibrate it against your own data.
 
-Two edges mirror the rest of the module:
+- An item with **no `expected_output`** scores 0 and cannot pass (as for `exact_match`).
+  The embedding backend is not called for such an item.
+- An **embedding backend failure** marks the *item* errored — never the run failed, never
+  a score of 0.
 
-- An item with **no `expected_output`** scores 0 and cannot pass — similarity is measured
-  against the reference answer, so without one there is nothing to be close to (the same
-  rule as `exact_match`). The embedding backend is not called for such an item.
-- An **embedding backend failure** marks the *item* errored — never the run failed, and
-  never a score of 0 (the same rule as a judge that cannot answer): a backend that could
-  not embed says nothing about the agent.
-
-Because the embedding model is platform-configured, scores from runs executed under
-different `EMBEDDING_MODEL` values are not comparable — re-run the baseline when the
-embedding model changes, just as you would when a judge model changes.
+Scores from runs executed under different `EMBEDDING_MODEL` values are not comparable;
+re-run the baseline when the embedding model changes.
 
 ### LLM judge
 
-An `llm_judge` scorer grades the output with a tool-less model completion, resolved through
-the ordinary [AI providers](./ai-providers.md) path (the scorer's `ai_provider_id` must
-belong to the eval's project; the project's default [model route](./model-routes.md) applies
-when the scorer pins none). The `prompt` carries three slots, filled in **one pass** (a slot
+An `llm_judge` scorer grades the output with a tool-less model completion through the
+ordinary [AI providers](./ai-providers.md) path: the scorer's `ai_provider_id` must belong
+to the eval's project, and the project's default [model route](./model-routes.md) applies
+when the scorer pins none. The `prompt` carries three slots, filled in **one pass** (a slot
 value containing `{{output}}` is never re-expanded; an unrecognised `{{…}}` is left as
 written):
 
@@ -208,19 +192,16 @@ written):
 The judge must answer with a JSON object carrying a numeric `score` between 0 and 1 and an
 optional `reasoning` string (stored on the result). Prose or a code fence around it is
 tolerated (the first `{…}` span is parsed). A non-JSON reply, non-numeric score, or score
-outside 0–1 marks the **item** errored — never the run failed, and never a score of 0.
+outside 0–1 marks the **item** errored — never the run failed, never a score of 0.
 
 `pass_threshold` is **required** on the scorer, with no default; the item passes when
-`score >= pass_threshold`. Judges drift with model updates — re-run the baseline when the
-judge model changes.
+`score >= pass_threshold`. Re-run the baseline when the judge model changes.
 
 ### Custom scorers (`tool`)
 
-A `tool` scorer is the module's
-[bring-your-own-algorithm seam](../advanced/engines-and-algorithms.md): the engine
-invokes a [tool](./tools.md) you own once per item, and your code — any language, any
-model, any vendor — answers with the same `{ score, passed }` shape every built-in scorer
-produces. Aggregation, thresholds, and baseline deltas apply to it unchanged.
+The [bring-your-own-algorithm seam](../advanced/engines-and-algorithms.md): the engine
+invokes a [tool](./tools.md) you own once per item; it answers with the same
+`{ score, passed }` shape as every built-in scorer.
 
 | Config field | Required | Meaning |
 | --- | --- | --- |
@@ -230,8 +211,8 @@ produces. Aggregation, thresholds, and baseline deltas apply to it unchanged.
 | `preset_parameters` | no | Fixed values merged into every call's input at the top level. The engine-injected keys below are reserved and rejected |
 | `pass_threshold` | no | Fallback verdict cutoff; see below |
 
-**Input** — the engine calls the tool with the item's context: the same variables a
-`json_logic` expression reads, so the two algorithm surfaces share one contract.
+**Input** — the engine calls the tool with the same variables a `json_logic` expression
+reads:
 
 ```jsonc
 {
@@ -255,21 +236,17 @@ produces. Aggregation, thresholds, and baseline deltas apply to it unchanged.
 }
 ```
 
-**Verdict resolution.** A tool-returned `passed` always wins. When the tool omits it, the
-scorer's `pass_threshold` applies (`score >= pass_threshold`, the same `>=` rule as
-`llm_judge`). When neither exists, the item is recorded as **errored** — a scorer that
-produced no verdict must not guess one. Return `passed` from the tool when the algorithm
-owns the cutoff; declare `pass_threshold` when you want to tune the cutoff in the eval
-config without redeploying the tool.
+**Verdict resolution.** A tool-returned `passed` wins; else the scorer's `pass_threshold`
+applies (`score >= pass_threshold`, the same `>=` rule as `llm_judge`); when neither exists
+the item is **errored**. Declare `pass_threshold` to tune the cutoff without redeploying
+the tool.
 
 **Error semantics** follow [errors are not zeros](#errors-are-not-zeros): a failed tool
 call, an unparseable answer, an out-of-range score, or a missing verdict errors the
-**item** — never the run, and never a score of 0. The item keeps the output it was graded
-on, and its `error` names the scorer.
+**item**, which keeps the output it was graded on; its `error` names the scorer.
 
-**Validation** happens at eval create and update, and again — authoritatively — at run
-start, so a tool deleted after the eval was created fails the run *request* with `400`
-rather than erroring every item.
+**Validation** runs at eval create and update, and authoritatively at run start: a tool
+deleted since fails the run request with `400`.
 
 Bind one like any other scorer:
 
@@ -280,9 +257,8 @@ soat create-eval --project-id "$PROJECT_ID" --name tone-suite \
   --pass-threshold 0.8
 ```
 
-An eval run invokes the tool once per item — real calls, like everything else in a run —
-so point scorer tools at infrastructure that tolerates the volume, and at a staging
-target if the algorithm itself has side effects.
+Calls are real, one per item: point scorer tools at infrastructure that tolerates the
+volume, and at a staging target if the algorithm has side effects.
 
 ### Frozen inputs
 
@@ -293,9 +269,7 @@ else.
 
 ### Curating items from production
 
-A hand-authored dataset drifts away from the traffic it is supposed to represent, which is
-the traffic a canary actually has to survive. `create-dataset-item-from-generation`
-promotes a real turn instead:
+`create-dataset-item-from-generation` promotes a real turn into a dataset item:
 
 ```bash
 soat create-dataset-item-from-generation \
@@ -303,29 +277,21 @@ soat create-dataset-item-from-generation \
   --generation-id "$GENERATION_ID"
 ```
 
-The generation's stored input messages become the item's `input`, and its own answer
-becomes `expected_output` — pass `--expected-output` to override it, or `null` to store the
-item with no reference answer. `source_generation_id` records where the item came from.
+The generation's stored input becomes the item's `input` and its answer becomes
+`expected_output` (`--expected-output` overrides it; `null` stores no reference answer).
+`source_generation_id` records the source. The item is a **copy**: it survives a purge of
+the source generation's content, and `source_generation_id` goes null when that generation
+is deleted.
 
-What the item stores is a **copy**, not a view. It keeps working after the source
-generation's content is purged, and if that generation is deleted `source_generation_id`
-simply goes null — consistent with the rest of the module, where a purge can never quietly
-stop a suite from being runnable.
+- **Only a completed generation.** A paused (`requires_action`) or failed turn is refused
+  with `409 GENERATION_NOT_COMPLETED`.
+- **Only while its content is available.** An agent or project running with
+  `trace_content_mode: none` never stored the input, and a purged or expired generation no
+  longer has it. Both answer `409 GENERATION_CONTENT_UNAVAILABLE`, as do generations
+  produced before input recording existed. See [content retention](#retention-and-erasure).
 
-Two rules bound what can be promoted:
-
-- **Only a completed generation.** A paused (`requires_action`) or failed turn has no
-  finished answer, so it is refused with `409 GENERATION_NOT_COMPLETED` rather than turned
-  into a fixture that scores whatever the agent does next.
-- **Only while its content is available.** Replay needs the input that
-  [content retention](#retention-and-erasure) exists to withhold, so an agent or project
-  running with `trace_content_mode: none` never stored it, and a purged or expired
-  generation no longer has it. Both answer `409 GENERATION_CONTENT_UNAVAILABLE`, as do
-  generations produced before input recording existed.
-
-The call copies content out of a generation, so it requires `generations:GetGeneration` in
-addition to `evaluations:CreateDataset`. The generation must also belong to the same
-project as the dataset.
+The call requires `generations:GetGeneration` in addition to `evaluations:CreateDataset`.
+The generation must belong to the same project as the dataset.
 
 ### Version pinning
 
@@ -347,40 +313,38 @@ naming this eval as its `promotion_gate` promotes only once a run finished `comp
    scorer passes when its score is at least the scorer's own `pass_threshold`.
 2. **Per item** — `EvalResult.passed` is the AND over its per-scorer flags.
 3. **Per run** — `EvalRun.passed` is `null` when the eval has no `pass_threshold`;
-   otherwise it is true when the **pass rate** — passed items over non-errored items — is
-   at least the threshold.
+   otherwise it is true when the **pass rate** (passed items over non-errored items) is at
+   least the threshold.
 
-The verdict gates on the pass rate, never on a pooled mean. `aggregate_scores` still
-reports per-scorer means. A run that scored nothing at all does not pass.
+The verdict gates on the pass rate, never on a pooled mean; `aggregate_scores` still
+reports per-scorer means. A run that scored nothing does not pass.
 
 ### Errors are not zeros
 
-An item whose generation did not complete — e.g. an agent with client-side tools pausing
-for tool outputs (`requires_action`) — is recorded as an **error**, excluded from
-`aggregate_scores`, and counted in `errored_count`; it is never scored 0. The same rule
-covers a scorer that could not reach a verdict (an `llm_judge` call failing or answering
-something unparseable). When the **generation** produced nothing, `output` is `null`; when
-a **scorer** failed over a good generation, the result keeps that generation's `output`
+An item whose generation did not complete (e.g. paused in `requires_action` for
+client-side tool outputs), or whose scorer could not reach a verdict (an `llm_judge` call
+failing or unparseable), is recorded as an **error**: excluded from `aggregate_scores`,
+counted in `errored_count`, never scored 0. When the **generation** produced nothing,
+`output` is `null`; when a **scorer** failed over a good generation, `output` is kept
 alongside the `error`. The generation stays linked either way.
 
 ### Synchronous and queued runs
 
-`wait` selects how a run executes (see [sync vs async](../advanced/sync-and-async.md) for
-the platform-wide contract). Both modes share one execution and finalize path.
+`wait` selects how a run executes (see [sync vs async](../advanced/sync-and-async.md)).
+Both modes share one execution and finalize path.
 
 | `wait` | Behavior |
 | --- | --- |
 | `true` | Executes items sequentially in-process and returns the run **terminal**, with its scores. Capped at **25 items** — a larger dataset is rejected with `400`. |
 | `false` (default) | Enqueues one task per item and returns immediately with `status: "queued"`. No item cap. |
 
-An **empty** dataset is rejected in both modes: a run that measured nothing must not
-produce a verdict.
+An **empty** dataset is rejected in both modes.
 
-For a queued run, a worker claims tasks in batches; the worker that drains the run's
-**last** task settles the run and fires [`eval_run.completed`](#lifecycle-webhooks). Poll
-[`GET /evals/{eval_id}/runs/{eval_run_id}`](/docs/api/evaluations/get-eval-run) or subscribe to the webhook. Delivery is
-at-least-once but safe: a result row is unique per `(run, item)`, and settling is guarded
-by an atomic claim, so the completion event fires exactly once.
+For a queued run, a worker claims tasks in batches; the one that drains the run's
+**last** task settles it and fires [`eval_run.completed`](#lifecycle-webhooks). Poll
+[`GET /evals/{eval_id}/runs/{eval_run_id}`](/docs/api/evaluations/get-eval-run) or subscribe to the webhook. Task delivery is
+at-least-once, but a result row is unique per `(run, item)` and settling is an atomic
+claim, so the completion event fires exactly once.
 
 A background reaper settles non-terminal runs that have gone quiet past a grace period
 (30 minutes by default): a run whose items all have results is finalized; a run with items
@@ -389,11 +353,9 @@ that still has queued tasks is left alone.
 
 ### Run metadata
 
-`start-eval-run` accepts a `metadata` bag — caller-owned key/value annotations, stored on the run and returned verbatim by every read of it, the list included. It answers "what was this measurement of": the commit or release candidate being scored, the CI job that asked for it, the experiment it belongs to.
+`start-eval-run` accepts a `metadata` bag: caller-owned key/value annotations, stored on the run and returned verbatim by every read of it, the list included. Use it to record what the run measured — the commit or release candidate, the CI job, the experiment. `trigger_id` records a *scheduled* origin; `metadata` records the caller's own.
 
-Every other field on the start request is platform-owned (`wait`, `agent_version`, `baseline_run_id`), so before this bag a CI caller running one eval per commit had nowhere to record which commit — the run was a score with no subject. `trigger_id` records a *scheduled* origin, which is provenance the platform knows; `metadata` records the caller's own, which it cannot.
-
-Nothing in the scoring path reads it, and no key is reserved: `status`, `agent_version`, `aggregate_scores`, `passed` and the counts are all fields of their own and cannot be written from here. A non-object `metadata` is rejected with `400 VALIDATION_FAILED` and no run is created.
+Nothing in the scoring path reads it, and no key is reserved: `status`, `agent_version`, `aggregate_scores`, `passed` and the counts are fields of their own and cannot be written from here. A non-object `metadata` is rejected with `400 VALIDATION_FAILED` and no run is created.
 
 ```bash
 soat start-eval-run \
@@ -405,7 +367,7 @@ Filtering runs by a metadata key is not supported — fetch and filter client-si
 
 ### Run tool context
 
-An eval scores the agent you are about to ship. An agent whose tools authorize through [`tool_context`](../advanced/tool-context.md) cannot be scored that way with an empty bag: a tool declaring `Authorization: Bearer {{context:...}}` fails every item with `MISSING_TOOL_CONTEXT_KEY`, and — worse — a tool that *tolerates* a missing key evaluates a different configuration than production, so the score is quietly about a different account, tenant or scope. A green eval on the wrong scope is more dangerous than a red one.
+An agent whose tools authorize through [`tool_context`](../advanced/tool-context.md) needs the bag to be scored: a tool declaring `Authorization: Bearer {{context:...}}` fails every item with `MISSING_TOOL_CONTEXT_KEY`, and one that tolerates a missing key scores a configuration other than production's.
 
 `start-eval-run` accepts a `tool_context` bag, forwarded to every item's generation:
 
@@ -416,11 +378,11 @@ soat start-eval-run \
   --tool-context '{"ocaToken":"eyJhbGciOiJIUzI1NiJ9.abc","tenant":"acme"}'
 ```
 
-Three properties distinguish it from `metadata`:
+Unlike `metadata`:
 
-- **It lives on the run, not the request.** A queued run — the default, and the only shape a [scheduled](#scheduled-runs) one has — is driven by a worker with no request behind it, so the bag is stored on the run row and re-read for every item.
-- **It is write-only.** No read of the run returns it. A run is a report other people read, and a credential in it is not theirs to see; `metadata` is readable for the opposite reason — a label is not a credential.
-- **It does not outlive the work.** The bag is cleared once the run reaches a terminal state, so a finished run — which is kept as a historical measurement — holds no credential.
+- **It lives on the run, not the request.** A queued run (the default, and the only shape a [scheduled](#scheduled-runs) one has) is driven by a worker with no request behind it, so the bag is stored on the run row and re-read for every item.
+- **It is write-only.** No read of the run returns it.
+- **It does not outlive the work.** The bag is cleared once the run reaches a terminal state.
 
 The usual `tool_context` rules apply: each key is forwarded as one `X-Soat-Context-<key>` header and resolves any `{{context:}}` token in a bound tool's headers or [`preset_parameters`](../advanced/tool-context.md#pinning-a-parameter-to-the-runs-value), a tool's [`context_keys`](./tools.md#scoping-which-context-keys-reach-a-tool) narrows what reaches it, and a key that could not become a header name is rejected with `400 INVALID_TOOL_CONTEXT_KEY` before any run is created. An eval generation has no session, so the reserved identity keys (`session_id`, `actor_id`, `actor_external_id`) are dropped rather than forwarded.
 
@@ -430,9 +392,9 @@ The usual `tool_context` rules apply: each key is forwarded as one `X-Soat-Conte
 outstanding tasks and settles it `canceled`; a run that has already finished is rejected
 with `400`. Results already written are **kept**, and `completed_count` /
 `errored_count` report what ran — an item a worker had already claimed runs to completion
-and recounts the run after it settles. `aggregate_scores` is deliberately left `null` (a
-partial roll-up would read as a whole-dataset verdict), and no lifecycle event fires. The
-run's [`tool_context`](#run-tool-context) is cleared, as on any terminal transition.
+and recounts the run after it settles. `aggregate_scores` is left `null` (a partial
+roll-up would read as a whole-dataset verdict), and no lifecycle event fires. The run's
+[`tool_context`](#run-tool-context) is cleared, as on any terminal transition.
 
 ### Scheduled runs
 
@@ -441,15 +403,11 @@ starter works (manual, webhook, and cron `schedule`), and the firing always star
 **queued** run; the firing's `result.result_id` is the `evrun_…` to poll. The run records
 its origin in `trigger_id` and keeps it if the trigger is later deleted.
 
-The trigger's `input` may carry `agent_version` and `baseline_run_id`; both are validated
-at fire time, so a nightly schedule naming a version that no longer exists fails the
-**firing** (with the reason on the firing record) instead of creating a run that could
-never execute. Creating an eval-target trigger requires `evaluations:RunEval` on top of
-`triggers:CreateTrigger`.
-
-A trigger carries no [`tool_context`](#run-tool-context) of its own, so a scheduled run of
-an eval whose agent needs one starts with an empty bag. Until a trigger can attach one,
-such a suite has to be started through the API.
+The trigger's `input` may carry `agent_version` and `baseline_run_id`, validated at fire
+time: a stale version fails the **firing** (reason on the firing record) instead of
+creating a run. Creating an eval-target trigger requires `evaluations:RunEval` on top of
+`triggers:CreateTrigger`. A trigger carries no [`tool_context`](#run-tool-context); an
+eval whose agent needs one has to be started through the API.
 
 ```bash
 soat create-trigger \
@@ -472,13 +430,11 @@ Datasets, their items, and evals are declarable in a [Formation](./formations.md
 | `eval` | `name`, `agent_id`, `dataset_id`, `scorers`, `pass_threshold` |
 
 Items are their own resource, so an item curated through the API is never collateral of a
-formation apply. `dataset_id` is immutable on a `dataset_item` — a template that moves an
-item to another dataset is rejected. Running the suite gives the agent under test
-generation history, so deleting the formation later fails with
-`409 FORMATION_DELETE_FAILED` naming that agent — see
-[formation teardown](./formations.md#resource-lifecycle); force-delete the agent
-([`DELETE /api/v1/agents/{agent_id}?force=true`](/docs/api/agents/delete-agent)) or declare it with
-`deletion_policy: retain`.
+formation apply. `dataset_id` is immutable on a `dataset_item`. Running the suite gives
+the agent under test generation history, so deleting the formation fails with
+`409 FORMATION_DELETE_FAILED` naming that agent ([formation teardown](./formations.md#resource-lifecycle)):
+force-delete the agent ([`DELETE /api/v1/agents/{agent_id}?force=true`](/docs/api/agents/delete-agent))
+or declare it with `deletion_policy: retain`.
 
 ### Baseline deltas
 
@@ -494,10 +450,9 @@ Pass `baseline_run_id` (a terminal run of the **same** eval; a run of another ev
 | `pass_rate_delta` | Run-level pass-rate delta over the intersection; `null` when the two runs share no comparable item |
 | `scorers` | Per scorer type, `mean_delta` and `pass_rate_delta` |
 
-Positive deltas mean this run scored **higher** than the baseline. Every number is
-computed over the **item intersection**, recomputing both sides, so dataset drift is
-reported through the counts instead of being attributed to the agent. A scorer that only
-one of the two runs ran is omitted.
+Positive deltas mean this run scored **higher**. Every number is computed over the
+**item intersection**, recomputing both sides, so dataset drift shows up in the counts. A
+scorer that only one run ran is omitted.
 
 ### Lifecycle webhooks
 
@@ -508,9 +463,8 @@ Two [webhook](./webhooks.md) events carry a run's outcome:
 | `eval_run.completed` | A run reached a terminal status with its items scored |
 | `eval_run.failed` | A run could not be executed to completion |
 
-Both carry `{ eval_id, eval_run_id, passed, aggregate_scores }` inline — this event is the
-promotion gate, so the verdict must not require a second call. Exactly one event fires per
-terminal run.
+Both carry `{ eval_id, eval_run_id, passed, aggregate_scores }` inline, so a promotion
+gate needs no second call. Exactly one event fires per terminal run.
 
 ### Eval spend is separable from production spend
 
@@ -521,10 +475,10 @@ with [`GET /api/v1/usage/events?source=eval`](/docs/api/usage/list-usage-events)
 [`GET /api/v1/usage/aggregate?group_by=source`](/docs/api/usage/get-usage-aggregate). [Quotas](./quotas.md) and usage thresholds still
 apply to eval runs.
 
-An `embedding_similarity` scorer's own embeddings are metered too, under
-`source: "embedding"` rather than `"eval_judge"` — they go through the
-deployment's [embedding](./embeddings.md#metering) stack, not a project provider,
-so they carry that stack's provider and model.
+An `embedding_similarity` scorer's embeddings are metered under `source: "embedding"`
+rather than `"eval_judge"`: they go through the deployment's
+[embedding](./embeddings.md#metering) stack, not a project provider, so they carry that
+stack's provider and model.
 
 :::warning[Eval runs have real side effects]
 
@@ -536,14 +490,12 @@ eval'd agent's tools at a staging target.
 
 ### Retention and erasure
 
-`EvalResult.output` is a copy of a generation's content, so purging that generation's
-content — directly, or through its trace — also clears the copy. Scores, `passed`, and the
-frozen `input` / `expected_output` survive. Datasets are operator-owned test fixtures: a
-content purge never deletes or mutates a dataset item — an erasure covering curated
-content requires deleting the item explicitly. That applies to items curated with
-[`create-dataset-item-from-generation`](#curating-items-from-production) too: promoting a
-turn copies its content into a fixture that outlives the source, which is what keeps a
-suite runnable, and also what makes deleting the item the only way to erase it.
+`EvalResult.output` is a copy of a generation's content, so purging that content
+(directly, or through its trace) clears the copy. Scores, `passed`, and the frozen
+`input` / `expected_output` survive. A content purge never deletes or mutates a dataset
+item, including one curated with
+[`create-dataset-item-from-generation`](#curating-items-from-production); deleting the
+item is the only way to erase it.
 
 Because only `output` is cleared, the corpus is not bounded by a project's retention
 window: every item and every frozen result counts toward the project's stored

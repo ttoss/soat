@@ -14,19 +14,14 @@ import TabItem from '@theme/TabItem';
 
 # Deploy a Multi-Agent App with Agent Formation
 
-This tutorial builds the same **multi-agent orchestration** pipeline from [Multi-Agent Sonnet with Nested Agent Calls](/docs/tutorials/multi-agent-orchestration) — an orchestrator agent that delegates sonnet stanzas to four specialized sub-agents — but deploys the entire system with a **single [Agent Formation](/docs/modules/formations#key-concepts) template** instead of many ordered API calls.
-
-You will write a template describing all 14 resources, validate and preview it, deploy it in one call, run the orchestrator, update the formation, and delete it.
+Deploy the pipeline from [Multi-Agent Sonnet with Nested Agent Calls](/docs/tutorials/multi-agent-orchestration) (an orchestrator delegating stanzas to four sub-agents) with a single [Agent Formation](/docs/modules/formations#key-concepts) template: write a template for all 14 resources, validate and preview it, deploy, run the orchestrator, update, and delete.
 
 ## Prerequisites
 
-- SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide to bring the stack up with Docker Compose.
-- New to SOAT? Read [Key Concepts](/docs/getting-started/concepts) to understand projects, agents, and sessions before diving in.
-- Want to see the same pipeline built step by step? Read [Multi-Agent Sonnet with Nested Agent Calls](/docs/tutorials/multi-agent-orchestration) first.
-- CLI installed and configured, or SDK set up. See [CLI](/docs/cli) or [SDK](/docs/sdk).
-- For production hardening (secrets, env vars), see [Configuration](/docs/self-hosting/configuration).
-- [Ollama](https://ollama.com) running locally with `qwen2.5:0.5b` pulled (`ollama pull qwen2.5:0.5b`).
-- Server is at `http://localhost:5047`.
+- SOAT running locally at `http://localhost:5047` ([Quick Start](/docs/getting-started)); [Key Concepts](/docs/getting-started/concepts); [Configuration](/docs/self-hosting/configuration).
+- [Multi-Agent Sonnet with Nested Agent Calls](/docs/tutorials/multi-agent-orchestration) for the same pipeline built step by step.
+- [CLI](/docs/cli) or [SDK](/docs/sdk).
+- [Ollama](https://ollama.com) with `qwen2.5:0.5b` pulled (`ollama pull qwen2.5:0.5b`).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -62,7 +57,7 @@ export SOAT_URL=http://localhost:5047
 
 ## Step 1 — Log in as admin
 
-Admin is the built-in superuser. See [Users](/docs/modules/users#examples) for full authentication details.
+See [Users](/docs/modules/users#examples).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -141,9 +136,7 @@ echo "PROJECT_ID: $PROJECT_ID"
 
 ## Step 3 — Write the formation template
 
-A [formation template](/docs/modules/formations#key-concepts) is a JSON object with a `resources` map and an optional `outputs` map. This template defines all 14 resources of the sonnet pipeline — an Ollama provider, a shared poem document, read/write tools, four stanza agents, five orchestrator tools, and the orchestrator. SOAT resolves `{ "ref": "logicalId" }` expressions in dependency order, so `tool_bindings[].tool_id`, `ai_provider_id`, and nested `preset_parameters.agentId` are wired automatically.
-
-This tutorial uses a local Ollama provider so it can run without external credentials. To connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
+A [formation template](/docs/modules/formations#key-concepts) is a JSON object with a `resources` map and an optional `outputs` map. This one declares 14 resources: an Ollama provider, a shared poem document, read/write tools, four stanza agents, five orchestrator tools, and the orchestrator. `{ "ref": "logicalId" }` expressions resolve in dependency order, wiring `tool_bindings[].tool_id`, `ai_provider_id`, and nested `preset_parameters.agentId`. For xAI, OpenAI, Anthropic, or Amazon Bedrock instead of Ollama, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -823,7 +816,7 @@ TEMPLATE=$(cat formation.json)
 
 ## Step 4 — Validate the template
 
-Validate the template structure before doing anything else. See [Formations](/docs/modules/formations#key-concepts) for validation rules.
+Validation rules: [Formations](/docs/modules/formations#key-concepts).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -865,7 +858,7 @@ curl -s -X POST "$SOAT_URL/api/v1/formations/validate" \
 
 ## Step 5 — Preview the deployment plan
 
-Preview the changes SOAT will make before deploying. The plan lists all resources that will be created. See [Formations](/docs/modules/formations#key-concepts).
+The plan lists every resource the deploy will create ([Formations](/docs/modules/formations#key-concepts)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -930,7 +923,7 @@ curl -s -X POST "$SOAT_URL/api/v1/formations/plan" \
 
 ## Step 6 — Deploy the formation
 
-Create the formation. SOAT provisions all 14 resources in dependency order; the `outputs` section surfaces the orchestrator and poem document IDs. See [Formations](/docs/modules/formations#key-concepts).
+All 14 resources are provisioned in dependency order; `outputs` surfaces the orchestrator and poem document IDs ([Formations](/docs/modules/formations#key-concepts)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -991,7 +984,7 @@ echo "POEM_DOC_ID:     $POEM_DOC_ID"
 </TabItem>
 </Tabs>
 
-The formation object includes a `resources` map keyed by logical ID, each with its physical resource ID. You can inspect the full resource manifest:
+The formation's `resources` map, keyed by logical ID, holds each physical resource ID:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -1031,7 +1024,7 @@ curl -s "$SOAT_URL/api/v1/formations/$FORMATION_ID" \
 
 ## Step 7 — Run the orchestrator
 
-Trigger the orchestrator agent to run the full sonnet pipeline. The orchestrator calls each stanza agent in order via its fixed tools. See [Agents — Generation](/docs/modules/agents#generation).
+The orchestrator calls each stanza agent in order via its fixed tools ([Agents — Generation](/docs/modules/agents#generation)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -1095,7 +1088,7 @@ TRACE_ID=$(printf '%s\n' "$RESULT" | jq -r '.trace_id')
 
 ## Step 8 — Read the poem document
 
-The stanza agents accumulated the sonnet in the shared poem document. Read it directly from the [Documents](/docs/modules/documents#examples) store.
+The stanza agents accumulated the sonnet in the shared [document](/docs/modules/documents#examples).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -1153,7 +1146,7 @@ curl -s "$SOAT_URL/api/v1/documents/$POEM_DOC_ID" \
 
 ## Step 9 — Inspect the trace tree
 
-The `/tree` endpoint returns the full execution tree rooted at the orchestrator trace. Each node is a [trace](/docs/modules/traces#examples) record, and its `children` array contains the traces spawned by sub-agent tool calls.
+`/tree` returns the execution tree rooted at the orchestrator trace; each node is a [trace](/docs/modules/traces#examples) whose `children` are the traces spawned by sub-agent tool calls.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -1172,7 +1165,7 @@ Expected output — the orchestrator at the root with 4 stanza workers as childr
 }
 ```
 
-List all traces for the project to see every agent that ran:
+Every agent that ran, as a flat list:
 
 ```bash
 soat list-traces --project-id "$PROJECT_ID" | jq '.data[] | {id, agent_id, step_count, parent_trace_id}'
@@ -1206,7 +1199,7 @@ curl -s "$SOAT_URL/api/v1/traces/$TRACE_ID/tree" \
 
 ## Step 10 — Update the formation
 
-Supply a modified template; SOAT diffs it against the current state and applies only the required changes. Here we update the orchestrator's instructions. See [Formations](/docs/modules/formations#key-concepts).
+A modified template is diffed against current state and only the required changes apply; here, the orchestrator's instructions ([Formations](/docs/modules/formations#key-concepts)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -1255,7 +1248,7 @@ curl -s -X PUT "$SOAT_URL/api/v1/formations/$FORMATION_ID" \
 
 ## Step 11 — View operation events
 
-Each formation deployment and update appends events to the formation's event log. Use this to audit exactly which resources were created, updated, or deleted and in what order. See [Formations](/docs/modules/formations#key-concepts).
+Each deployment and update appends events recording which resources were created, updated, or deleted, in order ([Formations](/docs/modules/formations#key-concepts)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -1298,7 +1291,7 @@ curl -s "$SOAT_URL/api/v1/formations/$FORMATION_ID/events" \
 
 ## Step 12 — Delete the formation
 
-Deleting a formation removes managed resources in reverse dependency order — but it will not delete resources the platform guards on their own. This stack has four agents, and running the sonnet above gave each of them generation history, so teardown stops there rather than destroying that history implicitly. The delete fails with `409 FORMATION_DELETE_FAILED`, naming every blocking resource in `error.meta.failures`, and leaves the formation in `delete_failed`. See [Formations — Resource Lifecycle](/docs/modules/formations#resource-lifecycle).
+Deletion removes managed resources in reverse dependency order but never deletes resources the platform guards. The four agents now have generation history, so the delete fails with `409 FORMATION_DELETE_FAILED`, names every blocker in `error.meta.failures`, and leaves the formation in `delete_failed` ([Formations — Resource Lifecycle](/docs/modules/formations#resource-lifecycle)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -1344,11 +1337,9 @@ curl -s "$SOAT_URL/api/v1/formations/$FORMATION_ID" \
 </TabItem>
 </Tabs>
 
-To finish the teardown, resolve the blockers and delete the formation again. For an
-agent that means deciding explicitly to discard its history —
-`soat delete-agent --agent-id "$AGENT_ID" --force true` — which is why teardown does
-not do it for you. Declare an agent with `deletion_policy: retain` if the stack should
-leave it standing instead.
+Resolve the blockers and delete again: for an agent, discard its history explicitly with
+`soat delete-agent --agent-id "$AGENT_ID" --force true`. Declare `deletion_policy: retain`
+if the stack should leave the agent standing.
 
 ---
 

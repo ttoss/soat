@@ -11,7 +11,7 @@ File upload, download, metadata management, and deletion over a pluggable storag
 
 ## Overview
 
-Files are associated with a project and persisted through the configured storage backend — local filesystem, S3, or GCS. Every file record exposes a public `id`; the internal database primary key is never returned. File metadata is tracked in PostgreSQL, while the physical location and backend selection are system-managed and not exposed through the API (see [Configuration](#configuration)).
+Files belong to a project and are persisted through the configured backend (local filesystem, S3, or GCS). Records expose a public `id`, never the internal key; metadata lives in PostgreSQL, while physical location and backend are system-managed (see [Configuration](#configuration)).
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -36,20 +36,20 @@ Files are associated with a project and persisted through the configured storage
 | `created_at`   | string                   | ISO 8601 creation timestamp                                                                                         |
 | `updated_at`   | string                   | ISO 8601 last-updated timestamp                                                                                     |
 
-`path` is normalized at write time and unique per project; it is the file's identity and the target of path-based policy SRNs. To **move** a file, change its `prefix`; to **rename** it, change its `filename` — either rebuilds `path`. Writing to a `prefix` + `filename` that resolves to an existing `path` in the project returns `409 NAME_CONFLICT`.
+`path` is normalized at write time, unique per project, and the target of path-based SRNs. Change `prefix` to **move**, `filename` to **rename**; either rebuilds `path`. A collision returns `409 NAME_CONFLICT`.
 
 ## Key Concepts
 
 ### Storage Backends
 
-The physical location of a file's bytes is handled by a **storage provider**, selected at runtime with `FILES_STORAGE_PROVIDER` (default `local`). The backend is transparent to the API: the same endpoints, records, and download flow work identically regardless of where the bytes live. Each file records which backend stored it, so reads and deletes always route back to the correct provider even if the active backend is later changed.
+Bytes are handled by a **storage provider** selected with `FILES_STORAGE_PROVIDER` (default `local`); the API is identical across backends. Each file records its backend, so reads and deletes route correctly after the active backend changes.
 
 | Provider | `FILES_STORAGE_PROVIDER` | Where bytes live |
 | -------- | ------------------------ | ---------------- |
 | Local filesystem | `local` (default) | A project-scoped directory tree under `FILES_STORAGE_DIR` |
 | S3 / S3-compatible | `s3` | Objects in the bucket named by `FILES_S3_BUCKET` |
 
-Both backends use the same logical object layout, `{projectPublicId}/{category}/{fileId}{ext}`:
+Both use the layout `{projectPublicId}/{category}/{fileId}{ext}`:
 
 | Segment           | Description                                                                                        |
 | ----------------- | -------------------------------------------------------------------------------------------------- |
@@ -58,9 +58,9 @@ Both backends use the same logical object layout, `{projectPublicId}/{category}/
 | `fileId`          | The file's public ID                                                                               |
 | `ext`             | File extension from the original filename                                                          |
 
-Every writer builds this key the same way, so a new storage backend inherits the layout rather than defining its own. `ext` describes the stored bytes: a [document](/docs/modules/documents)'s text object is always `.txt`, whatever the document is named.
+Every writer builds this key the same way. `ext` describes the stored bytes: a [document](/docs/modules/documents)'s text object is always `.txt`.
 
-If a file has no `path`, the category defaults to `files/`. For the local backend this becomes a path under `FILES_STORAGE_DIR`; for S3 it becomes the object key (optionally namespaced by `FILES_S3_KEY_PREFIX`):
+Without a `path`, the category is `files/`. Local: a path under `FILES_STORAGE_DIR`; S3: the object key, optionally under `FILES_S3_KEY_PREFIX`:
 
 ```
 # local:   {FILES_STORAGE_DIR}/{projectPublicId}/{category}/{fileId}{ext}
@@ -71,11 +71,11 @@ If a file has no `path`, the category defaults to `files/`. For the local backen
 s3://my-bucket/proj_1a123a/traces/trace_abc123.json
 ```
 
-Traces persist their raw step payloads as files in the `traces/` category; see it end to end in [Debug Session, Generation, and Trace History - Step 6 (Download raw trace steps)](/docs/tutorials/debug-session-generation-trace-history#step-6---download-raw-trace-steps-using-file_id).
+Traces persist raw steps in `traces/`; see [Debug Session, Generation, and Trace History - Step 6 (Download raw trace steps)](/docs/tutorials/debug-session-generation-trace-history#step-6---download-raw-trace-steps-using-file_id).
 
 ### Path-Based SRNs
 
-Policies can target files by their logical `path` rather than their `id`. When a file has a `path` set, the server evaluates **both** the id-based SRN and the path-based SRN:
+Policies can target files by `path`; with a `path` set, **both** the id-based and path-based SRN are evaluated:
 
 | SRN form                              | Matches                                   |
 | ------------------------------------- | ----------------------------------------- |
@@ -84,26 +84,26 @@ Policies can target files by their logical `path` rather than their `id`. When a
 | `srn:proj_ABC:file:/exports/*`       | All files under `/exports/`               |
 | `srn:proj_ABC:file:*`                | All files in the project (id wildcard)    |
 
-The list endpoint applies policy filters at the SQL level — the database returns only rows the caller is permitted to see. See [IAM](./iam.md) for full SRN syntax and policy authoring guidance, or walk through scoping a read-only policy to files in [Permissions in Practice - Step 7 (Verify permissions with file operations)](/docs/tutorials/permissions#step-7--verify-permissions).
+List queries apply policy filters in SQL. SRN syntax: [IAM](./iam.md); worked example: [Permissions in Practice - Step 7 (Verify permissions with file operations)](/docs/tutorials/permissions#step-7--verify-permissions).
 
 ### Upload Tokens (decoupled uploads)
 
-Upload tokens provide a two-step upload flow — the local-storage equivalent of an S3 presigned URL — usable from any client (SDK, CLI, curl, or an MCP agent):
+A two-step flow, the local-storage equivalent of an S3 presigned URL, usable from any client:
 
-1. **Request a token** — [`POST /api/v1/files/presigned-url`](/docs/api/files/create-presigned-url) returns a single-use `upload_token`, an `upload_url`, and an `expires_at` (15-minute lifetime). This step is authenticated and requires `files:UploadFile`. By default `upload_url` is **relative** (e.g. `/api/v1/files/upload/upt_xxx`); when the server is configured with `SOAT_BASE_URL`, it is returned as a **fully-qualified absolute URL** so clients and MCP agents can POST to it without knowing the server base URL in advance — see [Configuration](#configuration).
-2. **Upload the content** — [`POST /api/v1/files/upload/{token}`](/docs/api/files/upload-file-with-token) writes the file and returns the standard file record. This endpoint requires **no bearer credential** — the token is the credential — and accepts either `multipart/form-data` (field `file`) or JSON with a base64 `content` field.
+1. **Request a token** — [`POST /api/v1/files/presigned-url`](/docs/api/files/create-presigned-url) returns a single-use `upload_token`, `upload_url`, and `expires_at` (15 minutes). Authenticated; requires `files:UploadFile`. `upload_url` is **relative** (e.g. `/api/v1/files/upload/upt_xxx`) unless `SOAT_BASE_URL` is set, in which case it is **absolute** (see [Configuration](#configuration)).
+2. **Upload the content** — [`POST /api/v1/files/upload/{token}`](/docs/api/files/upload-file-with-token) writes the file and returns the record. **No bearer credential**; the token is the credential. Accepts `multipart/form-data` (field `file`) or JSON with base64 `content`.
 
-Because the two steps are decoupled, the party that authorizes the upload (step 1) need not be the party that transfers the bytes (step 2) — the token can be handed to a browser, a worker, or a CLI to complete the upload directly over HTTP.
+The authorizing party (step 1) need not transfer the bytes (step 2): hand the token to a browser, worker, or CLI.
 
-The token is invalidated after a single successful upload. Subsequent uploads return `409`; expired tokens return `410`; unknown tokens return `404`.
+A token is invalidated after one successful upload: reuse `409`, expired `410`, unknown `404`.
 
 ### Downloading from a tool
 
-[`GET /api/v1/files/{file_id}/download`](/docs/api/files/download-file) streams the raw bytes and is a REST/SDK/CLI operation only — raw bytes have no JSON form, so it is not offered as an MCP or `builtin` tool action. Use `download-file-base64`, which returns the same content as a base64 string in a normal JSON response. Large files are subject to the client's tool-call payload limit, so an agent should fetch the download URL out-of-band with whatever HTTP capability its runtime provides.
+[`GET /api/v1/files/{file_id}/download`](/docs/api/files/download-file) streams raw bytes and is REST/SDK/CLI only (no JSON form, so not an MCP or `builtin` action). Tools use `download-file-base64`, which returns the content base64-encoded in JSON, subject to the client's tool-call payload limit; an agent should fetch large files out-of-band.
 
 #### Large files via MCP
 
-MCP tool-call payloads larger than ~100 KB are truncated, so `upload-file-base64` cannot carry a large file. Use the token flow instead: step 1 (`create-presigned-url`, exposed as an MCP tool) is always small; perform step 2 **out-of-band** — via a shell (`curl`), a `fetch`/HTTP tool, or a direct SDK call — using `multipart/form-data` streamed from disk, not the base64 `content` field:
+MCP payloads above ~100 KB are truncated, so `upload-file-base64` cannot carry a large file. Use the token flow: `create-presigned-url` (an MCP tool) is small; do step 2 **out-of-band** (`curl`, a `fetch`/HTTP tool, or the SDK) with `multipart/form-data` streamed from disk:
 
 ```bash
 # Step 1 returned upload_url = /api/v1/files/upload/upt_xxx
@@ -124,9 +124,9 @@ curl -F "file=@/path/to/large-report.pdf" "$BASE_URL/api/v1/files/upload/upt_xxx
 | `FILE_UPLOAD_MAX_BYTES` | No    | Ceiling on a multipart upload, in bytes. Defaults to `26214400` (25 MB). A larger body is refused with `UPLOAD_TOO_LARGE` (`413`) while it is still streaming, so nothing is buffered or stored. |
 | `SOAT_BASE_URL`      | No       | Public base URL of the server (e.g. `https://api.example.com`). When set, the presigned-URL flow returns an absolute `upload_url`; otherwise the URL is relative. A trailing slash is trimmed. |
 
-AWS credentials for the `s3` backend are resolved through the standard AWS SDK credential chain (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`, a shared profile, or an instance/task role).
+AWS credentials for `s3` resolve through the standard AWS SDK chain (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`, shared profile, or instance/task role).
 
-When running the `local` backend via Docker, mount a volume at `FILES_STORAGE_DIR` to persist files across container restarts:
+With the `local` backend in Docker, mount a volume at `FILES_STORAGE_DIR`:
 
 ```yaml
 services:
@@ -141,7 +141,7 @@ volumes:
   files-data:
 ```
 
-To use S3 instead, set the provider and bucket (no volume needed):
+For S3, set provider and bucket (no volume):
 
 ```yaml
 services:

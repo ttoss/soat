@@ -11,9 +11,9 @@ Guardrails classify every tool call an agent makes into an action class — exec
 
 ## Overview
 
-A guardrail is a **standalone, versioned resource** — separate from [IAM policies](./policies.md). Where an IAM policy answers _"may this caller invoke this endpoint?"_ at request time, a guardrail answers _"may this agent take **this specific action, with these arguments, in this context**, on its own — or must a human sign off?"_. It maps tool calls to **action classes** (A/B/C/D) and gates class-B autonomy behind guard expressions evaluated at the tool-execution boundary — after the model produces the call and before anything touches the outside world. There is no LLM in the evaluation path.
+A guardrail is a standalone, versioned resource, separate from [IAM policies](./policies.md): a policy decides whether a caller may invoke an endpoint; a guardrail decides whether an agent may take this action, with these arguments, in this context, without a human signing off. It maps tool calls to **action classes** (A/B/C/D) and gates class-B autonomy behind guard expressions evaluated after the model produces the call and before it executes.
 
-Guardrails are the platform's **single tool-call gating mechanism**: class-C actions route into the [approvals queue](./approvals.md), guards read spend from [usage metering](./usage.md), and expressions use the shared [JSON Logic](https://jsonlogic.com) evaluator that [orchestrations](./orchestrations.md) use. A guardrail is a reusable template: tools, agents, and projects each carry a `guardrail_ids` list, so it [attaches](#attachment) at any of those three scopes, several can apply to one call, and the strictest decision wins — every added guardrail can only tighten the result, never loosen it.
+Class-C actions route into the [approvals queue](./approvals.md), guards read spend from [usage metering](./usage.md), and expressions use the [JSON Logic](https://jsonlogic.com) evaluator that [orchestrations](./orchestrations.md) use. Tools, agents and projects each carry a `guardrail_ids` list, so a guardrail [attaches](#attachment) at any of those scopes; the strictest decision wins.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -52,7 +52,7 @@ The `document`:
 
 ### GuardrailVersion
 
-An immutable archive of a guardrail's configuration at one version. Shares its shape — and the engine that reads and writes it — with [`AgentVersion`](./agents.md#versioning-and-staged-rollout).
+An immutable archive of a guardrail's configuration at one version; same shape and engine as [`AgentVersion`](./agents.md#versioning-and-staged-rollout).
 
 | Field          | Type    | Description                                                                 |
 | -------------- | ------- | --------------------------------------------------------------------------- |
@@ -64,21 +64,21 @@ An immutable archive of a guardrail's configuration at one version. Shares its s
 | `created_by`   | string  | Public ID of the user whose action produced this version; null when there was none |
 | `created_at`   | string  | ISO 8601 timestamp                                                          |
 
-Only the policy `document` is versioned. Name, description and the context binding are metadata — versioning them would make two version numbers denote the same policy, and the version number is what an [evaluation record](#evaluation-audit-record) cites.
+Only the `document` is versioned; name, description and the context binding are metadata. One version number denotes one policy, which is what an [evaluation record](#evaluation-audit-record) cites.
 
 ## Key Concepts
 
 ### Attachment
 
-A guardrail attaches through a `guardrail_ids` array on one of three resources — not the way IAM policies attach to users and API keys. Every field is a list, so each scope can carry several composable guardrails:
+A guardrail attaches through the `guardrail_ids` list on one of three resources; each scope can carry several:
 
-- **On a project** — governs **every** tool call by **every** agent in the project: the baseline scope, a floor narrower scopes can only raise.
-- **On an agent** — governs **every** tool call the agent makes, across all its bindings.
-- **On a tool** — governs that tool **wherever it is used**, by any agent; binding a dangerous tool to a new agent can never silently escape classification.
+- **Project** — every tool call by every agent in the project.
+- **Agent** — every tool call the agent makes.
+- **Tool** — that tool wherever it is used, by any agent.
 
-**Attach is cheap, detach is gated.** Adding an id can only tighten the outcome, so it needs only the carrying resource's update permission (`tools:UpdateTool`, `agents:UpdateAgent`, `projects:UpdateProject`). Removing an id — at **any** scope — can loosen posture, so it additionally requires `guardrails:DetachGuardrail`. The floor can't be silently lowered from any scope.
+Adding an id can only tighten the outcome, so it needs the carrying resource's update permission (`tools:UpdateTool`, `agents:UpdateAgent`, `projects:UpdateProject`). Removing an id can loosen posture, so it additionally requires `guardrails:DetachGuardrail`.
 
-Every guardrail that applies to a call **evaluates, and the strictest decision wins**, ordered `blocked` > `tripwire` > `route_to_approval` > `execute`; where several classify the same call as `B`, **all their guards must pass**. Composition is order-independent — `A` is the identity, so a guardrail returning `"A"` defers to the others. One `guardrail_evaluation` record is written per guardrail evaluated.
+Every applying guardrail evaluates and the strictest decision wins, ordered `blocked` > `tripwire` > `route_to_approval` > `execute`; where several classify the same call as `B`, all their guards must pass. Composition is order-independent; `A` is the identity. One `guardrail_evaluation` record is written per guardrail evaluated.
 
 ### Action Classes
 
@@ -89,19 +89,17 @@ Every guardrail that applies to a call **evaluates, and the strictest decision w
 | **C** | Human sign-off         | Files an [`ApprovalItem`](./approvals.md) (`origin: tool_call`); executes only on approval    |
 | **D** | Forbidden              | The call is blocked at dispatch; the model receives a blocked tool result and continues its turn |
 
-A `class` expression that returns anything other than `"A"` / `"B"` / `"C"` / `"D"` resolves to `default_class`, which itself defaults to **C**: a misconfigured or absent classification never grants autonomy.
+A `class` expression returning anything other than `"A"` / `"B"` / `"C"` / `"D"` resolves to `default_class` (default **C**). Mapping autonomy grades onto classes: [Layers are concerns, not autonomy levels](/docs/agent-system-layers#layers-are-concerns-not-autonomy-levels).
 
-The classes are also the platform's per-call **delegation dial** — how autonomy maturity grades map onto them is covered in [Layers are concerns, not autonomy levels](/docs/agent-system-layers#layers-are-concerns-not-autonomy-levels).
+Class C uses the [approvals queue](./approvals.md)'s return-pending mechanics: the tool result is `{ "status": "pending_approval", "approval_id": …, "expires_at": … }` and the turn completes. Approval starts a continuation generation with the frozen (or edited) arguments; rejection executes nothing; expiry ends the chain unless the agent opts in ([Agents → Approval Expiry](./agents.md#approval-expiry)).
 
-Class-C interception uses the return-pending mechanics the [approvals queue](./approvals.md) defines: the call returns `{ "status": "pending_approval", "approval_id": …, "expires_at": … }` as the tool result, and the turn completes normally. **Approval** then starts a continuation generation that executes the frozen (or edited) arguments; rejection executes nothing; and an expiry ends the chain without a continuation unless the agent opts in — see [Agents → Approval Expiry](./agents.md#approval-expiry).
-
-A guardrail may carry an optional **`expires_in`** (seconds) in its document — the sign-off window for a class-C approval it files (default 24h). When several guardrails apply, the governing (strictest-matching) guardrail's `expires_in` wins; it applies wherever a guardrail files an approval — agent tool-dispatch and the [orchestration tool node](#orchestration-tool-nodes) alike.
+The document may carry `expires_in` (seconds): the sign-off window for a class-C approval it files (default 24h). When several guardrails apply, the strictest guardrail's `expires_in` wins, in agent tool dispatch and the [orchestration tool node](#orchestration-tool-nodes) alike.
 
 ### Classification
 
-`class` is either a literal (`{ "class": "C" }` always requires sign-off) or a **single JSON Logic expression** returning the class, evaluated over the same three namespaces as guards (`args.*` / `context.*` / `runtime.*`). There is no rule list and no matching order: one expression, one result. Anything the expression doesn't account for falls through to `default_class`.
+`class` is a literal (`{ "class": "C" }` always requires sign-off) or a single JSON Logic expression returning the class, evaluated over the same namespaces as guards (`args.*` / `context.*` / `runtime.*`). There is no rule list; anything other than a valid class falls through to `default_class`.
 
-A guardrail reasons about **this** call, not about which tool it is: to gate several tools differently, create a guardrail per tool and [attach](#attachment) each to its tool rather than branching on `runtime.tool.name`. This example classifies a budget-update call **B** below a threshold and **C** at or above it:
+To gate several tools differently, create a guardrail per tool and [attach](#attachment) each to its tool rather than branching on `runtime.tool.name`. This example classifies a budget update **B** below a threshold and **C** at or above it:
 
 ```json
 {
@@ -113,7 +111,7 @@ A guardrail reasons about **this** call, not about which tool it is: to gate sev
 
 ### Guards and Guardrail Context
 
-Both `class` and `guard` are **single JSON Logic expressions** — the same evaluator [orchestration](./orchestrations.md) mappings use — with no `eval` and no LLM in the path. JSON Logic composes on its own (`if`/`and`/`or`/`!`), so there are no rule or guard arrays. Every `var` resolves against exactly three namespaces:
+`class` and `guard` are single JSON Logic expressions (the evaluator [orchestration](./orchestrations.md) mappings use); compose with `if`/`and`/`or`/`!`, not arrays. Every `var` resolves against three namespaces:
 
 | Namespace   | Source                                                                                                         |
 | ----------- | -------------------------------------------------------------------------------------------------------------- |
@@ -121,11 +119,11 @@ Both `class` and `guard` are **single JSON Logic expressions** — the same eval
 | `context.*` | The **effective guardrail context** — application-owned, see below                                             |
 | `runtime.*`    | Platform-computed values (fixed catalog below); reserved — never writable by the caller or the context tool     |
 
-**Guardrail context is application-owned.** The caller passes a free-form `guardrail_context` object on the generation request or orchestration-run start; the platform never interprets it. For long-lived work (an orchestration run can park at an approval node for days), a run-start snapshot goes stale, so a guardrail may also name a `context_tool_id` — an ordinary [tool](./tools.md) the platform calls at **evaluation time**, immediately before classifying each gated call. `context_mode` controls the combination: `merge` (default) shallow-merges top-level keys over the caller-supplied object, the tool's value winning on conflict; `replace` substitutes it entirely.
+The caller passes a free-form `guardrail_context` object on the generation request or orchestration-run start; the platform never interprets it. A guardrail may also name a `context_tool_id`, an ordinary [tool](./tools.md) the platform calls immediately before classifying each gated call, so long-parked runs read fresh context. `context_mode` combines the two: `merge` (default) shallow-merges top-level keys over the caller-supplied object, the tool's value winning; `replace` substitutes it entirely.
 
-The context tool executes **under the calling agent's credentials** — same project scoping, same secret resolution — so a guardrail can never read data the agent could not reach. The platform's dispatch path invokes it; the model never sees it and its result never enters the model context. If the agent cannot access the tool, the standard fail-closed rule applies. The call is bounded by a per-call timeout and a short per-`(project, guardrail)` TTL cache.
+The context tool runs under the calling agent's credentials (same project scoping and secret resolution); its result never enters the model context. An inaccessible tool fails closed. The call has a per-call timeout and a short per-`(project, guardrail)` TTL cache.
 
-The `runtime.*` catalog (windows are baked into the key name — a fixed suffix set `_1h` / `_24h` / `_7d` / `_30d`, each rolling and ending at evaluation time):
+The `runtime.*` catalog (window suffixes `_1h` / `_24h` / `_7d` / `_30d` are rolling and end at evaluation time):
 
 | Key                                                        | Type    | Source                                                  |
 | ---------------------------------------------------------- | ------- | ------------------------------------------------------- |
@@ -137,31 +135,27 @@ The `runtime.*` catalog (windows are baked into the key name — a fixed suffix 
 | `runtime.usage.tokens_24h` / `runtime.usage.tokens_30d`          | integer | [Usage metering](./usage.md) (per project)              |
 | `runtime.usage.orchestration_run_tokens` / `runtime.usage.orchestration_run_cost_usd`        | number  | [Usage metering](./usage.md) (**per run**, cumulative)  |
 
-`runtime.activity.actions_1h` / `actions_24h` count this project's `action_executed` entries on the [activity feed](./activity.md#the-feed-as-a-guardrail-signal) over the rolling window, read live. An empty feed reads as a real `0`; only a failing query falls back to the fail-closed rule.
+`runtime.activity.actions_1h` / `actions_24h` count this project's `action_executed` entries on the [activity feed](./activity.md#the-feed-as-a-guardrail-signal) over the window, read live. An empty feed reads `0`; only a failing query fails closed.
 
-`runtime.usage.orchestration_run_tokens` / `orchestration_run_cost_usd` are the odd pair out: they sum only the usage events of the **current [orchestration run](./orchestrations.md)**, read live — see [Per-run spend ceilings](#per-run-spend-ceilings).
+`runtime.usage.orchestration_run_tokens` / `orchestration_run_cost_usd` sum only the current [orchestration run](./orchestrations.md)'s usage events, read live; see [Per-run spend ceilings](#per-run-spend-ceilings).
 
-**A cost key resolves to `null` when its spend cannot be priced.** `SUM(cost_usd)` ignores unpriced events, so a window that metered LLM usage and priced **none** of it would otherwise report a figure that understates real spend — and every ceiling reading it would pass. Both `runtime.usage.cost_usd_*` and `runtime.usage.orchestration_run_cost_usd` report `null` for such a window instead, which the fail-closed rule below turns into a failed guard. It is the same verdict a `cost_usd` [quota](./quotas.md) answers with `QUOTA_UNENFORCEABLE`, and it clears the moment the models involved carry [price book](./usage.md) rows.
+**A cost key resolves to `null` when its spend cannot be priced.** `SUM(cost_usd)` ignores unpriced events, so a window that metered LLM usage and priced none of it would pass every ceiling. `runtime.usage.cost_usd_*` and `runtime.usage.orchestration_run_cost_usd` report `null` instead, which fails the guard: the same verdict a `cost_usd` [quota](./quotas.md) answers with `QUOTA_UNENFORCEABLE`, cleared once the models carry [price book](./usage.md) rows. Not triggered by a window with no LLM usage (reads `0`), unpriced **embeddings** (their rate is deployment configuration, not a tenant price row), or a partly priced window (any priced LLM event clears it; unpriced events count as zero). The partly priced gap is reported as a [`quota_unpriced` exception](./quotas.md#unpriced-usage) on the project's `cost_usd` [quota](./quotas.md) naming the rows to price.
 
-Three cases deliberately do **not** trigger it, so a ceiling never refuses a project that cannot clear it: a window holding no LLM usage at all (a project that has not generated yet reads a real `0`), unpriced **embeddings** (their rate is deployment configuration, with no price row a tenant can create), and a **partly** priced window (any priced LLM event clears the verdict, and the unpriced ones still count as zero).
+**Fail-closed at both ends.** At write time, a `var` outside the three namespaces, or a `runtime.*` key outside the catalog, is rejected with `400`. At evaluation time, a `context.*` key absent from the effective context, a context-tool failure or timeout, or an unresolvable `runtime.*` provider fails closed: in `class` the result is `default_class`; in `guard` it counts as a failed guard and tripwire semantics apply.
 
-That last one is a deliberate limit, not an oversight: refusing on a ratio would block the very generation that would price the window. It is reported instead — the same verdict and the same per-model reading of the window feed a [`quota_unpriced` exception](./quotas.md#unpriced-usage) on the project's `cost_usd` [quota](./quotas.md), so the pricing gap a ceiling is silently reading past has a triage item naming the rows to price.
+**Variable casing.** `guardrail_context` (and a dry-run's `args`) keys pass through verbatim, with no snake↔camel conversion; snake_case is recommended (it matches the `runtime.*` catalog): `{ "var": "context.max_daily_budget" }` reads a supplied `max_daily_budget`.
 
-**Fail-closed at both ends.** At write time, a document referencing a `var` outside the three namespaces — or a `runtime.*` key outside the catalog — is rejected with `400`. At evaluation time, a `context.*` key absent from the effective context, a context-tool failure or timeout, or an unresolvable `runtime.*` provider all fail closed: in `class`, the result resolves to `default_class`; in `guard`, it counts as a **failed guard** and tripwire semantics apply. Forgetting to supply context tightens the posture, never loosens it.
-
-**Variable casing.** `guardrail_context` (and a dry-run's `args`) is an application-owned bag — keys pass through **verbatim**, with no snake↔camel conversion. Author the document path and the context key in the same case; snake_case is recommended (it matches the `runtime.*` catalog), so `{ "var": "context.max_daily_budget" }` reads a supplied `max_daily_budget`.
-
-**Missing keys and comparisons.** JSON Logic coerces an absent `var` to a falsy, zero-ish value, so `{ "<": [{ "var": "args.amount" }, 500] }` is `true` when `args.amount` is absent. When a missing argument must **not** reach the permissive branch, test presence explicitly: `{ "and": [{ "var": "args.amount" }, { "<": [{ "var": "args.amount" }, 500] }] }`.
+**Missing keys.** JSON Logic coerces an absent `var` to a falsy, zero-ish value, so `{ "<": [{ "var": "args.amount" }, 500] }` is `true` when `args.amount` is absent. Test presence explicitly when that must not reach the permissive branch: `{ "and": [{ "var": "args.amount" }, { "<": [{ "var": "args.amount" }, 500] }] }`.
 
 ### Tripwires and `escalate`
 
-A failing class-B guard is a **tripwire**: by default it aborts the action and files an exception — a runaway loop hits a hard, non-LLM stop. `escalate: true` opts into the softer behavior: a failing guard routes the call to the [approvals queue](./approvals.md) instead.
+A failing class-B guard is a **tripwire**: by default it aborts the action and files an exception. `escalate: true` routes the call to the [approvals queue](./approvals.md) instead.
 
-`escalate` is **per-guardrail**: a failing guard yields that guardrail's own decision — `tripwire` without `escalate`, `route_to_approval` with it — and the strictest decision across all applying guardrails still wins (`tripwire` outranks `route_to_approval` in the [decision ordering](#attachment)), so opting one guardrail into escalation never softens another's hard stop.
+`escalate` is per-guardrail: a failing guard yields `tripwire` without it and `route_to_approval` with it; `tripwire` outranks `route_to_approval` in the [decision ordering](#attachment).
 
 ### Per-run spend ceilings
 
-A runaway [orchestration run](./orchestrations.md) is not caught by a project-windowed budget guard: the window barely moves while one run burns through its budget. `runtime.usage.orchestration_run_tokens` and `runtime.usage.orchestration_run_cost_usd` expose the **current run's** cumulative metered spend, live at evaluation time, so a ceiling trips mid-run on the tool call that crosses it.
+`runtime.usage.orchestration_run_tokens` and `runtime.usage.orchestration_run_cost_usd` expose the current [orchestration run](./orchestrations.md)'s cumulative metered spend, live, so a ceiling trips mid-run on the call that crosses it, where a project-windowed guard would barely move.
 
 Give the ceiling itself as `guardrail_context` (or a context tool) so one guardrail serves every run:
 
@@ -179,65 +173,43 @@ soat create-guardrail \
   }'
 ```
 
-Attach it to the tools the run dispatches: once the run crosses the ceiling the guard fails and class-B tripwire semantics abort the call **before** the tool runs. Swap `orchestration_run_tokens` for `orchestration_run_cost_usd` to cap dollars.
+Attach it to the tools the run dispatches; the guard fails before the tool runs. Swap `orchestration_run_tokens` for `orchestration_run_cost_usd` to cap dollars.
 
-Two properties worth knowing:
-
-- **Fail-closed outside a run.** Both keys are unresolvable when no run is in scope (they do **not** read as `0`), so a per-run ceiling attached at project scope trips on plain agent calls too — attach at tool scope unless that is intended.
-- **Metering granularity is the resolution.** The counters advance as each provider call is metered (see [usage coverage](./usage.md#coverage)), so a ceiling trips on the first gated call *after* it is crossed — a single over-budget call can still complete.
+- **Fail-closed outside a run.** Both keys are unresolvable when no run is in scope (they do not read as `0`), so a per-run ceiling attached at project scope trips on plain agent calls too; attach at tool scope unless that is intended.
+- **Metering granularity is the resolution.** Counters advance as each provider call is metered ([usage coverage](./usage.md#coverage)), so a ceiling trips on the first gated call after it is crossed; a single over-budget call can still complete.
 
 ### Client Tools
 
-Guardrails classify calls to [client tools](./tools.md) like any other, but because actuation happens on the client, the gate sits at the `requires_action` **handoff**: class **A** and a passing **B** hand the call to the client as usual; class **C** files the approval item first, and the handoff happens only on approval; class **D** blocks the handoff; a tripwire aborts before anything reaches the client. The guardrail governs whether the call is released to the client at all — the platform cannot observe what the client does after.
+[Client tools](./tools.md) are gated at the `requires_action` handoff: class **A** and a passing **B** hand the call to the client; class **C** files the approval item first and hands off only on approval; class **D** blocks the handoff; a tripwire aborts before anything reaches the client. The platform cannot observe what the client does after.
 
 ### Orchestration tool nodes
 
-An [orchestration](./orchestrations.md) `tool` node is gated at dispatch just like an agent tool call, but with no agent in scope it composes only the **project + tool** scopes (`agentId`/`generationId` are `null` on the evaluation identity and audit record). The strictest decision is enacted in orchestration terms:
+An [orchestration](./orchestrations.md) `tool` node is gated at dispatch with no agent in scope, so it composes only the **project + tool** scopes (`agentId`/`generationId` are `null` on the evaluation identity and audit record). The strictest decision is enacted as:
 
 - **A / passing B** — the tool executes with the (cleaned) node inputs.
-- **C** — the run **parks** on the node with a `requires_action` of `type: "approval"`, filing an [`ApprovalItem`](./approvals.md) (`origin: node`). On approval the node re-dispatches with the frozen (or edited) arguments — the guardrail is **not** re-evaluated; on rejection or expiry the tool never runs and only a matching decision edge (`condition: "rejected"` / `"expired"`) follows.
-- **D / tripwire** — a **routable `blocked` outcome**, not a run failure: the node records a `{ status, reason }` artifact and branches by label, so an edge conditioned on `blocked` (or `tripwire`) routes to a fallback path. An unlabeled success edge does **not** auto-follow a blocked node.
+- **C** — the run parks on the node with a `requires_action` of `type: "approval"`, filing an [`ApprovalItem`](./approvals.md) (`origin: node`). On approval the node re-dispatches with the frozen (or edited) arguments without re-evaluating the guardrail; on rejection or expiry the tool never runs and only a matching decision edge (`condition: "rejected"` / `"expired"`) follows.
+- **D / tripwire** — a routable `blocked` outcome, not a run failure: the node records a `{ status, reason }` artifact and branches by label, so an edge conditioned on `blocked` (or `tripwire`) routes to a fallback path. An unlabeled success edge does not follow a blocked node.
 
 ### Direct calls and pipeline steps
 
-A tool-scoped guardrail governs its tool *wherever it is used*, so the gate also
-sits on the dispatches that involve no agent and no orchestration graph:
-[`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool), every step of
-a `pipeline` tool, a [trigger](./triggers.md) whose target is a tool, an
-[ingestion rule](./ingestion-rules.md) converter, an
-[eval](./evaluations.md) tool scorer, and a `tool_id` embedded in a message.
-Like an orchestration node these compose **project + tool** scope only.
-
-None of them can await a decision, because there is no turn to return a pending
-result into and no run to park:
+A tool-scoped guardrail also gates the dispatches with no agent and no orchestration graph: [`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool), every step of a `pipeline` tool, a [trigger](./triggers.md) whose target is a tool, an [ingestion rule](./ingestion-rules.md) converter, an [eval](./evaluations.md) tool scorer, and a `tool_id` embedded in a message. These compose **project + tool** scope only, and none can await a decision:
 
 - **A / passing B** — the call runs with the cleaned arguments.
-- **C / D / tripwire** — the call is refused with
-  `422 TOOL_DISPATCH_FAILED`, whose `meta` carries the `tool_id` and the
-  `outcome` that settled it. Inside a pipeline the step's own
-  `PIPELINE_STEP_FAILED` names which step was settled.
+- **C / D / tripwire** — refused with `422 TOOL_DISPATCH_FAILED`, whose `meta` carries the `tool_id` and the `outcome` that settled it. Inside a pipeline the step's own `PIPELINE_STEP_FAILED` names the settled step.
 
-A gated pipeline is adjudicated **before its first step runs**, so a refusal
-never leaves half a pipeline applied. Reach an approval-gated tool through an
-agent or an orchestration instead: both can park on the sign-off and resume from
-it.
+A gated pipeline is adjudicated before its first step runs, so a refusal never leaves half a pipeline applied. Reach an approval-gated tool through an agent or an orchestration, which can park on the sign-off.
 
-The one dispatch that is deliberately not gated is a guardrail's own
-[context fetch](#guards-and-guardrail-context) — gating it would run the
-guardrails that decide a call in order to decide that call. An
-[approved](./approvals.md) call is not re-gated either: the guardrail that filed
-the approval is what classified it, and a human then signed off on those exact
-arguments.
+Not gated: a guardrail's own [context fetch](#guards-and-guardrail-context), and an [approved](./approvals.md) call (the filing guardrail already classified it and a human signed off on those exact arguments).
 
 ### Running a tighter posture in one project
 
-There is no separate override resource. A project runs a stricter posture by [attaching](#attachment) a tighter guardrail at its **project** scope — e.g. `{ "class": "C" }` forces sign-off on every call its agents make — or at one tool's scope to tighten just that tool. Stricter-wins guarantees the attachment can only tighten, and other projects are untouched.
+There is no override resource: [attach](#attachment) a tighter guardrail at the project scope (`{ "class": "C" }` forces sign-off on every call its agents make) or at one tool's scope. Stricter-wins means it can only tighten; other projects are untouched.
 
 ### Versioning
 
-A guardrail's policy is versioned by the same append-only archive that backs [agent versions](./agents.md#versioning-and-staged-rollout). Version 1 is written on create, and every write that **changes** the `document` increments `version` and archives it as a `GuardrailVersion`. Approval items, activity entries, and exceptions record the version that governed them.
+The policy uses the append-only archive that backs [agent versions](./agents.md#versioning-and-staged-rollout). Version 1 is written on create; every write that changes the `document` increments `version` and archives a `GuardrailVersion`. Approval items, activity entries and exceptions record the governing version.
 
-Three writes archive nothing — a version exists to name a distinct policy: a metadata-only edit (`name`, `description`, `context_tool_id`, `context_mode`); re-writing the document the guardrail already holds (compared structurally); restoring the version that is already live. `version_label` on a create or update annotates the version that write archives; it is not part of the config, so labelling a change is never itself a change.
+Three writes archive nothing: a metadata-only edit (`name`, `description`, `context_tool_id`, `context_mode`); re-writing the document already held (compared structurally); restoring the version already live. `version_label` on a create or update annotates the version that write archives and is not itself a change.
 
 | Operation | Endpoint |
 | --- | --- |
@@ -245,25 +217,21 @@ Three writes archive nothing — a version exists to name a distinct policy: a m
 | Fetch one version | [`GET /api/v1/guardrails/{guardrail_id}/versions/{version}`](/docs/api/guardrails/get-guardrail-version) |
 | Roll back to a version | [`POST /api/v1/guardrails/{guardrail_id}/versions/{version}/restore`](/docs/api/guardrails/restore-guardrail-version) |
 
-**Restore appends, it does not rewind.** Restoring v1 of a guardrail at v2 writes v1's document back as **v3**, so records citing v2 still resolve. The restore runs through the ordinary update path (the archived document is re-validated), takes an optional `label`, and rolls back only the policy — `name`, `description` and the context binding are untouched.
+**Restore appends.** Restoring v1 of a guardrail at v2 writes v1's document as **v3**, so records citing v2 still resolve. It runs through the ordinary update path (re-validated), takes an optional `label`, and rolls back only the policy; `name`, `description` and the context binding are untouched.
 
-Attachments reference the guardrail's **id**, not a version: a document edit takes effect immediately everywhere the id is attached. [Dry-run](#dry-run-evaluation) an edited document before writing it when the guardrail is attached at scale.
-
-Guardrails have no release/canary layer, unlike agents: splitting traffic across two policies would mean deliberately under-enforcing one of them.
+Attachments reference the id, not a version, so a document edit takes effect everywhere at once; [dry-run](#dry-run-evaluation) it first. There is no release/canary layer: splitting traffic across two policies would under-enforce one.
 
 ### Deletion
 
-A guardrail cannot be deleted while it is attached: [`DELETE /api/v1/guardrails/{guardrail_id}`](/docs/api/guardrails/delete-guardrail) returns `409` listing the tools, agents, and projects whose `guardrail_ids` still reference it. Each reference must be detached first — a `guardrails:DetachGuardrail` operation (see [Attachment](#attachment)) — so deletion can never do what detach permissions forbid. As defense-in-depth, a dangling reference encountered at evaluation time fails closed: the unresolvable guardrail evaluates as class **C**.
+A guardrail cannot be deleted while attached: [`DELETE /api/v1/guardrails/{guardrail_id}`](/docs/api/guardrails/delete-guardrail) returns `409` listing the tools, agents and projects whose `guardrail_ids` reference it. Each must be detached first (`guardrails:DetachGuardrail`, see [Attachment](#attachment)). A dangling reference met at evaluation time fails closed as class **C**.
 
 ### Dry-run Evaluation
 
-[`POST /api/v1/guardrails/{guardrail_id}/evaluate`](/docs/api/guardrails/evaluate-guardrail) runs the full evaluation pipeline — the `class` expression, the guard, the context tool per `context_mode`, live `runtime.*` resolution — against caller-supplied `args` and `guardrail_context`, and returns the exact [evaluation record](#evaluation-audit-record) a real call would produce. Nothing executes, no approval item is filed, no activity entry is written. Pass an optional `tool_id` to resolve `runtime.tool.*`; an unresolvable `runtime.*` key behaves exactly as at runtime (fail-closed).
-
-This is the adoption path: preview a document's decisions against production-shaped calls **before** attaching it — or before editing a widely-attached one.
+[`POST /api/v1/guardrails/{guardrail_id}/evaluate`](/docs/api/guardrails/evaluate-guardrail) runs the full evaluation pipeline (`class`, guard, context tool per `context_mode`, live `runtime.*`) against caller-supplied `args` and `guardrail_context`, and returns the [evaluation record](#evaluation-audit-record) a real call would produce. Nothing executes or is filed. Pass an optional `tool_id` to resolve `runtime.tool.*`; an unresolvable `runtime.*` key fails closed as at runtime. Use it before attaching a document, or before editing a widely attached one.
 
 ### Evaluation Audit Record
 
-Every evaluation — execute, route-to-approval, block, or tripwire — writes a `guardrail_evaluation` activity entry (and stamps the generation/run record):
+Every evaluation writes a `guardrail_evaluation` activity entry and stamps the generation/run record:
 
 ```json
 {
@@ -292,22 +260,22 @@ Every evaluation — execute, route-to-approval, block, or tripwire — writes a
 - `tool` / `action` name the call being classified; both are `null` for a call with no tool in scope.
 - `decision` is one of `execute` \| `route_to_approval` \| `blocked` \| `tripwire`.
 - `class` is the resolved class; when the `class` expression returned an invalid value it is the applied `default_class`.
-- `scope` records where this guardrail was attached: `project` \| `agent` \| `tool`. One record is written per applying guardrail; the enacted `decision` is the strictest across them.
+- `scope` records where this guardrail was attached: `project` \| `agent` \| `tool`. One record per applying guardrail; the enacted `decision` is the strictest across them.
 - `context_source` records where the effective context came from: `caller` \| `tool` \| `merged` \| `none`.
 - `guard_result` is the guard expression's boolean outcome; `null` when the document has no guard or the call did not classify as `B`.
-- `context_snapshot` is a flat map of **only the vars the evaluation actually referenced**, keyed by fully-qualified path and frozen at evaluation-time value — enough to answer "why did this pass?" later, without recording unreferenced (possibly sensitive) context.
+- `context_snapshot` is a flat map of only the vars the evaluation referenced, keyed by fully-qualified path and frozen at evaluation-time value; unreferenced (possibly sensitive) context is never recorded.
 
-Evaluations that **changed the call's outcome** — `route_to_approval`, `blocked`, or `tripwire`, but **not** `execute` — are additionally mirrored into the [audit log](./audit-log.md#system-originated-entries) as a platform-originated entry (`action: guardrails:Evaluate`, `detail.kind: guardrail_evaluation`); a `route_to_approval` entry also carries the filed `approval_id`.
+Evaluations that changed the call's outcome (`route_to_approval`, `blocked`, `tripwire`; not `execute`) are also mirrored into the [audit log](./audit-log.md#system-originated-entries) as a platform-originated entry (`action: guardrails:Evaluate`, `detail.kind: guardrail_evaluation`); a `route_to_approval` entry also carries the filed `approval_id`.
 
 ### Formation resource
 
-Guardrails can be declared as a `guardrail` [formation](./formations.md) resource (`GuardrailResourceProperties`): `name`, `description`, `class`, `default_class`, `guard`, `escalate`, `context_tool_id`, `context_mode` — the same fields as [Create a guardrail](#create-a-guardrail), with the REST API's single `document` object flattened to top-level properties. `context_tool_id` may be a `{ "ref": "ResourceName" }` to a `tool` resource in the same template, and a tool or agent resource can attach the guardrail via `guardrail_ids: [{ "ref": "ResourceName" }]`, so a full gate deploys from one template. `class`/`default_class`/`guard`/`escalate` are recombined into a single `document` write on every create/update, so an update that omits one of them drops it (matching [`PATCH /api/v1/guardrails/{guardrail_id}`](/docs/api/guardrails/update-guardrail)'s full-replace semantics for `document`).
+A `guardrail` [formation](./formations.md) resource (`GuardrailResourceProperties`) takes `name`, `description`, `class`, `default_class`, `guard`, `escalate`, `context_tool_id`, `context_mode`: the fields of [Create a guardrail](#create-a-guardrail) with `document` flattened to top-level properties. `context_tool_id` may be a `{ "ref": "ResourceName" }` to a `tool` resource in the same template, and a tool or agent resource can attach it via `guardrail_ids: [{ "ref": "ResourceName" }]`. `class`/`default_class`/`guard`/`escalate` are recombined into one `document` write on every create/update, so an update omitting one drops it (matching [`PATCH /api/v1/guardrails/{guardrail_id}`](/docs/api/guardrails/update-guardrail)'s full-replace semantics for `document`).
 
 ## Examples
 
 ### Create a guardrail
 
-This guardrail governs the budget-update tool it is attached to: class **B** below 500, **C** at or above, executing autonomously only while 24h spend stays under 1000.
+Class **B** below 500, **C** at or above; executes autonomously only while 24h spend stays under 1000.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -367,7 +335,7 @@ curl -X POST https://api.example.com/api/v1/guardrails \
 
 ### Dry-run a guardrail before attaching
 
-Preview the decision the guardrail above would make for a production-shaped call — nothing executes, nothing is filed:
+Preview the decision the guardrail above would make; nothing executes or is filed:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -402,7 +370,7 @@ curl -X POST https://api.example.com/api/v1/guardrails/guard_V1StGXR8Z5jdHi6B/ev
 </TabItem>
 </Tabs>
 
-The response is the would-be [evaluation record](#evaluation-audit-record) — here class **B** with a passing guard, `runtime.usage.cost_usd_24h` resolved live:
+The response is the would-be [evaluation record](#evaluation-audit-record): class **B**, passing guard, `runtime.usage.cost_usd_24h` resolved live:
 
 ```json
 {
@@ -419,7 +387,7 @@ The response is the would-be [evaluation record](#evaluation-audit-record) — h
 
 ### Attach a guardrail
 
-A tool-scoped guardrail attaches to its **tool**, governing it for every agent that uses it. Attach to an **agent** instead (`soat update-agent --agent-id agent_01 --guardrail-ids …`) for a blanket posture over the agent's whole tool surface, or to a **project** (`soat update-project --project-id proj_01 --guardrail-ids …`) for a baseline over every agent in it — see [Attachment](#attachment).
+Attach to a tool (below), to an agent (`soat update-agent --agent-id agent_01 --guardrail-ids …`) or to a project (`soat update-project --project-id proj_01 --guardrail-ids …`); see [Attachment](#attachment).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -456,7 +424,7 @@ curl -X PATCH https://api.example.com/api/v1/tools/tool_01 \
 
 ### Pass guardrail context on a generation
 
-The application supplies the `context.*` values guards evaluate over. If the guardrail also names a `context_tool_id`, the tool's output is combined over this object per `context_mode` at evaluation time.
+The application supplies the `context.*` values; a `context_tool_id`'s output is combined over this object per `context_mode`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>

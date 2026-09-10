@@ -4,7 +4,7 @@ description: "Complete reference for SOAT's six expression and templating patter
 
 # Expressions & Templating
 
-Every place SOAT lets you map, transform, or interpolate values uses one of six pattern families. Each family has a distinct syntax because each resolves at a **different time** — that is what lets them compose in a single string without escaping rules. This page is the complete reference.
+Every place SOAT maps, transforms, or interpolates values uses one of six pattern families. Each has a distinct syntax because each resolves at a **different time**, which lets them compose in one string without escaping rules.
 
 ## Quick Reference
 
@@ -20,9 +20,9 @@ Every place SOAT lets you map, transform, or interpolate values uses one of six 
 
 ## JSON Logic
 
-[JSON Logic](https://jsonlogic.com) is the platform's single expression language for structured data mapping. One shared evaluator handles every surface, so operators behave identically everywhere.
+[JSON Logic](https://jsonlogic.com) is the single expression language for structured data mapping; one shared evaluator serves every surface.
 
-An expression is a **single-key object whose key is a registered operator** — `var`, `cat`, `if`, comparison and arithmetic operators, `map`, and so on. Anything else is a literal: multi-key objects, arrays, and primitives are recursed into, so expressions can be nested at any depth inside literal structure.
+An expression is a **single-key object whose key is a registered operator** (`var`, `cat`, `if`, comparison and arithmetic operators, `map`, …). Anything else is a literal: multi-key objects, arrays, and primitives are recursed into, so expressions nest at any depth inside literal structure.
 
 ```json
 {
@@ -34,21 +34,21 @@ An expression is a **single-key object whose key is a registered operator** — 
 
 ### Where each surface points `var`
 
-The syntax is identical everywhere; only the **context root** differs:
+Only the **context root** differs:
 
 | Surface | Field | `var` reads from |
 | ------- | ----- | ---------------- |
 | Orchestration node | `input_mapping` | Run state. Run input is seeded under the `input` namespace only — read it with `{"var": "input.key"}` (a flat `{"var": "key"}` is never satisfied by run input). Every upstream node's raw artifact is also available under `nodes.<nodeId>` (see [Dotted paths](#dotted-paths)). |
 | Orchestration `transform` / `condition` | `expression` | Run state (same as above) |
 | Orchestration `poll` | `exit_condition` | Run state plus `response` (latest tool result) and `attempt` |
-| Orchestration node | `state_mapping` | `{ "output": <the node's own artifact>, "state": <run state> }` — note the different context root from every other orchestration surface |
+| Orchestration node | `state_mapping` | `{ "output": <the node's own artifact>, "state": <run state> }` — a different context root from every other orchestration surface |
 | Pipeline tool step | `input` | `input.*` (tool call arguments) and `steps.<id>.*` (earlier step results) |
 | Pipeline tool | `output` | Same as pipeline step `input` |
 | Any tool (`http`, `mcp`, `pipeline`) | `output_mapping` | `output.*` (the tool's raw result) |
 
 ### Passing logic-shaped data as a literal
 
-To pass an object that *looks like* an expression — for example, the literal payload `{"var": "x"}` — wrap it in `preserve`, which returns its argument unevaluated:
+To pass an object that looks like an expression (for example the literal payload `{"var": "x"}`), wrap it in `preserve`, which returns its argument unevaluated:
 
 ```json
 { "payload": { "preserve": { "var": "x" } } }
@@ -56,26 +56,21 @@ To pass an object that *looks like* an expression — for example, the literal p
 
 ## Dotted paths
 
-Plain dotted strings (no delimiters) appear where a value is an **address**, not an expression:
+Plain dotted strings appear where a value is an **address**, not an expression:
 
-- **Orchestration `state_mapping` keys** — `{"state.summary": {"var": "output.content"}}` writes the node artifact's `content` field to `state.summary`, building nested objects along the way (`state.a.b` is readable back as `{"var": "a.b"}`). The `state.` prefix is optional. Keys are *state write paths*; values are JSON Logic (see [JSON Logic](#json-logic)) — the reverse-of-`input_mapping` shape (there, keys are input-parameter names and values point at the read source).
-- **The `nodes.<id>` namespace** — every completed orchestration node's full artifact is recorded at `state.nodes.<nodeId>`, whether or not that node declares a `state_mapping`. A downstream node reads it with `{"var": "nodes.<nodeId>.<field>"}`, giving orchestrations the same read-any-upstream-result ergonomics as a pipeline's `steps.<id>` without explicit wiring. `nodes` is a reserved state key: a `state_mapping` write targeting it is rejected. (An `input_schema` property named `nodes` is fine — run input lives under `state.input`, so it cannot collide.)
+- **Orchestration `state_mapping` keys** — `{"state.summary": {"var": "output.content"}}` writes the node artifact's `content` field to `state.summary`, building nested objects along the way (`state.a.b` is readable back as `{"var": "a.b"}`). The `state.` prefix is optional. Keys are state write paths; values are [JSON Logic](#json-logic) — the reverse of `input_mapping`, where keys are input-parameter names and values point at the read source.
+- **The `nodes.<id>` namespace** — every completed orchestration node's full artifact is recorded at `state.nodes.<nodeId>`, whether or not that node declares a `state_mapping`. A downstream node reads it with `{"var": "nodes.<nodeId>.<field>"}`, like a pipeline's `steps.<id>`. `nodes` is a reserved state key: a `state_mapping` write targeting it is rejected. An `input_schema` property named `nodes` is fine, since run input lives under `state.input`.
 - **Loop node `collection`** — `state.items.pending` names the state array to iterate.
 - **`output_path` on `tool_output` message content** — extracts a field from a tool result before it enters a conversation (`"text"`, `"data.0.url"`; numeric segments index arrays).
 - **Formation `ref_attr`** — `"MySecret.value"` reads an attribute of another resource: everything before the first dot is the logical ID, the rest is the attribute name.
 
 :::note[Mapping keys are stored verbatim]
 
-The keys of an `input_mapping`, `state_mapping`, or approval-node `arguments` are
-names you author, and they leave SOAT exactly as written — an `input_mapping` key
-becomes a sub-tool's request-body key, an `emit_event` node's `data` key, or a
-line in the prompt an agent node builds. They are never case-converted, so a key
-written `cost_center` arrives as `cost_center`, and any `{"var": ...}` that reads
-it keeps the same spelling.
+The keys of an `input_mapping`, `state_mapping`, or approval-node `arguments` leave SOAT exactly as written — as a sub-tool's request-body key, an `emit_event` node's `data` key, or a line in the prompt an agent node builds. They are never case-converted: a key written `cost_center` arrives as `cost_center`, and any `{"var": ...}` that reads it keeps the same spelling.
 
 :::
 
-Dotted paths also appear *inside* JSON Logic `var` strings (`{"var": "steps.call.text"}`, `{"var": "nodes.fetch.result"}`) — that is JSON Logic's addressing, not a separate mechanism.
+Dotted paths also appear inside JSON Logic `var` strings (`{"var": "steps.call.text"}`, `{"var": "nodes.fetch.result"}`); that is JSON Logic's addressing, not a separate mechanism.
 
 ## Single curly (`{param}`)
 
@@ -85,7 +80,7 @@ Dotted paths also appear *inside* JSON Logic `var` strings (`{"var": "steps.call
 { "execute": { "url": "https://api.example.com/users/{user_id}/posts/{post_id}", "method": "DELETE" } }
 ```
 
-This is the canonical URL placeholder syntax and intentionally matches OpenAPI path templating.
+This matches OpenAPI path templating.
 
 :::warning[Single braces, not double]
 `{{city}}` is **not** a supported placeholder — double braces are reserved for [secret](#secret-references-secret) and [context](#context-references-context) references. Creating or updating a tool (directly, or via a formation) with any other `{{...}}` token in `execute`/`mcp` fields is rejected with `400 INVALID_TEMPLATE_TOKEN`. Always write `{city}`.
@@ -93,17 +88,17 @@ This is the canonical URL placeholder syntax and intentionally matches OpenAPI p
 
 ## Secret references (`{{secret:...}}`)
 
-One of the two valid double-curly forms. A `{{secret:sec_...}}` token embeds a [Secret](../modules/secrets.md) by public ID inside `execute.url`, `execute.headers`, `mcp.url`, or `mcp.headers`:
+A `{{secret:sec_...}}` token embeds a [Secret](../modules/secrets.md) by public ID inside `execute.url`, `execute.headers`, `mcp.url`, or `mcp.headers`:
 
 ```json
 { "execute": { "headers": { "Authorization": "Bearer {{secret:sec_01HXYZ}}" } } }
 ```
 
-The referenced secret must exist in the same project (validated at tool create/update; `400 SECRET_NOT_FOUND` otherwise). The stored tool — and every `GET`/`LIST` response — keeps the token; the decrypted value is substituted server-side only at the moment of the outbound request and is never echoed back.
+The secret must exist in the same project (validated at tool create/update; `400 SECRET_NOT_FOUND` otherwise). The stored tool and every `GET`/`LIST` response keep the token; the decrypted value is substituted server-side only in the outbound request and never echoed back.
 
 ## Context references (`{{context:...}}`)
 
-The other valid double-curly form. A `{{context:<key>}}` token reads one key of the caller's [`tool_context`](./tool-context.md) for **this call** and substitutes it into a tool header, or into a pinned parameter:
+A `{{context:<key>}}` token reads one key of the caller's [`tool_context`](./tool-context.md) for **this call** and substitutes it into a tool header, or into a pinned parameter:
 
 ```json
 { "mcp": { "headers": { "Authorization": "Bearer {{context:ocaToken}}" } } }
@@ -113,21 +108,20 @@ The other valid double-curly form. A `{{context:<key>}}` token reads one key of 
 { "preset_parameters": { "adAccountId": "{{context:ocaAdAccountId}}" } }
 ```
 
-It exists because `tool_context` on its own can only produce headers under the deployment's context prefix (`X-Soat-Context-` by default) — a security invariant, since a caller-named header could otherwise overwrite the tool's own credential. The token moves the header naming to the party that knows the header shape: the tool declares where the value goes, the caller supplies the value.
+`tool_context` on its own only produces headers under the deployment's context prefix (`X-Soat-Context-` by default), so a caller-named header can never overwrite the tool's own credential; the token lets the tool declare where the value goes.
 
-Unlike `{{secret:...}}`, it is valid in **`execute.headers`, `mcp.headers` and `preset_parameters` only** — never `execute.url`, `mcp.url`, `execute.auth`, or a model-supplied argument. A context value is caller-supplied, and a URL it could steer is a request to a host the tool's author never configured. A token anywhere else is rejected at write time with `400 INVALID_TEMPLATE_TOKEN`.
+- Valid in **`execute.headers`, `mcp.headers` and `preset_parameters` only** — never `execute.url`, `mcp.url`, `execute.auth`, or a model-supplied argument. Elsewhere it is rejected at write time with `400 INVALID_TEMPLATE_TOKEN`.
+- In a preset the pin wins over anything the model supplies; the string value is retyped to the parameter's declared schema type. `{{secret:...}}` is **not** resolved in a preset; it stays literal.
+- A key absent from the `tool_context` at call time **fails the tool call** with `400 MISSING_TOOL_CONTEXT_KEY`, naming the key and the header (or preset parameter). An empty-string value is a value, not a missing key.
+- Both double-curly forms may appear in one header value and are substituted in a single pass.
 
-A preset is the one place the token reaches a *value* rather than a header, and it is safe for the same reason a header is: the tool's author chose the parameter, and the pin wins over anything the model supplies. Since context values are strings, a resolved preset is retyped to the parameter's declared schema type. `{{secret:...}}` is deliberately **not** resolved in a preset — it stays literal, keeping secrets to headers.
-
-A key that is not present in the `tool_context` at call time **fails the tool call** with `400 MISSING_TOOL_CONTEXT_KEY`, naming the key and the header (or the preset parameter). Sending `Authorization: Bearer ` instead would surface as an opaque upstream `401`, far from the real mistake. An empty-string value is a value, not a missing key.
-
-Both forms may appear in one header value and are substituted in a single pass, so no substituted value is re-read as template source. Full rules, including which calling paths carry no context at all, are in the [Tool Context reference](./tool-context.md#placing-a-value-in-a-real-header).
+Full rules: [Tool Context reference](./tool-context.md#placing-a-value-in-a-real-header).
 
 ## Dollar curly (formations and body params)
 
 ### `${Name}` in formation `sub`
 
-Inside a formation template, `{"sub": "..."}` interpolates `${Name}` tokens at **apply time**. A token names either a template parameter or a resource logical ID (resolved to its physical ID):
+Inside a formation template, `{"sub": "..."}` interpolates `${Name}` tokens at **apply time**. A token names a template parameter or a resource logical ID (resolved to its physical ID):
 
 ```json
 { "url": { "sub": "${AppUrl}/webhooks/${MyTrigger}" } }
@@ -135,7 +129,7 @@ Inside a formation template, `{"sub": "..."}` interpolates `${Name}` tokens at *
 
 ### `${body.field}` in tool URLs
 
-`${body.fieldName}` in `execute.url` is replaced at **call time** with the URL-encoded tool argument, exactly like `{param}`. It exists because `{param}`-style tokens cannot pass through a formation `sub` (the `sub` resolver owns `${...}`, and skips `body.*` tokens on purpose):
+`${body.fieldName}` in `execute.url` is replaced at **call time** with the URL-encoded tool argument, exactly like `{param}`. It exists because `{param}` tokens cannot pass through a formation `sub` (the `sub` resolver owns `${...}` and skips `body.*` tokens on purpose):
 
 ```json
 { "url": { "sub": "${AppUrl}/expenses/${body.expense_id}" } }
@@ -145,7 +139,7 @@ Prefer `{param}` when defining tools directly via the API or CLI; use `${body.x}
 
 ## Formation object expressions
 
-Formation resource properties support three single-key object forms, deliberately mirroring CloudFormation:
+Formation resource properties support three single-key object forms, mirroring CloudFormation:
 
 | Form | Meaning |
 | ---- | ------- |
@@ -153,11 +147,11 @@ Formation resource properties support three single-key object forms, deliberatel
 | `{"param": "Name"}` | A template parameter value |
 | `{"sub": "...${Name}..."}` | String interpolation of parameters and logical IDs |
 
-See [Formations](../modules/formations.md) for the full model.
+See [Formations](../modules/formations.md).
 
 ## Composition — resolution phases in one string
 
-Because each family has its own delimiter and resolution phase, they nest without escaping. A formation can produce a tool whose header carries a secret reference:
+Each family has its own delimiter and resolution phase, so they nest without escaping. A formation can produce a tool whose header carries a secret reference:
 
 ```json
 { "headers": { "Authorization": { "sub": "Bearer {{secret:${ApiSecret}}}" } } }
@@ -166,19 +160,17 @@ Because each family has its own delimiter and resolution phase, they nest withou
 1. **Apply time** — `sub` resolves `${ApiSecret}` to the physical ID: the stored header becomes `Bearer {{secret:sec_01HXYZ}}`.
 2. **Call time** — the secret token resolves to the decrypted value, only inside the outbound request.
 
-The same phase rule explains `${body.x}`: `sub` leaves it alone at apply time so the tool resolver can fill it at call time.
+The same phase rule covers `${body.x}`: `sub` leaves it alone at apply time so the tool resolver fills it at call time.
 
 ## Mostly not templating: request context
 
-Session and actor context is **not** a general expression family: no `tool_context` value is ever interpolated into a URL, a body, or a JSON Logic expression. The server injects the generation's `tool_context` as `X-Soat-Context-*` **request headers** on every `http` and `mcp` tool call, alongside the tool's own `execute.headers`. That is the mechanism for getting the actor, session or caller identity into an outbound call — see the [Tool Context reference](./tool-context.md).
-
-The exceptions are both declared by the tool itself: [`{{context:<key>}}`](#context-references-context) in its own `headers`, so a credential lands in the header the target expects, and in its `preset_parameters`, so the scope that credential is confined to can vary per run.
+No `tool_context` value is interpolated into a URL, a body, or a JSON Logic expression. The server injects the generation's `tool_context` as `X-Soat-Context-*` **request headers** on every `http` and `mcp` tool call, alongside the tool's own `execute.headers` ([Tool Context reference](./tool-context.md)). The exceptions are declared by the tool itself: [`{{context:<key>}}`](#context-references-context) in its own `headers` and `preset_parameters`.
 
 ## Common mistakes
 
 - **`{{param}}` in a tool URL** — double braces are secrets-only; use `{param}`. Rejected at write time with `400 INVALID_TEMPLATE_TOKEN`.
-- **A `{{context:...}}` token outside `headers` or `preset_parameters`** — in a URL or an `execute.auth` block it is rejected with `400 INVALID_TEMPLATE_TOKEN`. Context also always arrives as `X-Soat-Context-*` headers regardless. See [Tool Context](./tool-context.md).
-- **camelCase `var` paths for run input** — orchestration run-input keys round-trip verbatim: an input sent as `cycle_task` is read as `{"var": "input.cycle_task"}`, not `cycleTask`.
+- **A `{{context:...}}` token outside `headers` or `preset_parameters`** — in a URL or an `execute.auth` block it is rejected with `400 INVALID_TEMPLATE_TOKEN`. Context always arrives as `X-Soat-Context-*` headers regardless. See [Tool Context](./tool-context.md).
+- **camelCase `var` paths for run input** — run-input keys round-trip verbatim: an input sent as `cycle_task` is read as `{"var": "input.cycle_task"}`, not `cycleTask`.
 - **Bare string as a state read** — in an `input_mapping`, a bare string is a literal. `"state.key"` does not read state; use `{"var": "key"}`.
 - **Forward references** — a pipeline step may only read `steps.<id>` of an *earlier* step; formations reject circular `ref`/`sub` dependencies.
 - **Expecting `{ var: ... }` to survive as data** — wrap logic-shaped literals in `preserve`.

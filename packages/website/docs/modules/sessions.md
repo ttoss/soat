@@ -11,9 +11,9 @@ A simplified 1 user ↔ 1 agent conversational interface, owned by an agent.
 
 ## Overview
 
-Sessions hide the underlying [Conversation](./conversations.md) and generation plumbing. The [Actor](./actors.md) is not hidden and not created for you — link one with `actor_id` when the session represents a specific end user. By default, interacting with an agent requires three API calls: create a session, save a user message, and trigger generation. When `auto_generate` is enabled, the message and generation collapse into a single call. Walk through it end to end in [Chat with an LLM - Step 5 (Create a session)](/docs/tutorials/chat-with-llm#step-5--create-a-session) and [Step 6 (Send messages and receive replies)](/docs/tutorials/chat-with-llm#step-6--send-messages-and-receive-replies).
+Sessions hide the underlying [Conversation](./conversations.md) and generation plumbing; the [Actor](./actors.md) is not hidden and not created for you (link one with `actor_id`). An interaction takes three calls (create a session, save a user message, trigger generation), or two with `auto_generate`. See [Chat with an LLM - Step 5 (Create a session)](/docs/tutorials/chat-with-llm#step-5--create-a-session) and [Step 6 (Send messages and receive replies)](/docs/tutorials/chat-with-llm#step-6--send-messages-and-receive-replies).
 
-Sessions are a top-level resource at `/sessions`. Each session belongs to an [Agent](./agents.md) — set `agent_id` on create, and filter by it with [`GET /sessions?agent_id=`](/docs/api/sessions/list-sessions). Each session exposes its `conversation_id` as an escape hatch to the full [Conversations](./conversations.md) API; list a session's messages via [`GET /conversations/:conversation_id/messages`](/docs/api/conversations/list-conversation-messages) (this is governed by `conversations:GetConversation`, not the `agents:*` session actions).
+Sessions are a top-level resource at `/sessions`. Each belongs to an [Agent](./agents.md): set `agent_id` on create and filter by it with [`GET /sessions?agent_id=`](/docs/api/sessions/list-sessions). Each session exposes its `conversation_id` as an escape hatch to the full [Conversations](./conversations.md) API; list a session's messages via [`GET /conversations/:conversation_id/messages`](/docs/api/conversations/list-conversation-messages) (governed by `conversations:GetConversation`, not the `agents:*` session actions).
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -60,7 +60,7 @@ When creating a session message (`POST .../messages`), send exactly one of:
 - `message`: raw text body
 - `document_id`: public ID of an existing document (its content is used as the message text)
 
-An optional `idempotency_key` string can be included with either variant — see [Idempotency](#idempotency).
+An optional `idempotency_key` string can accompany either variant — see [Idempotency](#idempotency).
 
 ## Key Concepts
 
@@ -74,39 +74,37 @@ An optional `idempotency_key` string can be included with either variant — see
 
 ### The Session's End User (Actor)
 
-A session has an end user only when `actor_id` is supplied on create. [Actors](./actors.md) are created separately and are never auto-created here. This matters beyond naming: end-user attribution on the resulting [usage](./usage.md#end-user-attribution) events is derived from the session's actor, so a session without one produces generations that match no `actor`-scoped [quota](./quotas.md#actor-scope). Attach an actor before relying on a per-user spend cap.
+A session has an end user only when `actor_id` is supplied on create; [Actors](./actors.md) are never auto-created here. End-user attribution on the resulting [usage](./usage.md#end-user-attribution) events is derived from the session's actor, so a session without one produces generations that match no `actor`-scoped [quota](./quotas.md#actor-scope). Attach an actor before relying on a per-user spend cap.
 
 ### Session cost
 
-[`GET /api/v1/sessions/{session_id}`](/docs/api/sessions/get-session) carries a `usage` object — `cost_usd` plus `input_tokens`, `output_tokens`, `cached_tokens` and `reasoning_tokens` — summed across every metered generation dispatched through the session. It is the same shape an [orchestration run](./orchestrations.md#run-usage) reports, so one client type reads both.
+[`GET /api/v1/sessions/{session_id}`](/docs/api/sessions/get-session) carries a `usage` object — `cost_usd` plus `input_tokens`, `output_tokens`, `cached_tokens` and `reasoning_tokens` — summed across every metered generation dispatched through the session. It is the same shape an [orchestration run](./orchestrations.md#run-usage) reports.
 
-Three things to know:
+- **Single read only.** Session and fork listings omit the field.
+- **A fork starts at zero.** It does not inherit what the copied history cost, so summing `usage` across a session and its forks never double-counts.
+- **Only its own generations.** Work done around a session without a generation of its own (a memory extraction pass, for instance) is metered on the project and appears in no session's figure.
 
-- **Single read only.** Session and fork listings omit the field rather than rolling one up per row.
-- **A fork starts at zero.** A fork is a session of its own, so it does not inherit what the history it copied cost, and summing `usage` across a session and its forks never double-counts.
-- **Only its own generations.** Work the platform does around a session without a generation of its own — a memory extraction pass, for instance — is metered on the project and appears in no session's figure.
-
-For a window, a split by day or model, or one end user across every session, narrow the aggregate instead: [`GET /api/v1/usage/aggregate?session_id=…`](/docs/api/usage/get-usage-aggregate). See [End-user attribution](./usage.md#end-user-attribution).
+For a window, a split by day or model, or one end user across every session, use the aggregate: [`GET /api/v1/usage/aggregate?session_id=…`](/docs/api/usage/get-usage-aggregate). See [End-user attribution](./usage.md#end-user-attribution).
 
 ### Lifecycle
 
-A session starts in `open` status. It can be updated to `closed` when the interaction is complete. If `inactivity_ttl_seconds` is configured, the status transitions to `expired` lazily when the session is next fetched or listed after the TTL elapses. See [Deletion](#deletion) for what happens when a session is deleted.
+A session starts `open` and can be updated to `closed`. If `inactivity_ttl_seconds` is configured, the status transitions to `expired` lazily when the session is next fetched or listed after the TTL elapses. See [Deletion](#deletion).
 
 ### Deletion
 
-`DELETE .../sessions/:session_id` removes the session row and its underlying [Conversation](./conversations.md) row in the same transaction. Deleting the conversation cascades at the database level to every [message](#message-within-a-session) in it.
+`DELETE .../sessions/:session_id` removes the session row and its underlying [Conversation](./conversations.md) row in the same transaction; the conversation cascades at the database level to every [message](#message-within-a-session) in it.
 
-What deletion does **not** remove:
+Deletion does **not** remove:
 
-- **The session's actor.** The [Actor](./actors.md) referenced by `actor_id` is left untouched and can still be looked up or reused by other sessions.
-- **Documents backing message content.** Each message's content is stored in a [Document](./documents.md) row; deleting the session does not delete these documents (or their underlying files), so they remain in place after the session and its messages are gone.
-- **Generations and traces.** A session's [generations and traces](./traces.md#debugging-joins-trace-generation-session) are not linked to the session or conversation record, so they are unaffected by session deletion and remain queryable via [`GET /api/v1/traces/{trace_id}`](/docs/api/traces/get-trace) after the session no longer exists.
+- **The session's actor.** The [Actor](./actors.md) referenced by `actor_id` is left untouched.
+- **Documents backing message content.** Each message's content is a [Document](./documents.md) row; those documents (and their underlying files) remain.
+- **Generations and traces.** A session's [generations and traces](./traces.md#debugging-joins-trace-generation-session) are not linked to the session or conversation record and remain queryable via [`GET /api/v1/traces/{trace_id}`](/docs/api/traces/get-trace).
 
-Delete these resources explicitly beforehand if you need a full cleanup.
+Delete these explicitly beforehand for a full cleanup.
 
 ### Forking
 
-[`POST /api/v1/sessions/{session_id}/fork`](/docs/api/sessions/fork-session) branches a new session from a point in an existing one: same context, different continuation. It answers "what if" — a support agent gave a bad answer at message 7, and you want to try a stricter prompt or a different agent version against *that exact* context without replaying the conversation by hand.
+[`POST /api/v1/sessions/{session_id}/fork`](/docs/api/sessions/fork-session) branches a new session from a point in an existing one: same context, different continuation (e.g. a stricter prompt or another agent version against the context that produced a bad answer at message 7).
 
 ```bash
 curl -X POST "$SOAT_URL/api/v1/sessions/$SESSION_ID/fork" \
@@ -127,11 +125,11 @@ curl -X POST "$SOAT_URL/api/v1/sessions/$SESSION_ID/fork" \
 | `name`, `tags`     | —                  | Set on the new session                                                       |
 | `tool_context`     | inherited          | Overrides the parent's [tool context](#tool-context) on the fork             |
 
-**Fork by reference, not by copy.** The fork gets its own [conversation](./conversations.md) whose messages point at the **same [Document](./documents.md) rows** as the parent — only the ordering is duplicated. There is one stored copy of the content, so a retention purge erases it from parent and fork together, and the branch cannot drift from what actually happened.
+**Fork by reference, not by copy.** The fork gets its own [conversation](./conversations.md) whose messages point at the **same [Document](./documents.md) rows** as the parent; only the ordering is duplicated. One stored copy of the content means a retention purge erases it from parent and fork together.
 
-**Replay, never re-invoke.** Recorded tool calls and their results ride along on the copied messages and are replayed as model input on the fork's next turn. Forking never calls a tool, so exploring a "what if" cannot send an email or charge a card a second time. The trade-off is that a forked turn sees the tool data **as it was**, not as it is now — right for comparison, wrong for "resume this session for real".
+**Replay, never re-invoke.** Recorded tool calls and their results ride along on the copied messages and are replayed as model input on the fork's next turn. Forking never calls a tool, so a fork cannot send an email or charge a card a second time; a forked turn sees the tool data **as it was**, which suits comparison, not resuming a session for real.
 
-**The fork is inert.** `auto_generate` is `false` and no generation is triggered; drive the branch with the normal `POST .../messages` and `POST .../generate` endpoints. It also starts without an actor, because [single session per actor](#single-session-per-actor) allows one open session per (agent, actor) pair and inheriting the parent's actor would make forking impossible for exactly those agents.
+**The fork is inert.** `auto_generate` is `false` and no generation is triggered; drive the branch with `POST .../messages` and `POST .../generate`. It starts without an actor, because [single session per actor](#single-session-per-actor) allows one open session per (agent, actor) pair and inheriting the parent's actor would make forking impossible for those agents.
 
 Lineage reads back on the session itself (`forked_from_session_id`, `forked_from_position`) and from the parent:
 
@@ -139,35 +137,29 @@ Lineage reads back on the session itself (`forked_from_session_id`, `forked_from
 curl "$SOAT_URL/api/v1/sessions/$SESSION_ID/forks" -H "Authorization: Bearer $TOKEN"
 ```
 
-That walks **one level**. Forking a fork is allowed and unbounded; each fork is listed under its own parent. Deleting a parent does not delete its forks — they keep their history and their `forked_from_session_id` becomes `null`.
+That walks **one level**. Forking a fork is allowed and unbounded; each fork is listed under its own parent. Deleting a parent does not delete its forks; their `forked_from_session_id` becomes `null`.
 
-Forking requires both `agents:GetSession` and `agents:CreateSession`: it reads a session's full history and creates a new session, and neither permission alone should imply the other.
+Forking requires both `agents:GetSession` and `agents:CreateSession`.
 
 ### Auto-Generate
 
-When `auto_generate` is `true`, `POST .../messages` saves the user message **and** automatically triggers LLM generation in the same request. The response body contains the assistant reply instead of just the saved user message.
+When `auto_generate` is `true`, `POST .../messages` saves the user message **and** triggers LLM generation in the same request; the response body carries the assistant reply instead of just the saved user message. `auto_generate` defaults to `false` and can be set at creation or toggled via [`PATCH /sessions/{session_id}`](/docs/api/sessions/update-session).
 
-This collapses the three-call flow into two calls: create a session, then send messages. `auto_generate` defaults to `false` and can be set at creation or toggled at any time via [`PATCH /sessions/{session_id}`](/docs/api/sessions/update-session).
-
-The explicit `POST .../generate` endpoint continues to work regardless of this setting. With `auto_generate` enabled, `POST .../messages` returns as soon as the message is saved and the triggered generation runs in the background.
+The explicit `POST .../generate` endpoint works regardless of this setting. With `auto_generate` enabled, `POST .../messages` returns as soon as the message is saved and the triggered generation runs in the background.
 
 ### Message Delay (Debounce)
 
-When `message_delay_seconds` is set, `POST .../messages` does **not** trigger LLM generation immediately. A timer starts and resets with each new message. The LLM is only called after the configured delay elapses with no new messages.
+When `message_delay_seconds` is set, `POST .../messages` does **not** trigger LLM generation immediately. A timer starts and resets with each new message; the LLM is called once the delay elapses with no new messages. With `message_delay_seconds: 3`, three rapid messages ("What's the" / "weather in" / "Paris?") each reset the timer; after 3 seconds of silence the LLM is called once with all three in context.
 
-With `message_delay_seconds: 3`, three rapid messages ("What's the" / "weather in" / "Paris?") each reset the timer; after 3 seconds of silence the LLM is called once with all three messages in context.
-
-`POST .../messages` always returns immediately with the saved user message, regardless of the delay setting. Generation fires asynchronously after the delay elapses.
-
-`message_delay_seconds` has no effect when `auto_generate` is `false` or when a generation is already in progress.
+`POST .../messages` always returns immediately with the saved user message; generation fires asynchronously after the delay. `message_delay_seconds` has no effect when `auto_generate` is `false` or when a generation is already in progress.
 
 ### Single Session Per Actor
 
-When the parent agent has `single_session_per_actor: true`, creating a session with an `actor_id` returns `409 Conflict` if an open session for that actor already exists. The error body includes `meta.session_id` with the existing session's ID. See [Single Session Per Actor](./agents.md#single-session-per-actor) on the Agents module.
+When the parent agent has `single_session_per_actor: true`, creating a session with an `actor_id` returns `409 Conflict` if an open session for that actor already exists. The error body includes `meta.session_id` with the existing session's ID. See [Single Session Per Actor](./agents.md#single-session-per-actor).
 
 ### Idempotency
 
-Channels like WhatsApp use at-least-once webhook delivery — the same inbound message may arrive multiple times. Pass `idempotency_key` in the `POST .../messages` body to deduplicate:
+Channels like WhatsApp use at-least-once webhook delivery, so the same inbound message may arrive multiple times. Pass `idempotency_key` in the `POST .../messages` body to deduplicate:
 
 ```json
 {
@@ -183,20 +175,20 @@ The key is scoped to the session.
 
 ### Inactivity TTL
 
-Sessions can expire automatically after a period of inactivity using `inactivity_ttl_seconds`.
+`inactivity_ttl_seconds` expires a session after a period of inactivity:
 
 - **`0` (default)** — the session never expires.
 - **Positive integer** — the session expires if no user message has been added for that many seconds since `last_activity_at`.
 
-When a session exceeds its TTL, its `status` is lazily updated to `expired` the next time it is fetched or listed. Once expired, `POST .../generate` returns `410 Gone` with error code `SESSION_EXPIRED` — open a fresh session to continue.
+When a session exceeds its TTL, its `status` is lazily updated to `expired` the next time it is fetched or listed. Once expired, `POST .../generate` returns `410 Gone` with error code `SESSION_EXPIRED`; open a fresh session to continue.
 
-The TTL can be updated at any time via `PATCH .../sessions/{session_id}` — the inactivity clock continues from the last `last_activity_at` timestamp, so changing the TTL takes effect on the next fetch.
+The TTL can be updated at any time via `PATCH .../sessions/{session_id}`; the inactivity clock continues from the last `last_activity_at`, so the change takes effect on the next fetch.
 
 ### Tool Context
 
-Sessions support the same `tool_context` mechanism as direct agent generations — see the [Tool Context reference](../advanced/tool-context.md) for the key→header rule, validation and security notes.
+Sessions support the same `tool_context` mechanism as direct agent generations; see the [Tool Context reference](../advanced/tool-context.md) for the key→header rule, validation and security notes.
 
-When a generation is triggered through a session, the server automatically injects the following keys into `tool_context`:
+When a generation is triggered through a session, the server injects these keys into `tool_context`:
 
 | Injected key      | Forwarded header                 | Value                                                  |
 | ----------------- | -------------------------------- | ------------------------------------------------------ |
@@ -204,23 +196,23 @@ When a generation is triggered through a session, the server automatically injec
 | `actor_external_id` | `X-Soat-Context-actor_external_id` | External ID of the session's actor; omitted if not set |
 | `session_id`       | `X-Soat-Context-session_id`       | Public ID of the session; always present               |
 
-These three keys are always taken from the session and actor, regardless of what the caller supplies — a caller-provided `actor_id`, `actor_external_id` or `session_id` in either the session's stored `tool_context` or a per-request `tool_context` is ignored in favor of the auto-populated value. Any other key a caller sets in `tool_context` is unaffected and still wins in the usual way (a per-request value overrides the session's stored value).
+These three keys are always taken from the session and actor: a caller-provided `actor_id`, `actor_external_id` or `session_id`, in the session's stored `tool_context` or a per-request one, is ignored. Any other key still wins in the usual way (a per-request value overrides the session's stored value).
 
-Note that `actor_external_id` carries the actor's `external_id` to every `http` and `mcp` tool the agent calls; see [Actors](./actors.md#external_id-and-idempotent-creation) if that value holds PII.
+`actor_external_id` carries the actor's `external_id` to every `http` and `mcp` tool the agent calls; see [Actors](./actors.md#external_id-and-idempotent-creation) if that value holds PII.
 
 ### Background Generation
 
-`POST .../generate` runs in the background by default and returns immediately with `202 Accepted`. Pass `?wait=true` to block until the generation settles and receive the assistant reply in the response. See [Synchronous & Asynchronous Execution](../advanced/sync-and-async.md) for the platform-wide `wait` contract. The default `202` body:
+`POST .../generate` runs in the background by default and returns `202 Accepted` immediately. Pass `?wait=true` to block until the generation settles and receive the assistant reply. See [Synchronous & Asynchronous Execution](../advanced/sync-and-async.md) for the platform-wide `wait` contract. The default `202` body:
 
 ```json
 { "status": "accepted", "session_id": "sess_..." }
 ```
 
-When a new generation request arrives while a previous one is still in-flight, the server **cancels the previous generation** and starts a fresh one so the model always sees the complete, up-to-date message history.
+When a new generation request arrives while a previous one is in flight, the server **cancels the previous generation** and starts a fresh one, so the model always sees the complete message history.
 
 ### Debugging (Session, Generation, Trace)
 
-Each call to `POST .../generate` returns `generation_id` and `trace_id`. Store these alongside `session_id` for debugging:
+Each call to `POST .../generate` returns `generation_id` and `trace_id`. Store these alongside `session_id`:
 
 - `GET .../sessions/{session_id}/messages` returns the conversation timeline — see [Debug Session, Generation, and Trace History - Step 4 (Retrieve the full session message timeline)](/docs/tutorials/debug-session-generation-trace-history#step-4---retrieve-the-full-session-message-timeline).
 - [`GET /api/v1/traces/{trace_id}`](/docs/api/traces/get-trace) returns the execution trace.
@@ -230,7 +222,7 @@ See [Traces](./traces.md#debugging-joins-trace-generation-session) for the full 
 
 ### Webhook Events
 
-The following events are dispatched to project webhooks as sessions change state:
+Dispatched to project webhooks as sessions change state:
 
 | Event type                            | Trigger                                                |
 | ------------------------------------- | ------------------------------------------------------ |
@@ -241,7 +233,7 @@ The following events are dispatched to project webhooks as sessions change state
 | `sessions.generation.requires_action` | LLM returned a client-tool call requiring tool outputs |
 | `sessions.generation.started`         | LLM generation has started for a session               |
 
-All events include `session_id`. Generation events additionally include `generation_id` and `trace_id`. Permissions are namespaced under `agents:` since each session belongs to an agent.
+All events include `session_id`; generation events also include `generation_id` and `trace_id`. Permissions are namespaced under `agents:` since each session belongs to an agent.
 
 ## Examples
 

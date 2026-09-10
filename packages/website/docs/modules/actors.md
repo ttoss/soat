@@ -7,21 +7,13 @@ import TabItem from '@theme/TabItem';
 
 # Actors
 
-The Actors module represents entities — people, bots, or other participants — that interact within a project. A common use case is storing external contacts such as WhatsApp numbers, where `external_id` holds the phone number and correlates the actor with a record in the external system.
+Actors are people, bots, or other participants within a project. A common use is external contacts such as WhatsApp numbers, with `external_id` holding the phone number.
 
 ## Overview
 
 An Actor belongs to a project and has a display name, an optional `external_id`, and optional links to an [Agent](./agents.md) or [Chat](./chats.md). Actors are identified by a public `id` prefixed with `actor_`. The internal database primary key is never returned.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
-
-The module covers:
-
-- **Identity** — display name and external correlation via `external_id`
-- **Idempotent creation** — [`POST /actors`](/docs/api/actors/create-actor) with `external_id` uses find-or-create semantics
-- **Agent/Chat linking** — an Actor can be bound to an Agent or a Chat for AI interactions
-- **Instructions** — per-actor system prompt overrides composed into generate calls
-- **Tags** — key-value metadata enabling attribute-based access control via IAM conditions
 
 ## Related Tutorials
 
@@ -47,44 +39,36 @@ The module covers:
 
 ### external_id and Idempotent Creation
 
-`external_id` is a free-form string for correlating an Actor with a record in an external system (e.g. a WhatsApp phone number, a CRM contact ID). It is enforced unique per project at the database level — two actors in the same project cannot share the same `external_id`. Across different projects the same value is allowed.
-
-`null` / absent `external_id` is never considered a duplicate — PostgreSQL NULL semantics are preserved.
+`external_id` correlates an Actor with an external record (WhatsApp number, CRM contact ID). Unique per project at the database level; the same value may recur across projects. `null`/absent is never a duplicate (PostgreSQL NULL semantics).
 
 :::warning[Choose this value knowing it egresses]
 
-`external_id` is not internal-only. Whenever a generation runs in a [session](./sessions.md) bound to this actor, the value is auto-populated into `tool_context` and transmitted as the `X-Soat-Context-actor_external_id` request header to **every** `http` and `mcp` tool the agent calls — including endpoints you do not control.
+Whenever a generation runs in a [session](./sessions.md) bound to this actor, `external_id` is auto-populated into `tool_context` and sent as the `X-Soat-Context-actor_external_id` header to **every** `http` and `mcp` tool the agent calls, including endpoints you do not control.
 
-If the tool set includes third-party endpoints, prefer an opaque internal identifier here (and correlate to the phone number or email on your own side) rather than storing the PII directly. See the [Tool Context reference](../advanced/tool-context.md#security).
+With third-party endpoints in the tool set, prefer an opaque internal identifier and correlate on your side. See [Tool Context](../advanced/tool-context.md#security).
 
 :::
 
-When `external_id` is supplied to [`POST /actors`](/docs/api/actors/create-actor), the endpoint uses **find-or-create** semantics:
+With `external_id`, [`POST /actors`](/docs/api/actors/create-actor) is **find-or-create**:
 
-- If no actor with that `external_id` exists in the project, a new actor is created and `201 Created` is returned.
-- If an actor with that `external_id` already exists, the existing actor is returned as-is with `200 OK`. None of the other request fields (name, instructions, etc.) are applied to the existing actor.
+- No match: created, `201 Created`.
+- Match: the existing actor is returned as-is with `200 OK`; other request fields (name, instructions, etc.) are not applied.
 
-This makes actor creation safe to call repeatedly from event-driven pipelines (e.g. a new inbound WhatsApp message). When `external_id` is **not** supplied, [`POST /actors`](/docs/api/actors/create-actor) always creates a new actor and returns `201 Created`.
+This makes creation safe to repeat from event-driven pipelines (e.g. an inbound WhatsApp message). Without `external_id`, [`POST /actors`](/docs/api/actors/create-actor) always creates and returns `201 Created`.
 
 ### Agent and Chat Linking
 
-An Actor can be linked to either an Agent or a Chat — not both simultaneously. These links control which AI backend handles generate calls initiated by or for the actor.
+An Actor links to an Agent or a Chat, not both; the link selects the AI backend for generate calls for the actor.
 
-- Set `agent_id` to link the actor to a specific Agent.
-- Set `chat_id` to link the actor to a specific Chat.
-- Pass `null` in a [`PATCH /actors/:id`](/docs/api/actors/update-actor) request to unlink either field.
-- Supplying both `agent_id` and `chat_id` in the same request returns `400 Bad Request`.
+- `agent_id` links an Agent; `chat_id` a Chat.
+- `null` in [`PATCH /actors/:id`](/docs/api/actors/update-actor) unlinks.
+- Both in one request: `400 Bad Request`.
 
 ### Per-Actor Memory
 
-An actor has no memory field. Retrieval scope for a generation comes from the
-agent's `knowledge_config` and nothing else, so the platform never read a link
-stored on the actor — keep the actor→memory mapping in your application and pass
-it per call.
+An actor has no memory field; retrieval scope comes from the agent's `knowledge_config` only. Keep the actor→memory mapping in your application and pass it per call.
 
-Create one [Memory](./memories.md) per end user, keyed however your application
-already keys them (the actor's `external_id` is the natural choice), then name it
-in the generate body:
+Create one [Memory](./memories.md) per end user (keyed by `external_id`, for instance) and name it in the generate body:
 
 ```json
 {
@@ -95,20 +79,13 @@ in the generate body:
 }
 ```
 
-`memory_ids` and `memory_tags` are **unioned** with the agent's stored config, so
-a per-actor memory extends the agent's shared scope rather than replacing it. If
-you would rather not keep a mapping table, tag the memory (`tags`) or name it
-after the `external_id` and look it up with
-[`GET /memories`](/docs/api/memories/list-memories).
+`memory_ids` and `memory_tags` are **unioned** with the agent's stored config, so a per-actor memory extends the shared scope. Without a mapping table, tag the memory (`tags`) or name it after the `external_id` and look it up with [`GET /memories`](/docs/api/memories/list-memories).
 
-Memory data outlives the actor record: deleting an actor deletes nothing in any
-memory.
+Deleting an actor deletes nothing in any memory.
 
 ### Instructions
 
-`instructions` is a free-form string injected into the system prompt when an AI generation is scoped to this actor. Use it to encode persona-specific context (tone, name, constraints) that should be consistent across all interactions with the actor.
-
-Pass `null` to [`PATCH /actors/:id`](/docs/api/actors/update-actor) to clear the instructions.
+`instructions` is injected into the system prompt when a generation is scoped to this actor: persona context (tone, name, constraints) consistent across interactions. `null` in [`PATCH /actors/:id`](/docs/api/actors/update-actor) clears it.
 
 ### Filtering
 
@@ -116,11 +93,11 @@ Pass `null` to [`PATCH /actors/:id`](/docs/api/actors/update-actor) to clear the
 
 ### Project Scope
 
-Project-scoped API keys make `project_id` optional: omit it and the request defaults to the key's project, supply a matching one and it is accepted, and supply a different project's id and the request is rejected with `403`. JWT callers must supply `project_id` explicitly for write operations. See [Implicit project id](./api-keys.md#implicit-project-id) for the full rules.
+Project-scoped API keys make `project_id` optional (omitted defaults to the key's project; a different project is `403`); JWT callers must supply it on writes. See [Implicit project id](./api-keys.md#implicit-project-id).
 
 ### Tags
 
-Tags are key-value string pairs attached to an actor, managed via the `tags` field or the tag sub-endpoints, and matched by IAM conditions (`soat:ResourceTag/<key>`). Actors use the `actor` resource type in SRNs (`srn:proj_ABC:actor:actor_123`). See [IAM — Tags](iam.md#tags) and [SRNs](iam.md#soat-resource-names-srns).
+Key-value string pairs managed via `tags` or the tag sub-endpoints, matched by `soat:ResourceTag/<key>`. SRN type `actor` (`srn:proj_ABC:actor:actor_123`). See [IAM — Tags](iam.md#tags) and [SRNs](iam.md#soat-resource-names-srns).
 
 ## Examples
 
@@ -174,7 +151,7 @@ curl -X POST https://api.example.com/api/v1/actors \
 </TabItem>
 </Tabs>
 
-The same call is an idempotent upsert when `external_id` is set — `201` on first contact, `200` with the existing actor thereafter (see [external_id and Idempotent Creation](#external_id-and-idempotent-creation)). For policy examples scoping access to actors (including tag conditions), see [IAM — Examples](iam.md#examples).
+With `external_id` the call is an idempotent upsert: `201` first, `200` thereafter ([external_id and Idempotent Creation](#external_id-and-idempotent-creation)). Policy examples: [IAM — Examples](iam.md#examples).
 
 ### Get an actor
 

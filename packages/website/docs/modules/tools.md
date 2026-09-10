@@ -11,13 +11,11 @@ Standalone, reusable tool definitions that agents call during generation.
 
 ## Overview
 
-The Tools module lets you define callable tools that agents use during a generation loop. A tool encapsulates its type, input schema, and execution configuration in one project-scoped record. Tools can be shared across multiple agents and invoked directly via the API independently of any agent.
+A tool is one project-scoped record of type, input schema and execution config, shareable across agents and callable directly via the API. Types: `http` (external HTTP endpoint), `client` (executed locally by the calling application), `mcp` (proxies an MCP server), `builtin` (SOAT platform action), `pipeline` (fixed sequence of other tools as one call). Any other `type` is `400 VALIDATION_FAILED` on create and update.
 
-Five tool types are supported: `http` (calls an external HTTP endpoint), `client` (signals the calling application to execute locally), `mcp` (proxies an MCP server), `builtin` (invokes a SOAT platform action), and `pipeline` (runs a deterministic sequence of other tools as a single call). Any other `type` is rejected with `400 VALIDATION_FAILED` on create and update.
+A [Trigger](./triggers.md) with `target_type: tool` invokes a tool automatically. A [Guardrail](./guardrails.md) on the tool (every agent) or on the agent classifies calls and routes them to the [approval queue](./approvals.md).
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
-
-To invoke a tool automatically, bind it to a [Trigger](./triggers.md) with `target_type: tool`. To classify a tool's calls and require human approval, attach a [Guardrail](./guardrails.md) — on the tool (governs it for every agent) or on the agent; decisions land in the [approval queue](./approvals.md).
 
 ## Related Tutorials
 
@@ -61,17 +59,15 @@ To invoke a tool automatically, bind it to a [Trigger](./triggers.md) with `targ
 
 ### Header Name Casing
 
-HTTP header names in `execute.headers` and `mcp.headers` are opaque and preserved **verbatim** — SOAT does not case-transform them. `Authorization` round-trips as `Authorization`.
+Header names in `execute.headers` and `mcp.headers` are preserved verbatim (`Authorization` stays `Authorization`).
 
 ### Context Headers (`X-Soat-Context-*`)
 
-On every `http` and `mcp` tool call, the server injects the generation's [`tool_context`](../advanced/tool-context.md) as `X-Soat-Context-*` request headers — including the auto-populated `session_id`, `actor_id` and `actor_external_id` — in addition to, and after, the headers you configure. This is how a tool endpoint learns who the agent is acting for without trusting the prompt; the prefix is deployment configuration ([`TOOL_CONTEXT_HEADER_PREFIX`](../self-hosting/configuration.md#agent-generation)), so a caller can never overwrite a tool's own credential. When a target needs a context value in a header of its own, declare it with a [`{{context:<key>}}` token](#context-references-in-headers). See the [Tool Context reference](../advanced/tool-context.md) for the key→header rule and security notes.
-
-By default every context key reaches every `http`, `mcp` and `builtin` tool; set [`context_keys`](#scoping-which-context-keys-reach-a-tool) to bound that.
+Every `http` and `mcp` call carries the generation's [`tool_context`](../advanced/tool-context.md) as `X-Soat-Context-*` headers (plus the auto-populated `session_id`, `actor_id` and `actor_external_id`), injected after the configured headers. The prefix is deployment configuration ([`TOOL_CONTEXT_HEADER_PREFIX`](../self-hosting/configuration.md#agent-generation)), so a caller cannot overwrite a tool's own credential. A [`{{context:<key>}}` token](#context-references-in-headers) places a context value in a header the target expects; [`context_keys`](#scoping-which-context-keys-reach-a-tool) bounds which keys reach a tool (default: all, for `http`, `mcp` and `builtin`). Key→header rule and security notes: [Tool Context reference](../advanced/tool-context.md).
 
 ### Tool ID vs Tool Name
 
-A **tool ID** is the resource identifier (e.g., `tool_k8x2f3np`), used in [`tool_bindings`](./agents.md#tool-bindings), `active_tool_ids`, and `step_rules[].active_tool_ids`. A **tool name** is what the AI model sees at runtime. For `http` and `client` tools, one ID → one name; for `mcp` and `builtin` tools, one ID exposes **many** names. `tool_choice` and `stop_conditions` on agents reference tools by **name**.
+A **tool ID** (`tool_k8x2f3np`) is used in [`tool_bindings`](./agents.md#tool-bindings), `active_tool_ids` and `step_rules[].active_tool_ids`; a **tool name** is what the model sees and what `tool_choice` and `stop_conditions` use. `http`/`client`: one ID, one name; `mcp`/`builtin`: one ID, many names.
 
 ### Tool Name Resolution
 
@@ -82,22 +78,22 @@ A **tool ID** is the resource identifier (e.g., `tool_k8x2f3np`), used in [`tool
 | `mcp`     | `{name}_{mcpToolName}` | `github_create_issue`, `github_list_repos`           |
 | `builtin`    | `{name}_{action}`      | `platform_get-document`, `platform_search-knowledge` |
 
-For `mcp` and `builtin`, the tool's `name` is a **prefix** joined with an underscore to each discovered sub-tool name, guaranteeing uniqueness when two servers or action sets share a sub-tool name (e.g., `github_search` vs `jira_search`).
+For `mcp` and `builtin`, `name` is a prefix joined with `_` to each sub-tool name (`github_search` vs `jira_search`).
 
 ### http
 
-When the model calls an `http` tool, the server sends an HTTP request to `execute.url` using the configured method. For `POST`, `PUT`, and `PATCH` the tool arguments are sent as a JSON body. For `GET`, `HEAD`, and `DELETE` the arguments become query-string parameters.
+The server sends the arguments to `execute.url` with the configured method: as a JSON body for `POST`, `PUT`, `PATCH`; as query-string parameters for `GET`, `HEAD`, `DELETE`.
 
 :::caution Pointing a `GET` tool at this API
 
-Because every leftover argument becomes a query parameter, a `GET` tool whose `execute.url` is a SOAT endpoint may only be given arguments that endpoint declares — an undeclared query parameter is a [`400`](./usage.md#narrowing-a-rollup), and the tool call surfaces it as `TOOL_HTTP_ERROR`. Use a `builtin` tool instead when the target is this API: it derives its arguments from the operation, so it cannot send one the endpoint does not have.
+Every leftover argument becomes a query parameter, so a `GET` tool at a SOAT endpoint may only take arguments that endpoint declares; an undeclared one is a [`400`](./usage.md#narrowing-a-rollup), surfaced as `TOOL_HTTP_ERROR`. Prefer a `builtin` tool.
 
 :::
 
-`execute.url` supports two placeholder syntaxes for injecting tool arguments into the URL path at invocation time; arguments consumed by either form are excluded from the request body or query string:
+Two placeholder syntaxes inject arguments into the URL path; a consumed argument leaves the body or query string:
 
-- **`{paramName}`** — replaced with the corresponding tool argument (URL-encoded). Use when defining the tool directly via the API or CLI.
-- **`${body.fieldName}`** — same behavior, but used inside formation template `sub` expressions, where `${...}` is the interpolation syntax (e.g. `url: { sub: '${AppUrl}/posts/${body.post_id}' }`).
+- **`{paramName}`** — the URL-encoded argument; for tools defined via the API or CLI.
+- **`${body.fieldName}`** — the same inside formation template `sub` expressions, where `${...}` is the interpolation syntax (`url: { sub: '${AppUrl}/posts/${body.post_id}' }`).
 
 Example — a `DELETE` tool with path parameters:
 
@@ -124,15 +120,15 @@ Called with `{ "user_id": "123", "post_id": "456" }`, the server issues `DELETE 
 
 #### Secret references in `execute`
 
-Never paste raw credentials into `execute.headers` — [`GET /tools/{id}`](/docs/api/tools/get-tool) echoes the config back verbatim to anyone with read access. Embed a [secret reference](./secrets.md#secret-references-secret) instead, e.g. `"headers": { "Authorization": "Bearer {{secret:sec_01HXYZ}}" }`.
+[`GET /tools/{id}`](/docs/api/tools/get-tool) echoes `execute` to anyone with read access, so use a [secret reference](./secrets.md#secret-references-secret) rather than a raw credential: `"headers": { "Authorization": "Bearer {{secret:sec_01HXYZ}}" }`.
 
-`{{secret:...}}` tokens are supported in `execute.url` and `execute.headers` values. The token is resolved to the decrypted secret value right before the outbound request; the stored tool — and everything returned by `GET`/`LIST` — keeps the reference. The referenced secret must exist in the same project, validated at tool create/update time (`400 SECRET_NOT_FOUND` otherwise).
+`{{secret:...}}` works in `execute.url` and `execute.headers` values, resolved right before the outbound request; the stored tool and every `GET`/`LIST` keep the reference. The secret must exist in the same project (`400 SECRET_NOT_FOUND` at create/update).
 
-Secret and [context](#context-references-in-headers) references are the **only** valid double-curly forms: any other `{{...}}` token anywhere in `execute` or `mcp` is rejected at create/update time with `400 INVALID_TEMPLATE_TOKEN` — use single braces (`{param}`) for [URL path placeholders](#http). See [Expressions & Templating](../advanced/expressions-and-templating.md) for the full pattern reference.
+Secret and [context](#context-references-in-headers) references are the only valid double-curly forms; any other `{{...}}` in `execute` or `mcp` is `400 INVALID_TEMPLATE_TOKEN` at create/update. [URL path placeholders](#http) use single braces (`{param}`). Full reference: [Expressions & Templating](../advanced/expressions-and-templating.md).
 
 #### Context references in headers
 
-A `{{context:<key>}}` token in `execute.headers` or `mcp.headers` is substituted, per call, with one key of the caller's [`tool_context`](../advanced/tool-context.md) — e.g. `"headers": { "Authorization": "Bearer {{context:ocaToken}}" }`. Use it when a per-user credential must reach the target in the header the target expects.
+A `{{context:<key>}}` token in `execute.headers` or `mcp.headers` is substituted per call with one key of the caller's [`tool_context`](../advanced/tool-context.md): `"headers": { "Authorization": "Bearer {{context:ocaToken}}" }`.
 
 | | |
 | --- | --- |
@@ -143,7 +139,7 @@ A `{{context:<key>}}` token in `execute.headers` or `mcp.headers` is substituted
 
 #### Scoping which context keys reach a tool
 
-A generation's `tool_context` is forwarded, in full, to every `http`, `mcp` and `builtin` tool the agent has. When one of those keys is a credential, `context_keys` bounds the egress per tool: with `"context_keys": ["tenant"]` and a caller sending `tool_context: { "ocaToken": "...", "tenant": "acme" }`, the tool receives `X-Soat-Context-tenant` and **not** `X-Soat-Context-ocaToken`.
+`tool_context` is forwarded in full to every `http`, `mcp` and `builtin` tool; `context_keys` bounds it per tool. With `"context_keys": ["tenant"]` and `tool_context: { "ocaToken": "...", "tenant": "acme" }`, the tool receives `X-Soat-Context-tenant`, not `X-Soat-Context-ocaToken`.
 
 | | |
 | --- | --- |
@@ -155,18 +151,18 @@ A generation's `tool_context` is forwarded, in full, to every `http`, `mcp` and 
 | Matching | Case-insensitive (a key names a header). |
 | Invalid entry | An entry outside the [key grammar](../advanced/tool-context.md) is rejected at write time with `400 INVALID_TOOL_CONTEXT_KEY`. |
 
-The allowlist is per tool, not per agent: the same tool used by ten agents carries the same bound.
+The allowlist is per tool, not per agent.
 
 #### Computed credentials (`execute.auth`)
 
-Some targets cannot be authenticated with a static header: AWS expects a per-request Signature Version 4 HMAC, and Google expects a short-lived OAuth 2.0 access token minted from a signed service account assertion. `execute.auth` fills that gap. It is an authentication strategy on the existing `http` transport, not a separate tool type: `parameters`, path placeholders, `body_mode`, `output_mapping`, `preset_parameters`, guardrails, approvals, pipeline steps and `502 TOOL_HTTP_ERROR` mapping all behave identically whether or not `auth` is set.
+`execute.auth` authenticates targets a static header cannot: AWS (per-request Signature Version 4 HMAC) and Google (short-lived OAuth 2.0 token from a signed service account assertion). It is a strategy on the `http` transport, not a tool type; `parameters`, path placeholders, `body_mode`, `output_mapping`, `preset_parameters`, guardrails, approvals, pipeline steps and `502 TOOL_HTTP_ERROR` mapping are unchanged.
 
 | `auth.type`             | Required fields                                                        | Optional fields | What is sent |
 | ----------------------- | ---------------------------------------------------------------------- | --------------- | ------------ |
 | `aws_sigv4`             | `region`, `service`, `access_key_id`, `secret_access_key`              | `session_token` | `Authorization: AWS4-HMAC-SHA256 …`, `X-Amz-Date`, plus `X-Amz-Security-Token` and `X-Amz-Content-Sha256` when applicable |
 | `gcp_service_account`   | `credentials` (service account key file JSON, as a string), `scopes`    | —               | `Authorization: Bearer <access token>` |
 
-Store credential values as [secret references](./secrets.md#secret-references-secret) — the reference is what is stored and returned, resolved only immediately before signing:
+Credential values take [secret references](./secrets.md#secret-references-secret), stored and returned as-is, resolved only before signing:
 
 ```json
 {
@@ -192,34 +188,30 @@ Store credential values as [secret references](./secrets.md#secret-references-se
 }
 ```
 
-Behaviour worth knowing:
+- **Signing happens last**, over the final method, URL, headers and body. Only SOAT-controlled headers are signed (`host`, `content-type`, `x-amz-*`); [context headers](#context-headers-x-soat-context-) and `Idempotency-Key` go unsigned (AWS permits it).
+- **`aws_sigv4` with `body_mode: "multipart"`** is `400 VALIDATION_FAILED` at create/update: the body bytes are unknown at signing time.
+- **Path encoding follows the service**: segments are URI-encoded twice except for `s3` (once), per the SigV4 spec.
+- **GCP tokens are cached** per service account, token endpoint and scope set, refreshed shortly before expiry.
+- **`service` and `region` are signed**, not just routing; a mismatch is rejected by the target.
+- **Credential failures are `502 TOOL_AUTH_FAILED`** (distinct from `502 TOOL_HTTP_ERROR`, the target rejecting the call); a token endpoint's status and body land in error `meta` as `upstream_status` and `upstream_body`.
 
-- **Signing happens last**, over the final method, URL, headers and body. Only headers SOAT itself controls are signed (`host`, `content-type`, `x-amz-*`); [context headers](#context-headers-x-soat-context-) and `Idempotency-Key` are sent unsigned, which AWS permits.
-- **`aws_sigv4` is incompatible with `body_mode: "multipart"`** (`400 VALIDATION_FAILED` at create/update): the multipart body bytes are not knowable at signing time.
-- **Path encoding follows the service** — segments are URI-encoded twice for every service except `s3` (single encoding), matching the SigV4 spec.
-- **GCP tokens are cached** per service account, token endpoint and scope set, and refreshed shortly before expiry.
-- **`service` and `region` are part of the signature**, not just routing — a mismatch produces a signature the target rejects.
-- **Credential failures return `502 TOOL_AUTH_FAILED`** (distinct from `502 TOOL_HTTP_ERROR`, the target rejecting the call); when the token endpoint responded, its status and body are in the error `meta` as `upstream_status` and `upstream_body`.
-
-Every field in `auth` is validated at create and update time (`400 VALIDATION_FAILED`), and the same rule runs during `validate-formation`.
+Every `auth` field is validated at create/update (`400 VALIDATION_FAILED`) and by `validate-formation`.
 
 #### Request body encoding (`body_mode`)
 
-The `input` a caller passes to an `http` tool becomes its request body **verbatim** — SOAT does not case-transform the body keys. Author the input in whatever casing the target API expects; a tool's `input` is an opaque payload forwarded to the target, not a SOAT resource field.
+The caller's `input` is the request body verbatim (keys never case-transformed). `POST`, `PUT` and `PATCH` default to JSON (`Content-Type: application/json`); `execute.body_mode` set to `"multipart"` sends `multipart/form-data`:
 
-For `POST`, `PUT`, and `PATCH`, the request body defaults to JSON (`Content-Type: application/json`). Set `execute.body_mode` to `"multipart"` for APIs that require `multipart/form-data`. In multipart mode:
-
-- Scalar fields (string, number, boolean) become plain form fields.
-- A field shaped like `{ content_type, filename, data_base64 }` — the shape an [ingestion rule](./ingestion-rules.md) passes for the uploaded file — is base64-decoded and attached as a file part with the given filename and content type.
-- The `Content-Type` header is left unset so `fetch` generates the boundary itself (any `Content-Type` in `execute.headers` is dropped).
+- Scalars (string, number, boolean) become form fields.
+- A `{ content_type, filename, data_base64 }` field (the shape an [ingestion rule](./ingestion-rules.md) passes for the uploaded file) is base64-decoded and attached as a file part with that filename and content type.
+- `Content-Type` is left unset so `fetch` generates the boundary (any `Content-Type` in `execute.headers` is dropped).
 
 ### client
 
-Client tools have no server-side `execute`. When the model calls a `client` tool, the generation **pauses** — it suspends with `status: "requires_action"` and the pending tool calls. The caller executes the tool locally, then submits the results via [`POST /agents/{agent_id}/generate/{generation_id}/tool-outputs`](/docs/api/agents/submit-agent-tool-outputs) to resume the loop; the response is either a final result or another `requires_action` if the model calls more client tools.
+Client tools have no server-side `execute`. A call pauses the generation with `status: "requires_action"` and the pending tool calls; the caller executes locally and submits results via [`POST /agents/{agent_id}/generate/{generation_id}/tool-outputs`](/docs/api/agents/submit-agent-tool-outputs), which answers with a final result or another `requires_action`.
 
-Resuming continues the paused turn rather than starting one: the agent's [`tool_choice`](./agents.md#tool-choice) still applies, [`step_rules`](./agents.md#step-rules) keep counting from the turn's first step, and what remains of [`max_steps`](./agents.md#stop-conditions) is what the resumed loop has to spend — so a caller cannot extend one turn indefinitely by submitting outputs.
+Resuming continues the paused turn: the agent's [`tool_choice`](./agents.md#tool-choice) applies, [`step_rules`](./agents.md#step-rules) keep counting from the turn's first step, and only what remains of [`max_steps`](./agents.md#stop-conditions) can be spent.
 
-Example response when a client tool is called:
+Response when a client tool is called:
 
 ```json
 {
@@ -255,13 +247,13 @@ POST /agents/{agent_id}/generate/{generation_id}/tool-outputs
 
 ### mcp
 
-An `mcp` tool represents a connection to a [Model Context Protocol](https://modelcontextprotocol.io/) server. At generation time, the SOAT server connects to the MCP endpoint, discovers all available tools, and registers them with the AI model — one `mcp` tool ID provides **many** tool names, each with the name, description, and parameters the MCP server advertises. The SOAT server acts as a proxy: it forwards the model's tool call to the MCP server and feeds the result back into the loop.
+An `mcp` tool proxies a [Model Context Protocol](https://modelcontextprotocol.io/) server: at generation time its tools are discovered and registered with the model (one tool ID, many names, each with the advertised name, description and parameters); each call is forwarded and the result fed back.
 
-`mcp.url` and `mcp.headers` values support [secret references](./secrets.md#secret-references-secret), resolved right before the MCP server is contacted, exactly like [`http` tool headers](#secret-references-in-execute). `mcp.headers` also supports [`{{context:<key>}}`](#context-references-in-headers).
+`mcp.url` and `mcp.headers` accept [secret references](./secrets.md#secret-references-secret) (resolved before connecting, as for [`http` headers](#secret-references-in-execute)); `mcp.headers` also accepts [`{{context:<key>}}`](#context-references-in-headers).
 
 #### Scoping an MCP tool to a subset of actions
 
-By default an `mcp` tool exposes the **entire** MCP server surface. Set the `actions` array to an allowlist of MCP tool names to scope it:
+By default an `mcp` tool exposes the whole server surface. `actions` allowlists MCP tool names:
 
 ```json
 {
@@ -272,25 +264,25 @@ By default an `mcp` tool exposes the **entire** MCP server surface. Set the `act
 }
 ```
 
-The scope is enforced at two points: only allowlisted tools are registered with the model during generation, and [`POST /tools/{id}/call`](/docs/api/tools/call-tool) (and `pipeline` steps) reject an `action` outside the allowlist with `400 VALIDATION_FAILED` before any request reaches the MCP server.
+Only allowlisted tools are registered with the model; [`POST /tools/{id}/call`](/docs/api/tools/call-tool) and `pipeline` steps reject an `action` outside it with `400 VALIDATION_FAILED` before contacting the server.
 
-Omit `actions` (or set `null`) to expose the whole surface; `[]` exposes nothing. Because MCP tool names are discovered at runtime, they are **not** validated against a static registry at create/update time (unlike `builtin` actions) — a name the server does not advertise is simply never exposed.
+Omitted or `null` exposes everything; `[]` nothing. MCP names are discovered at runtime, not validated at create/update (unlike `builtin`); an unadvertised name is never exposed.
 
-`denied_actions` is the inverse: expose the whole surface minus a denylist (useful for a read+write server where enumerating every read tool would drift). It is enforced at the same two points, applied **after** `actions`, and **takes precedence** over it: a name present in both is denied. Omit or `null` denies nothing.
+`denied_actions` is a denylist (for a read+write server where enumerating every read tool would drift), enforced at the same points, applied after `actions` and winning: a name in both is denied. Omitted or `null` denies nothing.
 
 ### builtin
 
-A `builtin` tool exposes actions from the SOAT platform itself (documents, conversations, files, secrets, etc.). Instead of pointing to an external endpoint, you list the platform actions the agent may use via the `actions` array. Each action name corresponds to an MCP tool registered on the platform (e.g., `get-document`, `search-knowledge`, `create-file`) — **not** the REST operationId (use `search-knowledge`, not `searchKnowledge`). For a worked example of a fixed `builtin` write tool, see [Orchestrate a Sonnet - Step 4 (Create the fixed write tool)](/docs/tutorials/orchestrate-a-sonnet#step-4--create-the-poem-document-and-a-fixed-write-tool).
+A `builtin` tool exposes the SOAT platform actions listed in `actions`, named as the platform's MCP tools (`get-document`, `search-knowledge`, `create-file`), not REST operationIds (`search-knowledge`, not `searchKnowledge`). Worked example: [Orchestrate a Sonnet - Step 4 (Create the fixed write tool)](/docs/tutorials/orchestrate-a-sonnet#step-4--create-the-poem-document-and-a-fixed-write-tool).
 
-Creating or updating a `builtin` tool validates every entry in `actions` against the platform's action registry. An unrecognized action name returns `400 VALIDATION_FAILED` immediately; a camelCase name matching a known action once kebab-cased gets a suggestion (e.g. `"searchKnowledge" (did you mean "search-knowledge"?)`).
+Create/update validates every entry against the registry: an unknown name is `400 VALIDATION_FAILED`; a camelCase name matching a kebab-cased action gets a suggestion (`"searchKnowledge" (did you mean "search-knowledge"?)`).
 
-A platform action that responds non-2xx **fails the tool call** — `502 TOOL_HTTP_ERROR`, with the real status in `meta.tool_status_code` — so a rejected or unauthorized action can't be mistaken for data. An action that answers `204 No Content` (every `delete-*`) yields a `null` result rather than an error.
+A non-2xx action response is `502 TOOL_HTTP_ERROR` with the real status in `meta.tool_status_code`. A `204 No Content` answer (every `delete-*`) yields `null`.
 
-An operation whose response cannot be a tool result is rejected at create time with `400 VALIDATION_FAILED`: `download-file` (raw bytes — use `download-file-base64`) and `export-audit-entries` (unbounded NDJSON — use `list-audit-entries`). Both remain available over REST, the SDK, and the CLI. For the same reason, `create-agent-generation` is callable as a `builtin` action but without `stream`, and returns the completed generation.
+Operations whose response cannot be a tool result are `400 VALIDATION_FAILED` at create: `download-file` (raw bytes; use `download-file-base64`) and `export-audit-entries` (unbounded NDJSON; use `list-audit-entries`); both remain over REST, SDK and CLI. `create-agent-generation` has no `stream` and returns the completed generation.
 
 #### Actions an agent may not be given
 
-Some platform actions are withheld from the agent surface whatever the caller's credential allows, and naming one in `actions` returns `400 VALIDATION_FAILED` on create and update:
+These actions are withheld from agents whatever the caller's credential allows; naming one in `actions` is `400 VALIDATION_FAILED` on create and update:
 
 | Actions | Why |
 | --- | --- |
@@ -301,89 +293,62 @@ Some platform actions are withheld from the agent surface whatever the caller's 
 | `attach-user-policies`, `create-policy`, `update-policy`, `delete-policy`, `create-user`, `delete-user`, `list-users`, `get-user` | Change or enumerate who may do what |
 | `update-ai-provider-prices`, `update-project-prices` | Rewrite the price book its own spend is metered against. The `get-*` twins stay available |
 
-The difference is who chooses the arguments. Over [MCP](../mcp/introduction.md) these are ordinary operations — the caller is a person acting as themselves — so they are withheld from agents only. A tool row created before an action joined this list keeps the action stored, and the agent's surface leaves it out.
-
-Because the exclusion is per surface, an `mcp` tool pointed at this deployment's own MCP endpoint reaches them again. That is one more reason to prefer a `builtin` tool over pointing a tool back at your own API: it dispatches in-process under the caller's permissions, and it is the surface these rules apply to.
+Over [MCP](../mcp/introduction.md) these are ordinary operations (the caller is a person acting as themselves). A tool row created before an action joined the list keeps it stored; the agent's surface leaves it out. An `mcp` tool pointed at this deployment's own MCP endpoint reaches them again; prefer a `builtin` tool.
 
 #### The project a builtin action acts on
 
-`project_id` is supplied by the server, not by the model: on every action that takes one it is pinned to the **agent's own project** and removed from the schema the model sees. A credential that reaches several projects is ordinary, so without this an agent could act on any of them.
-
-The pin outranks a [preset parameter](#preset-parameters) naming a different project, and applies to an agent's tool calls. A direct [`POST /tools/{tool_id}/call`](/docs/api/tools/call-tool) is unaffected — that caller is acting as themselves, exactly as they would by calling the route.
+On every action that takes `project_id` the server pins it to the agent's own project and removes it from the model's schema. The pin outranks a [preset parameter](#preset-parameters) naming another project and applies to agent tool calls only; a direct [`POST /tools/{tool_id}/call`](/docs/api/tools/call-tool) is unaffected.
 
 #### How a builtin action is executed
 
-The action runs **in the server process**, dispatching through the same middleware stack and route handler a client request goes through — no network hop, so nothing depends on the server being reachable at a particular address. The route's permission check runs per call against the caller's policies, and strict field validation, audit logging, metering and quotas, and the snake_case response contract all apply exactly as for a client request.
+The action runs in-process through the same middleware stack and route handler as a client request (no network hop): per-call permission check against the caller's policies, strict field validation, audit logging, metering and quotas, and the snake_case response contract all apply. No ambient authority: an action the credential cannot perform fails with `502 TOOL_HTTP_ERROR` / `meta.tool_status_code: 403`. A call not settled within `SOAT_TOOL_CALL_TIMEOUT_MS` (default `300000`) fails with a timeout error. From an orchestration the tool acts as the run's own identity — [Run identity](./orchestrations.md#durable-background-execution).
 
-A `builtin` tool therefore has **no ambient authority**: it acts with the credential it was given, and an action the credential cannot perform fails with `502 TOOL_HTTP_ERROR` / `meta.tool_status_code: 403`. A call that does not settle within `SOAT_TOOL_CALL_TIMEOUT_MS` (default `300000`) fails with a timeout error. Called from an orchestration, a `builtin` tool acts as the run's own identity — see [Run identity](./orchestrations.md#durable-background-execution).
-
-When a `builtin` tool is called mid-turn by an agent, the server injects `tool_context`, `parent_trace_id`, `root_trace_id`, and `max_call_depth` into the request only for actions whose REST schema declares those fields (currently only `create-agent-generation`); other actions are called as-is.
+Mid-turn agent calls inject `tool_context`, `parent_trace_id`, `root_trace_id` and `max_call_depth` only for actions whose REST schema declares them (currently only `create-agent-generation`).
 
 ### pipeline
 
-A `pipeline` tool runs a **fixed, ordered sequence of other tools as a single call** — one tool call executes the whole `compute → persist` sequence deterministically server-side, with no model reasoning between steps. The same pipeline is callable by orchestration `tool` nodes and directly via the API.
+A `pipeline` tool runs a fixed, ordered sequence of other tools as one call (`compute → persist`) server-side, with no model reasoning between steps; callable by orchestration `tool` nodes and directly via the API.
 
-The `pipeline` config has a `steps` array and an optional `output`:
+`pipeline` has `steps` and an optional `output`:
 
-- **`steps[]`** — each step calls a tool either by **`tool_id`** (an existing tool) or by an inline **`tool`** definition (the same shape as [Create Tool](#data-model) minus `project_id`, executed without a Tool row) — never both. An inline step `tool` cannot itself be of type `pipeline`. In a [formation](./formations.md) template, `tool_id` may be a `{ "ref": "ResourceName" }` reference to another tool resource in the same template, resolved at deploy time. Either form accepts an optional **`action`** for `builtin`/`mcp` step tools. The step's **`input`** is a mapping object whose values are [JSON Logic](https://jsonlogic.com) expressions evaluated against a `{ input, steps }` context:
-  - `{ "var": "input.<field>" }` reads the pipeline tool's own input; `{ "var": "steps.<id>.<path>" }` reads an earlier step's output.
-  - Literals pass through; transforms (`cat`, `+`, `if`, `map`, `filter`, `reduce`, …) are supported, and expressions are resolved **recursively at any nesting depth**.
-  - A value is treated as an expression only when it is a single-key object whose key names a real JSON Logic operator. To pass a **literal** object that looks like one, wrap it in `preserve`, which returns its argument unevaluated: `{ "preserve": { "var": "some.var" } }`.
-- **`output`** (optional) — a JSON Logic expression, evaluated the same way, that builds the return value. When omitted, the last step's raw output is returned. `output` may resolve to a bare scalar (e.g. `{ "var": "steps.<id>.<path>" }`) or an object with nested expressions.
+- **`steps[]`** — each step names a tool by **`tool_id`** or an inline **`tool`** ([Create Tool](#data-model) body minus `project_id`, no Tool row, not itself `pipeline`), never both; in a [formation](./formations.md) template `tool_id` may be `{ "ref": "ResourceName" }` to another template tool, resolved at deploy. Optional **`action`** for `builtin`/`mcp` step tools. **`input`** maps keys to [JSON Logic](https://jsonlogic.com) expressions over `{ input, steps }`:
+  - `{ "var": "input.<field>" }` reads the pipeline's own input; `{ "var": "steps.<id>.<path>" }` an earlier step's output.
+  - Literals pass through; transforms (`cat`, `+`, `if`, `map`, `filter`, `reduce`, …) resolve recursively at any depth.
+  - A value is an expression only when it is a single-key object whose key is a real JSON Logic operator; `preserve` returns its argument unevaluated for a literal that looks like one: `{ "preserve": { "var": "some.var" } }`.
+- **`output`** (optional) — a JSON Logic expression building the return value (default: the last step's raw output); may be a bare scalar (`{ "var": "steps.<id>.<path>" }`) or an object with nested expressions.
 
-Each step's full output is captured under `steps.<id>`. A step may reference only **earlier** steps — forward references are rejected at create time. Execution is **fail-fast**: the first failing step aborts the pipeline with `PIPELINE_STEP_FAILED`. A `tool_id` step targeting another `pipeline` tool is bounded by a maximum nesting depth (`PIPELINE_DEPTH_EXCEEDED`). Steps cannot target `client` tools, which cannot run server-side.
+Each step's output is captured under `steps.<id>`; a step may reference only earlier steps (forward references rejected at create). The first failing step aborts with `PIPELINE_STEP_FAILED`. Nested `pipeline` targets are bounded by a maximum depth (`PIPELINE_DEPTH_EXCEEDED`). Steps cannot target `client` tools.
 
-> **Case convention.** Structural keys are snake_case (`tool_id`, `steps`, `input`, `output`). A step's `input` mapping is a **tool payload, not a SOAT field**: its keys are preserved **verbatim** and become the sub-tool's arguments — author them in the exact casing the target expects. A `var` path must match the casing of the data it reads.
+> **Case convention.** Structural keys are snake_case (`tool_id`, `steps`, `input`, `output`). A step's `input` keys are preserved verbatim as the sub-tool's arguments; author them, and `var` paths, in the casing of the data.
 
-For LLM-decided (rather than fixed) multi-step flows, see [Orchestrations](./orchestrations.md), which share the same JSON Logic mapping model.
+For LLM-decided multi-step flows see [Orchestrations](./orchestrations.md), which share the JSON Logic mapping model.
 
-**Validation.** [`POST /tools`](/docs/api/tools/create-tool), [`PATCH /tools/:id`](/docs/api/tools/update-tool), and `validate-formation` all validate a `pipeline` config's structure before it can run — every step must have a `tool_id` or an inline `tool` object with a `name`. In a formation template a step `tool_id` may be a `{ "ref": … }` (resolved at deploy); direct `POST`/`PATCH` require a literal string `tool_id`. `validate-formation` additionally warns (not an error) when the tool's own `parameters` schema declares a property that no step `input` or `output` mapping ever reads via `{ "var": "input.<name>" }` — an unreachable input key.
+**Validation.** [`POST /tools`](/docs/api/tools/create-tool), [`PATCH /tools/:id`](/docs/api/tools/update-tool) and `validate-formation` check the structure: every step needs a `tool_id` or an inline `tool` with a `name`; a `{ "ref": … }` `tool_id` is accepted in a formation template only (direct `POST`/`PATCH` need a literal string). `validate-formation` also warns (not errors) on a `parameters` property no step `input` or `output` reads via `{ "var": "input.<name>" }`.
 
 ### Output Mapping
 
-`output_mapping` is a universal [JSON Logic](https://jsonlogic.com) mapping applied to a tool's raw result, for **every** tool type. It's evaluated over `{ "output": <raw result>, "input": <merged input> }`, so `{ "var": "output.text" }` extracts a bare scalar without needing a wrapping `pipeline` tool, and `{ "var": "input.title" }` echoes back a field of the request. An object mapping reshapes the result instead of extracting one field:
+`output_mapping` is a [JSON Logic](https://jsonlogic.com) mapping over `{ "output": <raw result>, "input": <merged input> }`, applied to every tool type's raw result: `{ "var": "output.text" }` extracts a scalar without a wrapping `pipeline`, `{ "var": "input.title" }` echoes a request field, an object reshapes:
 
 ```json
 { "transcript": { "var": "output.text" }, "language": { "var": "output.language" } }
 ```
 
-`input` is the tool's merged input for this call — the caller-supplied `input` with `preset_parameters` pinned over it.
+`input` is the caller-supplied `input` with `preset_parameters` pinned over it.
 
-- **Ordering for `pipeline` tools.** The tool's top-level `output_mapping` runs *after* the pipeline's own `output` mapping, over the pipeline's final result.
-- **`client` tools.** The mapping is applied when the submitted tool output is materialized back into the generation, keyed by tool name.
-- **Where `input` is available.** Populated for a direct call ([`POST /tools/{id}/call`](/docs/api/tools/call-tool)), a pipeline step, or a workflow/orchestration tool dispatch; `{}` for a tool the model calls by name from within an agent's loop, and for a `client` tool's output mapping.
-- **A `var` path that resolves to `null`** (commonly a mismatched path, e.g. a missing `output.` prefix) emits a debug log entry; the mapped result is unchanged.
+- **`pipeline` tools.** The top-level `output_mapping` runs after the pipeline's own `output` mapping, over its final result.
+- **`client` tools.** Applied when the submitted output is materialized back into the generation, keyed by tool name.
+- **`input`** is populated for a direct call ([`POST /tools/{id}/call`](/docs/api/tools/call-tool)), a pipeline step or a workflow/orchestration tool dispatch; `{}` for a tool the model calls from an agent's loop and for a `client` tool's mapping.
+- **A `var` path resolving to `null`** (commonly a missing `output.` prefix) emits a debug log entry; the result is unchanged.
 
-When no `output_mapping` is configured, the raw result is returned unchanged.
+Without `output_mapping` the raw result is returned unchanged.
 
 ### Preset Parameters
 
-`preset_parameters` bakes fixed values into a tool definition. When a key matches a field in the action's input schema, that field is **removed from the schema shown to the model** and the preset value is **merged into every call** before dispatch. This eliminates the risk of the model choosing a wrong value for parameters that should always be fixed, and enables multiple tool instances targeting different resources from the same action — e.g. two `builtin` tools both binding `update-document`, one with `"preset_parameters": { "id": "doc_abc123" }` and one with `{ "id": "doc_xyz789" }`. See it end to end in [Agent SOAT Tools and Preset Parameters - Step 6 (Create builtin tools)](/docs/tutorials/agent-soat-tools#step-6--create-builtin-tools).
+`preset_parameters` pins fixed values: a key matching an input-schema field is removed from the schema shown to the model and merged into every call before dispatch. Several tools can target different resources from one action: two `builtin` tools binding `update-document`, one with `"preset_parameters": { "id": "doc_abc123" }`, one with `{ "id": "doc_xyz789" }`. End to end: [Agent SOAT Tools and Preset Parameters - Step 6 (Create builtin tools)](/docs/tutorials/agent-soat-tools#step-6--create-builtin-tools).
 
-**A preset is a pin, not a default: it wins.** If a call supplies a value for a
-key the tool pins — a model that names the hidden field anyway, or an `input`
-sent to [`POST /tools/{id}/call`](/docs/api/tools/call-tool) — the preset value
-is what dispatches. Keys the presets do not name are taken from the call as
-usual. Hiding the field from the schema is ergonomics, not the guarantee: no
-tool schema sets `additionalProperties: false`, so a model that emits a hidden
-key is not rejected, and the merge order is what makes a pinned parameter
-actually fixed.
+**A preset is a pin, not a default: it wins.** A value the call supplies for a pinned key (a model naming the hidden field, or an `input` to [`POST /tools/{id}/call`](/docs/api/tools/call-tool)) is replaced by the preset; unpinned keys come from the call. No tool schema sets `additionalProperties: false`, so a hidden key is not rejected; merge order is the guarantee.
 
-This holds on **every** tool type — `builtin`, `http`, `mcp`, `client`,
-`pipeline` — and at every dispatch surface: an agent's tool loop, a direct call,
-a pipeline step, an orchestration tool node, a converter invocation. A guardrail
-evaluates the pinned arguments too (`args.*` in a guard condition, and the
-`arguments` recorded on an approval item), since those are the arguments the
-call will carry.
-
-For a `client` tool the server never dispatches the call, so the presets are
-applied to the arguments handed over at the `requires_action` boundary — what
-your client receives is already pinned.
-
-On an `mcp` binding, presets apply to **every** tool the MCP server exposes
-through that binding, the same reach they have over every action a `builtin`
-binding lists. Pin a key on a binding only when it is meant for all of them; use
-a separate binding otherwise.
+Holds on every tool type (`builtin`, `http`, `mcp`, `client`, `pipeline`) and dispatch surface (agent tool loop, direct call, pipeline step, orchestration tool node, converter invocation). A guardrail evaluates the pinned arguments (`args.*` in a guard condition, `arguments` on an approval item); a `client` tool receives them pinned at the `requires_action` boundary. On an `mcp` binding presets apply to every tool the server exposes, as to every action a `builtin` binding lists; use a separate binding for a key meant for one.
 
 #### Pinning to a per-run value (`{{context:}}`)
 
@@ -398,49 +363,33 @@ A preset value may be a [`{{context:<key>}}`](../advanced/tool-context.md#pinnin
 }
 ```
 
-That is what lets one tool serve many tenants: the credential and the scope it must be confined to both come from the run, and neither is in the model's hands. A key missing from this call's `tool_context` fails the call with `400 MISSING_TOOL_CONTEXT_KEY` rather than sending the literal placeholder; a resolved value is retyped to the parameter's declared schema type, since context values are strings. `{{secret:...}}` is **not** resolved in a preset — it stays literal, so secrets remain a headers-only mechanism.
+Credential and scope both come from the run, neither from the model. A key missing from the call's `tool_context` is `400 MISSING_TOOL_CONTEXT_KEY` (the literal placeholder is never sent); a resolved value is retyped to the parameter's declared schema type. `{{secret:...}}` is not resolved in a preset (secrets are headers-only).
 
-Presets and model-supplied arguments reach the action wherever the OpenAPI operation declares the parameter — path, query string, or request body. A `list-*` action's `project_id`, filters, and pagination arguments are query parameters, so a preset like `{ "project_id": "proj_abc123" }` is the way to lock a `builtin` tool to one project. An argument the caller omits is left out of the request entirely rather than sent as an empty value.
+Presets and model arguments reach the action wherever the OpenAPI operation declares the parameter (path, query, body): a `list-*` action's `project_id`, filters and pagination are query parameters, so `{ "project_id": "proj_abc123" }` locks a `builtin` tool to one project. An omitted argument is left out, never sent empty.
 
 ### Literal Credentials Are Masked on Read
 
-A tool definition is readable by anyone holding `tools:GetTool`, which is a wider audience than whoever wrote a credential into it. So a credential written as a **literal** is stored and still sent on every call, but never echoed: `secret_access_key`, `session_token` and `credentials` under `execute.auth`, and any credential-named `headers` value in `execute` or `mcp` (`Authorization`, `Cookie`, or a name containing `api-key` / `token` / `secret` / `password`) come back as `{"no_echo": true}`.
+A tool is readable by anyone holding `tools:GetTool`, so a literal credential is stored and sent on every call but never echoed: `secret_access_key`, `session_token` and `credentials` under `execute.auth`, and any credential-named `headers` value in `execute` or `mcp` (`Authorization`, `Cookie`, or a name containing `api-key` / `token` / `secret` / `password`) read back as `{"no_echo": true}`. The mask is an object so a read-edit-write round trip fails the schema's `type: string` check instead of storing the placeholder as the credential.
 
-The mask is an object rather than a masked string so that a read-edit-write round trip fails the schema's `type: string` check instead of quietly writing the placeholder in as the credential.
-
-A value carrying a `{{secret:...}}` reference stays readable — the reference is the wiring, not the credential, and hiding it would leave a reader unable to see which secret a tool uses, or that it uses one at all. Use a reference rather than a literal: it is what keeps the credential out of the row as well as out of the response.
+A `{{secret:...}}` reference stays readable; it is the wiring, not the credential.
 
 ### Where a Tool May Reach (Egress)
 
-An `http` or `mcp` tool is a request **the server makes**, so its target is
-bounded by the deployment, not by the tool definition. The default is: any
-publicly routable address, and nothing else. A target that is not — loopback,
-`10/8`, `172.16/12`, `192.168/16`, link-local `169.254/16` (cloud metadata),
-CGNAT, IPv6 ULA — fails with `403 TOOL_EGRESS_BLOCKED`, with the refused
-address in `meta.tool_address`.
+An `http` or `mcp` tool's target is bounded by the deployment, not the tool definition. Default: any publicly routable address. Loopback, `10/8`, `172.16/12`, `192.168/16`, link-local `169.254/16` (cloud metadata), CGNAT and IPv6 ULA fail with `403 TOOL_EGRESS_BLOCKED`, the refused address in `meta.tool_address`.
 
-The address the hostname **resolves to** is what is checked, and the check runs
-again on every redirect hop; credential headers (`Authorization`, `Cookie`) are
-dropped when a redirect changes origin. So a public-looking hostname pointing at
-`169.254.169.254`, and a legitimate target answering
-`302 Location: http://169.254.169.254/…`, are both refused.
+The resolved address is checked on the first request and every redirect hop; credential headers (`Authorization`, `Cookie`) are dropped when a redirect changes origin. A public hostname resolving to `169.254.169.254` and a `302 Location: http://169.254.169.254/…` are both refused.
 
-To reach an internal service on purpose, the operator lists it in
-[`TOOL_EGRESS_ALLOWED_HOSTS`](../self-hosting/configuration.md#outbound-egress) —
-a deployment-wide setting, not a per-project one. When the destination is SOAT's
-own API, use a [`builtin` tool](#builtin) instead of an `http` tool pointed at
-your own base URL: it dispatches in-process under the caller's own permissions
-and never leaves the network.
+The operator allows internal services in [`TOOL_EGRESS_ALLOWED_HOSTS`](../self-hosting/configuration.md#outbound-egress), deployment-wide, not per project. For SOAT's own API use a [`builtin` tool](#builtin): in-process, under the caller's permissions.
 
 ### Calling a Tool Directly
 
-Tools can be invoked independently of an agent via [`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool). The body accepts `action` (required for `builtin` and `mcp` types), `input`, and `tool_context`. For `pipeline` tools, `input` is the pipeline input and `action` is ignored. When the tool has an `output_mapping`, the response is that mapping's result — see [Output Mapping](#output-mapping).
+[`POST /api/v1/tools/{tool_id}/call`](/docs/api/tools/call-tool) invokes a tool without an agent. Body: `action` (required for `builtin` and `mcp`; ignored for `pipeline`), `input` (the pipeline input for `pipeline`), `tool_context`. With an `output_mapping` the response is its result ([Output Mapping](#output-mapping)).
 
-- A target that is not publicly routable, and not listed in the deployment's `TOOL_EGRESS_ALLOWED_HOSTS`, fails with `403 TOOL_EGRESS_BLOCKED` before any connection is opened — see [Where a Tool May Reach](#where-a-tool-may-reach-egress).
-- A non-2xx target response fails with `502 TOOL_HTTP_ERROR`; the error `meta` carries `tool_status_code`, `tool_response_body`, `tool_url`, and `tool_method`.
-- If [`execute.auth`](#computed-credentials-executeauth) cannot produce the credential, the call fails with `502 TOOL_AUTH_FAILED` instead.
-- A 2xx response whose body isn't valid JSON is returned as raw text; an empty result (e.g. a `builtin` action answering `204`) responds `200` with a JSON `null` body.
-- `tool_context` in the body reaches a tool declaring a [`{{context:<key>}}` token](#context-references-in-headers), so a context-dependent tool can be exercised here without an agent in between. There is no session on this route, so the auto-populated `session_id`, `actor_id` and `actor_external_id` are dropped from that bag rather than forwarded — see [Calling a context-dependent tool directly](../advanced/tool-context.md#calling-a-context-dependent-tool-directly).
+- A target neither publicly routable nor in `TOOL_EGRESS_ALLOWED_HOSTS` is `403 TOOL_EGRESS_BLOCKED` before any connection is opened — [Where a Tool May Reach](#where-a-tool-may-reach-egress).
+- A non-2xx target response is `502 TOOL_HTTP_ERROR`; error `meta` carries `tool_status_code`, `tool_response_body`, `tool_url` and `tool_method`.
+- [`execute.auth`](#computed-credentials-executeauth) failing to produce the credential is `502 TOOL_AUTH_FAILED`.
+- A 2xx body that is not valid JSON is returned as raw text; an empty result (a `builtin` action answering `204`) is `200` with a JSON `null` body.
+- `tool_context` reaches a tool declaring a [`{{context:<key>}}` token](#context-references-in-headers); with no session on this route, `session_id`, `actor_id` and `actor_external_id` are dropped — [Calling a context-dependent tool directly](../advanced/tool-context.md#calling-a-context-dependent-tool-directly).
 
 ## Examples
 
@@ -515,7 +464,7 @@ curl -X POST https://api.example.com/api/v1/tools \
 
 ### Create a pipeline tool
 
-A `pipeline` tool chains existing tools: here one step computes a sum, the next persists it, mapping the first step's output into the second step's input (`$CALC_TOOL_ID` and `$SAVE_TOOL_ID` are IDs of previously created tools).
+Step one computes a sum, step two persists it, the first output mapped into the second input (`$CALC_TOOL_ID` and `$SAVE_TOOL_ID` are existing tool IDs).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>

@@ -13,17 +13,12 @@ import TabItem from '@theme/TabItem';
 
 # Conditional Branching in Orchestrations
 
-This tutorial shows how to build a branching orchestration using [condition nodes](/docs/modules/orchestrations#node-types). When a run completes, every node that was not reached is recorded with `status: "skipped"` — giving you a complete execution trace regardless of which path ran.
-
-You will define an orchestration whose `condition` node routes to one of two `transform` branches, then run both branches and inspect `node_executions`. No AI provider is required.
+A branching orchestration with [condition nodes](/docs/modules/orchestrations#node-types); unreached nodes are recorded with `status: "skipped"`. You route a `condition` node to one of two `transform` branches, run both, and inspect `node_executions`. No AI provider is required.
 
 ## Prerequisites
 
-- SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide to bring the stack up with Docker Compose.
-- New to orchestrations? Read [Key Concepts](/docs/getting-started/concepts) and the [Orchestrations module](/docs/modules/orchestrations) before diving in.
-- CLI installed and configured, or SDK set up. See [CLI](/docs/cli) or [SDK](/docs/sdk).
-- For production hardening (secrets, env vars), see [Configuration](/docs/self-hosting/configuration).
-- Server is at `http://localhost:5047`.
+- SOAT running locally ([Quick Start](/docs/getting-started)); [Key Concepts](/docs/getting-started/concepts); [Orchestrations module](/docs/modules/orchestrations); [Configuration](/docs/self-hosting/configuration).
+- [CLI](/docs/cli) or [SDK](/docs/sdk); server at `http://localhost:5047`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -53,7 +48,7 @@ export SOAT_BASE_URL=http://localhost:5047
 
 ## Step 1 — Log in as admin
 
-See [Users](/docs/modules/users#examples) for authentication details.
+See [Users](/docs/modules/users#examples) for authentication.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -140,7 +135,7 @@ The graph has three nodes:
 | `send_alert` | `transform` | Runs only on the `alert` branch |
 | `queue_task` | `transform` | Runs only on the `queue` branch |
 
-Edges carry `condition: "<label>"` to select which branch the engine traverses after `route` completes. A node whose only incoming edge is not traversed is recorded as `skipped` when the run finishes. See [Orchestrations — Node Types](/docs/modules/orchestrations#node-types) for the full condition node reference.
+Edges carry `condition: "<label>"`; a node whose only incoming edge is not traversed is recorded `skipped`. See [Orchestrations — Node Types](/docs/modules/orchestrations#node-types).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -240,7 +235,7 @@ ORCH_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestrations" \
 
 ## Step 4 — Run the alert branch
 
-Pass `urgent: true`. The engine evaluates the `route` condition, emits `"alert"`, traverses only the `send_alert` edge, and records `queue_task` as `skipped`. See [Orchestrations — Node Executions](/docs/modules/orchestrations#node-executions) for the full execution trace schema.
+`urgent: true` makes `route` emit `"alert"`; `send_alert` runs and `queue_task` is `skipped`. Trace schema: [Orchestrations — Node Executions](/docs/modules/orchestrations#node-executions).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -296,13 +291,13 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestration-runs" \
 </TabItem>
 </Tabs>
 
-The `queue_task` node appears in the trace with `status: "skipped"`, `output: null`, and `started_at: null` — confirming it was never executed.
+`queue_task` shows `status: "skipped"`, `output: null`, `started_at: null`.
 
 ---
 
 ## Step 5 — Run the queue branch
 
-Pass `urgent: false`. Now `route` emits `"queue"`, `send_alert` is skipped, and `queue_task` runs.
+`urgent: false` makes `route` emit `"queue"`; `send_alert` is skipped and `queue_task` runs ([Node Executions](/docs/modules/orchestrations#node-executions)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -357,4 +352,4 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestration-runs" \
 
 ## Next Steps
 
-To apply this pattern to a real pipeline, replace the `transform` nodes with `agent` nodes pointing at specialized agents for each branch. See [Orchestrate a Sonnet](/docs/tutorials/orchestrate-a-sonnet) and [Multi-Agent Orchestration](/docs/tutorials/multi-agent-orchestration) for examples that wire agents into an orchestration graph.
+Replace the `transform` nodes with `agent` nodes per branch: [Orchestrate a Sonnet](/docs/tutorials/orchestrate-a-sonnet), [Multi-Agent Orchestration](/docs/tutorials/multi-agent-orchestration).

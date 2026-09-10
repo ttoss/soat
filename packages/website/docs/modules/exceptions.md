@@ -7,13 +7,13 @@ import TabItem from '@theme/TabItem';
 
 # Exceptions
 
-A queue of failures and anomalies surfaced as first-class, triageable items rather than log lines.
+Failures and anomalies as first-class triageable items.
 
 ## Overview
 
-The platform files an **exception** whenever something needs a human's attention — an orchestration run that failed after exhausting retries, a [guardrail](./guardrails.md) tripwire that aborted an action, or an [approval](./approvals.md) that expired without a decision. Each item carries a severity, structured detail, and provenance links, and moves through an `open → acknowledged → resolved` triage lifecycle. Repeated identical failures fold into one item with an occurrence count, so a hot failure loop never floods the queue.
+The platform files an **exception** when something needs a human: an orchestration run failed after retries, a [guardrail](./guardrails.md) tripwire aborted an action, an [approval](./approvals.md) expired. Each carries severity, structured detail, provenance links, and an `open → acknowledged → resolved` lifecycle. Identical failures fold into one item with an occurrence count.
 
-Exceptions are **auto-filed by the platform** (or filed explicitly as `manual`); there is no public create endpoint. They are read, acknowledged, and resolved through the API, and an `exceptions.created` [webhook](./webhooks.md) fires on the first occurrence so alerting is push, not poll.
+Exceptions are **auto-filed** (or filed as `manual`); there is no public create endpoint. They are read, acknowledged, and resolved through the API; `exceptions.created` fires a [webhook](./webhooks.md) on first occurrence.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -50,7 +50,7 @@ Exceptions are **auto-filed by the platform** (or filed explicitly as `manual`);
 
 ### Severity
 
-Severity is keyed to actionability, not raw "badness". Each `kind` has a default a producer can override:
+Severity is keyed to actionability. Each `kind` has a default a producer may override:
 
 | Kind | Default severity | Why |
 |---|---|---|
@@ -64,23 +64,21 @@ Severity is keyed to actionability, not raw "badness". Each `kind` has a default
 
 ### Occurrence dedup
 
-Repeated identical failures fold into one **open** item rather than filing duplicates: a partial unique index keys at most one open exception per dedup key, and each recurrence bumps `occurrence_count` and `last_seen_at` (only the first emits `exceptions.created`). A resolved item frees the key, so a recurrence after resolution opens a fresh exception. `manual` items are never deduped.
+Identical failures fold into one **open** item: a partial unique index keys at most one open exception per dedup key; recurrences bump `occurrence_count` and `last_seen_at` (only the first emits `exceptions.created`). Resolving frees the key, so a later recurrence opens a fresh item. `manual` items are never deduped.
 
 ### Triage lifecycle
 
-An item is `open` when filed. **Acknowledge** it (`acknowledged`) to signal someone is on it — distinct from **resolve** (`resolved`, "fixed"), which records the resolver and an optional note. A resolved item is terminal: acknowledging or resolving it again returns `409 EXCEPTION_ALREADY_RESOLVED`.
+Filed as `open`. **Acknowledge** (`acknowledged`) signals someone is on it; **resolve** (`resolved`) records the resolver and optional note and is terminal: acknowledging or resolving again returns `409 EXCEPTION_ALREADY_RESOLVED`.
 
 ### Producers
 
-Exceptions are filed by subscribing to platform events, so producers stay decoupled: `run_failed` rides the existing `orchestration_runs.failed` event, `approval_expired` rides `approvals.expired`, and `guardrail_tripwire` rides a dedicated `guardrail.tripwire` event emitted from the guardrail dispatch path. Every filing is fire-and-forget — it never disturbs the producer.
+Producers subscribe to platform events: `run_failed` rides `orchestration_runs.failed`, `approval_expired` rides `approvals.expired`, `guardrail_tripwire` rides `guardrail.tripwire` from the guardrail dispatch path. Filing is fire-and-forget.
 
-`event_trigger_loop` is filed by the [event-trigger](./triggers.md#loops-and-cost) dispatcher when a trigger refuses to extend the causal chain that reached it — because the chain already names that trigger, or because it has run past the depth cap. It is deduped on the trigger and the reason, so a loop that keeps re-arriving is one triage item whose `occurrence_count` reads as how often it was refused; `detail` carries the chain and the event name, which is the only place that wiring is visible (the events themselves are not persisted).
+`event_trigger_loop` is filed by the [event-trigger](./triggers.md#loops-and-cost) dispatcher when a trigger refuses to extend the causal chain that reached it (the chain already names it, or is past the depth cap). Deduped on trigger and reason, so `occurrence_count` is how often it was refused; `detail` carries the chain and event name, the only place that wiring is visible (events are not persisted).
 
-`chain_limit` is filed when a [continuation chain](./chains.md) is refused for spending its generation budget. It rides a dedicated `generations.chain_limit` event and is deduped on the chain's **root generation**, which is the one id every refusal in a chain shares: an over-budget chain is refused once per resumption, so keying on the refused hop would file one item per occurrence of exactly the runaway this reports. `detail` carries the root, the initiator that asked for the refused turn, the chain's size, the budget it hit, and `limit_source` — `agent` when the agent's own [`max_chain_generations`](./agents.md#stop-conditions) refused it, `project` when the project's [`max_chain_generations`](./projects.md) did, `platform` when the deployment's ceiling did, so the number alone does not leave you guessing which knob to turn.
+`chain_limit` is filed when a [continuation chain](./chains.md) is refused for spending its generation budget. It rides `generations.chain_limit` and is deduped on the chain's **root generation**, the id every refusal in a chain shares. `detail` carries the root, the initiator of the refused turn, the chain's size, the budget hit, and `limit_source`: `agent` ([`max_chain_generations`](./agents.md#stop-conditions) on the agent), `project` ([`max_chain_generations`](./projects.md) on the project), or `platform` (the deployment ceiling). The refusal itself is recorded on a trace and returned to a caller that is usually a background sweep; the exception is what reaches a human.
 
-This is the signal that a chain stopped growing. The refusal itself is recorded on a trace and returned to a caller that is usually a background sweep with nothing left to hand it to, so without the exception a runaway would be bounded but still reach nobody until the bill arrived.
-
-`quota_unpriced` is the exception to the event-driven pattern: it is filed inline from the [quota](./quotas.md#token-and-cost-enforcement) pre-generation check, which is the only place that knows a cost cap just evaluated against a window whose usage was not fully priced. A window that priced **nothing** and one that priced only **part** of its usage file the same item — the fix is the same price rows, named in the item's `unpriced_rows` — and it is deduped on the quota rather than the window, so one degraded cap is one triage item and `occurrence_count` reads as the number of generations that ran under it. The check fails open, so a filing error can never block a generation.
+`quota_unpriced` is filed inline from the [quota](./quotas.md#token-and-cost-enforcement) pre-generation check, the only place that knows a cost cap evaluated against a window whose usage was not fully priced. Nothing priced and partly priced file the same item (the fix is the price rows named in `unpriced_rows`), deduped on the quota, so `occurrence_count` is the number of generations run under the degraded cap. The check fails open; a filing error never blocks a generation.
 
 ## Examples
 

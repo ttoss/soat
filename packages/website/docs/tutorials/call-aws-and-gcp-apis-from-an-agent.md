@@ -15,22 +15,17 @@ import TabItem from '@theme/TabItem';
 
 # Call AWS and GCP APIs from an Agent
 
-An HTTP [tool](/docs/modules/tools) with an `Authorization` header covers every target whose credential is a fixed string. AWS and Google Cloud are not such targets:
+A static `Authorization` header on an HTTP [tool](/docs/modules/tools) does not cover AWS (Signature Version 4 HMAC per request over method, URL, headers and body) or Google Cloud (short-lived OAuth 2.0 access token minted from a signed service account assertion, expiring in about an hour).
 
-- **AWS** expects a Signature Version 4 HMAC computed **per request**, over that request's method, URL, headers and body.
-- **Google** expects a short-lived OAuth 2.0 access token, minted from a signed service account assertion and expiring in about an hour.
-
-Neither is expressible as a static header. `execute.auth` handles both: it is an authentication strategy on the existing `http` transport, so every other HTTP tool feature ([guardrails](/docs/modules/guardrails), [approvals](/docs/modules/approvals), `body_mode`, `output_mapping`, …) behaves exactly as usual. You will build a SigV4-signed S3 tool and a GCP service-account BigQuery tool, hand one to an agent, and read the failure modes.
+`execute.auth` is an authentication strategy on the `http` transport, so [guardrails](/docs/modules/guardrails), [approvals](/docs/modules/approvals), `body_mode` and `output_mapping` behave as usual. You build a SigV4-signed S3 tool and a GCP service-account BigQuery tool, hand one to an agent, and read the failure modes.
 
 ## Prerequisites
 
-- SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide to bring the stack up with Docker Compose.
-- `SECRETS_ENCRYPTION_KEY` set on the server — the [secrets](/docs/modules/secrets) module refuses to start without it. See [Configuration](/docs/self-hosting/configuration).
-- [Ollama](https://ollama.com) running locally with `qwen2.5:0.5b` available. To connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
-- New to SOAT? Read [Key Concepts](/docs/getting-started/concepts) to understand projects, agents, and tools first.
-- CLI installed and configured, or SDK set up. See [CLI](/docs/cli) or [SDK](/docs/sdk).
-- **Real cloud credentials.** An AWS access key pair with `s3:GetObject` on one bucket, and/or a GCP service account key file with BigQuery access. Steps 3 and 7 call the live APIs; everything else works without them.
-- Server is at `http://localhost:5047`.
+- SOAT running locally ([Quick Start](/docs/getting-started)); [Key Concepts](/docs/getting-started/concepts).
+- `SECRETS_ENCRYPTION_KEY` set — [secrets](/docs/modules/secrets) refuses to start without it ([Configuration](/docs/self-hosting/configuration)).
+- [Ollama](https://ollama.com) with `qwen2.5:0.5b`; other providers: [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
+- [CLI](/docs/cli) or [SDK](/docs/sdk); server at `http://localhost:5047`.
+- Real cloud credentials: an AWS key pair with `s3:GetObject` on one bucket, and/or a GCP service account key file with BigQuery access. Only Steps 3 and 7 call the live APIs.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -60,7 +55,7 @@ export SOAT_BASE_URL=http://localhost:5047
 
 ## Step 1 — Log in and create a project
 
-Tools, secrets and agents are all project-scoped. See [Projects](/docs/modules/projects) and [Users](/docs/modules/users#examples).
+See [Projects](/docs/modules/projects) and [Users](/docs/modules/users#examples).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -113,7 +108,7 @@ PROJECT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/projects" \
 
 ## Step 2 — Store the AWS credentials as secrets
 
-[`GET /tools/{tool_id}`](/docs/api/tools/get-tool) echoes `execute` back verbatim to anyone with read access on the project. A pasted access key would therefore be readable by every project member. Store the values as [secrets](/docs/modules/secrets#secret-references-secret) and reference them: the reference is what is stored and returned, and it is resolved only immediately before signing.
+[`GET /tools/{tool_id}`](/docs/api/tools/get-tool) echoes `execute` verbatim to every project reader, so store credentials as [secrets](/docs/modules/secrets#secret-references-secret) and reference them; the reference is resolved only immediately before signing.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -169,7 +164,7 @@ AWS_SECRET_SECRET=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/secrets" \
 
 ## Step 3 — Create a SigV4-signed S3 tool
 
-`auth.type: aws_sigv4` requires `region`, `service`, `access_key_id` and `secret_access_key`; `session_token` is optional and is sent as `X-Amz-Security-Token` when present. Replace `my-bucket` with a bucket your key can read. See [Tools — Computed credentials](/docs/modules/tools#computed-credentials-executeauth).
+`auth.type: aws_sigv4` requires `region`, `service`, `access_key_id` and `secret_access_key`; optional `session_token` is sent as `X-Amz-Security-Token`. Replace `my-bucket` with a bucket your key can read. See [Tools — Computed credentials](/docs/modules/tools#computed-credentials-executeauth).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -264,13 +259,13 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/tools/$S3_TOOL_ID/call" \
 </TabItem>
 </Tabs>
 
-SOAT sends `Authorization: AWS4-HMAC-SHA256 …`, `X-Amz-Date`, and `X-Amz-Content-Sha256` where applicable, signing last over the final request. See [Tools — Computed credentials](/docs/modules/tools#computed-credentials-executeauth) for exactly which headers are signed.
+SOAT sends `Authorization: AWS4-HMAC-SHA256 …`, `X-Amz-Date` and `X-Amz-Content-Sha256` where applicable, signing last over the final request. Signed headers: [Tools — Computed credentials](/docs/modules/tools#computed-credentials-executeauth).
 
 ---
 
 ## Step 4 — Let an agent call it
 
-Nothing about attaching an authenticated tool differs from attaching any other HTTP tool — which is the point of putting `auth` on the transport instead of inventing an `aws` tool type. See [Agents — Tool Bindings](/docs/modules/agents#tool-bindings).
+Attach it like any other HTTP tool — [Agents — Tool Bindings](/docs/modules/agents#tool-bindings).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -345,13 +340,13 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/generate?wait=true" \
 </TabItem>
 </Tabs>
 
-The credential never enters the model's context: the tool schema the model sees is `parameters` only, and signing happens server-side after the model has chosen its arguments.
+The model sees `parameters` only; signing happens server-side after the model has chosen its arguments.
 
 ---
 
 ## Step 5 — One combination is refused on write
 
-`aws_sigv4` cannot be combined with `body_mode: "multipart"`. SigV4 signs a hash of the exact payload, but in multipart mode `fetch` generates the body and its boundary — the bytes are not knowable at signing time, so any signature would be rejected upstream with an opaque `403`. SOAT rejects it at create and update time instead, with `400 VALIDATION_FAILED`.
+`aws_sigv4` cannot be combined with `body_mode: "multipart"`: `fetch` generates the multipart body and boundary, so the bytes SigV4 must hash are unknown at signing time. SOAT rejects the combination on create and update with `400 VALIDATION_FAILED` ([Tools](/docs/modules/tools#computed-credentials-executeauth)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -400,13 +395,13 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/tools" \
 </TabItem>
 </Tabs>
 
-Every field in `auth` is validated on write the same way — a missing `region` or an unknown `type` fails at create time rather than at the first call. The same rule runs during `validate-formation`, so a malformed credential config fails before a [formation](/docs/modules/formations) apply starts.
+Every `auth` field is validated on write (a missing `region`, an unknown `type`) and during `validate-formation`, before a [formation](/docs/modules/formations) apply starts.
 
 ---
 
 ## Step 6 — Store the GCP service account key
 
-The whole key file JSON is one secret value. Read it from disk rather than pasting it — `jq -Rs` slurps the file into a single JSON string, and `--value` takes it as-is.
+The whole key file JSON is one [secret](/docs/modules/secrets) value; `jq -Rs` slurps the file into a single JSON string for `--value`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -454,7 +449,7 @@ GCP_SECRET_ID=$(jq -n \
 
 ## Step 7 — Create a BigQuery tool
 
-`auth.type: gcp_service_account` requires `credentials` (the key file JSON, as a string) and `scopes`. SOAT signs the assertion, exchanges it for an access token, and sends `Authorization: Bearer <access token>`.
+`auth.type: gcp_service_account` requires `credentials` (the key file JSON as a string) and `scopes`. SOAT signs the assertion, exchanges it for an access token, and sends `Authorization: Bearer <access token>` ([Tools](/docs/modules/tools#computed-credentials-executeauth)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -535,20 +530,24 @@ BQ_TOOL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/tools" \
 </TabItem>
 </Tabs>
 
-Tokens are **cached** per service account, token endpoint and scope set, and refreshed shortly before they expire. Two tools sharing one service account and scope set share its token; a different scope set gets its own.
+Tokens are cached per service account, token endpoint and scope set, and refreshed shortly before expiry.
 
 :::note
-A tool's `input` becomes the request body **verbatim** — SOAT does not rewrite its keys. Author it in whatever casing the target API expects (`useLegacySql`, not `use_legacy_sql`). See [Tools — Request body encoding](/docs/modules/tools#request-body-encoding-body_mode).
+`input` becomes the request body verbatim; use the target API's casing (`useLegacySql`, not `use_legacy_sql`). See [Tools — Request body encoding](/docs/modules/tools#request-body-encoding-body_mode).
 :::
 
 ---
 
 ## Step 8 — Read the failure modes
 
-The error code tells you which side failed: `502 TOOL_AUTH_FAILED` means the credential itself could not be produced (the request never reached the target), `502 TOOL_HTTP_ERROR` means the target rejected the call, and `400 VALIDATION_FAILED` means a malformed `auth` config was caught on write. See [Tools — Computed credentials](/docs/modules/tools#computed-credentials-executeauth) for the full failure semantics, including signature and path-encoding gotchas.
+- `502 TOOL_AUTH_FAILED` — the credential could not be produced; the request never reached the target.
+- `502 TOOL_HTTP_ERROR` — the target rejected the call.
+- `400 VALIDATION_FAILED` — malformed `auth` config caught on write.
+
+Full semantics, including signature and path-encoding gotchas: [Tools — Computed credentials](/docs/modules/tools#computed-credentials-executeauth).
 
 ---
 
 ## What's next
 
-Read next: [Tools — Computed credentials](/docs/modules/tools#computed-credentials-executeauth), [Secrets](/docs/modules/secrets), and [Gate a Tool with Guardrails](/docs/tutorials/gate-a-tool-with-guardrails) to require an approval before an agent is allowed to call one of these.
+[Tools — Computed credentials](/docs/modules/tools#computed-credentials-executeauth), [Secrets](/docs/modules/secrets), [Gate a Tool with Guardrails](/docs/tutorials/gate-a-tool-with-guardrails).

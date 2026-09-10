@@ -16,15 +16,15 @@ import TabItem from '@theme/TabItem';
 
 # Execute Agent Tool Calls in Your Own App (Client Tools)
 
-A [client tool](/docs/modules/tools#client) declares a function's contract so the model can decide to call it — but SOAT never executes it. The generation pauses with status `requires_action`, hands the pending tool calls to your app, and resumes when you submit the results — the same loop as function calling with the OpenAI or Anthropic APIs, with configuration, history, and traces managed server-side.
+A [client tool](/docs/modules/tools#client) declares a function's contract; SOAT never executes it. The generation pauses with `requires_action`, hands the tool calls to your app, and resumes when you submit the results — the function-calling loop of the OpenAI and Anthropic APIs, with configuration, history and traces server-side.
 
-In this tutorial you build an order-support agent whose `get_order_status` function is a client tool: the agent pauses at `requires_action`, your app looks the order up and submits the result, and the agent resumes with real data.
+You build an order-support agent whose `get_order_status` function is a client tool.
 
 ## Prerequisites
 
-- SOAT running locally with Ollama. Follow the [Quick Start](/docs/getting-started) guide, and see [Key Concepts](/docs/getting-started/concepts) if you are new to SOAT's mental model.
-- An Ollama instance accessible at `http://ollama:11434` with model `qwen2.5:0.5b` pulled (`ollama pull qwen2.5:0.5b`). See [Ollama](https://ollama.com) for installation.
-- CLI, SDK, or curl available. The server is at `http://localhost:5047`. For production hardening see [Configuration](/docs/self-hosting/configuration).
+- SOAT running locally ([Quick Start](/docs/getting-started)); [Key Concepts](/docs/getting-started/concepts); [Configuration](/docs/self-hosting/configuration).
+- [Ollama](https://ollama.com) at `http://ollama:11434` with `qwen2.5:0.5b` pulled (`ollama pull qwen2.5:0.5b`).
+- CLI, SDK, or curl; server at `http://localhost:5047`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -54,7 +54,7 @@ export SOAT_BASE_URL=http://localhost:5047
 
 ## Step 1 — Log in as admin
 
-Admin is the built-in superuser role. It bypasses policy evaluation entirely. See [IAM — Authentication](/docs/modules/iam#authentication) for details on JWT tokens and the admin role.
+Admin bypasses policy evaluation — see [IAM — Authentication](/docs/modules/iam#authentication).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -96,7 +96,7 @@ ADMIN_TOKEN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users/login" \
 
 ## Step 2 — Create a project
 
-Every resource in SOAT lives inside a [project](/docs/modules/projects#examples). Create one to hold the AI provider, the tool, and the agent.
+Every resource lives inside a [project](/docs/modules/projects#examples).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -134,7 +134,7 @@ echo "Project: $PROJECT_ID"
 
 ## Step 3 — Create an Ollama AI provider
 
-Set up a local [AI provider](/docs/modules/ai-providers#examples) backed by Ollama. This tutorial uses a local Ollama provider so it can run without external credentials. To connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
+A local Ollama [AI provider](/docs/modules/ai-providers#examples). Other providers: [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -181,7 +181,7 @@ echo "Provider: $PROVIDER_ID"
 
 ## Step 4 — Declare the function as a client tool
 
-A [client tool](/docs/modules/tools#client) has a `name`, a `description`, and a JSON Schema in `parameters` — and deliberately **no** `execute` configuration. The schema is what the model sees, so write it the way you want the model to call your function. Parameter keys are caller-owned: SOAT hands them back to your app exactly as you author them here (`orderId` stays `orderId`).
+A [client tool](/docs/modules/tools#client) has a `name`, a `description` and a JSON Schema in `parameters`, with no `execute` configuration. The model sees the schema as written; parameter keys come back to your app exactly as authored (`orderId` stays `orderId`).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -246,15 +246,13 @@ echo "Tool: $TOOL_ID"
 
 ## Step 5 — Create the agent
 
-Attach the tool through [`tool_bindings`](/docs/modules/agents#tool-bindings), the canonical attachment field. Three settings make the pause-and-resume loop predictable:
+Attach the tool through [`tool_bindings`](/docs/modules/agents#tool-bindings). Three settings make the loop predictable:
 
-- [`step_rules`](/docs/modules/agents#step-rules) `{ "step": 1, "tool_choice": { "type": "tool", "tool_name": "get_order_status" } }` forces the **first** call of the turn to invoke the function. Step numbering spans the pause, so the step that runs after you submit the output is step 2 and free to answer.
+- [`step_rules`](/docs/modules/agents#step-rules) `{ "step": 1, "tool_choice": { "type": "tool", "tool_name": "get_order_status" } }` forces the first call of the turn. Step numbering spans the pause, so the step after you submit the output is step 2 and free to answer. Agent-level [`tool_choice`](/docs/modules/agents#tool-choice) would apply to every step, the resumed one included, re-proposing the tool on each submit until `max_steps`.
 
-  Forcing at agent level instead ([`tool_choice`](/docs/modules/agents#tool-choice)) would apply to *every* step of the turn, the resumed one included — the run would propose the same client tool again on each submit until `max_steps` ended it.
-
-  Forcing is passed through to the provider, so it works only where the provider implements it. [Ollama's OpenAI-compatible API](https://docs.ollama.com/api/openai-compatibility) does **not** support `tool_choice` and ignores the field, so a local Ollama agent falls back to `"auto"`. OpenAI, Anthropic, and xAI all honor it.
-- [`stop_conditions`](/docs/modules/agents#stop-conditions) `{ "type": "has_tool_call", "tool_name": "get_order_status" }` names the call that ends the turn. It is required only when the agent's own `tool_choice` forces a tool — a step rule leaves the agent at `"auto"`, so here it is documentation of the intended exit.
-- `max_steps` bounds the agent loop, counted across the pause: the resumed turn spends what is left of it, never a fresh budget.
+  Forcing is passed through to the provider. [Ollama's OpenAI-compatible API](https://docs.ollama.com/api/openai-compatibility) ignores `tool_choice`, so a local Ollama agent falls back to `"auto"`; OpenAI, Anthropic and xAI honor it.
+- [`stop_conditions`](/docs/modules/agents#stop-conditions) `{ "type": "has_tool_call", "tool_name": "get_order_status" }` names the call that ends the turn. Required only when the agent's own `tool_choice` forces a tool; here it documents the intended exit.
+- `max_steps` is counted across the pause: the resumed turn spends what is left.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -321,7 +319,7 @@ echo "Agent: $AGENT_ID"
 
 ## Step 6 — Ask about an order: the generation pauses
 
-Start a generation as for any [agent](/docs/modules/agents#examples). Because the model calls a client tool, the response comes back with `status: "requires_action"`, and `required_action.tool_calls` lists what your app must execute — each entry has an `id`, the `tool_name`, and the model-supplied `args`.
+Start a generation as for any [agent](/docs/modules/agents#examples). The response comes back with `status: "requires_action"`; each `required_action.tool_calls` entry has an `id`, the `tool_name` and the model-supplied `args`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -376,7 +374,7 @@ TOOL_CALL_ID=$(echo "$GEN_RESPONSE" | jq -r '.required_action.tool_calls[0].id')
 </TabItem>
 </Tabs>
 
-The response looks like this:
+Response:
 
 ```json
 {
@@ -395,16 +393,16 @@ The response looks like this:
 ```
 
 :::note
-Running against local Ollama and got `"status": "completed"` with `required_action: null`? That is the ignored `tool_choice` described in Step 5 — the model chose to answer instead of calling the function. Re-run the generation, or point the agent at a provider that honors forcing.
+`"status": "completed"` with `required_action: null` on local Ollama is the ignored `tool_choice` from Step 5. Re-run, or use a provider that honors forcing.
 :::
 
-Nothing is executing anywhere at this point. The generation is suspended server-side, waiting for your app — this is also the seam where a human can review the call before anything happens (see [Approvals](/docs/modules/approvals)).
+The generation is suspended server-side; this is also where a human can review the call ([Approvals](/docs/modules/approvals)).
 
 ---
 
 ## Step 7 — Execute the function in your app and submit the output
 
-Your application runs the real function and posts the result back with the matching `tool_call_id`. The `output` can be any JSON value; the agent resumes with the tool result in context. See [Tools — client](/docs/modules/tools#client) for the full flow.
+Post the result back with the matching `tool_call_id`; `output` is any JSON value. See [Tools — client](/docs/modules/tools#client).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -465,7 +463,7 @@ echo "$FINAL_RESPONSE" | jq '{status, content: .output.content}'
 </TabItem>
 </Tabs>
 
-The status flips to `completed` and `output.content` holds the assistant's answer, grounded in the data your app supplied:
+Status is `completed` and `output.content` holds the answer:
 
 ```json
 {
@@ -474,13 +472,13 @@ The status flips to `completed` and `output.content` holds the assistant's answe
 }
 ```
 
-If the model had requested several client calls in one step, `tool_calls` would contain one entry per call and you would submit all outputs in a single `tool_outputs` array.
+Several client calls in one step yield one `tool_calls` entry each; submit all outputs in a single `tool_outputs` array.
 
 ---
 
 ## Step 8 — Inspect the pause and resume in the trace
 
-Every generation writes a [trace](/docs/modules/traces#examples). For a client-tool run it records the whole exchange — the forced tool call, your submitted output, and the final text. `step_count` covers both halves of the run, and `file_id` points to the [file](/docs/modules/files) holding the full serialized steps.
+Every generation writes a [trace](/docs/modules/traces#examples) recording the forced tool call, your submitted output and the final text. `step_count` covers both halves; `file_id` points to the [file](/docs/modules/files) with the serialized steps.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -519,13 +517,13 @@ curl -s "$SOAT_BASE_URL/api/v1/traces/$TRACE_ID" \
 }
 ```
 
-Two steps: the model call that proposed `get_order_status`, and the resumed call that turned your output into the answer.
+Two steps: the call that proposed `get_order_status`, and the resumed call that produced the answer.
 
 ---
 
 ## Where to go next
 
-- **Sessions** — the same pause-and-resume loop works in long-lived [sessions](/docs/modules/sessions): `generate-session-response --wait true` returns `requires_action` and `submit-session-tool-outputs` resumes it, with SOAT keeping the conversation history for you.
-- **Gate the call before it reaches your app** — attach a [guardrail](/docs/modules/guardrails) to classify each client call, or require human sign-off with [approvals](/docs/modules/approvals). See [Gate a Dangerous Tool with Guardrails](/docs/tutorials/gate-a-tool-with-guardrails).
-- **Reshape the output** — [`output_mapping`](/docs/modules/tools#output-mapping) applies a JSON Logic transform to the output your app submits before the model sees it.
-- **Track spend per end user** — attribute each session's generations to an [actor](/docs/modules/actors) and cap budgets: [Cap Spend Per End User](/docs/tutorials/cap-spend-per-end-user).
+- [Sessions](/docs/modules/sessions) — `generate-session-response --wait true` returns `requires_action`; `submit-session-tool-outputs` resumes it.
+- Gate the call with a [guardrail](/docs/modules/guardrails) or [approvals](/docs/modules/approvals): [Gate a Dangerous Tool with Guardrails](/docs/tutorials/gate-a-tool-with-guardrails).
+- [`output_mapping`](/docs/modules/tools#output-mapping) — JSON Logic transform on the submitted output before the model sees it.
+- Attribute generations to an [actor](/docs/modules/actors): [Cap Spend Per End User](/docs/tutorials/cap-spend-per-end-user).

@@ -15,9 +15,7 @@ import TabItem from '@theme/TabItem';
 
 # Replay a Bad Turn
 
-An agent gave a bad answer at message 3 of a real conversation. You want to try a stricter prompt against **that exact context** — not a paraphrase of it typed from memory — and you want the bad answer to become a test case so it cannot come back quietly.
-
-Three operations do that, and they compose into one loop:
+An agent gave a bad answer at message 3 of a real conversation. Try a stricter prompt against **that exact context**, and turn the bad answer into a test case. Three operations compose into one loop:
 
 | Operation                             | What it gives you                                                |
 | ------------------------------------- | ---------------------------------------------------------------- |
@@ -25,18 +23,15 @@ Three operations do that, and they compose into one loop:
 | `create-dataset-item-from-generation` | that turn frozen as an [eval](/docs/modules/evaluations) fixture |
 | `fork-session`                        | a new session branched at any message, same context              |
 
-You will produce a turn that goes wrong, read it back, capture it, branch the session at the customer's question, answer it with a different agent, and score the result against the captured fixture.
-
-This tutorial assumes you have been through [Evaluate an Agent](/docs/tutorials/evaluate-an-agent).
+You will produce a bad turn, read it back, capture it, branch the session at the customer's question, answer with a different agent, and score the result against the fixture. Assumes [Evaluate an Agent](/docs/tutorials/evaluate-an-agent).
 
 ## Prerequisites
 
-- SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide to bring the stack up with Docker Compose.
-- [Ollama](https://ollama.com) running locally with `qwen2.5:0.5b` available. This tutorial uses a local provider so it runs without external credentials — to connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
-- New to SOAT? Read [Key Concepts](/docs/getting-started/concepts) to understand projects, agents, and sessions first.
-- CLI installed and configured, or SDK set up. See [CLI](/docs/cli) or [SDK](/docs/sdk).
-- For production hardening (secrets, env vars), see [Configuration](/docs/self-hosting/configuration).
-- Server is at `http://localhost:5047`.
+- SOAT running locally at `http://localhost:5047` ([Quick Start](/docs/getting-started)).
+- [Ollama](https://ollama.com) running locally with `qwen2.5:0.5b`. For xAI, OpenAI, Anthropic, or Amazon Bedrock, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
+- [Key Concepts](/docs/getting-started/concepts) if new to SOAT.
+- [CLI](/docs/cli) or [SDK](/docs/sdk) set up.
+- [Configuration](/docs/self-hosting/configuration) for production hardening.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -66,7 +61,7 @@ export SOAT_BASE_URL=http://localhost:5047
 
 ## Step 1 — Log in as admin
 
-Admin is the built-in superuser role. See [Users](/docs/modules/users#examples) for authentication details.
+Admin is the built-in superuser role ([Users](/docs/modules/users#examples)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -108,7 +103,7 @@ ADMIN_TOKEN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users/login" \
 
 ## Step 2 — Produce the turn that goes wrong
 
-A support drafter with vague instructions, and a customer whose second message asks the question that matters. See [Sessions](/docs/modules/sessions) for the session lifecycle.
+A support drafter with vague instructions; the customer's second message asks the question that matters ([Sessions](/docs/modules/sessions)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -218,7 +213,7 @@ SESSION_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions" \
 </TabItem>
 </Tabs>
 
-The conversation is four messages, each backed by a [Document](/docs/modules/documents) — note the `document_id` values, they are the thing the fork will share:
+Four messages, each backed by a [Document](/docs/modules/documents); the fork will share these `document_id` values:
 
 ```json
 [
@@ -229,13 +224,13 @@ The conversation is four messages, each backed by a [Document](/docs/modules/doc
 ]
 ```
 
-Position 3 is the answer that ducked the refund question. Everything below works from it.
+Position 3 is the answer that ducked the refund question.
 
 ---
 
 ## Step 3 — Read the turn back
 
-A [transcript](/docs/modules/generations) is the turn reconstructed at read time: the messages it was asked, each model step in order with its tool calls and results, and the final answer. It is assembled from the generation record and the trace's steps object — never stored, so it **dies with the content it projects** rather than outliving a [retention](/docs/modules/traces#retention-policy) purge.
+A [transcript](/docs/modules/generations) is the turn reconstructed at read time from the generation record and the trace's steps: the input messages, each model step with its tool calls and results, and the final answer. It is never stored, so a [retention](/docs/modules/traces#retention-policy) purge erases it with the content it projects.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -289,15 +284,13 @@ curl -s "$SOAT_BASE_URL/api/v1/generations/$GENERATION_ID/transcript" \
 }
 ```
 
-`agent_version` is the config that actually served the turn, `step_count` survives a purge even when `steps` is empty, and `status` disambiguates an empty transcript caused by a run still in flight from one caused by erased content. A turn that called tools shows them per step, which is how you see _why_ an answer came out the way it did instead of guessing from the final text.
+`agent_version` is the config that served the turn; `step_count` survives a purge even when `steps` is empty; `status` distinguishes an empty transcript from a run in flight from one with erased content. Tool calls appear per step.
 
 ---
 
 ## Step 4 — Freeze the turn as a fixture
 
-Hand-authored dataset items drift away from what production traffic looks like. Curating from a real generation copies the turn's input — and its output as `expected_output` when you do not supply one — into a [dataset item](/docs/modules/evaluations#dataset) that records where it came from.
-
-Here the recorded answer is the bad one, so pass the answer you _wanted_:
+Curating from a real generation copies the turn's input, and its output as `expected_output` unless you supply one, into a [dataset item](/docs/modules/evaluations#dataset) that records its provenance. Here the recorded answer is the bad one, so pass the wanted answer:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -351,15 +344,13 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/datasets/$DATASET_ID/items/from-generatio
 </TabItem>
 </Tabs>
 
-The item is a **copy**, deliberately. `source_generation_id` records the provenance, but purging or deleting that generation neither deletes nor rewrites the item — a fixture that mutated under you would silently rewrite the baseline every regression report is compared against.
-
-That is the opposite of what forking does next, and the difference is the whole design: **a fixture must be frozen, a fork must stay bound to real history.**
+The item is a **copy**: `source_generation_id` records provenance, but purging or deleting that generation neither deletes nor rewrites the item, so the regression baseline stays fixed. A fork, next, stays bound to real history instead.
 
 ---
 
 ## Step 5 — Fork the session and answer it differently
 
-Now the experiment. A second agent with instructions that actually commit to a decision, and the same conversation up to the customer's question.
+A second agent whose instructions commit to a decision, and the same conversation up to the customer's question.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -435,11 +426,11 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$SESSION_ID/fork" \
 }
 ```
 
-`fork_at_position` branches **after** that position, so the fork holds messages 0–2 — up to and including the customer's question, and not the answer you are trying to replace. Omit it to branch at the tip.
+`fork_at_position` branches **after** that position: the fork holds messages 0–2, up to the customer's question and without the answer under replacement. Omit it to branch at the tip.
 
 ### The fork references the parent's documents
 
-The fork's conversation has its own message rows, but they point at the **same document rows**. Only the ordering was duplicated:
+The fork has its own message rows pointing at the **same document rows**; only the ordering was duplicated:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -488,11 +479,11 @@ curl -s "$SOAT_BASE_URL/api/v1/conversations/$FORK_CONVERSATION_ID/messages" \
 </TabItem>
 </Tabs>
 
-This is what keeps the branch honest. One stored copy of the content means a retention purge erases it from parent and fork together, storage stays proportional to the conversation rather than to the number of experiments, and the fork cannot drift from what actually happened.
+One stored copy: a retention purge erases parent and fork together, storage is proportional to the conversation rather than to the number of experiments, and the fork cannot drift from what happened.
 
 ### Drive the branch
 
-The fork is created **inert** — `auto_generate` is `false` and no generation was triggered. Creating a branch and running it are separate acts:
+The fork is created **inert** (`auto_generate` is `false`, no generation triggered):
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -538,21 +529,19 @@ curl -s "$SOAT_BASE_URL/api/v1/sessions/$SESSION_ID/forks" \
 </TabItem>
 </Tabs>
 
-Two agents have now answered the same question from the same context, and both conversations are intact and addressable. `GET /forks` walks **one level**: forking a fork is allowed and unbounded, and each branch is listed under its own parent.
+Two agents have answered the same question from the same context; both conversations are intact. `GET /forks` walks **one level**: forking a fork is allowed and unbounded, each branch listed under its own parent.
 
 :::caution Forking replays tool results — it never re-invokes tools
-A forked turn re-encounters tool calls that already ran. Some are idempotent reads; `send_email` and `charge_card` are not. So the recorded results travel with the copied messages and are replayed as model input — exploring a "what if" cannot charge a card a second time.
-
-The honest consequence: the fork sees the tool data **as it was**, not as it is now. That is what you want for a comparison (change one variable, not two) and wrong for "resume this session for real," which is not what forking is.
+Recorded tool results travel with the copied messages and are replayed as model input, so a fork cannot re-run `send_email` or `charge_card`. The fork sees tool data **as it was**, not as it is now: right for a comparison, wrong for resuming a session for real.
 :::
 
-Two more things the fork deliberately does not inherit: it starts with **no actor**, because [single session per actor](/docs/modules/sessions#single-session-per-actor) allows one open session per (agent, actor) pair and inheriting would make forking impossible for exactly the agents that enforce it; and `forked_from_session_id` becomes `null` if you delete the parent, because a fork is a real session with its own history and must not vanish with it.
+The fork starts with **no actor** ([single session per actor](/docs/modules/sessions#single-session-per-actor) allows one open session per (agent, actor) pair), and `forked_from_session_id` becomes `null` if the parent is deleted; the fork is a real session with its own history.
 
 ---
 
 ## Step 6 — Prove the fix against the fixture
 
-The captured item is now an ordinary dataset item, so the [eval](/docs/modules/evaluations) machinery applies unchanged — this time with the strict agent under test:
+The captured item is an ordinary dataset item, so the [eval](/docs/modules/evaluations) machinery applies unchanged, with the strict agent under test:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -616,7 +605,7 @@ curl -s "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs/$RUN_ID" \
 </TabItem>
 </Tabs>
 
-The run replays the item's recorded input — the exact message list that turn was asked — against the agent you name, so the only thing that changed between the production failure and this run is the agent. A `json_logic` scorer is the cheap structural floor used here; for output with no single correct string, bind an `llm_judge` scorer instead ([Judge Open-Ended Answers](/docs/tutorials/judge-open-ended-answers)).
+The run replays the item's recorded input against the named agent, so the agent is the only variable. `json_logic` is the cheap structural scorer; for output with no single correct string, bind `llm_judge` ([Judge Open-Ended Answers](/docs/tutorials/judge-open-ended-answers)).
 
 ---
 
@@ -631,12 +620,12 @@ production turn  ──get-generation-transcript──▶  read it back, step by
                                                     (reference: dies with its parent's content)
 ```
 
-The two halves pull in opposite directions on purpose. The fixture is a **copy** because a dataset must not be rewritten by what happens to production afterwards. The fork is a **reference** because a branch that drifted from the conversation it claims to continue would be an experiment about nothing.
+The fixture is a **copy**, so production cannot rewrite the dataset; the fork is a **reference**, so the branch cannot drift from the conversation it continues.
 
 ## What's next
 
-- [Evaluate an Agent](/docs/tutorials/evaluate-an-agent) — baselines, comparison over the item intersection, and what the numbers mean.
-- [Judge Open-Ended Answers](/docs/tutorials/judge-open-ended-answers) — score answers that have no single correct string.
-- [Gate a Canary Promotion on an Eval](/docs/tutorials/gate-a-canary-promotion-on-an-eval) — make a rollout wait for the evidence you just captured.
-- [Debug Session, Generation, and Trace History](/docs/tutorials/debug-session-generation-trace-history) — the wider mapping between sessions, generations, and traces.
-- [Data Retention and Zero Retention](/docs/tutorials/data-retention-and-zero-retention) — what a purge does to transcripts, forks, and curated items.
+- [Evaluate an Agent](/docs/tutorials/evaluate-an-agent) — baselines and comparison.
+- [Judge Open-Ended Answers](/docs/tutorials/judge-open-ended-answers) — answers with no single correct string.
+- [Gate a Canary Promotion on an Eval](/docs/tutorials/gate-a-canary-promotion-on-an-eval) — rollouts that wait for evidence.
+- [Debug Session, Generation, and Trace History](/docs/tutorials/debug-session-generation-trace-history) — sessions, generations, traces.
+- [Data Retention and Zero Retention](/docs/tutorials/data-retention-and-zero-retention) — purges vs transcripts, forks, curated items.

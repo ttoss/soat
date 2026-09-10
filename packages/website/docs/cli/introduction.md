@@ -6,7 +6,7 @@ slug: /cli
 
 # SOAT CLI
 
-The `@soat/cli` package is a command-line interface for the SOAT REST API. Every API operation is available as a sub-command, auto-generated from the same OpenAPI specs.
+`@soat/cli` exposes every SOAT REST API operation as a sub-command generated from the OpenAPI specs.
 
 ## Installation
 
@@ -18,20 +18,14 @@ pnpm add -g @soat/cli
 
 ## Authentication
 
-Before making API calls you must configure a profile with your server URL and token:
-
 ```bash
 soat configure
 ```
-
-You will be prompted for:
 
 | Prompt   | Description                                            |
 | -------- | ------------------------------------------------------ |
 | Base URL | URL of your SOAT server (e.g. `http://localhost:5047`) |
 | Token    | JWT session token (from `login-user`) or `sk_`-prefixed API key (from `create-api-key`) |
-
-To save under a named profile, pass `--profile`:
 
 ```bash
 soat configure --profile prod
@@ -49,7 +43,7 @@ Profiles are stored in `~/.soat/config.json`.
 
 ## Environment Variables
 
-Environment variables take precedence over stored profiles:
+Take precedence over stored profiles.
 
 | Variable        | Description                                                                                                      |
 | --------------- | ---------------------------------------------------------------------------------------------------------------- |
@@ -65,4 +59,4 @@ Environment variables take precedence over stored profiles:
 | `list-commands` | Print all available API commands                 |
 | _any operation_ | Call the corresponding REST API operation        |
 
-See the [Commands Reference](./commands.md) for the complete list of API operations.
+Complete list: [Commands Reference](./commands.md).

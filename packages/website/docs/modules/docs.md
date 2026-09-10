@@ -11,15 +11,15 @@ MCP-only tools that give agents direct access to SOAT platform documentation.
 
 ## Overview
 
-The Docs module exposes two MCP tools — `get-docs` and `get-doc-page` — that allow agents to discover and read SOAT documentation without needing a separate web fetch tool. The tools fetch content directly from the published documentation site (`soat.ttoss.dev/llms.txt` and individual pages).
+Two MCP tools, `get-docs` and `get-doc-page`, let agents discover and read SOAT documentation from the published site (`soat.ttoss.dev/llms.txt` and pages) without a web fetch tool.
 
-These tools are registered directly in the MCP server and are not backed by REST API endpoints. The documentation base URL defaults to `https://soat.ttoss.dev` and can be overridden via the `SOAT_DOCS_BASE_URL` environment variable for self-hosted deployments.
+They are registered in the MCP server, not backed by REST endpoints. The base URL defaults to `https://soat.ttoss.dev`; override with `SOAT_DOCS_BASE_URL` for self-hosted deployments.
 
-`SOAT_DOCS_BASE_URL` also rebases the error envelope's `docs_url` field and the `errors.json` link inside the default `hint` (see [Error Codes](../error-codes.md)) — a deployment that fronts SOAT and relays its errors verbatim can point both at its own documentation instead of soat.ttoss.dev.
+`SOAT_DOCS_BASE_URL` also rebases the error envelope's `docs_url` and the `errors.json` link in the default `hint` (see [Error Codes](../error-codes.md)), so a deployment relaying SOAT errors can point both at its own documentation.
 
 ## Access
 
-The Docs tools are **not project-scoped and carry no IAM action** — they read only public documentation, never project data. Any authenticated MCP client can call them; there is no `resource:Action` permission to grant and no entry in the [Permissions Reference](../permissions.md).
+**Not project-scoped, no IAM action**: they read only public documentation. Any authenticated MCP client can call them; there is no `resource:Action` permission and no entry in the [Permissions Reference](../permissions.md).
 
 ## Configuration
 
@@ -29,7 +29,7 @@ The Docs tools are **not project-scoped and carry no IAM action** — they read 
 
 ## Data Model
 
-The module is stateless — it stores nothing and returns documentation content fetched live from the documentation site. Each tool takes the input below and returns Markdown text.
+Stateless; each tool returns Markdown fetched live.
 
 | Tool | Input | Output |
 | --- | --- | --- |
@@ -42,11 +42,11 @@ The `url` passed to `get-doc-page` must belong to the SOAT documentation site; o
 
 ### `get-docs`
 
-Returns the SOAT documentation index in `llms.txt` format — a Markdown document listing all available documentation pages with their URLs. Use this first to discover what topics are available.
+The documentation index (`llms.txt`): every page and its URL. Call first to discover topics.
 
 ### `get-doc-page`
 
-Fetches the full content of a specific documentation page by URL. The URL must be from the SOAT documentation site (as returned by `get-docs`).
+Full content of one page; the URL must be from the SOAT documentation site (as returned by `get-docs`).
 
 ## Examples
 

@@ -15,22 +15,15 @@ import TabItem from '@theme/TabItem';
 
 # Judge Open-Ended Answers
 
-`exact_match` and `contains` work when the right answer is a known string. Most agent output is not like that: a summary, an explanation, a rewritten paragraph — all have many correct forms and no single one to match. Assert on the wording and you measure phrasing, not quality.
+`exact_match` and `contains` need a known right string; summaries, explanations and rewrites have many correct forms. An `llm_judge` [scorer](/docs/modules/evaluations#llm-judge) grades the answer with a tool-less model completion through the same [AI providers](/docs/modules/ai-providers) path, returning a 0–1 score plus reasoning.
 
-An `llm_judge` [scorer](/docs/modules/evaluations#llm-judge) grades the answer with a model completion instead, returning a continuous 0–1 score plus its reasoning. It is an ordinary, **tool-less** completion resolving through the same [AI providers](/docs/modules/ai-providers) path.
-
-You will bind an `llm_judge` scorer next to a deterministic one, run it and read each item's `score` and `reasoning`, see why an unparseable verdict is an error rather than a zero, run the same eval **queued** and poll for the verdict, and cancel a run mid-flight.
-
-This tutorial assumes you have been through [Evaluate an Agent](/docs/tutorials/evaluate-an-agent).
+Bind an `llm_judge` scorer next to a deterministic one, read each item's `score` and `reasoning`, see why an unparseable verdict is an error rather than a zero, run the eval queued and poll, and cancel a run mid-flight. Assumes [Evaluate an Agent](/docs/tutorials/evaluate-an-agent).
 
 ## Prerequisites
 
-- SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide to bring the stack up with Docker Compose.
-- [Ollama](https://ollama.com) running locally with `qwen2.5:0.5b` available. This tutorial uses a local provider so it runs without external credentials — to connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
-- New to SOAT? Read [Key Concepts](/docs/getting-started/concepts) to understand projects, agents, and evaluations first.
-- CLI installed and configured, or SDK set up. See [CLI](/docs/cli) or [SDK](/docs/sdk).
-- For production hardening (secrets, env vars), see [Configuration](/docs/self-hosting/configuration).
-- Server is at `http://localhost:5047`.
+- SOAT running locally at `http://localhost:5047` ([Quick Start](/docs/getting-started)); [Key Concepts](/docs/getting-started/concepts); [Configuration](/docs/self-hosting/configuration).
+- [Ollama](https://ollama.com) with `qwen2.5:0.5b`. For xAI, OpenAI, Anthropic, or Amazon Bedrock see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
+- [CLI](/docs/cli) or [SDK](/docs/sdk).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -60,7 +53,7 @@ export SOAT_BASE_URL=http://localhost:5047
 
 ## Step 1 — Log in as admin
 
-Admin is the built-in superuser role. See [Users](/docs/modules/users#examples) for authentication details.
+See [Users](/docs/modules/users#examples).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -102,7 +95,7 @@ ADMIN_TOKEN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users/login" \
 
 ## Step 2 — An agent with open-ended output
 
-A support-reply drafter. There is no single correct draft, which is exactly why a string matcher cannot grade it. See [Agents](/docs/modules/agents) and [Evaluations — Dataset](/docs/modules/evaluations#dataset) for the resources involved.
+A support-reply drafter: no single correct draft exists. See [Agents](/docs/modules/agents) and [Evaluations — Dataset](/docs/modules/evaluations#dataset).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -208,9 +201,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/datasets/$DATASET_ID/items" \
 
 ## Step 3 — Bind the judge
 
-The judge's `prompt` carries three slots the platform fills per item — `{{input}}`, `{{output}}`, and `{{expected}}`; see [Evaluations — LLM judge](/docs/modules/evaluations#llm-judge).
-
-`pass_threshold` on the scorer is **required**, with no default — a judge emits a continuous score, so nothing about the number itself says where "good enough" is. Keep a deterministic scorer alongside the judge as a cheap structural floor.
+The judge's `prompt` has three per-item slots: `{{input}}`, `{{output}}`, `{{expected}}` ([Evaluations — LLM judge](/docs/modules/evaluations#llm-judge)). `pass_threshold` on the scorer is required, no default. Keep a deterministic scorer alongside as a structural floor.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -265,7 +256,7 @@ EVAL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/evals" \
 </TabItem>
 </Tabs>
 
-Slots are filled in **one pass** — a slot value containing `{{output}}` is never re-expanded, and an unrecognized `{{…}}` is left as written so a typo stays visible.
+Slots fill in one pass: a value containing `{{output}}` is never re-expanded, and an unrecognized `{{…}}` is left as written.
 
 ---
 
@@ -318,7 +309,7 @@ curl -s "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs/$RUN_ID/results" \
 </TabItem>
 </Tabs>
 
-A judged item looks like this — the score gates, and `reasoning` is stored for audit:
+A judged item (the score gates; `reasoning` is stored for audit):
 
 ```json
 {
@@ -336,19 +327,19 @@ A judged item looks like this — the score gates, and `reasoning` is stored for
 }
 ```
 
-:::note[A small judge model may not answer in JSON — and that is instructive]
+:::note[A small judge model may not answer in JSON]
 
-The judge must reply with a JSON object carrying a numeric `score` between 0 and 1. `qwen2.5:0.5b` frequently ignores that contract, so on this local stack items often come back with `error` set and no `scores`. That is designed behavior: a judge that could not reach a verdict means **the answer was never graded**, so recording 0 would fabricate a regression; an out-of-range score is likewise rejected, not clamped. Errored items are excluded from `aggregate_scores` and counted in `errored_count`. Use a real judge model (see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms)) for a suite you intend to gate on.
+The judge must reply with a JSON object carrying a numeric `score` between 0 and 1. `qwen2.5:0.5b` often ignores that, so items come back with `error` set and no `scores`. An ungraded answer is an error, never a 0; an out-of-range score is rejected, not clamped. Errored items are excluded from `aggregate_scores` and counted in `errored_count`. Use a real judge model ([Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms)) for a suite you gate on.
 
 :::
 
-The judge model is pinned **per scorer config** — deltas between runs judged by different models are not comparable, so re-run the baseline when you change the judge. The judge's `ai_provider_id` must belong to the eval's project, and the project's default [model route](/docs/modules/model-routes) applies when the scorer pins none.
+The judge model is pinned per scorer config; re-run the baseline when you change it. The judge's `ai_provider_id` must belong to the eval's project; the project's default [model route](/docs/modules/model-routes) applies when the scorer pins none.
 
 ---
 
 ## Step 5 — Run it queued instead of blocking
 
-A judged suite makes two provider calls per item — exactly the workload not to hold a request open for. `wait` selects the mode; both modes share one execution path, so their runs are directly comparable.
+A judged suite makes two provider calls per item. `wait` selects the mode; both share one execution path, so runs are comparable.
 
 | `wait` | Behavior |
 | --- | --- |
@@ -407,15 +398,15 @@ curl -s "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs/$QUEUED_RUN_ID" \
 </TabItem>
 </Tabs>
 
-Each item becomes one queued task; the worker that drains the run's last task settles it and fires the `eval_run.completed` [webhook](/docs/modules/webhooks) exactly once. Poll the returned `evrun_…` id as above, or subscribe to the webhook — [Gate a Canary Promotion on an Eval](/docs/tutorials/gate-a-canary-promotion-on-an-eval) does the latter.
+Each item is one queued task; the worker draining the last task settles the run and fires the `eval_run.completed` [webhook](/docs/modules/webhooks) once. Poll the `evrun_…` id or subscribe to the webhook ([Gate a Canary Promotion on an Eval](/docs/tutorials/gate-a-canary-promotion-on-an-eval)).
 
-An **empty** dataset is rejected in both modes, and a `wait: true` run over more than 25 items is rejected naming the cap rather than scored partially — `wait: false` is the answer for a large suite.
+An empty dataset is rejected in both modes; a `wait: true` run over 25 items is rejected naming the cap.
 
 ---
 
 ## Step 6 — Cancel a run mid-flight
 
-A queued run holds real provider budget. Cancelling drops its outstanding tasks, so it stops spending on the next tick, and settles it `canceled` — see [Evaluations — Canceling a run](/docs/modules/evaluations#canceling-a-run).
+Cancelling drops the run's outstanding tasks and settles it `canceled` ([Evaluations — Canceling a run](/docs/modules/evaluations#canceling-a-run)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -471,12 +462,12 @@ Expected shape:
 }
 ```
 
-Results already written are **kept** and `completed_count` / `errored_count` report what ran. `aggregate_scores` is left `null` on purpose — a partial roll-up would read as a whole-dataset verdict. A canceled run fires no lifecycle event, and cancelling a run that already finished is a `400`.
+Written results are kept; `completed_count` / `errored_count` report what ran; `aggregate_scores` stays `null`. A canceled run fires no lifecycle event; cancelling a finished run is a `400`.
 
 ---
 
 ## Next steps
 
-Eval spend is metered separately from production (`source: "eval"` / `"eval_judge"`) — see [Evaluations — Eval spend](/docs/modules/evaluations#eval-spend-is-separable-from-production-spend).
-
-Read next: [Gate a Canary Promotion on an Eval](/docs/tutorials/gate-a-canary-promotion-on-an-eval) to make a rollout depend on a green suite, and [Evaluations — LLM judge](/docs/modules/evaluations#llm-judge) for the full contract.
+- [Evaluations — Eval spend](/docs/modules/evaluations#eval-spend-is-separable-from-production-spend) — metered as `source: "eval"` / `"eval_judge"`.
+- [Gate a Canary Promotion on an Eval](/docs/tutorials/gate-a-canary-promotion-on-an-eval) — a rollout that depends on a green suite.
+- [Evaluations — LLM judge](/docs/modules/evaluations#llm-judge) — full contract.

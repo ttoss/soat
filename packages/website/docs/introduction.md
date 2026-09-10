@@ -8,9 +8,9 @@ import TabItem from '@theme/TabItem';
 
 # Introduction
 
-**SOAT is the infrastructure layer for production-ready AI agents.** It bundles IAM, file and document storage, vector search, conversational memory, agent orchestration, multi-agent workflows, retrieval-augmented generation, declarative stack deployment, and a full MCP server into a single self-hostable Node.js service backed by PostgreSQL.
+**SOAT is the infrastructure layer for production-ready AI agents**: IAM, file and document storage, vector search, conversational memory, agent orchestration, multi-agent workflows, RAG, declarative stack deployment, and a full MCP server in one self-hostable Node.js service backed by PostgreSQL.
 
-The platform is organized around the [four layers of an agent system](/docs/agent-system-layers): the **harness** (what an agent can reach), the **loop** (what proves a run did the job), the **graph** (what happens next), and the **ratchet** (what proves a change was an improvement). The first three are shipped in depth; the ratchet is the active build front — see [Where SOAT is going](#where-soat-is-going).
+The platform is organized around the [four layers of an agent system](/docs/agent-system-layers): **harness** (what an agent can reach), **loop** (what proves a run did the job), **graph** (what happens next), **ratchet** (what proves a change was an improvement). The ratchet is the active build front: [Where SOAT is going](#where-soat-is-going).
 
 ## What you get out of the box
 
@@ -32,9 +32,9 @@ The platform is organized around the [four layers of an agent system](/docs/agen
 - Multi-step reasoning loops with `tool_choice`, step rules, and boundary policies
 - **Multi-agent workflows**: agents call other agents as tools
 - **Async generations**: long-running jobs you can poll or wait on
-- [Sessions](/docs/modules/sessions) — a 1↔1 user/agent interface that hides actors and conversations
-- [Conversations](/docs/modules/conversations) — multi-party message engine when you need full control
-- [Chats](/docs/modules/chats) — raw LLM completions when you don't need an agent at all
+- [Sessions](/docs/modules/sessions) — 1↔1 user/agent interface that hides actors and conversations
+- [Conversations](/docs/modules/conversations) — multi-party message engine
+- [Chats](/docs/modules/chats) — raw LLM completions without an agent
 
 ### Orchestration & automation
 
@@ -44,7 +44,7 @@ The platform is organized around the [four layers of an agent system](/docs/agen
 
 ### Governance & safety
 
-- [Guardrails](/docs/modules/guardrails) classify every tool call from its actual arguments — deterministically, before anything executes
+- [Guardrails](/docs/modules/guardrails) classify every tool call from its arguments, deterministically, before execution
 - [Approvals](/docs/modules/approvals) — a human-decision queue with frozen evidence, hard expiry, and a recurrence view over repeated corrections
 - [Quotas](/docs/modules/quotas) fail closed on request, token, or cost caps; [Usage](/docs/modules/usage) meters every call with alert thresholds
 - Append-only [agent versions](/docs/modules/agents#versioning-and-staged-rollout) with staged canary rollout and served-version stamping
@@ -62,26 +62,22 @@ The platform is organized around the [four layers of an agent system](/docs/agen
 
 ## Where SOAT is going
 
-Everything above records what agents _did_ or constrains what they _may do_. The direction of the platform is the layer that governs what they _become_: the **ratchet** — produce a verdict from evidence, gate every change on the verdict, keep history append-only so nothing regresses silently.
+The **ratchet**: produce a verdict from evidence, gate every change on it, keep history append-only. Versioned agents, canary rollout, the approvals recurrence view, and:
 
-The ratchet is now closed end to end: versioned agents, canary rollout, the approvals recurrence view, and —
+- **[Evaluations](/docs/modules/evaluations)** — datasets, scorers, and scored runs of the real agent compared against a baseline; a pass/fail verdict
+- **[Eval-gated promotion](/docs/modules/agents#eval-gated-promotion)** — a canary release promotes only on a passing eval run against that canary
 
-- **[Evaluations](/docs/modules/evaluations)** — datasets, scorers, and scored runs of the real agent, comparable against a baseline, answering "did this change make the agent worse?" with a pass/fail verdict
-- **[Eval-gated promotion](/docs/modules/agents#eval-gated-promotion)** — a canary release that promotes only on a passing eval run against that canary, not on a judgment call
-
-Promotion stays human-gated by design: the platform owns the queue, the recurrence signal, and the verdict — a human owns the judgment. The full framing is in [The Layers of an Agent System](/docs/agent-system-layers), and sequencing lives in the [roadmap](https://github.com/ttoss/soat/blob/main/docs/roadmap.md).
+Promotion stays human-gated. Framing: [The Layers of an Agent System](/docs/agent-system-layers); sequencing: [roadmap](https://github.com/ttoss/soat/blob/main/docs/roadmap.md).
 
 ## Architecture
 
-SOAT runs as a single Node.js server backed by PostgreSQL with [pgvector](https://github.com/pgvector/pgvector). One process exposes both the REST API and the Streamable HTTP MCP endpoint — both call the same business-logic layer and the same permission engine.
+One Node.js process backed by PostgreSQL with [pgvector](https://github.com/pgvector/pgvector) exposes the REST API and the Streamable HTTP MCP endpoint; both call the same business-logic layer and permission engine.
 
 <div style={{display: 'flex', justifyContent: 'center'}}>
   <img src="/img/architecture.svg" alt="SOAT Architecture" style={{width: '100%', maxWidth: 720}} />
 </div>
 
 ## One backend, four surfaces
-
-Every operation in SOAT is reachable through four interchangeable client surfaces. They share the same permission check, the same business logic, and the same response shape — pick the one that fits the job.
 
 | Surface               | Best for                                             | Docs                       |
 | --------------------- | ---------------------------------------------------- | -------------------------- |
@@ -90,7 +86,7 @@ Every operation in SOAT is reachable through four interchangeable client surface
 | **CLI** (`soat`)      | Scripts, CI pipelines, and local exploration         | [CLI](/docs/cli)           |
 | **SDK** (`@soat/sdk`) | TypeScript and JavaScript applications               | [SDK](/docs/sdk)           |
 
-See [Choosing a Client Surface](/docs/client-surfaces) for the trade-offs. Each operation is gated by a single [permission action](/docs/permissions) (e.g. `documents:CreateDocument`) that is enforced consistently across all four surfaces. See [IAM & Policies](/docs/modules/iam) for how policies are evaluated.
+All four share one permission check, one business-logic layer, and one response shape: each operation is gated by one [permission action](/docs/permissions) (e.g. `documents:CreateDocument`) on every surface ([IAM & Policies](/docs/modules/iam)). Trade-offs: [Choosing a Client Surface](/docs/client-surfaces).
 
 ## Example — create a document
 
@@ -139,7 +135,7 @@ curl -X POST https://api.example.com/api/v1/documents \
 
 ## Where to next
 
-- **[Get started](/docs/getting-started)** — bring up SOAT with Docker Compose in five minutes
-- **[Key concepts](/docs/getting-started/concepts)** — the mental model behind projects, agents, and sessions
+- **[Get started](/docs/getting-started)** — Docker Compose in five minutes
+- **[Key concepts](/docs/getting-started/concepts)** — projects, agents, sessions
 - **[Choosing a client surface](/docs/client-surfaces)** — REST, SDK, CLI, or MCP
-- **[Platform modules](/docs/modules)** — deep-dives into every resource type
+- **[Platform modules](/docs/modules)** — every resource type

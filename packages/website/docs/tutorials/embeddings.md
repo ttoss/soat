@@ -14,14 +14,12 @@ import TabItem from '@theme/TabItem';
 
 # Generating Embeddings
 
-This tutorial shows how to use the SOAT [Embeddings](/docs/modules/embeddings) endpoint to convert text into numeric vectors and compute cosine similarity between them: single and batch embedding, a cosine similarity function in TypeScript, and ranking a collection against a query.
+Convert text into vectors with the [Embeddings](/docs/modules/embeddings) endpoint: single and batch embedding, cosine similarity in TypeScript, and ranking a collection against a query.
 
 ## Prerequisites
 
-- SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide to bring the stack up with Docker Compose.
-- New to SOAT? Read [Key Concepts](/docs/getting-started/concepts) first.
-- For production hardening (env vars, secrets), see [Configuration](/docs/self-hosting/configuration).
-- [Ollama](https://ollama.com) running locally with an embedding model pulled, for example:
+- SOAT running locally ([Quick Start](/docs/getting-started)); [Key Concepts](/docs/getting-started/concepts); [Configuration](/docs/self-hosting/configuration).
+- [Ollama](https://ollama.com) running locally with an embedding model pulled:
   ```bash
   ollama pull qwen3-embedding:0.6b
   ```
@@ -56,7 +54,7 @@ export SOAT_BASE_URL=http://localhost:5047
 
 ## Step 1 — Log in
 
-Authenticate as admin to obtain a token. See [Users](/docs/modules/users#examples) for full authentication details.
+Obtain an admin token ([Users](/docs/modules/users#examples)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -104,9 +102,7 @@ ADMIN_TOKEN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users/login" \
 
 ## Step 2 — Embed a single text
 
-Pass `input` to embed one piece of text. The server returns `embedding` — a floating-point array whose length equals `EMBEDDING_DIMENSIONS` (default 1024).
-
-See [Embeddings — Single vs batch](/docs/modules/embeddings#single-vs-batch) for when to choose single vs batch mode.
+`input` embeds one text; the response `embedding` is a float array of length `EMBEDDING_DIMENSIONS` (default 1024). See [Embeddings — Single vs batch](/docs/modules/embeddings#single-vs-batch).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -159,7 +155,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/embeddings" \
 
 ## Step 3 — Embed a batch of texts
 
-Pass `inputs` (an array) to generate multiple vectors in a single request. The [Embeddings](/docs/modules/embeddings) module returns `embeddings` — an array of vectors in the same order as the inputs.
+`inputs` (an array) returns `embeddings`, vectors in input order ([Embeddings](/docs/modules/embeddings)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -217,7 +213,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/embeddings" \
 
 ## Step 4 — Compute cosine similarity
 
-Cosine similarity measures how alike two vectors are, regardless of their magnitude. It returns a value between `-1` (opposite) and `1` (identical). Because all embeddings from the same SOAT deployment share the same vector space (see [Shared vector space](/docs/modules/embeddings#shared-vector-space)), cosine similarity is meaningful across any two texts.
+Cosine similarity ranges from `-1` (opposite) to `1` (identical), independent of magnitude. All embeddings from one deployment share a [vector space](/docs/modules/embeddings#shared-vector-space), so it is meaningful across any two texts.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -290,7 +286,7 @@ EOF
 
 ## Step 5 — Find the most similar text
 
-Use cosine similarity to rank a collection of texts against a query. Embed everything in one batch call, then sort by similarity score.
+Embed the query and the collection in one batch call ([Embeddings key concepts](/docs/modules/embeddings#key-concepts)), then sort by cosine similarity.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -317,7 +313,7 @@ items
 EOF
 ```
 
-Expected output — the cast iron skillet ranks first because it is semantically closest to stovetop cooking:
+Expected output (the skillet is closest to stovetop cooking):
 
 ```
 0.8412  Cast iron skillet
@@ -399,7 +395,7 @@ EOF
 
 ## What's next
 
-- **Production-scale search** — for large document collections, pass SOAT-generated vectors to a dedicated vector search engine. [Meilisearch](https://www.meilisearch.com/docs/capabilities/hybrid_search/getting_started) supports a `userProvided` embedder source that accepts your own vectors for hybrid keyword + semantic search. [Qdrant](https://qdrant.tech/documentation/) and [pgvector](https://github.com/pgvector/pgvector) are good alternatives.
-- **Re-embed on update** — when a document's text changes, call SOAT's embeddings endpoint again and update the stored vector. Only changed documents need reprocessing.
-- **Agents with knowledge** — see [Agent with Persistent Memory](/docs/tutorials/memories-agent) to learn how SOAT uses embeddings automatically to inject relevant context before every agent generation, without any external search engine.
-- **Knowledge search** — use [`POST /api/v1/knowledge/search`](/docs/api/knowledge/search-knowledge) to query across SOAT Documents and Memories using the same embedding model. See [Knowledge](/docs/modules/knowledge).
+- **Production-scale search** — store vectors in a vector engine: [Meilisearch](https://www.meilisearch.com/docs/capabilities/hybrid_search/getting_started) (`userProvided` embedder, hybrid keyword + semantic), [Qdrant](https://qdrant.tech/documentation/) or [pgvector](https://github.com/pgvector/pgvector).
+- **Re-embed on update** — re-embed only documents whose text changed.
+- **Agents with knowledge** — [Agent with Persistent Memory](/docs/tutorials/memories-agent): embeddings inject context before every generation.
+- **Knowledge search** — [`POST /api/v1/knowledge/search`](/docs/api/knowledge/search-knowledge) queries Documents and Memories with the same model ([Knowledge](/docs/modules/knowledge)).

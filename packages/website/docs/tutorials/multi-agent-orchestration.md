@@ -14,18 +14,15 @@ import TabItem from '@theme/TabItem';
 
 # Multi-Agent Sonnet with Nested Agent Calls
 
-This tutorial builds a **nested-agent** pipeline where one agent coordinates multiple sub-agents using [builtin tools](/docs/modules/tools#builtin). For the same sonnet workflow driven by the [Orchestrations](/docs/modules/orchestrations#examples) module instead, see [Orchestrate a Sonnet](/docs/tutorials/orchestrate-a-sonnet).
-
-You will build a sonnet composer: an orchestrator agent delegates each stanza to a specialized sub-agent, all collaborating through a shared document, with a [trace](/docs/modules/traces) capturing the full execution tree. The coordinator → workers → shared-state pattern generalizes to any workflow decomposable into sub-tasks.
+A **nested-agent** pipeline: an orchestrator agent delegates each stanza of a sonnet to a sub-agent through [builtin tools](/docs/modules/tools#builtin), all sharing one document, with a [trace](/docs/modules/traces) capturing the execution tree. For the same sonnet driven by the [Orchestrations](/docs/modules/orchestrations#examples) module, see [Orchestrate a Sonnet](/docs/tutorials/orchestrate-a-sonnet).
 
 ## Prerequisites
 
-- SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide to bring the stack up with Docker Compose.
-- New to SOAT? Read [Key Concepts](/docs/getting-started/concepts) to understand projects, agents, and sessions before diving in.
-- CLI installed and configured, or SDK set up. See [CLI](/docs/cli) or [SDK](/docs/sdk).
-- For production hardening (secrets, env vars), see [Configuration](/docs/self-hosting/configuration).
-- Server is at `http://localhost:5047`.
-- [Ollama](https://ollama.com) running locally with a chat model available.
+- SOAT running locally at `http://localhost:5047` ([Quick Start](/docs/getting-started)).
+- [Key Concepts](/docs/getting-started/concepts) if new to SOAT.
+- [CLI](/docs/cli) or [SDK](/docs/sdk) set up.
+- [Configuration](/docs/self-hosting/configuration) for production hardening.
+- [Ollama](https://ollama.com) running locally with a chat model.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -60,7 +57,7 @@ export SOAT_URL=http://localhost:5047
 
 ## Step 1 — Log in as admin
 
-Admin is the built-in superuser role. See [Users](/docs/modules/users#examples) for full authentication details.
+Admin is the built-in superuser role ([Users](/docs/modules/users#examples)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -102,7 +99,7 @@ ADMIN_TOKEN=$(curl -s -X POST "$SOAT_URL/api/v1/users/login" \
 
 ## Step 2 — Create a project
 
-Every resource lives inside a [project](/docs/modules/projects#examples). Create one for this tutorial.
+Every resource lives inside a [project](/docs/modules/projects#examples).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -140,7 +137,7 @@ echo "PROJECT_ID: $PROJECT_ID"
 
 ## Step 3 — Create an AI provider
 
-Set up a local [AI provider](/docs/modules/ai-providers#examples) backed by Ollama. This tutorial uses a local Ollama provider so it can run without external credentials. To connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
+Create a local Ollama [AI provider](/docs/modules/ai-providers#examples). For xAI, OpenAI, Anthropic, or Amazon Bedrock, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -188,7 +185,7 @@ echo "AI_PROVIDER_ID: $AI_PROVIDER_ID"
 
 ## Step 4 — Create a shared document for the poem
 
-Create a [document](/docs/modules/documents#examples) that will hold the poem. Each stanza agent will read this document, then update it by appending their stanza.
+Create the [document](/docs/modules/documents#examples) each stanza agent reads and appends to.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -234,12 +231,10 @@ echo "POEM_DOC_ID: $POEM_DOC_ID"
 
 ## Step 5 — Create fixed builtin tools for stanza agents
 
-Each stanza agent needs two [builtin tools](/docs/modules/tools#builtin) with fixed parameters:
+Two [builtin tools](/docs/modules/tools#builtin) with `preset_parameters.documentId` fixed, so the model never guesses document IDs:
 
-1. **poem-read** — reads the shared poem document (`get-document` action)
-2. **poem-write** — updates the shared poem document (`update-document` action)
-
-Both tools use `preset_parameters` with `documentId`, so the model never has to guess document IDs.
+1. **poem-read** — `get-document` action
+2. **poem-write** — `update-document` action
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -319,9 +314,7 @@ echo "WRITE_STANZA_TOOL_ID: $WRITE_STANZA_TOOL_ID"
 
 ## Step 6 — Create the four stanza agents
 
-Each stanza agent writes one stanza of the sonnet. They all share the same fixed document tools (`poem-read`, `poem-write`) but use different instructions and rhyme schemes. See [Agents](/docs/modules/agents#examples).
-
-To maximize determinism, each stanza agent uses strict `step_rules`:
+Each [agent](/docs/modules/agents#examples) writes one stanza, sharing `poem-read` and `poem-write` but with its own instructions and rhyme scheme. Strict `step_rules` fix the order:
 
 1. Step 1 must call `poem-read_get-document`
 2. Step 2 must call `poem-write_update-document`
@@ -470,7 +463,7 @@ echo "STANZA4_AGENT_ID: $STANZA4_AGENT_ID"
 
 ## Step 7 — Create fixed call tools for the orchestrator
 
-The orchestrator should not choose `agentId` dynamically. Create one tool per stanza with fixed `preset_parameters.agentId`, plus one fixed reader tool for the final poem. See [Agents — SOAT](/docs/modules/tools#builtin).
+One tool per stanza with fixed `preset_parameters.agentId`, so the orchestrator never chooses `agentId`, plus one fixed reader tool for the final poem ([builtin tools](/docs/modules/tools#builtin)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -667,7 +660,7 @@ echo "READ_FINAL_POEM_TOOL_ID: $READ_FINAL_POEM_TOOL_ID"
 
 ## Step 8 — Create the orchestrator agent
 
-The orchestrator uses fixed tools only: four fixed agent-call tools and one final read tool. This fixes `agentId` and `documentId` routing while keeping the flow deterministic. See [Agents — Step Rules](/docs/modules/agents#step-rules) and [Agents — Nested Agent Calls](/docs/modules/agents#nested-agent-calls).
+The orchestrator carries only the four fixed agent-call tools and the final read tool, so `agentId` and `documentId` routing is deterministic. See [Agents — Step Rules](/docs/modules/agents#step-rules) and [Agents — Nested Agent Calls](/docs/modules/agents#nested-agent-calls).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -764,7 +757,7 @@ echo "ORCHESTRATOR_ID: $ORCHESTRATOR_ID"
 
 ## Step 9 — Run the orchestrator (final result is the poem)
 
-Now trigger the orchestrator with the theme "artificial intelligence". With fixed tool routing and step rules, the final output is the poem text itself. See [Agents — Generation](/docs/modules/agents#generation).
+Run the orchestrator with the theme "artificial intelligence"; the final output is the poem text ([Agents — Generation](/docs/modules/agents#generation)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -791,7 +784,7 @@ Expected status output:
 }
 ```
 
-Example poem output (`.output.content`):
+Example `.output.content`:
 
 ```
 AI is born of human thought,
@@ -863,7 +856,7 @@ echo "TRACE_ID: $TRACE_ID"
 
 ## Step 10 — Read the completed poem from the shared document
 
-The shared [document](/docs/modules/documents#examples) stores the final poem. Retrieve it to verify persisted output.
+Retrieve the shared [document](/docs/modules/documents#examples) to verify persisted output.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -882,7 +875,7 @@ From circuits flows its wisdom's band.
 ```
 
 :::note
-The document shows only what the last successful stanza worker persisted. Worker agents run sequentially and each overwrites with the full accumulated poem; if a later worker fails or the model truncates output, the document reflects the last complete write. In the validated run above, the final content shows stanza 1 because the document was last written by stanza 1 before the model's max-steps cut off the remaining workers.
+Workers run sequentially and each overwrites the document with the full accumulated poem, so it reflects the last complete write. In the validated run above it holds stanza 1 only: the orchestrator's max-steps cut off the remaining workers.
 :::
 
 </TabItem>
@@ -910,7 +903,7 @@ curl -s "$SOAT_URL/api/v1/documents/$POEM_DOC_ID" \
 
 ## Step 11 — Inspect the trace
 
-The [trace](/docs/modules/traces#examples) endpoint returns **metadata only**: the step count and a `file_id` pointing to the full step JSON, retrieved separately.
+The [trace](/docs/modules/traces#examples) endpoint returns **metadata only**: the step count and a `file_id` for the full step JSON.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -937,13 +930,13 @@ Expected metadata output:
 }
 ```
 
-To see the full execution steps (all model calls, tool invocations, and tool results), download the file referenced by `file_id`:
+Download `file_id` for the full steps (model calls, tool invocations, tool results):
 
 ```bash
 soat download-file --file-id "$FILE_ID" | jq '.'
 ```
 
-The downloaded file is a JSON array of step objects (tool name, inputs, outputs — including the `trace_id` of any nested agent that was spawned). Each nested agent call creates its **own separate trace** (visible in Step 13); the parent trace's steps reference the child's `trace_id` as a tool call result.
+The file is a JSON array of step objects (tool name, inputs, outputs). Each nested agent call creates its **own trace** (Step 13); the parent's step references the child's `trace_id` in the tool call result.
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
@@ -979,7 +972,7 @@ curl -s "$SOAT_URL/api/v1/files/$FILE_ID/download" \
 
 ## Step 12 — Inspect the trace tree
 
-The `/tree` endpoint returns the full execution tree rooted at the orchestrator trace: each node is a [trace](/docs/modules/traces#examples) record with the traces spawned by sub-agent tool calls in `children`.
+`/tree` returns the execution tree rooted at the orchestrator: each node is a [trace](/docs/modules/traces#examples) record with sub-agent traces in `children`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -1010,7 +1003,7 @@ Expected output structure:
 }
 ```
 
-The root node is the orchestrator. Each entry in `children` is a stanza worker that was invoked via a `call-stanza-N_create-agent-generation` tool call. Workers that did not run (because the orchestrator's step limit was reached) will not appear.
+Each `children` entry is a stanza worker invoked via `call-stanza-N_create-agent-generation`. Workers cut off by the orchestrator's step limit do not appear.
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
@@ -1039,7 +1032,7 @@ curl -s "$SOAT_URL/api/v1/traces/$TRACE_ID/tree" \
 
 ## Step 13 — List all traces for the project
 
-List all traces in the project to inspect the orchestrator and nested stanza runs. See [Traces](/docs/modules/traces#examples).
+List the project's [traces](/docs/modules/traces#examples): the orchestrator and the nested stanza runs.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -1055,7 +1048,7 @@ Expected output (one entry per agent that ran):
 { "id": "trace_ZBfVXbQaDkC0nOu",  "agent_id": "agent_LhYajzCuJSY0SFqI", "step_count": 4, "parent_trace_id": "trace_ypo8g0yO3563AfuC" }
 ```
 
-The first entry is the orchestrator (`parent_trace_id: null`); the second is the stanza-1 worker (4 steps: LLM decision + poem-read + LLM decision + poem-write).
+First entry: the orchestrator (`parent_trace_id: null`); second: the stanza-1 worker (4 steps: LLM decision, poem-read, LLM decision, poem-write).
 
 </TabItem>
 <TabItem value="sdk" label="SDK">

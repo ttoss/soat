@@ -11,9 +11,9 @@ Generate numeric vector representations of text using the server's configured em
 
 ## Overview
 
-The Embeddings module exposes the server's embedding model as a REST endpoint. A single call accepts one or more text strings and returns the corresponding floating-point vectors. These vectors capture semantic meaning and can be used for downstream tasks such as similarity scoring, clustering, classification, or feeding a custom search index.
+One call accepts one or more strings and returns floating-point vectors for similarity scoring, clustering, classification, or a custom search index.
 
-The embedding model is configured server-side via environment variables (`EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`). `ollama`, `openai`, and `bedrock` (Amazon Bedrock) are supported backends. Callers do not choose the model at request time; the server always uses the configured model so all vectors in a deployment share the same space.
+The model is configured server-side (`EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`; backends `ollama`, `openai`, `bedrock`). Callers do not choose it, so all vectors in a deployment share one space.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -38,11 +38,11 @@ The embedding model is configured server-side via environment variables (`EMBEDD
 
 ### Batch size
 
-`inputs` accepts at most **256** values per request — each one is a call to the embedding model. A larger batch is refused with `VALIDATION_FAILED` (`400`) rather than queued; split it across requests.
+`inputs` accepts at most **256** values per request (each a model call); larger batches are refused with `VALIDATION_FAILED` (`400`).
 
 ## Data Model
 
-The endpoint is stateless — it does not store embeddings. The response shape depends on which input fields are provided.
+Stateless; nothing is stored. The response shape depends on the inputs:
 
 | Field        | Type         | Description                                                              |
 | ------------ | ------------ | ------------------------------------------------------------------------ |
@@ -51,28 +51,21 @@ The endpoint is stateless — it does not store embeddings. The response shape d
 
 Both fields can be present if the request includes both `input` and `inputs`.
 
-The request also accepts an optional `project_id`, which names the project the
-call's token usage is billed to — see [Metering](#metering).
+Optional `project_id` names the project billed; see [Metering](#metering).
 
 ## Key Concepts
 
 ### Single vs batch
 
-Pass `input` (a string) for a single vector, or `inputs` (an array of strings) for multiple vectors in one request. Batch calls reduce per-request overhead. Both can be combined in one call.
+`input` (string) for one vector, `inputs` (array) for many; both may be combined.
 
 ### Shared vector space
 
-All embeddings produced by a given SOAT deployment are in the same vector space because they use the same model. Cosine similarity between any two vectors produced by the same server is meaningful. Vectors from different deployments or models are not comparable.
+All embeddings from one deployment share a vector space, so cosine similarity between them is meaningful; vectors from other deployments or models are not comparable.
 
 ### Metering
 
-Every embedding call is metered as an `llm_tokens` usage event with `source`
-`embedding`, whatever reached the model: this endpoint, document ingestion, a
-memory write, an `embedding_similarity` scorer, or the query embedding behind a
-knowledge search. Spend therefore appears in
-[`GET /api/v1/usage/events`](/docs/api/usage/list-usage-events) and counts
-towards a project's `cost_usd` and `tokens`
-[quotas](./quotas.md), like every other provider call.
+Every embedding call is metered as an `llm_tokens` usage event with `source` `embedding`, whatever the origin: this endpoint, ingestion, a memory write, an `embedding_similarity` scorer, or a knowledge-search query. Spend appears in [`GET /api/v1/usage/events`](/docs/api/usage/list-usage-events) and counts towards `cost_usd` and `tokens` [quotas](./quotas.md).
 
 A usage event belongs to a project, so an embedding call needs one:
 
@@ -86,15 +79,9 @@ A usage event belongs to a project, so an embedding call needs one:
 
 ### Pricing embeddings
 
-**The rate is deployment configuration, not a price book row.**
-`EMBEDDING_INPUT_1M_TOKEN_PRICE_USD` prices every embedding this deployment
-makes, and `cost_usd` is computed at write time as
-`tokens × rate / 1,000,000`. `input_tokens` is the only dimension an embedding
-has — the model emits no completion, so there is no output rate to price
-against.
+**The rate is deployment configuration, not a price book row.** `EMBEDDING_INPUT_1M_TOKEN_PRICE_USD` prices every embedding; `cost_usd` = `tokens × rate / 1,000,000` at write time. `input_tokens` is the only dimension; there is no output rate.
 
-The variable is denominated per **million** tokens because that is how vendors
-publish embedding rates, so the figure is copied across as written:
+Per **million** tokens, as vendors publish, so the figure is copied as written:
 
 ```bash
 EMBEDDING_PROVIDER=openai
@@ -102,16 +89,9 @@ EMBEDDING_MODEL=text-embedding-3-small
 EMBEDDING_INPUT_1M_TOKEN_PRICE_USD=0.02
 ```
 
-**Unset means zero.** A deployment that states no rate meters every embedding at
-`cost_usd` of `0` rather than `null`, so an embedding never leaves a `cost_usd`
-[quota](./quotas.md) unable to evaluate its window. That is the right answer for
-a local model, which bills nothing per token; on a vendor-billed provider it
-reports real spend as free, so the server logs a warning at startup naming the
-variable. The recorded cost is frozen per event, so a rate set later prices the
-*next* embedding, never an earlier one.
+**Unset means zero.** With no rate, every embedding is metered at `cost_usd` `0` (not `null`), so a `cost_usd` [quota](./quotas.md) window always evaluates. Right for a local model; on a vendor-billed provider it reports spend as free, so the server warns at startup naming the variable. Cost is frozen per event; a rate set later prices the *next* embedding.
 
-**The [price book](./usage.md#pricing) does not reach embeddings.** None of its
-three tiers can price one, and a row naming the embedding model is ignored:
+**The [price book](./usage.md#pricing) does not reach embeddings.** A row naming the embedding model is ignored:
 
 | Tier | Scope | Applies to embeddings? |
 | --- | --- | --- |
@@ -119,21 +99,15 @@ three tiers can price one, and a row naming the embedding model is ignored:
 | Project + slug | One project's rate for a provider slug | No |
 | Global default | Every project | No |
 
-The embedding stack is configured per deployment rather than by an AI provider
-record, so there is no provider instance to price and no per-project rate to
-vary. Keeping the rate beside `EMBEDDING_MODEL` means the operator who chooses
-the model sets its price in the same place.
+The embedding stack is per deployment, not an AI provider record, so there is no instance or per-project rate to price; the operator who picks `EMBEDDING_MODEL` sets its price beside it.
 
-An embedding is also never named in a `QUOTA_UNENFORCEABLE` refusal's
-`unpriced_rows`, and never counts towards one: with no price book row to create,
-naming it would point at a fix that does not exist.
+An embedding is never named in a `QUOTA_UNENFORCEABLE` refusal's `unpriced_rows` and never counts towards one.
 
-Rows already in the price book for an embedding model keep explaining costs
-frozen before this behaviour changed; they price nothing new.
+Existing price book rows for an embedding model explain costs frozen before this behaviour changed; they price nothing new.
 
 ### 503 when unconfigured
 
-If `EMBEDDING_PROVIDER` or `EMBEDDING_MODEL` is not set, the server returns `503 EMBEDDING_NOT_CONFIGURED`. This is a configuration error, not a caller error.
+Without `EMBEDDING_PROVIDER` or `EMBEDDING_MODEL`, the server returns `503 EMBEDDING_NOT_CONFIGURED` (a configuration error).
 
 ## Examples
 

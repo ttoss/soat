@@ -14,21 +14,18 @@ import TabItem from '@theme/TabItem';
 
 # Cap Spend Per End User
 
-A per-user product needs a per-user budget: _"no single user costs me more than X a month"_, enforced no matter which agent they talk to. SOAT gets there in two moves — [Actors](/docs/modules/actors) give each end user an identity that [usage events](/docs/modules/usage) are billed to, and one actor-scoped [Quota](/docs/modules/quotas) turns that ledger into a hard cap.
+[Actors](/docs/modules/actors) give each end user an identity that [usage events](/docs/modules/usage) are billed to; one actor-scoped [Quota](/docs/modules/quotas) caps each of them.
 
-You will bind [sessions](/docs/modules/sessions) to two actors, read spend per end
-user, cap every user with a single quota (one blocked with `429`, one unaffected),
-raise the cap, see the one case where a cost cap silently protects nothing (and the
-[exception](/docs/modules/exceptions) it files), and finish with **monitor** mode.
+You bind [sessions](/docs/modules/sessions) to two actors, read spend per user, cap
+every user with one quota (one blocked with `429`, one unaffected), raise the cap,
+see the case where a cost cap protects nothing (and the
+[exception](/docs/modules/exceptions) it files), and finish with monitor mode.
 
 ## Prerequisites
 
-- SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide to bring the stack up with Docker Compose.
-- [Ollama](https://ollama.com) running locally with `qwen2.5:0.5b` available. This tutorial uses a local provider so it runs without external credentials — to connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
-- New to SOAT? Read [Key Concepts](/docs/getting-started/concepts) to understand projects, agents, and sessions first.
-- CLI installed and configured, or SDK set up. See [CLI](/docs/cli) or [SDK](/docs/sdk).
-- For production hardening (secrets, env vars), see [Configuration](/docs/self-hosting/configuration).
-- Server is at `http://localhost:5047`.
+- SOAT running locally ([Quick Start](/docs/getting-started)); [Key Concepts](/docs/getting-started/concepts); [Configuration](/docs/self-hosting/configuration).
+- [Ollama](https://ollama.com) with `qwen2.5:0.5b`; other providers: [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
+- [CLI](/docs/cli) or [SDK](/docs/sdk); server at `http://localhost:5047`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -58,7 +55,7 @@ export SOAT_BASE_URL=http://localhost:5047
 
 ## Step 1 — Log in as admin
 
-Admin is the built-in superuser role. See [Users](/docs/modules/users#examples) for authentication details.
+See [Users](/docs/modules/users#examples) for authentication.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -100,7 +97,7 @@ ADMIN_TOKEN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users/login" \
 
 ## Step 2 — Create a project
 
-Quotas are always project-scoped, so the [project](/docs/modules/projects#examples) is the tenant boundary for every cap in this tutorial.
+Quotas are project-scoped; the [project](/docs/modules/projects#examples) is the tenant boundary.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -138,7 +135,7 @@ echo "PROJECT_ID: $PROJECT_ID"
 
 ## Step 3 — Create the provider and agent
 
-A local Ollama [AI provider](/docs/modules/ai-providers#examples) and one [agent](/docs/modules/agents#examples) that both end users will talk to. The instructions keep answers short so the token counts in this tutorial stay small and legible.
+A local Ollama [AI provider](/docs/modules/ai-providers#examples) and one [agent](/docs/modules/agents#examples) for both end users. Short answers keep token counts legible.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -203,7 +200,7 @@ echo "AGENT_ID: $AGENT_ID"
 
 ## Step 4 — Create an actor per end user
 
-An [Actor](/docs/modules/actors) is the platform's identity for an end user. Creation with an `external_id` is **idempotent**: posting the same one again returns the existing actor (`200` instead of `201`), so an inbound-message webhook can call `create-actor` on every message without bookkeeping.
+An [Actor](/docs/modules/actors) is the identity of an end user. Creation with an `external_id` is idempotent: the same one again returns the existing actor (`200` instead of `201`), so a webhook can call `create-actor` on every message.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -217,7 +214,7 @@ echo "ADA_ID: $ADA_ID"
 echo "BLAKE_ID: $BLAKE_ID"
 ```
 
-Post Ada again and you get the same actor back, not a second one:
+Post Ada again:
 
 ```bash
 soat create-actor --project-id "$PROJECT_ID" \
@@ -264,7 +261,7 @@ echo "BLAKE_ID: $BLAKE_ID"
 
 ## Step 5 — Run a turn through a session bound to the actor
 
-Attribution is set on the [session](/docs/modules/sessions) path, because a session is the surface that knows which end user a turn belongs to. Create the session with `actor_id`, add a user message, and generate.
+Attribution is set on the [session](/docs/modules/sessions) path. Create the session with `actor_id`, add a user message, and generate.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -278,7 +275,7 @@ soat add-session-message --session-id "$ADA_SESSION_ID" \
 soat generate-session-response --wait true --session-id "$ADA_SESSION_ID" | jq '{status}'
 ```
 
-Expected output (the assistant's wording will vary — only the status matters):
+Expected output (wording varies; the status matters):
 
 ```json
 { "status": "completed" }
@@ -326,14 +323,14 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$ADA_SESSION_ID/generate?wait=tr
 </Tabs>
 
 :::note
-Only the session path carries an end user. A direct agent generation, a [trigger](/docs/modules/triggers)-initiated run, and an [orchestration](/docs/modules/orchestrations) node have nobody behind them and record `null` for both `actor_id` and `session_id` — so they match no actor quota. Cap that traffic with a `project`- or `agent`-scoped quota instead.
+Only the session path carries an end user. A direct agent generation, a [trigger](/docs/modules/triggers)-initiated run and an [orchestration](/docs/modules/orchestrations) node record `null` for `actor_id` and `session_id` and match no actor quota; cap them with a `project`- or `agent`-scoped quota.
 :::
 
 ---
 
 ## Step 6 — Read spend per end user
 
-The [usage meter](/docs/modules/usage#end-user-attribution) copies the actor and session onto every event at write time and **freezes** them there. Renaming an actor or deleting a session never rewrites recorded spend.
+The [usage meter](/docs/modules/usage#end-user-attribution) freezes actor and session onto every event at write time; renaming an actor or deleting a session never rewrites recorded spend.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -342,7 +339,7 @@ The [usage meter](/docs/modules/usage#end-user-attribution) copies the actor and
 soat get-usage-aggregate --project-id "$PROJECT_ID" --group-by actor | jq '{groups, totals}'
 ```
 
-Expected output — one bucket per end user:
+One bucket per end user:
 
 ```json
 {
@@ -373,7 +370,7 @@ Expected output — one bucket per end user:
 }
 ```
 
-The raw event carries the full attribution chain, filterable by actor:
+The raw event carries the attribution chain, filterable by actor:
 
 ```bash
 soat list-usage-events --actor-id "$ADA_ID" \
@@ -395,7 +392,7 @@ soat list-usage-events --actor-id "$ADA_ID" \
 }
 ```
 
-`cost_usd` is `null` because this project has no [price book](/docs/modules/usage#pricing) yet — the tokens are recorded, they just are not priced. Step 9 shows why that matters for cost caps.
+`cost_usd` is `null`: the project has no [price book](/docs/modules/usage#pricing) yet. Step 10 shows why that matters.
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
@@ -431,9 +428,9 @@ curl -s "$SOAT_BASE_URL/api/v1/usage/events?actor_id=$ADA_ID" \
 
 ## Step 7 — One quota, one budget per end user
 
-For `actor` scope, a **null `scope_ref` means one budget per actor** — not one pooled total. A single quota expresses _"every end user gets N tokens a month"_, and one user exhausting theirs never blocks anyone else.
+For `actor` scope, a null `scope_ref` means one budget per actor, not a pooled total; one user exhausting theirs never blocks another ([Quotas](/docs/modules/quotas)).
 
-The limit below is deliberately tiny (30 tokens) so Step 5's single turn already crosses it; in production this would be `100000` or more.
+The 30-token limit is tiny so Step 5's turn already crosses it; production would use `100000` or more.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -491,10 +488,10 @@ curl -s "$SOAT_BASE_URL/api/v1/quotas/$QUOTA_ID" \
 </Tabs>
 
 :::note
-`current_usage` reads `null` on a `tokens` or `cost_usd` quota — those metrics aggregate the [usage meter](/docs/modules/usage) at check time rather than keeping a counter. Only `requests` keeps a window counter.
+`current_usage` is `null` on `tokens` and `cost_usd` quotas: they aggregate the [usage meter](/docs/modules/usage) at check time. Only `requests` keeps a window counter.
 :::
 
-A quota is only accepted for a scope its metric can be aggregated by — `actor` + `requests` is rejected outright rather than stored as a silent no-op:
+A metric that cannot be aggregated by the scope is rejected — `actor` + `requests`:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -514,7 +511,7 @@ soat create-quota --project-id "$PROJECT_ID" --scope actor --metric requests --w
 }
 ```
 
-See [Scope × metric validity](/docs/modules/quotas#scope--metric-validity) for the full table.
+Full table: [Scope × metric validity](/docs/modules/quotas#scope--metric-validity).
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
@@ -549,7 +546,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/quotas" \
 
 ## Step 8 — One user is blocked, the other is not
 
-Ada's Step 5 turn already put her over the 30-token cap, so her next turn is refused **before the generation starts** with `429 QUOTA_EXCEEDED`. Blake, under the same quota, is at zero and runs normally.
+Ada is over the 30-token cap, so her next turn is refused before the generation starts with `429 QUOTA_EXCEEDED` ([Quotas](/docs/modules/quotas)). Blake is at zero and runs normally.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -563,7 +560,7 @@ soat add-session-message --session-id "$ADA_SESSION_ID" --message "And another u
 soat generate-session-response --wait true --session-id "$ADA_SESSION_ID"
 ```
 
-Expected output — the error carries the quota that fired and when the window resets:
+The error carries the quota that fired and the window reset:
 
 ```json
 {
@@ -582,7 +579,7 @@ Expected output — the error carries the quota that fired and when the window r
 }
 ```
 
-Now Blake, against the same quota:
+Blake, same quota:
 
 ```bash
 BLAKE_SESSION_ID=$(soat create-session --agent-id "$AGENT_ID" \
@@ -597,7 +594,7 @@ soat get-usage-aggregate --project-id "$PROJECT_ID" --group-by actor | jq '.grou
 { "status": "completed" }
 ```
 
-Both users now appear as separate buckets — Ada capped, Blake spending:
+Separate buckets — Ada capped, Blake spending:
 
 ```json
 [
@@ -666,14 +663,14 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$BLAKE_SESSION_ID/generate?wait=
 </Tabs>
 
 :::note
-A generation already **in flight is never killed**, so a budget can overshoot by at most one generation — the check runs before a generation starts, never mid-stream.
+The check runs before a generation starts, never mid-stream, so a budget can overshoot by at most one generation.
 :::
 
 ---
 
 ## Step 9 — Raise the cap
 
-`limit` and `mode` are the only mutable fields on a [quota](/docs/modules/quotas#data-model). Raise the limit and Ada resumes immediately — the check reads the meter live, so there is no counter to reset.
+`limit` and `mode` are the only mutable fields on a [quota](/docs/modules/quotas#data-model). The check reads the meter live, so Ada resumes immediately.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -723,13 +720,13 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$ADA_SESSION_ID/generate?wait=tr
 </TabItem>
 </Tabs>
 
-To give one named user a different allowance instead of the shared per-actor budget, set `scope_ref` to their actor id — that quota caps only that actor. Note it does not *override* the null-ref quota: every applicable quota is checked, and the tightest one that breaches wins.
+For a per-user allowance, set `scope_ref` to the actor id. It does not override the null-ref quota: every applicable quota is checked and the tightest breach wins.
 
 ---
 
 ## Step 10 — A cost cap with no prices protects nothing
 
-A `cost_usd` quota sums priced costs — an event with no [price-book](/docs/modules/usage#pricing) row contributes `0`, so on a project with no prices (like this one) a `cost_usd` cap fails **open**: it never breaches. When a cost check finds AI usage the price book did not cover, it files a `quota_unpriced` [exception](/docs/modules/exceptions#severity) naming the rows to price, deduped on the quota. A project that prices *some* of its models files the same item, for the same reason: the cap is measuring less than it caps.
+An event with no [price-book](/docs/modules/usage#pricing) row contributes `0` to a `cost_usd` quota, so on an unpriced project the cap fails open. A cost check that finds unpriced AI usage files a `quota_unpriced` [exception](/docs/modules/exceptions#severity) naming the rows to price, deduped on the quota; a partially priced project files the same item.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -745,7 +742,7 @@ soat list-exceptions --project-id "$PROJECT_ID" --kind quota_unpriced \
   | jq '.data[0] | {kind, severity, status, title, occurrence_count, detail}'
 ```
 
-Expected output — the generation is **not** blocked (the cap fails open), and the dead cap is filed for triage:
+The generation is not blocked; the dead cap is filed for triage:
 
 ```json
 { "status": "completed" }
@@ -772,7 +769,7 @@ Expected output — the generation is **not** blocked (the cap fails open), and 
 }
 ```
 
-Fix it by configuring the [price book](/docs/modules/usage#pricing) — walked through in [Meter and Budget Your Project's Spend](/docs/tutorials/metering-and-budgets). A `tokens` quota has no such dependency: it sums component quantities, which are always recorded. When in doubt, cap tokens.
+Fix: configure the [price book](/docs/modules/usage#pricing) ([Meter and Budget Your Project's Spend](/docs/tutorials/metering-and-budgets)). A `tokens` quota has no such dependency; when in doubt, cap tokens.
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
@@ -832,7 +829,7 @@ curl -s "$SOAT_BASE_URL/api/v1/exceptions?project_id=$PROJECT_ID&kind=quota_unpr
 
 ## Step 11 — Observe before you enforce
 
-`mode: monitor` runs the identical check and records the breach — firing the `quota.exceeded` [webhook](/docs/modules/webhooks) and writing a `quotas:MonitorBreach` [audit entry](/docs/modules/audit-log#system-originated-entries) — but lets the request through.
+`mode: monitor` runs the same check, fires the `quota.exceeded` [webhook](/docs/modules/webhooks), writes a `quotas:MonitorBreach` [audit entry](/docs/modules/audit-log#system-originated-entries), and lets the request through.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -844,14 +841,14 @@ soat add-session-message --session-id "$ADA_SESSION_ID" --message "One more use?
 soat generate-session-response --wait true --session-id "$ADA_SESSION_ID" | jq '{status}'
 ```
 
-Expected output — a 1-token cap that a real turn blows straight past, and the turn still completes:
+A 1-token cap is exceeded and the turn still completes:
 
 ```json
 { "limit": 1, "mode": "monitor" }
 { "status": "completed" }
 ```
 
-The breach is recorded once per window, with no principal — nobody *requested* it, so the platform records the fact rather than inventing an author:
+The breach is recorded once per window, with no principal:
 
 ```bash
 soat list-audit-entries --project-id "$PROJECT_ID" --action "quotas:MonitorBreach" \
@@ -878,7 +875,7 @@ soat list-audit-entries --project-id "$PROJECT_ID" --action "quotas:MonitorBreac
 }
 ```
 
-`observed_value` against `limit` is exactly the number you need to pick a real limit before flipping `mode` back to `enforce`.
+`observed_value` against `limit` sizes a real limit before flipping `mode` back to `enforce`.
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
@@ -935,7 +932,7 @@ curl -s "$SOAT_BASE_URL/api/v1/audit-log?project_id=$PROJECT_ID&action=quotas:Mo
 
 ## Next Steps
 
-- Price your usage so `cost_usd` caps actually bite, and get pushed a webhook before a budget is hit, in [Meter and Budget Your Project's Spend](/docs/tutorials/metering-and-budgets).
-- Give each end user their own long-term memory: create one memory per user, keep the mapping in your application, and pass it as `knowledge_config.memory_ids` on the generate call — see [Give Your Agent Long-Term Memory](/docs/tutorials/memories-agent) and [Actors — Per-Actor Memory](/docs/modules/actors#per-actor-memory).
-- Cap an individual tool call rather than aggregate spend with [Gate a Dangerous Tool with Guardrails](/docs/tutorials/gate-a-tool-with-guardrails).
-- Triage what a breached cap filed — see [Exceptions](/docs/modules/exceptions).
+- [Meter and Budget Your Project's Spend](/docs/tutorials/metering-and-budgets) — price usage so `cost_usd` caps bite; webhook before a budget is hit.
+- Per-user memory via `knowledge_config.memory_ids` — [Give Your Agent Long-Term Memory](/docs/tutorials/memories-agent), [Actors — Per-Actor Memory](/docs/modules/actors#per-actor-memory).
+- [Gate a Dangerous Tool with Guardrails](/docs/tutorials/gate-a-tool-with-guardrails) — cap an individual tool call.
+- [Exceptions](/docs/modules/exceptions) — triage what a breached cap filed.
