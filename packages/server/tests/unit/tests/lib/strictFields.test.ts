@@ -205,7 +205,11 @@ describe('strictFieldsMiddleware', () => {
       const ctx = makeCtx({
         method: 'GET',
         path: '/api/v1/usage/aggregate',
-        query: { project_id: 'proj_1', group_by: 'model', model: 'gpt-4' },
+        query: {
+          project_id: 'proj_1',
+          group_by: 'model',
+          conversation_id: 'conv_1',
+        },
         authUser,
       });
 
@@ -216,7 +220,7 @@ describe('strictFieldsMiddleware', () => {
       expect(
         (thrown as { meta?: { unknown_query_parameters?: string[] } }).meta
           ?.unknown_query_parameters
-      ).toEqual(['model']);
+      ).toEqual(['conversation_id']);
     });
 
     test('passes the parameters the spec declares', async () => {
