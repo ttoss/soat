@@ -18,8 +18,23 @@ type Finder = (
   where: Record<string, unknown>
 ) => Promise<{ id?: number } | null>;
 
-/** Every resource a filter can name, and the table it resolves against. */
-const SCOPED_ID_MODELS = {
+/**
+ * Every resource a filter can name. Spelled out rather than inferred from the
+ * table below: a model thunk's return type drags Sequelize's whole instance
+ * surface into the inferred type, which `tsc` cannot serialize (TS2883).
+ */
+export type ScopedIdResource =
+  | 'actor'
+  | 'agent'
+  | 'aiProvider'
+  | 'generation'
+  | 'orchestration'
+  | 'orchestrationRun'
+  | 'session'
+  | 'trace';
+
+/** The table each one resolves against. */
+const SCOPED_ID_MODELS: Record<ScopedIdResource, Finder> = {
   actor: (where) => {
     return db.Actor.findOne({ where });
   },
@@ -44,9 +59,7 @@ const SCOPED_ID_MODELS = {
   trace: (where) => {
     return db.Trace.findOne({ where });
   },
-} satisfies Record<string, Finder>;
-
-export type ScopedIdResource = keyof typeof SCOPED_ID_MODELS;
+};
 
 /** One narrowing: which resource the id names, under which key to file it. */
 export type ScopedIdFilter<K extends string = string> = {
