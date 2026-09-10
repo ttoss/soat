@@ -46,6 +46,28 @@ No `## Permissions` section. Define once, reference everywhere: never
 reproduce another module's data model or rules (tool types → Tools, trace
 ancestry → Traces, IAM policy format → IAM, user model → Users).
 
+## Prose
+
+Docs state facts; they do not argue for them. Before a page lands, cut:
+
+- Rationale and motivation paragraphs. Keep the rule, drop the argument; one
+  clause of "why" is enough when it is a hidden constraint.
+- History and narration: "used to", "before X shipped", "this page explains",
+  "as we saw", "in other words".
+- Restatements of an adjacent table, or of another section (link instead).
+- Another module's concepts. Link to its page; never re-define them.
+- Hedging, marketing adjectives, rhetorical questions, italics for emphasis,
+  em-dash asides that add no fact, admonitions that restate nearby text.
+- Related Tutorials entries longer than the link plus a short clause.
+
+Prefer a table or bullet list over a paragraph that enumerates cases. Plain
+declarative sentences. A `### Key Concept` is one behavior: what it does, when
+it applies, what it returns on refusal. If a section reads well as a blog post,
+it is too long.
+
+Never cut a fact: field, enum value, status or error code, env var, flag,
+default, limit, unit, endpoint link, heading text (anchors) or code block.
+
 ## Permissions page is generated
 
 Actions live in `packages/server/src/permissions/<module>.json`. Regenerate
