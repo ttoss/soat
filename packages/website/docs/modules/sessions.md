@@ -42,6 +42,7 @@ Sessions are a top-level resource at `/sessions`. Each session belongs to an [Ag
 | `last_activity_at`       | string \| null  | ISO 8601 timestamp of the last user message; `null` until the first message is added                             |
 | `forked_from_session_id` | string \| null  | Public ID of the session this one was [forked](#forking) from; `null` when it is not a fork, or once the parent is deleted |
 | `forked_from_position`   | integer \| null | Parent conversation `position` this session branched after; `null` when it is not a fork or was forked at the tip |
+| `usage`                  | object          | What the session's generations cost — `cost_usd` and token counts. Single-session read only; see [Session cost](#session-cost)                |
 | `created_at`             | string          | ISO 8601 creation timestamp                                                                                      |
 | `updated_at`             | string          | ISO 8601 last-updated timestamp                                                                                  |
 
@@ -74,6 +75,18 @@ An optional `idempotency_key` string can be included with either variant — see
 ### The Session's End User (Actor)
 
 A session has an end user only when `actor_id` is supplied on create. [Actors](./actors.md) are created separately and are never auto-created here. This matters beyond naming: end-user attribution on the resulting [usage](./usage.md#end-user-attribution) events is derived from the session's actor, so a session without one produces generations that match no `actor`-scoped [quota](./quotas.md#actor-scope). Attach an actor before relying on a per-user spend cap.
+
+### Session cost
+
+[`GET /api/v1/sessions/{session_id}`](/docs/api/sessions/get-session) carries a `usage` object — `cost_usd` plus `input_tokens`, `output_tokens`, `cached_tokens` and `reasoning_tokens` — summed across every metered generation dispatched through the session. It is the same shape an [orchestration run](./orchestrations.md#run-usage) reports, so one client type reads both.
+
+Three things to know:
+
+- **Single read only.** Session and fork listings omit the field rather than rolling one up per row.
+- **A fork starts at zero.** A fork is a session of its own, so it does not inherit what the history it copied cost, and summing `usage` across a session and its forks never double-counts.
+- **Only its own generations.** Work the platform does around a session without a generation of its own — a memory extraction pass, for instance — is metered on the project and appears in no session's figure.
+
+For a window, a split by day or model, or one end user across every session, narrow the aggregate instead: [`GET /api/v1/usage/aggregate?session_id=…`](/docs/api/usage/get-usage-aggregate). See [End-user attribution](./usage.md#end-user-attribution).
 
 ### Lifecycle
 

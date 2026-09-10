@@ -305,7 +305,9 @@ curl -s "$SOAT_URL/api/v1/usage/receipt?generation_id=$GENERATION_ID" \
 ## Step 6 — Aggregate the project's usage
 
 `get-usage-aggregate` rolls the whole project up over an optional `[from, to]` window,
-bucketed by one dimension: `model`, `agent`, `run`, `day`, or `meter_type`.
+bucketed by one dimension: `model`, `ai_provider`, `agent`,
+`orchestration_run`, `day`, `meter_type`, `actor`, `session`, or `source` —
+or by none, for the window's totals alone.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>

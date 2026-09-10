@@ -88,6 +88,12 @@ For `mcp` and `builtin`, the tool's `name` is a **prefix** joined with an unders
 
 When the model calls an `http` tool, the server sends an HTTP request to `execute.url` using the configured method. For `POST`, `PUT`, and `PATCH` the tool arguments are sent as a JSON body. For `GET`, `HEAD`, and `DELETE` the arguments become query-string parameters.
 
+:::caution Pointing a `GET` tool at this API
+
+Because every leftover argument becomes a query parameter, a `GET` tool whose `execute.url` is a SOAT endpoint may only be given arguments that endpoint declares — an undeclared query parameter is a [`400`](./usage.md#narrowing-a-rollup), and the tool call surfaces it as `TOOL_HTTP_ERROR`. Use a `builtin` tool instead when the target is this API: it derives its arguments from the operation, so it cannot send one the endpoint does not have.
+
+:::
+
 `execute.url` supports two placeholder syntaxes for injecting tool arguments into the URL path at invocation time; arguments consumed by either form are excluded from the request body or query string:
 
 - **`{paramName}`** — replaced with the corresponding tool argument (URL-encoded). Use when defining the tool directly via the API or CLI.

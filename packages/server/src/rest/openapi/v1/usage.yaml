@@ -34,9 +34,17 @@ paths:
       summary: List usage events
       description: >
         Returns the raw usage events the caller can access, most recent first,
-        optionally filtered by agent, generation, trace, actor, session, or
-        `source`. Each event is the per-generation token usage as reported by
-        the provider, for audit and reconciliation.
+        narrowed by any combination of the same filters the aggregate takes —
+        agent, generation, trace, actor, session, AI provider, orchestration
+        run, orchestration, trigger, action, meter type, model or `source` — so
+        a rollup and the events behind it are addressed the same way. Each
+        event is the per-generation token usage as reported by the provider,
+        for audit and reconciliation.
+
+
+        An id naming nothing in scope yields an empty page rather than dropping
+        the filter, so a mistyped narrowing can never widen the list past what
+        was asked for.
       operationId: listUsageEvents
       parameters:
         - name: agent_id
@@ -71,6 +79,41 @@ paths:
           description: >
             Filter by the session the usage was produced in. A session that does
             not exist in scope yields an empty page.
+          schema:
+            type: string
+        - name: ai_provider_id
+          in: query
+          required: false
+          description: >
+            Filter by the provider record the spend was billed against. A
+            provider that does not exist in scope yields an empty page.
+          schema:
+            type: string
+        - name: orchestration_run_id
+          in: query
+          required: false
+          description: >
+            Filter by the orchestration run that metered the event. A run that
+            does not exist in scope yields an empty page.
+          schema:
+            type: string
+        - name: orchestration_id
+          in: query
+          required: false
+          description: >
+            Filter by orchestration — the events of the runs it started
+            itself, not the subtree its `loop` or `sub_orchestration` nodes
+            started. An orchestration that does not exist in scope yields an
+            empty page.
+          schema:
+            type: string
+        - name: model
+          in: query
+          required: false
+          description: >
+            Filter by the as-billed SKU the event recorded. Matched as
+            recorded, so it still selects events whose provider has since been
+            deleted.
           schema:
             type: string
         - name: trigger_id
@@ -118,6 +161,15 @@ paths:
             type: integer
             default: 0
       responses:
+        '400':
+          description: >-
+            Bad Request — a query parameter this endpoint does not declare. An
+            unrecognised filter is rejected rather than ignored, since ignoring
+            one answers a narrow question with the unfiltered list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '200':
           description: Paginated list of usage events
           content:
@@ -155,8 +207,12 @@ paths:
       summary: Get aggregated usage for a project
       description: >
         Returns a project's usage rolled up over an optional `[from, to]` time
-        window, bucketed by a single dimension and optionally narrowed to one
-        `meter_type`. Each group and the grand total carry an `event_count`,
+        window, optionally bucketed by a single dimension and narrowed by any
+        combination of thirteen filters — session, actor, agent, AI provider,
+        orchestration run, orchestration, generation, trace, meter type, model,
+        source, trigger and action. That is how "what did this conversation
+        cost", "what has this end user cost" and "what did this agent cost" are
+        answered. Each group and the grand total carry an `event_count`,
         summed token counts, a
         measured `quantity` per component (so infra meters report their real
         amount, not zeros), and `cost_usd` (null when no event in the bucket was
@@ -164,11 +220,22 @@ paths:
         monthly figure without scanning raw usage events client-side.
 
 
+        Narrowings intersect and apply to the whole rollup — every bucket,
+        `totals` and `totals.distinct` alike — so each composes with any
+        `group_by`, and all thirteen are echoed back under `filters`. The eight
+        naming a resource are resolved against the project, and one naming
+        nothing there empties the rollup rather than being dropped: a mistyped
+        id must never read back as the project's whole spend. The other five
+        are matched against the value the event recorded.
+
+
         `groups` is paginated. Its `total` is the number of distinct buckets in
         the window — bucket cardinality, including a null bucket for the events
         the dimension does not apply to, and never a count of entities. To
         count entities, send `include=distinct` and read `totals.distinct`.
-        `totals` always describes the whole window — never the page above it.
+        `totals` always describes the whole window — never the page above it,
+        and never the bucketing: omit `group_by` and `totals` is unchanged
+        while `groups` is empty.
       operationId: getUsageAggregate
       parameters:
         - name: project_id
@@ -179,9 +246,13 @@ paths:
             type: string
         - name: group_by
           in: query
-          required: true
+          required: false
           description: >
-            Dimension to bucket by. `day` buckets on the event's UTC calendar
+            Dimension to bucket by. Omit it to skip bucketing entirely:
+            `totals` still describes the whole window and `groups` is an empty
+            page, which is what "what did this one thing cost" wants. A value
+            naming no dimension is a `400`.
+            `day` buckets on the event's UTC calendar
             day; the others bucket on the matching column. `ai_provider` buckets
             on the provider the spend was billed against — a routed
             generation's serving target, or the agent's pinned provider.
@@ -238,6 +309,114 @@ paths:
             every meter. An unknown type yields an empty rollup, not an error.
           schema:
             type: string
+        - name: session_id
+          in: query
+          required: false
+          description: >
+            Narrow the whole rollup — every bucket, `totals` and
+            `totals.distinct` alike — to one session's traffic. Combines with
+            `group_by`: `group_by=day&session_id=…` is a conversation's spend
+            per day, `group_by=model` is the same spend split by model. An id
+            naming no session in this project yields an empty rollup, never the
+            project total.
+          schema:
+            type: string
+        - name: actor_id
+          in: query
+          required: false
+          description: >
+            The same narrowing, for one end user across every session they
+            appear in. This is the figure behind a `scope: actor`,
+            `metric: cost_usd` quota — what that actor has spent, against the
+            cap it is held to.
+          schema:
+            type: string
+        - name: agent_id
+          in: query
+          required: false
+          description: >
+            Narrow to one agent's traffic, across every session, run and
+            trigger that dispatched it.
+          schema:
+            type: string
+        - name: ai_provider_id
+          in: query
+          required: false
+          description: >
+            Narrow to the spend billed against one provider record — a routed
+            generation's serving target, or the agent's pinned provider.
+          schema:
+            type: string
+        - name: orchestration_run_id
+          in: query
+          required: false
+          description: Narrow to the events one orchestration run metered.
+          schema:
+            type: string
+        - name: orchestration_id
+          in: query
+          required: false
+          description: >
+            Narrow to the runs of one orchestration — the runs it started
+            itself, never the subtree a `loop` or `sub_orchestration` node
+            started under it, which is metered against the child orchestration
+            where it was incurred. Additive: summed across a project's
+            orchestrations the figures reach the project total exactly once.
+            For the subtree figure of a single invocation, read `usage` on the
+            run.
+          schema:
+            type: string
+        - name: generation_id
+          in: query
+          required: false
+          description: >
+            Narrow to one generation's events. A generation writes more than
+            one when it meters several dimensions (tokens and compute).
+          schema:
+            type: string
+        - name: trace_id
+          in: query
+          required: false
+          description: Narrow to the events recorded under one trace.
+          schema:
+            type: string
+        - name: model
+          in: query
+          required: false
+          description: >
+            Narrow to one model, matched against the as-billed SKU the event
+            recorded. A value naming no model yields an empty rollup, not an
+            error. Under `group_by=model` this is a single-bucket rollup; under
+            any other dimension it is that model's spend split by the
+            dimension.
+          schema:
+            type: string
+        - name: source
+          in: query
+          required: false
+          description: >
+            Narrow by what the spend was incurred for — `eval` and `eval_judge`
+            are verification spend. Ordinary traffic carries no source, so it
+            cannot be selected by this filter; omit the filter for everything.
+          schema:
+            type: string
+        - name: trigger_id
+          in: query
+          required: false
+          description: >
+            Narrow to the spend one trigger initiated. Matched as recorded
+            rather than resolved, so it still selects the spend of a trigger
+            that has since been deleted.
+          schema:
+            type: string
+        - name: action_id
+          in: query
+          required: false
+          description: >
+            Narrow to one caller-supplied action label, for per-action spend.
+            Matched as recorded, like `trigger_id`.
+          schema:
+            type: string
         - name: limit
           in: query
           required: false
@@ -263,7 +442,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/UsageAggregate'
         '400':
-          description: Bad Request (missing project_id, invalid group_by or timestamp)
+          description: >-
+            Bad Request (missing project_id, invalid group_by or timestamp, or a
+            query parameter this endpoint does not declare — an unrecognised
+            filter is rejected rather than ignored, since ignoring one returns
+            the project-wide total in answer to a narrower question)
           content:
             application/json:
               schema:
@@ -856,6 +1039,65 @@ components:
             distinct:
               $ref: '#/components/schemas/UsageDistinct'
 
+    UsageAggregateFilters:
+      type: object
+      description: >
+        Every narrowing the rollup applied, echoed back exactly as the caller
+        sent it and null when unset. Echoed because a rollup of zeros is
+        otherwise indistinguishable from a project that spent nothing, and
+        always complete so a caller reading one key can tell "not filtered"
+        from "this endpoint does not know that filter". The eight naming a
+        resource are resolved against the project and empty the rollup when
+        they name nothing in it; the other five are matched against the value
+        the event recorded.
+      properties:
+        meter_type:
+          type: string
+          nullable: true
+        model:
+          type: string
+          nullable: true
+        source:
+          type: string
+          nullable: true
+        trigger_id:
+          type: string
+          nullable: true
+        action_id:
+          type: string
+          nullable: true
+        session_id:
+          x-soat-ref: sessions
+          type: string
+          nullable: true
+        actor_id:
+          x-soat-ref: actors
+          type: string
+          nullable: true
+        agent_id:
+          x-soat-ref: agents
+          type: string
+          nullable: true
+        ai_provider_id:
+          x-soat-ref: ai-providers
+          type: string
+          nullable: true
+        orchestration_run_id:
+          x-soat-ref: orchestration-runs
+          type: string
+          nullable: true
+        orchestration_id:
+          x-soat-ref: orchestrations
+          type: string
+          nullable: true
+        generation_id:
+          x-soat-ref: generations
+          type: string
+          nullable: true
+        trace_id:
+          x-soat-ref: traces
+          type: string
+          nullable: true
     UsageAggregate:
       type: object
       properties:
@@ -873,11 +1115,14 @@ components:
           nullable: true
           description: Upper bound applied, echoed back; null when unbounded
         group_by:
-          $ref: '#/components/schemas/UsageGroupBy'
-        meter_type:
-          type: string
+          allOf:
+            - $ref: '#/components/schemas/UsageGroupBy'
           nullable: true
-          description: Meter-type filter applied, echoed back; null when unfiltered
+          description: >
+            Dimension applied, echoed back; null when the caller asked for no
+            bucketing, in which case `groups` is an empty page.
+        filters:
+          $ref: '#/components/schemas/UsageAggregateFilters'
         groups:
           type: object
           description: >

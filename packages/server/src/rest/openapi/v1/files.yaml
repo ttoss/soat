@@ -451,6 +451,14 @@ paths:
           description: File ID
           schema:
             type: string
+        - name: token
+          in: query
+          required: false
+          description: >-
+            Signed single-file download token, an alternative to a bearer
+            credential (issued for ingestion-rule converters).
+          schema:
+            type: string
             example: 'file_abc123'
       responses:
         '200':
@@ -539,6 +547,14 @@ paths:
           in: path
           required: true
           description: File ID
+          schema:
+            type: string
+        - name: token
+          in: query
+          required: false
+          description: >-
+            Signed single-file download token, an alternative to a bearer
+            credential (issued for ingestion-rule converters).
           schema:
             type: string
       responses:

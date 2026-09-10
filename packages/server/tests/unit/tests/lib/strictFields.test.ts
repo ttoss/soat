@@ -18,11 +18,13 @@ const makeCtx = (args: {
   method: string;
   path: string;
   body?: unknown;
+  query?: Record<string, string>;
   authUser?: Context['authUser'];
 }): Context => {
   return {
     method: args.method,
     path: args.path,
+    query: args.query ?? {},
     authUser: args.authUser,
     request: { body: args.body },
   } as unknown as Context;
@@ -191,5 +193,162 @@ describe('strictFieldsMiddleware', () => {
 
     expect(thrown).toBeUndefined();
     expect(next).toHaveBeenCalledTimes(1);
+  });
+  /**
+   * The query-string half. The accepted names are the spec operation's own
+   * `parameters`, so these pin the wiring rather than a list: a path template
+   * the middleware never matches would fail open and silently restore the
+   * ignore-and-answer-wrong behavior.
+   */
+  describe('query parameters', () => {
+    test('rejects a parameter the route does not declare', async () => {
+      const ctx = makeCtx({
+        method: 'GET',
+        path: '/api/v1/usage/aggregate',
+        query: {
+          project_id: 'proj_1',
+          group_by: 'model',
+          conversation_id: 'conv_1',
+        },
+        authUser,
+      });
+
+      const { next, thrown } = await run(ctx);
+
+      expect(next).not.toHaveBeenCalled();
+      expect((thrown as { code?: string }).code).toBe('VALIDATION_FAILED');
+      expect(
+        (thrown as { meta?: { unknown_query_parameters?: string[] } }).meta
+          ?.unknown_query_parameters
+      ).toEqual(['conversation_id']);
+    });
+
+    test('passes the parameters the spec declares', async () => {
+      const ctx = makeCtx({
+        method: 'GET',
+        path: '/api/v1/usage/aggregate',
+        query: {
+          project_id: 'proj_1',
+          group_by: 'day',
+          session_id: 'sess_1',
+          actor_id: 'actor_1',
+        },
+        authUser,
+      });
+
+      const { next, thrown } = await run(ctx);
+
+      expect(thrown).toBeUndefined();
+      expect(next).toHaveBeenCalledTimes(1);
+    });
+
+    test('rejects an unknown parameter on any documented route', async () => {
+      const ctx = makeCtx({
+        method: 'GET',
+        path: '/api/v1/projects',
+        query: { bogus: 'yes' },
+        authUser,
+      });
+
+      const { next, thrown } = await run(ctx);
+
+      expect(next).not.toHaveBeenCalled();
+      expect((thrown as { code?: string }).code).toBe('VALIDATION_FAILED');
+    });
+
+    test('resolves a parameterized path to its template', async () => {
+      const rejected = await run(
+        makeCtx({
+          method: 'GET',
+          path: '/api/v1/agents/agt_abc123',
+          query: { bogus: 'yes' },
+          authUser,
+        })
+      );
+      expect(rejected.next).not.toHaveBeenCalled();
+      expect((rejected.thrown as { code?: string }).code).toBe(
+        'VALIDATION_FAILED'
+      );
+
+      const accepted = await run(
+        makeCtx({
+          method: 'GET',
+          path: '/api/v1/sessions/sess_abc123/forks',
+          query: { limit: '5' },
+          authUser,
+        })
+      );
+      expect(accepted.thrown).toBeUndefined();
+      expect(accepted.next).toHaveBeenCalledTimes(1);
+    });
+
+    // The query string is checked on writes too: `?wait=true` decides whether
+    // a generation route answers with the finished record or a handle, so a
+    // typo there silently changes the response shape rather than the filter.
+    test('checks mutating routes, not only reads', async () => {
+      const accepted = await run(
+        makeCtx({
+          method: 'POST',
+          path: '/api/v1/agents/agt_abc123/generate',
+          query: { wait: 'true' },
+          authUser,
+        })
+      );
+      expect(accepted.thrown).toBeUndefined();
+
+      const rejected = await run(
+        makeCtx({
+          method: 'POST',
+          path: '/api/v1/agents/agt_abc123/generate',
+          query: { waite: 'true' },
+          authUser,
+        })
+      );
+      expect((rejected.thrown as { code?: string }).code).toBe(
+        'VALIDATION_FAILED'
+      );
+    });
+
+    test('leaves a path the spec documents no operation for alone', async () => {
+      const ctx = makeCtx({
+        method: 'GET',
+        path: '/api/v1/openapi.json',
+        query: { bogus: 'yes' },
+        authUser,
+      });
+
+      const { next, thrown } = await run(ctx);
+
+      expect(thrown).toBeUndefined();
+      expect(next).toHaveBeenCalledTimes(1);
+    });
+
+    test('leaves paths outside /api/v1 alone', async () => {
+      const ctx = makeCtx({
+        method: 'GET',
+        path: '/hooks/inbound/whatever',
+        query: { bogus: 'yes' },
+        authUser,
+      });
+
+      const { next, thrown } = await run(ctx);
+
+      expect(thrown).toBeUndefined();
+      expect(next).toHaveBeenCalledTimes(1);
+    });
+
+    test('skips unauthenticated requests so the handler can return 401', async () => {
+      const ctx = makeCtx({
+        method: 'GET',
+        path: '/api/v1/usage/aggregate',
+        query: { bogus: 'yes' },
+        authUser: undefined,
+      });
+
+      const { next, thrown } = await run(ctx);
+
+      expect(thrown).toBeUndefined();
+      expect(next).toHaveBeenCalledTimes(1);
+    });
   });
 });

@@ -46,6 +46,7 @@ export type GroupRow = {
 // behind them.
 const EVENT_TABLE = 'usage_events';
 const COMPONENT_TABLE = 'usage_components';
+const ORCHESTRATION_RUN_TABLE = 'orchestration_runs';
 
 /**
  * How each dimension is bucketed in SQL.
@@ -155,17 +156,78 @@ const joinClause = (groupBy: UsageGroupBy): string => {
     .join('\n       ');
 };
 
+/**
+ * Narrowings matched against the value the event recorded, as sent.
+ *
+ * Deliberately unvalidated, the rule the meters listing already applies to
+ * `meter_type`: an unknown value yields an empty rollup rather than a `400`
+ * that goes stale the moment a new meter, model or workload source appears.
+ * `triggerId` and `actionId` are values rather than ids precisely because the
+ * event stores them denormalized — spend outlives the trigger that incurred it.
+ */
+type ValueNarrowings = {
+  meterType?: string;
+  model?: string;
+  source?: string;
+  triggerId?: string;
+  actionId?: string;
+};
+
+/**
+ * Narrowings on an attribution column, as the internal ids the caller has
+ * already resolved within the project (see `scopedIdFilters.ts`).
+ */
+type IdNarrowings = {
+  sessionId?: number;
+  actorId?: number;
+  agentId?: number;
+  aiProviderId?: number;
+  orchestrationRunId?: number;
+  generationId?: number;
+  traceId?: number;
+};
+
 export type EventFilter = {
   projectId: number;
   from: Date | null;
   to: Date | null;
-  meterType?: string;
+  /**
+   * The runs of one orchestration — the runs it started itself, never the
+   * subtree a `loop` or `sub_orchestration` node started under it, which is
+   * metered against the child orchestration where it was incurred. Additive:
+   * summed across a project's orchestrations the figures reach the project
+   * total exactly once. The subtree figure is a run's own `usage` field.
+   */
+  orchestrationId?: number;
+} & IdNarrowings &
+  ValueNarrowings;
+
+// Every narrowing that compares one event column to one value, and the column
+// it compares. Exhaustive over both narrowing types, so a field added there
+// without a column here is a type error rather than a filter silently ignored.
+const NARROWING_COLUMNS: {
+  [K in keyof (IdNarrowings & ValueNarrowings)]-?: string;
+} = {
+  meterType: 'meter_type',
+  model: 'model',
+  source: 'source',
+  triggerId: 'trigger_id',
+  actionId: 'action_id',
+  sessionId: 'session_id',
+  actorId: 'actor_id',
+  agentId: 'agent_id',
+  aiProviderId: 'ai_provider_id',
+  orchestrationRunId: 'orchestration_run_id',
+  generationId: 'generation_id',
+  traceId: 'trace_id',
 };
 
-// The `[from, to]` window and optional meter narrowing, as a WHERE fragment
-// plus the replacements it names. `meterType` is deliberately unvalidated — a
-// free-form column the meters listing filters the same way, so an unknown type
-// yields an empty rollup rather than a 400.
+const NARROWING_KEYS = Object.keys(NARROWING_COLUMNS) as Array<
+  keyof typeof NARROWING_COLUMNS
+>;
+
+// The `[from, to]` window and the narrowings, as a WHERE fragment plus the
+// replacements it names.
 const eventFilter = (
   filter: EventFilter
 ): { sql: string; replacements: Record<string, Date | number | string> } => {
@@ -182,9 +244,24 @@ const eventFilter = (
     clauses.push('e."created_at" <= :to');
     replacements.to = filter.to;
   }
-  if (filter.meterType !== undefined) {
-    clauses.push('e."meter_type" = :meterType');
-    replacements.meterType = filter.meterType;
+
+  for (const key of NARROWING_KEYS) {
+    const value = filter[key];
+    if (value === undefined) continue;
+    clauses.push(`e."${NARROWING_COLUMNS[key]}" = :${key}`);
+    replacements[key] = value;
+  }
+
+  // The one narrowing the event carries no column for: the orchestration is
+  // the run's, so it is read through the runs rather than denormalized onto
+  // every event. Both sides of the lookup are indexed.
+  if (filter.orchestrationId !== undefined) {
+    clauses.push(
+      `e."orchestration_run_id" IN (
+         SELECT r."id" FROM "${ORCHESTRATION_RUN_TABLE}" r
+          WHERE r."orchestration_id" = :orchestrationId)`
+    );
+    replacements.orchestrationId = filter.orchestrationId;
   }
 
   return { sql: clauses.join(' AND '), replacements };

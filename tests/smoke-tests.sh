@@ -2508,13 +2508,20 @@ echo "Agent Tool id: $TOOL_ID"
 # Step `b`'s input and the pipeline `output` nest a `var` marker inside a plain
 # object, to exercise recursive JSON Logic resolution at depth, not just at the
 # top level (#321).
+#
+# The marker rides on `offset` because an `http` tool with no body turns every
+# leftover input key into a query parameter, and the target here is this API,
+# where an undeclared parameter is now a 400 (#1265). `offset` is declared on
+# the projects listing and parses a non-numeric value back to its default, so
+# the call still exercises the nesting without asserting anything about
+# pagination.
 echo "--- Creating pipeline tool ---"
 PIPELINE_TOOL_RESP=$($SOAT_CLI create-tool \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name compute-and-list \
   --type pipeline \
   --description "Runs list-projects twice and maps both step outputs" \
-  --pipeline "{\"steps\":[{\"id\":\"a\",\"tool_id\":\"$TOOL_ID\",\"input\":{}},{\"id\":\"b\",\"tool_id\":\"$TOOL_ID\",\"input\":{\"note\":{\"wrapped\":{\"var\":\"steps.a\"}}}}],\"output\":{\"from_a\":{\"var\":\"steps.a\"},\"from_b\":{\"var\":\"steps.b\"},\"echoed\":{\"container\":{\"var\":\"input.tag\"}}}}")
+  --pipeline "{\"steps\":[{\"id\":\"a\",\"tool_id\":\"$TOOL_ID\",\"input\":{}},{\"id\":\"b\",\"tool_id\":\"$TOOL_ID\",\"input\":{\"offset\":{\"wrapped\":{\"var\":\"steps.a\"}}}}],\"output\":{\"from_a\":{\"var\":\"steps.a\"},\"from_b\":{\"var\":\"steps.b\"},\"echoed\":{\"container\":{\"var\":\"input.tag\"}}}}")
 PIPELINE_TOOL_ID=$(printf '%s\n' "$PIPELINE_TOOL_RESP" | jq -r '.id')
 if [ -z "$PIPELINE_TOOL_ID" ] || [ "$PIPELINE_TOOL_ID" = "null" ]; then
   echo "FAIL: could not create pipeline tool"
@@ -3957,7 +3964,7 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
       and ([$g[0].components[] | select(.component == "compute_second")
              | select(.quantity > 0) | select(.unit == "compute_second")]
            | length == 1)
-      and (.meter_type == null)')
+      and (.filters.meter_type == null)')
   if [ "$USAGE_QTY_OK" != "true" ]; then
     echo "ERROR: get-usage-aggregate reported the compute_execution meter without a measured quantity" >&2
     echo "$USAGE_AGG_RESP" >&2
@@ -3972,7 +3979,7 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
     --group-by meter_type \
     --meter-type compute_execution | sanitize_json)
   USAGE_FILTERED_OK=$(printf '%s\n' "$USAGE_FILTERED_RESP" | jq -r '
-    (.meter_type == "compute_execution")
+    (.filters.meter_type == "compute_execution")
       and ((.groups.data | map(.key)) == ["compute_execution"])
       and ((.totals.components | map(.component)) == ["compute_second"])')
   if [ "$USAGE_FILTERED_OK" != "true" ]; then
@@ -4093,6 +4100,80 @@ EUA_AGG_SESSION_OK=$(printf '%s\n' "$EUA_AGG_SESSION" | jq -r --arg session "$EU
 if [ "$EUA_AGG_SESSION_OK" != "true" ]; then
   echo "ERROR: get-usage-aggregate --group-by session did not bucket the session's spend" >&2
   printf '%s\n' "$EUA_AGG_SESSION" >&2
+  exit 1
+fi
+
+# The narrowed rollup: the same spend asked for one session, and one end user,
+# rather than bucketed out of the project's. An unfiltered call would answer
+# with the project total, so the assertion is that the two agree.
+EUA_AGG_NARROWED=$($SOAT_CLI get-usage-aggregate \
+  --project-id "$PROJECT_PUBLIC_ID" --group-by model \
+  --session-id "$EUA_SESSION_ID" | sanitize_json)
+EUA_AGG_NARROWED_OK=$(printf '%s\n' "$EUA_AGG_NARROWED" | jq -r --arg session "$EUA_SESSION_ID" '(.filters.session_id == $session) and (.totals.event_count >= 1) and (.totals.output_tokens > 0)')
+if [ "$EUA_AGG_NARROWED_OK" != "true" ]; then
+  echo "ERROR: get-usage-aggregate --session-id did not narrow the rollup to the session" >&2
+  printf '%s\n' "$EUA_AGG_NARROWED" >&2
+  exit 1
+fi
+
+EUA_AGG_ACTOR=$($SOAT_CLI get-usage-aggregate \
+  --project-id "$PROJECT_PUBLIC_ID" --group-by day \
+  --actor-id "$EUA_ACTOR_ID" | sanitize_json)
+EUA_AGG_ACTOR_OK=$(printf '%s\n' "$EUA_AGG_ACTOR" | jq -r --arg actor "$EUA_ACTOR_ID" '(.filters.actor_id == $actor) and (.totals.event_count >= 1)')
+if [ "$EUA_AGG_ACTOR_OK" != "true" ]; then
+  echo "ERROR: get-usage-aggregate --actor-id did not narrow the rollup to the actor" >&2
+  printf '%s\n' "$EUA_AGG_ACTOR" >&2
+  exit 1
+fi
+
+# A mistyped id must read as zero, never as the project's whole spend.
+EUA_AGG_UNKNOWN=$($SOAT_CLI get-usage-aggregate \
+  --project-id "$PROJECT_PUBLIC_ID" --group-by model \
+  --session-id sess_smokedoesnotexist | sanitize_json)
+EUA_AGG_UNKNOWN_OK=$(printf '%s\n' "$EUA_AGG_UNKNOWN" | jq -r '(.totals.event_count == 0) and ((.groups.data | length) == 0)')
+if [ "$EUA_AGG_UNKNOWN_OK" != "true" ]; then
+  echo "ERROR: get-usage-aggregate with an unknown --session-id did not return an empty rollup" >&2
+  printf '%s\n' "$EUA_AGG_UNKNOWN" >&2
+  exit 1
+fi
+
+# Without a bucketing at all: the window's totals are what "what did this cost"
+# asks for, and they must not depend on a dimension the caller had to invent.
+EUA_AGG_UNGROUPED=$($SOAT_CLI get-usage-aggregate \
+  --project-id "$PROJECT_PUBLIC_ID" --actor-id "$EUA_ACTOR_ID" | sanitize_json)
+EUA_AGG_UNGROUPED_OK=$(printf '%s\n' "$EUA_AGG_UNGROUPED" | jq -r --argjson grouped "$(printf '%s\n' "$EUA_AGG_ACTOR" | jq -c '.totals')" '(.group_by == null) and ((.groups.data | length) == 0) and (.totals.event_count == $grouped.event_count) and (.totals.output_tokens == $grouped.output_tokens)')
+if [ "$EUA_AGG_UNGROUPED_OK" != "true" ]; then
+  echo "ERROR: get-usage-aggregate without --group-by did not report the window totals" >&2
+  printf '%s\n' "$EUA_AGG_UNGROUPED" >&2
+  exit 1
+fi
+
+# The narrowings the events and generation listings share with the rollup, so
+# a figure and the rows behind it are addressed the same way.
+EUA_GENS=$($SOAT_CLI list-generations --session-id "$EUA_SESSION_ID" | sanitize_json)
+EUA_GENS_OK=$(printf '%s\n' "$EUA_GENS" | jq -r --arg session "$EUA_SESSION_ID" '((.data | length) >= 1) and all(.data[]; .session_id == $session)')
+if [ "$EUA_GENS_OK" != "true" ]; then
+  echo "ERROR: list-generations --session-id did not narrow to the session" >&2
+  printf '%s\n' "$EUA_GENS" >&2
+  exit 1
+fi
+
+EUA_EVENT_MODEL=$(printf '%s\n' "$EUA_EVENTS" | jq -r '.data[0].model')
+EUA_EVENTS_MODEL=$($SOAT_CLI list-usage-events \
+  --session-id "$EUA_SESSION_ID" --model "$EUA_EVENT_MODEL" | sanitize_json)
+EUA_EVENTS_MODEL_OK=$(printf '%s\n' "$EUA_EVENTS_MODEL" | jq -r --arg model "$EUA_EVENT_MODEL" '((.data | length) >= 1) and all(.data[]; .model == $model)')
+if [ "$EUA_EVENTS_MODEL_OK" != "true" ]; then
+  echo "ERROR: list-usage-events --model did not narrow to the model" >&2
+  printf '%s\n' "$EUA_EVENTS_MODEL" >&2
+  exit 1
+fi
+
+# The same figure on the session record itself — what this conversation cost.
+EUA_SESSION_GET=$($SOAT_CLI get-session --session-id "$EUA_SESSION_ID" | sanitize_json)
+EUA_SESSION_USAGE_OK=$(printf '%s\n' "$EUA_SESSION_GET" | jq -r '(.usage | type) == "object" and (.usage.output_tokens | type) == "number" and (.usage.output_tokens > 0)')
+if [ "$EUA_SESSION_USAGE_OK" != "true" ]; then
+  echo "ERROR: get-session did not include the session's usage roll-up" >&2
+  printf '%s\n' "$EUA_SESSION_GET" >&2
   exit 1
 fi
 

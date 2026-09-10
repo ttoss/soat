@@ -8,6 +8,7 @@ import { mapSession } from './sessionMapper';
 import { abortSessionGeneration } from './sessionOperations';
 import { createSessionTransaction } from './sessionTransaction';
 import { assertValidToolContextKeys } from './toolContext';
+import { rollUpUsageTotals } from './usageAggregate';
 
 const isSessionExpired = (session: InstanceType<(typeof db)['Session']>) => {
   const ttl = session.inactivityTtlSeconds;
@@ -250,6 +251,9 @@ export const findSessionAccess = async (args: {
 export const getSession = async (args: {
   agentId: number;
   sessionId: string;
+  // Off unless asked for: the formation drift check reads sessions through this
+  // function and discards the figure, and the roll-up is two aggregates.
+  includeUsage?: boolean;
 }) => {
   const session = await db.Session.findOne({
     where: { publicId: args.sessionId, agentId: args.agentId },
@@ -265,7 +269,18 @@ export const getSession = async (args: {
 
   await checkAndExpireSession(session);
 
-  return mapSession(session);
+  if (!args.includeUsage) return mapSession(session);
+
+  // Its own events only. A fork is a session of its own, so it starts at zero
+  // rather than inheriting what the history it copied cost.
+  const usage = await rollUpUsageTotals({
+    projectId: session.projectId,
+    from: null,
+    to: null,
+    sessionId: session.id,
+  });
+
+  return mapSession(session, usage);
 };
 
 export const updateSession = async (args: {

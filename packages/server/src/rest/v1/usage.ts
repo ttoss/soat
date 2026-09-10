@@ -3,6 +3,7 @@ import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { buildSrn } from 'src/lib/iam';
 import { listPrices, upsertPrices } from 'src/lib/priceBook';
+import type { UsageNarrowings } from 'src/lib/usage';
 import {
   aggregateUsage,
   createThreshold,
@@ -40,13 +41,41 @@ type UpsertPricesBody = {
 };
 
 /**
+ * The narrowings both usage reads accept, in the internal camelCase the libs
+ * take. One reader for both so the two surfaces cannot drift into accepting
+ * different filters; unknown parameters are rejected upstream by
+ * `strictFieldsMiddleware` against each route's declared parameters.
+ */
+const usageNarrowings = (ctx: Context): UsageNarrowings => {
+  const query = ctx.query as Record<string, string | undefined>;
+  return {
+    meterType: query.meter_type,
+    model: query.model,
+    source: query.source,
+    triggerId: query.trigger_id,
+    actionId: query.action_id,
+    sessionId: query.session_id,
+    actorId: query.actor_id,
+    agentId: query.agent_id,
+    aiProviderId: query.ai_provider_id,
+    orchestrationRunId: query.orchestration_run_id,
+    orchestrationId: query.orchestration_id,
+    generationId: query.generation_id,
+    traceId: query.trace_id,
+  };
+};
+
+/**
  * @openapi
  * GET /api/v1/usage/events
  * operationId: listUsageEvents
  * Lists raw usage events the caller can access, optionally filtered by
- * agent_id, generation_id, trace_id, actor_id, session_id, and source. One row
- * is recorded per completed generation with the provider's reported
- * input/output/cached/reasoning token counts.
+ * agent_id, generation_id, trace_id, actor_id, session_id, ai_provider_id,
+ * orchestration_run_id, orchestration_id, trigger_id, action_id, meter_type,
+ * model, and source — the same narrowings the aggregate takes, so a rollup and
+ * the events behind it are addressed the same way. An id naming nothing in
+ * scope yields an empty page. One row is recorded per completed generation
+ * with the provider's reported input/output/cached/reasoning token counts.
  */
 usageRouter.get('/usage/events', async (ctx: Context) => {
   requireAuth(ctx);
@@ -57,31 +86,11 @@ usageRouter.get('/usage/events', async (ctx: Context) => {
     resourceType: 'usage',
   });
 
-  const {
-    agent_id: agentId,
-    generation_id: generationId,
-    trace_id: traceId,
-    actor_id: actorId,
-    session_id: sessionId,
-    trigger_id: triggerId,
-    action_id: actionId,
-    meter_type: meterType,
-    source,
-    limit,
-    offset,
-  } = ctx.query as Record<string, string | undefined>;
+  const { limit, offset } = ctx.query as Record<string, string | undefined>;
 
   const result = await listUsageEvents({
     projectIds: projectIds ?? undefined,
-    agentId,
-    generationId,
-    traceId,
-    actorId,
-    sessionId,
-    triggerId,
-    actionId,
-    meterType,
-    source,
+    ...usageNarrowings(ctx),
     limit: limit ? Number(limit) : undefined,
     offset: offset ? Number(offset) : undefined,
   });
@@ -94,11 +103,18 @@ usageRouter.get('/usage/events', async (ctx: Context) => {
  * GET /api/v1/usage/aggregate
  * operationId: getUsageAggregate
  * Returns a project's usage rolled up over an optional [from, to] window,
- * bucketed by one dimension
+ * optionally bucketed by one dimension
  * (group_by=model|ai_provider|agent|orchestration_run|day|meter_type|actor|
- * session|source) and optionally narrowed to a single meter_type. Each group
- * and the grand total carry an event count, summed token counts, a measured
- * quantity per component, and cost_usd. groups is paginated with limit/offset;
+ * session|source) and narrowed by any combination of thirteen filters, echoed
+ * back under filters. Each group and the grand total carry an event count,
+ * summed token counts, a measured quantity per component, and cost_usd.
+ * Narrowings intersect and apply to the whole rollup. The eight naming a
+ * resource are resolved against the project, and one naming nothing yields an
+ * empty rollup, never the project total; the other five (meter_type, model,
+ * source, trigger_id, action_id) match the value the event recorded.
+ * orchestration_id selects that orchestration's own runs, not the subtree its
+ * nodes started. Omitting group_by returns totals with an empty groups page.
+ * groups is paginated with limit/offset;
  * its total is the number of distinct buckets, while totals always describes
  * the whole window. include=distinct adds totals.distinct, the distinct-entity
  * counters a "how many" question reads. Requires usage:GetAggregate on the
@@ -112,7 +128,6 @@ usageRouter.get('/usage/aggregate', async (ctx: Context) => {
     from,
     to,
     group_by: groupBy,
-    meter_type: meterType,
     include,
   } = ctx.query as Record<string, string | undefined>;
 
@@ -144,8 +159,8 @@ usageRouter.get('/usage/aggregate', async (ctx: Context) => {
     from,
     to,
     groupBy,
-    meterType,
     include,
+    ...usageNarrowings(ctx),
     ...parsePagination(ctx),
   });
 });

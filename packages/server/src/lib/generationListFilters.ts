@@ -4,71 +4,54 @@
  *
  * Its own module because it only serves the list query: `generations.ts` writes
  * and updates generation records, and holding both jobs is what pushed that file
- * past its size ceiling.
+ * past its size ceiling. The resolution itself is shared
+ * (`scopedIdFilters.ts`); what lives here is which column each filter fills.
  */
-import { db } from '../db';
+import type { ScopedIdResource } from './scopedIdFilters';
+import { applyScopedIdFilters } from './scopedIdFilters';
 
-// Resolves a project-scoped parent (agent/trace) publicId to its internal id
-// for use as a generation list filter. Returns null when it does not exist in
-// scope (caller yields an empty page).
-const resolveScopedId = async (
-  find: (where: {
-    publicId: string;
-    projectId?: number[];
-  }) => Promise<{ id?: number } | null>,
-  publicId: string,
-  projectIds?: number[]
-): Promise<number | null> => {
-  const where: { publicId: string; projectId?: number[] } = { publicId };
-  if (projectIds !== undefined) where.projectId = projectIds;
-  const row = await find(where);
-  return row?.id ?? null;
+type GenerationScopeFilters = {
+  agentId?: string;
+  traceId?: string;
+  initiatorGenerationId?: string;
+  sessionId?: string;
+  actorId?: string;
 };
 
-// Resolves agent/trace publicId filters into `where` (mutating it). Returns
-// false when a referenced agent/trace does not exist in scope.
+// `actorId` fills `startedByActorId`: the generation names who started it,
+// while the usage event copies the same actor under its own column.
+const SCOPED_FILTERS: ReadonlyArray<{
+  key: keyof GenerationScopeFilters;
+  column: string;
+  resource: ScopedIdResource;
+}> = [
+  { key: 'agentId', column: 'agentId', resource: 'agent' },
+  { key: 'traceId', column: 'traceId', resource: 'trace' },
+  {
+    key: 'initiatorGenerationId',
+    column: 'initiatorGenerationId',
+    resource: 'generation',
+  },
+  { key: 'sessionId', column: 'sessionId', resource: 'session' },
+  { key: 'actorId', column: 'startedByActorId', resource: 'actor' },
+];
+
+// Resolves the publicId filters into `where` (mutating it). Returns false when
+// a referenced resource does not exist in scope.
 export const applyGenerationScopeFilters = async (
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   where: Record<string, any>,
-  args: {
-    agentId?: string;
-    traceId?: string;
-    initiatorGenerationId?: string;
-    projectIds?: number[];
-  }
+  args: GenerationScopeFilters & { projectIds?: number[] }
 ): Promise<boolean> => {
-  if (args.agentId !== undefined) {
-    const agentId = await resolveScopedId(
-      (w) => {
-        return db.Agent.findOne({ where: w });
-      },
-      args.agentId,
-      args.projectIds
-    );
-    if (agentId === null) return false;
-    where.agentId = agentId;
-  }
-  if (args.traceId !== undefined) {
-    const traceId = await resolveScopedId(
-      (w) => {
-        return db.Trace.findOne({ where: w });
-      },
-      args.traceId,
-      args.projectIds
-    );
-    if (traceId === null) return false;
-    where.traceId = traceId;
-  }
-  if (args.initiatorGenerationId !== undefined) {
-    const initiatorId = await resolveScopedId(
-      (w) => {
-        return db.Generation.findOne({ where: w });
-      },
-      args.initiatorGenerationId,
-      args.projectIds
-    );
-    if (initiatorId === null) return false;
-    where.initiatorGenerationId = initiatorId;
-  }
-  return true;
+  return applyScopedIdFilters({
+    where,
+    filters: SCOPED_FILTERS.map((filter) => {
+      return {
+        key: filter.column,
+        resource: filter.resource,
+        publicId: args[filter.key],
+      };
+    }),
+    ...(args.projectIds !== undefined ? { projectIds: args.projectIds } : {}),
+  });
 };

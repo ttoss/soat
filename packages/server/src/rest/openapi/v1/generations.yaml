@@ -56,6 +56,24 @@ paths:
           description: Filter by trace public ID
           schema:
             type: string
+        - name: session_id
+          in: query
+          required: false
+          description: >
+            Return only the generations dispatched through one session — the
+            turns behind that conversation's spend. A session that does not
+            exist in scope yields an empty page.
+          schema:
+            type: string
+        - name: actor_id
+          in: query
+          required: false
+          description: >
+            Return only the generations one end user started, across every
+            session they appear in. An actor that does not exist in scope
+            yields an empty page.
+          schema:
+            type: string
         - name: initiator_generation_id
           in: query
           required: false
@@ -412,6 +430,23 @@ components:
             Public ID of the continuation chain this generation belongs to.
             Set on every member of a chain — the continuations and the root they
             descend from — and null on a generation that is not part of one.
+        session_id:
+          x-soat-ref: sessions
+          type: string
+          nullable: true
+          description: >
+            Public ID of the session this generation was dispatched through, or
+            null for a generation started outside one. This is the link a
+            per-session cost reading follows; the session's own `usage` field
+            reports the roll-up directly.
+        actor_id:
+          x-soat-ref: actors
+          type: string
+          nullable: true
+          description: >
+            Public ID of the end-user actor the generation was attributed to, or
+            null when none was. Copied onto the generation's usage event, so it
+            is the same dimension `group_by=actor` buckets on.
         started_by_principal_type:
           type: string
           nullable: true

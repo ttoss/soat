@@ -23,7 +23,8 @@ export const generationsRouter = new Router<Context>();
  * GET /api/v1/generations
  * operationId: listGenerations
  * Lists generations the caller can access, optionally filtered by agent_id,
- * trace_id, chain_id, orchestration_run_id, node_id, and status. Replaces
+ * trace_id, session_id, actor_id, chain_id, orchestration_run_id, node_id, and
+ * status. An id naming nothing in scope yields an empty page. Replaces
  * the former GET /traces/{trace_id}/generations.
  */
 generationsRouter.get('/generations', async (ctx: Context) => {
@@ -38,6 +39,8 @@ generationsRouter.get('/generations', async (ctx: Context) => {
   const {
     agent_id: agentId,
     trace_id: traceId,
+    session_id: sessionId,
+    actor_id: actorId,
     initiator_generation_id: initiatorGenerationId,
     chain_id: chainId,
     orchestration_run_id: orchestrationRunId,
@@ -51,6 +54,8 @@ generationsRouter.get('/generations', async (ctx: Context) => {
     projectIds: projectIds ?? undefined,
     agentId,
     traceId,
+    sessionId,
+    actorId,
     initiatorGenerationId,
     chainId,
     orchestrationRunId,

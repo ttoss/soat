@@ -1,7 +1,8 @@
 import createDebug from 'debug';
 
 import type { Context } from '../Context';
-import { matchOpenApiPath } from '../lib/openapiSpec';
+import { DomainError } from '../errors';
+import { getDeclaredQueryParams, matchOpenApiPath } from '../lib/openapiSpec';
 import { validateRequestBody } from '../lib/requestValidation';
 
 const log = createDebug('soat:strictFields');
@@ -42,9 +43,56 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> => {
 };
 
 /**
- * Validates request bodies against the route's OpenAPI request schema — derived
- * from the spec, the single source of truth for the REST contract, SDK, CLI,
- * and MCP surface — so an allowlist can never drift from the schema. Rejects
+ * Rejects query parameters the route's spec does not declare.
+ *
+ * Every documented `/api/v1` route, not an allowlist: the accepted names are
+ * the operation's own `parameters`, so the check cannot drift from the contract
+ * the SDK, CLI and MCP surface are generated from, and a route is strict the
+ * moment it is documented. Ignoring an unknown parameter is not a missing
+ * answer but a wrong one — a dropped `?model=` hands back a project-wide usage
+ * total under the caller's belief that it is one model's (#1265) — and a
+ * `?limitt=5` that silently pages by 20 is the same failure in miniature.
+ *
+ * A path no operation documents (`/openapi.json`, the OAuth consent pages) is
+ * left alone, the rule the body half already applies. `tests/unit/tests/lib/
+ * queryParamContract.test.ts` pins that no handler reads a parameter its spec
+ * omits, so strictness can never make a working parameter unreachable.
+ */
+const validateQueryParams = (ctx: Context): void => {
+  if (!ctx.authUser) return;
+  if (!ctx.path.startsWith('/api/v1')) return;
+
+  const template = matchOpenApiPath({ path: ctx.path });
+  if (!template) return;
+
+  const declared = getDeclaredQueryParams({
+    method: ctx.method,
+    path: template,
+  });
+  if (!declared) return;
+
+  const unknown = Object.keys(ctx.query).filter((name) => {
+    return !declared.has(name);
+  });
+  if (unknown.length === 0) return;
+
+  log('unknown query params: %s %s %o', ctx.method, ctx.path, unknown);
+  throw new DomainError(
+    'VALIDATION_FAILED',
+    `Unknown query parameter(s): ${unknown.sort().join(', ')}. Accepted: ${[
+      ...declared,
+    ]
+      .sort()
+      .join(', ')}.`,
+    { unknown_query_parameters: unknown.sort() }
+  );
+};
+
+/**
+ * Validates request bodies against the route's OpenAPI request schema, and
+ * every query string against the parameters its operation declares — both
+ * derived from the spec, the single source of truth for the REST contract, SDK,
+ * CLI, and MCP surface — so an allowlist can never drift from the schema. Rejects
  * unknown fields (at every nesting level) and missing top-level required fields
  * with `VALIDATION_FAILED` (400); see `validateRequestBody`.
  *
@@ -55,6 +103,8 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> => {
  * validation error never preempts the auth error or leaks the schema pre-auth).
  */
 export const strictFieldsMiddleware = async (ctx: Context, next: Next) => {
+  validateQueryParams(ctx);
+
   if (
     !MUTATING_METHODS.has(ctx.method) ||
     !ctx.authUser ||

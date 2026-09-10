@@ -217,11 +217,28 @@ An event bills against the provider that served it: the target a [model route](.
 
 ### End-user attribution
 
-An event carries the [actor](./actors.md) and [session](./sessions.md) it was produced for, copied from the generation at write time and **frozen** — renaming or deleting either never rewrites recorded spend. Attribution is set on the session path only; direct agent generations, trigger-initiated work, orchestration nodes, and standalone completions record `null` for both. The actor is **derived from the session**, never taken from the request (`tool_context` is caller-writable and is not read for attribution). Both dimensions filter (`?actor_id=` / `?session_id=`) and group (`group_by=actor` / `group_by=session`). Events recorded before this shipped carry `null`.
+An event carries the [actor](./actors.md) and [session](./sessions.md) it was produced for, copied from the generation at write time and **frozen** — renaming or deleting either never rewrites recorded spend. Attribution is set on the session path only; direct agent generations, trigger-initiated work, orchestration nodes, and standalone completions record `null` for both. The actor is **derived from the session**, never taken from the request (`tool_context` is caller-writable and is not read for attribution). Events recorded before this shipped carry `null`.
+
+There are three ways to read the resulting spend, in increasing order of how much shaping they let you do:
+
+| Question | Read |
+| --- | --- |
+| What did this conversation cost? | The `usage` object on [`GET /api/v1/sessions/{session_id}`](/docs/api/sessions/get-session) — see [Session cost](./sessions.md#session-cost) |
+| What has this end user cost, over a window or split by day/model? | [`GET /api/v1/usage/aggregate`](/docs/api/usage/get-usage-aggregate) with `actor_id=` (or `session_id=`), with or without a `group_by` |
+| Which sessions or users are the biggest spenders? | The same endpoint with `group_by=session` or `group_by=actor` |
+| Which turns made up that spend? | [`GET /api/v1/generations`](/docs/api/generations/list-generations) with `session_id=` or `actor_id=` |
+
+`session_id` and `actor_id` are two of the [thirteen narrowings](#narrowing-a-rollup) the rollup takes; both narrow the **whole** rollup, so they compose with any `group_by`. `actor_id` is the figure behind an `actor`-scoped `cost_usd` [quota](./quotas.md#actor-scope): what the actor has spent, against the cap it is held to.
+
+The same pair is on the generation record itself (`session_id`, `actor_id` on [`GET /api/v1/generations/{generation_id}`](/docs/api/generations/get-generation)), filters the generation listing, and filters the raw event listing (`?actor_id=` / `?session_id=` on [`GET /api/v1/usage/events`](/docs/api/usage/list-usage-events)), so a consumer that wants to price the turns itself can walk session → generation → components without recording the link on its own side.
 
 ### Pricing
 
 Each component's cost is computed at write time from the effective price row for its `(provider, model, component)`, resolved most-specific first: AI provider instance → project + provider-slug → global default. Costs are frozen onto the components; later price changes never alter them. `cached_tokens` falls back to the `input_tokens` rate when no cached price is set. A `null` `cost_usd` means no price row covered the component — the quantity is still captured. Each component records `price_id`, so a receipt is auditable to the precise price applied.
+
+**`cached_tokens` is a component in its own right, not a slice of `input_tokens`.** The `input_tokens` *component* holds uncached input only, and the two are priced independently — so pricing both is correct and double-counts nothing. What does include cached input is the reconstructed `input_tokens` *field* on a receipt's or an aggregate's totals, which is the provider's full prompt count (`input_tokens` component + `cached_tokens` component). Price the components; read the fields.
+
+**Pricing is not retroactive.** Cost is frozen when the event is written, so a component metered before any row priced it stays `cost_usd: null` permanently — a project that sets its prices on day 30 can never cost its first 29 days, and there is no backfill or re-pricing pass. The [first-price exception](#pricing) exists for exactly this: while a `(provider, model, component)` is unpriced in every scope it resolves through, `effective_from` may be dated now or earlier, so the way to avoid the gap is to write the first row before the traffic rather than to correct it after. The quantities survive either way, so an unpriced window can still be costed outside the platform from the component counts.
 
 **Embeddings are the one exception.** No tier prices an embedding call — it carries no provider record, and its rate is deployment configuration (`EMBEDDING_INPUT_1M_TOKEN_PRICE_USD`), so a price book row naming the embedding model is ignored. See [Pricing embeddings](./embeddings.md#pricing-embeddings).
 
@@ -250,7 +267,30 @@ A run whose graph contains a `loop` or `sub_orchestration` node is covered by th
 
 ### Aggregation
 
-[`GET /api/v1/usage/aggregate?project_id=…&group_by=…`](/docs/api/usage/get-usage-aggregate) rolls a project's usage up over an optional `[from, to]` window (inclusive ISO-8601 bounds on `created_at`), bucketed by one dimension — `model`, `ai_provider`, `agent`, `orchestration_run`, `day`, `meter_type`, `actor`, `session`, or [`source`](#workload-source). `ai_provider` buckets on the provider the spend was billed against (see [Provider attribution](#provider-attribution)). Each group and the grand `totals` carry an `event_count`, summed token counts and `cost_usd` (`null` when no event in the bucket was priced). An event a dimension does not apply to collapses into a `null`-keyed group, so groups always sum to the project total. Requires `usage:GetAggregate` on the project.
+[`GET /api/v1/usage/aggregate?project_id=…`](/docs/api/usage/get-usage-aggregate) rolls a project's usage up over an optional `[from, to]` window (inclusive ISO-8601 bounds on `created_at`), optionally bucketed by one dimension — `model`, `ai_provider`, `agent`, `orchestration_run`, `day`, `meter_type`, `actor`, `session`, or [`source`](#workload-source). `ai_provider` buckets on the provider the spend was billed against (see [Provider attribution](#provider-attribution)). Each group and the grand `totals` carry an `event_count`, summed token counts and `cost_usd` (`null` when no event in the bucket was priced). An event a dimension does not apply to collapses into a `null`-keyed group, so groups always sum to the project total. Requires `usage:GetAggregate` on the project.
+
+**`group_by` is optional.** Omit it and `group_by` echoes back `null`, `groups` is an empty page, and `totals` still describes the whole window — which is what "what did this one agent cost" asks, without picking a bucketing to discard. A value naming no dimension is still a `400`.
+
+#### Narrowing a rollup
+
+Thirteen filters narrow the rollup before it is bucketed. They intersect, and each applies to the **whole** rollup — every bucket, `totals` and `totals.distinct` alike — so any of them composes with any `group_by`: `session_id` with `group_by=day` is one conversation's spend per day, the same `session_id` with `group_by=model` is that spend split by model.
+
+| Filter | Selects |
+| --- | --- |
+| `session_id`, `actor_id` | One conversation, or one end user across every session ([End-user attribution](#end-user-attribution)) |
+| `agent_id`, `ai_provider_id` | One agent's traffic; the spend billed against one provider record |
+| `orchestration_run_id`, `orchestration_id` | One run; every run of one orchestration |
+| `generation_id`, `trace_id` | One generation's events; everything recorded under one trace |
+| `meter_type`, `model`, `source` | One meter, one as-billed SKU, one [workload source](#workload-source) |
+| `trigger_id`, `action_id` | The spend one trigger initiated; one caller-supplied action label |
+
+The two rows differ in how a value that matches nothing behaves. The **eight naming a resource** are resolved against the project first, and an id naming nothing there empties the rollup rather than dropping the filter — a mistyped id must never read back as the project's whole spend. The **five carrying a value** are matched exactly as the event recorded them, so an unrecognised meter, model or source simply selects no events; that is also why `trigger_id` and `action_id` are values rather than ids, since the event stores them denormalized and the spend outlives the trigger that incurred it.
+
+`orchestration_id` selects the runs that orchestration started **itself**, never the subtree a `loop` or `sub_orchestration` node started under it — those are metered against the child orchestration, where they were incurred. That keeps the figure additive: summed across a project's orchestrations it reaches the project total exactly once. For one invocation's subtree, read `usage` on the run ([Run usage](./orchestrations.md#run-usage)).
+
+Every narrowing is echoed back under `filters` on the response, `null` when unset, because a rollup of zeros is otherwise indistinguishable from a project that spent nothing. The same filters (plus `limit`/`offset`) narrow the raw event listing at [`GET /api/v1/usage/events`](/docs/api/usage/list-usage-events), so a rollup and the events behind it are addressed the same way.
+
+**An unrecognised query parameter is a `400`** here as on every documented route, rather than being ignored. Ignoring one is not a missing answer but a wrong one: before `model` was a filter, `?group_by=day&model=…` returned the project-wide total under the caller's belief that it was one model's. The accepted names are listed in the error message.
 
 The rollup is computed by the database — the window is grouped and summed in SQL, with one join for the chosen dimension — so the cost of a request tracks the buckets it answers with rather than the events behind them.
 
@@ -305,7 +345,7 @@ Two guarantees worth relying on:
 
 Every group also carries a `components` array — the measured dimensions summed over the bucket — so an infra meter aggregates to what it measured rather than reading as all-zero tokens. Entries are keyed by `component` **and** `unit` and sorted, and quantities are summed as exact decimals (no float drift).
 
-For platform meter types `group_by=model` mixes model ids with SKUs; add `meter_type=llm_tokens` (or another meter type) to narrow to one meter. The applied filter is echoed back as `meter_type` on the response; an unrecognized value yields an empty rollup rather than an error.
+For platform meter types `group_by=model` mixes model ids with SKUs; add `meter_type=llm_tokens` (or another meter type) to narrow to one meter. The applied filter is echoed back as `filters.meter_type` on the response; an unrecognized value yields an empty rollup rather than an error.
 
 Under `group_by=model` every group also carries `ai_provider_id` — the [AI provider](./ai-providers.md) that served the bucket's model, `null` on every other dimension. A model id does not identify its provider on its own: one project can hold two providers serving byte-identical model names, so a consumer that presents its own model names cannot translate a bucket it cannot attribute. The model dimension therefore buckets on the model id **and** its provider, so one model name served by two providers is two groups repeating the same `key` with different `ai_provider_id`. The groups still sum to `totals`.
 

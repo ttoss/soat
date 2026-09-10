@@ -1,4 +1,5 @@
 import type { SessionRow } from './sessionAccessor';
+import type { UsageTotals } from './usageReceipt';
 
 /**
  * The wire shape of a session.
@@ -37,7 +38,13 @@ const extractSessionOptional = (session: SessionRow) => {
   };
 };
 
-export const mapSession = (session: SessionRow) => {
+/**
+ * `usage` is what the session's generations cost, in the shape an orchestration
+ * run already reports. Passed in rather than looked up here so it stays on the
+ * single-session read: a listing would roll one up per row, and the formation
+ * drift check reads sessions too and discards it.
+ */
+export const mapSession = (session: SessionRow, usage?: UsageTotals) => {
   return {
     id: session.publicId,
     ...extractSessionIds(session),
@@ -45,6 +52,7 @@ export const mapSession = (session: SessionRow) => {
     name: session.name ?? null,
     ...extractSessionFlags(session),
     ...extractSessionOptional(session),
+    ...(usage ? { usage } : {}),
     created_at: session.createdAt,
     updated_at: session.updatedAt,
   };
