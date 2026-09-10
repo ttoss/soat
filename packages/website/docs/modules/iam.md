@@ -4,18 +4,16 @@ description: "SOAT's AWS-inspired IAM engine for authentication and fine-grained
 
 # IAM
 
-The IAM (Identity and Access Management) module provides authentication, identity management, and fine-grained authorization for the SOAT platform. It implements an AWS IAM-inspired policy engine with structured policy statements supporting `Effect`, `Action`, `Resource`, and `Condition`.
+Authentication, identity, and fine-grained authorization: an AWS IAM-inspired policy engine with `Effect`, `Action`, `Resource`, and `Condition` statements.
 
 ## Overview
 
-SOAT uses a policy-based access control model. Every API request is authenticated via JWT (for users) or an API key. Authorization is evaluated entirely through the attached **policy documents** — there is no separate project membership gate.
+Every request is authenticated via JWT (users) or an API key, and authorized entirely through attached **policy documents**; there is no separate project membership gate.
 
-The IAM module covers:
-
-- **Users** — identity management, roles, and JWT authentication (see [Users](#users) below)
-- **Policy Documents** — structured permission rules attached to users and API keys (see [Policies](./policies.md))
-- **Policy Engine** — evaluation logic that resolves allow/deny decisions at request time
-- **Authorization Model** — how policies are resolved for each caller type (see [Authorization Model](#authorization-model) below)
+- **Users** — identity, roles, JWT ([Users](#users))
+- **Policy Documents** — permission rules attached to users and API keys ([Policies](./policies.md))
+- **Policy Engine** — allow/deny resolution at request time
+- **Authorization Model** — policy resolution per caller type ([Authorization Model](#authorization-model))
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -27,19 +25,19 @@ The IAM module covers:
 
 ## Authentication
 
-SOAT supports two authentication methods. Both use the `Authorization: Bearer <token>` header.
+Two methods, both via `Authorization: Bearer <token>`.
 
 ### JWT (Users)
 
-Users authenticate via [`POST /api/v1/users/login`](/docs/api/users/login-user) with username and password. The server returns a signed JWT containing the user's public ID and role. Admin users bypass policy evaluation and have unrestricted access. Regular users are authorized through the [policies](./policies.md) attached to their account.
+[`POST /api/v1/users/login`](/docs/api/users/login-user) with username and password returns a signed JWT carrying the user's public ID and role. Admins bypass policy evaluation; regular users are authorized by their attached [policies](./policies.md).
 
 ### API Keys
 
-API keys are prefixed with `sk_` and identified by a `key_`-prefixed public ID. They are always scoped to a single project via `project_id` and may optionally have their own policy list. When an API key has policies attached, authorization applies **intersection semantics**: both the owning user's policies _and_ the key's own policies must independently allow the action. This ensures API keys can never exceed the permissions of the user who created them. See [API Keys](./api-keys.md) for details, or watch intersection semantics block an escalation attempt in [Permissions in Practice - Step 7 (Verify permissions)](/docs/tutorials/permissions#step-7--verify-permissions).
+Keys are prefixed `sk_` with a `key_` public ID, always scoped to a single project via `project_id`, optionally with their own policies. With key policies, **intersection semantics** apply: the owning user's policies _and_ the key's must both allow the action, so a key never exceeds its owner. See [API Keys](./api-keys.md) and [Permissions in Practice - Step 7 (Verify permissions)](/docs/tutorials/permissions#step-7--verify-permissions).
 
 ## Policy Documents
 
-A policy document is a JSON object containing one or more statements. Each statement describes a permission rule.
+A policy document is a JSON object of statements:
 
 ```json
 {
@@ -67,11 +65,11 @@ A policy document is a JSON object containing one or more statements. Each state
 | `resource`  | `string[]` | No       | SRNs this statement applies to (default: `["*"]`)       |
 | `condition` | `object`   | No       | Conditions that must be true for the statement to apply |
 
-Policy documents are created and managed globally via the [Policies](./policies.md) module and attached to users or API keys. For a worked example building both a full-access and a read-only document, see [Permissions in Practice - Step 4 (Create policies)](/docs/tutorials/permissions#step-4--create-policies).
+Documents are managed globally via [Policies](./policies.md) and attached to users or API keys. Worked example: [Permissions in Practice - Step 4 (Create policies)](/docs/tutorials/permissions#step-4--create-policies).
 
 ## SOAT Resource Names (SRNs)
 
-Every addressable entity has a canonical identifier called a SOAT Resource Name:
+Every addressable entity has an SRN:
 
 ```
 srn:<project_id>:<resource_type>:<resource_id>
@@ -89,16 +87,14 @@ Examples:
 
 ### Project Segment and Policy Scoping
 
-Because policies are **global** (not scoped to any project), the `<project_id>` segment in an SRN is the primary mechanism for restricting access to specific projects.
+Policies are **global**, so the `<project_id>` segment is the primary project restriction:
 
-In practice:
-
-- `resource: ["*"]` — matches all resources in **all projects**. Use only for broad access.
-- `resource: ["srn:proj_ABC:*:*"]` — restricts access to resources in `proj_ABC` only.
-- `resource: ["srn:*:document:*"]` — matches all documents across all projects.
+- `resource: ["*"]` — all resources in **all projects**
+- `resource: ["srn:proj_ABC:*:*"]` — `proj_ABC` only
+- `resource: ["srn:*:document:*"]` — all documents across all projects
 
 :::tip
-To give a **user** (JWT) access to a specific project, create a policy with `resource: ["srn:proj_ABC:*:*"]`. This achieves project-level scoping entirely through the policy engine. API keys are always scoped to a single project via `project_id` (see [API Keys](./api-keys.md#project-scoping)).
+Grant a **user** (JWT) a project with `resource: ["srn:proj_ABC:*:*"]`. API keys are scoped via `project_id` (see [API Keys](./api-keys.md#project-scoping)).
 :::
 
 ### Resource Types
@@ -115,11 +111,11 @@ To give a **user** (JWT) access to a specific project, create a policy with `res
 
 ## Actions
 
-Actions follow the `module:Operation` pattern. The full list of all action strings per module is in the [Permissions Reference](../permissions.md).
+Actions follow `module:Operation`. Full list: [Permissions Reference](../permissions.md).
 
 ### Action Surface Mapping
 
-Every permission action corresponds to a single operation that is reachable through all four client surfaces. Given `actors:CreateActor` as an example:
+Every action maps to one operation reachable through every client surface, e.g. `actors:CreateActor`:
 
 | Surface           | Convention                    | Example                     |
 | ----------------- | ----------------------------- | --------------------------- |
@@ -129,7 +125,7 @@ Every permission action corresponds to a single operation that is reachable thro
 | **CLI command**   | `soat <kebab-case>`           | `soat create-actor`         |
 | **SDK method**    | `soat.<module>.<camelCase>()` | `soat.actors.createActor()` |
 
-A caller is authorised to invoke an operation if — and only if — the resolved policy grants the corresponding permission action. The same check applies regardless of which surface the caller uses.
+A caller may invoke an operation iff the resolved policy grants the action, on any surface.
 
 ### Wildcards
 
@@ -138,7 +134,7 @@ A caller is authorised to invoke an operation if — and only if — the resolve
 
 ## Conditions
 
-Conditions add attribute-based constraints to statements. A condition block maps an operator to one or more key-value pairs that must all evaluate to true.
+Conditions add attribute-based constraints: an operator mapped to key-value pairs that must all hold.
 
 ```json
 {
@@ -168,13 +164,11 @@ Conditions add attribute-based constraints to statements. A condition block maps
 | `soat:ResourceTag/<key>` | Resource tags | Tag value on the target resource        |
 | `soat:ResourceType`      | Request       | The type of the resource being accessed |
 
-Condition operators and condition keys are matched **by exact string** — no case
-conversion is applied to a `condition` block or to a resource's `tags` (see
-[Tag keys are stored verbatim](#tag-keys-are-stored-verbatim)).
+Operators and keys match **by exact string**; no case conversion applies to a `condition` block or to `tags` (see [Tag keys are stored verbatim](#tag-keys-are-stored-verbatim)).
 
 ## Authorization Model
 
-Authorization in SOAT is **policy-only** — there is no separate project membership gate. All access decisions are evaluated through the policy engine against the requested action and the target resource SRN.
+Authorization is **policy-only**: every decision is evaluated against the requested action and target SRN.
 
 ### Policy Resolution by Caller Type
 
@@ -186,11 +180,11 @@ Authorization in SOAT is **policy-only** — there is no separate project member
 | **API key (with policies)**   | Intersection of user policies and key policies — both must allow the action |
 | **OAuth token**               | Intersection of user policies and the consented scope, hard-locked to the token's project |
 
-Every API key is hard-locked to its `project_id`, and every OAuth token to its `prj`; access to any other project is denied regardless of policy — and regardless of the owner's role. An `admin` owner cannot cross a scoped credential's project boundary for resource operations: admin lifts the policy ceiling within scope and passes the role-gated project create/delete, but never the scope binding itself, so a cross-project resource write still returns `403 API_KEY_PROJECT_SCOPE`. See [Project scope is a hard boundary, even for admins](./api-keys.md#project-scope-is-a-hard-boundary-even-for-admins).
+Every API key is hard-locked to its `project_id`, every OAuth token to its `prj`; any other project is denied regardless of policy or role. An `admin` owner cannot cross a scoped credential's project boundary: admin lifts the policy ceiling within scope and passes the role-gated project create/delete, never the scope binding, so a cross-project resource write returns `403 API_KEY_PROJECT_SCOPE`. See [Project scope is a hard boundary, even for admins](./api-keys.md#project-scope-is-a-hard-boundary-even-for-admins).
 
 ### Why Intersection Semantics Matter
 
-When an API key has policies attached — or an OAuth token carries a consented scope — the credential can **never exceed the permissions of the user who owns it**. Even if the key's policy or the consent is very permissive, the user's policies still apply as a ceiling. This is why both [API keys](./api-keys.md) and [OAuth tokens](./oauth.md#permission-enforcement) are safe to delegate. The same evaluator enforces all credential types.
+A key with policies, or an OAuth token with a consented scope, **never exceeds its owning user's permissions**: the user's policies are the ceiling. This is what makes [API keys](./api-keys.md) and [OAuth tokens](./oauth.md#permission-enforcement) safe to delegate; one evaluator enforces every credential type.
 
 ### Authorization by Caller Type
 
@@ -215,9 +209,7 @@ A denial's status code depends on what the route does, not on which policy faile
 | **Create** ([`POST /agents`](/docs/api/agents/create-agent))                                             | `403 FORBIDDEN`                                                                        |
 | Scoped credential targeting another project                             | `403 API_KEY_PROJECT_SCOPE`, naming both projects                                     |
 
-A write is refused **before** the request body is validated, so a caller without
-permission cannot tell a well-formed body from a malformed one: the answer is
-`403` either way.
+A write is refused **before** body validation, so an unauthorized caller gets `403` whether the body is well-formed or not.
 
 ## Policy Evaluation
 
@@ -245,7 +237,7 @@ A statement matches a request when **all** of the following are true:
 
 ## Tags
 
-Tags are key-value pairs attached to resources. They enable attribute-based access control (ABAC) via conditions. Taggable resources include documents, files, actors, and conversations.
+Tags are key-value pairs on resources, enabling ABAC via conditions. Taggable: documents, files, actors, conversations.
 
 ```json
 {
@@ -257,7 +249,7 @@ Tags are key-value pairs attached to resources. They enable attribute-based acce
 }
 ```
 
-Tags are managed via each resource's create/update endpoints using the `tags` field, or through dedicated tag sub-endpoints:
+Managed via each resource's `tags` field or the tag sub-endpoints:
 
 ```
 PUT    /api/v1/<resource>/:id/tags    Replace all tags
@@ -267,24 +259,16 @@ GET    /api/v1/<resource>/:id/tags    Get tags
 
 ### Tag keys are stored verbatim
 
-A tag key is an opaque label, not an API field name, so — unlike every other
-field in the REST API — it is **never case-converted**. It is stored, returned,
-and matched against `soat:ResourceTag/<key>` exactly as you wrote it, on REST, in
-formation templates, and over MCP alike.
+A tag key is an opaque label, **never case-converted**: stored, returned, and matched against `soat:ResourceTag/<key>` exactly as written, on REST, in formation templates, and over MCP.
 
-Two consequences worth knowing:
-
-- `cost_center` and `costCenter` are **two different tags**. A resource can carry
-  both, and a policy naming one does not match a resource carrying only the other.
-- The key you read back is the key to name in a condition. `GET .../tags` returns
-  the stored key verbatim, so it can be copied straight into
-  `soat:ResourceTag/<key>`.
+- `cost_center` and `costCenter` are **two different tags**; a policy naming one does not match a resource carrying only the other.
+- `GET .../tags` returns the stored key verbatim; copy it into `soat:ResourceTag/<key>`.
 
 ## Examples
 
 ### Full Access Policy
 
-Equivalent to unrestricted access across all projects. The `resource: ["*"]` wildcard matches all SRNs globally.
+`resource: ["*"]` matches every SRN across all projects.
 
 ```json
 {
@@ -300,7 +284,7 @@ Equivalent to unrestricted access across all projects. The `resource: ["*"]` wil
 
 ### Project-scoped Read-only Policy
 
-Grants read access to a specific project's resources. Attach this to a user or API key.
+Read access to one project's resources; attach to a user or API key.
 
 ```json
 {

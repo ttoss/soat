@@ -14,17 +14,14 @@ import TabItem from '@theme/TabItem';
 
 # Approval Gates: Human-in-the-Loop with the `approval` Node
 
-An [`approval` node](/docs/modules/orchestrations#approval-nodes) pauses an orchestration run and files a human-decision item in the [Approvals](/docs/modules/approvals) queue. A person then **approves**, **rejects**, or lets it **expire**, and the run resumes down the matching decision edge.
+An [`approval` node](/docs/modules/orchestrations#approval-nodes) pauses a run and files an item in the [Approvals](/docs/modules/approvals) queue; a person approves, rejects, or lets it expire, and the run resumes down the matching edge.
 
-You will define an [orchestration](/docs/modules/orchestrations) whose `approval` node branches to `approved` / `rejected` / `expired` edges, start runs that pause with pending approval items, then approve one and reject another. Everything here is deterministic — **no AI provider is required**.
+You define an [orchestration](/docs/modules/orchestrations) with `approved` / `rejected` / `expired` edges, start runs that pause, then approve one and reject another. No AI provider is required.
 
 ## Prerequisites
 
-- SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide to bring the stack up with Docker Compose.
-- New to SOAT? Read [Key Concepts](/docs/getting-started/concepts) to understand projects, tools, and runs first.
-- CLI installed and configured, or SDK set up. See [CLI](/docs/cli) or [SDK](/docs/sdk).
-- For production hardening (secrets, env vars), see [Configuration](/docs/self-hosting/configuration).
-- Server is at `http://localhost:5047`.
+- SOAT running locally ([Quick Start](/docs/getting-started)); [Key Concepts](/docs/getting-started/concepts); [Configuration](/docs/self-hosting/configuration).
+- [CLI](/docs/cli) or [SDK](/docs/sdk); server at `http://localhost:5047`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -54,7 +51,7 @@ export SOAT_BASE_URL=http://localhost:5047
 
 ## Step 1 — Log in as admin
 
-Admin is the built-in superuser role. See [Users](/docs/modules/users#examples) for authentication details.
+See [Users](/docs/modules/users#examples) for authentication.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -134,7 +131,7 @@ echo "PROJECT_ID: $PROJECT_ID"
 
 ## Step 3 — Create the tool the approval gates
 
-The `approval` node names the [Tool](/docs/modules/tools#examples) whose call is under review and freezes the proposed arguments onto the item — it records the proposal, it does not run the tool (a downstream node performs the action once approved). Create a read-only [builtin tool](/docs/modules/tools) so the tutorial needs no external services; in a real system this would be your refund, payment, or deployment tool.
+The `approval` node names the [Tool](/docs/modules/tools#examples) under review and freezes the proposed arguments onto the item; it does not run the tool (a downstream node does, once approved). A read-only [builtin tool](/docs/modules/tools) stands in for a refund, payment or deployment tool.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -186,7 +183,7 @@ echo "REFUND_TOOL_ID: $REFUND_TOOL_ID"
 
 ## Step 4 — Create the orchestration with an approval gate
 
-The [`approval` node](/docs/modules/orchestrations#approval-nodes) resolves its `arguments` against run state, freezes them onto an approval item, and pauses the run. On resolution the decision becomes the node's branch label: edges labeled `condition: "approved"` / `"rejected"` / `"expired"` route accordingly (an unlabeled edge would follow only on approval). Here each branch ends in a `transform` that records the outcome.
+The [`approval` node](/docs/modules/orchestrations#approval-nodes) resolves `arguments` against run state, freezes them onto the item, and pauses. The decision becomes the branch label: edges with `condition: "approved"` / `"rejected"` / `"expired"` route accordingly; an unlabeled edge follows only on approval. Each branch ends in a `transform` recording the outcome.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -282,7 +279,7 @@ echo "ORCHESTRATION_ID: $ORCHESTRATION_ID"
 
 ## Step 5 — Start a run — it pauses for approval
 
-Start a [run](/docs/modules/orchestrations#examples). The `approval` node pauses it as `awaiting_input` and the response's `required_action` carries the created approval item's `approval_id` and `expires_at`.
+The [run](/docs/modules/orchestrations#examples) pauses as `awaiting_input`; `required_action` carries the item's `approval_id` and `expires_at`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -350,7 +347,7 @@ echo "APPROVAL_ID: $APPROVAL_ID"
 
 ## Step 6 — See the pending item in the queue
 
-The item is now in the [Approvals](/docs/modules/approvals#data-model) queue with the frozen proposed action and its provenance (the originating run and node). Anyone with `approvals:ResolveApproval` on the project can act on it.
+The [Approvals](/docs/modules/approvals#data-model) queue holds the frozen proposed action and its provenance (run and node). Anyone with `approvals:ResolveApproval` on the project can act.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -360,7 +357,7 @@ soat list-approvals --project-id "$PROJECT_ID" --status pending \
   | jq '.data[] | {id, status, origin, orchestration_run_id, node_id, proposed_action}'
 ```
 
-Look for `origin: "node"`, `orchestration_run_id` matching your run, and `proposed_action.arguments` equal to `{ "amount": 500 }`.
+Expect `origin: "node"`, `orchestration_run_id` = your run, `proposed_action.arguments` = `{ "amount": 500 }`.
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
@@ -388,7 +385,7 @@ curl -s "$SOAT_BASE_URL/api/v1/approvals?project_id=$PROJECT_ID&status=pending" 
 
 ## Step 7 — Approve it — the run resumes
 
-Approving resolves the [item](/docs/modules/approvals#approve-reject-edit-then-approve) and resumes the parked run down the `approved` edge, which runs the `issue` node. To approve with different arguments (edit-then-approve), pass `--arguments '{"amount": 450}'`.
+Approving resolves the [item](/docs/modules/approvals#approve-reject-edit-then-approve) and resumes the run down the `approved` edge to `issue`. Edit-then-approve: pass `--arguments '{"amount": 450}'`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -446,7 +443,7 @@ curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$RUN_ID" \
 
 ## Step 8 — Reject a second run
 
-Start another run and **reject** it. A reason is required, and the run resumes down the `rejected` edge to the `declined` node. Rejection reasons and edit diffs are the raw material of the feedback loop described in the [Approvals](/docs/modules/approvals#approve-reject-edit-then-approve) module.
+A reason is required; the run resumes down the `rejected` edge to `declined`. Reasons and edit diffs feed the loop described in [Approvals](/docs/modules/approvals#approve-reject-edit-then-approve).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -522,10 +519,10 @@ curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$RUN2_ID" \
 
 ## How It Works
 
-Approval items are [snapshotted at emit time](/docs/modules/approvals#snapshot-at-emit-time), [expiry is a hard gate](/docs/modules/approvals#expiry-is-a-hard-gate) enforced by a background sweeper, and the queue is producer-agnostic (every item carries an `origin`). One routing rule worth restating: an **unlabeled** edge from an approval node follows only on approval, so rejection and expiry paths must be modeled with explicit labeled edges.
+Items are [snapshotted at emit time](/docs/modules/approvals#snapshot-at-emit-time); [expiry is a hard gate](/docs/modules/approvals#expiry-is-a-hard-gate) enforced by a sweeper; every item carries an `origin`. An unlabeled edge from an approval node follows only on approval, so model rejection and expiry with labeled edges.
 
 ## Next Steps
 
-- Browse the whole queue and filter by status or origin — see [Approvals](/docs/modules/approvals#examples).
-- Combine an approval gate with other control-flow nodes in [Orchestration Control Flow](/docs/tutorials/orchestration-control-flow).
-- Route a decision through more branches with [Conditional Branching](/docs/tutorials/conditional-orchestration).
+- [Approvals](/docs/modules/approvals#examples) — filter the queue by status or origin.
+- [Orchestration Control Flow](/docs/tutorials/orchestration-control-flow).
+- [Conditional Branching](/docs/tutorials/conditional-orchestration).

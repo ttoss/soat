@@ -13,7 +13,7 @@ import TabItem from '@theme/TabItem';
 
 # Orchestrate a Sonnet
 
-This tutorial shows how to build a poem pipeline with the [Orchestrations](/docs/modules/orchestrations#examples) module. Unlike [Multi-Agent Sonnet with Nested Agent Calls](/docs/tutorials/multi-agent-orchestration), the agents here do not call one another. The orchestration graph invokes each agent directly, stores their outputs in typed state, assembles the final poem, and persists it through a builtin tool.
+A poem pipeline with the [Orchestrations](/docs/modules/orchestrations#examples) module. Unlike [Multi-Agent Sonnet with Nested Agent Calls](/docs/tutorials/multi-agent-orchestration), agents do not call one another: the graph invokes each agent directly, stores outputs in typed state, assembles the poem, and persists it through a builtin tool.
 
 You will:
 
@@ -25,12 +25,11 @@ You will:
 
 ## Prerequisites
 
-- SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide to bring the stack up with Docker Compose.
-- New to SOAT? Read [Key Concepts](/docs/getting-started/concepts) to understand projects, agents, tools, and runs before diving in.
-- CLI installed and configured, or SDK set up. See [CLI](/docs/cli) or [SDK](/docs/sdk).
-- For production hardening (secrets, env vars), see [Configuration](/docs/self-hosting/configuration).
-- Server is at `http://localhost:5047`.
-- [Ollama](https://ollama.com) running locally with a chat model available. This tutorial uses a local Ollama provider so it can run without external credentials. To connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
+- SOAT running locally at `http://localhost:5047` ([Quick Start](/docs/getting-started)).
+- [Key Concepts](/docs/getting-started/concepts) if new to SOAT.
+- [CLI](/docs/cli) or [SDK](/docs/sdk) set up.
+- [Configuration](/docs/self-hosting/configuration) for production hardening.
+- [Ollama](https://ollama.com) running locally with a chat model. For xAI, OpenAI, Anthropic, or Amazon Bedrock, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -60,7 +59,7 @@ export SOAT_URL=http://localhost:5047
 
 ## Step 1 — Log in as admin
 
-Admin is the built-in superuser role. See [Users](/docs/modules/users#examples) for authentication details.
+Admin is the built-in superuser role ([Users](/docs/modules/users#examples)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -102,7 +101,7 @@ ADMIN_TOKEN=$(curl -s -X POST "$SOAT_URL/api/v1/users/login" \
 
 ## Step 2 — Create a project
 
-Every resource lives inside a [project](/docs/modules/projects#examples). Create one for this workflow.
+Every resource lives inside a [project](/docs/modules/projects#examples).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -188,7 +187,7 @@ echo "AI_PROVIDER_ID: $AI_PROVIDER_ID"
 
 ## Step 4 — Create the poem document and a fixed write tool
 
-The final poem will be persisted in a [document](/docs/modules/documents#examples). A fixed [builtin tool](/docs/modules/tools#builtin) will later update that document from the orchestration.
+The poem is persisted in a [document](/docs/modules/documents#examples); a fixed [builtin tool](/docs/modules/tools#builtin) updates it from the orchestration.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -262,7 +261,7 @@ echo "WRITE_POEM_TOOL_ID: $WRITE_POEM_TOOL_ID"
 
 ## Step 5 — Create the title and stanza agents
 
-Create five [agents](/docs/modules/agents#examples): one returns the title as JSON, and four return a stanza or couplet as JSON. The orchestration will call them directly in order.
+Five [agents](/docs/modules/agents#examples): one returns the title as JSON, four return a stanza or couplet as JSON.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -415,7 +414,7 @@ echo "STANZA4_AGENT_ID: $STANZA4_AGENT_ID"
 
 ## Step 6 — Create the orchestration graph
 
-This [orchestration](/docs/modules/orchestrations#examples) stores every agent result in state, assembles the poem with a `transform` node, writes it with a `tool` node, and exposes it again through a terminal `return-poem` node.
+The [orchestration](/docs/modules/orchestrations#examples) stores each agent result in state, assembles the poem with a `transform` node, writes it with a `tool` node, and exposes it through a terminal `return-poem` node.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -652,7 +651,7 @@ echo "ORCHESTRATION_ID: $ORCHESTRATION_ID"
 
 ## Step 7 — Start a run
 
-Run the [orchestration](/docs/modules/orchestrations#examples) with a theme. The run output includes both terminal nodes: the persisted document update and the returned poem text.
+Run the [orchestration](/docs/modules/orchestrations#examples) with a theme. The output includes both terminal nodes: the document update and the poem text.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -726,7 +725,7 @@ echo "RUN_ID: $RUN_ID"
 
 ## Step 8 — Read the persisted poem document
 
-The [document](/docs/modules/documents#examples) now contains the final poem written by the `persist-poem` tool node.
+The [document](/docs/modules/documents#examples) holds the poem written by the `persist-poem` tool node.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -760,7 +759,7 @@ curl -s "$SOAT_URL/api/v1/documents/$POEM_DOC_ID" \
 
 ## Step 9 — Inspect the run state
 
-Use `get-orchestration-run` to inspect the accumulated [orchestration](/docs/modules/orchestrations#examples) state. This is the main difference from the nested-agent tutorial: you can see every intermediate field directly in the run record.
+`get-orchestration-run` exposes the accumulated [orchestration](/docs/modules/orchestrations#examples) state, every intermediate field included, unlike the nested-agent tutorial.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -770,7 +769,7 @@ soat get-orchestration-run \
   --orchestration-run-id "$RUN_ID" | jq '{status, state, output}'
 ```
 
-Key fields to look for:
+Key fields:
 
 - `state.title`
 - `state.stanza1` through `state.stanza4`
@@ -803,7 +802,6 @@ curl -s "$SOAT_URL/api/v1/orchestration-runs/$RUN_ID" \
 
 ## How It Works
 
-- `agent` nodes call the five agents directly; `state_mapping` writes each result into orchestration state (`state.title`, `state.stanza1`, …).
-- The `transform` node assembles the poem deterministically with JSON Logic; the `tool` node persists it using a fixed `documentId`; the terminal `return-poem` node exposes it in the run output.
-
-Compared with [Multi-Agent Sonnet with Nested Agent Calls](/docs/tutorials/multi-agent-orchestration), routing, sequencing, and state accumulation live in the [Orchestrations](/docs/modules/orchestrations#examples) engine instead of an orchestrator agent.
+- `agent` nodes call the five agents; `state_mapping` writes each result into state (`state.title`, `state.stanza1`, …).
+- `transform` assembles the poem with JSON Logic; `tool` persists it with a fixed `documentId`; `return-poem` exposes it in the run output.
+- Routing, sequencing and state live in the [Orchestrations](/docs/modules/orchestrations#examples) engine, not in an orchestrator agent as in [Multi-Agent Sonnet with Nested Agent Calls](/docs/tutorials/multi-agent-orchestration).

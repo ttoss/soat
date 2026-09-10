@@ -11,14 +11,12 @@ LLM completions with optional persistent configuration, supporting both stateles
 
 ## Overview
 
-All completions run through a single endpoint, [`POST /chat/completions`](/docs/api/chats/create-chat-completion), which names exactly one target:
+All completions go through [`POST /chat/completions`](/docs/api/chats/create-chat-completion), naming exactly one target:
 
-- **Stateless** (`ai_provider_id`) — OpenAI-compatible; pass the full provider configuration on every request. No setup required.
-- **Per-chat** (`chat_id`) — create a Chat resource once to store the AI provider, default `instructions`, and model; then pass only `chat_id` and the `messages` array per request.
+- **Stateless** (`ai_provider_id`) — OpenAI-compatible; full provider configuration per request.
+- **Per-chat** (`chat_id`) — a Chat stores the AI provider, default `instructions`, and model; pass `chat_id` and `messages` per request.
 
-The two are mutually exclusive, and a request naming neither — or both — is rejected with `400`.
-
-Both targets support SSE streaming via `stream: true`. To see a completion driven end to end through a provider-backed flow, follow [Connect Third-Party LLMs - Step 6 (Start a conversation)](/docs/tutorials/connect-third-party-llms#step-6--start-a-conversation).
+Naming neither, or both, is `400`. Both support SSE streaming via `stream: true`. Example: [Connect Third-Party LLMs - Step 6 (Start a conversation)](/docs/tutorials/connect-third-party-llms#step-6--start-a-conversation).
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -44,7 +42,7 @@ Both targets support SSE streaming via `stream: true`. To see a completion drive
 
 ### Message
 
-Each message in the `messages` array sent to the completions endpoint:
+Each entry of `messages`:
 
 | Field         | Type                   | Description                                                               |
 | ------------- | ---------------------- | ------------------------------------------------------------------------- |
@@ -56,44 +54,42 @@ Each message in the `messages` array sent to the completions endpoint:
 
 ### System Instructions
 
-System content never travels as a message — one rule, on every SOAT surface. On a completion it goes in the `instructions` request field — the same name everywhere: a completion request, a Chat, an Agent — and a `role: "system"` entry in `messages` is refused with `400 SYSTEM_MESSAGE_NOT_ALLOWED`.
+System content never travels as a message. It goes in `instructions` (same field name on a completion, a Chat, and an Agent); a `role: "system"` entry in `messages` is refused with `400 SYSTEM_MESSAGE_NOT_ALLOWED`.
 
-The server sends the field to the provider as its `instructions` argument, which is the only place the underlying [AI SDK](https://ai-sdk.dev/docs/reference/ai-sdk-core/generate-text) accepts it — `allowSystemInMessages` defaults to `false` there and throws, because a system message inside a caller-supplied array is a prompt-injection vector. SOAT's wire contract is the same contract.
+The field is sent to the provider as the [AI SDK](https://ai-sdk.dev/docs/reference/ai-sdk-core/generate-text)'s `instructions` argument; `allowSystemInMessages` defaults to `false` there, because a system message inside a caller-supplied array is a prompt-injection vector.
 
-The same rule everywhere else: an agent's system prompt is its `instructions` field ([Agents](./agents.md#instructions)), and a conversation's stored history carries only `user` and `assistant` turns ([Conversations](./conversations.md)) — all three refuse a system entry with the same 400.
+[Agents](./agents.md#instructions) and [Conversations](./conversations.md) apply the same rule with the same 400.
 
 #### Per-chat override
 
-A Chat stores `instructions` applied to every completion on it. A single call replaces them by supplying its own `instructions`. The Chat record is not modified.
-
-The stored prompt applies only when the request carries none. The two are never merged: combining them would produce a prompt neither the chat nor the caller wrote.
+A Chat's stored `instructions` apply to every completion on it; a call supplying its own `instructions` replaces them for that call without modifying the Chat. The two are never merged.
 
 ### AI Provider Resolution
 
-For per-chat completions the AI provider is taken from the Chat record, and the pin must name a provider in the **chat's own project** — one from another project answers `400 AI_PROVIDER_NOT_FOUND`, indistinguishably from an id that exists nowhere. A chat created **without** `ai_provider_id` pins none and resolves through its project's [`default_model_route_id`](./model-routes.md#project-default-route) instead, which gives its completions ordered provider failover; `model` cannot be combined with that (each route target names its own), and omitting the provider returns `400` when the project has no default.
+Per-chat completions take the provider from the Chat; the pin must name a provider in the **chat's own project** (another project's answers `400 AI_PROVIDER_NOT_FOUND`, like a nonexistent id). A chat created **without** `ai_provider_id` resolves through the project's [`default_model_route_id`](./model-routes.md#project-default-route) for ordered failover; `model` cannot be combined with that, and omitting the provider is `400` when the project has no default.
 
-For a stateless completion `ai_provider_id` is passed directly in the request body and is **required** — that call belongs to no chat, so there is no chat binding and no default to inherit. It is still scoped to a project: the provider's own — see [Authorization](#authorization).
+Stateless completions **require** `ai_provider_id` in the body; there is no chat binding or default to inherit. The call is scoped to the provider's project; see [Authorization](#authorization).
 
-See [AI Providers](./ai-providers.md) for the full list of supported providers and how secrets are resolved. For a worked example of creating a provider the Chat can reference, see [Chat with an LLM - Step 3 (Create a local AI provider)](/docs/tutorials/chat-with-llm#step-3--create-a-local-ai-provider).
+Supported providers and secret resolution: [AI Providers](./ai-providers.md). Example: [Chat with an LLM - Step 3 (Create a local AI provider)](/docs/tutorials/chat-with-llm#step-3--create-a-local-ai-provider).
 
 ### Authorization
 
-Both targets are gated on the same action, `chats:CreateChatCompletion`, each checked against the project the call belongs to:
+Both targets require `chats:CreateChatCompletion` on the project the call belongs to:
 
 | Target | Project the check runs against |
 | --- | --- |
 | `chat_id` | the chat's project |
 | `ai_provider_id` | the AI provider's project |
 
-A caller without the action on that project gets `403`, before any provider call and before an SSE stream is opened — a refused streaming request is a JSON `403`, never an error frame inside a `200` stream. An `ai_provider_id` that does not exist is still `404`, which is resolved before the permission check.
+A caller without it gets `403` before any provider call or SSE stream (a refused streaming request is a JSON `403`, never an error frame in a `200` stream). A nonexistent `ai_provider_id` is `404`, resolved before the permission check.
 
 ### Streaming
 
-Set `stream: true` in the request body to receive an SSE stream. Each event contains a JSON object with a `choices[0].delta.content` chunk. The stream ends with `data: [DONE]`.
+`stream: true` returns SSE; each event is a JSON object with a `choices[0].delta.content` chunk, ending with `data: [DONE]`.
 
 ### Upstream provider errors
 
-When the provider rejects the completion — an unavailable model, a refused credential — or cannot be reached, [`POST /api/v1/chat/completions`](/docs/api/chats/create-chat-completion) answers `502 AI_PROVIDER_ERROR` with the provider's own status and message in the error message:
+When the provider rejects the completion (unavailable model, refused credential) or is unreachable, [`POST /api/v1/chat/completions`](/docs/api/chats/create-chat-completion) answers `502 AI_PROVIDER_ERROR` with the provider's status and message:
 
 ```json
 {
@@ -104,13 +100,11 @@ When the provider rejects the completion — an unavailable model, a refused cre
 }
 ```
 
-This is the same mapping [Agents](./agents.md) generation applies, so probing which models a provider can actually serve gives an interpretable answer instead of a bare `500`.
-
-A streaming request cannot report this as a status code — its `200` and headers are written before the provider is called. The failure arrives as a terminal `data: {"error": "..."}` frame carrying the same message, and the stream then ends without a `[DONE]`.
+Same mapping as [Agents](./agents.md) generation, so probing which models a provider can serve gives an interpretable answer instead of a bare `500`. A streaming request has already written `200`; the failure arrives as a terminal `data: {"error": "..."}` frame and the stream ends without `[DONE]`.
 
 ### Document-Backed Messages
 
-A message may carry a `document_id` instead of inline `content`. The server fetches that document and uses its `content` field as the message body. jq-based selection of tool output (the `output_path` behavior) is handled by [Agents](./agents.md#tool-output-message-content).
+A message may carry `document_id` instead of `content`; the server uses the document's `content`. jq-based selection of tool output (`output_path`) belongs to [Agents](./agents.md#tool-output-message-content).
 
 ## Examples
 
@@ -165,9 +159,7 @@ curl -X POST https://api.example.com/api/v1/chats \
 
 ### Run a per-chat completion
 
-Once a Chat is stored, run completions against it by passing `chat_id` and the `messages` array — the AI provider, `instructions`, and model come from the Chat record.
-
-A Chat stores configuration, not conversation history: no message sent to or returned from a completion is persisted, so send the full `messages` array on every call.
+Pass `chat_id` and `messages`; provider, `instructions`, and model come from the Chat. A Chat stores configuration, not history: no message is persisted, so send the full `messages` array each call.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>

@@ -11,11 +11,9 @@ Named containers for storing and retrieving knowledge entries within a project.
 
 ## Overview
 
-Memories provide a logical namespace for text content that agents can read and write during generation. Each memory holds many **memory entries** — individual pieces of text that are automatically embedded for semantic search via the [Knowledge](./knowledge.md) module.
+A memory is a namespace for text content that agents read and write during generation. Each memory holds many **memory entries**, embedded for semantic search via the [Knowledge](./knowledge.md) module.
 
-Agents can retrieve relevant entries automatically via `knowledge_config` and write new facts using the built-in `write_memory` tool. See [Agent Integration](#agent-integration) for details, and the [Memory & Knowledge Engine](../advanced/memory-and-knowledge-engine.md) deep dive for how the write, extraction, and retrieval algorithms fit together end to end.
-
-The module follows SOAT's [engine & algorithms pattern](../advanced/engines-and-algorithms.md): the write funnel, embedding, provenance, and invalidation are the **engine**; the [write algorithm](#write-algorithm) and [extraction](#automatic-extraction) are the **algorithms** running on it, with their customization seams documented in the [deep dive](../advanced/memory-and-knowledge-engine.md#extending-the-engine-today).
+Agents retrieve relevant entries via `knowledge_config` and write new facts with the built-in `write_memory` tool; see [Agent Integration](#agent-integration) and the [Memory & Knowledge Engine](../advanced/memory-and-knowledge-engine.md) deep dive. In the [engine & algorithms pattern](../advanced/engines-and-algorithms.md), the write funnel, embedding, provenance and invalidation are the **engine**; the [write algorithm](#write-algorithm) and [extraction](#automatic-extraction) are the **algorithms**, with customization seams in the [deep dive](../advanced/memory-and-knowledge-engine.md#extending-the-engine-today).
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -43,7 +41,7 @@ The module follows SOAT's [engine & algorithms pattern](../advanced/engines-and-
 
 ### Memory Entry
 
-Memory entries are the individual knowledge items stored inside a memory. When an entry is created or updated, its `content` is automatically embedded for semantic similarity search.
+When an entry is created or updated, its `content` is embedded for semantic similarity search.
 
 | Field        | Type     | Description                                             |
 | ------------ | -------- | ------------------------------------------------------- |
@@ -64,36 +62,34 @@ Memory entries are the individual knowledge items stored inside a memory. When a
 
 ### What belongs in a memory
 
-A memory entry is a **fact the agent learns about the world** — a customer's shipping
-address, a decision a team reached, a constraint discovered while working. It is retrieved
-by semantic similarity and consumed as context.
+A memory entry is a **fact the agent learns about the world** (a customer's shipping
+address, a decision a team reached, a constraint discovered while working), retrieved by
+semantic similarity and consumed as context.
 
-That retrieval is **approximate**: `memory_entries.embedding` carries an HNSW index, so a
-similarity search reads a bounded candidate list from the index rather than scanning every
-entry. Recall against the exact top-k is therefore no longer 1.0, and `min_score`
-thresholds tuned against an exact scan may select a slightly different set. See
-[Ranking is approximate](./knowledge.md#ranking-is-approximate) for the full trade-off; it
-applies to entry search and to the consolidation similarity check below alike.
+Retrieval is **approximate**: `memory_entries.embedding` carries an HNSW index, so a
+similarity search reads a bounded candidate list rather than scanning every entry. Recall
+against the exact top-k is below 1.0, and `min_score` thresholds tuned against an exact
+scan may select a slightly different set. See
+[Ranking is approximate](./knowledge.md#ranking-is-approximate); it applies to entry
+search and to the consolidation similarity check below alike.
 
-A **correction to the agent's behavior** is not a fact, and does not belong here.
-"Never quote a delivery date without checking stock" is doctrine about how the agent should
-act; storing it as an entry makes its application depend on whether a retrieval happened to
-rank it highly. Doctrine has two durable homes instead:
+A **correction to the agent's behavior** ("never quote a delivery date without checking
+stock") is doctrine, not a fact, and its application must not depend on retrieval rank.
+It has two homes:
 
 - **A constraint that must never be violated** — a [guardrail](./guardrails.md) `deny`,
-  which refuses the action deterministically rather than hoping the model reads the entry.
+  which refuses the action deterministically.
 - **Guidance the model should follow** — the agent's `instructions`, which
-  [agent versions](./agents.md#versioning-and-staged-rollout) archive on every write, so the
-  change is attributable and reversible.
+  [agent versions](./agents.md#versioning-and-staged-rollout) archive on every write.
 
 When the same correction keeps being made by hand, the
-[approvals recurrence view](./approvals.md#recurrence-view) is what surfaces it.
+[approvals recurrence view](./approvals.md#recurrence-view) surfaces it.
 
 ### Write Algorithm
 
-Every write to a memory — via REST, agent tool, or extraction — goes through the same deduplication algorithm.
+Every write to a memory (REST, agent tool, or extraction) goes through the same deduplication algorithm.
 
-When you call [`POST /api/v1/memory-entries`](/docs/api/memory-entries/create-memory-entry) (with `memory_id` in the body), the server:
+On [`POST /api/v1/memory-entries`](/docs/api/memory-entries/create-memory-entry) (with `memory_id` in the body), the server:
 
 1. **Embeds** the incoming content.
 2. **Finds** the most similar **currently-valid** existing entry in that memory (cosine similarity via pgvector). [Invalidated entries](#temporal-invalidation) are never candidates.
@@ -106,23 +102,20 @@ When you call [`POST /api/v1/memory-entries`](/docs/api/memory-entries/create-me
 
 `duplicate_threshold` is a per-request field on [`POST /api/v1/memory-entries`](/docs/api/memory-entries/create-memory-entry), defaulting to `0.95`.
 
-**Merge** is a third outcome, and only agent write paths can reach it. A write made
-during a generation (the [`write_memory` tool](#write_memory-tool) and
-[automatic extraction](#automatic-extraction)) carries an agent context, so a fact
-that is merely *similar* to an existing entry — scoring at or above `0.75` but
-below `duplicate_threshold` — is consolidated with it into a **single atomic
-fact** by the agent's LLM, contradictions resolving in favour of the new fact.
+**Merge** is a third outcome, reachable only from agent write paths. A write made during a
+generation (the [`write_memory` tool](#write_memory-tool) and
+[automatic extraction](#automatic-extraction)) carries an agent context, so a fact scoring
+at or above `0.75` but below `duplicate_threshold` is consolidated with the existing entry
+into a **single atomic fact** by the agent's LLM, contradictions resolving in favour of the
+new fact.
 
-A write with no agent context — the manual endpoint above and the
-[orchestration `memory_write` node](#orchestration-memory_write-node) — has no
-model to consolidate with, so it creates instead. Consolidation is also
-best-effort on the agent paths: if the completion fails or comes back empty, the
-write creates too. Nothing is ever appended to an existing entry, so no write can
-lose a fact, and an entry stays one fact rather than growing into a paragraph
-whose embedding drifts away from everything in it. The cost is a possible
-near-duplicate pair, which future arbitration merges properly.
+A write with no agent context (the manual endpoint and the
+[orchestration `memory_write` node](#orchestration-memory_write-node)) creates instead.
+Consolidation is best-effort: if the completion fails or comes back empty, the write
+creates too. Nothing is ever appended to an existing entry, so no write can lose a fact;
+a near-duplicate pair is possible and is merged by future arbitration.
 
-On a **merge**, the incoming `tags` are unioned into the existing entry's tags and `metadata` is shallow-merged (incoming keys win), so accumulated labels are never lost. [`PUT /api/v1/memory-entries/:id`](/docs/api/memory-entries/update-memory-entry) replaces `tags`/`metadata` outright; pass `null` (or `[]` for tags) to clear.
+On a **merge**, the incoming `tags` are unioned into the existing entry's tags and `metadata` is shallow-merged (incoming keys win). [`PUT /api/v1/memory-entries/:id`](/docs/api/memory-entries/update-memory-entry) replaces `tags`/`metadata` outright; pass `null` (or `[]` for tags) to clear.
 
 #### Response `action` Field
 
@@ -137,8 +130,7 @@ The response always includes an `action` field alongside the entry:
 
 ### Provenance
 
-Entries written during a generation record where the fact came from, so "why does the
-agent believe this" is answerable from the entry itself:
+Entries written during a generation record where the fact came from:
 
 | Written by | `source_generation_id` | `source_conversation_id` |
 | --- | --- | --- |
@@ -147,20 +139,19 @@ agent believe this" is answerable from the entry itself:
 | [`POST /api/v1/memory-entries`](/docs/api/memory-entries/create-memory-entry) | `null` | `null` |
 | [Orchestration `memory_write` node](#orchestration-memory_write-node) | `null` | `null` |
 
-Provenance is recorded **when the entry is created and never rewritten by a later merge**:
-it names the turn that first asserted the fact. A later turn that genuinely replaces the
-fact supersedes it with a new entry, which carries its own provenance.
+Provenance is recorded **when the entry is created and never rewritten by a later merge**;
+a turn that replaces the fact supersedes it with a new entry carrying its own provenance.
 
-Both fields are `null` when the referenced generation or conversation is deleted — removing
+Both fields are `null` when the referenced generation or conversation is deleted; removing
 a conversation never deletes the facts learned from it.
 
-See it end to end in [Agent with Persistent Memory - Step 13 (Trace a fact back to the turn that produced it)](/docs/tutorials/memories-agent#step-13--trace-a-fact-back-to-the-turn-that-produced-it).
+See [Agent with Persistent Memory - Step 13 (Trace a fact back to the turn that produced it)](/docs/tutorials/memories-agent#step-13--trace-a-fact-back-to-the-turn-that-produced-it).
 
 ### Temporal invalidation
 
-An entry that no longer holds is **retired rather than rewritten**. Superseding sets
-`invalidated_at` and points `superseded_by_entry_id` at the replacement, so the history
-stays intact: `DELETE` remains the way to remove an entry outright.
+An entry that no longer holds is **retired rather than rewritten**: superseding sets
+`invalidated_at` and points `superseded_by_entry_id` at the replacement. `DELETE` remains
+the way to remove an entry outright.
 
 Invalidated entries are excluded from:
 
@@ -171,8 +162,8 @@ Invalidated entries are excluded from:
 
 They stay readable by ID ([`GET /api/v1/memory-entries/{entry_id}`](/docs/api/memory-entries/get-memory-entry)) for audit.
 
-The write path that *produces* an invalidation — LLM arbitration over a shortlist of
-similar entries — has not shipped yet; the columns and the API shape are in place because
+The write path that *produces* an invalidation (LLM arbitration over a shortlist of
+similar entries) has not shipped yet; the columns and API shape are in place because
 supersede history cannot be reconstructed after the fact.
 
 ### Tag Filtering
@@ -188,7 +179,7 @@ POST /api/v1/memories
 }
 ```
 
-Use the `tags` query parameter on [`GET /api/v1/memories`](/docs/api/memories/list-memories) to filter. The parameter supports **glob patterns**:
+The `tags` query parameter on [`GET /api/v1/memories`](/docs/api/memories/list-memories) filters, with **glob patterns**:
 
 | Pattern      | Matches                                          |
 | ------------ | ------------------------------------------------ |
@@ -196,11 +187,11 @@ Use the `tags` query parameter on [`GET /api/v1/memories`](/docs/api/memories/li
 | `customer*`  | `customer`, `customer-support`, `customer-prefs` |
 | `user-?refs` | `user-prefs`, `user-xrefs`, etc.                 |
 
-Multiple patterns are **ORed** — a memory is included if any of its tags match any pattern. The same glob syntax applies to `memory_tags` in [Knowledge search](./knowledge.md).
+Multiple patterns are **ORed**. The same glob syntax applies to `memory_tags` in [Knowledge search](./knowledge.md).
 
 ### Entry-Level Tag Filtering
 
-Memory entries carry their own `tags` (and optional `metadata`), independent of the container's tags. `memory_tags` in [Knowledge search](./knowledge.md) and an agent's `knowledge_config.memory_tags` match at **entry granularity**: an entry is returned when either its parent memory's tags match the globs (container-level, all entries returned) **or** the entry's own tags match (only that entry returned). This lets a single memory hold entries for many roles/sources and retrieve just the relevant slice — e.g. tag captured rules with `role:traffic-manager` and `source:rejected_approval`, then search `memory_tags: ["role:traffic-manager"]` to read only those.
+Memory entries carry their own `tags` (and optional `metadata`), independent of the container's tags. `memory_tags` in [Knowledge search](./knowledge.md) and an agent's `knowledge_config.memory_tags` match at **entry granularity**: an entry is returned when its parent memory's tags match the globs (container-level, all entries returned) **or** its own tags match (only that entry returned). A single memory can thus hold entries for many roles/sources: tag captured rules with `role:traffic-manager` and `source:rejected_approval`, then search `memory_tags: ["role:traffic-manager"]` to read only those.
 
 ```bash
 soat create-memory-entry \
@@ -212,23 +203,21 @@ soat create-memory-entry \
 
 ### Orchestration `memory_write` Node
 
-The orchestration `memory_write` node maps its `input_mapping` into a memory-entry write. Besides `content`, the node honors:
+The orchestration `memory_write` node maps its `input_mapping` into a memory-entry write. Besides `content`, it honors:
 
-- `tags` — either a string array, or a `{ key: value }` mapping that is flattened into `key:value` tag strings (so `tags: { role: "traffic-manager" }` becomes `["role:traffic-manager"]`).
+- `tags` — a string array, or a `{ key: value }` mapping flattened into `key:value` tag strings (`tags: { role: "traffic-manager" }` becomes `["role:traffic-manager"]`).
 - `metadata` — a plain object stored on the entry.
-- `source_type` — honored when supplied; defaults to `orchestration` for node-written entries.
+- `source_type` — honored when supplied; defaults to `orchestration`.
 
 ### Agent Integration
 
-Agents can read from and write to memories automatically during generation.
-
 #### Automatic Knowledge Retrieval
 
-Set `knowledge_config` on an agent to have the server search relevant memory entries before every generation and inject them as a delimited reference-context message (never as `system` content, since memory entries can be user-derived). See [Knowledge Config](./agents.md#knowledge-config) in the Agents module.
+Set `knowledge_config` on an agent to have the server search relevant memory entries before every generation and inject them as a delimited reference-context message (never as `system` content, since entries can be user-derived). See [Knowledge Config](./agents.md#knowledge-config).
 
 #### `write_memory` Tool
 
-Set `write_memory_id` in the agent's `knowledge_config` to automatically inject a `write_memory` tool into every generation. The tool accepts a single `content` input — the atomic fact to write. The target memory is fixed by `write_memory_id`; the agent cannot choose a different memory. Entries written by the tool are tagged with `source_type: "agent"`.
+Set `write_memory_id` in the agent's `knowledge_config` to inject a `write_memory` tool into every generation. The tool accepts a single `content` input, the atomic fact to write. The target memory is fixed by `write_memory_id`; the agent cannot choose another. Entries written by the tool carry `source_type: "agent"`.
 
 ```json
 {
@@ -241,7 +230,7 @@ Set `write_memory_id` in the agent's `knowledge_config` to automatically inject 
 
 #### Automatic Extraction
 
-Set `extraction` alongside `write_memory_id` to have the server extract facts from completed generation turns automatically — no explicit `write_memory` call by the agent is needed. Pass `true` for the defaults, or an object to customize the provider, model, and prompt used for extraction:
+Set `extraction` alongside `write_memory_id` to have the server extract facts from completed generation turns without an explicit `write_memory` call. Pass `true` for the defaults, or an object to customize the provider, model, and prompt:
 
 ```json
 {
@@ -252,12 +241,10 @@ Set `extraction` alongside `write_memory_id` to have the server extract facts fr
 }
 ```
 
-How it works:
-
-- After a conversation, session, or direct agent generation completes, the server runs a fire-and-forget extraction step. It never blocks or fails the generation response.
-- The extraction step sends the turn's transcript as a plain completion (no tools, no knowledge injection) and asks for a JSON array of atomic facts. Transient content such as greetings is skipped.
-- Each candidate fact (at most 20 per turn) goes through the standard [write algorithm](#write-algorithm) — duplicates are skipped, related facts are merged. Entries are tagged with `source_type: "extraction"`.
-- A summary (`{ candidates, created, updated, skipped }`) is recorded on the originating generation's `extraction` field for observability via the [Generations](./generations.md) API.
+- After a conversation, session, or direct agent generation completes, the server runs a fire-and-forget extraction step that never blocks or fails the generation response.
+- The step sends the turn's transcript as a plain completion (no tools, no knowledge injection) and asks for a JSON array of atomic facts. Transient content such as greetings is skipped.
+- Each candidate fact (at most 20 per turn) goes through the standard [write algorithm](#write-algorithm). Entries carry `source_type: "extraction"`.
+- A summary (`{ candidates, created, updated, skipped }`) is recorded on the originating generation's `extraction` field ([Generations](./generations.md) API).
 
 Object form fields (all optional):
 
@@ -268,27 +255,27 @@ Object form fields (all optional):
 | `model`          | see below                | Model override for extraction calls                                                                       |
 | `prompt`         | built-in instructions    | Replaces the default task instructions; the JSON response contract and the transcript are always appended |
 
-Provider resolution order: `extraction.ai_provider_id` → the agent's pinned provider → the agent's [`model_route_id`](./model-routes.md) → the project's [`default_model_route_id`](./model-routes.md#project-default-route). Model resolution for the provider cases: `extraction.model` → the override provider's `default_model` (when `ai_provider_id` is set) → the agent's `model` → the agent provider's `default_model`. A provider override switches the fallback to *that* provider's default because the agent's model name is usually meaningless on a different provider.
+Provider resolution order: `extraction.ai_provider_id` → the agent's pinned provider → the agent's [`model_route_id`](./model-routes.md) → the project's [`default_model_route_id`](./model-routes.md#project-default-route). Model resolution for the provider cases: `extraction.model` → the override provider's `default_model` (when `ai_provider_id` is set) → the agent's `model` → the agent provider's `default_model`. A provider override falls back to *that* provider's default because the agent's model name is usually meaningless on a different provider.
 
-When resolution lands on a route, each target names its own model (so `extraction.model` does not apply), the extraction call gets ordered provider failover, and it is metered against the target that actually served.
+When resolution lands on a route, each target names its own model (so `extraction.model` does not apply), the extraction call gets ordered provider failover, and it is metered against the target that served.
 
-The custom `prompt` controls *what* to extract, not the response format — the server always appends the JSON-array contract line and the conversation transcript, since the extraction parser accepts nothing else.
+The custom `prompt` controls *what* to extract, not the response format; the server always appends the JSON-array contract line and the transcript.
 
-Extraction is opt-in and requires both fields: `extraction` without `write_memory_id` does nothing. Streaming generations and `requires_action` (client-tool) turns do not trigger extraction; the turn must complete in the same request.
+Extraction requires both fields: `extraction` without `write_memory_id` does nothing. Streaming generations and `requires_action` (client-tool) turns do not trigger extraction; the turn must complete in the same request.
 
 ##### Gating extraction per turn
 
-The agent-level `extraction` flag decides the default, but a single [`POST /agents/:id/generate`](/docs/api/agents/create-agent-generation) call can override it with a top-level `extract` boolean (not inside `knowledge_config`):
+A single [`POST /agents/:id/generate`](/docs/api/agents/create-agent-generation) call can override the agent-level `extraction` default with a top-level `extract` boolean (not inside `knowledge_config`):
 
 - `extract` omitted — follow the agent's stored `extraction` default.
-- `extract: false` — suppress extraction for this turn even when the agent enables it. Use this for operational or tool-listing turns whose facts would only add noise to a curated memory.
-- `extract: true` — force extraction for this turn even when the agent does not enable it by default, provided the agent has a `write_memory_id`.
+- `extract: false` — suppress extraction for this turn (e.g. operational or tool-listing turns whose facts would add noise).
+- `extract: true` — force extraction for this turn, provided the agent has a `write_memory_id`.
 
-The `extract` flag has no effect on streaming or `requires_action` turns (they never extract), and cannot conjure a target: `extract: true` is still a no-op when the agent has no `write_memory_id`.
+The `extract` flag has no effect on streaming or `requires_action` turns, and `extract: true` is a no-op when the agent has no `write_memory_id`.
 
-Extraction reads the agent's stored `knowledge_config` at generation time and normalizes its casing on read, so an agent deployed by a Formation (whose stored config may be snake_case) extracts correctly without needing to be re-saved.
+Extraction reads the agent's stored `knowledge_config` at generation time and normalizes its casing on read, so an agent deployed by a Formation (whose stored config may be snake_case) extracts correctly without being re-saved.
 
-See it end to end in [Agent with Persistent Memory - Step 11 (Enable automatic extraction)](/docs/tutorials/memories-agent#step-11--enable-automatic-extraction).
+See [Agent with Persistent Memory - Step 11 (Enable automatic extraction)](/docs/tutorials/memories-agent#step-11--enable-automatic-extraction).
 
 ## Examples
 

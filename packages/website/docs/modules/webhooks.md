@@ -11,11 +11,11 @@ HTTP callbacks that deliver signed event notifications when project resources ch
 
 ## Overview
 
-A webhook is scoped to a project. When you create a webhook you specify a URL and a list of event patterns to subscribe to. The server dispatches matching events automatically, retrying up to three times for failed deliveries. Every delivery is recorded as a row before the first HTTP attempt and retried from that row, so a restart mid-delivery does not lose it — see [Delivery durability](#delivery-durability). Every delivery is signed with HMAC-SHA256 so receivers can verify authenticity.
+A webhook is project-scoped: a URL plus a list of event patterns. Matching events are dispatched automatically, retried up to three times, recorded as a row before the first HTTP attempt (see [Delivery durability](#delivery-durability)), and signed with HMAC-SHA256.
 
-Webhooks are **outbound** — SOAT calls your endpoint when events occur. For the **inbound** direction — an external system calling SOAT to activate an orchestration, agent, or tool — see [Triggers](./triggers.md), whose `webhook` starter verifies an incoming HMAC signature the same way.
+Webhooks are **outbound**. For the **inbound** direction (an external system activating an orchestration, agent, or tool) see [Triggers](./triggers.md), whose `webhook` starter verifies an incoming HMAC signature the same way.
 
-To start work **inside** SOAT when an event fires, do not wire a webhook subscription back to your own deployment's inbound hook — bind an [`event` trigger](./triggers.md#event-triggers) to the same event pattern instead. It subscribes to the bus directly, so there is no public URL, no signature to verify against your own event, and no second retry policy for one logical hop.
+To start work inside SOAT when an event fires, bind an [`event` trigger](./triggers.md#event-triggers) to the pattern instead of pointing a webhook at your own inbound hook: no public URL, signature, or second retry policy.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -64,7 +64,7 @@ To start work **inside** SOAT when an event fires, do not wire a webhook subscri
 
 ### Event Patterns
 
-Each webhook subscribes to one or more event patterns using dot-separated hierarchy:
+Patterns are dot-separated:
 
 | Pattern         | Matches                           |
 | --------------- | --------------------------------- |
@@ -72,13 +72,11 @@ Each webhook subscribes to one or more event patterns using dot-separated hierar
 | `files.*`       | Any event starting with `files.`  |
 | `*`             | Every event in the project        |
 
-Every event SOAT emits is listed in the [Webhook Events Reference](../webhook-events.md), which is generated from the server's event registry — a name that is not there is one no subscription will ever match.
-
-See it end to end in [Chat with an LLM - Step 9 (Create a session webhook subscription)](/docs/tutorials/chat-with-llm#step-9---create-a-session-webhook-subscription).
+Every event is listed in the [Webhook Events Reference](../webhook-events.md), generated from the event registry; a name not there never matches. Example: [Chat with an LLM - Step 9 (Create a session webhook subscription)](/docs/tutorials/chat-with-llm#step-9---create-a-session-webhook-subscription).
 
 ### Delivery
 
-When an event matches a webhook, the server sends an HTTP POST to the webhook URL. The request includes these headers:
+A matching event is delivered as an HTTP POST with these headers:
 
 | Header                | Description                                                                |
 | --------------------- | -------------------------------------------------------------------------- |
@@ -87,51 +85,36 @@ When an event matches a webhook, the server sends an HTTP POST to the webhook UR
 | `X-Soat-Signature-V2` | Timestamped signature, `t=<unix>,v1=<hex>` — see [Signature verification](#secret-and-signature-verification) |
 | `X-Soat-Signature`    | **Deprecated.** HMAC-SHA256 hex digest of the bare request body, as `sha256=<hex>` |
 
-Deliveries are retried up to three times. Each attempt and its outcome are recorded in a delivery log queryable through the API. To watch a real delivery arrive and inspect its outcome, see [Chat with an LLM - Step 11 (Verify delivery)](/docs/tutorials/chat-with-llm#step-11---verify-delivery-and-final-assistant-message).
-
-Before pointing `url` at a real endpoint, use [`soat listen`](../cli/usage.md#testing-webhooks-locally) to receive and inspect deliveries on your local machine.
+Deliveries are retried up to three times; each attempt is recorded in the delivery log. See [Chat with an LLM - Step 11 (Verify delivery)](/docs/tutorials/chat-with-llm#step-11---verify-delivery-and-final-assistant-message). Test locally with [`soat listen`](../cli/usage.md#testing-webhooks-locally).
 
 ### Where a webhook may point
 
-`url` must be an absolute `http`/`https` URL, and must not carry a username or
-password — a credential written into a URL is echoed by every log line and error
-that names it. Anything else is refused with `400 VALIDATION_FAILED` on create
-and update.
+`url` must be an absolute `http`/`https` URL without a username or password (a credential in a URL is echoed by every log line naming it); otherwise `400 VALIDATION_FAILED` on create and update.
 
-A delivery is a request the server makes to an address you chose, so it passes
-the deployment's egress rule: the address the hostname **resolves to** is
-checked, and again on every redirect hop. A URL that resolves inside the
-deployment's own network — loopback, RFC1918, link-local (cloud metadata), CGNAT,
-IPv6 ULA — is refused unless the operator lists it in
-[`TOOL_EGRESS_ALLOWED_HOSTS`](../self-hosting/configuration.md#outbound-egress).
+The address the hostname **resolves to** passes the deployment's egress rule, re-checked on every redirect hop. A URL resolving inside the deployment's own network (loopback, RFC1918, link-local/cloud metadata, CGNAT, IPv6 ULA) is refused unless listed in [`TOOL_EGRESS_ALLOWED_HOSTS`](../self-hosting/configuration.md#outbound-egress).
 
-Such a delivery is closed as `failed` immediately rather than retried, with the
-reason in `response_body` and `attempts` still `0`: no retry changes where the
-URL points. `response_body` also holds at most the first kilobyte of a real
-endpoint's answer — enough to see why it rejected the call.
+Such a delivery is closed as `failed` without a retry, `attempts` still `0`, the reason in `response_body`. `response_body` holds at most the first kilobyte of a real endpoint's answer.
 
 ### Delivery durability
 
-A delivery is a database row, not an in-flight function call. The row is written — with its payload and the time its next attempt is due — **before** the first HTTP request is made, and every attempt after the first is claimed from that row by a background sweep.
+A delivery row (payload and next due time) is written **before** the first HTTP request; every later attempt is claimed from that row by a background sweep.
 
-Two consequences matter to a subscriber:
-
-- **A restart does not lose a delivery.** If the server is killed between attempts, or during one, the row keeps its `pending` status and is picked up again once the crashed process's lease expires (about a minute). Nothing depends on the process that emitted the event still being alive.
-- **Retries are spaced, not immediate.** A failed attempt schedules the next one behind an exponential backoff with jitter (roughly 1s, then 2s), rather than firing three times back to back. `next_attempt_at` on the delivery tells you when the next one is due.
+- **A restart does not lose a delivery.** A row left `pending` by a killed process is picked up once its lease expires (about a minute).
+- **Retries are spaced.** Exponential backoff with jitter (roughly 1s, then 2s); `next_attempt_at` says when the next is due.
 
 After three failed attempts the delivery is marked `failed` and is not retried automatically. Use [redelivery](#redelivery) to send it again.
 
-**Where the guarantee starts.** Everything above holds from the moment the row exists. Getting there is a short, in-memory step: once the write that produced the event has committed, the server matches the project's subscriptions and inserts the delivery rows. A database blip during that step is retried, and a failure that outlives the retries is counted and printed to stderr rather than discarded quietly — but a process killed inside that window loses the event, and no redelivery can recover what was never recorded. The window is sub-second and unaffected by your endpoint being slow or down; closing it entirely requires the delivery row to be written in the same transaction as the change that triggered it.
+**Where the guarantee starts.** The row is inserted in a short in-memory step after the producing write commits: the server matches subscriptions and inserts the delivery rows. A database blip there is retried, and a failure outliving the retries is counted and printed to stderr; a process killed inside that sub-second window loses the event, and no redelivery can recover it. Closing the window would require writing the row in the same transaction as the change.
 
 ### Redelivery
 
-[`POST /api/v1/webhook-deliveries/{delivery_id}/redeliver`](/docs/api/webhooks/redeliver-webhook-delivery) queues a stored payload to be sent again — useful when your endpoint was down, or when you have fixed a bug and want the original event back.
+[`POST /api/v1/webhook-deliveries/{delivery_id}/redeliver`](/docs/api/webhooks/redeliver-webhook-delivery) queues a stored payload to be sent again.
 
-It creates a **new** delivery record rather than resetting the original, so the failed attempt stays in the history. The call returns `202 Accepted` with the new delivery; the send itself happens in the background, so poll that delivery's `status` to observe the outcome.
+It creates a **new** delivery record, so the failed attempt stays in the history. Returns `202 Accepted` with the new delivery; poll its `status` for the outcome.
 
 ### Event Payload
 
-The request body is a JSON envelope wrapping the resource payload. Like every other SOAT surface, it is **snake_case**:
+The body is a **snake_case** JSON envelope:
 
 | Field           | Type   | Description                                                       |
 | --------------- | ------ | ----------------------------------------------------------------- |
@@ -157,15 +140,15 @@ The request body is a JSON envelope wrapping the resource payload. Like every ot
 }
 ```
 
-`data` is carried through verbatim from the same mapper the REST API uses, so a subscriber never needs a follow-up `GET` to read the resource, and no key inside it is rewritten.
+`data` comes from the same mapper as the REST API; no key inside it is rewritten, so no follow-up `GET` is needed.
 
 ### Secret and Signature Verification
 
-Every webhook has a secret generated at creation time. The secret is returned in the response body on create or secret rotation. You can also retrieve it explicitly via [`GET /api/v1/webhooks/{webhook_id}/secret`](/docs/api/webhooks/get-webhook-secret) (requires `webhooks:GetWebhookSecret`).
+Each webhook has a secret generated at creation, returned on create and rotation, or via [`GET /api/v1/webhooks/{webhook_id}/secret`](/docs/api/webhooks/get-webhook-secret) (requires `webhooks:GetWebhookSecret`).
 
-The secret is stored encrypted at rest using the same AES-256-GCM encryption as [secrets](./secrets.md), keyed by `SECRETS_ENCRYPTION_KEY`. It is decrypted only to sign outbound deliveries or to return it through the API to a caller with `webhooks:GetWebhookSecret`. See [Configuration](/docs/self-hosting/configuration) for the operational impact of losing this key.
+It is stored AES-256-GCM encrypted like [secrets](./secrets.md), keyed by `SECRETS_ENCRYPTION_KEY`, and decrypted only to sign deliveries or to answer that route. See [Configuration](/docs/self-hosting/configuration) for the impact of losing the key.
 
-A stored secret that is **not** valid ciphertext — encrypted under a `SECRETS_ENCRYPTION_KEY` that has since changed — is refused rather than guessed at. `GET .../secret` answers `500 SECRET_NOT_DECRYPTABLE`, and an outbound delivery is recorded as `failed` with the reason and `attempts: 0` rather than being sent unsigned. Rotate the secret to replace it, or restore the original key.
+A stored secret that is not valid ciphertext (encrypted under a changed `SECRETS_ENCRYPTION_KEY`) is refused: `GET .../secret` answers `500 SECRET_NOT_DECRYPTABLE`, and a delivery is recorded `failed` with the reason and `attempts: 0` rather than sent unsigned. Rotate the secret or restore the key.
 
 #### Verifying `X-Soat-Signature-V2`
 
@@ -175,7 +158,7 @@ The header carries two comma-separated elements: `t`, the Unix timestamp (in sec
 X-Soat-Signature-V2: t=1769865600,v1=5257a869e7ecebeda32affa62cdca3fa51cad7e77a0e56ff536d0ce8e108d8bd
 ```
 
-Signing the timestamp along with the body is what bounds a replay: an attacker who captures a delivery cannot resend it later, because you reject a timestamp outside your tolerance window. Verify the digest **before** trusting anything in the body, and compare with a constant-time function.
+The timestamp bounds replay: reject a `t` outside your tolerance window. Verify **before** trusting the body, with a constant-time compare.
 
 ```js
 const crypto = require('crypto');
@@ -206,11 +189,11 @@ const isValid = (secret, body, header) => {
 };
 ```
 
-Each attempt is signed at the moment it is sent, so a retry carries its own fresh timestamp and passes the same tolerance check as a first attempt.
+Each attempt is signed when sent, so a retry carries a fresh timestamp.
 
 #### The deprecated `X-Soat-Signature`
 
-`X-Soat-Signature: sha256=<hex>` signs the bare body with no timestamp, so it cannot distinguish a live delivery from one replayed days later. It is still sent alongside the new header during the deprecation window so existing subscribers keep working. Migrate to `X-Soat-Signature-V2` and stop reading the old header.
+`X-Soat-Signature: sha256=<hex>` signs the bare body with no timestamp, so it cannot bound a replay. It is still sent during the deprecation window; migrate to `X-Soat-Signature-V2`.
 
 ```js
 // Deprecated — no replay bound.
@@ -220,11 +203,11 @@ const isValid = `sha256=${expected}` === header;
 
 ### Policy Gating
 
-Attach a [policy](./policies.md) to a webhook to filter deliveries without changing your event subscriptions. Policies are global resources (not scoped to any project); when one is set on a webhook, the event is only delivered if the policy evaluates to _allow_ for the event context.
+Attach a [policy](./policies.md) (a global resource) to filter deliveries without changing subscriptions: the event is delivered only if the policy evaluates to _allow_ for the event context.
 
 ### Formation Support
 
-Webhooks can be created as part of a [Formation](./formations.md). The webhook secret can be captured as a formation output using a `ref_attr` expression:
+A [Formation](./formations.md) can create webhooks; capture the secret as an output with `ref_attr`:
 
 ```json
 {

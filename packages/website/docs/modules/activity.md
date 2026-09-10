@@ -11,9 +11,9 @@ A cursor-paginated feed of every autonomously executed action.
 
 ## Overview
 
-The activity feed answers *"what did agents do today?"* — one entry per autonomous execution: a tool call, an approval resolution, an exception filing, a schedule firing. It is distinct from the [audit log](./audit-log.md): the audit log is **principal-centric** (who authorized a request to the platform — a `user` or `api_key`), while activity is **agent/run-centric** (what an agent did during a run). Security-relevant events (a policy `deny`, a decision-changing guardrail evaluation) stay on the audit log; only autonomous execution telemetry lands here.
+One entry per autonomous execution: a tool call, an approval resolution, an exception filing, a schedule firing. The [audit log](./audit-log.md) is **principal-centric** (who authorized a request: a `user` or `api_key`); activity is **agent/run-centric**. Security-relevant events (a policy `deny`, a decision-changing guardrail evaluation) stay on the audit log.
 
-There is no public create endpoint — entries are platform-written by producers. The feed is read-only and append-only, and paginated with an opaque cursor rather than offset/limit, because it is high-volume and offset pages shift under a fast-moving feed.
+No public create endpoint; entries are platform-written. The feed is read-only, append-only, and paginated with an opaque cursor, because offset pages shift under a fast-moving feed.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -34,13 +34,13 @@ There is no public create endpoint — entries are platform-written by producers
 | `ref_id` | string \| null | Producer-specific reference (the approval, exception, or trigger id the entry came from, or the executed tool's id) |
 | `created_at` | string | Append-only timestamp |
 
-`orchestration_run_id` / `agent_id` / `guardrail_version` are held as bare public ids (not foreign keys), matching [Exceptions](./exceptions.md#exceptionitem)'s provenance convention: the feed has no resolution workflow that needs to join back to those rows. A node id, generation id, or guardrail policy version is carried in `detail` rather than as a dedicated column — only the fields every kind shares (`orchestration_run_id`, `agent_id`, and the generic `ref_id`) are indexed top-level columns.
+`orchestration_run_id` / `agent_id` / `guardrail_version` are bare public ids, not foreign keys, matching [Exceptions](./exceptions.md#exceptionitem). Node id, generation id, and guardrail policy version live in `detail`; only fields every kind shares (`orchestration_run_id`, `agent_id`, `ref_id`) are indexed columns.
 
 ## Key Concepts
 
 ### Activity vs. the audit log vs. traces
 
-Three surfaces record "what happened," each answering a different question:
+Three surfaces record what happened:
 
 | Surface | Question it answers | Subject |
 |---|---|---|
@@ -48,7 +48,7 @@ Three surfaces record "what happened," each answering a different question:
 | [**Audit log**](./audit-log.md) | *Who did what to the platform, and was it allowed?* | the principal — a [user](./users.md) or [API key](./api-keys.md) |
 | [**Traces**](./traces.md) | *How did one generation actually execute?* | a single [generation](./generations.md)'s step-by-step tree |
 
-Activity and the audit log are the pair most easily confused, because both describe things the platform did on its own. The field-level contrast:
+Field-level contrast with the audit log:
 
 | | Activity | [Audit log](./audit-log.md) |
 |---|---|---|
@@ -61,9 +61,9 @@ Activity and the audit log are the pair most easily confused, because both descr
 | Immutability | no update path exists, but it is a convention — not enforced by model hooks | [hard-enforced append-only, with a retention sweep](./audit-log.md#append-only--retention) |
 | Reading | keyset [cursor pagination](#cursor-pagination), no export | offset pagination plus [NDJSON export](./audit-log.md#ndjson-export) |
 
-Because the audit log is the compliance surface and this feed is not, security-relevant events stay there even when they look activity-shaped: a [guardrail](./guardrails.md) evaluation that *changed* a call's outcome is mirrored into the audit log as a [system-originated entry](./audit-log.md#system-originated-entries) (`detail.kind: guardrail_evaluation`) — see [Evaluation Audit Record](./guardrails.md#evaluation-audit-record). Only autonomous-execution telemetry lands here.
+Security-relevant events stay on the audit log even when activity-shaped: a [guardrail](./guardrails.md) evaluation that *changed* a call's outcome is mirrored as a [system-originated entry](./audit-log.md#system-originated-entries) (`detail.kind: guardrail_evaluation`); see [Evaluation Audit Record](./guardrails.md#evaluation-audit-record).
 
-Neither surface is a superset of the other, and one tool call can legitimately appear in both. A call a guardrail blocked produces an audit record and **no** `action_executed` entry; a call that ran produces an `action_executed` entry, while the audit log separately records the principal authorized to trigger the enclosing request.
+Neither is a superset of the other. A call a guardrail blocked produces an audit record and **no** `action_executed` entry; a call that ran produces an `action_executed` entry while the audit log records the principal who triggered the enclosing request.
 
 ### Severity
 
@@ -77,35 +77,35 @@ Severity defaults per kind, and a producer may override it:
 | `exception_created` | `warning` | An exception was already filed — an anomaly, by definition |
 | `schedule_fired` | `info` | Routine autonomous operation |
 
-One producer exercises that override: `exception_created` **inherits the filed [exception](./exceptions.md#severity)'s own severity**, so it spans all three values rather than always reading `warning` — a `run_failed` exception (`critical`) records a `critical` activity entry. The kind's `warning` default applies only when the event carries no recognized severity. This is the only path that writes `critical`, so `severity` is not simply a restatement of `kind`: filtering `severity=critical` surfaces the feed's most serious entries, which a `kind` filter cannot express.
+`exception_created` **inherits the filed [exception](./exceptions.md#severity)'s severity**, so a `run_failed` exception (`critical`) records a `critical` entry; the `warning` default applies only when the event carries no recognized severity. This is the only path that writes `critical`, so `severity=critical` surfaces entries a `kind` filter cannot.
 
 ### Cursor pagination
 
-[`GET /api/v1/activity`](/docs/api/activity/list-activity) returns `next_cursor` — pass it back as `cursor` to fetch the next page; a `null` `next_cursor` means there is no more data. The cursor is an opaque, keyset (not offset) token encoding a `(created_at, id)` position, so a page never shifts as new entries arrive ahead of it — the failure mode an offset page has on a fast-moving, append-only feed.
+[`GET /api/v1/activity`](/docs/api/activity/list-activity) returns `next_cursor`; pass it back as `cursor`. `null` means no more data. The cursor is an opaque keyset token over `(created_at, id)`, so a page never shifts as entries arrive.
 
 ### Retention
 
-Entries are kept **indefinitely**. There is no delete endpoint, and — unlike the [audit log](./audit-log.md#append-only--retention), which prunes rows past a configured window on a daily sweep — no job prunes this table, so `activity_entries` grows monotonically with autonomous execution volume.
+Entries are kept **indefinitely**: no delete endpoint and, unlike the [audit log](./audit-log.md#append-only--retention), no pruning sweep, so `activity_entries` grows with execution volume.
 
-Nothing the platform reads needs an aged entry: the [guardrail rate keys](#the-feed-as-a-guardrail-signal) count only a rolling 1-hour or 24-hour window, and the feed itself pages newest-first. Pruning old rows out of band is therefore safe on a high-volume project — there is simply no built-in sweep that does it.
+Nothing reads aged entries: [guardrail rate keys](#the-feed-as-a-guardrail-signal) count a rolling 1-hour or 24-hour window and the feed pages newest-first, so pruning out of band is safe.
 
 ### Producers
 
-Each kind is written by a single, dedicated producer:
+One producer per kind:
 
-- **`action_executed`** — emitted after a successful tool call, from two call sites: the orchestration tool-node executor (attributed to the run and node, `agent_id` null) and the agent tool resolver (attributed to the agent and generation, so a tool call an agent makes during a generation — in a [conversation](./conversations.md), a [session](./sessions.md), or a resumed generation — is recorded too). Each call is recorded by exactly one of them: the orchestration path threads no agent identity into the resolver, so a tool node never double-records.
+- **`action_executed`** — after a successful tool call, from the orchestration tool-node executor (attributed to run and node, `agent_id` null) or the agent tool resolver (attributed to agent and generation, covering [conversation](./conversations.md), [session](./sessions.md), and resumed generations). The orchestration path threads no agent identity into the resolver, so a tool node never double-records.
 
-  Recording sits **inside** the [guardrail](./guardrails.md) interceptor and after the tool returns, which is what makes an entry mean the action really ran: a call that was blocked, tripped, or routed to approval never reaches it, and neither does one whose target threw. Two things are deliberately not recorded: [client tools](./tools.md) (no server-side execution, so the platform cannot attest the action happened) and the built-in knowledge-retrieval tools (a [knowledge](./knowledge.md) lookup reads, it does not act).
-- **`approval_created`** — subscribes to the existing `approvals.created` event (see [Approvals](./approvals.md)); no change to that module. Filed while the approval is still pending, so an approval an agent raised is discoverable from the feed before anyone settles it, the way a created exception is. `approvals.expired` is not filed.
-- **`approval_resolved`** — subscribes to the existing `approvals.approved` / `approvals.rejected` events (see [Approvals](./approvals.md)); no change to that module.
-- **`exception_created`** — subscribes to the existing `exceptions.created` event (see [Exceptions](./exceptions.md#producers)); no change to that module.
-- **`schedule_fired`** — emitted directly from the trigger scheduler's due-firing sweep, filtered to `source === 'schedule'` only — a manually- or webhook-fired [trigger](./triggers.md) does not produce this kind.
+  Recording sits **inside** the [guardrail](./guardrails.md) interceptor, after the tool returns: a call blocked, tripped, routed to approval, or whose target threw is never recorded. Not recorded: [client tools](./tools.md) (no server-side execution to attest) and the built-in knowledge-retrieval tools (a [knowledge](./knowledge.md) lookup reads, it does not act).
+- **`approval_created`** — subscribes to `approvals.created` ([Approvals](./approvals.md)), filed while the approval is pending. `approvals.expired` is not filed.
+- **`approval_resolved`** — subscribes to `approvals.approved` / `approvals.rejected`.
+- **`exception_created`** — subscribes to `exceptions.created` ([Exceptions](./exceptions.md#producers)).
+- **`schedule_fired`** — from the trigger scheduler's due-firing sweep, `source === 'schedule'` only; a manual or webhook [trigger](./triggers.md) fire does not produce it.
 
-Every producer is fire-and-forget: a recording failure is logged and swallowed, and never disturbs the action it describes — the same "auditing never blocks the request it describes" principle the [audit log](./audit-log.md) follows.
+Every producer is fire-and-forget: a recording failure is logged and never disturbs the action, as in the [audit log](./audit-log.md).
 
 ### The feed as a guardrail signal
 
-Because `action_executed` counts real executions, the feed doubles as the platform's autonomous-action **rate** signal: [guardrails](./guardrails.md#guards-and-guardrail-context) read it through `runtime.activity.actions_1h` and `runtime.activity.actions_24h`, the number of `action_executed` entries in this project over a rolling window ending at evaluation time. That is what lets a guard cap how many actions an agent may take per hour or per day:
+`action_executed` counts real executions, so [guardrails](./guardrails.md#guards-and-guardrail-context) read it through `runtime.activity.actions_1h` and `runtime.activity.actions_24h` (entries in this project over a rolling window ending at evaluation time) to cap actions per hour or day:
 
 ```json
 {
@@ -114,10 +114,8 @@ Because `action_executed` counts real executions, the feed doubles as the platfo
 }
 ```
 
-Two consequences of the counting rule are worth knowing when writing such a guard:
-
-- **Only `action_executed` counts.** The other three kinds record what the platform did *about* an action (an approval resolved, an exception filed, a schedule fired), not an action an agent took, so counting them would inflate the rate the ceiling is written against.
-- **An empty feed reads as `0`, not unresolved.** A project that has taken no actions yet passes a rate ceiling rather than failing closed on it — unlike the per-run usage keys, "no actions" is a real, meaningful zero. A query that *fails* still fails closed.
+- **Only `action_executed` counts.** The other kinds record what the platform did *about* an action.
+- **An empty feed reads as `0`**, so a project with no actions yet passes a rate ceiling; unlike per-run usage keys, "no actions" is a real zero. A query that *fails* still fails closed.
 
 ## Examples
 

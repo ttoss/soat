@@ -11,21 +11,21 @@ DAG-based pipeline definitions for chaining agents, tools, and knowledge lookups
 
 ## Overview
 
-Orchestrations describe a directed acyclic graph (DAG) of nodes where each node performs a discrete operation. Nodes in the same execution round run in parallel; edges with activation groups control fan-in convergence. Use an orchestration when you know the exact steps in advance and want deterministic, auditable execution — an `agent` node can still use LLM reasoning internally, but the graph itself is deterministic. See it end to end in [Orchestrate a Sonnet - Step 6 (Create the orchestration graph)](/docs/tutorials/orchestrate-a-sonnet#step-6--create-the-orchestration-graph).
+An orchestration is a directed acyclic graph (DAG) of nodes, each one discrete operation. Nodes in the same round run in parallel; edges with activation groups control fan-in. The graph stays deterministic and auditable where an `agent` node reasons internally. See [Orchestrate a Sonnet - Step 6 (Create the orchestration graph)](/docs/tutorials/orchestrate-a-sonnet#step-6--create-the-orchestration-graph).
 
-An orchestration is a pipeline that _ends_; a [workflow](./workflows.md) is a state graph a task _lives_ in. See [Choosing an Automation Model](/docs/advanced/choosing-an-automation-model) for the comparison and composition patterns — starting with [whether the work needs a graph at all](/docs/advanced/choosing-an-automation-model#step-0--you-may-need-neither), since an orchestration is the [graph layer](/docs/agent-system-layers) and the graph is the layer to build last. An orchestration can also be declared as a [Formation](./formations.md) resource — see [Create an Agent Squad](/docs/tutorials/create-an-agent-squad) — and can be run automatically by binding it to a [Trigger](./triggers.md) with `target_type: orchestration`.
+An orchestration is a pipeline that ends; a [workflow](./workflows.md) is a state graph a task lives in. [Choosing an Automation Model](/docs/advanced/choosing-an-automation-model) compares them, starting with [whether the work needs a graph at all](/docs/advanced/choosing-an-automation-model#step-0--you-may-need-neither); an orchestration is the [graph layer](/docs/agent-system-layers), built last. An orchestration can be a [Formation](./formations.md) resource ([Create an Agent Squad](/docs/tutorials/create-an-agent-squad)) and a [Trigger](./triggers.md) target (`target_type: orchestration`).
 
 > See the [Permissions Reference](../permissions.md#orchestrations) for the IAM action strings for this module.
 
 ## Related Tutorials
 
-- [Orchestration Control Flow: Delay, Poll, and Loop](/docs/tutorials/orchestration-control-flow) — the `delay`, `poll`, `loop`, and `condition` nodes in one deterministic run, with a reference table for every node type
-- [Conditional Branching in Orchestrations](/docs/tutorials/conditional-orchestration) — condition nodes, branch routing, and `skipped` node executions
+- [Orchestration Control Flow: Delay, Poll, and Loop](/docs/tutorials/orchestration-control-flow) — `delay`, `poll`, `loop`, and `condition` nodes in one run
+- [Conditional Branching in Orchestrations](/docs/tutorials/conditional-orchestration) — branch routing and `skipped` node executions
 - [Orchestrate a Sonnet - Step 6 (Create the orchestration graph)](/docs/tutorials/orchestrate-a-sonnet#step-6--create-the-orchestration-graph)
 - [Orchestrate a Sonnet - Step 7 (Start a run)](/docs/tutorials/orchestrate-a-sonnet#step-7--start-a-run)
 - [Orchestrate a Sonnet - Step 9 (Inspect the run state)](/docs/tutorials/orchestrate-a-sonnet#step-9--inspect-the-run-state)
-- [Create an Agent Squad](/docs/tutorials/create-an-agent-squad) — a team of agents plus a coordinating orchestration, deployed and run as one stack
-- [Close the Monthly Books - Step 4 (Validate and create the reconciliation graph)](/docs/tutorials/close-the-monthly-books#step-4--validate-and-create-the-reconciliation-graph) — parallel start nodes, an `activation_group` join, and a branch decided by arithmetic rather than a model
+- [Create an Agent Squad](/docs/tutorials/create-an-agent-squad) — agents plus a coordinating orchestration as one stack
+- [Close the Monthly Books - Step 4 (Validate and create the reconciliation graph)](/docs/tutorials/close-the-monthly-books#step-4--validate-and-create-the-reconciliation-graph) — parallel start nodes, an `activation_group` join, an arithmetic branch
 
 ## Data Model
 
@@ -79,7 +79,7 @@ An orchestration is a pipeline that _ends_; a [workflow](./workflows.md) is a st
 
 ### NodeExecution
 
-Each entry in a run's `node_executions` array records a single node execution, in chronological order.
+One entry per node execution, in chronological order.
 
 | Field          | Type           | Description                                              |
 | -------------- | -------------- | -------------------------------------------------------- |
@@ -94,7 +94,7 @@ Each entry in a run's `node_executions` array records a single node execution, i
 | `completed_at` | string \| null | ISO 8601 timestamp when the record was written           |
 | `created_at`   | string         | ISO 8601 creation timestamp                              |
 
-A node execution records the node's **external I/O** — the input it resolved and the artifact it returned — not the model's internal reasoning, and it carries **no generation id**. To reach what an `agent` node's model actually did, see [Reaching an agent node's generation](#reaching-an-agent-nodes-generation).
+A record holds external I/O only (resolved input, returned artifact) and no generation id; see [Reaching an agent node's generation](#reaching-an-agent-nodes-generation).
 
 ## Key Concepts
 
@@ -119,7 +119,7 @@ A node execution records the node's **external I/O** — the input it resolved a
 
 ### Node artifacts
 
-Every completed node produces an **artifact** — the object that `state_mapping` reads as `output` and that downstream nodes read as [`nodes.<id>`](#the-nodesid-namespace). The shape is per node type:
+Every completed node produces an **artifact**: what `state_mapping` reads as `output` and downstream nodes read as [`nodes.<id>`](#the-nodesid-namespace).
 
 | Type | Artifact |
 | ---- | -------- |
@@ -137,29 +137,27 @@ Every completed node produces an **artifact** — the object that `state_mapping
 | `emit_event` | `{ emitted, eventType }`. See [Emitting events](#emitting-events). |
 | `sub_orchestration` | The child run's `output`, i.e. `{ terminalNodeId: terminalArtifact }`. |
 
-The common trap is `tool`: because the artifact is the tool's result verbatim, `{"var": "output.result"}` resolves to `null` for any tool returning a JSON object. Map the field the tool actually returns.
+On a `tool` node returning a JSON object, `{"var": "output.result"}` resolves to `null`; map the field the tool returns.
 
 #### Agent node `output_schema`
 
-When an `agent` node declares an `output_schema`, the engine resolves the artifact in order: (1) the model provider's own structured output, when the agent's configured `output_schema` reaches it as a generation-time constraint (see [Agents](./agents.md)); (2) otherwise, the raw text response parsed as JSON, stripping a single markdown code fence first; (3) if neither produces a JSON object, the artifact falls back to `{ content }` and the node still completes — a mismatch never fails the run (a `soat:orchestrations` debug log records the parse failure).
+With an `output_schema`, an `agent` node's artifact resolves in order: (1) the provider's structured output, when the agent's own `output_schema` reaches it as a generation-time constraint ([Agents](./agents.md)); (2) the raw text parsed as JSON after stripping one markdown code fence; (3) `{ content }`, the node still completing. A mismatch never fails the run (a `soat:orchestrations` debug log records the parse failure). It is a parsing aid, not a validation gate: a parsed object is accepted whether or not it satisfies the schema, and a node-level `output_schema` differing from the agent's is not forwarded to the model.
 
-`output_schema` is a **best-effort parsing aid**, not a hard validation gate: a parsed object is accepted whether or not its fields satisfy the schema, and a node-level `output_schema` that differs from its agent's own is not forwarded to the model.
-
-> **Tip:** a `state_mapping` that writes `null` usually means the mapping read a field the artifact does not have. Every artifact is visible under `state.nodes.<id>` in `get-orchestration-run`, so check there for the real shape.
+> **Tip:** a `state_mapping` that writes `null` usually read a field the artifact lacks; every artifact is visible under `state.nodes.<id>` in `get-orchestration-run`.
 
 ### Guardrail interception on tool nodes
 
-A `tool` node's call is classified by [Guardrails](./guardrails.md) at dispatch. With no agent in scope the node composes the **project + tool** scopes only; the strictest [action class](./guardrails.md#action-classes) is enacted in graph terms:
+[Guardrails](./guardrails.md) classify a `tool` node's call at dispatch over the **project + tool** scopes (no agent in scope); the strictest [action class](./guardrails.md#action-classes) applies:
 
 - **A / passing B** — the tool runs with the (cleaned) `input_mapping` result.
-- **C (human sign-off)** — the run parks on the node (`required_action.type: "approval"`) and files an [ApprovalItem](./approvals.md) with the frozen arguments, exactly like an [approval node](#approval-nodes). On approval the node re-dispatches the tool and continues down its success edge; on rejection/expiry the tool never runs and only a matching `condition: "rejected"` / `"expired"` edge follows.
-- **D / tripwire** — a routable **`blocked`** outcome: the node records a `{ status, reason }` artifact and emits a `blocked` (or `tripwire`) branch label, so an edge with `condition: "blocked"` routes to a fallback. An **unlabeled** success edge does not follow a blocked node.
+- **C (human sign-off)** — the run parks on the node (`required_action.type: "approval"`) and files an [ApprovalItem](./approvals.md) with the frozen arguments, like an [approval node](#approval-nodes). Approval re-dispatches the tool and follows its success edge; rejection/expiry never runs it and only a matching `condition: "rejected"` / `"expired"` edge follows.
+- **D / tripwire** — a routable **`blocked`** outcome: a `{ status, reason }` artifact plus a `blocked` (or `tripwire`) branch label for an edge with `condition: "blocked"`. An unlabeled success edge does not follow a blocked node.
 
-Guardrails attach to the referenced [tool](./tools.md) (or the run's project) via `guardrail_ids`; there is no per-node guardrail field.
+Guardrails attach to the [tool](./tools.md) (or the project) via `guardrail_ids`; there is no per-node guardrail field.
 
 ### Loops (collection iteration)
 
-A `loop` node iterates an array in the run state and runs a **sub-orchestration once per item**. It is the collection counterpart to `poll` (which repeats until a condition).
+A `loop` node runs a **sub-orchestration once per item** of an array in run state (`poll` repeats until a condition instead).
 
 | Field | Default | Purpose |
 | --- | --- | --- |
@@ -169,7 +167,7 @@ A `loop` node iterates an array in the run state and runs a **sub-orchestration 
 | `parallelism` | `5` | Items are processed in batches of this size |
 | `context_keys` | `null` | Allowlist of the run's `tool_context` keys each child inherits; `null` hands down the whole bag, `[]` none. See [Narrowing what a child run inherits](#narrowing-what-a-child-run-inherits) |
 
-The node completes with an artifact `{ results: [...] }` — one entry per item, in order, holding that sub-run's `output`. A graph containing a `loop` node is exempt from [cycle detection](#static-validation) (loops introduce intentional cycles).
+Artifact: `{ results: [...] }`, one entry per item in order, each the sub-run's `output`. A graph with a `loop` node is exempt from [cycle detection](#static-validation).
 
 ```json
 {
@@ -185,9 +183,9 @@ The node completes with an artifact `{ results: [...] }` — one entry per item,
 
 ### Polling
 
-A `poll` node repeatedly calls a [Tool](./tools.md) until a [JSON Logic](https://jsonlogic.com) **exit condition** on its response is satisfied. Each attempt calls `toolId` (resolving `inputMapping` against state, like a `tool` node), then evaluates `exitCondition` against the run state augmented with `response` (the latest tool result) and `attempt` (1-based count). A truthy result stops polling; otherwise the run is parked and the background scheduler drives the next attempt after `interval`, bounded by `maxIterations` (default 10, ceiling 1000). There is no wall-clock ceiling — the wait holds no HTTP request open, so a poll can span hours or days.
+A `poll` node calls a [Tool](./tools.md) until a [JSON Logic](https://jsonlogic.com) **exit condition** on its response holds. Each attempt calls `toolId` (resolving `inputMapping` against state, like a `tool` node), then evaluates `exitCondition` against run state plus `response` (latest result) and `attempt` (1-based). Truthy stops; otherwise the run parks and the scheduler drives the next attempt after `interval`, up to `maxIterations` (default 10, ceiling 1000). No request is held open, so there is no wall-clock ceiling; a poll can span days.
 
-The node completes with an artifact `{ result, attempts, conditionMet, timedOut }`. On exhaustion it completes with `conditionMet: false` (branch on it downstream with a `condition` node) — unless `failOnTimeout: true`, which fails the run with `ORCHESTRATION_POLL_EXHAUSTED`.
+Artifact: `{ result, attempts, conditionMet, timedOut }`. On exhaustion the node completes with `conditionMet: false` (branch on it with a `condition` node) unless `failOnTimeout: true`, which fails the run with `ORCHESTRATION_POLL_EXHAUSTED`.
 
 ```json
 {
@@ -202,16 +200,16 @@ The node completes with an artifact `{ result, attempts, conditionMet, timedOut 
 }
 ```
 
-> **Note:** `poll` and `delay` waits are offloaded to the background scheduler (see [Durable Background Execution](#durable-background-execution)); a run parked on a wait survives a server restart.
+`poll` and `delay` waits run on the background scheduler ([Durable Background Execution](#durable-background-execution)) and survive a restart.
 
 ### Emitting events
 
-An `emit_event` node emits an **internal event** — it calls no URL itself. Delivery is entirely the [Webhooks](./webhooks.md) module's job: any webhook subscribed to the event type in the run's project delivers it — signed, retried, tracked, and policy-gated — so the graph holds **no URL and no secret**.
+An `emit_event` node emits an **internal event**, calling no URL; any [webhook](./webhooks.md) subscribed to the event type in the run's project delivers it (signed, retried, tracked, policy-gated), so the graph holds no URL or secret.
 
-- **`event_type`** — the event type to emit, e.g. `guardrail.exception`. A subscriber listens with `create-webhook --events "guardrail.exception"` (or a pattern like `guardrail.*`).
-- **`input_mapping`** — resolved against run state to build the event `data` payload.
+- **`event_type`** — e.g. `guardrail.exception`; subscribe with `create-webhook --events "guardrail.exception"` (or a pattern like `guardrail.*`).
+- **`input_mapping`** — resolved against run state as the event `data`.
 
-The node is fire-and-forget: it completes as soon as the event is emitted, and the run neither blocks on nor fails from any subscriber's delivery outcome. Its artifact is `{ emitted: true, eventType: "<type>" }`. (If a graph needs a _synchronous_ call whose failure must fail the run, use an `http` [tool](./tools.md) node instead.)
+Fire-and-forget: the node completes on emit and the run never blocks on or fails from delivery. Artifact: `{ emitted: true, eventType: "<type>" }`. For a synchronous call whose failure must fail the run, use an `http` [tool](./tools.md) node.
 
 ```json
 {
@@ -222,13 +220,13 @@ The node is fire-and-forget: it completes as soon as the event is emitted, and t
 }
 ```
 
-The emitted event carries `resource_type: "orchestration_run"` and the run's id as `resource_id`, so subscribers (and webhook policies) can scope to orchestration output. See [Delivery](./webhooks.md#delivery) for the envelope and signature format.
+The event carries `resource_type: "orchestration_run"` and the run's id as `resource_id` for scoping; envelope and signature in [Delivery](./webhooks.md#delivery).
 
 ### Retry Policy
 
-Any node can declare a `retry` policy. When the node throws a **transient** error and attempts remain, the run parks as `sleeping` and re-executes the node after a backoff delay (offloaded to the scheduler, so retries survive a restart and hold no worker). Absent, or `max_attempts <= 1`, is fail-fast.
+Any node can declare `retry`. On a **transient** error with attempts left, the run parks as `sleeping` and re-executes the node after a backoff on the scheduler (survives a restart, holds no worker). Absent, or `max_attempts <= 1`, is fail-fast.
 
-Unexpected/infrastructure errors (network, timeouts, provider SDK throws) and upstream `5xx` errors are **retriable**; deliberate `4xx` business errors (validation, not found, conflict) are **terminal** and fail the run immediately without consuming attempts. Each attempt writes its own `node_executions` record with an incrementing `attempt`.
+Retriable: infrastructure errors (network, timeouts, provider SDK throws) and upstream `5xx`. Terminal: `4xx` business errors (validation, not found, conflict), which fail the run at once without consuming attempts. Each attempt writes its own `node_executions` record with an incrementing `attempt`.
 
 | Field | Type | Description |
 | --- | --- | --- |
@@ -249,27 +247,27 @@ Unexpected/infrastructure errors (network, timeouts, provider SDK throws) and up
 }
 ```
 
-> **Note:** a **retry** (a new attempt) is deliberately not deduped; a **redelivery** of the same attempt is — see [Idempotency](#idempotency-of-node-execution).
+A **retry** (new attempt) is not deduped; a **redelivery** of the same attempt is ([Idempotency](#idempotency-of-node-execution)).
 
 ### Durable Background Execution
 
-Runs execute in a **queue-backed durable worker**, detached from the HTTP request that starts them:
+Runs execute in a **queue-backed durable worker**, detached from the starting request:
 
-- `start-orchestration-run` persists the run, enqueues a `continue` task, and returns immediately with `status: "queued"` — no node executes inside the request. Observe progress with `get-orchestration-run` or via run lifecycle [webhook](./webhooks.md) events. (The single-process default runs the worker loop inside the API process, so the run starts draining right away.)
-- `delay` and `poll` waits park the run as **`sleeping`** — pure DB state, no worker, no memory. The wake time is persisted and the scheduler enqueues a `wake` task when due, so a run containing `delay: "2h"` survives a restart and completes on schedule.
-- `human` and `webhook (mode: receive)` nodes park the run as **`awaiting_input`**; satisfy the pause with `submit-human-input`, which applies the submitted payload, drives the run inline, and returns the settled result. `resume-orchestration-run` only re-drives an `awaiting_input` run from its last checkpoint — it carries no `node_id` or payload, so it cannot satisfy a pause and will simply re-park on the same node.
-- An **operator** can park a run the same way with [`POST /api/v1/orchestration-runs/{orchestration_run_id}/pause`](/docs/api/orchestrations/pause-orchestration-run) — see [Pausing a run](#pausing-a-run).
+- `start-orchestration-run` persists the run, enqueues a `continue` task and returns `status: "queued"`; no node executes in the request. Follow with `get-orchestration-run` or lifecycle [webhook](./webhooks.md) events. By default the worker loop runs inside the API process.
+- `delay` and `poll` waits park the run as **`sleeping`** (DB state only, no worker); the scheduler enqueues a `wake` task at the persisted wake time, so `delay: "2h"` survives a restart.
+- `human` and `webhook (mode: receive)` nodes park the run as **`awaiting_input`**. `submit-human-input` applies the payload, drives the run inline and returns the settled result; `resume-orchestration-run` carries no `node_id` or payload, so it re-drives from the last checkpoint and re-parks on the same node.
+- An **operator** parks a run with [`POST /api/v1/orchestration-runs/{orchestration_run_id}/pause`](/docs/api/orchestrations/pause-orchestration-run) ([Pausing a run](#pausing-a-run)).
 
-**Run identity.** A run outlives the request that started it. Each run persists the principal that started it (the user or API key), and every background drive re-mints a short-lived **run-as token** from it, confined to the run's project — this is what lets a [`builtin` tool](./tools.md#builtin) node call the platform from a durable run.
+**Run identity.** Each run persists its starting principal (user or API key); every background drive re-mints a short-lived **run-as token** from it, confined to the run's project, so a [`builtin` tool](./tools.md#builtin) node can call the platform from a durable run.
 
-- **Identity only, not permissions.** Authorization is evaluated per call against policies as they stand at that moment, so revoking access takes effect on a run already in flight.
-- **Never wider than the starting credential.** A run started by an API key is bounded by that key's own policies; revoke the key and the run stops acting rather than falling back to its owner's access.
+- **Identity only, not permissions.** Authorization is evaluated per call against current policies; revoking access affects a run in flight.
+- **Never wider than the starting credential.** A key-started run is bounded by the key's policies; revoking the key stops it, with no fallback to the owner's access.
 - **Attributed to the key, not its owner.** A key-started run names the key (`key_…`) in [task history](./workflows.md#transition-history), the [audit log](./audit-log.md), and the principal a later automation hop inherits.
-- **Trigger- and OAuth-started runs record no principal.** Their boundary lives in the token (the trigger's attached policy, the consented scope), so they execute inline with the original token. A run with no principal still runs — only its platform self-calls are unauthenticated, and they fail loudly (`TOOL_HTTP_ERROR` carrying the upstream 401).
+- **Trigger- and OAuth-started runs record no principal.** They execute inline with the original token (the trigger's attached policy, the consented scope); their platform self-calls are unauthenticated and fail with `TOOL_HTTP_ERROR` carrying the upstream 401.
 
-Nested `loop` and `sub_orchestration` children inherit their parent's identity, so a whole tree of runs acts as one principal. The same mechanism covers a [workflow](./workflows.md)-dispatched agent, keyed to the task rather than a run.
+Nested `loop` / `sub_orchestration` children inherit the parent's identity; a [workflow](./workflows.md)-dispatched agent gets the same, keyed to the task.
 
-**Queue driver.** The queue is reached through a four-operation abstraction (`enqueue` / `claim` / `ack` / `retry`), selected with `ORCHESTRATION_QUEUE_DRIVER`. Both drivers give at-least-once delivery with lease-based redelivery:
+**Queue driver.** `enqueue` / `claim` / `ack` / `retry`, selected with `ORCHESTRATION_QUEUE_DRIVER`. Both drivers are at-least-once with lease-based redelivery:
 
 | | `postgres` (default) | `sqs` |
 | --- | --- | --- |
@@ -277,27 +275,27 @@ Nested `loop` and `sub_orchestration` children inherit their parent's identity, 
 | Per-project `max_concurrent_runs` | **enforced** at claim time | **not enforced** |
 | `oldest_queued_age_seconds`, `per_project` stats | reported | `null` / empty |
 
-Postgres needs no infrastructure beyond the database. Choose `sqs` when a deployment standardizes on a managed queue and accepts the two differences above. A backoff longer than SQS's 15-minute maximum delay becomes 15 minutes — the run's persisted `wake_at` still decides whether there is anything to do. An unrecognized `ORCHESTRATION_QUEUE_DRIVER`, or `sqs` without a queue URL, fails loudly (`QUEUE_DRIVER_MISCONFIGURED`) rather than silently falling back to Postgres.
+Postgres needs no extra infrastructure. A backoff longer than SQS's 15-minute maximum delay becomes 15 minutes; the persisted `wake_at` still decides whether there is work. An unrecognized `ORCHESTRATION_QUEUE_DRIVER`, or `sqs` without a queue URL, fails with `QUEUE_DRIVER_MISCONFIGURED` (no fallback to Postgres).
 
-**Separate worker process.** The worker loop runs inside the API process by default. `node dist/worker.js` starts only the scheduler tick + worker loop — no HTTP listener — so the queue can be drained by a dedicated worker with the API tier running request-only (`ORCHESTRATION_WORKER_DISABLED=true`). On `SIGTERM`/`SIGINT` the worker stops claiming new tasks and finishes claimed ones before exiting; unfinished tasks are left un-acked and redelivered. A standalone worker publishes a heartbeat file after every **successful** queue claim (`ORCHESTRATION_WORKER_HEARTBEAT_FILE`), and `workerHealthcheck.mjs` exits `0` only while that heartbeat is younger than `ORCHESTRATION_WORKER_HEARTBEAT_STALE_MS` — a worker that can no longer reach the queue goes unhealthy instead of looking alive.
+**Separate worker process.** `node dist/worker.js` runs only the scheduler tick + worker loop (no HTTP listener); set `ORCHESTRATION_WORKER_DISABLED=true` on the request-only API tier. On `SIGTERM`/`SIGINT` it stops claiming, finishes claimed tasks and leaves the rest un-acked for redelivery. It writes a heartbeat file after every **successful** claim (`ORCHESTRATION_WORKER_HEARTBEAT_FILE`); `workerHealthcheck.mjs` exits `0` only while that file is younger than `ORCHESTRATION_WORKER_HEARTBEAT_STALE_MS`.
 
-**Crash recovery.** While a run is `running` it holds a **lease** (`lease_expires_at`), refreshed after every completed round. A background reaper reclaims runs whose lease has expired and enqueues a `continue` task so a worker re-drives them from the last checkpoint — completed nodes are skipped and only the unfinished frontier re-executes.
+**Crash recovery.** A `running` run holds a **lease** (`lease_expires_at`), refreshed after every completed round. A reaper reclaims expired leases and enqueues a `continue` task; completed nodes are skipped and only the unfinished frontier re-executes.
 
-**Synchronous (compatibility) mode.** Pass `wait: true` to `start-orchestration-run` to block until the run reaches a terminal (`succeeded`/`failed`) or `awaiting_input` state. Nested `loop` and `sub_orchestration` runs always execute synchronously so their output can be aggregated. See [Synchronous vs Asynchronous Execution](../advanced/sync-and-async.md) for the platform-wide contract.
+**Synchronous (compatibility) mode.** `wait: true` on `start-orchestration-run` blocks until the run is terminal (`succeeded`/`failed`) or `awaiting_input`. Nested `loop` / `sub_orchestration` runs always execute synchronously so their output can be aggregated. See [Synchronous vs Asynchronous Execution](../advanced/sync-and-async.md).
 
-**Lifecycle events** emitted through the [Webhooks](./webhooks.md) module: `orchestration_runs.started`, `orchestration_runs.awaiting_input`, `orchestration_runs.succeeded`, `orchestration_runs.failed`.
+**Lifecycle events** ([Webhooks](./webhooks.md)): `orchestration_runs.started`, `orchestration_runs.awaiting_input`, `orchestration_runs.succeeded`, `orchestration_runs.failed`.
 
 #### Idempotency of node execution
 
-At-least-once delivery means a node executor must tolerate replay. Each **side-effecting** node execution (`agent`, `tool`, `memory_write`, `emit_event`, `sub_orchestration`, `loop`) is written with a run-scoped idempotency key `{orchestration_run_id}:{node_id}:{attempt}`, inserted `running` **before** the side effect runs and updated in place afterward. A **redelivery** of the same `(run, node, attempt)` finds the key `completed` and reuses the stored output; a **retry** (a new attempt) is a new key and runs for real.
+Each **side-effecting** node execution (`agent`, `tool`, `memory_write`, `emit_event`, `sub_orchestration`, `loop`) is written under a run-scoped idempotency key `{orchestration_run_id}:{node_id}:{attempt}`, inserted `running` **before** the side effect and updated in place after. A **redelivery** of the same `(run, node, attempt)` finds the key `completed` and reuses the stored output; a **retry** (new attempt) is a new key and runs for real.
 
-The honest boundary: a worker that crashes *between* firing the side effect and marking the key `completed` leaves a `running` key; the redelivering worker re-executes under the same key. To let downstream services dedupe that window, an `http` tool node forwards its key verbatim as an **`Idempotency-Key`** request header. Pure nodes (`condition`, `transform`, `delay`, `human`, `approval`, `webhook`) are unkeyed.
+A worker that crashes between the side effect and marking the key `completed` leaves a `running` key, and the redelivering worker re-executes under it. An `http` tool node forwards its key verbatim as an **`Idempotency-Key`** request header so downstream services can dedupe that window. Pure nodes (`condition`, `transform`, `delay`, `human`, `approval`, `webhook`) are unkeyed.
 
 ### Pausing a run
 
-[`POST /api/v1/orchestration-runs/{orchestration_run_id}/pause`](/docs/api/orchestrations/pause-orchestration-run) parks a run in flight at its next **checkpoint** and [`POST /api/v1/orchestration-runs/{orchestration_run_id}/resume`](/docs/api/orchestrations/resume-orchestration-run) re-drives it from there. It is the stop that [`POST /api/v1/orchestration-runs/{orchestration_run_id}/cancel`](/docs/api/orchestrations/cancel-orchestration-run) cannot be: cancelling a 50-node run at its 40th node discards the 39 nodes' work, while a pause keeps the checkpoint and defers the rest — the same deferral a `human` node already gives.
+[`POST /api/v1/orchestration-runs/{orchestration_run_id}/pause`](/docs/api/orchestrations/pause-orchestration-run) parks a run in flight at its next **checkpoint**; [`POST /api/v1/orchestration-runs/{orchestration_run_id}/resume`](/docs/api/orchestrations/resume-orchestration-run) re-drives it from there. [`POST /api/v1/orchestration-runs/{orchestration_run_id}/cancel`](/docs/api/orchestrations/cancel-orchestration-run) discards completed work; a pause keeps the checkpoint and defers the rest.
 
-The parked run carries `required_action.type: "paused"` with the operator's `reason`, which is how a consumer tells an operator pause from a node's own. `pause_requested_at` is set independently of `status`, so a `running` run reads as paused-but-still-running until the round in flight reaches its checkpoint.
+The parked run carries `required_action.type: "paused"` with the operator's `reason`. `pause_requested_at` is set independently of `status`: a `running` run reads as paused until the round in flight reaches its checkpoint.
 
 | The run was… | What pause does |
 | --- | --- |
@@ -306,55 +304,49 @@ The parked run carries `required_action.type: "paused"` with the operator's `rea
 | `sleeping` | Parked immediately, **keeping the wake it was due**. The scheduler only claims a `sleeping` run, so the wake finds a parked run and does nothing; resuming puts it back to `sleeping` at the instant it already was |
 | `awaiting_input` | The node's own `required_action` stands, unchanged. The pause is still recorded, which is what refuses `submit-human-input` below |
 
-Pausing is **idempotent** — a second pause answers with the run unchanged, so a reconciliation loop that pauses on every tick writes once — and a run that has already settled answers `409 ORCHESTRATION_RUN_NOT_PAUSABLE`.
+Pausing is **idempotent** (a second pause answers with the run unchanged); a settled run answers `409 ORCHESTRATION_RUN_NOT_PAUSABLE`.
 
-**`resume` is the only thing that lifts a pause.** While one is in force, `submit-human-input` answers `409 ORCHESTRATION_RUN_PAUSED` and an [approval](./approvals.md) decision does not drive the run — an operator pause must not be liftable by satisfying the node behind it. Resolving the item still records the decision; resume then re-drives the parked node, which files a fresh proposal.
+**Only `resume` lifts a pause.** While one is in force, `submit-human-input` answers `409 ORCHESTRATION_RUN_PAUSED` and an [approval](./approvals.md) decision does not drive the run; resolving the item still records the decision, and resume re-drives the parked node, which files a fresh proposal.
 
-**A pause fans out to nested runs; a resume does not.** Every `loop` / `sub_orchestration` descendant is flagged too and parks at its own next checkpoint — without that a parent's pause would bound nothing, since a child drives its own graph. A child started *after* the pause is born paused for the same reason. Resuming is per run: each parked descendant is resumed by its own id, reachable through `parent_orchestration_run_id`.
+**A pause fans out to nested runs; a resume does not.** Every `loop` / `sub_orchestration` descendant parks at its own next checkpoint, and a child started after the pause is born paused. Each descendant is resumed by its own id, reachable through `parent_orchestration_run_id`.
 
-**What a pause does not reach** is the unit of work already in flight when it arrives — the current round's nodes, including a nested child started in it. That is the same bound the checkpoint gives: a pause defers what has not started, it does not interrupt what has.
+**A pause does not reach work in flight**: the current round's nodes, including a nested child started in it, finish.
 
 ### Listing the runs still driving
 
-[`GET /api/v1/orchestration-runs`](/docs/api/orchestrations/list-orchestration-runs) filters on `status` beside `orchestration_id`, `parent_orchestration_run_id` and `nested`. The parameter **repeats**, and the values are ORed:
+[`GET /api/v1/orchestration-runs`](/docs/api/orchestrations/list-orchestration-runs) filters on `status` beside `orchestration_id`, `parent_orchestration_run_id` and `nested`. The parameter **repeats**; values are ORed:
 
 ```
 GET /api/v1/orchestration-runs?status=queued&status=running&status=sleeping&status=awaiting_input
 ```
 
-Runs accumulate and the listing is newest-first, so without this a consumer looking for live work — a job pausing what a stopped account is still spending, for one — has to page every run the project ever started: a long-running old run sits behind any number of newer terminal ones, which makes an early exit on the newest page unsound.
-
-There is deliberately no `non_terminal` shorthand. Which statuses count as live is the caller's policy: a run parked `awaiting_input` spends nothing until someone hands it back, so a consumer bounding spend leaves it alone while a dashboard would not. A value outside the [status enum](#orchestrationrun) — empty string included — is a `400 VALIDATION_FAILED` rather than a silently unfiltered listing.
+The listing is newest-first; without the filter, finding live work means paging every run. There is no `non_terminal` shorthand (a run parked `awaiting_input` spends nothing; which statuses count as live is the caller's call). A value outside the [status enum](#orchestrationrun), empty string included, is a `400 VALIDATION_FAILED`.
 
 ### Concurrency limits
 
-Parallelism is bounded on two axes:
-
-- **Per project.** A project's [`max_concurrent_runs`](./projects.md) caps how many of its runs may be actively driven at once, enforced at queue **claim time**: excess tasks stay `queued` (never failed) until a slot frees. `null` (the default) means unlimited. Only actively-driven runs occupy a slot — a run parked `sleeping` or `awaiting_input` holds no task and no slot, and a run never blocks on itself. Enforced by the **Postgres** driver only.
-- **Global (per worker).** `ORCHESTRATION_WORKER_CONCURRENCY` caps the tasks a single worker process holds claimed-and-unacked at any instant; `ORCHESTRATION_WORKER_BATCH` is the per-tick claim size beneath it, so the effective claim each tick is `min(BATCH, CONCURRENCY − in-flight)`. A fleet of P workers bounds global parallelism at `P × CONCURRENCY`.
+- **Per project.** [`max_concurrent_runs`](./projects.md) caps runs actively driven at once, enforced at queue **claim time**: excess tasks stay `queued` (never failed) until a slot frees. `null` (default) is unlimited. A run parked `sleeping` or `awaiting_input` holds no task or slot; a run never blocks on itself. **Postgres** driver only.
+- **Global (per worker).** `ORCHESTRATION_WORKER_CONCURRENCY` caps claimed-and-unacked tasks per worker process; `ORCHESTRATION_WORKER_BATCH` is the per-tick claim size, so each tick claims `min(BATCH, CONCURRENCY − in-flight)`. P workers bound global parallelism at `P × CONCURRENCY`.
 
 ### Queue metrics
 
-[`GET /api/v1/orchestrations/queue/stats`](/docs/api/orchestrations/get-queue-stats) returns a point-in-time snapshot of the run queue — waiting vs. claimed task counts, the oldest waiting task's age, recent claim-latency percentiles (computed in-process over a rolling 5-minute window), and a per-project breakdown. `driver` names the active backend; under `sqs`, `oldest_queued_age_seconds` / `per_project` are `null` / empty. Guarded by the `orchestrations:GetQueueStats` action.
+[`GET /api/v1/orchestrations/queue/stats`](/docs/api/orchestrations/get-queue-stats) snapshots waiting vs. claimed task counts, the oldest waiting task's age, claim-latency percentiles (in-process, rolling 5-minute window) and a per-project breakdown. `driver` names the backend; under `sqs`, `oldest_queued_age_seconds` / `per_project` are `null` / empty. Guarded by `orchestrations:GetQueueStats`.
 
-Every figure is scoped to what the caller may see. A project-scoped caller gets `per_project` for their own projects only, `queue_depth` and `claimed_tasks` summed over those same projects, and `null` for `oldest_queued_age_seconds` and both `claim_latency_ms` percentiles — each describes the whole deployment and cannot be narrowed, so it is withheld rather than approximated. An unrestricted caller — the action granted on every project — gets the deployment-wide figures.
+A project-scoped caller gets `per_project` for its projects, `queue_depth` and `claimed_tasks` summed over them, and `null` for `oldest_queued_age_seconds` and both `claim_latency_ms` percentiles (deployment-wide, not narrowable). A caller granted the action on every project gets deployment-wide figures.
 
 ### State and Mappings
 
-Each node can define:
-
-- **`input_mapping`** — Maps node input keys to values resolved against the run state before execution. Each value is [JSON Logic](https://jsonlogic.com) (see [Input Mapping](#input-mapping-json-logic)).
-- **`state_mapping`** — Projects a node's artifact into state after execution. Each **key** is a state write path and should start with the literal `state.` prefix (a key without the prefix is normalized to be state-relative). Each **value** is JSON Logic evaluated against `{ "output": <the node's artifact>, "state": <run state> }` — the same evaluator as `input_mapping`/`transform`/`condition`. A literal value is written as-is; a **dotted** target such as `"state.proposed.action_id"` builds a nested object, read back with `{"var": "proposed.action_id"}`. Since it is JSON Logic, `state_mapping` can also compute derived values — e.g. `{ "state.count": { "+": [{ "var": "state.count" }, { "var": "output.delta" }] } }` accumulates a running total.
+- **`input_mapping`** — node input keys resolved against run state before execution; each value is [JSON Logic](https://jsonlogic.com) ([Input Mapping](#input-mapping-json-logic)).
+- **`state_mapping`** — projects the artifact into state after execution. Each **key** is a write path starting with `state.` (normalized if missing). Each **value** is JSON Logic over `{ "output": <the node's artifact>, "state": <run state> }`, the same evaluator as `input_mapping`/`transform`/`condition`. A literal is written as-is; a **dotted** target such as `"state.proposed.action_id"` builds a nested object, read back with `{"var": "proposed.action_id"}`; `{ "state.count": { "+": [{ "var": "state.count" }, { "var": "output.delta" }] } }` accumulates a total.
 
   ```json
   { "id": "summarise", "type": "agent", "agent_id": "agent_xyz", "state_mapping": { "state.summary": { "var": "output.content" } } }
   ```
 
-Every JSON Logic expression in a graph is evaluated against the run **state** — the run input (see [Run input](#run-input)), everything upstream nodes wrote via `state_mapping`, and every upstream node's raw artifact under `nodes.<id>`. `transform` and `condition` evaluate their `expression` against the full state; other node types receive only their projected `input_mapping` result; `poll` additionally evaluates its `exit_condition` against state augmented with `response` and `attempt`.
+Run **state** = the run input ([Run input](#run-input)) + every upstream `state_mapping` write + every upstream artifact under `nodes.<id>`. `transform` and `condition` evaluate `expression` against full state; other node types receive only their `input_mapping` result; `poll` also evaluates `exit_condition` against state plus `response` and `attempt`.
 
 #### The `nodes.<id>` namespace
 
-Every completed node's full artifact is also recorded at `state.nodes.<nodeId>`, whether or not the node declares a `state_mapping`. A downstream node reads it with `{ "var": "nodes.<nodeId>.<field>" }` without any explicit wiring on the upstream node:
+Every completed node's artifact is recorded at `state.nodes.<nodeId>`, `state_mapping` or not; downstream reads it with `{ "var": "nodes.<nodeId>.<field>" }`:
 
 ```json
 [
@@ -368,11 +360,11 @@ Every completed node's full artifact is also recorded at `state.nodes.<nodeId>`,
 ]
 ```
 
-`nodes` is a reserved top-level state key: [static validation](#static-validation) rejects a `state_mapping` write targeting it, and a `{ "var": "nodes.<id>..." }` reference must name an earlier (upstream) node. (An `input_schema` property named `nodes` is allowed: run input is seeded under `state.input`, so it cannot collide.) A `condition` node's namespace entry is `{ "label": "<emitted label>" }`. The field names available under `nodes.<id>` are the artifact's own — see [Node artifacts](#node-artifacts).
+`nodes` is a reserved top-level state key: [static validation](#static-validation) rejects a `state_mapping` write targeting it, and a `{ "var": "nodes.<id>..." }` reference must name an upstream node. An `input_schema` property named `nodes` is fine, since run input is seeded under `state.input`. A `condition` node's entry is `{ "label": "<emitted label>" }`; other field names are the artifact's own ([Node artifacts](#node-artifacts)).
 
 #### Input Mapping (JSON Logic)
 
-Each `input_mapping` value is evaluated as [JSON Logic](https://jsonlogic.com) against the run state — the same evaluator used by `transform` and `condition` nodes:
+Each `input_mapping` value is [JSON Logic](https://jsonlogic.com) over run state (same evaluator as `transform` and `condition`):
 
 | Value | Behaviour |
 | ----- | --------- |
@@ -391,19 +383,19 @@ Each `input_mapping` value is evaluated as [JSON Logic](https://jsonlogic.com) a
 }
 ```
 
-A bare string is a literal value; use `{"var": "key"}` to read `state.key`. To pass a literal object that happens to look like a JSON Logic expression as data, wrap it in `preserve`, which returns its argument unevaluated: `{"preserve": {"var": "x"}}`.
+`{"var": "key"}` reads `state.key`. A literal object that looks like JSON Logic goes in `preserve`, which returns its argument unevaluated: `{"preserve": {"var": "x"}}`.
 
 #### Run input
 
-Values passed to [`start-orchestration-run`](#examples) via `input` seed the initial state under an `input` namespace, read with `{"var": "input.key"}` — matching the pipeline/formation convention. Input keys round-trip **verbatim** (not case-transformed), so a key sent as `cycle_task` is read as `{"var": "input.cycle_task"}`. Because the `input` namespace is always seeded, a `{"var": "input.<name>"}` reference satisfies [static validation](#static-validation) regardless of the declared `input_schema`; a **flat** `{"var": "<name>"}` reference is never satisfied by run input — only by an upstream node's `state_mapping` write.
+`input` on [`start-orchestration-run`](#examples) seeds state under the `input` namespace, read with `{"var": "input.key"}`. Keys round-trip **verbatim** (`cycle_task` → `{"var": "input.cycle_task"}`). `input` is always seeded, so `{"var": "input.<name>"}` satisfies [static validation](#static-validation) regardless of `input_schema`; a **flat** `{"var": "<name>"}` is satisfied only by an upstream `state_mapping` write, never by run input.
 
 ### Parallel Execution
 
-All nodes that become active in the same round execute concurrently via `Promise.all`. After all complete, their outputs and state mutations are applied sequentially to avoid races. A single node with multiple outgoing edges activates all targets in parallel.
+Nodes active in the same round run concurrently via `Promise.all`; their outputs and state mutations are applied sequentially afterwards. A node with several outgoing edges activates all targets in parallel.
 
 ### Activation Groups (Fan-In)
 
-Edges can carry an `activation_group` name and an `activation_condition` to control when a downstream node runs:
+Edges may carry an `activation_group` name and an `activation_condition`:
 
 | `activation_condition` | Behaviour                                                                                                                         |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
@@ -414,59 +406,30 @@ Edges without an `activation_group` always pass through unconditionally.
 
 ### Cycle Detection
 
-A DFS-based cycle check runs both at create/update time (see [Static Validation](#static-validation)) and again before a run begins. Orchestrations that contain a `loop` node are exempt — loops introduce intentional cycles. If a cycle reaches execution anyway, the run is created, set to `failed`, and the `error` field contains `code: "ORCHESTRATION_CYCLE_DETECTED"`.
+A DFS cycle check runs at create/update ([Static Validation](#static-validation)) and before a run begins; graphs with a `loop` node are exempt. A cycle reaching execution creates the run as `failed` with `error.code: "ORCHESTRATION_CYCLE_DETECTED"`.
 
 ### Nesting depth
 
-Cycle detection is **intra-graph** and exempts `loop` nodes, so it cannot see the
-cycle a graph makes by naming *itself* in a `sub_orchestration` node — directly,
-or through two graphs that name each other. Each level is a separate run, so an
-accidental self-reference recursed until something incidental ran out.
+Cycle detection is intra-graph, so it cannot see a graph naming itself in a `sub_orchestration` node, directly or through two graphs naming each other. Every run carries `orchestration_run_depth`: `0` for a caller-started run, one more than its parent's for a `loop` / `sub_orchestration` child. Starting a child past the bound **fails the run that tried to descend** with `ORCHESTRATION_RUN_DEPTH_LIMIT`, before the child's record exists; `error.meta` names the depth reached, the limit and `limit_source`.
 
-Every run therefore carries a `orchestration_run_depth`: `0` for a run a caller started, one
-more than its parent's for a `loop` / `sub_orchestration` child. Starting a child
-past the effective bound is refused, and the refusal **fails the run that tried
-to descend** with `ORCHESTRATION_RUN_DEPTH_LIMIT` — before the child's record
-exists, so nothing is left queued behind it. The `error.meta` names the depth
-reached, the limit, and `limit_source`.
-
-The effective bound is the **smaller** of two numbers, so a project owner can be
-stricter than the deployment but never looser:
+The bound is the **smaller** of two numbers (a project can be stricter than the deployment, never looser):
 
 | Bound | Where | Default |
 | --- | --- | --- |
 | `MAX_ORCHESTRATION_RUN_DEPTH` | deployment env var | 10 |
 | [`max_orchestration_run_depth`](./projects.md) | the project | `null` (defer to the deployment's) |
 
-Both are read when the child is about to start, not pinned on the tree's root, so
-lowering the number stops a tree that is already recursing.
+Both are read when the child starts, not pinned on the root, so lowering the number stops a tree already recursing.
 
-This is a bound on **recursion**, not on total work: a `loop` node fans out, so
-`N` children per level still permits `N^depth` runs. Width is bounded by the
-node's `parallelism` and the project's
-[`max_concurrent_runs`](#concurrency-limits).
-
-Because the bound fails the parent, and a child's failure now fails the node that
-started it (below), the error reaches the run a caller actually reads rather than
-stopping at the run that noticed it.
+This bounds **recursion**, not total work: a `loop` fans out, so `N` children per level still permits `N^depth` runs; width is bounded by `parallelism` and the project's [`max_concurrent_runs`](#concurrency-limits). Since a child's failure fails its parent (below), the error reaches the run a caller reads.
 
 ### A child run's failure fails its parent
 
-A `loop` or `sub_orchestration` child that settles in a **non-success terminal
-status** (`failed`, `cancelled`, `expired`) fails the node that started it, and
-so the parent run — the same rule a
-[workflow `on_enter` dispatch](./workflows.md) already follows. The parent's
-`error.code` is the **child's own code** where it has one, so the cause survives
-the whole chain instead of being replaced at every level; `error.meta` names the
-child run and the node, so `parent_orchestration_run_id` still walks you down to
-the failure.
-
-A child that has merely **parked** (`awaiting_input`, `sleeping`) has not settled
-and is unaffected.
+A `loop` / `sub_orchestration` child settling **non-success terminal** (`failed`, `cancelled`, `expired`) fails the node that started it and so the parent run, as a [workflow `on_enter` dispatch](./workflows.md) does. The parent's `error.code` is the **child's own code** where it has one; `error.meta` names the child run and node, so `parent_orchestration_run_id` walks down to the failure. A parked child (`awaiting_input`, `sleeping`) is unaffected.
 
 ### Static Validation
 
-Orchestration graphs are validated **before** they are persisted. `create-orchestration` and `update-orchestration` reject an invalid graph with HTTP `400` (`code: "ORCHESTRATION_VALIDATION_FAILED"`); the `error.meta` field carries the full `errors` and `warnings` arrays. The same checks are available without persisting through `validate-orchestration`, which returns a `{ valid, errors, warnings }` result.
+Graphs are validated **before** persistence: `create-orchestration` / `update-orchestration` reject an invalid graph with `400` (`code: "ORCHESTRATION_VALIDATION_FAILED"`), `error.meta` carrying the `errors` and `warnings` arrays. `validate-orchestration` runs the same checks without persisting and returns `{ valid, errors, warnings }`.
 
 **Errors (block create/update):**
 
@@ -486,7 +449,7 @@ Orchestration graphs are validated **before** they are persisted. `create-orches
 | ----- | ------- |
 | Conditional-branch state read | a node reads `{"var": "branch"}` that an upstream node writes only on one side of a `condition`, so it may be undefined when the node runs |
 
-The `input_mapping` reachability check only treats an unwritten reference as an **error** when an `input_schema` is declared (a closed input contract); without one the graph stays permissive, since a parallel node's `state_mapping` may legitimately write the key first. A `{"var": "nodes.<id>..."}` reference is the one exception: an unwritten reference is always an error, open contract or not.
+An unwritten `input_mapping` reference is an **error** only under a declared `input_schema` (a closed input contract); without one a parallel node's `state_mapping` may write the key first, so the graph stays permissive. An unwritten `{"var": "nodes.<id>..."}` reference is always an error.
 
 ```bash
 soat validate-orchestration \
@@ -498,9 +461,9 @@ soat validate-orchestration \
 
 ### Versioning
 
-An orchestration's graph is versioned by the same append-only archive that backs [agent versions](./agents.md#versioning-and-staged-rollout) and [guardrail versions](./guardrails.md#versioning). Version 1 is written on create, and every subsequent write that **changes** the graph increments `version` and archives it as an `OrchestrationVersion`. The versioned surface is `nodes`, `edges`, `state_schema` and `input_schema`. Metadata-only edits, structurally-identical rewrites, and restoring the already-live version archive nothing. `version_label` on a create or update annotates the version that write archives; it is not itself part of the config.
+The graph is versioned by the same append-only archive as [agent versions](./agents.md#versioning-and-staged-rollout) and [guardrail versions](./guardrails.md#versioning). Version 1 is written on create; every write that **changes** the graph increments `version` and archives it as an `OrchestrationVersion`. Versioned surface: `nodes`, `edges`, `state_schema`, `input_schema`. Metadata-only edits, structurally identical rewrites and restoring the live version archive nothing. `version_label` on a create or update annotates the archived version; it is not part of the config.
 
-**A run executes the version it started on.** `start-orchestration-run` stamps the orchestration's current `version` onto the run as `orchestration_version`, and every later step — a wake, a resume, a redrive — resolves its topology from that version. Editing an orchestration never re-shapes a run already in flight; the live columns are a **draft** for runs started from now on. To read the topology a run actually took, fetch the version its `orchestration_version` names:
+**A run executes the version it started on.** `start-orchestration-run` stamps `version` onto the run as `orchestration_version`; every later step (wake, resume, redrive) resolves its topology from it. Editing never re-shapes a run in flight; the live graph is a **draft** for runs started from now on. To read a run's topology, fetch the version `orchestration_version` names:
 
 ```bash
 soat get-orchestration-run --orchestration-run-id "$RUN_ID"
@@ -509,33 +472,33 @@ soat get-orchestration-run --orchestration-run-id "$RUN_ID"
 soat get-orchestration-version --orchestration-id "$ORCH_ID" --version 3
 ```
 
-Versions are listed, fetched, and restored via `list-orchestration-versions`, `get-orchestration-version`, and `restore-orchestration-version`.
+Versions: `list-orchestration-versions`, `get-orchestration-version`, `restore-orchestration-version`.
 
-**Restore appends, it does not rewind.** Restoring v1 of an orchestration at v2 writes v1's graph back as **v3**, so a run pinned to v2 still resolves the graph it started on. Only the graph rolls back; `name` and `description` are untouched. A restored graph goes through the same static validation as an authored one. Node resource references (`agent_id`, `tool_id`, `orchestration_id`) resolve when a run reaches the node, not when the graph is written, so restoring a graph whose target has since been deleted succeeds and surfaces as a failed run.
+**Restore appends, it does not rewind.** Restoring v1 at v2 writes v1's graph back as **v3**; a run pinned to v2 still resolves its graph. Only the graph rolls back; `name` and `description` are untouched. A restored graph passes the same static validation. Node references (`agent_id`, `tool_id`, `orchestration_id`) resolve when a run reaches the node, not at write time, so restoring a graph whose target was deleted succeeds and surfaces as a failed run.
 
-Pinning is per run: a `loop` or `sub_orchestration` node starts a **new** run of the child orchestration, which pins the child's current version at that moment — so editing a sub-orchestration does reach iterations that have not started yet. Version the parent and the child together if you need a whole nested pipeline frozen.
+Pinning is per run: a `loop` / `sub_orchestration` node starts a **new** child run pinned to the child's version at that moment, so editing a sub-orchestration reaches iterations not yet started. Version parent and child together to freeze a nested pipeline.
 
 ### Node Executions
 
-Every time a node runs, the engine persists an entry in the run's `node_executions` array capturing the resolved `input_mapping` it received, the `output` artifact it produced, its `status`, and — on failure — the structured `error`. The record is written even when a node throws, so `get-orchestration-run` shows **which** node failed, **what** input it received, and **why**.
+Every node run persists a `node_executions` entry: resolved `input_mapping`, `output` artifact, `status`, and on failure the structured `error`, written even when the node throws, so `get-orchestration-run` shows which node failed, with what input, and why.
 
-Records are returned by both `get-orchestration-run` and `list-orchestration-runs`, ordered oldest-first. A node that pauses the run for human input is recorded with `status: "requires_action"`; once `submit-human-input` satisfies the pause, that same record is updated to `completed` with `output` set to the submitted payload — a re-entered pause reuses the record rather than appending another. When a run completes, nodes that were never reached (an un-traversed condition branch, an activation group that never fired) are recorded with `status: "skipped"` and `null` `input`/`output`/timestamps — walk through it in [Conditional Branching in Orchestrations](/docs/tutorials/conditional-orchestration). For reading back a finished run's state, see [Orchestrate a Sonnet - Step 9 (Inspect the run state)](/docs/tutorials/orchestrate-a-sonnet#step-9--inspect-the-run-state).
+`get-orchestration-run` and `list-orchestration-runs` return them oldest-first. A node paused for human input is `status: "requires_action"`; when `submit-human-input` satisfies it, the same record becomes `completed` with the payload as `output` (a re-entered pause reuses the record). On completion, nodes never reached (an un-traversed condition branch, an activation group that never fired) are `status: "skipped"` with `null` `input`/`output`/timestamps ([Conditional Branching in Orchestrations](/docs/tutorials/conditional-orchestration)). Reading a finished run: [Orchestrate a Sonnet - Step 9 (Inspect the run state)](/docs/tutorials/orchestrate-a-sonnet#step-9--inspect-the-run-state).
 
 ### Run usage
 
-Every generation an `agent` node dispatches meters against the run: its [usage](./usage.md) event carries the run's `orchestration_run_id` and the dispatching `node_id`. `get-orchestration-run` surfaces the roll-up inline as a `usage` object summed across the run's generations. For the full per-event breakdown, fetch the run receipt at [`GET /api/v1/usage/receipt?orchestration_run_id=…`](/docs/api/usage/get-usage-receipt) — see [Receipts](./usage.md#receipts-and-reconciliation). When a run is started by a [trigger](./triggers.md), the trigger id is propagated onto every in-run generation's usage event, so run spend also rolls up per trigger (`?trigger_id=`).
+Every generation an `agent` node dispatches meters against the run: its [usage](./usage.md) event carries `orchestration_run_id` and the dispatching `node_id`. `get-orchestration-run` rolls it up as `usage`; the per-event breakdown is [`GET /api/v1/usage/receipt?orchestration_run_id=…`](/docs/api/usage/get-usage-receipt) ([Receipts](./usage.md#receipts-and-reconciliation)). A [trigger](./triggers.md)-started run propagates the trigger id onto every in-run generation's usage event, so spend also rolls up per trigger (`?trigger_id=`).
 
-**Per node.** Each receipt line carries its `node_id`, so grouping the lines by it gives what each node of the run cost — the `llm_tokens` line of an `agent` node's generation and the `compute_execution` line of every node execution alike. The run total alone hides that split.
+**Per node.** Each receipt line carries `node_id`: the `llm_tokens` line of an `agent` node's generation and the `compute_execution` line of every node execution.
 
-**Nested runs are metered on the child and roll up to the parent.** A `loop` or `sub_orchestration` node starts child runs, each its own run record, so their usage events carry the *child's* `orchestration_run_id`. Two figures follow from that, both on the single-run read:
+**Nested runs are metered on the child and roll up to the parent.** A `loop` / `sub_orchestration` child's usage events carry the *child's* `orchestration_run_id`. On the single-run read:
 
-- **`usage`** — what the run cost, subtree included. A `loop` over 100 items reports all 100 children here.
-- **`usage_own`** — this run's own nodes only. At the node that started children you see its execution cost, not what they spent. Read it against `usage` to see where cost sits in the tree.
+- **`usage`** — subtree included; a `loop` over 100 items reports all 100 children.
+- **`usage_own`** — this run's own nodes only.
 
-The children themselves are reachable with [`GET /api/v1/orchestration-runs?parent_orchestration_run_id=…`](/docs/api/orchestrations/list-orchestration-runs), and each child names the run and node that started it (`parent_orchestration_run_id`, `parent_node_id`) — so a per-child or per-node breakdown of a delegated run is a read away rather than a guess from timestamps.
+Children: [`GET /api/v1/orchestration-runs?parent_orchestration_run_id=…`](/docs/api/orchestrations/list-orchestration-runs); each names its starter (`parent_orchestration_run_id`, `parent_node_id`).
 
 :::caution Summing `usage` over a list double-counts
-Because `usage` spans a subtree, a child run's spend appears twice in a list containing both it and its parent. When totalling across runs, restrict the list to the runs a caller started:
+`usage` spans a subtree, so a child's spend appears twice in a list holding it and its parent. Total over caller-started runs only:
 
 ```
 GET /api/v1/orchestration-runs?nested=false
@@ -544,15 +507,13 @@ GET /api/v1/orchestration-runs?nested=false
 `nested=true` gives the complement — every run started by another run, across all parents.
 :::
 
-The [receipt](./usage.md#receipts-and-reconciliation) stays self-only, deliberately: its line items carry a `node_id`, and merging a child's nodes into the parent's receipt would put node ids from two different graphs under one list.
+The [receipt](./usage.md#receipts-and-reconciliation) stays self-only: its lines carry a `node_id`, and a child's nodes belong to another graph.
 
-> **Note:** usage events are metered as each generation settles, so read the roll-up from `get-orchestration-run`, not the `start-orchestration-run` response — even with `wait: true` the start response can carry `usage: null`.
+Usage is metered as each generation settles: read the roll-up from `get-orchestration-run`, not the `start-orchestration-run` response, which can carry `usage: null` even with `wait: true`.
 
 ### Reaching an agent node's generation
 
-A `node_executions` entry records what a node received and what artifact it returned. For an `agent` node that artifact is the model's final answer — `{ content }`, or the parsed object when the node declares an `output_schema`. It is **not** the model's reasoning, its tool calls, or its token usage, and the record holds no generation id.
-
-Those live on the [generation](./generations.md), which points back at the node rather than the other way round. An agent node's generation is stamped with three attribution columns — `orchestration_run_id`, `node_id`, and `node_attempt` — so the run is traced forward by filtering the generations list:
+An `agent` node's `node_executions` artifact is the final answer (`{ content }`, or the parsed object with an `output_schema`); reasoning, tool calls and token usage live on the [generation](./generations.md), which is stamped with `orchestration_run_id`, `node_id` and `node_attempt`. Filter the generations list:
 
 ```bash
 # every generation this run's agent nodes produced
@@ -562,15 +523,15 @@ soat list-generations --orchestration-run-id run_abc123
 soat list-generations --orchestration-run-id run_abc123 --node-id summarize
 ```
 
-`node_attempt` matches the `attempt` on the corresponding `node_executions` entry, which is what makes the pairing exact for a [retried](#retry-policy) node.
+`node_attempt` equals the `attempt` on the matching `node_executions` entry, pairing a [retried](#retry-policy) node exactly.
 
-Each generation returned carries its own `trace_id`, which opens the full [trace](./traces.md) for that turn — the provider call, the tool calls, and the steps in between. Note that the run's own `trace_id` is not a per-node handle: it is whichever trace the run's first agent node produced, with later nodes hanging off it as children.
+Each generation carries its own `trace_id` for the full [trace](./traces.md) of that turn. The run's `trace_id` is the trace of its first agent node, later nodes as children, not a per-node handle.
 
 ### Run Tool Context
 
-`start-orchestration-run` accepts a `tool_context` bag, the same contract as an [agent generation or session](../advanced/tool-context.md): each key/value pair is forwarded as one prefixed context header on every `http`, `mcp` and `builtin` tool call the run makes. This is how a scheduled or orchestrated flow hands a per-user credential to the tools it calls, without embedding it in the graph.
+`start-orchestration-run` accepts a `tool_context` bag, the same contract as an [agent generation or session](../advanced/tool-context.md): each key/value pair becomes one prefixed context header on every `http`, `mcp` and `builtin` tool call the run makes, so a per-user credential reaches the tools without living in the graph.
 
-The bag is stored **on the run** and re-read at every step, so it survives every way a run gets driven — queued starts, scheduler wakes, human/approval resumes, crash redrives — and is inherited by `loop` / `sub_orchestration` child runs, in full unless the node sets [`context_keys`](#narrowing-what-a-child-run-inherits). Rules that carry over from the shared contract: the header name is the deployment's [context prefix](../advanced/tool-context.md#configuring-the-header-prefix) plus the key **verbatim**; an invalid or colliding key is rejected with `400 INVALID_TOOL_CONTEXT_KEY` at start time, before any run is created; the reserved identity keys (`session_id`, `actor_id`, `actor_external_id`) are stripped. `tool_context` reaches every node that calls a tool: an `agent` node's generation, and a `tool` or `poll` node's direct call — the latter being the run acting on its own behalf, which is as much the run's work as a generation is. A tool reached that way resolves its `{{context:}}` headers and [`preset_parameters`](../advanced/tool-context.md#pinning-a-parameter-to-the-runs-value) from the run's bag, which is how a run's own boundary — the one account it may act on — reaches the call with no model in between.
+The bag is stored **on the run** and re-read at every step (queued start, scheduler wake, human/approval resume, crash redrive) and inherited in full by `loop` / `sub_orchestration` children unless the node sets [`context_keys`](#narrowing-what-a-child-run-inherits). Header name = the deployment's [context prefix](../advanced/tool-context.md#configuring-the-header-prefix) + the key **verbatim**; an invalid or colliding key is `400 INVALID_TOOL_CONTEXT_KEY` at start time, before any run is created; the reserved identity keys (`session_id`, `actor_id`, `actor_external_id`) are stripped. It reaches an `agent` node's generation and a `tool` or `poll` node's direct call; such a tool resolves its `{{context:}}` headers and [`preset_parameters`](../advanced/tool-context.md#pinning-a-parameter-to-the-runs-value) from the run's bag.
 
 ```bash
 soat start-orchestration-run \
@@ -581,7 +542,7 @@ soat start-orchestration-run \
 
 #### Narrowing what a child run inherits
 
-A child run inherits the parent's whole bag by default, which is right when the sub-graph is the same team's next step and wrong when it is a shared component. `context_keys` on a `loop` or `sub_orchestration` node bounds that edge, exactly as [the field of the same name on a tool](tools.md#scoping-which-context-keys-reach-a-tool) bounds what egresses to that tool:
+`context_keys` on a `loop` or `sub_orchestration` node bounds what the child inherits, as [the same field on a tool](tools.md#scoping-which-context-keys-reach-a-tool) bounds what egresses to it:
 
 ```json
 {
@@ -592,22 +553,16 @@ A child run inherits the parent's whole bag by default, which is right when the 
 }
 ```
 
-A run carrying `{"ocaToken": "…", "tenant": "acme"}` hands that child `tenant` and nothing else. The rules match the tool-level allowlist because it is the same primitive: omitting the field inherits everything (so every graph authored before it keeps its behavior), `[]` inherits nothing, matching is case-insensitive since an entry names a header, and an entry outside the header-name grammar is rejected at write time with `400 INVALID_TOOL_CONTEXT_KEY` rather than becoming a key that silently never matches. The identity keys are unaffected — a child re-derives `session_id`, `actor_id` and `actor_external_id` per generation regardless of the list, so narrowing cannot strip a child's identity.
-
-Worth knowing why this exists: the same delegation spelled as an agent calling a `builtin` tool bound to `start-orchestration-run` was already filtered by that tool's `context_keys`. Without this field, one logical operation had two different containment outcomes chosen by graph-authoring style rather than by intent.
+A run carrying `{"ocaToken": "…", "tenant": "acme"}` hands that child `tenant` only. Rules match the tool-level allowlist: omitted inherits everything, `[]` nothing, matching is case-insensitive (an entry names a header), and an entry outside the header-name grammar is `400 INVALID_TOOL_CONTEXT_KEY` at write time. A child re-derives `session_id`, `actor_id` and `actor_external_id` per generation regardless of the list.
 
 ### Run Metadata
 
-`start-orchestration-run` accepts a `metadata` bag — caller-owned key/value annotations, stored on the run and returned verbatim by every read of it, the list included. It is the run's equivalent of the same field on an agent generation, and it exists for the same reason: attributing a run to something only the caller knows about — which of *its* tenants the run belongs to, the dispatch batch that started it, the ticket that asked for it.
+`start-orchestration-run` accepts a `metadata` bag: caller-owned annotations (tenant, dispatch batch, ticket) stored on the run and returned verbatim by every read, the list included. Unlike `input`:
 
-Two properties make it the right place for such a label, and `input` the wrong one:
+- **Nothing merges it into run state.** No node sees it, no `{ "var": … }` reads it, a strict `input_schema` never has to tolerate it.
+- **The server writes nothing here; no key is reserved.** `status`, `orchestration_version`, `trace_id`, `usage`, `artifacts`, `input`, `state` are fields of their own.
 
-- **Nothing merges it into run state.** No graph node sees it, no `{ "var": … }` reads it, and a strict `input_schema` never has to tolerate it. `input` is the run's *initial state* — a label put there is business payload every node and every schema has to accommodate.
-- **The server writes nothing here, and no key is reserved.** Every piece of state the platform owns — `status`, the pinned `orchestration_version`, `trace_id`, `usage`, `artifacts`, `input`, `state` — is a field of its own, so no key a caller writes can reach platform state.
-
-The bag lives **on the run**, so it survives every way a run is driven: a queued start whose 201 lands long before the first node executes, a scheduler wake, a human or approval resume, a crash redrive. A non-object `metadata` is rejected with `400 VALIDATION_FAILED` at start time and no run is created.
-
-Unlike `tool_context`, it is **not** inherited by the child runs a `loop` or `sub_orchestration` node starts: a context header has to reach a nested tool call to work at all, whereas a label is a statement about the run the caller actually started. Pass one per child through the graph if a child needs its own.
+It survives every drive (queued start, scheduler wake, human or approval resume, crash redrive). A non-object `metadata` is `400 VALIDATION_FAILED` at start time; no run is created. Unlike `tool_context`, it is **not** inherited by `loop` / `sub_orchestration` children; pass one per child through the graph.
 
 ```bash
 soat start-orchestration-run \
@@ -615,11 +570,11 @@ soat start-orchestration-run \
   --metadata '{"tenant_account_id":"42","dispatch_batch":"nightly-2026-08-25"}'
 ```
 
-Filtering runs by a metadata key is not supported — fetch and filter client-side.
+Filtering runs by a metadata key is not supported; filter client-side.
 
 ### Human Nodes
 
-When a `human` node is reached, the run pauses and the GET run response includes a `required_action` object:
+At a `human` node the run pauses and the run read carries `required_action`:
 
 ```json
 {
@@ -631,18 +586,16 @@ When a `human` node is reached, the run pauses and the GET run response includes
 }
 ```
 
-`required_action.type` discriminates why the run paused: `human_input` for a `human` node, `webhook_receive` for a `webhook` node in `mode: "receive"`, `paused` for an [operator pause](#pausing-a-run) (which names no node and carries a `reason` instead). The first two are resumed the same way — [`POST /orchestration-runs/{id}/human-input`](/docs/api/orchestrations/submit-human-input) with the paused node's `node_id` — there is no separate, independently-authenticated callback endpoint for webhook-receive nodes.
+`required_action.type`: `human_input` for a `human` node, `webhook_receive` for a `webhook` node in `mode: "receive"`, `paused` for an [operator pause](#pausing-a-run) (no node; carries a `reason`). The first two resume via [`POST /orchestration-runs/{id}/human-input`](/docs/api/orchestrations/submit-human-input) with the paused `node_id`; webhook-receive nodes have no separate callback endpoint.
 
 ### Approval Nodes
 
-An `approval` node proposes a guarded tool call and pauses the run for a human decision. Unlike a `human` node, it files an [ApprovalItem](./approvals.md) at emit time and is resumed **only** by resolving that item through the [Approvals](./approvals.md) queue, or by server-side expiry. The run pauses with `required_action.type: "approval"`, carrying `approval_id` and `expires_at`.
+An `approval` node proposes a guarded tool call, files an [ApprovalItem](./approvals.md) at emit time and pauses with `required_action.type: "approval"` (`approval_id`, `expires_at`). It resumes **only** by resolving that item through the [Approvals](./approvals.md) queue or by server-side expiry ([Expiry is a hard gate](./approvals.md#expiry-is-a-hard-gate): an expired item never executes).
 
-The node's `arguments`, `reasoning`, `evidence`, and `predicted_impact` mappings are resolved against run state and **frozen** onto the item at emit time. On resolution the decision (`approved` | `rejected` | `expired`) becomes the node's branch label:
+`arguments`, `reasoning`, `evidence` and `predicted_impact` mappings are resolved against run state and **frozen** onto the item at emit time. The decision (`approved` | `rejected` | `expired`) is the node's branch label:
 
-- Edges labeled `condition: "approved"` / `"rejected"` / `"expired"` route by the decision.
-- An **unlabeled** edge leaving an approval node follows **only on approval**; if no edge matches a `rejected`/`expired` decision, the run ends at the node.
-
-Expiry is enforced server-side (see [Approvals — Expiry is a hard gate](./approvals.md#expiry-is-a-hard-gate)): an expired item can never execute.
+- Edges labeled `condition: "approved"` / `"rejected"` / `"expired"` route by decision.
+- An **unlabeled** edge follows **only on approval**; with no edge matching `rejected`/`expired`, the run ends at the node.
 
 ### Common Errors
 
@@ -658,7 +611,7 @@ Expiry is enforced server-side (see [Approvals — Expiry is a hard gate](./appr
 | `ORCHESTRATION_RUN_NOT_PAUSABLE`   | `409`  | The run has already settled, so there is nothing left to pause                                | Nothing to do — a settled run keeps its result; pause only applies while a run is `queued`, `running`, `sleeping` or `awaiting_input` — see [Pausing a run](#pausing-a-run) |
 | `ORCHESTRATION_RUN_PAUSED`         | `409`  | `submit-human-input` was called while an operator pause is in force                           | Resume the run first, then submit the payload — an operator pause is not liftable by satisfying the node behind it — see [Pausing a run](#pausing-a-run) |
 
-**A run appears stuck in a non-terminal state:** `queued` means no worker has claimed its task yet — confirm a worker is running (the API process runs one unless `ORCHESTRATION_WORKER_DISABLED=true`). `sleeping` is a parked `delay`/`poll` wait or retry backoff (`active_nodes` names the node) and resumes on its own. `awaiting_input` waits for `submit-human-input`, or — when `required_action.type` is `paused` — for [`resume-orchestration-run`](#pausing-a-run). `running` for far longer than expected self-heals: the reaper reclaims any run whose lease has expired within `ORCHESTRATION_RUN_LEASE_TTL_MS` — see [Durable Background Execution](#durable-background-execution).
+**A run stuck non-terminal:** `queued` — no worker claimed its task; confirm one runs (the API process does unless `ORCHESTRATION_WORKER_DISABLED=true`). `sleeping` — a `delay`/`poll` wait or retry backoff (`active_nodes` names the node); resumes on its own. `awaiting_input` — waits for `submit-human-input`, or [`resume-orchestration-run`](#pausing-a-run) when `required_action.type` is `paused`. `running` too long self-heals: the reaper reclaims the run once its lease is older than `ORCHESTRATION_RUN_LEASE_TTL_MS` ([Durable Background Execution](#durable-background-execution)).
 
 ## Configuration
 
@@ -684,7 +637,7 @@ Expiry is enforced server-side (see [Approvals — Expiry is a hard gate](./appr
 
 ### Create a sequential pipeline
 
-The `fetch` node maps `output.text` because a `tool` node's artifact is its tool's result object verbatim — substitute whatever field your tool returns (see [Node artifacts](#node-artifacts)).
+`fetch` maps `output.text`, a field of the tool's own result ([Node artifacts](#node-artifacts)); substitute yours.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -766,7 +719,7 @@ curl -X POST https://api.example.com/api/v1/orchestrations \
 
 ### Start a run
 
-Returns immediately with `status: "queued"`; a worker claims the run and drives it in the background. Add `wait: true` (`--wait` in the CLI) to block until the run settles (see [Durable Background Execution](#durable-background-execution)).
+Returns `status: "queued"`; `wait: true` (`--wait`) blocks until the run settles ([Durable Background Execution](#durable-background-execution)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -810,7 +763,7 @@ curl -X POST https://api.example.com/api/v1/orchestration-runs \
 
 ### Pause and resume a run
 
-Parks a run in flight at its next checkpoint and re-drives it from there — see [Pausing a run](#pausing-a-run).
+See [Pausing a run](#pausing-a-run).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -856,7 +809,7 @@ curl -X POST https://api.example.com/api/v1/orchestration-runs/orch_run_01/resum
 
 ### Parallel fan-out and fan-in
 
-Both `branch_a` and `branch_b` run concurrently after `start` completes; `merge` runs only after **both** complete because its edges share an `activation_group` with `activation_condition: "all"`:
+`branch_a` and `branch_b` run concurrently after `start`; `merge` waits for **both** via a shared `activation_group` with `activation_condition: "all"`:
 
 ```json
 {
@@ -877,7 +830,7 @@ Both `branch_a` and `branch_b` run concurrently after `start` completes; `merge`
 
 ### Condition-based routing
 
-A `condition` node emits a string label; edges carry `condition: "<label>"` to select the active branch. The unselected branch's nodes are recorded as `skipped`. For a runnable walkthrough, see [Conditional Branching in Orchestrations](/docs/tutorials/conditional-orchestration).
+Edges carry `condition: "<label>"`; unselected nodes are recorded `skipped`. Walkthrough: [Conditional Branching in Orchestrations](/docs/tutorials/conditional-orchestration).
 
 ```json
 {
@@ -899,4 +852,4 @@ A `condition` node emits a string label; edges carry `condition: "<label>"` to s
 
 ### Agent Squad
 
-A team of agents plus the flow that coordinates them can deploy as a single [Formation](./formations.md) stack, because an orchestration is itself a formation resource type. A node's `agent_id` uses a [`ref` expression](./formations.md#ref-expressions) to bind to an agent created in the same template; SOAT resolves it to the physical `agent_...` ID before the orchestration is created. Node fields are written in snake_case (`agent_id`, `input_mapping`, `state_mapping`), exactly as in this module's REST contract. For a full step-by-step build — the template, deploy, and run — see [Create an Agent Squad](/docs/tutorials/create-an-agent-squad).
+Agents plus their coordinating orchestration deploy as one [Formation](./formations.md) stack. A node's `agent_id` takes a [`ref` expression](./formations.md#ref-expressions) to an agent in the same template, resolved to the physical `agent_...` ID before the orchestration is created. Node fields are snake_case (`agent_id`, `input_mapping`, `state_mapping`), as in REST. Full build: [Create an Agent Squad](/docs/tutorials/create-an-agent-squad).

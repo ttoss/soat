@@ -14,28 +14,16 @@ import TabItem from '@theme/TabItem';
 
 # Meter and Budget Your Project's Spend
 
-Every time an agent completes a generation, SOAT records an append-only
-[usage event](/docs/modules/usage) with the provider's reported token counts.
-On top of that raw ledger you can price usage, roll it up per project, and get
-**pushed** a webhook the moment a project crosses a budget. In this tutorial you
-will:
-
-1. Log in and create a project.
-2. Create an Ollama-backed agent and run a generation.
-3. Inspect the raw **usage meter** and its token components.
-4. Read a **receipt** for the generation.
-5. **Aggregate** the project's usage by day and by model.
-6. Register **prices** so future usage carries a dollar cost.
-7. Set a **budget threshold** and subscribe a webhook to the
-   `usage.threshold_crossed` alert.
+Every completed generation writes an append-only
+[usage event](/docs/modules/usage) with the provider's token counts. This
+tutorial prices that ledger, aggregates it per project, and subscribes a webhook
+to the `usage.threshold_crossed` budget alert.
 
 ## Prerequisites
 
-- SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide to
-  bring the stack up with Docker Compose.
-- [Ollama](https://ollama.com) running locally with a chat model available
-  (this tutorial uses `qwen2.5:0.5b`).
-- New to SOAT? Read [Key Concepts](/docs/getting-started/concepts) first.
+- SOAT running locally ([Quick Start](/docs/getting-started)).
+- [Ollama](https://ollama.com) running locally with `qwen2.5:0.5b`.
+- [Key Concepts](/docs/getting-started/concepts) if new to SOAT.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -47,7 +35,7 @@ export SOAT_BASE_URL=http://localhost:5047
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
-All snippets below use a `SoatClient` created in Step 1.
+Snippets use the `SoatClient` created in Step 1.
 
 ```ts
 import { SoatClient } from '@soat/sdk';
@@ -67,8 +55,7 @@ export SOAT_URL=http://localhost:5047
 
 ## Step 1 — Log in as admin
 
-Admin is the built-in superuser role. See [Users](/docs/modules/users#examples)
-for full authentication details.
+Admin is the built-in superuser role ([Users](/docs/modules/users#examples)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -148,9 +135,8 @@ echo "PROJECT_ID: $PROJECT_ID"
 
 ## Step 3 — Create an agent and run a generation
 
-Set up a local Ollama [AI provider](/docs/modules/ai-providers#examples) and an
-[agent](/docs/modules/agents#examples), then run one generation. The completed
-generation is what SOAT meters.
+Create a local Ollama [AI provider](/docs/modules/ai-providers#examples) and an
+[agent](/docs/modules/agents#examples), then run one generation.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -227,10 +213,11 @@ echo "GENERATION_ID: $GENERATION_ID"
 
 ## Step 4 — Inspect the raw usage meter
 
-Each completed generation records one usage event whose **components** carry the
-per-dimension token counts (`input_tokens`, `output_tokens`, `cached_tokens`,
-and a non-billable `reasoning_tokens` detail). `cost_usd` is `null` for now —
-you have not registered any prices yet, and SOAT ships none by default.
+Each completed generation records one usage event whose
+[**components**](/docs/modules/usage#meter-types-and-components) carry
+`input_tokens`, `output_tokens`, `cached_tokens` and a non-billable
+`reasoning_tokens` detail. `cost_usd` is `null` until prices are registered;
+SOAT ships none by default.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -260,17 +247,16 @@ curl -s "$SOAT_URL/api/v1/usage/events?generation_id=$GENERATION_ID" \
 </TabItem>
 </Tabs>
 
-> The meter is written a moment after the generation response returns. If the
-> list is empty, re-run the command.
+> The meter is written shortly after the response returns; if the list is empty, re-run.
 
 ---
 
 ## Step 5 — Read the generation receipt
 
-A **receipt** rolls a generation's events into per-model line items with a
-`by_meter_type` split and reconstructed token totals — the shape you reconcile
-against a provider invoice. Pass `orchestration_run_id` instead of `generation_id` to get the
-same shape summed across an orchestration run.
+A [**receipt**](/docs/modules/usage#receipts-and-reconciliation) rolls a
+generation's events into per-model line items with a `by_meter_type` split and
+token totals, for reconciling against a provider invoice. Pass `orchestration_run_id` instead of `generation_id` for the same
+shape summed across an orchestration run.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -304,10 +290,10 @@ curl -s "$SOAT_URL/api/v1/usage/receipt?generation_id=$GENERATION_ID" \
 
 ## Step 6 — Aggregate the project's usage
 
-`get-usage-aggregate` rolls the whole project up over an optional `[from, to]` window,
-bucketed by one dimension: `model`, `ai_provider`, `agent`,
-`orchestration_run`, `day`, `meter_type`, `actor`, `session`, or `source` —
-or by none, for the window's totals alone.
+`get-usage-aggregate` ([Aggregation](/docs/modules/usage#aggregation)) rolls the
+project up over an optional `[from, to]` window,
+bucketed by one dimension (`model`, `ai_provider`, `agent`, `orchestration_run`,
+`day`, `meter_type`, `actor`, `session`, `source`) or by none for totals alone.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -343,19 +329,17 @@ curl -s "$SOAT_URL/api/v1/usage/aggregate?project_id=$PROJECT_ID&group_by=model"
 </TabItem>
 </Tabs>
 
-Each group and the grand `totals` carry summed token counts and `cost_usd`
-(still `null` until you price the SKU next). Under `group_by=model` a group also
-carries the `ai_provider_id` that served it — two providers in one project can
-serve the same model name, so the model dimension buckets on both.
+Each group and `totals` carry summed token counts and `cost_usd` (`null` until
+Step 7). Under `group_by=model` each group also carries `ai_provider_id`: two
+providers can serve the same model name, so the model dimension buckets on both.
 
 ---
 
 ## Step 7 — Register prices (they apply going forward)
 
-Cost is computed **at write time** from the price effective when a generation
-runs, and prices are **immutable and non-retroactive** — `effective_from` must
-be in the future. Generations from `effective_from` onward carry a `cost_usd`;
-already-metered usage stays frozen at `null`.
+Cost is computed **at write time** from the price in effect. Prices are
+immutable and non-retroactive: `effective_from` must be in the future, and
+already-metered usage stays at `null`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -395,9 +379,8 @@ curl -s "$SOAT_URL/api/v1/usage/prices" -H "Authorization: Bearer $ADMIN_TOKEN" 
 </TabItem>
 </Tabs>
 
-> Prices resolve most-specific-first: a per-provider override, then a
-> project + provider-slug rate, then this global default. See
-> [Usage → Pricing](/docs/modules/usage) for the full resolution rules.
+> Resolution is most-specific-first: per-provider override, then project +
+> provider-slug rate, then this global default ([Usage → Pricing](/docs/modules/usage)).
 
 ---
 
@@ -405,11 +388,9 @@ curl -s "$SOAT_URL/api/v1/usage/prices" -H "Authorization: Bearer $ADMIN_TOKEN" 
 
 A [`UsageThreshold`](/docs/modules/usage#usagethreshold) fires the
 `usage.threshold_crossed` [webhook](/docs/modules/webhooks) after any
-usage-event write once a project's windowed metric crosses it. Because **tokens
-are always metered** (with or without prices), a `tokens` threshold works
-immediately; a `cost_usd` threshold starts counting as priced usage accrues.
-
-Create both, then subscribe a webhook so the alert is pushed to you.
+usage-event write that crosses a project's windowed metric. A `tokens`
+threshold works immediately (tokens are always metered); a `cost_usd`
+threshold counts priced usage only. Create both, then subscribe a webhook.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -477,9 +458,9 @@ curl -s "$SOAT_URL/api/v1/usage/thresholds?project_id=$PROJECT_ID" \
 </TabItem>
 </Tabs>
 
-The `tokens`/`rolling_24h` threshold above (limit `1`) is already exceeded by
-Step 3's generation, so the **next** metered generation on this project fires
-the webhook. Delivery carries the standard signed envelope with this `data`:
+The `tokens`/`rolling_24h` threshold (limit `1`) is already exceeded by Step
+3's generation, so the **next** metered generation fires the webhook. Delivery
+uses the standard signed envelope with this `data`:
 
 ```json
 {
@@ -493,17 +474,16 @@ the webhook. Delivery carries the standard signed envelope with this `data`:
 }
 ```
 
-Re-fire is bounded by hysteresis so you are not spammed:
+Re-fire hysteresis:
 
-- **`calendar_month`** fires at most once per `YYYY-MM` window (`window_key`
-  identifies it); it re-arms at the month boundary.
-- **`rolling_24h`** re-arms only after the windowed value drops below 90% of the
+- **`calendar_month`** fires at most once per `YYYY-MM` window (`window_key`);
+  re-arms at the month boundary.
+- **`rolling_24h`** re-arms once the windowed value drops below 90% of the
   threshold (`window_key` is `null`).
 
-Thresholds are immutable apart from deletion — to change one, delete and
-recreate it, which resets its fire state.
+Thresholds are immutable: delete and recreate to change one, which resets its
+fire state.
 
 ---
 
-See the [Usage module](/docs/modules/usage) for the full data model, pricing
-tiers, and permissions.
+[Usage module](/docs/modules/usage): data model, pricing tiers, permissions.

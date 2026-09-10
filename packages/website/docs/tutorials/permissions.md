@@ -14,31 +14,30 @@ import TabItem from '@theme/TabItem';
 
 # Permissions in Practice
 
-This tutorial builds a realistic permissions setup from scratch: two users (`alice`, project lead; `bob`, read-only analyst), an **Analytics** project, a full-access and a read-only policy, and project-scoped API keys for each — then verifies what each key can and cannot do.
+Two users (`alice`, project lead; `bob`, read-only analyst), an **Analytics** project, a full-access and a read-only policy, project-scoped API keys for each, and a check of what each key can do.
 
 ## Prerequisites
 
-- SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide to bring the stack up with Docker Compose.
-- New to SOAT? Read [Key Concepts](/docs/getting-started/concepts) to understand projects, users, and the IAM model before diving in.
-- CLI installed and configured, or SDK set up. See [CLI](/docs/cli) or [SDK](/docs/sdk).
-- For production hardening (secrets, env vars), see [Configuration](/docs/self-hosting/configuration).
-- Server is at `http://localhost:5047`.
+- SOAT running locally at `http://localhost:5047` ([Quick Start](/docs/getting-started)).
+- [Key Concepts](/docs/getting-started/concepts) if new to SOAT.
+- [CLI](/docs/cli) or [SDK](/docs/sdk) set up.
+- [Configuration](/docs/self-hosting/configuration) for production hardening.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
-Export your server URL (used in subsequent steps):
+Export the server URL:
 
 ```bash
 export SOAT_BASE_URL=http://localhost:5047
 ```
 
-CLI path flags in this tutorial are resource-specific and kebab-cased, for example `--user-id` and `--project-id`.
+CLI path flags are kebab-cased per resource: `--user-id`, `--project-id`.
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
-All code snippets below use `SoatClient` instances. The authenticated instance is created in Step 1 after login.
+Snippets use the authenticated `SoatClient` created in Step 1.
 
 ```ts
 import { SoatClient } from '@soat/sdk';
@@ -47,7 +46,7 @@ import { SoatClient } from '@soat/sdk';
 </TabItem>
 <TabItem value="curl" label="curl">
 
-Export your server URL once:
+Export the server URL:
 
 ```bash
 export SOAT_BASE_URL=http://localhost:5047
@@ -60,7 +59,7 @@ export SOAT_BASE_URL=http://localhost:5047
 
 ## Step 1 — Log in as admin
 
-Admin is the built-in superuser role. It bypasses policy evaluation entirely. See [IAM — Authentication](/docs/modules/iam#authentication) for details on JWT tokens and the admin role.
+Admin is the built-in superuser role and bypasses policy evaluation ([IAM — Authentication](/docs/modules/iam#authentication)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -69,7 +68,7 @@ Admin is the built-in superuser role. It bypasses policy evaluation entirely. Se
 soat login-user --username admin --password Admin1234!
 ```
 
-The CLI prints a token. Save it and update your profile:
+Save the token and update the profile:
 
 ```bash
 soat configure
@@ -113,7 +112,7 @@ echo "Admin token: $ADMIN_TOKEN"
 
 ## Step 2 — Create regular users
 
-Create `alice` (project lead) and `bob` (read-only analyst). Only admins can create users. See [Users](/docs/modules/users#examples) for the full user management reference.
+Only admins can create [users](/docs/modules/users#examples).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -125,7 +124,7 @@ echo "alice: $ALICE_ID"
 echo "bob  : $BOB_ID"
 ```
 
-Note the `id` field (`user_…`) for each user — you will need them when attaching policies.
+Keep each `id` (`user_…`) for attaching policies.
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
@@ -172,7 +171,7 @@ echo "bob  : $BOB_ID"
 
 ## Step 3 — Create the Analytics project
 
-See [Projects](/docs/modules/projects#examples) for the full project management reference.
+See [Projects](/docs/modules/projects#examples).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -182,7 +181,7 @@ PROJECT_ID=$(soat create-project --name "Analytics" | jq -r '.id')
 echo "project: $PROJECT_ID"
 ```
 
-Copy the returned `id` (e.g. `proj_…`).
+Keep the returned `id` (`proj_…`).
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
@@ -217,13 +216,11 @@ echo "project: $PROJECT_ID"
 
 ## Step 4 — Create policies
 
-You will create two policies. Replace `$PROJECT_ID` with the actual value from the previous step.
-
-Policies are global (not scoped to any project). The `resource` field uses [SOAT Resource Names (SRNs)](/docs/modules/iam#soat-resource-names-srns) to restrict which projects a policy covers. For the full policy document format and evaluation rules, see [IAM — Policy Documents](/docs/modules/iam#policy-documents).
+Policies are global; the `resource` field uses [SRNs](/docs/modules/iam#soat-resource-names-srns) to restrict which projects a policy covers. Format and evaluation rules: [IAM — Policy Documents](/docs/modules/iam#policy-documents).
 
 ### 4a — Full-access policy (for Alice)
 
-This policy allows all actions on every resource inside the Analytics project.
+All actions on every resource inside the Analytics project.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -299,7 +296,7 @@ echo "full-access policy: $FULL_POLICY_ID"
 
 ### 4b — Read-only policy (for Bob)
 
-This policy only allows read actions on files inside the project. For the full list of `files:*` and `documents:*` actions, see the [Permissions Reference](/docs/permissions).
+Read actions on files inside the project only. `files:*` and `documents:*` actions: [Permissions Reference](/docs/permissions).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -385,7 +382,7 @@ echo "read-only policy: $READ_POLICY_ID"
 
 ## Step 5 — Attach policies to users
 
-Attach the full-access policy to Alice and the read-only policy to Bob. See [Policies — Attaching Policies to Users](/docs/modules/policies#attaching-policies-to-users) for more details.
+Full-access to Alice, read-only to Bob ([Policies — Attaching Policies to Users](/docs/modules/policies#attaching-policies-to-users)).
 
 :::note
 [`PUT /users/:user_id/policies`](/docs/api/users/attach-user-policies) **replaces** the user's entire policy list with the provided array.
@@ -449,12 +446,7 @@ curl -s -X PUT "$SOAT_BASE_URL/api/v1/users/$BOB_ID/policies" \
 
 ## Step 6 — Create API keys
 
-API keys allow programmatic access without sending a username and password. See [API Keys](/docs/modules/api-keys#examples) for key rotation and revocation. Here you create two keys:
-
-- **Alice's key** — scoped to the Analytics project, inherits her full-access policy.
-- **Bob's key** — scoped to the Analytics project, further restricted to the read-only policy.
-
-First, log in as each user to obtain their JWT tokens.
+[API keys](/docs/modules/api-keys#examples) give programmatic access without a password. Both are scoped to the Analytics project: Alice's inherits her full-access policy; Bob's is further restricted to the read-only policy. Log in as each user first to obtain their JWT tokens.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -570,14 +562,14 @@ echo "Bob key  : $BOB_API_KEY"
 </Tabs>
 
 :::warning
-The raw `sk_…` key is returned **only once** — store it in a secret manager immediately. If lost, delete the key and create a new one.
+The raw `sk_…` key is returned **only once**; store it in a secret manager. If lost, delete the key and create a new one.
 :::
 
 ---
 
 ## Step 7 — Verify permissions
 
-Confirm that each key behaves as expected. The file upload and list operations used here are part of the [Files](/docs/modules/files#examples) module.
+Upload and list operations are from the [Files](/docs/modules/files#examples) module.
 
 ### Alice can upload a file
 
@@ -696,7 +688,7 @@ curl -s "$SOAT_BASE_URL/api/v1/files?project_id=$PROJECT_ID" \
 
 ### Bob's key cannot exceed Bob's own permissions
 
-Even if you tried to assign `FULL_POLICY_ID` to Bob's API key, it would not grant more than what Bob's user policies already allow. The effective permissions are always the **intersection**. See [IAM — Authorization Model](/docs/modules/iam#authorization-model) for the full rules.
+Assigning `FULL_POLICY_ID` to Bob's API key grants nothing beyond Bob's user policies: effective permissions are the **intersection** ([IAM — Authorization Model](/docs/modules/iam#authorization-model)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -771,6 +763,6 @@ curl -s -o /dev/null -w "%{http_code}\n" \
 
 ## Next steps
 
-- Explore [IAM](/docs/modules/iam#policy-documents) for the full policy document format including wildcard actions and SRN patterns.
-- See [Policies](/docs/modules/policies#examples) for the complete policy CRUD API.
-- See [API Keys](/docs/modules/api-keys#examples) for key rotation and revocation patterns.
+- [IAM](/docs/modules/iam#policy-documents) — policy document format, wildcard actions, SRN patterns.
+- [Policies](/docs/modules/policies#examples) — policy CRUD API.
+- [API Keys](/docs/modules/api-keys#examples) — rotation and revocation.

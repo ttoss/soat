@@ -15,13 +15,10 @@ import TabItem from '@theme/TabItem';
 
 # Agent over a Library of PDFs
 
-This tutorial builds an agent that answers questions from a small library of PDF
-manuals. You upload PDFs, ingest them into chunked, embedded
+Upload PDFs, ingest them into chunked, embedded
 [Documents](/docs/modules/documents#examples), scope an
-[agent](/docs/modules/agents#examples) to them with `knowledge_config`, and watch
-the agent answer from the right page — with no RAG logic in the prompt.
-
-It maps directly onto the build plan:
+[agent](/docs/modules/agents#examples) to them with `knowledge_config`, and get
+answers from the right page with no RAG logic in the prompt.
 
 | Plan step | Where in this tutorial |
 | --------- | ---------------------- |
@@ -32,20 +29,16 @@ It maps directly onto the build plan:
 
 ## Prerequisites
 
-- SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide.
-- New to SOAT? Read [Key Concepts](/docs/getting-started/concepts) first.
-- CLI installed and configured, or SDK set up. See [CLI](/docs/cli) or [SDK](/docs/sdk).
-- Server is at `http://localhost:5047`.
-- [Ollama](https://ollama.com) running locally with `qwen2.5:0.5b` pulled. The PDFs
-  here are deliberately tiny (a few short facts each) so a small local model can
-  answer reliably from the injected context.
+- SOAT running locally ([Quick Start](/docs/getting-started)); [Key Concepts](/docs/getting-started/concepts).
+- [CLI](/docs/cli) or [SDK](/docs/sdk); server at `http://localhost:5047`.
+- [Ollama](https://ollama.com) with `qwen2.5:0.5b` pulled. The PDFs are tiny so a
+  small model answers reliably from the injected context.
 
 ---
 
 ## Step 1 — Log in as admin
 
-Admin is the built-in superuser. It bypasses policy evaluation. See
-[Users](/docs/modules/users#examples) for authentication details.
+See [Users](/docs/modules/users#examples) for authentication.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -125,9 +118,8 @@ echo "PROJECT_ID: $PROJECT_ID"
 
 ## Step 3 — Create an AI provider
 
-A local [AI provider](/docs/modules/ai-providers#examples) backed by Ollama, so the
-tutorial runs without external credentials. To use xAI, OpenAI, Anthropic, or
-Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
+A local Ollama [AI provider](/docs/modules/ai-providers#examples). For other
+providers see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -175,8 +167,8 @@ echo "AI_PROVIDER_ID: $AI_PROVIDER_ID"
 
 ## Step 4 — Prepare two small PDFs
 
-These two base64 strings are real, single-page PDFs with a text layer that `unpdf`
-(the server's parser) extracts cleanly. Each holds a handful of short facts:
+Two base64 single-page PDFs with a text layer `unpdf` (the server's parser)
+extracts. Their facts:
 
 - **printer-x1000.pdf** — "The paper tray holds 250 sheets.", standby timeout 5 minutes, toner every 8000 pages.
 - **router-r200.pdf** — "The default admin password is admin1234.", up to 32 devices, 10-second reset.
@@ -215,8 +207,8 @@ ROUTER_PDF_B64="JVBERi0xLjQK..."  # router-r200.pdf (truncated)
 
 ## Step 5 — Upload the PDFs
 
-Upload each PDF as a [File](/docs/modules/files#examples). Set `content_type` to
-`application/pdf` — ingestion dispatches on it in the next step.
+Upload each PDF as a [File](/docs/modules/files#examples) with `content_type`
+`application/pdf`; ingestion dispatches on it.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -288,18 +280,16 @@ echo "ROUTER_FILE_ID: $ROUTER_FILE_ID"
 
 ## Step 6 — Ingest the PDFs (Plan A)
 
-[`POST /documents/ingest`](/docs/api/documents/ingest-document) extracts the text page-by-page, splits it into chunks, embeds
-each chunk, and stores **one Document with many `DocumentChunk` rows**. The
-`--path-prefix` organizes the documents under a common path so you can scope an agent
-to the whole subtree later with a single `document_paths` prefix.
+[`POST /documents/ingest`](/docs/api/documents/ingest-document) extracts text
+page-by-page, chunks and embeds it, and stores one Document with many
+`DocumentChunk` rows. `--path-prefix` puts the documents under a common path so an
+agent can be scoped to the subtree with one `document_paths` prefix.
 
-Ingestion is asynchronous by default (see
-[Documents — Async File Ingestion](/docs/modules/documents#async-file-ingestion));
-`--wait true` blocks until the document is `ready` so the next steps can search
-immediately. `chunk_count` comes from
+Ingestion is asynchronous
+([Documents — Async File Ingestion](/docs/modules/documents#async-file-ingestion));
+`--wait true` blocks until the document is `ready`. `chunk_count` comes from
 [`GET /documents/:id/status`](/docs/modules/documents#polling-ingestion-status). The
-default `page` chunk strategy produces one chunk per page — these PDFs are one page
-each, so `chunk_count` is `1`.
+default `page` strategy yields one chunk per page, so `chunk_count` is `1` here.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -385,17 +375,13 @@ curl -s "$SOAT_URL/api/v1/documents/$ROUTER_DOC_ID/status" \
 
 ## Step 7 — Finer chunks with the `size` strategy (Plan A, optional)
 
-For dense, long-page PDFs, one chunk per page is too coarse — a whole page becomes a
-single embedding and retrieval gets fuzzy. The `size` strategy splits the extracted
-text into fixed-size character windows (`chunk_size` / `chunk_overlap`) for sharper
-retrieval. The trade-off: `size` chunks are not page-aligned, so they carry no `page`
-number for citations.
+The `size` strategy splits extracted text into fixed-size character windows
+(`chunk_size` / `chunk_overlap`) for sharper retrieval on dense pages. `size` chunks
+are not page-aligned and carry no `page` number.
 
-A [file can only back one Document](/docs/modules/documents#file-ingestion-and-chunking) —
-`$PRINTER_FILE_ID` is already ingested from Step 6, so re-ingesting it directly would
-return `409 FILE_ALREADY_INGESTED`. Upload a second copy of the same PDF bytes and
-ingest *that* file into the new path with small windows to see multiple chunks from
-the same one-page source:
+A [file backs only one Document](/docs/modules/documents#file-ingestion-and-chunking):
+re-ingesting `$PRINTER_FILE_ID` returns `409 FILE_ALREADY_INGESTED`. Upload a second
+copy of the bytes and ingest that file with small windows:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -473,17 +459,15 @@ curl -s "$SOAT_URL/api/v1/documents/$SIZED_DOC_ID/status" \
 </TabItem>
 </Tabs>
 
-Start with `page` (citations, simpler) and only switch to `size` if recall is poor on
-dense documents.
+Prefer `page` (citations); switch to `size` when recall is poor on dense documents.
 
 ---
 
 ## Step 8 — Search the knowledge layer directly (Plan D)
 
-Before wiring an agent, query the knowledge layer to see retrieval and **citations**.
-Search runs at the **chunk** level, so each result carries `document_id`, `chunk_id`,
-and (for `page`-chunked docs) the `page` number. Scope the search to `/manuals/` with
-`document_paths`.
+Search runs at the chunk level: each result carries `document_id`, `chunk_id` and,
+for `page`-chunked docs, `page`. Scope to `/manuals/` with `document_paths`. See
+[Knowledge](/docs/modules/knowledge).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -497,7 +481,7 @@ soat search-knowledge \
   | jq '[.results[] | {document_id, chunk_id, page, similarity_score, content}]'
 ```
 
-The top hit is the printer chunk, attributable to its page:
+The top hit is the printer chunk:
 
 ```json
 [
@@ -542,16 +526,15 @@ curl -s -X POST "$SOAT_URL/api/v1/knowledge/search" \
 </TabItem>
 </Tabs>
 
-Those `document_id` + `page` fields are what let an agent cite "per `printer-x1000.pdf`,
-page 1…".
+`document_id` + `page` let an agent cite "per `printer-x1000.pdf`, page 1".
 
 ---
 
 ## Step 9 — Create the agent scoped to the PDFs (Plan B)
 
-The `knowledge_config` field tells SOAT to search the manuals before every generation,
-using the last user message as the query — no RAG logic in the prompt. Scope it to the
-`/manuals/` subtree and bound results with `min_score` and `limit`.
+`knowledge_config` searches the manuals before every generation with the last user
+message as the query. Scope to `/manuals/`; bound results with `min_score` and `limit`.
+See [Agents](/docs/modules/agents#examples).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -607,9 +590,8 @@ echo "AGENT_ID: $AGENT_ID"
 
 ## Step 10 — Automatic retrieval (Plan C)
 
-Ask a question that is answered only inside a PDF. SOAT embeds the user message,
-searches `/manuals/`, and injects the top chunks as a `system` message before the model
-runs. The agent never sees a "tool call" — the context is just there.
+SOAT embeds the user message, searches `/manuals/`, and injects the top chunks as a
+`system` message before the model runs ([Agents](/docs/modules/agents#examples)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -630,8 +612,7 @@ Expected shape (exact wording varies by model):
 }
 ```
 
-The answer (`admin1234`) appears only in `router-r200.pdf` — it was retrieved and
-injected automatically.
+`admin1234` appears only in `router-r200.pdf`.
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
@@ -671,10 +652,9 @@ curl -s -X POST "$SOAT_URL/api/v1/agents/$AGENT_ID/generate?wait=true" \
 
 ## Step 11 — Agent-driven retrieval (Plan C)
 
-Automatic retrieval uses the raw user message as the query. Sometimes you want a
-**reformulated** query — the building block is the same `search-knowledge` operation,
-called explicitly with a sharpened query. This is exactly what an agent does when it
-decides, mid-reasoning, that it needs to look something up.
+For a reformulated query, call the same `search-knowledge` operation explicitly
+([Knowledge](/docs/modules/knowledge)); this is what an agent does when it decides to
+look something up.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -718,19 +698,16 @@ curl -s -X POST "$SOAT_URL/api/v1/knowledge/search" \
 </TabItem>
 </Tabs>
 
-Use automatic retrieval (Step 10) for single-shot Q&A and agent-driven retrieval when a
-question needs the agent to break it down and search in its own words.
+Automatic retrieval suits single-shot Q&A; agent-driven retrieval suits questions the
+agent must break down.
 
 ---
 
 ## Step 12 — Give the agent a knowledge tool (Plan D)
 
-This step wraps the same operation as a [`builtin` tool](/docs/modules/tools#builtin) and
-attaches it to an agent, so the model decides for itself, mid-reasoning, when to search
-and what query to write. `preset_parameters` pins the tool to this project and the
-`/manuals/` subtree — those fields are hidden from the model, leaving only `query` (and
-optionally `limit`) for it to fill in, and retrieval stays bounded to the manuals
-library no matter who talks to the agent.
+Wrap the operation as a [`builtin` tool](/docs/modules/tools#builtin) so the model
+decides when to search and what to ask. `preset_parameters` pins the project and the
+`/manuals/` subtree, hidden from the model; only `query` (and optionally `limit`) remain.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -779,10 +756,9 @@ echo "KNOWLEDGE_TOOL_ID: $KNOWLEDGE_TOOL_ID"
 </TabItem>
 </Tabs>
 
-Attach it to a new [agent](/docs/modules/agents#examples) — this one has no
-`knowledge_config`, so the tool call is the *only* path to the manuals. The model will
-see the tool as `manuals_search-knowledge` (the tool's `name` plus the action, per
-[Tool Name Resolution](/docs/modules/tools#tool-name-resolution)):
+Attach it to a new [agent](/docs/modules/agents#examples) without `knowledge_config`,
+so the tool is the only path to the manuals. The model sees it as
+`manuals_search-knowledge` ([Tool Name Resolution](/docs/modules/tools#tool-name-resolution)):
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -830,11 +806,9 @@ echo "TOOL_AGENT_ID: $TOOL_AGENT_ID"
 </TabItem>
 </Tabs>
 
-Ask the same kind of question as Step 10. This time the model itself decides to call
-`manuals_search-knowledge`, the server executes it in-process and feeds the results
-back into the loop, and the final response comes back `completed` with no extra
-round-trip on your side — `builtin` tools run server-side, unlike `client` tools, which
-would pause the generation with `requires_action`:
+The model calls `manuals_search-knowledge`, the server executes it in-process, and
+the response comes back `completed`; `builtin` tools run server-side, unlike `client`
+tools, which pause with `requires_action`:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -889,15 +863,13 @@ curl -s -X POST "$SOAT_URL/api/v1/agents/$TOOL_AGENT_ID/generate?wait=true" \
 </TabItem>
 </Tabs>
 
-`knowledge_config` (Step 9) and a `builtin` knowledge tool are not mutually exclusive — an
-agent can carry both: automatic context on every turn, plus a tool it can call again
-mid-reasoning with a sharper, self-written query when the first pass wasn't enough.
+An agent can carry both `knowledge_config` and a `builtin` knowledge tool: automatic
+context every turn plus a self-written follow-up query.
 
 ---
 
 ## What you built
 
-To grow the library, upload more PDFs and ingest them under the same `/manuals/` prefix
-— the agent picks them up automatically with no config change. For organizing larger
-sets, ingest under nested prefixes (e.g. `/manuals/network/`, `/manuals/print/`) and
-point different agents at different subtrees.
+Ingest more PDFs under `/manuals/` and the agent picks them up with no config change.
+For larger sets, use nested prefixes (`/manuals/network/`, `/manuals/print/`) and point
+different agents at different subtrees.

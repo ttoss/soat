@@ -15,20 +15,15 @@ import TabItem from '@theme/TabItem';
 
 # Evaluate an Agent
 
-Every time you reword an instruction, swap a model, or add a tool, you ship a change whose effect you cannot see. [Traces](/docs/modules/traces) tell you what one run did. They cannot tell you whether the *distribution* of runs got better or worse — which is the only question that matters when the prompt you just edited serves production traffic.
+[Traces](/docs/modules/traces) show what one run did; an [evaluation](/docs/modules/evaluations) shows whether the distribution of runs got better or worse after a prompt, model or tool change. A **dataset** holds test cases, an **eval** binds an agent to that dataset plus **scorers**, and a **run** executes the real agent against every case and scores the outputs. Build a small suite, run it, fix the prompt, and measure the fix against the first run as a baseline.
 
-An [evaluation](/docs/modules/evaluations) answers it. A **dataset** holds test cases, an **eval** binds an agent to that dataset plus a list of **scorers**, and a **run** executes the real agent against every case and scores the outputs. You will build a small suite, run it, fix the prompt, and measure the fix against the first run as a baseline.
-
-Everything here is deterministic apart from the model's own wording — no judge model in the evaluation path. For grading open-ended answers, see [Judge Open-Ended Answers](/docs/tutorials/judge-open-ended-answers).
+Scorers here are deterministic; no judge model. For open-ended answers, see [Judge Open-Ended Answers](/docs/tutorials/judge-open-ended-answers).
 
 ## Prerequisites
 
-- SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide to bring the stack up with Docker Compose.
-- [Ollama](https://ollama.com) running locally with `qwen2.5:0.5b` available. This tutorial uses a local provider so it runs without external credentials — to connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
-- New to SOAT? Read [Key Concepts](/docs/getting-started/concepts) to understand projects, agents, and generations first.
-- CLI installed and configured, or SDK set up. See [CLI](/docs/cli) or [SDK](/docs/sdk).
-- For production hardening (secrets, env vars), see [Configuration](/docs/self-hosting/configuration).
-- Server is at `http://localhost:5047`.
+- SOAT running locally at `http://localhost:5047` ([Quick Start](/docs/getting-started)); [Key Concepts](/docs/getting-started/concepts); [Configuration](/docs/self-hosting/configuration).
+- [Ollama](https://ollama.com) with `qwen2.5:0.5b`. For xAI, OpenAI, Anthropic, or Amazon Bedrock see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
+- [CLI](/docs/cli) or [SDK](/docs/sdk).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -58,7 +53,7 @@ export SOAT_BASE_URL=http://localhost:5047
 
 ## Step 1 — Log in as admin
 
-Admin is the built-in superuser role. See [Users](/docs/modules/users#examples) for authentication details.
+See [Users](/docs/modules/users#examples).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -100,7 +95,7 @@ ADMIN_TOKEN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users/login" \
 
 ## Step 2 — Create the agent under test
 
-A support agent with a vague prompt. The vagueness is the point: it is what the first run will measure and the second will fix. See [Projects](/docs/modules/projects), [AI Providers](/docs/modules/ai-providers), and [Agents](/docs/modules/agents) for the resources it depends on.
+A support agent with a deliberately vague prompt; the first run measures it, the second fixes it. See [Projects](/docs/modules/projects), [AI Providers](/docs/modules/ai-providers), and [Agents](/docs/modules/agents).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -175,7 +170,7 @@ AGENT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents" \
 
 ## Step 3 — Build a dataset
 
-A **dataset item** is one test case. `input` is an array of `{ role, content }` messages, replayed verbatim as the generation's input — so a case is exactly what a user would have sent. `metadata` is a free-form bag the platform never interprets, readable later from a `json_logic` scorer. See [Evaluations — Dataset item](/docs/modules/evaluations#dataset-item) for the full field list.
+A **dataset item** is one test case: `input` is an array of `{ role, content }` messages replayed verbatim as the generation's input; `metadata` is a free-form bag the platform never interprets, readable from a `json_logic` scorer. Fields: [Evaluations — Dataset item](/docs/modules/evaluations#dataset-item).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -265,15 +260,15 @@ curl -s "$SOAT_BASE_URL/api/v1/datasets/$DATASET_ID/items" \
 </TabItem>
 </Tabs>
 
-Datasets are **operator-owned fixtures**. A [content purge](/docs/tutorials/data-retention-and-zero-retention) never deletes or rewrites a dataset item, so an unrelated erasure request cannot quietly stop your suite from being runnable.
+A [content purge](/docs/tutorials/data-retention-and-zero-retention) never deletes or rewrites a dataset item.
 
 ---
 
 ## Step 4 — Bind an eval with two scorers
 
-An eval freezes the criteria: the agent under test, the dataset, the scorers, and the threshold the run's verdict gates on. Scorer config lives here rather than being read off the agent at run time, so two runs of the same eval are always judged the same way and their comparison measures the **agent** instead of the criteria shifting underneath it.
+An eval freezes the criteria: agent under test, dataset, scorers, and the threshold the verdict gates on. Scorer config lives on the eval, not the agent, so two runs are judged the same way and their comparison measures the agent.
 
-Two deterministic scorers, each doing a different job:
+Two deterministic scorers:
 
 | Scorer | Asks |
 | --- | --- |
@@ -326,13 +321,13 @@ EVAL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/evals" \
 </TabItem>
 </Tabs>
 
-A `json_logic` expression is evaluated over `input`, `output`, `object`, `expected`, and `item.metadata` — see [Evaluations — Scorers](/docs/modules/evaluations#scorers) for the details and the other scorer types.
+A `json_logic` expression is evaluated over `input`, `output`, `object`, `expected`, and `item.metadata`; other scorer types: [Evaluations — Scorers](/docs/modules/evaluations#scorers).
 
 ---
 
 ## Step 5 — Run it and read the verdict
 
-`wait: true` executes the items sequentially in-process and returns the run **terminal**, with its scores. It is capped at 25 items — for anything larger, see [queued runs](/docs/tutorials/judge-open-ended-answers).
+`wait: true` executes the items sequentially in-process and returns the run terminal, with scores. Capped at 25 items; larger suites use [queued runs](/docs/tutorials/judge-open-ended-answers).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -373,7 +368,7 @@ curl -s "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs/$BASELINE_RUN_ID" \
 </TabItem>
 </Tabs>
 
-Expected shape — the `contains` scorer fails every item, because nothing in the prompt asks for a hand-off:
+Expected shape (`contains` fails every item; the prompt never asks for a hand-off):
 
 ```json
 {
@@ -394,7 +389,7 @@ Expected shape — the `contains` scorer fails every item, because nothing in th
 }
 ```
 
-Now look at the individual cases. This is where a failing suite becomes actionable — the run-level number says *something* regressed, the results say *which case*.
+Per-item results say which case regressed:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -429,11 +424,11 @@ curl -s "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs/$BASELINE_RUN_ID/results" \
 </TabItem>
 </Tabs>
 
-Each result also carries `generation_id`, so any case can be opened as an ordinary [generation](/docs/modules/generations) and its [trace](/docs/tutorials/debug-session-generation-trace-history) read step by step. An eval run is real traffic, not a simulation.
+Each result carries `generation_id`, so any case opens as an ordinary [generation](/docs/modules/generations) with a readable [trace](/docs/tutorials/debug-session-generation-trace-history).
 
 :::warning[Eval runs have real side effects]
 
-Every item is a real generation, so an agent with a write-capable `http` or `mcp` [tool](/docs/modules/tools) performs N real writes per run. There is no tool-stub mode, deliberately — running the real agent is what makes a score mean anything. Point an eval'd agent's tools at a staging target.
+Every item is a real generation: an agent with a write-capable `http` or `mcp` [tool](/docs/modules/tools) performs N real writes per run. There is no tool-stub mode. Point an eval'd agent's tools at a staging target.
 
 :::
 
@@ -441,7 +436,7 @@ Every item is a real generation, so an agent with a write-capable `http` or `mcp
 
 ## Step 6 — Fix the prompt, then measure the fix
 
-Add the missing instruction. This archives a new agent [version](/docs/modules/agents#versioning-and-staged-rollout), which the next run stamps on itself.
+Add the missing instruction; this archives a new agent [version](/docs/modules/agents#versioning-and-staged-rollout), stamped on the next run.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -521,7 +516,7 @@ curl -s "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs/$CANDIDATE_RUN_ID" \
 </TabItem>
 </Tabs>
 
-Expected shape — a positive `pass_rate_delta` is the prompt change paying off:
+Expected shape (positive `pass_rate_delta` = improvement over the baseline):
 
 ```json
 {
@@ -544,17 +539,17 @@ Expected shape — a positive `pass_rate_delta` is the prompt change paying off:
 
 :::note[Your numbers will differ]
 
-`qwen2.5:0.5b` follows an instruction like this some of the time, not all of it, so your `pass_rate_delta` may be `0.33` or `0.67` rather than `1`. That is the point of measuring instead of guessing — and the reason a suite is judged on its pass **rate**, not on one case. What must hold is the direction: the run that was told about the hand-off scores at least as well as the one that was not.
+`qwen2.5:0.5b` follows the instruction only some of the time, so `pass_rate_delta` may be `0.33` or `0.67` rather than `1`. The direction must hold: the run told about the hand-off scores at least as well as the one that was not.
 
 :::
 
-Positive deltas mean this run scored **higher** than the baseline. Every number is computed over the **item intersection** — the cases present and scorable in both runs; see [Evaluations](/docs/modules/evaluations) for the full comparison rules.
+Every delta is computed over the item intersection (cases present and scorable in both runs); comparison rules: [Evaluations](/docs/modules/evaluations).
 
 ---
 
 ## Step 7 — Editing a case cannot rewrite history
 
-Dataset items keep full CRUD. That is safe because every result carries its **own frozen copy** of the item's `input` and `expected_output`, taken at run time — see [Evaluations — Frozen inputs](/docs/modules/evaluations#frozen-inputs). Edit a case and the runs that already scored it are untouched.
+Every result carries its own frozen copy of the item's `input` and `expected_output`, taken at run time ([Evaluations — Frozen inputs](/docs/modules/evaluations#frozen-inputs)), so dataset items keep full CRUD without touching past runs.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -611,17 +606,17 @@ curl -s "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs/$BASELINE_RUN_ID/results" \
 </TabItem>
 </Tabs>
 
-The old result still reads back the wording it was actually scored on, so a baseline delta can never report dataset drift as agent regression. Deleting an item nulls `dataset_item_id` on past results and changes nothing else.
+A baseline delta therefore never reports dataset drift as agent regression. Deleting an item nulls `dataset_item_id` on past results and changes nothing else.
 
 ---
 
 ## Step 8 — What the numbers mean
 
-Per-scorer, per-item, and per-run pass rules are defined in [Evaluations — Pass semantics](/docs/modules/evaluations#pass-semantics). In short: an item passes when all its scorers pass, and the run's verdict gates on the **pass rate** against `pass_threshold`, never on a pooled mean.
+[Evaluations — Pass semantics](/docs/modules/evaluations#pass-semantics): an item passes when all its scorers pass; the run's verdict gates on the pass rate against `pass_threshold`, never on a pooled mean.
 
 :::info[Errors are not zeros]
 
-An item whose generation did not complete is recorded as an **error**: excluded from `aggregate_scores`, counted in `errored_count`, never scored 0. A run that scored nothing at all does not pass.
+An item whose generation did not complete is an **error**: excluded from `aggregate_scores`, counted in `errored_count`, never scored 0. A run that scored nothing does not pass.
 
 :::
 
@@ -629,4 +624,6 @@ An item whose generation did not complete is recorded as an **error**: excluded 
 
 ## What's next
 
-Read next: [Judge Open-Ended Answers](/docs/tutorials/judge-open-ended-answers) for grading answers that have no single right string, [Gate a Canary Promotion on an Eval](/docs/tutorials/gate-a-canary-promotion-on-an-eval) to make a rollout wait for a green suite, and [Evaluations](/docs/modules/evaluations) for the full data model.
+- [Judge Open-Ended Answers](/docs/tutorials/judge-open-ended-answers) — answers with no single right string.
+- [Gate a Canary Promotion on an Eval](/docs/tutorials/gate-a-canary-promotion-on-an-eval) — a rollout that waits for a green suite.
+- [Evaluations](/docs/modules/evaluations) — full data model.

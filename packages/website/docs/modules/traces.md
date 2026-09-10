@@ -11,7 +11,7 @@ Traces record the full execution history of agent generations, including every r
 
 ## Overview
 
-Every time an agent runs a generation, SOAT automatically records a trace: the sequence of steps the model took, the tools it invoked, the inputs and outputs at each step, and any errors encountered. Traces are stored as JSON files in the project's file storage and indexed in the database for fast retrieval. Traces support parent-child relationships, so the full execution tree of a multi-agent run can be reconstructed — see the [Trace Ancestry Model](#trace-ancestry-model).
+Every agent generation records a trace: the model's steps, tool invocations, inputs, outputs and errors. Traces are stored as JSON files in the project's file storage and indexed in the database. Parent-child links reconstruct a multi-agent run's tree; see the [Trace Ancestry Model](#trace-ancestry-model).
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -43,96 +43,93 @@ Every time an agent runs a generation, SOAT automatically records a trace: the s
 
 ### Generation Failures
 
-When a generation in a trace fails (e.g. the upstream AI provider returns an error), the structured error payload is recorded on the trace's `error` field and on the corresponding generation record. This makes failed runs distinguishable from runs that have not started yet (which also have `step_count: 0`).
+When a generation fails (e.g. a provider error), the structured error is recorded on the trace's `error` field and on the generation record, distinguishing failed runs from not-yet-started ones (both `step_count: 0`).
 
 ### Step Serialization and File Linkage
 
-Each trace stores the raw step objects produced by the Vercel AI SDK `generateText` call, as a file at `/traces/{traceId}.json` in the project's file storage; `file_id` points to it, so it can be downloaded via the Files API. `Error` instances are serialized to plain objects (`message`, `name`, enumerable properties) so tool failures are preserved faithfully.
+Raw step objects from the Vercel AI SDK `generateText` call are stored at `/traces/{traceId}.json` in the project's file storage; `file_id` points to it (downloadable via the Files API). `Error` instances are serialized to plain objects (`message`, `name`, enumerable properties).
 
 ### Reading a Turn Back
 
-The steps object is the raw record, in the `ai` package's own shape. To read a turn
-without parsing it yourself, use the generation's transcript — an ordered projection of
-the same steps into a documented, stable schema:
+The steps object is in the `ai` package's own shape. The generation's transcript is an
+ordered projection of the same steps into a stable schema:
 
 ```bash
 soat get-generation-transcript --generation_id gen_abc
 ```
 
-A transcript is scoped to one **turn**, which is why it is anchored on the generation
-rather than here: a trace can hold several generations, and `status`, `stop_reason` and
-`agent_version` are generation fields. A transcript reads back only the steps of its own
-generation's segment, so grouping several turns under one `trace_id` does not blur them
-together. See [Generations → Transcript](./generations.md#transcript).
+A transcript is scoped to one **turn** (a trace can hold several generations; `status`,
+`stop_reason` and `agent_version` are generation fields) and reads back only its own
+generation's segment. See [Generations → Transcript](./generations.md#transcript).
 
 ### Grouping Generations Under One Trace
 
-[`POST /agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation) accepts a `trace_id`. Passing one that already exists groups the new generation with the earlier ones instead of starting a new tree — use it when several turns are one logical run and `parent_trace_id` / `root_trace_id` would misrepresent them as nested calls.
+[`POST /agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation) accepts a `trace_id`; an existing one groups the new generation with the earlier ones. Use it when several turns are one logical run rather than nested calls.
 
-- **The steps object is the concatenation of every grouped generation's steps**, in the order the generations first wrote. A second generation appends; it never replaces what the first one recorded.
-- **`step_count` counts them all**, so it stays the length of the object `file_id` points at.
-- **A generation that writes twice rewrites only its own slice.** This is what a run paused on a client tool does: the tool-outputs continuation re-sends the turn's earlier steps along with the new ones, and they replace — rather than duplicate — the ones already recorded.
-- **Sub-agent calls are not grouping.** An agent-to-agent call gets a trace of its own, linked through `parent_trace_id` / `root_trace_id` — see [Trace Ancestry Model](#trace-ancestry-model).
+- **The steps object concatenates every grouped generation's steps**, in first-write order; a second generation appends.
+- **`step_count` counts them all**, matching the object `file_id` points at.
+- **A generation that writes twice rewrites only its own slice** (a tool-outputs continuation re-sends the turn's earlier steps with the new ones; they replace, not duplicate).
+- **Sub-agent calls are not grouping**; they get their own trace linked through `parent_trace_id` / `root_trace_id` (see [Trace Ancestry Model](#trace-ancestry-model)).
 
-To read one grouped turn on its own rather than the whole object, use that generation's [transcript](#reading-a-turn-back).
+Read one grouped turn via its [transcript](#reading-a-turn-back).
 
-Concurrent generations sharing one `trace_id` are serialized per server process. If several servers write to the same `trace_id` at the same moment, one turn's steps can still be lost; sequential turns — the ordinary grouping flow — are unaffected.
+Concurrent generations on one `trace_id` are serialized per server process; simultaneous writes from several servers can lose one turn's steps. Sequential turns are unaffected.
 
 ### Debugging Joins (Trace, Generation, Session)
 
-Generation responses carry `generation_id` + `trace_id`; [`GET /generations?trace_id=`](/docs/api/generations/list-generations) returns all generations linked to a trace. Trace records do **not** include `session_id` — capture (`session_id`, `generation_id`, `trace_id`) from generation responses at your own boundary to correlate in both directions. See [Debug Session, Generation, and Trace History - Step 5](/docs/tutorials/debug-session-generation-trace-history#step-5---inspect-traces-for-each-generation).
+Generation responses carry `generation_id` + `trace_id`; [`GET /generations?trace_id=`](/docs/api/generations/list-generations) lists a trace's generations. Traces do **not** include `session_id`; capture (`session_id`, `generation_id`, `trace_id`) from generation responses to correlate both ways. See [Debug Session, Generation, and Trace History - Step 5](/docs/tutorials/debug-session-generation-trace-history#step-5---inspect-traces-for-each-generation).
 
 ### Content Purge
 
-[`DELETE /traces/{trace_id}/content`](/docs/api/traces/purge-trace-content) deletes the trace's steps object **from storage** and clears its content columns. It requires the `traces:PurgeTraceContent` action.
+[`DELETE /traces/{trace_id}/content`](/docs/api/traces/purge-trace-content) deletes the steps object **from storage** and clears the content columns. Requires `traces:PurgeTraceContent`.
 
-- **The row survives as a skeleton.** `content_redacted_at`, the ids, timestamps and `step_count` remain, so a purge is provable. Reads of a purged trace return the skeleton with the redaction marker set, never a 404.
-- **The bytes are deleted, not orphaned.** The purge commits the row changes, then deletes the storage objects; a failed object delete is logged for reconciliation rather than rolled back.
-- **It cascades.** Every descendant trace is purged too, along with all of their generations — a descendant holds its own steps object covering the same run.
+- **The row survives as a skeleton**: `content_redacted_at`, ids, timestamps and `step_count` remain. Reads return the skeleton, never a 404.
+- **The bytes are deleted.** Row changes commit, then storage objects are deleted; a failed object delete is logged for reconciliation, not rolled back.
+- **It cascades** to every descendant trace and their generations.
 
-The operation is idempotent: purging an already-purged trace succeeds and leaves the original `content_redacted_at` untouched. A purge does **not** touch the usage and audit ledger: each cascaded generation keeps `action_id`, `trigger_id`, `orchestration_run_id`, `node_id`, `agent_version`, `routing`, status and timestamps. See [Generations](./generations.md#content-purge) for the per-generation operation.
+Idempotent: re-purging leaves the original `content_redacted_at` untouched. The usage and audit ledger is untouched: each cascaded generation keeps `action_id`, `trigger_id`, `orchestration_run_id`, `node_id`, `agent_version`, `routing`, status and timestamps. Per-generation operation: [Generations](./generations.md#content-purge).
 
 ### Retention Policy
 
-Setting `trace_content_retention_days` on a [project](./projects.md) makes purging automatic: a daily sweep content-purges every trace in that project older than the window. The sweep also runs once at server startup, so a deployment that restarts more often than the interval still purges.
+`trace_content_retention_days` on a [project](./projects.md) makes a daily sweep content-purge every trace older than the window. The sweep also runs once at server startup.
 
 ```bash
 soat update-project --project_id proj_abc --trace_content_retention_days 90
 ```
 
-- **Opt-in.** `null` (the default) disables retention. Clear it with `--trace_content_retention_days null`.
-- **Same purge path** as [`DELETE /traces/{id}/content`](/docs/api/traces/purge-trace-content) — same cascade, byte deletion, `content_redacted_at` semantics, audit entries and `traces.content_purged` events.
-- **Scoped to the project, not the agent** — every trace in a subtree shares one project, so a project-scoped window cannot conflict across a nested call the way a per-agent window would.
-- **A run is purged as a unit.** The sweep selects root traces; when a root crosses the window, its whole subtree goes with it.
-- **Auditable.** Sweep-driven purges are stamped `content_redacted_by_principal_type: "system"`, `content_redacted_by_principal_id: "retention_sweep"`.
+- **Opt-in.** `null` (default) disables retention; clear with `--trace_content_retention_days null`.
+- **Same purge path** as [`DELETE /traces/{id}/content`](/docs/api/traces/purge-trace-content): cascade, byte deletion, `content_redacted_at`, audit entries and `traces.content_purged` events.
+- **Scoped to the project, not the agent**, so a window cannot conflict across a nested call.
+- **A run is purged as a unit.** The sweep selects root traces; a root crossing the window takes its subtree.
+- **Auditable.** Stamped `content_redacted_by_principal_type: "system"`, `content_redacted_by_principal_id: "retention_sweep"`.
 
-Already-redacted traces are excluded from the due set, so a steady-state sweep costs work proportional to what is newly due.
+Already-redacted traces are excluded from the due set.
 
 ### Zero-Retention Mode
 
-Retention deletes content after the fact; zero-retention never writes it. Set `trace_content_mode` to `none` on a [project](./projects.md) (every agent in it) or on a single [agent](./agents.md#zero-retention):
+Zero-retention never writes content. Set `trace_content_mode` to `none` on a [project](./projects.md) (every agent in it) or a single [agent](./agents.md#zero-retention):
 
 ```bash
 soat update-project --project_id proj_abc --trace_content_mode none   # whole project
 soat patch-agent --agent_id agent_xyz --trace_content_mode none          # one agent
 ```
 
-**The project is a floor, the agent may only tighten**: an agent can set `none` under a storing project, but setting `full` under a `none` project is refused with `400`. An agent's `null` (the default) inherits the project.
+**The project is a floor; the agent may only tighten**: `full` under a `none` project is refused with `400`. An agent's `null` (default) inherits the project.
 
-What is **not written** is exactly the field set a [content purge](#content-purge) clears — the two features share one definition:
+What is **not written** is exactly the field set a [content purge](#content-purge) clears:
 
 | Record | Not written |
 | --- | --- |
 | Trace | the steps object (no `File` row, no bytes), `error` |
 | Generation | `metadata`, `error`, `extraction`, `pending_state` |
 
-The skeleton is still written unchanged: ids, timestamps, `status`, `stop_reason`, `step_count`, and every usage-attribution column — metering, cost, quotas and audit behave identically. Rows written in this mode carry `content_redacted_at` with `content_redacted_by_principal_id: "zero_retention"`, distinguishing never-stored from stored-then-erased.
+The skeleton is still written: ids, timestamps, `status`, `stop_reason`, `step_count`, and every usage-attribution column, so metering, cost, quotas and audit are unchanged. Rows carry `content_redacted_at` with `content_redacted_by_principal_id: "zero_retention"`.
 
-**Trade-off:** `pending_state` (the message history of a generation paused on a client tool) is content, so it is not persisted. A paused generation resumes normally within a running server, but **a generation paused when the server restarts cannot be recovered**. If restart-recovery matters more than never-stored, use [retention](#retention-policy) instead.
+**Trade-off:** `pending_state` (the message history of a generation paused on a client tool) is content and is not persisted, so **a generation paused across a server restart cannot be recovered**. If that matters, use [retention](#retention-policy) instead.
 
 ## Configuration
 
-The retention sweep's schedule (not its per-project window, which is a project field):
+The retention sweep's schedule (the per-project window is a project field):
 
 | Environment Variable | Required | Description |
 | --- | --- | --- |
@@ -141,20 +138,14 @@ The retention sweep's schedule (not its per-project window, which is a project f
 
 ## Trace Ancestry Model
 
-This section is the canonical reference for how trace relationships work. All other SOAT documentation on traces points here.
+Canonical reference for trace relationships.
 
-> **Trace lineage is not a [continuation chain](./chains.md).** They are different
-> axes, and a generation can sit on both. Trace lineage runs **inward**, through
-> the calls one turn makes — agent A calls agent B via a tool, within a single
-> request, bounded by `max_call_depth`. A continuation chain runs **forward in
-> time**, through turns resumed after their request is gone — an approval decided
-> three days later spawning a new generation, bounded by the chain budget.
->
-> They are also kept deliberately independent: a chain is identified by its root
-> *generation*, not by trace lineage, because lineage is legitimately rewritten by
-> operations that know nothing about chains (deleting an agent nulls the trace
-> parentage of everything left beneath it). A chain keyed on lineage would have
-> been re-rooted — and handed a fresh budget — by an unrelated cleanup.
+> **Trace lineage is not a [continuation chain](./chains.md).** Lineage runs
+> **inward**, through the calls one turn makes within a single request, bounded
+> by `max_call_depth`. A chain runs **forward in time**, through turns resumed
+> after their request is gone, bounded by the chain budget. A chain is keyed on
+> its root *generation*, not on lineage, because lineage is rewritten by
+> unrelated operations (deleting an agent nulls the trace parentage beneath it).
 
 ### Field Definitions
 
@@ -165,15 +156,15 @@ This section is the canonical reference for how trace relationships work. All ot
 
 ### Invariants
 
-1. **Root traces** — `parent_trace_id` is `null` **and** `root_trace_id` is `null`. A trace is the root of its tree if and only if both fields are `null`.
-2. **Child traces** — `parent_trace_id` is always the immediate parent (never skipped levels). `root_trace_id` is always the top-level ancestor (never `null` for non-root traces).
+1. **Root traces** — `parent_trace_id` and `root_trace_id` are both `null` (iff).
+2. **Child traces** — `parent_trace_id` is the immediate parent; `root_trace_id` is the top-level ancestor (never `null` for non-root traces).
 3. **Sibling traces** share the same `parent_trace_id` and `root_trace_id`.
 4. **Depth-1 children** of the root have `parent_trace_id === root_trace_id`.
 5. The [`GET /traces/{id}/tree`](/docs/api/traces/get-trace-tree) endpoint accepts any `id` in the tree and always returns the same full tree rooted at the root trace.
 
 ### Concrete Example
 
-A three-level tree — Agent A (top level) calls Agent B via a tool, and Agent B calls Agent C:
+Agent A calls Agent B via a tool; Agent B calls Agent C:
 
 ```
 trace_A   (root)
@@ -204,17 +195,17 @@ trace_A   (root)
 ]
 ```
 
-Note `trace_C`: `parent_trace_id` points to its immediate parent (`trace_B`), while `root_trace_id` still points to the top-level root (`trace_A`).
+`trace_C`: `parent_trace_id` is `trace_B`, `root_trace_id` is `trace_A`.
 
 ### Reconstructing the Tree
 
-**Recommended:** supply any trace ID from the tree to the tree endpoint; the server resolves the root and returns the fully nested tree (root node with descendants under `children`) in one call:
+**Recommended:** pass any trace ID to the tree endpoint; it returns the nested tree (descendants under `children`) in one call:
 
 ```
 GET /api/v1/traces/{any_trace_id}/tree
 ```
 
-Alternatively, build it client-side from a flat list: the root is the trace with `root_trace_id: null`; group the rest by `parent_trace_id` and attach recursively. Steps in a parent trace that triggered a child generation also contain the child's `trace_id` in the `create-agent-generation` tool result, so the tree can be walked through step content.
+Or build it client-side: the root has `root_trace_id: null`; group the rest by `parent_trace_id` and attach recursively. A parent's `create-agent-generation` tool result also contains the child's `trace_id`.
 
 ## Examples
 

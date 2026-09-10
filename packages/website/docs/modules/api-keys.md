@@ -7,13 +7,11 @@ import TabItem from '@theme/TabItem';
 
 # API Keys
 
-The API Keys module provides long-lived programmatic credentials for users. An API key authenticates as its owning user, is optionally scoped to a single project, and optionally restricts access to a subset of that user's policies.
+Long-lived programmatic credentials that authenticate as their owning user, optionally scoped to one project and optionally restricted to a subset of the user's policies.
 
 ## Overview
 
-API keys are prefixed with `sk_` and are identified in the system by a public `id` prefixed with `key_`. The raw key value is returned **only at creation time** and cannot be retrieved again. A truncated `key_prefix` (first 8 characters) is stored for identification.
-
-API keys use the standard `Authorization: Bearer <key>` header — the same as JWTs.
+Keys are prefixed `sk_` with a public `id` prefixed `key_`. The raw value is returned **only at creation**; a `key_prefix` (first 8 characters) is stored for identification. Keys use `Authorization: Bearer <key>`, like JWTs.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -39,7 +37,7 @@ API keys use the standard `Authorization: Bearer <key>` header — the same as J
 
 ### Permission Inheritance
 
-A key may be scoped to one project or left unscoped; `policy_ids` optionally narrow it further:
+Scope and `policy_ids` combine as:
 
 | Configuration                | Effective permissions                                                          |
 | ---------------------------- | ------------------------------------------------------------------------------ |
@@ -48,24 +46,24 @@ A key may be scoped to one project or left unscoped; `policy_ids` optionally nar
 | unscoped (no `project_id`)   | User permissions, across every project the user can reach                      |
 | unscoped + `policy_ids`      | Intersection of user policies and key policies, across every reachable project |
 
-**Intersection semantics:** when a key has `policy_ids`, both the user's policies **and** the key's own policies must independently allow the requested action. The key can never exceed the permissions of the user who owns it — scoping to a project or leaving it unscoped only changes which projects the ceiling applies to, never raises it. See this ceiling demonstrated end to end in [Permissions in Practice - Step 7 (Verify permissions)](/docs/tutorials/permissions#step-7--verify-permissions), where a key granted a full-access policy is still limited to its owner's read-only permissions.
+**Intersection semantics:** with `policy_ids`, the user's policies **and** the key's must both allow the action; a key never exceeds its owner, and scoping only changes which projects the ceiling applies to. Demonstrated in [Permissions in Practice - Step 7 (Verify permissions)](/docs/tutorials/permissions#step-7--verify-permissions).
 
 ### Project Scoping
 
 `project_id` is **optional**.
 
-- **Scoped key** (`project_id` set): any request made with the key is hard-locked to its project; attempts to access resources in any other project are denied regardless of what the policies say. This binding is a hard boundary — see [Project scope is a hard boundary, even for admins](#project-scope-is-a-hard-boundary-even-for-admins).
-- **Unscoped key** (`project_id` omitted or null): the key is not confined to any project. It can operate across every project its owner can reach, bounded by the intersection of the owner's permissions and the key's own `policy_ids`. Use IAM policies (on the user or the key) to control which projects and actions such a key may touch. Because an unscoped key has no implicit project, a `project_id` must be supplied explicitly on requests that operate on a specific project.
+- **Scoped key** (`project_id` set): hard-locked to its project; other projects are denied regardless of policy. See [Project scope is a hard boundary, even for admins](#project-scope-is-a-hard-boundary-even-for-admins).
+- **Unscoped key** (`project_id` omitted or null): operates across every project its owner can reach, bounded by the intersection of the owner's permissions and `policy_ids`. Requests on a specific project must supply `project_id` explicitly.
 
-An update may re-scope a key to a different project, scope a previously unscoped key, or clear the scope with `project_id: null`. For a worked example of creating project-scoped keys, see [Permissions in Practice - Step 6 (Create API keys)](/docs/tutorials/permissions#step-6--create-api-keys).
+An update may re-scope, scope, or clear scope with `project_id: null`. Example: [Permissions in Practice - Step 6 (Create API keys)](/docs/tutorials/permissions#step-6--create-api-keys).
 
 #### Implicit project id
 
-Because a project-scoped key already identifies its project, `project_id` is **optional** on requests made with such a key:
+With a project-scoped key `project_id` is **optional** on requests:
 
-- Omit `project_id` and the request defaults to the key's project. An agent using a project-scoped MCP connector can upload a file, list files, create documents, etc. without first calling `list-projects`.
-- Supply a `project_id` that matches the key's project and it is accepted.
-- Supply a `project_id` that belongs to a different project and the request is rejected with `403` and the `API_KEY_PROJECT_SCOPE` error code. The message names both the key's project and the requested one, and the `meta` carries `scoped_project` / `requested_project`:
+- Omitted: defaults to the key's project, so a project-scoped MCP connector can upload files, list files, create documents, etc. without `list-projects`.
+- Matching the key's project: accepted.
+- A different project: `403` with the `API_KEY_PROJECT_SCOPE` error code; the message names both projects and `meta` carries `scoped_project` / `requested_project`:
 
   ```json
   {
@@ -77,17 +75,17 @@ Because a project-scoped key already identifies its project, `project_id` is **o
   }
   ```
 
-JWT auth is unchanged: a write that omits `project_id` still returns `400`, since a concrete project is never inferred from a user's set of accessible projects.
+JWT auth is unchanged: a write omitting `project_id` returns `400`; a project is never inferred from a user's accessible set.
 
 ### Project scope is a hard boundary, even for admins
 
-A key's `project_id` binding is enforced **before**, and independently of, the owner's role. An `admin`-owned key can create and delete projects (those gates are role-based and not tied to any project), but for ordinary resource operations — secrets, formations, files, webhooks, etc. — a project-scoped key is still confined to its own project. Admin role lifts the policy ceiling, never the project binding.
+The `project_id` binding is enforced **before**, and independently of, the owner's role. An `admin`-owned key can create and delete projects (role-gated, not project-tied), but for resource operations (secrets, formations, files, webhooks, etc.) it stays confined to its project.
 
-This means a single project-scoped key cannot both create a new project **and** provision resources inside it: create the project, then mint a key scoped to the new project (or use an unscoped key, bounded by IAM policy) to deploy into it. A cross-project resource write returns `403 API_KEY_PROJECT_SCOPE` (above) rather than silently succeeding.
+So one scoped key cannot both create a project **and** provision inside it: create the project, then mint a key scoped to it (or use an unscoped key). A cross-project resource write returns `403 API_KEY_PROJECT_SCOPE`.
 
 ### The boundary covers key management itself
 
-Key creation is self-service — any authenticated caller may mint a key for themselves — so the project binding has to guard the credential being written, not only the resources being read. Requests made **with a project-scoped credential** are therefore confined on this module too:
+Key creation is self-service, so the binding also guards the credential being written. Under a credential scoped to `proj_A`:
 
 | Operation | Behavior under a credential scoped to `proj_A` |
 | --- | --- |
@@ -98,19 +96,17 @@ Key creation is self-service — any authenticated caller may mint a key for the
 | [`PUT /api-keys/{id}`](/docs/api/api-keys/update-api-key) moving a `proj_A` key to `proj_B`, or clearing its scope | `403` — both ends of a re-scope are checked |
 | [`GET /api-keys`](/docs/api/api-keys/list-api-keys) (list) | Returns the caller's own keys in `proj_A`, or every key in `proj_A` when the credential holds `api-keys:ListApiKeys` on the project |
 
-Without this, the boundary would be exactly one call deep: a key confined to `proj_A` could mint an unscoped key for the same owning user and operate anywhere. Rotation still works — a scoped key can mint and delete keys **within its own project**.
+Otherwise a key confined to `proj_A` could mint an unscoped key for the same owner and operate anywhere. Rotation still works within the key's own project.
 
-Owner-or-admin still applies on top: the project check decides *which* keys a credential can see, and the owner check decides whether it may act on them.
-
-That applies to the listing as well as the item routes. Being confined to a project is not authority over it — a key's metadata names its owner, its prefix and the policies attached to it, so the collection is narrowed to the caller's own keys by default. A credential that genuinely holds `api-keys:ListApiKeys` on the project reads the whole project's inventory, which is what a project operator taking stock of outstanding credentials needs.
+Owner-or-admin applies on top: the project check decides *which* keys are visible, the owner check whether the caller may act on them. The listing is narrowed to the caller's own keys by default (confinement to a project is not authority over it); a credential holding `api-keys:ListApiKeys` on the project reads the whole inventory.
 
 ### Policy Attachment
 
-Policies listed in `policy_ids` are loaded from the global [Policies](./policies.md) store. `policy_ids` is the list of policy public IDs (`pol_`-prefixed) attached to the key; the REST API accepts and returns these public IDs.
+`policy_ids` are `pol_`-prefixed public IDs from the global [Policies](./policies.md) store; the REST API accepts and returns them.
 
 ### Revoking a Key
 
-Delete the key via [`DELETE /api/v1/api-keys/:id`](/docs/api/api-keys/delete-api-key). The key immediately stops authenticating. There is no rotation endpoint — create a new key and delete the old one.
+[`DELETE /api/v1/api-keys/:id`](/docs/api/api-keys/delete-api-key) stops the key immediately. There is no rotation endpoint: create a new key, delete the old.
 
 ## Examples
 
@@ -169,7 +165,7 @@ Store the `key` value securely — it is never returned again.
 
 ### List API keys
 
-The raw secret is never included in list or get responses — only the `key_prefix` is returned.
+List and get responses carry only `key_prefix`, never the raw secret.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>

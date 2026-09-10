@@ -7,13 +7,11 @@ import TabItem from '@theme/TabItem';
 
 # Policies
 
-The Policies module provides global, reusable IAM policy documents that can be attached to users and API keys. Policies are managed by admins and define fine-grained permission rules evaluated at request time.
+Global, reusable IAM policy documents attached to users and API keys; managed by admins, evaluated at request time.
 
 ## Overview
 
-A Policy is a named, reusable [policy document](./iam.md#policy-documents) stored globally — not scoped to any project. Policies are attached to **users** and **API keys** to grant or restrict access. The policies attached to a given user can be listed by filtering on that user.
-
-Policies are identified by an `id` prefixed with `pol_`.
+A Policy is a named [policy document](./iam.md#policy-documents) stored globally, attached to **users** and **API keys**. Filter the listing by user to see a user's policies. Ids are prefixed `pol_`.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -38,7 +36,7 @@ Policies are identified by an `id` prefixed with `pol_`.
 
 ### Policy Document
 
-A policy document contains one or more statements. Each statement specifies an `effect` (`Allow` or `Deny`), a list of `action` strings, and an optional list of `resource` SRNs.
+Each statement has an `effect` (`Allow` or `Deny`), `action` strings, and optional `resource` SRNs.
 
 ```json
 {
@@ -52,27 +50,25 @@ A policy document contains one or more statements. Each statement specifies an `
 }
 ```
 
-See [IAM — Policy Documents](./iam.md#policy-documents) for the full format and evaluation rules. For a worked example of authoring full-access and read-only documents, see [Permissions in Practice - Step 4 (Create policies)](/docs/tutorials/permissions#step-4--create-policies).
+Format and evaluation: [IAM — Policy Documents](./iam.md#policy-documents). Example: [Permissions in Practice - Step 4 (Create policies)](/docs/tutorials/permissions#step-4--create-policies).
 
 ### Attaching Policies to Users
 
-Users accumulate permissions from all policies attached to their account. When a user makes a request, all their policies are loaded and evaluated together. Attaching a policy set to a user **replaces** the user's full policy list. See it end to end in [Permissions in Practice - Step 5 (Attach policies to users)](/docs/tutorials/permissions#step-5--attach-policies-to-users), and the [Attach policies to a user](#attach-policies-to-a-user) example below.
+All of a user's policies are evaluated together. Attaching **replaces** the full list. See [Permissions in Practice - Step 5 (Attach policies to users)](/docs/tutorials/permissions#step-5--attach-policies-to-users), and the [Attach policies to a user](#attach-policies-to-a-user) example below.
 
 ### Attaching Policies to API Keys
 
-API keys can also have policies attached. When an API key has policies, the effective permissions are the **intersection** of the owning user's policies and the key's own policies — the key can never exceed the user's permissions. If a key has no policies attached, it inherits the user's full permissions.
-
-See [API Keys](./api-keys.md) for details.
+With key policies, effective permissions are the **intersection** of the user's and the key's; a key never exceeds its user. Without them, the key inherits the user's permissions. See [API Keys](./api-keys.md).
 
 ### SRN Scoping
 
-Because policies are global (not project-scoped), resource SRNs in policy statements carry the full project identifier:
+Policies are global, so resource SRNs carry the full project identifier:
 
 ```json
 { "resource": ["srn:proj_ABC:document:*"] }
 ```
 
-Use `srn:*:*:*` to grant access across all projects (admin-level). Use project-specific SRNs to restrict a policy to a single project without scoping the API key to that project.
+`srn:*:*:*` grants all projects (admin-level); a project-specific SRN restricts a policy to one project without scoping the API key.
 
 ## Examples
 

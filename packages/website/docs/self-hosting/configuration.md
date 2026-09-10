@@ -5,8 +5,6 @@ sidebar_label: Configuration
 
 # Configuration
 
-This page covers all environment variables available for the SOAT server, along with guidance for production deployments.
-
 ## Environment Variables
 
 ### Database
@@ -19,13 +17,11 @@ This page covers all environment variables available for the SOAT server, along 
 | `DATABASE_USER`     | `soat_user`     | Database user     |
 | `DATABASE_PASSWORD` | `soat_password` | Database password |
 
-The database must have the [pgvector](https://github.com/pgvector/pgvector) extension installed, at **version 0.8 or newer**. Use the official `pgvector/pgvector` Docker image or install the extension manually.
-
-0.8 is what semantic search needs to be exact about its filters: it sets `hnsw.iterative_scan`, added in that version, so a scoped or path-filtered search cannot return fewer results than exist. An older extension still answers every search — PostgreSQL discards the unknown setting with a warning — but a narrow filter can silently come back short. See [Ranking is approximate](../modules/knowledge.md#ranking-is-approximate).
+The database needs [pgvector](https://github.com/pgvector/pgvector) **0.8 or newer** (the `pgvector/pgvector` image, or a manual install). Semantic search sets `hnsw.iterative_scan`, added in 0.8; an older extension discards the setting with a warning and a scoped or path-filtered search can silently come back short. See [Ranking is approximate](../modules/knowledge.md#ranking-is-approximate).
 
 #### Standard `PG*` environment variables
 
-The `DATABASE_*` variables above set the host, port, name, user, and password. For anything else — most commonly TLS behavior — SOAT relies on the underlying [`node-postgres`](https://node-postgres.com/features/connecting#environment-variables) driver, which honors the standard [libpq `PG*` environment variables](https://www.postgresql.org/docs/current/libpq-envars.html). Set any of them alongside the `DATABASE_*` variables when you need finer-grained control over the connection.
+Beyond `DATABASE_*` (most commonly TLS), the [`node-postgres`](https://node-postgres.com/features/connecting#environment-variables) driver honors the standard [libpq `PG*` environment variables](https://www.postgresql.org/docs/current/libpq-envars.html).
 
 | Variable            | Description                                                                                        |
 | ------------------- | -------------------------------------------------------------------------------------------------- |
@@ -34,11 +30,11 @@ The `DATABASE_*` variables above set the host, port, name, user, and password. F
 | `PGCONNECT_TIMEOUT` | Connection timeout in seconds                                                                      |
 | `PGOPTIONS`         | Command-line options to send to the server at connection time                                      |
 
-The full list is documented in the [libpq environment variables](https://www.postgresql.org/docs/current/libpq-envars.html) reference. These take effect without any SOAT-specific configuration.
+Full list: [libpq environment variables](https://www.postgresql.org/docs/current/libpq-envars.html).
 
 :::tip[Managed PostgreSQL with forced SSL]
 
-Managed providers such as **Amazon Aurora / RDS** may set `rds.force_ssl=1`, which rejects any non-TLS connection. SOAT connects in plaintext by default, so the connection is refused and the server exits at startup. Set `PGSSLMODE` to enable TLS:
+**Amazon Aurora / RDS** may set `rds.force_ssl=1`. SOAT connects in plaintext by default, so the server exits at startup. Set `PGSSLMODE`:
 
 ```yaml
 services:
@@ -48,37 +44,37 @@ services:
       PGSSLMODE: no-verify
 ```
 
-`no-verify` encrypts the connection but skips certificate verification, so it works against a managed CA without shipping a CA bundle. For stricter security, use `PGSSLMODE=verify-full` and point `PGSSLROOTCERT` at the provider's CA bundle (for RDS, the [Amazon RDS CA bundle](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.SSL.html)).
+`no-verify` encrypts without certificate verification. Stricter: `PGSSLMODE=verify-full` with `PGSSLROOTCERT` pointing at the provider's CA bundle (for RDS, the [Amazon RDS CA bundle](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.SSL.html)).
 
 :::
 
 :::note[Aurora PostgreSQL 18.3]
 
-Aurora PostgreSQL 18.3 crashes the DB instance when it receives the multi-statement session-setup query (`SET client_min_messages ...; SET TIME ZONE ...`) that the ORM sends on each new pooled connection. SOAT suppresses the `SET TIME ZONE` half of that query (the session timezone is UTC either way), so it boots against Aurora 18.3 without any extra configuration.
+Aurora PostgreSQL 18.3 crashes on the ORM's multi-statement session-setup query (`SET client_min_messages ...; SET TIME ZONE ...`). SOAT suppresses the `SET TIME ZONE` half (the session timezone is UTC either way), so no extra configuration is needed.
 
 :::
 
 ### Schema Sync
 
-On boot, SOAT runs `sync({ alter: true })` behind a **session-level Postgres advisory lock** so concurrently starting tasks (a rolling deploy batch, auto-scale-out, or an instance refresh) serialize instead of racing the DDL. All-but-one boot waits for the lock; the winner runs the schema changes once and the rest see a no-op.
+On boot, SOAT runs `sync({ alter: true })` behind a **session-level Postgres advisory lock**: concurrently starting tasks (rolling deploy, scale-out, instance refresh) serialize; one runs the schema changes, the rest see a no-op.
 
-That wait is **bounded**. If a task is SIGKILLed (grace-period expiry, OOM) while holding the lock mid-sync, its Postgres backend can linger — behind a connection pooler or a managed engine like Aurora it may take minutes to be reaped — leaving the session lock held. Without a bound, every later boot would block on lock acquisition forever and the whole deploy would deadlock. The bound turns that into a fast, logged failure (`canceling statement due to lock timeout`) that exits the process with a non-zero code, so the orchestrator restarts the task cleanly.
+The wait is **bounded**: a task SIGKILLed mid-sync (grace-period expiry, OOM) can leave its backend and the lock lingering for minutes behind a pooler or a managed engine like Aurora. On timeout the boot fails fast (`canceling statement due to lock timeout`) with a non-zero exit, so the orchestrator restarts the task.
 
 | Variable                      | Default          | Description                                                                                                     |
 | ----------------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------- |
 | `SCHEMA_SYNC_LOCK_TIMEOUT_MS` | `600000` (10min) | Upper bound in milliseconds on how long boot waits to acquire the schema-sync advisory lock before failing fast |
 
-Any non-positive-integer value (non-numeric, `0`, negative, fractional, empty) falls back to the default — a misconfigured bound never becomes an unbounded wait.
+Any non-positive-integer value (non-numeric, `0`, negative, fractional, empty) falls back to the default.
 
 :::warning
-Keep this value **larger than a legitimate migration's duration.** A task that is merely waiting for a live peer's `sync` to finish should wait it out rather than abort. Align it with your deployment's health-check grace period. Lower it only if your migrations are known to be fast and you want boots to fail sooner when a lock is genuinely stuck.
+Keep this **larger than a legitimate migration's duration** and aligned with the health-check grace period. Lower it only when migrations are known to be fast.
 :::
 
 :::note[Indexes are never dropped by the sync]
 
-`sync({ alter: true })` is additive where indexes are concerned: it creates what the current schema declares and never drops what an earlier version declared. When a SOAT release renames an index, the previous one stays in your database, and a release that _widens_ a unique index leaves its narrower predecessor in place — still enforcing the old constraint.
+`sync({ alter: true })` creates the indexes the current schema declares and never drops earlier ones. A renamed index leaves its predecessor in place; a widened unique index leaves the narrower one enforcing the old constraint, which can reject writes the current schema permits.
 
-Release notes call out any index that needs dropping. Apply it with `DROP INDEX CONCURRENTLY IF EXISTS <name>` (or `ALTER TABLE <table> DROP CONSTRAINT IF EXISTS <name>` when a UNIQUE constraint owns the index). Leaving one in place costs disk and write throughput; leaving a stale _unique_ index in place can reject writes the current schema permits.
+Release notes call out indexes to drop: `DROP INDEX CONCURRENTLY IF EXISTS <name>`, or `ALTER TABLE <table> DROP CONSTRAINT IF EXISTS <name>` when a UNIQUE constraint owns the index.
 
 :::
 
@@ -91,13 +87,11 @@ Release notes call out any index that needs dropping. Apply it with `DROP INDEX 
 
 ### Debug Logging
 
-SOAT uses the [`debug`](https://www.npmjs.com/package/debug) package internally. Enable debug logs with the standard `DEBUG` environment variable.
+Logging uses the [`debug`](https://www.npmjs.com/package/debug) package.
 
 | Variable | Default | Description                                                           |
 | -------- | ------- | --------------------------------------------------------------------- |
 | `DEBUG`  | _(off)_ | Enables debug namespaces (for example, `soat:*` or `soat:formations`) |
-
-Examples:
 
 ```bash
 # Enable all SOAT debug namespaces
@@ -116,11 +110,7 @@ services:
       DEBUG: soat:*
 ```
 
-`SOAT_ERROR_LOGS_ENABLED` is independent from `DEBUG` namespaces.
-When unset, request error logs are enabled by default.
-To disable them, set the value to one of: `false`, `0`, `off`, or `no` (case-insensitive).
-
-Valid examples:
+`SOAT_ERROR_LOGS_ENABLED` is independent of `DEBUG`. Unset means enabled; disable with `false`, `0`, `off`, or `no` (case-insensitive).
 
 ```bash
 # Disable request error logs from the global middleware
@@ -140,26 +130,22 @@ SOAT_ERROR_LOGS_ENABLED=true DEBUG=soat:formations pnpm dev
 | `SOAT_ADMIN_USERNAME` | No       | If set and no users exist at startup, an admin account is created automatically |
 | `SOAT_ADMIN_PASSWORD` | No       | Password for the auto-created admin. Must meet complexity requirements          |
 
-This is useful for container-based deployments where you want the first admin seeded without a manual API call.
-
 ### Secrets Encryption
 
 | Variable                 | Required | Description                                                       |
 | ------------------------ | -------- | ----------------------------------------------------------------- |
 | `SECRETS_ENCRYPTION_KEY` | **Yes**  | 64-character hex string (32 bytes) used to encrypt stored secrets |
 
-This key also encrypts [webhook](../modules/webhooks.md) and [trigger](../modules/triggers.md) signing secrets at rest. Losing it makes those secrets unreadable too — outbound webhook delivery and inbound webhook-trigger signature verification will fail until each affected webhook/trigger has its secret rotated and subscribers are given the new value.
+Also encrypts [webhook](../modules/webhooks.md) and [trigger](../modules/triggers.md) signing secrets at rest. If lost, outbound webhook delivery and inbound webhook-trigger signature verification fail until each affected secret is rotated and subscribers receive the new value.
 
-Generate a secure key:
+Generate a key:
 
 ```bash
 openssl rand -hex 32
 ```
 
 :::danger
-Production requirement
-
-`SECRETS_ENCRYPTION_KEY` must be set in production. Changing it after secrets have been stored will make those secrets, as well as webhook and trigger signing secrets, unreadable.
+`SECRETS_ENCRYPTION_KEY` must be set in production. Changing it makes stored secrets and webhook/trigger signing secrets unreadable.
 :::
 
 ### Outbound Egress
@@ -168,15 +154,11 @@ Production requirement
 | --------------------------- | -------------- | --------------------------------------------------------------------------------- |
 | `TOOL_EGRESS_ALLOWED_HOSTS` | _(unset)_      | Comma-separated non-public destinations the server may request on a tenant's behalf |
 
-An [`http` or `mcp` tool](../modules/tools.md) is a request **the server makes on
-the agent's behalf**, so by default its target may only be a publicly routable
-address. Everything that is not — loopback, RFC1918 (`10/8`, `172.16/12`,
-`192.168/16`), link-local (`169.254/16`, where every cloud provider's metadata
-service lives), CGNAT, IPv6 ULA — is refused with `403 TOOL_EGRESS_BLOCKED`
-unless this variable lists it.
-
-A tool target is not the only such destination, and the same rule covers each
-one:
+An [`http` or `mcp` tool](../modules/tools.md) target must be publicly routable
+by default. Loopback, RFC1918 (`10/8`, `172.16/12`, `192.168/16`), link-local
+(`169.254/16`, cloud metadata services), CGNAT and IPv6 ULA are refused with
+`403 TOOL_EGRESS_BLOCKED` unless listed here. The same rule covers every
+tenant-chosen destination:
 
 | Destination                                                       | Refused how |
 | ----------------------------------------------------------------- | ----------- |
@@ -185,13 +167,9 @@ one:
 | An [AI provider](../modules/ai-providers.md)'s `base_url`          | the generation or model listing fails |
 | A GCP service-account key file's `token_uri`, on an `http` tool    | `403 TOOL_EGRESS_BLOCKED` on the call |
 
-What it does **not** cover is a destination the deployment itself chose:
-`OLLAMA_BASE_URL`, `EMBEDDING_BASE_URL` and the embedding stack are operator
-settings, already an operator's decision about their own network, and they keep
-working when they point at localhost.
-
-Unset, these requests still reach the whole public internet; only your own
-network is closed. List what a tool legitimately needs:
+Operator-chosen destinations (`OLLAMA_BASE_URL`, `EMBEDDING_BASE_URL`, the
+embedding stack) are not covered and keep working on localhost. Unset, the
+public internet stays reachable; only non-public networks are closed.
 
 ```yaml
 environment:
@@ -207,24 +185,15 @@ environment:
 | `10.42.0.0/16`              | any hostname whose **resolved** address falls in the range           |
 | `[::1]:8080`                | an IPv6 literal with a port                                          |
 
-A malformed entry fails loudly rather than being dropped — an operator who
-believes an internal host is allowed and silently isn't is the failure this
-setting exists to prevent.
-
-Two properties worth knowing, because they are what makes this a control rather
-than a check on the URL string:
-
-- **The resolved address is what is checked.** A public-looking hostname whose
-  A record points at `169.254.169.254` is refused.
-- **Every redirect hop is checked**, and credential headers
-  (`Authorization`, `Cookie`) are dropped when a redirect changes origin.
+A malformed entry fails loudly rather than being dropped. The **resolved**
+address is checked (a public-looking hostname whose A record points at
+`169.254.169.254` is refused), every redirect hop is checked, and credential
+headers (`Authorization`, `Cookie`) are dropped when a redirect changes origin.
 
 :::note
-This is a deployment-wide setting, not a per-project one: it applies to every
-tool of every project on the server. When the destination is SOAT's own API,
-prefer a [`builtin` tool](../modules/tools.md) over an `http` tool pointed at
-your own base URL — it dispatches in-process under the caller's own
-permissions instead of leaving the network at all.
+Deployment-wide, not per-project. When the destination is SOAT's own API, use a
+[`builtin` tool](../modules/tools.md) rather than an `http` tool at your own
+base URL: it dispatches in-process under the caller's permissions.
 :::
 
 ### Provider Credentials
@@ -233,31 +202,24 @@ permissions instead of leaving the network at all.
 | ---------------------------------------- | ------- | ---------------------------------------------------------------------------------------------- |
 | `AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS`  | `false` | Whether an AI provider record that links no credential may sign with the deployment's own       |
 
-`bedrock` and `vertex` are the two [AI provider](../modules/ai-providers.md)
-types whose SDK reaches for a credential nobody put on the record: Bedrock walks
-the AWS default credential chain (environment, instance or task role), Vertex
-resolves [Application Default Credentials](https://cloud.google.com/docs/authentication/application-default-credentials).
-Those are the **deployment's** credentials, and a provider record is written by
-a tenant — so unless this is set to `true`, a `bedrock` or `vertex` record must
-carry a credential of its own:
+`bedrock` and `vertex` [AI provider](../modules/ai-providers.md) SDKs fall back
+to the **deployment's** credentials: Bedrock walks the AWS default credential
+chain (environment, instance or task role), Vertex resolves
+[Application Default Credentials](https://cloud.google.com/docs/authentication/application-default-credentials).
+Unless this is `true`, a tenant-written provider record must carry its own
+credential:
 
-- `400 VALIDATION_FAILED` when such a record is created or updated with neither
-  a linked secret nor a `config.apiKey`, and
-- `400 AI_PROVIDER_MISCONFIGURED` when such a record is used to generate or to
-  list models, so one that reached the table some other way fails closed rather
-  than signing with credentials it was never given.
+- `400 VALIDATION_FAILED` on create or update with neither a linked secret nor a
+  `config.apiKey`;
+- `400 AI_PROVIDER_MISCONFIGURED` when such a record generates or lists models,
+  so one that reached the table another way fails closed.
 
-Set it to `true` on a **single-tenant** deployment, where the account the server
-runs as is the account its projects are meant to bill — a server on an EC2
-instance profile or an ECS task role serving only your own team. Leave it off
-wherever a project may be created by someone you would not hand those
-credentials to: without it, such a record generates on the deployment's cloud
-account, against the deployment's quotas, with whatever IAM the deployment's
-role holds.
+Set `true` only on a **single-tenant** deployment (an EC2 instance profile or
+ECS task role serving your own team); otherwise a tenant's record generates on
+the deployment's cloud account, quotas and IAM role.
 
 The embedding stack is unaffected: `EMBEDDING_PROVIDER` and its region are
-operator settings that no tenant writes, so `bedrock` embeddings keep using the
-AWS credential chain whatever this is set to.
+operator settings, so `bedrock` embeddings always use the AWS credential chain.
 
 ### File Storage
 
@@ -265,7 +227,7 @@ AWS credential chain whatever this is set to.
 | ------------------- | ------------- | ----------------------------------------------- |
 | `FILES_STORAGE_DIR` | `/data/files` | Local directory where uploaded files are stored |
 
-Mount a persistent volume to this path in Docker to prevent data loss between container restarts.
+Mount a persistent volume here in Docker.
 
 ### Agent Generation
 
@@ -274,15 +236,13 @@ Mount a persistent volume to this path in Docker to prevent data loss between co
 | `SOAT_TOOL_CALL_TIMEOUT_MS`  | `300000`          | Maximum time in milliseconds to wait for a single external tool call (MCP, SOAT, or HTTP tools) |
 | `TOOL_CONTEXT_HEADER_PREFIX` | `X-Soat-Context-` | Prefix prepended to every `tool_context` key to form the outbound request header name            |
 
-If an external tool server does not respond within this window, the call is aborted and the generation fails with an error. The default is 5 minutes. Set a lower value to fail fast in latency-sensitive environments.
+A tool server that does not respond within `SOAT_TOOL_CALL_TIMEOUT_MS` (default 5 minutes) aborts the call and fails the generation.
 
-`TOOL_CONTEXT_HEADER_PREFIX` renames the [context headers](../advanced/tool-context.md#configuring-the-header-prefix) a deployment emits — useful when you front SOAT under your own product name and do not want that name reaching third-party tool providers. The prefix is prepended verbatim, so include the trailing `-` if you want one (`X-Acme-Context-` + `userId` → `X-Acme-Context-userId`). It must be a valid HTTP header-name prefix (letters, digits and ``!#$%&'*+-.^_`|~``); an invalid value fails the tool call with an error naming the variable. An empty or unset value keeps the default — the prefix cannot be removed, since an unprefixed key could otherwise land on a header like `Authorization`.
-
-Changing it is a **breaking change for every tool endpoint that already reads these headers**, including third-party endpoints you do not control. Set it before wiring up tools, or update both sides together.
+`TOOL_CONTEXT_HEADER_PREFIX` renames the [context headers](../advanced/tool-context.md#configuring-the-header-prefix) a deployment emits (e.g. to hide the SOAT name from third-party tool providers). Prepended verbatim, so include the trailing `-` (`X-Acme-Context-` + `userId` → `X-Acme-Context-userId`). Must be a valid HTTP header-name prefix (letters, digits and ``!#$%&'*+-.^_`|~``); an invalid value fails the tool call with an error naming the variable. Empty or unset keeps the default; the prefix cannot be removed, since an unprefixed key could land on `Authorization`. Changing it breaks every tool endpoint already reading these headers: set it before wiring up tools, or update both sides together.
 
 ### Embeddings
 
-SOAT uses [Ollama](https://ollama.com) by default for generating vector embeddings, and also supports [OpenAI](https://platform.openai.com/docs/guides/embeddings) and [Amazon Bedrock](https://docs.aws.amazon.com/bedrock/latest/userguide/titan-embedding-models.html).
+[Ollama](https://ollama.com) by default; [OpenAI](https://platform.openai.com/docs/guides/embeddings) and [Amazon Bedrock](https://docs.aws.amazon.com/bedrock/latest/userguide/titan-embedding-models.html) are supported.
 
 | Variable               | Default                  | Description                                                                                |
 | ---------------------- | ------------------------ | ------------------------------------------------------------------------------------------ |
@@ -295,13 +255,13 @@ SOAT uses [Ollama](https://ollama.com) by default for generating vector embeddin
 | `EMBEDDING_REGION`     | `us-east-1`              | AWS region for Bedrock (`bedrock` only); falls back to `AWS_REGION`                        |
 | `EMBEDDING_INPUT_1M_TOKEN_PRICE_USD` | _(unset)_ | USD per **million** input tokens. Unset meters embeddings at `0`; the price book does not price them |
 
-Embedding spend is priced from `EMBEDDING_INPUT_1M_TOKEN_PRICE_USD`, not from the price book — the embedding stack is configured here rather than by an AI provider record, so no price-book tier can reach it. Leaving it unset meters every embedding at `0`, which is correct for a local model and silently free on a vendor-billed one; the server logs a warning at startup in that case. See [Pricing embeddings](/docs/modules/embeddings#pricing-embeddings).
+Embedding spend is priced from `EMBEDDING_INPUT_1M_TOKEN_PRICE_USD`, not the price book (no AI provider record configures the embedding stack). Unset meters every embedding at `0` (correct for a local model, silently free on a vendor-billed one) and logs a startup warning. See [Pricing embeddings](/docs/modules/embeddings#pricing-embeddings).
 
-To use a different embedding model, update `EMBEDDING_MODEL` and `EMBEDDING_DIMENSIONS` together — the model name and dimension count must be consistent. The count may not exceed **2000**: both vector columns carry an HNSW index, and that is the widest vector pgvector can build one over. A model above it is refused at startup rather than at the first schema sync. For `openai` and `bedrock`, set the provider's credentials as well; Bedrock without `EMBEDDING_API_KEY` uses the standard AWS credential chain (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`).
+Change `EMBEDDING_MODEL` and `EMBEDDING_DIMENSIONS` together. Dimensions may not exceed **2000**, the widest vector pgvector can build an HNSW index over; a larger model is refused at startup. Bedrock without `EMBEDDING_API_KEY` uses the AWS credential chain (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`).
 
 ## Docker Compose Example
 
-The following `docker-compose.yml` deploys the SOAT server, assuming PostgreSQL and Ollama are already running externally.
+PostgreSQL and Ollama run externally.
 
 ```yaml
 services:
@@ -332,16 +292,14 @@ volumes:
 ```
 
 :::tip
-Replace every `change-me` placeholder and the `SECRETS_ENCRYPTION_KEY` before deploying. Use `openssl rand -hex 32` to generate a secure key.
+Replace every `change-me` and `SECRETS_ENCRYPTION_KEY` (`openssl rand -hex 32`) before deploying.
 :::
 
 ## Linux: Connecting to Host Services from Docker
 
-When running SOAT inside Docker on Linux and connecting to services on the host machine (such as Ollama or PostgreSQL), you need additional configuration. Unlike Docker Desktop on macOS and Windows, Docker on Linux does **not** automatically resolve `host.docker.internal`.
+Docker on Linux does **not** resolve `host.docker.internal` automatically (Docker Desktop on macOS and Windows does). Reaching host services (Ollama, PostgreSQL) needs two steps.
 
 ### Step 1: Add `extra_hosts` to your Docker Compose file
-
-Add the following to the SOAT server service so that `host.docker.internal` resolves to the host machine's gateway IP:
 
 ```yaml
 services:
@@ -356,43 +314,39 @@ services:
 
 ### Step 2: Configure Ollama to listen on all interfaces
 
-By default, Ollama binds only to `127.0.0.1`, which is unreachable from inside a Docker container even after resolving `host.docker.internal`. You must configure Ollama to listen on all interfaces:
+Ollama binds to `127.0.0.1` by default, unreachable from a container:
 
 ```bash
 # Create an override for the Ollama systemd service
 sudo systemctl edit ollama
 ```
 
-In the editor that opens, add:
+Add:
 
 ```ini
 [Service]
 Environment="OLLAMA_HOST=0.0.0.0"
 ```
 
-Then restart Ollama:
+Restart:
 
 ```bash
 sudo systemctl restart ollama
 ```
 
 :::warning
-Setting `OLLAMA_HOST=0.0.0.0` makes Ollama accessible on all network interfaces. Ensure your firewall restricts port `11434` to trusted sources if this machine is network-facing.
+`OLLAMA_HOST=0.0.0.0` exposes Ollama on all interfaces; firewall port `11434` on a network-facing machine.
 :::
 
 ### Verification
-
-After completing both steps, verify that SOAT can reach Ollama from within the container:
 
 ```bash
 docker compose exec server wget -qO- http://host.docker.internal:11434/api/tags
 ```
 
-You should see a JSON response listing available Ollama models. If you see a connection error, check that both steps above were completed and that `ollama` is running (`systemctl status ollama`).
+Expected: a JSON list of Ollama models. Otherwise re-check both steps and `systemctl status ollama`.
 
 ## Production Checklist
-
-Before deploying SOAT in production:
 
 - [ ] **Generate a strong `SECRETS_ENCRYPTION_KEY`** — `openssl rand -hex 32`
 - [ ] **Use strong database credentials** — change the defaults

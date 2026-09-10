@@ -16,20 +16,20 @@ import TabItem from '@theme/TabItem';
 
 # Build an Agent Harness
 
-A **harness** is the layer that decides what an agent can reach and what it is forbidden — see [The Layers of an Agent System](/docs/agent-system-layers). Terminal harnesses bundle that layer with local process execution; on SOAT you compose the same layer from platform resources, and the one piece SOAT deliberately does not own — executing code on your machine — stays in your process via [client tools](/docs/modules/tools#client).
+A harness decides what an agent can reach and what it is forbidden — see [The Layers of an Agent System](/docs/agent-system-layers). On SOAT it is composed from platform resources; code execution on your machine stays in your process via [client tools](/docs/modules/tools#client).
 
-In this tutorial you build a minimal file-assistant harness:
+You build a minimal file-assistant harness:
 
-- **Reach** — the agent's only capability is a `read_local_file` function, declared as a client tool so SOAT never executes it.
-- **Forbidden** — the harness process runs under a dedicated identity whose policy allows generations and nothing else; you prove the ceiling by watching a delete be refused.
-- **The loop** — your process drives the pause-and-resume cycle: the generation stops at `requires_action`, your code reads the file locally, and the agent resumes with the real content.
+- Reach — one `read_local_file` client tool, never executed by SOAT.
+- Forbidden — the harness runs under an identity whose policy allows generations only; a delete is refused.
+- The loop — the generation stops at `requires_action`, your code reads the file, the agent resumes.
 
 ## Prerequisites
 
-- SOAT running locally with Ollama. Follow the [Quick Start](/docs/getting-started) guide, and see [Key Concepts](/docs/getting-started/concepts) if you are new to SOAT's mental model.
-- An [Ollama](https://ollama.com) instance accessible at `http://ollama:11434` with model `qwen2.5:0.5b` pulled (`ollama pull qwen2.5:0.5b`).
-- CLI, SDK, or curl available. The server is at `http://localhost:5047`. For production hardening see [Configuration](/docs/self-hosting/configuration).
-- Familiar with the client-tool pause-and-resume flow? If not, run [Client Tools](/docs/tutorials/client-tools) first — this tutorial builds the identity and policy shell around that loop.
+- SOAT running locally ([Quick Start](/docs/getting-started)); [Key Concepts](/docs/getting-started/concepts); [Configuration](/docs/self-hosting/configuration).
+- [Ollama](https://ollama.com) at `http://ollama:11434` with `qwen2.5:0.5b` pulled (`ollama pull qwen2.5:0.5b`).
+- CLI, SDK, or curl; server at `http://localhost:5047`.
+- The client-tool pause-and-resume flow: [Client Tools](/docs/tutorials/client-tools).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -59,7 +59,7 @@ export SOAT_BASE_URL=http://localhost:5047
 
 ## Step 1 — Log in as admin
 
-Admin is the built-in superuser role and bypasses policy evaluation entirely — see [IAM — Authentication](/docs/modules/iam#authentication). You use it only to assemble the harness; the harness itself will run under a far smaller identity.
+Admin ([IAM — Authentication](/docs/modules/iam#authentication)) only assembles the harness; the harness runs under a smaller identity.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -101,7 +101,7 @@ ADMIN_TOKEN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users/login" \
 
 ## Step 2 — Create a project and an AI provider
 
-Every resource lives inside a [project](/docs/modules/projects#examples). The [AI provider](/docs/modules/ai-providers#examples) is a local Ollama instance so the tutorial runs without external credentials. To connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
+A [project](/docs/modules/projects#examples) and a local Ollama [AI provider](/docs/modules/ai-providers#examples). Other providers: [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -161,7 +161,7 @@ PROVIDER_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/ai-providers" \
 
 ## Step 3 — Declare the reach: a client tool
 
-The harness's local capability is declared as a [client tool](/docs/modules/tools#client): a `name`, a `description`, and a JSON Schema in `parameters` — and deliberately **no** `execute` configuration. SOAT holds the contract and the pause point; the code that actually touches your filesystem lives only in your process. This is the whole reach of the agent — it has no other tool.
+A [client tool](/docs/modules/tools#client) is a `name`, a `description` and a JSON Schema in `parameters`, with no `execute` configuration. SOAT holds the contract and the pause point; the filesystem code lives in your process. The agent has no other tool.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -225,15 +225,13 @@ echo "Tool: $TOOL_ID"
 
 ## Step 4 — Create the agent
 
-Attach the tool through [`tool_bindings`](/docs/modules/agents#tool-bindings). Three settings make the harness loop predictable:
+Attach the tool through [`tool_bindings`](/docs/modules/agents#tool-bindings). Three settings make the loop predictable:
 
-- [`step_rules`](/docs/modules/agents#step-rules) `{ "step": 1, "tool_choice": { "type": "tool", "tool_name": "read_local_file" } }` forces the **first** call of the turn to invoke the function. Step numbering spans the pause, so the step that runs after you submit the output is step 2 and free to answer.
+- [`step_rules`](/docs/modules/agents#step-rules) `{ "step": 1, "tool_choice": { "type": "tool", "tool_name": "read_local_file" } }` forces the first call of the turn. Step numbering spans the pause, so the step after you submit the output is step 2 and free to answer. Agent-level [`tool_choice`](/docs/modules/agents#tool-choice) would apply to every step, the resumed one included, re-proposing the tool on each submit until `max_steps`.
 
-  Forcing at agent level instead ([`tool_choice`](/docs/modules/agents#tool-choice)) would apply to *every* step of the turn, the resumed one included — the run would propose the same client tool again on each submit until `max_steps` ended it.
-
-  Forcing is passed through to the provider, so it works only where the provider implements it. [Ollama's OpenAI-compatible API](https://docs.ollama.com/api/openai-compatibility) does **not** support `tool_choice` and ignores the field, so a local Ollama agent falls back to `"auto"`. OpenAI, Anthropic, and xAI all honor it.
-- [`stop_conditions`](/docs/modules/agents#stop-conditions) `{ "type": "has_tool_call", "tool_name": "read_local_file" }` names the call that ends the turn. It is required only when the agent's own `tool_choice` forces a tool — a step rule leaves the agent at `"auto"`, so here it is documentation of the intended exit.
-- `max_steps` bounds the agent loop, counted across the pause: the resumed turn spends what is left of it, never a fresh budget.
+  Forcing is passed through to the provider. [Ollama's OpenAI-compatible API](https://docs.ollama.com/api/openai-compatibility) ignores `tool_choice`, so a local Ollama agent falls back to `"auto"`; OpenAI, Anthropic and xAI honor it.
+- [`stop_conditions`](/docs/modules/agents#stop-conditions) `{ "type": "has_tool_call", "tool_name": "read_local_file" }` names the call that ends the turn. Required only when the agent's own `tool_choice` forces a tool; here it documents the intended exit.
+- `max_steps` is counted across the pause: the resumed turn spends what is left.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -300,7 +298,7 @@ echo "Agent: $AGENT_ID"
 
 ## Step 5 — Forbid everything else: the harness identity
 
-The process that runs the loop should not hold admin power. Create a dedicated user and attach a [policy](/docs/modules/policies) that allows exactly one action — `agents:CreateAgentGeneration`, which covers both starting a generation and submitting tool outputs — scoped to this project. See [IAM](/docs/modules/iam) for how policies evaluate.
+A dedicated user with a [policy](/docs/modules/policies) allowing one action, `agents:CreateAgentGeneration` (covers starting a generation and submitting tool outputs), scoped to this project. See [IAM](/docs/modules/iam).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -404,7 +402,7 @@ RUNNER_TOKEN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users/login" \
 </TabItem>
 </Tabs>
 
-Prove the ceiling before trusting it: the runner identity cannot even delete the agent it drives.
+The runner identity cannot delete the agent it drives:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -439,7 +437,7 @@ curl -s -o /dev/null -w "%{http_code}\n" -X DELETE \
 
 ## Step 6 — Run the harness loop
 
-This is the whole harness runtime, from your process's point of view: start a generation, and because the model calls a client tool, the response comes back paused with `status: "requires_action"` — `required_action.tool_calls` lists what your process must execute. See [Agents — examples](/docs/modules/agents#examples) for the generation call itself.
+Start a generation; the model calls the client tool and the response pauses with `status: "requires_action"`, `required_action.tool_calls` listing what your process must execute. See [Agents — examples](/docs/modules/agents#examples).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -501,10 +499,10 @@ TOOL_CALL_ID=$(echo "$GEN_RESPONSE" | jq -r '.required_action.tool_calls[0].id')
 </Tabs>
 
 :::note
-Running against local Ollama and got `"status": "completed"` with `required_action: null`? That is the ignored `tool_choice` described in Step 4 — the model chose to answer instead of calling the function. Re-run the generation, or point the agent at a provider that honors forcing.
+`"status": "completed"` with `required_action: null` on local Ollama is the ignored `tool_choice` from Step 4. Re-run, or use a provider that honors forcing.
 :::
 
-Nothing is executing anywhere at this point — the generation is suspended server-side. Now your process performs the local half of the harness — the read happens on **your** machine, under whatever OS-level confinement your process runs in — and submits the result to resume the run. See [Tools — client](/docs/modules/tools#client) for the full flow.
+The generation is suspended server-side. Your process reads the file locally and submits the result to resume the run. See [Tools — client](/docs/modules/tools#client).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -565,13 +563,13 @@ echo "$FINAL_RESPONSE" | jq '{status, content: .output.content}'
 </TabItem>
 </Tabs>
 
-The status flips to `completed` and `output.content` holds the answer, grounded in a file only your process could read. A production harness wraps exactly this cycle in a loop — one iteration per `requires_action`, submitting all pending `tool_calls` each time — while SOAT keeps the configuration, history, policy checks, and traces server-side.
+Status is `completed` and `output.content` holds the answer. A production harness loops this cycle, one iteration per `requires_action`, submitting all pending `tool_calls` each time.
 
 ---
 
 ## Step 7 — Inspect the run in the trace
 
-Every generation writes a [trace](/docs/modules/traces#examples) recording the forced tool call, your submitted output, and the final text — the audit half of the harness, for free. Read it as admin: the runner identity cannot, which is the ceiling working as designed.
+Every generation writes a [trace](/docs/modules/traces#examples) with the forced tool call, your submitted output and the final text. Read it as admin; the runner identity cannot.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -601,16 +599,14 @@ curl -s "$SOAT_BASE_URL/api/v1/traces/$TRACE_ID" \
 </TabItem>
 </Tabs>
 
-Two steps: the model call that proposed `read_local_file`, and the resumed call that turned your output into the answer.
+Two steps: the call that proposed `read_local_file`, and the resumed call that produced the answer.
 
 ---
 
 ## Where to go next
 
-The harness you built is minimal on purpose. Each piece hardens independently:
-
-- **Gate the tool call itself** — attach a [guardrail](/docs/modules/guardrails) to classify each call from its actual arguments before your process sees it, and route risky ones to a human [approvals](/docs/modules/approvals) queue: [Gate a Dangerous Tool with Guardrails](/docs/tutorials/gate-a-tool-with-guardrails).
-- **Cap the agent, not just the caller** — an agent-side ceiling with [`boundary_policy`](/docs/tutorials/agent-boundary-policy), so even a broader caller cannot widen this agent's reach.
-- **Bound the spend** — [quotas](/docs/modules/quotas) fail closed on request, token, or cost caps: [Metering and Budgets](/docs/tutorials/metering-and-budgets).
-- **Make it conversational** — the same pause-and-resume loop works in long-lived [sessions](/docs/modules/sessions), with SOAT keeping the history.
-- **Ship it declaratively** — define the provider, tool, agent, and policies as one [formation](/docs/modules/formations) template: [Formations](/docs/tutorials/formations).
+- Gate the tool call with a [guardrail](/docs/modules/guardrails) or an [approvals](/docs/modules/approvals) queue: [Gate a Dangerous Tool with Guardrails](/docs/tutorials/gate-a-tool-with-guardrails).
+- Cap the agent itself with [`boundary_policy`](/docs/tutorials/agent-boundary-policy).
+- Bound spend with [quotas](/docs/modules/quotas): [Metering and Budgets](/docs/tutorials/metering-and-budgets).
+- Run the same loop in long-lived [sessions](/docs/modules/sessions).
+- Ship provider, tool, agent and policies as one [formation](/docs/modules/formations): [Formations](/docs/tutorials/formations).

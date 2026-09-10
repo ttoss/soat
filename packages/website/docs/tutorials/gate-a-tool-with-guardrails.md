@@ -14,19 +14,14 @@ import TabItem from '@theme/TabItem';
 
 # Gate a Dangerous Tool with Guardrails
 
-A [guardrail](/docs/modules/guardrails) classifies every gated tool call into an action class — **A** (always execute), **B** (execute if a guard passes), **C** (human sign-off), **D** (forbidden) — with deterministic JSON Logic, no LLM in the evaluation path. See [Guardrails](/docs/modules/guardrails) for the full model.
+A [guardrail](/docs/modules/guardrails) classifies every gated tool call into an action class with deterministic JSON Logic: **A** (always execute), **B** (execute if a guard passes), **C** (human sign-off), **D** (forbidden).
 
-You will build one guardrail over a budget-update tool, dry-run it, drive it from an [orchestration](/docs/modules/orchestrations) tool node to see all three outcomes (autonomous execute, park for sign-off, tripwire), read the governance trail ([approvals](/docs/modules/approvals), [exceptions](/docs/modules/exceptions), [audit log](/docs/modules/audit-log)), and finally tighten the whole project with a second guardrail.
-
-Everything here is deterministic — **no AI provider is required**.
+Build one guardrail over a budget-update tool, dry-run it, drive it from an [orchestration](/docs/modules/orchestrations) tool node through all three outcomes (execute, park for sign-off, tripwire), read the governance trail ([approvals](/docs/modules/approvals), [exceptions](/docs/modules/exceptions), [audit log](/docs/modules/audit-log)), then tighten the whole project with a second guardrail. No AI provider is required.
 
 ## Prerequisites
 
-- SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide to bring the stack up with Docker Compose.
-- New to SOAT? Read [Key Concepts](/docs/getting-started/concepts) to understand projects, tools, and runs first.
-- CLI installed and configured, or SDK set up. See [CLI](/docs/cli) or [SDK](/docs/sdk).
-- For production hardening (secrets, env vars), see [Configuration](/docs/self-hosting/configuration).
-- Server is at `http://localhost:5047`.
+- SOAT running locally at `http://localhost:5047` ([Quick Start](/docs/getting-started)); [Key Concepts](/docs/getting-started/concepts); [Configuration](/docs/self-hosting/configuration).
+- [CLI](/docs/cli) or [SDK](/docs/sdk).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -56,7 +51,7 @@ export SOAT_BASE_URL=http://localhost:5047
 
 ## Step 1 — Log in as admin
 
-Admin is the built-in superuser role. See [Users](/docs/modules/users#examples) for authentication details.
+See [Users](/docs/modules/users#examples).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -98,7 +93,7 @@ ADMIN_TOKEN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users/login" \
 
 ## Step 2 — Create a project
 
-Every resource lives inside a [project](/docs/modules/projects#examples). The project is also the broadest guardrail attach scope — you will use it in Step 12.
+The [project](/docs/modules/projects#examples) is also the broadest guardrail attach scope (Step 12).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -136,7 +131,7 @@ echo "PROJECT_ID: $PROJECT_ID"
 
 ## Step 3 — Create the tool the guardrail gates
 
-The gate sits at the tool-execution boundary, so the guardrail needs a [Tool](/docs/modules/tools#examples) to govern. Create a read-only [builtin tool](/docs/modules/tools) named `update-budget` so the tutorial needs no external services — in a real system this would be the tool that actually moves money.
+The gate sits at the tool-execution boundary, so the guardrail needs a [Tool](/docs/modules/tools#examples). A read-only [builtin tool](/docs/modules/tools) named `update-budget` stands in for the tool that would move money.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -188,7 +183,7 @@ echo "BUDGET_TOOL_ID: $BUDGET_TOOL_ID"
 
 ## Step 4 — Write the guardrail
 
-A [guardrail document](/docs/modules/guardrails#classification) has three parts — `class`, `guard`, and the fail-closed `default_class`. Here: class **B** below 500, **C** at or above, with a guard requiring the amount under 200. The three amounts `150`, `900`, and `450` exercise every outcome.
+A [guardrail document](/docs/modules/guardrails#classification) has `class`, `guard`, and the fail-closed `default_class`. Here: class **B** below 500, **C** at or above, guard requiring the amount under 200. Amounts `150`, `900`, and `450` exercise every outcome.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -240,13 +235,13 @@ echo "GUARDRAIL_ID: $GUARDRAIL_ID"
 </TabItem>
 </Tabs>
 
-The document is validated on write: every `var` must resolve to the `args.*`, `context.*`, or `runtime.*` [namespaces](/docs/modules/guardrails#guards-and-guardrail-context), and an out-of-catalog `runtime.*` key is rejected with `400` rather than silently reading `null` at runtime.
+Validated on write: every `var` must resolve to the `args.*`, `context.*`, or `runtime.*` [namespaces](/docs/modules/guardrails#guards-and-guardrail-context); an out-of-catalog `runtime.*` key is a `400`.
 
 ---
 
 ## Step 5 — Dry-run every decision before attaching
 
-[Dry-run evaluation](/docs/modules/guardrails#dry-run-evaluation) runs the real evaluation pipeline against arguments you supply and returns the exact record a real call would produce — nothing executes, no approval is filed.
+[Dry-run evaluation](/docs/modules/guardrails#dry-run-evaluation) runs the real pipeline against supplied arguments and returns the record a real call would produce; nothing executes, no approval is filed.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -256,7 +251,7 @@ soat evaluate-guardrail --guardrail-id "$GUARDRAIL_ID" --tool-id "$BUDGET_TOOL_I
   --args '{"amount": 150}' | jq '{class, decision, guard_result, context_snapshot}'
 ```
 
-Expected output — under both thresholds, so it runs on its own:
+Expected output (under both thresholds):
 
 ```json
 {
@@ -269,7 +264,7 @@ Expected output — under both thresholds, so it runs on its own:
 }
 ```
 
-Now the other two amounts:
+The other two amounts:
 
 ```bash
 soat evaluate-guardrail --guardrail-id "$GUARDRAIL_ID" --tool-id "$BUDGET_TOOL_ID" \
@@ -281,7 +276,7 @@ soat evaluate-guardrail --guardrail-id "$GUARDRAIL_ID" --tool-id "$BUDGET_TOOL_I
   --args '{"amount": 450}' | jq '{class, decision, guard_result}'
 ```
 
-`900` classifies **C** (`decision: "route_to_approval"`, `guard_result: null` — the guard is not consulted for a class-C call). `450` classifies **B** but fails the `< 200` guard, so `decision: "tripwire"`.
+`900` classifies **C** (`decision: "route_to_approval"`, `guard_result: null`: the guard is not consulted for class C). `450` classifies **B** but fails the `< 200` guard: `decision: "tripwire"`.
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
@@ -316,14 +311,14 @@ done
 </Tabs>
 
 :::warning
-JSON Logic coerces an **absent** `var` to a zero-ish value, so `{ "<": [{ "var": "args.amount" }, 500] }` is `true` when `amount` is missing entirely — a call with no `amount` takes the permissive branch. When a missing argument must not reach it, test presence explicitly: `{ "and": [{ "var": "args.amount" }, { "<": [{ "var": "args.amount" }, 500] }] }`. See [Missing keys and comparisons](/docs/modules/guardrails#guards-and-guardrail-context).
+JSON Logic coerces an absent `var` to a zero-ish value, so `{ "<": [{ "var": "args.amount" }, 500] }` is `true` when `amount` is missing. Test presence explicitly: `{ "and": [{ "var": "args.amount" }, { "<": [{ "var": "args.amount" }, 500] }] }`. See [Missing keys and comparisons](/docs/modules/guardrails#guards-and-guardrail-context).
 :::
 
 ---
 
 ## Step 6 — Attach the guardrail to the tool
 
-A guardrail governs nothing until it is [attached](/docs/modules/guardrails#attachment). Attaching at the **tool** scope means this tool carries its own gate wherever it is used — binding it to a new agent can never silently escape classification. `guardrail_ids` is a list, so several guardrails can compose on one tool.
+A guardrail governs nothing until [attached](/docs/modules/guardrails#attachment). At the **tool** scope the tool carries its gate wherever it is bound. `guardrail_ids` is a list; several guardrails compose on one tool.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -356,15 +351,13 @@ curl -s -X PATCH "$SOAT_BASE_URL/api/v1/tools/$BUDGET_TOOL_ID" \
 </TabItem>
 </Tabs>
 
-Attach is cheap, detach is gated: adding an id needs only `tools:UpdateTool`, because it can only tighten the outcome. Removing one additionally requires `guardrails:DetachGuardrail` — see [Step 13](#step-13--edits-are-versioned-detach-is-gated).
+Adding an id needs only `tools:UpdateTool` (it can only tighten); removing one additionally requires `guardrails:DetachGuardrail` ([Step 13](#step-13--edits-are-versioned-detach-is-gated)).
 
 ---
 
 ## Step 7 — Drive the tool from an orchestration
 
-An [orchestration](/docs/modules/orchestrations#node-types) `tool` node is gated at dispatch exactly like an agent tool call, minus the model. With no agent in scope it composes the **project + tool** scopes only.
-
-The `apply` node feeds the run's `amount` into the tool call as the guardrail's `args.amount`. The unlabeled edge is the success path; the `blocked` / `tripwire` edges catch a guardrail refusal, which is a routable outcome, not a run failure.
+An [orchestration](/docs/modules/orchestrations#node-types) `tool` node is gated at dispatch like an agent tool call; with no agent in scope it composes the project + tool scopes only. The `apply` node feeds the run's `amount` in as `args.amount`. The unlabeled edge is the success path; `blocked` / `tripwire` edges catch a refusal, which is a routable outcome, not a run failure.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -451,7 +444,7 @@ echo "ORCHESTRATION_ID: $ORCHESTRATION_ID"
 
 ## Step 8 — Class B with a passing guard: the call just runs
 
-Start a [run](/docs/modules/orchestrations#examples) with `amount: 150`. The guardrail classifies **B**, the guard passes, and the tool dispatches with no human involved.
+A [run](/docs/modules/orchestrations#examples) with `amount: 150` classifies **B**, passes the guard, and dispatches the tool.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -505,7 +498,7 @@ printf '%s\n' "$RUN1" | jq '{status, required_action}'
 
 ## Step 9 — Class C: the run parks for sign-off
 
-Now `amount: 900`. The guardrail classifies **C**, so the tool is **not** dispatched: the run parks as `awaiting_input` and files an [approval item](/docs/modules/approvals#data-model) carrying the frozen arguments.
+`amount: 900` classifies **C**: the tool is not dispatched, the run parks as `awaiting_input`, and an [approval item](/docs/modules/approvals#data-model) carries the frozen arguments.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -534,7 +527,7 @@ Expected output:
 }
 ```
 
-The item records exactly which guardrail — and which **version** of it — sent the call here:
+The item records which guardrail and which version sent the call:
 
 ```bash
 soat get-approval --approval-id "$APPROVAL_ID" \
@@ -552,7 +545,7 @@ soat get-approval --approval-id "$APPROVAL_ID" \
 }
 ```
 
-Approve it, and the node re-dispatches the tool with the frozen arguments:
+Approve, and the node re-dispatches the tool with the frozen arguments:
 
 ```bash
 soat approve-approval --approval-id "$APPROVAL_ID" | jq '{status, resolved_by}'
@@ -618,13 +611,13 @@ curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$RUN2_ID" \
 </TabItem>
 </Tabs>
 
-On approval the tool is re-dispatched with the frozen (or edited) arguments and the guardrail is **not** re-evaluated — the human decision is final for that call. Rejection or expiry means the tool never runs at all, and only a matching `rejected` / `expired` edge follows.
+On approval the tool is re-dispatched with the frozen (or edited) arguments; the guardrail is not re-evaluated. On rejection or expiry the tool never runs and only a matching `rejected` / `expired` edge follows.
 
 ---
 
 ## Step 10 — A failing guard: the tripwire
 
-`amount: 450` classifies **B** — but fails the `< 200` guard. By default a failing class-B guard is a [tripwire](/docs/modules/guardrails#tripwires-and-escalate): it aborts the action outright.
+`amount: 450` classifies **B** but fails the `< 200` guard. By default a failing class-B guard is a [tripwire](/docs/modules/guardrails#tripwires-and-escalate): the action aborts.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -637,7 +630,7 @@ soat get-orchestration-run --orchestration-run-id "$RUN3_ID" \
   | jq '{status, outcome: .state.outcome, refusal: .artifacts.apply}'
 ```
 
-Expected output — the run **succeeds** down the `tripwire` edge; the refusal is data, not a crash:
+Expected output (the run succeeds down the `tripwire` edge):
 
 ```json
 {
@@ -650,7 +643,7 @@ Expected output — the run **succeeds** down the `tripwire` edge; the refusal i
 }
 ```
 
-A tripwire also files an [exception](/docs/modules/exceptions#severity) so the abort lands in a triage queue instead of a log line:
+A tripwire also files an [exception](/docs/modules/exceptions#severity):
 
 ```bash
 soat list-exceptions --project-id "$PROJECT_ID" --kind guardrail_tripwire \
@@ -713,14 +706,14 @@ curl -s "$SOAT_BASE_URL/api/v1/exceptions?project_id=$PROJECT_ID&kind=guardrail_
 </Tabs>
 
 :::tip
-Add `"escalate": true` to the document to soften this: a failing guard then routes to the approvals queue for a human decision instead of aborting. `escalate` is per-guardrail, and a tripwire from another applying guardrail still wins.
+`"escalate": true` in the document routes a failing guard to the approvals queue instead of aborting. It is per-guardrail; a tripwire from another applying guardrail still wins.
 :::
 
 ---
 
 ## Step 11 — Read the governance trail
 
-Every evaluation writes a `guardrail_evaluation` record. Those that **changed the call's outcome** — `route_to_approval`, `blocked`, `tripwire`, but not a plain `execute` — are also mirrored into the [audit log](/docs/modules/audit-log#system-originated-entries) as platform-originated entries.
+Every evaluation writes a `guardrail_evaluation` record. Those that changed the outcome (`route_to_approval`, `blocked`, `tripwire`, not plain `execute`) are also mirrored into the [audit log](/docs/modules/audit-log#system-originated-entries) as platform-originated entries.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -730,7 +723,7 @@ soat list-audit-entries --project-id "$PROJECT_ID" --action "guardrails:Evaluate
   | jq '[.data[] | {resource_srn, class: .detail.class, decision: .detail.decision, approval_id: .detail.approval_id}]'
 ```
 
-Expected output — the class-C route and the tripwire are recorded; the autonomous class-B `execute` from Step 8 is not (it is high-volume operational telemetry, kept only in the guardrail's own evaluation records):
+Expected output (the class-C route and the tripwire; the class-B `execute` from Step 8 stays only in the guardrail's own evaluation records):
 
 ```json
 [
@@ -749,7 +742,7 @@ Expected output — the class-C route and the tripwire are recorded; the autonom
 ]
 ```
 
-Each entry's `detail` also carries the `context_snapshot` — a flat map of **only** the vars the evaluation actually referenced, frozen at their evaluation-time values. It is the only way to answer "why did this pass?" after the application's context has moved on.
+Each entry's `detail` carries `context_snapshot`: only the vars the evaluation referenced, frozen at evaluation-time values.
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
@@ -779,9 +772,7 @@ curl -s "$SOAT_BASE_URL/api/v1/audit-log?project_id=$PROJECT_ID&action=guardrail
 
 ## Step 12 — Raise the floor for the whole project
 
-There is no override resource. To run a stricter posture, [attach a tighter guardrail at the project scope](/docs/modules/guardrails#running-a-tighter-posture-in-one-project) — an always-`C` document forces sign-off on every tool call in the project.
-
-Because composition is **stricter-wins**, this can only tighten: the `amount: 150` call that executed autonomously in Step 8 now parks.
+There is no override resource; [attach a tighter guardrail at the project scope](/docs/modules/guardrails#running-a-tighter-posture-in-one-project). An always-`C` document forces sign-off on every tool call in the project. Composition is stricter-wins, so the `amount: 150` call from Step 8 now parks.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -802,7 +793,7 @@ soat get-approval --approval-id "$(printf '%s\n' "$RUN4" | jq -r '.required_acti
   | jq '{policy_version}'
 ```
 
-Expected output — the same input, now gated, and `policy_version` names the **baseline** as the governing guardrail:
+Expected output (`policy_version` names the baseline as the governing guardrail):
 
 ```json
 { "status": "awaiting_input", "node_id": "apply" }
@@ -861,13 +852,13 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestration-runs" \
 </TabItem>
 </Tabs>
 
-Other projects — which don't carry the attachment — are untouched. A tenant can raise the floor, never lower it.
+Other projects are untouched. A tenant can raise the floor, never lower it.
 
 ---
 
 ## Step 13 — Edits are versioned, detach is gated
 
-Every write that changes a `document` increments `version` and archives the new one, so an approval item's `policy_version` always resolves to the exact text that governed it. A version's `config` holds the archived policy as `{ document }`. Metadata-only edits — and re-writing the document the guardrail already holds — archive nothing. See [Versioning](/docs/modules/guardrails#versioning).
+Every write that changes `document` increments `version` and archives it, so an approval item's `policy_version` resolves to the exact governing text. A version's `config` holds `{ document }`. Metadata-only edits and unchanged documents archive nothing. See [Versioning](/docs/modules/guardrails#versioning).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -883,16 +874,16 @@ soat get-guardrail-version --guardrail-id "$GUARDRAIL_ID" --version 1 \
   | jq '{version, guard: .config.document.guard}'
 ```
 
-Expected output — the live guardrail is now `version: 2`, and version 1's original `< 200` guard is still retrievable:
+Expected output (`version: 2` live; version 1's `< 200` guard still retrievable):
 
 ```json
 { "version": 2 }
 { "version": 1, "guard": { "<": [{ "var": "args.amount" }, 200] } }
 ```
 
-Attachments reference the guardrail's **id**, not a version, so this edit takes effect immediately everywhere it is attached — [dry-run](#step-5--dry-run-every-decision-before-attaching) an edit before writing it when the guardrail is attached at scale.
+Attachments reference the guardrail's id, not a version, so the edit applies immediately everywhere; [dry-run](#step-5--dry-run-every-decision-before-attaching) edits first when attached at scale.
 
-Deletion refuses to do what detach permissions forbid. While the guardrail is still attached, `delete-guardrail` returns `409` listing every reference:
+While the guardrail is attached, `delete-guardrail` returns `409` listing every reference:
 
 ```bash
 # → expect-fail
@@ -910,7 +901,7 @@ soat delete-guardrail --guardrail-id "$GUARDRAIL_ID"
 }
 ```
 
-Detach first — which requires `guardrails:DetachGuardrail` on top of `tools:UpdateTool` — and the delete succeeds:
+Detach first (`guardrails:DetachGuardrail` on top of `tools:UpdateTool`), then delete:
 
 ```bash
 soat update-tool --tool-id "$BUDGET_TOOL_ID" --guardrail-ids '[]' | jq '{guardrail_ids}'
@@ -978,11 +969,9 @@ curl -s -X DELETE "$SOAT_BASE_URL/api/v1/guardrails/$GUARDRAIL_ID" \
 
 ---
 
-The classification model, fail-closed evaluation rules, and stricter-wins composition are documented in [Guardrails](/docs/modules/guardrails).
-
 ## Next Steps
 
-- Feed live values into guards with `guardrail_context` and a `context_tool_id`, and cap a runaway run with `runtime.usage.orchestration_run_tokens` — see [Per-run spend ceilings](/docs/modules/guardrails#per-run-spend-ceilings).
-- Model an explicit human decision point in the graph instead of a guardrail-driven one with the [`approval` node](/docs/tutorials/approval-gate).
-- Cap aggregate spend rather than individual calls with [Cap Spend Per End User](/docs/tutorials/cap-spend-per-end-user).
-- Triage what a tripwire files — see [Exceptions](/docs/modules/exceptions).
+- [Per-run spend ceilings](/docs/modules/guardrails#per-run-spend-ceilings) — `guardrail_context`, `context_tool_id`, `runtime.usage.orchestration_run_tokens`.
+- [`approval` node](/docs/tutorials/approval-gate) — an explicit human decision point in the graph.
+- [Cap Spend Per End User](/docs/tutorials/cap-spend-per-end-user) — aggregate spend caps.
+- [Exceptions](/docs/modules/exceptions) — triage what a tripwire files.

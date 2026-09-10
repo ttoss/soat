@@ -14,32 +14,30 @@ import TabItem from '@theme/TabItem';
 
 # Write a Sonnet with a Workflow
 
-The [Orchestrate a Sonnet](/docs/tutorials/orchestrate-a-sonnet) tutorial builds
-a DAG that runs forward and terminates. This tutorial builds the same sonnet as a
-**[workflow](/docs/modules/workflows) a [task](/docs/modules/workflows) lives
-in**: a card that moves through named states, that an agent advances on its own,
-that a human reviews, and that can move **backward** for a revision — the case a
-DAG rejects by design. The poem is composed one stanza at a time — a state per
-stanza, each dispatching the agent to append the next quatrain, handing the
-poem-so-far forward through the task payload.
+[Orchestrate a Sonnet](/docs/tutorials/orchestrate-a-sonnet) builds a DAG that
+runs forward and terminates. This tutorial builds the same sonnet as a
+[workflow](/docs/modules/workflows) a [task](/docs/modules/workflows) lives in:
+a card that moves through named states, advanced by an agent, reviewed by a
+human, and able to move **backward** for a revision. One state per stanza
+dispatches the agent to append the next quatrain, handing the poem-so-far
+forward through the task payload.
 
 You will:
 
 1. Create a project, an AI provider, and a sonnet-writing [agent](/docs/modules/agents#examples).
-2. Define a [workflow](/docs/modules/workflows): `triage → create_text → stanza_1 → stanza_2 → stanza_3 → stanza_4 → review → published`.
-3. Wire each composing state's `on_enter` to **dispatch the agent**, feed it the poem-so-far, and route the result to the next stanza.
-4. Create a [task](/docs/modules/workflows) and watch the card compose itself stanza by stanza.
-5. Send the card **backward** (`review → stanza_4`) for a fresh closing couplet — the cycle a DAG rejects.
-6. **Guard** the publish transition, then close the task and read its full audited history.
+2. Define a workflow: `triage → create_text → stanza_1 → stanza_2 → stanza_3 → stanza_4 → review → published`.
+3. Wire each composing state's `on_enter` to dispatch the agent and route the result onward.
+4. Create a task and watch it compose itself.
+5. Send the card backward (`review → stanza_4`) for a new closing couplet.
+6. Guard the publish transition, close the task, read its audited history.
 
 ## Prerequisites
 
-- SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide.
-- New to SOAT? Read [Key Concepts](/docs/getting-started/concepts) for projects, agents, and tasks.
-- CLI installed and configured, or SDK set up. See [CLI](/docs/cli) or [SDK](/docs/sdk).
-- For production hardening (secrets, env vars), see [Configuration](/docs/self-hosting/configuration).
-- Server at `http://localhost:5047`.
-- [Ollama](https://ollama.com) running locally with a chat model available (or another [third-party LLM](/docs/tutorials/connect-third-party-llms)).
+- SOAT running locally at `http://localhost:5047` ([Quick Start](/docs/getting-started)).
+- [Key Concepts](/docs/getting-started/concepts) if new to SOAT.
+- [CLI](/docs/cli) or [SDK](/docs/sdk) set up.
+- [Configuration](/docs/self-hosting/configuration) for production hardening.
+- [Ollama](https://ollama.com) running locally with a chat model (or another [third-party LLM](/docs/tutorials/connect-third-party-llms)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -69,8 +67,7 @@ export SOAT_BASE_URL=http://localhost:5047
 
 ## Step 1 — Log in as admin
 
-Admin is the built-in superuser role. See [Users](/docs/modules/users#examples)
-for authentication details.
+Admin is the built-in superuser role ([Users](/docs/modules/users#examples)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -112,12 +109,9 @@ ADMIN_TOKEN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users/login" \
 
 ## Step 2 — Create a project, provider, and agent
 
-The [agent](/docs/modules/agents#examples) does one job: given a theme, write a
-short sonnet. It is a normal agent — the workflow will call it, not the other way
-around.
-
-This tutorial uses a local Ollama provider so it can run without external
-credentials. To connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see
+The [agent](/docs/modules/agents#examples) writes a short sonnet from a theme;
+the workflow calls it, not the other way around. For xAI, OpenAI, Anthropic, or
+Amazon Bedrock instead of Ollama, see
 [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
 
 <Tabs groupId="client">
@@ -197,18 +191,15 @@ AGENT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents" \
 
 ## Step 3 — Define the workflow
 
-Eight states model the card's life. The composing states — `create_text` and
-`stanza_1`…`stanza_4` — each carry `on_enter` automation: entering one dispatches
-the agent, whose output lands in `task.last_result`, and `on_complete` routes the
-card onward (see [Workflows & Tasks](/docs/modules/workflows) for the automation
-model). Each also declares `on_failure: abandon_to_review`, so a failed
-generation lands the card in front of a human instead of stalling with no route
-out.
+Eight states. The composing states (`create_text`, `stanza_1`…`stanza_4`) carry
+`on_enter` automation: entering one dispatches the agent, its output lands in
+`task.last_result`, and `on_complete` routes the card onward
+([Workflows & Tasks](/docs/modules/workflows)). Each declares
+`on_failure: abandon_to_review`, so a failed generation lands in front of a human.
 
-`review` is a `human` state — the card parks there until a person acts.
-`published` is `terminal`, so entering it closes the task. The `publish`
-transition carries a **guard**: the card can only be published once
-`payload.approved` is `true`.
+`review` is a `human` state (the card parks until a person acts). `published` is
+`terminal` (entering it closes the task). The `publish` transition carries a
+guard: `payload.approved` must be `true`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -446,8 +437,8 @@ WORKFLOW_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/workflows" \
 
 ## Step 4 — Create a task (a card)
 
-The [task](/docs/modules/workflows#task) is placed in the `initial` state,
-`triage`. Its `payload` carries the theme the agent will read.
+The [task](/docs/modules/workflows#task) starts in the `initial` state,
+`triage`; its `payload` carries the theme.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -503,20 +494,16 @@ The card is `open` in `triage`.
 
 ## Step 5 — Advance the card; the agent composes the sonnet
 
-Firing `start` moves the card into `create_text`. From there the card walks the
-chain on its own: each state's `on_complete` rule fires the next transition **as
-the `automation` principal**. While a generation runs the card shows
-`automation_status: running`; the poem-so-far accumulates in `last_result` until
-the card lands in `review`. See
-[Per-state automation](/docs/modules/workflows#per-state-automation-on_enter).
+Firing `start` moves the card into `create_text`; from there each state's
+`on_complete` rule fires the next transition **as the `automation` principal**.
+During a generation the card shows `automation_status: running`; the poem-so-far
+accumulates in `last_result` until the card lands in `review`
+([Per-state automation](/docs/modules/workflows#per-state-automation-on_enter)).
 
-Five generations run back to back, so the card takes a while to arrive — poll
-until `.state` is `review`. The `# → retry 480` budget is deliberately generous:
-each attempt costs about a second of sleep plus a CLI round trip, so it buys
-roughly ten minutes, against the 303s the five generations took on the CI sandbox
-in the slowest run measured so far. The sandbox model is CPU-only and shares the
-box with whatever the previous tutorial left running in the background, so a
-budget sized to the _typical_ run expires on the slow ones.
+Five generations run back to back, so poll until `.state` is `review`. The
+`# → retry 480` budget (about a second per attempt, roughly ten minutes) covers
+the 303s the slowest CI sandbox run took on a CPU-only model sharing the box
+with the previous tutorial's leftovers.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -576,18 +563,16 @@ curl -s "$SOAT_BASE_URL/api/v1/tasks/$TASK_ID" -H "Authorization: Bearer $ADMIN_
 </TabItem>
 </Tabs>
 
-The card is now in `review`, holding the full sonnet it composed one stanza at a
-time — no application-side state, no glue code between the stages.
+The card is in `review`, holding the full sonnet, with no application-side state.
 
 ---
 
 ## Step 6 — Send it backward for a revision
 
-The reviewer wants a different ending. `review → stanza_4` is a **backward move** —
-exactly the cycle a DAG rejects. Firing `revise` re-enters `stanza_4` for a new
-closing couplet, then routes back to `review` through the same `to_review`
-transition. The revision re-enters the chain at the step that needs redoing —
-one generation, not five.
+`review → stanza_4` is a backward move, the cycle a DAG rejects. Firing `revise`
+re-enters `stanza_4` for a new closing couplet, then routes back to `review`
+through the same `to_review` transition: one generation, not five. See
+[Workflows & Tasks](/docs/modules/workflows).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -631,12 +616,11 @@ until curl -s "$SOAT_BASE_URL/api/v1/tasks/$TASK_ID" -H "Authorization: Bearer $
 
 ## Step 7 — Guarded publish
 
-The `publish` transition's guard requires `payload.approved == true`. Firing it
-before approving is **rejected** (`TASK_GUARD_REJECTED`) with no state change.
-Approve via a payload patch, then publish — entering the `terminal` state closes
-the task. [`PATCH /tasks/{task_id}`](/docs/modules/workflows#task) shallow-merges
-the patch, so setting `approved` alone keeps the composed sonnet in
-`last_result`.
+Firing `publish` before `payload.approved == true` is rejected
+(`TASK_GUARD_REJECTED`) with no state change. Approve via a payload patch, then
+publish; entering the `terminal` state closes the task.
+[`PATCH /tasks/{task_id}`](/docs/modules/workflows#task) shallow-merges, so
+setting `approved` alone keeps the sonnet in `last_result`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -702,10 +686,9 @@ The card is `published` and `closed`.
 
 ## Step 8 — Read the audited history
 
-Every move — the human `start`, the agent's `to_stanza_1`…`to_review` chain, the
-backward `revise`, the guarded `publish` — is one append-only record.
-Automation-driven moves carry their `generation_id` as provenance. See
-[Transition history](/docs/modules/workflows#transition-history).
+Every move (`start`, the automated `to_stanza_1`…`to_review` chain, `revise`,
+`publish`) is one append-only record; automation-driven moves carry their
+`generation_id` ([Transition history](/docs/modules/workflows#transition-history)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -741,9 +724,7 @@ curl -s "$SOAT_BASE_URL/api/v1/tasks/$TASK_ID/history" -H "Authorization: Bearer
 
 ## The board query
 
-The workflow's states are kanban columns and each task a card — one query renders
-a column, with no application-side state. See
-[Tasks](/docs/modules/workflows#task):
+States are kanban columns and tasks are cards; one query renders a column ([Tasks](/docs/modules/workflows#task)):
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -781,5 +762,5 @@ curl -s "$SOAT_BASE_URL/api/v1/tasks?project_id=$PROJECT_ID&workflow_id=$WORKFLO
 
 ## Where to go next
 
-- [Workflows & Tasks](/docs/modules/workflows) — the full data model, guards, and automation reference.
-- [Orchestrate a Sonnet](/docs/tutorials/orchestrate-a-sonnet) — the same poem as a pipeline that ends, for contrast.
+- [Workflows & Tasks](/docs/modules/workflows) — data model, guards, automation.
+- [Orchestrate a Sonnet](/docs/tutorials/orchestrate-a-sonnet) — the same poem as a DAG.

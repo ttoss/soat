@@ -14,37 +14,25 @@ import TabItem from '@theme/TabItem';
 
 # Automate a Flow with Triggers
 
-A [Trigger](/docs/modules/triggers) binds a **starter** — `manual`, `webhook`, or
-`schedule` — to an **executable target** — an orchestration, agent, or tool. Every
-firing is recorded as an auditable [firing record](/docs/modules/triggers#data-model),
-and runs under a confined run-as identity derived from the trigger's creator. You will
-bind a small orchestration to all three starters: fire a **manual** trigger and inspect
-the firing record, schedule the same flow with **cron**, and create a **webhook** trigger
-with its signing secret.
+A [Trigger](/docs/modules/triggers) binds a starter (`manual`, `webhook`, `schedule`)
+to a target (orchestration, agent, tool). Each firing is an auditable
+[firing record](/docs/modules/triggers#data-model) run under an identity derived from
+the trigger's creator. You bind one orchestration to all three starters.
 
 ## Prerequisites
 
-- SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide to bring the stack up with Docker Compose.
-- New to SOAT? Read [Key Concepts](/docs/getting-started/concepts) to understand projects, orchestrations, and the IAM model first.
-- CLI installed and configured, or SDK set up. See [CLI](/docs/cli) or [SDK](/docs/sdk).
-- For production hardening (secrets, env vars), see [Configuration](/docs/self-hosting/configuration).
-- Server is at `http://localhost:5047`.
+- SOAT running locally ([Quick Start](/docs/getting-started)); [Key Concepts](/docs/getting-started/concepts); [Configuration](/docs/self-hosting/configuration).
+- [CLI](/docs/cli) or [SDK](/docs/sdk); server at `http://localhost:5047`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
-
-Export your server URL (used in subsequent steps):
 
 ```bash
 export SOAT_BASE_URL=http://localhost:5047
 ```
 
-CLI path flags in this tutorial are resource-specific and kebab-cased, for example `--trigger-id` and `--project-id`.
-
 </TabItem>
 <TabItem value="sdk" label="SDK">
-
-All code snippets below use `SoatClient` instances. The authenticated instance is created in Step 1 after login.
 
 ```ts
 import { SoatClient } from '@soat/sdk';
@@ -52,8 +40,6 @@ import { SoatClient } from '@soat/sdk';
 
 </TabItem>
 <TabItem value="curl" label="curl">
-
-Export your server URL once:
 
 ```bash
 export SOAT_BASE_URL=http://localhost:5047
@@ -66,7 +52,7 @@ export SOAT_BASE_URL=http://localhost:5047
 
 ## Step 1 — Log in as admin
 
-Admin is the built-in superuser role. See [IAM — Authentication](/docs/modules/iam#authentication) for details on JWT tokens and the admin role.
+See [IAM — Authentication](/docs/modules/iam#authentication).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -74,8 +60,6 @@ Admin is the built-in superuser role. See [IAM — Authentication](/docs/modules
 ```bash
 soat login-user --username admin --password Admin1234!
 ```
-
-The CLI prints a token. Save it to your profile:
 
 ```bash
 soat configure
@@ -118,7 +102,7 @@ echo "Admin token: $ADMIN_TOKEN"
 
 ## Step 2 — Create a project
 
-Triggers, orchestrations, and firings all live inside a [Project](/docs/modules/projects).
+Every resource lives inside a [Project](/docs/modules/projects).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -157,9 +141,8 @@ echo "Project: $PROJECT_ID"
 
 ## Step 3 — Create an orchestration to activate
 
-The trigger's target can be an orchestration, agent, or tool. Here we use a minimal
-[Orchestration](/docs/modules/orchestrations) — a single `transform` node — so it runs
-synchronously without needing an AI provider.
+A single-`transform` [Orchestration](/docs/modules/orchestrations) runs synchronously
+without an AI provider.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -214,10 +197,9 @@ echo "Orchestration: $ORCH_ID"
 
 ## Step 4 — Create a manual trigger
 
-A `manual` [Trigger](/docs/modules/triggers) is fired on demand. `input` is the trigger's
-static input, shallow-merged under each firing's runtime input. Creating a trigger requires
-the target-start permission (`orchestrations:StartRun` here) — see
-[Triggers — Run-as Identity](/docs/modules/triggers#run-as-identity).
+`input` is the [Trigger](/docs/modules/triggers)'s static input, shallow-merged under
+each firing's runtime input. Creating a trigger requires the target-start permission
+(`orchestrations:StartRun`) — [Triggers — Run-as Identity](/docs/modules/triggers#run-as-identity).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -269,9 +251,9 @@ echo "Trigger: $TRIGGER_ID"
 
 ## Step 5 — Fire the trigger and inspect the firing
 
-Firing a `manual` trigger runs the target synchronously and returns a terminal
-[firing record](/docs/modules/triggers#data-model). The fire-time `input` is merged over the
-trigger's static `input`. Each firing is retained for auditing.
+A `manual` fire runs the target synchronously and returns a terminal
+[firing record](/docs/modules/triggers#data-model); fire-time `input` is merged over
+the static `input`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -330,9 +312,8 @@ curl -s "$SOAT_BASE_URL/api/v1/trigger-firings?trigger_id=$TRIGGER_ID" \
 
 ## Step 6 — Schedule the same flow with cron
 
-A `schedule` trigger fires on a cron cadence instead of on demand. The `cron` field is a
-strict 5-field UTC expression; the server computes `next_fire_at` and a background poller
-fires due triggers exactly once, coalescing missed occurrences. See
+`cron` is a strict 5-field UTC expression; the server computes `next_fire_at` and a
+poller fires due triggers exactly once, coalescing missed occurrences. See
 [Triggers — Schedules and Misfire Coalescing](/docs/modules/triggers#schedules-and-misfire-coalescing).
 
 <Tabs groupId="client">
@@ -383,17 +364,16 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/triggers" \
 </TabItem>
 </Tabs>
 
-The scheduler fires this trigger automatically; you do not fire it yourself.
+The scheduler fires it; you do not.
 
 ---
 
 ## Step 7 — Trigger from an inbound webhook
 
-A `webhook` trigger is fired by an external system POSTing to a public inbound endpoint.
-Creating one returns a signing `secret` (also retrievable with `get-trigger-secret` and
-replaceable with `rotate-trigger-secret`). See
-[Triggers — Inbound Webhook Endpoint](/docs/modules/triggers#inbound-webhook-endpoint).
-This is the inbound counterpart to outbound [Webhooks](/docs/modules/webhooks).
+An external system POSTs to a public inbound endpoint. Creation returns a signing
+`secret` (also via `get-trigger-secret`; replace with `rotate-trigger-secret`). See
+[Triggers — Inbound Webhook Endpoint](/docs/modules/triggers#inbound-webhook-endpoint);
+the outbound counterpart is [Webhooks](/docs/modules/webhooks).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -463,15 +443,14 @@ curl -s -X POST "$SOAT_BASE_URL/hooks/triggers/$WEBHOOK_TRIGGER_ID" \
 </TabItem>
 </Tabs>
 
-The inbound `POST /hooks/triggers/{trigger_id}` call is made by the **external system**, not
-the SOAT CLI — it carries no bearer token and is authenticated solely by the
-`X-Soat-Signature` HMAC header over the raw request body.
+`POST /hooks/triggers/{trigger_id}` is made by the external system with no bearer
+token; it is authenticated by the `X-Soat-Signature` HMAC header over the raw body.
 
 ---
 
 ## Next Steps
 
-The same pattern works with `target_type: agent` and `target_type: tool`. To ship a trigger
-alongside the resource it activates as a single deployable stack, declare it as a `trigger`
-resource in a [Formation](/docs/modules/formations) template — see
+The same pattern works with `target_type: agent` and `target_type: tool`. To ship a
+trigger with its target, declare a `trigger` resource in a
+[Formation](/docs/modules/formations) template —
 [Triggers — Formation Support](/docs/modules/triggers#formation-support).

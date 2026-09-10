@@ -11,9 +11,9 @@ Encrypted storage for sensitive values such as API keys and credentials.
 
 ## Overview
 
-Secrets are associated with a project. Values are encrypted at rest using AES-256-GCM and are **never returned** by any API response. Once stored, a secret's value can only be replaced. All operations return a `has_value` boolean to indicate whether an encrypted value is on file.
+Secrets belong to a project. Values are encrypted at rest with AES-256-GCM, **never returned**, and can only be replaced. Every response carries `has_value`.
 
-Secrets can be linked to [AI Providers](./ai-providers.md) to supply credentials at inference time. See it end to end in [Connect Third-Party LLMs - Step 3 (Store provider credentials as secrets)](/docs/tutorials/connect-third-party-llms#step-3--store-provider-credentials-as-secrets) and [Step 4 (Create provider records)](/docs/tutorials/connect-third-party-llms#step-4--create-provider-records).
+Secrets supply credentials to [AI Providers](./ai-providers.md) at inference time: [Connect Third-Party LLMs - Step 3 (Store provider credentials as secrets)](/docs/tutorials/connect-third-party-llms#step-3--store-provider-credentials-as-secrets) and [Step 4 (Create provider records)](/docs/tutorials/connect-third-party-llms#step-4--create-provider-records).
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -38,15 +38,15 @@ Secrets can be linked to [AI Providers](./ai-providers.md) to supply credentials
 
 ### Secret References (`{{secret:...}}`)
 
-Any string field that supports secret references can embed a token of the form:
+A string field supporting secret references may embed:
 
 ```
 {{secret:sec_01HXYZ...}}
 ```
 
-The token — not the raw value — is what gets stored and echoed back by `GET`/`LIST` endpoints. The server resolves the token to the decrypted value at the point of use only, e.g. right before an outbound HTTP request. The referenced secret must belong to the same project as the resource that uses it; otherwise the API fails fast with `400 SECRET_NOT_FOUND` at create/update time.
+The token, not the value, is stored and echoed by `GET`/`LIST`; it is resolved at the point of use (e.g. before an outbound HTTP request). The secret must belong to the same project as the resource, else `400 SECRET_NOT_FOUND` at create/update.
 
-Currently supported fields:
+Supported fields:
 
 | Resource | Field | Resolved when |
 | --- | --- | --- |
@@ -62,13 +62,13 @@ Currently supported fields:
 }
 ```
 
-To rotate a credential, update the secret's value — every tool referencing it picks up the new value on its next call.
+Updating the secret's value rotates the credential for every referencing tool on its next call.
 
 For referencing a secret created in the same [Formation](./formations.md) template, see [Sub Expressions](./formations.md#sub-expressions).
 
 ### Deletion
 
-By default, deleting a secret that is still referenced by one or more AI providers returns `409 Conflict`. Pass `?force=true` to cascade-delete the dependent AI providers along with the secret.
+Deleting a secret still referenced by AI providers returns `409 Conflict`; `?force=true` cascade-deletes the dependents.
 
 ## Configuration
 

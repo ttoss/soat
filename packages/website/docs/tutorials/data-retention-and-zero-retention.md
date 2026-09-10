@@ -16,22 +16,12 @@ import TabItem from '@theme/TabItem';
 
 # Data Retention and Zero-Retention
 
-SOAT separates **content** (the [trace](/docs/modules/traces) steps, a generation's `metadata`, `error` and `extraction`) from **skeleton** (ids, timestamps, `status`, `stop_reason`, token counts, cost, and usage-attribution fields). Every mechanism in this tutorial destroys — or never writes — the first while preserving the second, so an erasure never costs you a billing record.
-
-You will:
-
-1. Run a turn and confirm the content is stored.
-2. Purge one trace on request; the row survives as a provable skeleton.
-3. Purge a single [generation](/docs/modules/generations)'s content.
-4. Prove the usage and cost ledger is untouched by a purge.
-5. Automate it with a project retention window.
-6. Turn on zero-retention for one agent — content is never written at all.
-7. Make it a project-wide mandate that agents cannot opt out of.
+SOAT separates **content** ([trace](/docs/modules/traces) steps, a [generation](/docs/modules/generations)'s `metadata`, `error` and `extraction`) from **skeleton** (ids, timestamps, `status`, `stop_reason`, token counts, cost, usage-attribution fields). Every mechanism here destroys or never writes the first and preserves the second, so an erasure never costs a billing record.
 
 ## Prerequisites
 
 - SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide to bring the stack up with Docker Compose.
-- [Ollama](https://ollama.com) running locally with `qwen2.5:0.5b` available. This tutorial uses a local provider so it runs without external credentials — to connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
+- [Ollama](https://ollama.com) running locally with `qwen2.5:0.5b` available. To connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
 - New to SOAT? Read [Key Concepts](/docs/getting-started/concepts) to understand projects, agents, and sessions first.
 - CLI installed and configured, or SDK set up. See [CLI](/docs/cli) or [SDK](/docs/sdk).
 - For production hardening (secrets, env vars), see [Configuration](/docs/self-hosting/configuration).
@@ -65,7 +55,7 @@ export SOAT_BASE_URL=http://localhost:5047
 
 ## Step 1 — Log in as admin
 
-Retention and zero-retention are project settings, and changing a project requires the admin role. See [Users](/docs/modules/users#examples) for authentication details.
+Changing a project requires the admin role. See [Users](/docs/modules/users#examples) for authentication details.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -107,7 +97,7 @@ ADMIN_TOKEN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users/login" \
 
 ## Step 2 — Create a project, provider, and agent
 
-Retention is scoped to the [project](/docs/modules/projects), so the project is the boundary every policy in this tutorial applies to.
+Retention is scoped to the [project](/docs/modules/projects).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -182,7 +172,7 @@ AGENT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents" \
 
 ## Step 3 — Run a turn, and confirm the content is stored
 
-Send a message a compliance officer would care about, then read the trace back. `file_id` is the pointer to the stored steps object; `content_redacted_at` is `null` while the content is intact.
+Send a message with sensitive content, then read the trace back. `file_id` points to the stored steps object; `content_redacted_at` is `null` while the content is intact.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -202,7 +192,7 @@ soat get-trace --trace-id "$TRACE_ID" \
   | jq '{id, file_id, step_count, content_redacted_at}'
 ```
 
-The steps object holds the whole exchange — download it and the account number is right there:
+The steps object holds the whole exchange, account number included:
 
 ```bash
 TRACE_FILE_ID=$(soat get-trace --trace-id "$TRACE_ID" | jq -r '.file_id')
@@ -283,7 +273,7 @@ Expected output (ids will differ):
 
 ## Step 4 — Purge the trace on request
 
-This is the erasure primitive: `purge-trace-content` deletes the steps object **from storage** and clears the trace's content columns. It requires the `traces:PurgeTraceContent` action.
+`purge-trace-content` deletes the steps object from storage and clears the trace's content columns. It requires the `traces:PurgeTraceContent` action.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -334,7 +324,7 @@ Expected output:
 Three things happened:
 
 - **The row survived as a skeleton** carrying `content_redacted_at`, so the erasure is provable to an auditor (a `404` would be indistinguishable from a resource that never existed).
-- **The bytes are gone, not orphaned.** The steps object and its `File` row were deleted from storage. Fetching it now fails:
+- **The bytes are gone.** The steps object and its `File` row were deleted from storage. Fetching it now fails:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -344,7 +334,7 @@ Three things happened:
 soat download-file-base64 --file-id "$TRACE_FILE_ID"
 ```
 
-Purging again is a no-op — the operation is idempotent and keeps the original timestamp:
+Purging again is an idempotent no-op that keeps the original timestamp:
 
 ```bash
 soat purge-trace-content --trace-id "$TRACE_ID" | jq '{content_redacted_at}'
@@ -378,13 +368,13 @@ curl -s -X DELETE "$SOAT_BASE_URL/api/v1/traces/$TRACE_ID/content" \
 </TabItem>
 </Tabs>
 
-- **It cascaded.** Every descendant trace and its generations were purged too — a nested agent call writes its own steps object, which would otherwise stay readable.
+- **It cascaded.** Every descendant trace and its generations were purged too; a nested agent call writes its own steps object.
 
 ---
 
 ## Step 5 — Purge a single generation
 
-`purge-generation-content` is the narrower operation: it clears one generation's `metadata`, `error`, `extraction` and the internal recovery state of a paused run, without touching sibling generations. It requires `generations:PurgeGenerationContent`.
+`purge-generation-content` clears one generation's `metadata`, `error`, `extraction` and the internal recovery state of a paused run, without touching sibling generations. It requires `generations:PurgeGenerationContent`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -420,14 +410,14 @@ curl -s -X DELETE "$SOAT_BASE_URL/api/v1/generations/$GENERATION_ID/content" \
 </Tabs>
 
 :::warning
-A generation purge does **not** delete the parent trace's steps object, which holds this generation's content alongside its siblings'. To erase a run completely, purge the **trace** — that is the operation that deletes bytes from storage and cascades to every generation in the tree.
+A generation purge does **not** delete the parent trace's steps object, which holds this generation's content alongside its siblings'. To erase a run completely, purge the **trace**.
 :::
 
 ---
 
 ## Step 6 — Confirm the ledger survived
 
-The [usage](/docs/modules/usage) meter for the purged generation is intact — a deletion request never costs the record that the spend happened.
+The [usage](/docs/modules/usage) meter for the purged generation is intact.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -471,13 +461,13 @@ curl -s "$SOAT_BASE_URL/api/v1/generations/$GENERATION_ID" \
 </TabItem>
 </Tabs>
 
-Ids, timestamps, `status`, `stop_reason`, token counts, cost, and every attribution field (`action_id`, `trigger_id`, `orchestration_run_id`, `node_id`, `agent_version`, `routing`) are preserved on purpose. `cost_usd` is `null` above only because this local model has no price rows — see [Metering and Budgets](/docs/tutorials/metering-and-budgets); the purge does not touch that number either way.
+Ids, timestamps, `status`, `stop_reason`, token counts, cost, and every attribution field (`action_id`, `trigger_id`, `orchestration_run_id`, `node_id`, `agent_version`, `routing`) are preserved. `cost_usd` is `null` above only because this local model has no price rows (see [Metering and Budgets](/docs/tutorials/metering-and-budgets)); the purge does not touch it either way.
 
 ---
 
 ## Step 7 — Automate it with a retention window
 
-A purge on request depends on someone remembering to ask. `trace_content_retention_days` on the project turns it into policy: a daily sweep content-purges every trace in the project older than the window.
+`trace_content_retention_days` on the project makes erasure a policy: a daily sweep content-purges every trace in the project older than the window.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -514,14 +504,14 @@ curl -s -X PATCH "$SOAT_BASE_URL/api/v1/projects/$PROJECT_ID" \
 
 What the sweep guarantees:
 
-- **Opt-in.** `null` is the default and disables retention entirely.
-- **One purge implementation.** The sweep calls the same code path as Step 4 — same cascade, byte deletion, `content_redacted_at` semantics, audit entries and `traces.content_purged` events.
-- **A run is purged as a unit.** The sweep selects root traces; the whole subtree goes with the root.
-- **Auditable.** Sweep purges are stamped `content_redacted_by_principal_type: "system"` / `content_redacted_by_principal_id: "retention_sweep"`, distinguishable from a requested erasure.
+- **Opt-in.** `null` is the default and disables retention.
+- **One purge implementation.** The sweep uses the same code path as Step 4: same cascade, byte deletion, `content_redacted_at` semantics, audit entries and `traces.content_purged` events.
+- **A run is purged as a unit.** The sweep selects root traces; the subtree goes with the root.
+- **Auditable.** Sweep purges are stamped `content_redacted_by_principal_type: "system"` / `content_redacted_by_principal_id: "retention_sweep"`.
 
-The sweep's schedule is server configuration — see [Traces — Configuration](/docs/modules/traces#configuration) for `CONTENT_RETENTION_SWEEP_INTERVAL_MS` and `CONTENT_RETENTION_SWEEP_DISABLED`.
+The sweep schedule is server configuration; see [Traces — Configuration](/docs/modules/traces#configuration) for `CONTENT_RETENTION_SWEEP_INTERVAL_MS` and `CONTENT_RETENTION_SWEEP_DISABLED`.
 
-Clear the window with `null` to go back to keeping content until it is purged on demand:
+Clear the window with `null` to keep content until purged on demand:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -558,7 +548,7 @@ curl -s -X PATCH "$SOAT_BASE_URL/api/v1/projects/$PROJECT_ID" \
 
 ## Step 8 — Zero-retention for one agent
 
-Retention deletes content after the fact; **zero-retention never writes it** — content that was never written cannot leak, be missed by a sweep, or sit in a backup. Create a second agent and opt it in with `trace_content_mode: none`.
+Retention deletes content after the fact; zero-retention never writes it. Create a second agent with `trace_content_mode: none`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -610,7 +600,7 @@ curl -s -X PATCH "$SOAT_BASE_URL/api/v1/agents/$INTAKE_AGENT_ID" \
 </TabItem>
 </Tabs>
 
-Now run a turn through it. The reply still reaches the caller — only the durable record is a skeleton.
+Run a turn through it. The reply still reaches the caller; only the durable record is a skeleton.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -702,7 +692,7 @@ Expected output — the marker is set from the moment the row exists:
 }
 ```
 
-The principal id distinguishes **never stored** (`zero_retention`) from **stored, then erased** (a user, an API key, or `retention_sweep`). The skeleton is still written unchanged, so metering is unaffected:
+The principal id distinguishes never stored (`zero_retention`) from stored-then-erased (a user, an API key, or `retention_sweep`). The skeleton is written unchanged, so metering is unaffected:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -734,14 +724,14 @@ curl -s "$SOAT_BASE_URL/api/v1/usage/events?generation_id=$(printf '%s\n' "$INTA
 </Tabs>
 
 :::warning[Trade-off: no recovery after a restart]
-The state that resumes a generation paused on a [client tool](/docs/tutorials/client-tools) is itself content, so it is not persisted in this mode. A generation still pauses and resumes normally within a running server, but **a generation paused when the server restarts cannot be recovered**. If restart-recovery matters more than never-stored, use a retention window instead.
+The state that resumes a generation paused on a [client tool](/docs/tutorials/client-tools) is content, so it is not persisted in this mode. A generation still pauses and resumes within a running server, but **a generation paused when the server restarts cannot be recovered**. If restart-recovery matters more, use a retention window.
 :::
 
 ---
 
 ## Step 9 — Make it a project-wide mandate
 
-Setting `trace_content_mode: none` on the project applies zero-retention to every agent in it — including agents created later.
+`trace_content_mode: none` on the project applies zero-retention to every agent in it, including agents created later.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -765,7 +755,7 @@ REGULATED_AGENT_ID=$(soat create-agent \
   --instructions "You are a concise assistant." | jq -r '.id')
 ```
 
-The project is a **floor**: an agent may tighten to `none`, but it cannot loosen back to `full`.
+The project is a floor: an agent may tighten to `none` but cannot loosen back to `full`.
 
 ```bash
 # → expect-fail
@@ -834,7 +824,7 @@ curl -s -X PATCH "$SOAT_BASE_URL/api/v1/agents/$REGULATED_AGENT_ID" \
 </TabItem>
 </Tabs>
 
-An agent's `null` (the default) inherits the project, and resolution **fails closed**: an unrecognised stored mode resolves to `none`.
+An agent's `null` (the default) inherits the project; resolution fails closed: an unrecognised stored mode resolves to `none`.
 
 ---
 

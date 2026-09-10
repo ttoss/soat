@@ -6,17 +6,15 @@ slug: /getting-started
 
 # Quick Start
 
-Get SOAT running locally with Docker Compose in under five minutes.
-
 ## Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) 24+
 - [Docker Compose](https://docs.docker.com/compose/install/) v2+
-- [curl](https://curl.se/) and [jq](https://jqlang.github.io/jq/) (for the API examples below)
+- [curl](https://curl.se/) and [jq](https://jqlang.github.io/jq/)
 
 ## 1. Create a Docker Compose file
 
-Create a new directory and save the following as `docker-compose.yml`:
+Save as `docker-compose.yml`:
 
 ```yaml
 services:
@@ -86,9 +84,7 @@ volumes:
 ```
 
 :::warning
-Change the secrets before going to production
-
-Replace `SOAT_ADMIN_PASSWORD` and `SECRETS_ENCRYPTION_KEY` with strong values before exposing SOAT outside of localhost. See [Configuration](/docs/self-hosting/configuration) for details.
+Replace `SOAT_ADMIN_PASSWORD` and `SECRETS_ENCRYPTION_KEY` with strong values before exposing SOAT outside localhost. See [Configuration](/docs/self-hosting/configuration).
 :::
 
 ## 2. Start the stack
@@ -97,21 +93,17 @@ Replace `SOAT_ADMIN_PASSWORD` and `SECRETS_ENCRYPTION_KEY` with strong values be
 docker compose up -d
 ```
 
-This starts three services:
-
 | Service    | Description                                                          |
 | ---------- | -------------------------------------------------------------------- |
 | `database` | PostgreSQL 18 with pgvector for relational and vector storage        |
 | `ollama`   | Local LLM runtime (downloads `qwen3-embedding` and `qwen2.5` models) |
 | `server`   | SOAT REST API + MCP server, exposed on port **5047**                 |
 
-The first run pulls Docker images and downloads the Ollama models, which may take a few minutes. Wait until all services are healthy:
+The first run pulls images and Ollama models (a few minutes). Wait until all three show `healthy` or `running`:
 
 ```bash
 docker compose ps
 ```
-
-All three services should show `healthy` or `running`.
 
 ## 3. Log in and obtain a token
 
@@ -123,11 +115,9 @@ TOKEN=$(curl -s -X POST http://localhost:5047/api/v1/users/login \
 echo "Token: ${TOKEN:0:40}..."
 ```
 
-All subsequent requests use this JWT in the `Authorization` header.
+Subsequent requests send this JWT in the `Authorization` header.
 
 ## 4. Create your first project
-
-Projects are the primary resource boundary in SOAT. Every document, file, secret, and agent belongs to a project.
 
 ```bash
 PROJECT=$(curl -s -X POST http://localhost:5047/api/v1/projects \
@@ -142,7 +132,7 @@ PROJECT_ID=$(echo "$PROJECT" | jq -r '.id')
 
 ## 5. Send your first chat message
 
-First, register Ollama as an AI provider for the project:
+Register Ollama as an AI provider for the project:
 
 ```bash
 AI_PROVIDER_ID=$(curl -s -X POST http://localhost:5047/api/v1/ai-providers \
@@ -159,7 +149,7 @@ AI_PROVIDER_ID=$(curl -s -X POST http://localhost:5047/api/v1/ai-providers \
 echo "AI Provider: $AI_PROVIDER_ID"
 ```
 
-Then send a stateless completion — no chat resource required:
+Send a stateless completion (no chat resource required):
 
 ```bash
 curl -s -X POST http://localhost:5047/api/v1/chat/completions \
@@ -174,11 +164,9 @@ curl -s -X POST http://localhost:5047/api/v1/chat/completions \
   }" | jq '.choices[0].message.content'
 ```
 
-You should see a short answer from the configured model running locally via Ollama.
-
 ## 6. What's next?
 
-If you continue with the CLI docs and tutorials, path parameters use resource-specific kebab-case flags such as `--project-id`, `--agent-id`, and `--session-id` rather than a generic `--id`.
+CLI path parameters are resource-specific kebab-case flags (`--project-id`, `--agent-id`, `--session-id`), never a generic `--id`.
 
 | Goal                                           | Where to go                                                     |
 | ---------------------------------------------- | --------------------------------------------------------------- |

@@ -11,9 +11,9 @@ Generation records track individual LLM generation runs started by agents, inclu
 
 ## Overview
 
-Every agent generation ([`POST /agents/:id/generate`](/docs/api/agents/create-agent-generation), session generation, sub-agent calls) creates a generation record before the model is called. The record tracks the run through its lifecycle and — when the run fails — stores a structured error payload so failed generations are distinguishable from pending ones and can be debugged post-mortem.
+Every agent generation ([`POST /agents/:id/generate`](/docs/api/agents/create-agent-generation), session generation, sub-agent calls) creates a generation record before the model is called. The record tracks the run through its lifecycle and, when the run fails, stores a structured error payload so failed generations are distinguishable from pending ones.
 
-Generations can be listed via [`GET /generations`](/docs/api/generations/list-generations) (filter by `agent_id`, `trace_id`, or `status`), and each record can be retrieved via [`GET /generations/:generation_id`](/docs/api/generations/get-generation).
+List with [`GET /generations`](/docs/api/generations/list-generations) (filter by `agent_id`, `trace_id`, or `status`); read one with [`GET /generations/:generation_id`](/docs/api/generations/get-generation).
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -63,27 +63,23 @@ Generations can be listed via [`GET /generations`](/docs/api/generations/list-ge
 
 ### Starting principal
 
-Every generation records who started it in `started_by_principal_type` /
-`started_by_principal_id`. When the request was authenticated with an API key the
-principal is the **key itself** (`key_…`), so a generation names which key acted
-rather than only the user that owns it; a JWT-authenticated request records the
-user (`user_…`).
+`started_by_principal_type` / `started_by_principal_id` record who started the generation.
+An API-key request records the **key itself** (`key_…`), so the generation names which key
+acted rather than only the owning user; a JWT-authenticated request records the user
+(`user_…`).
 
-The pair is durable identity, not a log line: work that resumes after the
-original request is gone re-mints a short-lived credential from it. That is what
-lets an [approval continuation](./approvals.md#continuation-identity) — possibly
-days later — authenticate its `builtin` tools as the principal that started the
-chain, and it is why a generation started by a request-less drive (a
-[workflow dispatch](./workflows.md), an
-[orchestration node](./orchestrations.md#durable-background-execution)) records
-the drive's principal rather than nothing.
+The pair is durable identity: work that resumes after the original request is gone
+re-mints a short-lived credential from it. That lets an
+[approval continuation](./approvals.md#continuation-identity), possibly days later,
+authenticate its `builtin` tools as the principal that started the chain, and it is why a
+generation started by a request-less drive (a [workflow dispatch](./workflows.md), an
+[orchestration node](./orchestrations.md#durable-background-execution)) records the
+drive's principal.
 
-Both fields are `null` when the chain has no re-mintable principal — a
-generation started by a [trigger](./triggers.md) or an
-[OAuth](./oauth.md) token. Each of those carries its authority in the token (the
-trigger's attached policy, the consented scope) rather than in the principal, so
-recording one would let a later re-mint drop that boundary and act with the whole
-of the owning user's access.
+Both fields are `null` when the chain has no re-mintable principal: a generation started
+by a [trigger](./triggers.md) or an [OAuth](./oauth.md) token. Each carries its authority
+in the token (the trigger's attached policy, the consented scope), so recording a
+principal would let a later re-mint act with the whole of the owning user's access.
 
 ### Lifecycle
 
@@ -91,13 +87,13 @@ A generation starts as `in_progress`. It transitions to:
 
 - `requires_action` when a client tool call pauses the run and the caller must submit tool outputs.
 - `completed` when the model finishes (the `stop_reason` carries the finish reason).
-- `failed` when the run errors — for example when the upstream AI provider returns an error or is unreachable. `stop_reason` is set to `error` and the `error` field carries the failure details.
+- `failed` when the run errors, for example when the upstream AI provider returns an error or is unreachable. `stop_reason` is set to `error` and the `error` field carries the failure details.
 
 ### Error Recording
 
 When a generation fails, the failure is persisted on both the generation record and its trace: `status` becomes `failed`, `stop_reason` is `error`, and `error` carries `{ code, message }`.
 
-The `error` object always contains `message`. `code` is set for mapped errors — most notably `AI_PROVIDER_ERROR`, which is used when the upstream AI provider returns an error (e.g. exhausted credits, rate limit) or is unreachable.
+`error` always contains `message`. `code` is set for mapped errors, most notably `AI_PROVIDER_ERROR`: the upstream AI provider returned an error (e.g. exhausted credits, rate limit) or is unreachable.
 
 ### Provider Error Surfacing (`AI_PROVIDER_ERROR`)
 
@@ -117,40 +113,36 @@ Generation endpoints return HTTP `502` with the `AI_PROVIDER_ERROR` code when th
 }
 ```
 
-The `meta` field includes the `generation_id` and `trace_id` of the failed run so the failure can be inspected post-mortem via [`GET /generations/:generation_id`](/docs/api/generations/get-generation) and [`GET /traces/:trace_id`](/docs/api/traces/get-trace).
+`meta` carries the `generation_id` and `trace_id` of the failed run for inspection via [`GET /generations/:generation_id`](/docs/api/generations/get-generation) and [`GET /traces/:trace_id`](/docs/api/traces/get-trace).
 
 ### Metadata
 
-The `metadata` field is a **caller-owned** bag: it holds only what the caller put there, and it is returned verbatim. It is a place to attach per-run audit attribution — for example, which knowledge-corpus version produced an AI action.
-
-Callers can write metadata two ways:
+`metadata` is a **caller-owned** bag, returned verbatim, for per-run audit attribution (e.g. which knowledge-corpus version produced an AI action).
 
 - **At create time** — pass a `metadata` object on [`POST /agents/:id/generate`](/docs/api/agents/create-agent-generation).
-- **After creation** — [`PATCH /generations/:generation_id`](/docs/api/generations/update-generation) with a `metadata` object. The provided keys are **shallow-merged** over the existing metadata, so repeated patches accumulate.
+- **After creation** — [`PATCH /generations/:generation_id`](/docs/api/generations/update-generation) with a `metadata` object. Keys are **shallow-merged** over the existing metadata, so repeated patches accumulate.
 
-Both paths require the `generations:UpdateGeneration` action for PATCH and `agents:CreateAgentGeneration` for the create path.
+PATCH requires `generations:UpdateGeneration`; the create path requires `agents:CreateAgentGeneration`.
 
-**No key is reserved.** Every piece of state the server owns (`action_id`, `trigger_id`, `orchestration_run_id`, `node_id`, `agent_version`, `routing`, `extraction`) is a field of its own on the generation, so nothing written into `metadata` can reach it. A caller key that happens to be spelled `action_id` is just an annotation; it does not affect the `action_id` field.
+**No key is reserved.** Every piece of server-owned state (`action_id`, `trigger_id`, `orchestration_run_id`, `node_id`, `agent_version`, `routing`, `extraction`) is a field of its own, so nothing written into `metadata` can reach it; a caller key spelled `action_id` is just an annotation.
 
-Internal recovery state (used to resume a `requires_action` generation after a server restart) is stored in its own column and is never exposed through the API under any name.
+Internal recovery state (used to resume a `requires_action` generation after a server restart) is stored in its own column and is never exposed through the API.
 
 #### `extraction` — memory-extraction summary
 
-When an agent is configured with `knowledge_config.extraction` and `write_memory_id`, a completed generation writes an `extraction` summary — `{ "candidates": 3, "created": 2, "updated": 1, "skipped": 0 }` — describing what the auto-extraction pass did with the turn. See [Memories — Automatic Extraction](./memories.md#automatic-extraction) for how it is configured.
+When an agent is configured with `knowledge_config.extraction` and `write_memory_id`, a completed generation writes an `extraction` summary — `{ "candidates": 3, "created": 2, "updated": 1, "skipped": 0 }` — describing what the auto-extraction pass did with the turn. See [Memories — Automatic Extraction](./memories.md#automatic-extraction).
 
 ### Recorded input
 
 A generation also stores the messages it was asked to answer, resolved (file and document
-references already inlined) but without the agent's own instructions or knowledge
-injections — those are config, recoverable from `agent_version`.
+references inlined) but without the agent's own instructions or knowledge injections,
+which are config recoverable from `agent_version`.
 
-The record is not part of the generation response; it is served by
-[the transcript](#transcript) and it exists so a real turn can be promoted into
-an evaluation fixture with
+The record is served by [the transcript](#transcript), not the generation response, and
+exists so a real turn can be promoted into an evaluation fixture with
 [`create-dataset-item-from-generation`](./evaluations.md#curating-items-from-production).
-It is **content**, not skeleton, so it follows the same rules as everything below: never
-written under zero-retention, cleared by a purge, and swept by retention. A generation
-whose input is gone can no longer be curated, and says so with
+It is **content**, not skeleton: never written under zero-retention, cleared by a purge,
+swept by retention. A generation whose input is gone can no longer be curated and answers
 `409 GENERATION_CONTENT_UNAVAILABLE`.
 
 ### Transcript
@@ -163,21 +155,18 @@ soat get-generation-transcript --generation_id gen_abc
 ```
 
 The transcript is **assembled at read time** from the generation record and the trace's
-steps object. There is no transcript table and no extra write on the generation path, so
-it always reflects the current records and can never outlive the content it projects.
+steps object; there is no transcript table and no extra write on the generation path, so
+it always reflects the current records.
 
-Requires `traces:GetTrace` in addition to `generations:GetGeneration`: the response merges
-content from both resources, so a single generations action would silently widen to cover
-trace content.
+Requires `traces:GetTrace` in addition to `generations:GetGeneration`, since the response
+merges content from both resources.
 
 Each entry in `steps` carries `index`, `text`, `finish_reason`, `tool_calls`,
 `tool_results` and `usage`. `args` on a call and `result` on a result are tool-owned
-payloads, returned as values — their keys are passed through exactly as recorded and are
-never inspected or rewritten.
+payloads, passed through exactly as recorded.
 
-The stored steps are **projected**, never forwarded: their on-disk shape belongs to the
-`ai` package and changes with it, so putting it on the wire would freeze an internal
-detail of a dependency as a public contract.
+The stored steps are **projected**, never forwarded; their on-disk shape belongs to the
+`ai` package.
 
 Two states return `200` with a skeleton rather than an error, so a caller never has to
 distinguish "no content" from "no such generation":
@@ -188,21 +177,20 @@ distinguish "no content" from "no such generation":
 | Never stored (zero-retention) | terminal | `null` | `[]` | set, principal `zero_retention` |
 | Erased by a purge or sweep | terminal | `null` | `[]` | set, purging principal |
 
-`step_count` survives all three, because it is a counter rather than content. It counts
-**this turn's** steps: when a `trace_id` groups several generations, the trace's own
-`step_count` covers every one of them, while each transcript reports and projects only its
-own slice — see [Traces → Grouping Generations Under One Trace](./traces.md#grouping-generations-under-one-trace).
+`step_count` survives all three, being a counter rather than content. It counts **this
+turn's** steps: when a `trace_id` groups several generations, the trace's own `step_count`
+covers every one of them, while each transcript reports only its own slice — see
+[Traces → Grouping Generations Under One Trace](./traces.md#grouping-generations-under-one-trace).
 
 A purged generation returns the skeleton even though the trace's steps object may still
-exist — see the warning under [Content Purge](#content-purge). The redaction marker
-governs the whole transcript, so an erased turn is never reconstituted from an adjacent
-record.
+exist (see the warning under [Content Purge](#content-purge)); the redaction marker
+governs the whole transcript.
 
 ### Content Purge
 
 [`DELETE /generations/{generation_id}/content`](/docs/api/generations/purge-generation-content) clears the generation's content — `metadata`, `error`, `extraction`, the recorded input messages, and the internal recovery state of a paused run — and stamps `content_redacted_at`. It requires the `generations:PurgeGenerationContent` action.
 
-The usage and audit skeleton is preserved on purpose: ids, timestamps, status, stop reason, and every attribution field (`action_id`, `trigger_id`, `orchestration_run_id`, `node_id`, `node_attempt`, `agent_version`, `routing`). A billing ledger has to outlive a tenant's erasure of the content, so a purged generation reads back as that skeleton rather than as a 404.
+The usage and audit skeleton is preserved (the billing ledger outlives the erasure): ids, timestamps, status, stop reason, and every attribution field (`action_id`, `trigger_id`, `orchestration_run_id`, `node_id`, `node_attempt`, `agent_version`, `routing`). A purged generation reads back as that skeleton, not a 404.
 
 The operation is idempotent: a second purge succeeds and leaves the original `content_redacted_at` untouched.
 
@@ -215,19 +203,17 @@ A generation purge does **not** delete the parent trace's steps object, which ho
 Two project settings turn the manual purge into a policy:
 
 - **[Retention](./traces.md#retention-policy)** — `trace_content_retention_days` on the project runs a daily sweep that purges content past the window, through this same purge path.
-- **[Zero-retention](./traces.md#zero-retention-mode)** — `trace_content_mode: "none"` on the project or the agent means the content columns above are never written at all. The generation is still created and still metered; it simply reads back as a skeleton stamped `content_redacted_by_principal_id: "zero_retention"` from the moment it exists.
+- **[Zero-retention](./traces.md#zero-retention-mode)** — `trace_content_mode: "none"` on the project or the agent means the content columns are never written. The generation is still created and metered; it reads back as a skeleton stamped `content_redacted_by_principal_id: "zero_retention"` from the moment it exists.
 
 ### Sub-agent invocations
 
-`initiator_generation_id` is populated only when an agent calls another agent via a builtin tool: the child generation records the calling generation's ID, while top-level generations leave it `null`. This is the sole case in which the field is set.
+`initiator_generation_id` is populated only when an agent calls another agent via a builtin tool: the child generation records the calling generation's ID; top-level generations leave it `null`.
 
-Multi-step reasoning is composed by the calling application, so intermediate steps appear as ordinary generations of their own rather than as `metadata` on, or child generations of, the calling generation.
+Intermediate steps of multi-step reasoning composed by the calling application are ordinary generations of their own, not `metadata` on or children of the calling generation.
 
 ### Finding an orchestration run's generations
 
-An [orchestration](./orchestrations.md) run's `node_executions` record what each node received and produced, but they carry **no generation id**. The pointer runs the other way: a generation dispatched by an agent node stores `orchestration_run_id`, `node_id` and `node_attempt` as attribution columns of its own, next to `action_id` and `trigger_id`.
-
-So a run is traced to what its agents actually did by filtering this module's list endpoint:
+An [orchestration](./orchestrations.md) run's `node_executions` record what each node received and produced but carry **no generation id**. The pointer runs the other way: a generation dispatched by an agent node stores `orchestration_run_id`, `node_id` and `node_attempt` as attribution columns, next to `action_id` and `trigger_id`. Filter the list endpoint:
 
 ```bash
 # every generation the run produced
@@ -237,11 +223,11 @@ soat list-generations --orchestration-run-id run_abc123
 soat list-generations --orchestration-run-id run_abc123 --node-id summarize
 ```
 
-`node_attempt` is what distinguishes the generations of a **retried** node. A node with a retry policy produces one node execution record per attempt and one generation per attempt; matching them on `node_attempt` is exact, where matching on timestamps is a guess.
+`node_attempt` distinguishes the generations of a **retried** node: one node execution record and one generation per attempt, matched exactly on `node_attempt`.
 
-From a generation reached this way, the rest of the graph is already reachable: `trace_id` opens the [trace](./traces.md) for that turn, `initiator_generation_id` walks down into any [sub-agent invocations](#sub-agent-invocations) it made, `chain_id` opens the [continuation chain](./chains.md) it belongs to — filtering generations by that id returns every member of the chain — and `session_id` / `actor_id` name the [session](./sessions.md) and end user it ran for, the same pair its usage event is attributed to.
+From a generation reached this way, the rest of the graph is reachable: `trace_id` opens the [trace](./traces.md) for that turn, `initiator_generation_id` walks down into any [sub-agent invocations](#sub-agent-invocations) it made, `chain_id` opens the [continuation chain](./chains.md) it belongs to (filtering generations by that id returns every member), and `session_id` / `actor_id` name the [session](./sessions.md) and end user it ran for, the same pair its usage event is attributed to.
 
-`session_id` and `actor_id` also **filter** the listing, so the turns behind a conversation's or an end user's [cost](./usage.md#end-user-attribution) are one call away from the figure:
+`session_id` and `actor_id` also **filter** the listing, so the turns behind a conversation's or an end user's [cost](./usage.md#end-user-attribution) are one call away:
 
 ```bash
 soat list-generations --session-id sess_abc123
@@ -252,7 +238,7 @@ An id naming nothing in scope yields an empty page, never an unfiltered one.
 
 ### Tool context
 
-The generation-creation endpoints ([`POST /agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation), and the session and conversation generate endpoints) accept an optional `tool_context` object. Its entries are forwarded as `X-Soat-Context-*` request headers on every `http`, `mcp` and `builtin` tool call the generation makes, and an invalid key is rejected with `400 INVALID_TOOL_CONTEXT_KEY` before the provider is called. It is not persisted on the Generation record. See the [Tool Context reference](../advanced/tool-context.md).
+The generation-creation endpoints ([`POST /agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation), and the session and conversation generate endpoints) accept an optional `tool_context` object. Its entries are forwarded as `X-Soat-Context-*` request headers on every `http`, `mcp` and `builtin` tool call the generation makes; an invalid key is rejected with `400 INVALID_TOOL_CONTEXT_KEY` before the provider is called. It is not persisted on the Generation record. See the [Tool Context reference](../advanced/tool-context.md).
 
 ## Examples
 

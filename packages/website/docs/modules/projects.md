@@ -7,11 +7,11 @@ import TabItem from '@theme/TabItem';
 
 # Projects
 
-The Projects module provides multi-tenant namespaces in SOAT. Every resource ([document](./documents.md), [file](./files.md), [actor](./actors.md), [conversation](./conversations.md)) belongs to a project. Projects are identified by an `id` prefixed with `proj_`.
+Projects are multi-tenant namespaces; every resource ([document](./documents.md), [file](./files.md), [actor](./actors.md), [conversation](./conversations.md)) belongs to one. Ids are prefixed `proj_`.
 
 ## Overview
 
-A Project is a top-level container that scopes all resources. Users access projects through policy-based authorization — there is no separate membership table. Whether a user can access a project is determined entirely by the [policies](./policies.md) attached to their account and the SRN patterns those policies contain. For a project creation walkthrough, see [Chat with an LLM - Step 2 (Create a project)](/docs/tutorials/chat-with-llm#step-2--create-a-project).
+Access is policy-based, with no membership table: the [policies](./policies.md) attached to the account and their SRN patterns decide. Walkthrough: [Chat with an LLM - Step 2 (Create a project)](/docs/tutorials/chat-with-llm#step-2--create-a-project).
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -43,7 +43,7 @@ A Project is a top-level container that scopes all resources. Users access proje
 
 ### Project Access via Policies
 
-Project access is entirely policy-driven; there is no membership list to maintain. Access is granted by attaching a [Policy](./policies.md) to the user (or their API key) that contains an `Allow` statement covering the relevant project's SRN pattern:
+Access is granted by attaching a [Policy](./policies.md) to the user (or API key) with an `Allow` statement covering the project's SRN pattern:
 
 ```json
 {
@@ -57,9 +57,9 @@ Project access is entirely policy-driven; there is no membership list to maintai
 }
 ```
 
-For a complete scoped-access walkthrough, see [Permissions in Practice - Step 3 (Create the Analytics project)](/docs/tutorials/permissions#step-3--create-the-analytics-project).
+Walkthrough: [Permissions in Practice - Step 3 (Create the Analytics project)](/docs/tutorials/permissions#step-3--create-the-analytics-project).
 
-To grant a user access to all projects, use a wildcard project segment:
+All projects: a wildcard project segment:
 
 ```json
 { "resource": ["srn:*:*:*"] }
@@ -71,21 +71,21 @@ To grant a user access to all projects, use a wildcard project segment:
 - **API key callers** scoped to a project see only that project.
 - **Regular users** see only the projects covered by the SRN patterns in their attached policies.
 
-Authorization is policy-only: all access decisions are evaluated through the policy engine against the requested action and resource SRN, and a project-scoped grant is honored by every project endpoint, including [`GET /projects/{id}`](/docs/api/projects/get-project). See [IAM](./iam.md) for details.
+Authorization is policy-only; a project-scoped grant is honored by every project endpoint, including [`GET /projects/{id}`](/docs/api/projects/get-project). See [IAM](./iam.md).
 
 ### Default Model Route
 
-`default_model_route_id` names the [model route](./model-routes.md) every consumer in the project inherits when it binds neither `model_route_id` nor `ai_provider_id` — a single project-scoped switch that gives agents, chats, and memory completions provider failover without editing each one.
+`default_model_route_id` names the [model route](./model-routes.md) inherited by every consumer binding neither `model_route_id` nor `ai_provider_id`, giving agents, chats, and memory completions failover without editing each:
 
 ```bash
 soat update-project --project-id proj_… --default_model_route_id route_…
 ```
 
-The route must belong to this project. An explicit binding on a consumer always wins, so the default can never override a deliberate pin. Repointing the default to another route is free; **clearing** it returns `409 PROJECT_DEFAULT_ROUTE_INHERITED` while any consumer inherits it, and deleting the route itself returns `409 MODEL_ROUTE_HAS_DEPENDENTS`. Governed by `projects:UpdateProject`.
+The route must belong to the project. An explicit binding always wins. Repointing is free; **clearing** returns `409 PROJECT_DEFAULT_ROUTE_INHERITED` while any consumer inherits it, and deleting the route itself returns `409 MODEL_ROUTE_HAS_DEPENDENTS`. Governed by `projects:UpdateProject`.
 
 ### Deletion
 
-Deleting a project that has any dependent resource returns `409 Conflict` with error code `PROJECT_HAS_DEPENDENTS`. "Any" is literal — every project-scoped resource counts, including the ones a project accumulates on its own while it runs:
+Deleting a project with any dependent resource returns `409 Conflict`, code `PROJECT_HAS_DEPENDENTS`. Every project-scoped resource counts, including those accumulated while running:
 
 - agents, AI providers, [model routes](./model-routes.md), tools, [ingestion rules](./ingestion-rules.md)
 - actors, chats, conversations, sessions, [generations](./generations.md), [traces](./traces.md)
@@ -93,9 +93,9 @@ Deleting a project that has any dependent resource returns `409 Conflict` with e
 - [formations](./formations.md), [memories](./memories.md), [secrets](./secrets.md), [files](./files.md), [guardrails](./guardrails.md), [quotas](./quotas.md)
 - [usage](./usage.md) history, and the [activity](./activity.md), [approval](./approvals.md), [exception](./exceptions.md) and guardrail-evaluation records of past runs
 
-Pass `?force=true` to delete all dependents along with the project in a single transaction — including the billing/usage history, and the stored bytes of the project's [files](./files.md), so a force-deleted project leaves nothing behind in storage.
+`?force=true` deletes all dependents in one transaction, including billing/usage history and the stored bytes of [files](./files.md).
 
-The [audit log](./audit-log.md) is the one deliberate exception: its entries outlive the project, keeping the record of who did what with `project_id` cleared instead of the row deleted.
+The [audit log](./audit-log.md) is the exception: entries outlive the project with `project_id` cleared.
 
 ### Common Errors
 
