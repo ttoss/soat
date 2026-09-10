@@ -2508,13 +2508,20 @@ echo "Agent Tool id: $TOOL_ID"
 # Step `b`'s input and the pipeline `output` nest a `var` marker inside a plain
 # object, to exercise recursive JSON Logic resolution at depth, not just at the
 # top level (#321).
+#
+# The marker rides on `offset` because an `http` tool with no body turns every
+# leftover input key into a query parameter, and the target here is this API,
+# where an undeclared parameter is now a 400 (#1265). `offset` is declared on
+# the projects listing and parses a non-numeric value back to its default, so
+# the call still exercises the nesting without asserting anything about
+# pagination.
 echo "--- Creating pipeline tool ---"
 PIPELINE_TOOL_RESP=$($SOAT_CLI create-tool \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name compute-and-list \
   --type pipeline \
   --description "Runs list-projects twice and maps both step outputs" \
-  --pipeline "{\"steps\":[{\"id\":\"a\",\"tool_id\":\"$TOOL_ID\",\"input\":{}},{\"id\":\"b\",\"tool_id\":\"$TOOL_ID\",\"input\":{\"note\":{\"wrapped\":{\"var\":\"steps.a\"}}}}],\"output\":{\"from_a\":{\"var\":\"steps.a\"},\"from_b\":{\"var\":\"steps.b\"},\"echoed\":{\"container\":{\"var\":\"input.tag\"}}}}")
+  --pipeline "{\"steps\":[{\"id\":\"a\",\"tool_id\":\"$TOOL_ID\",\"input\":{}},{\"id\":\"b\",\"tool_id\":\"$TOOL_ID\",\"input\":{\"offset\":{\"wrapped\":{\"var\":\"steps.a\"}}}}],\"output\":{\"from_a\":{\"var\":\"steps.a\"},\"from_b\":{\"var\":\"steps.b\"},\"echoed\":{\"container\":{\"var\":\"input.tag\"}}}}")
 PIPELINE_TOOL_ID=$(printf '%s\n' "$PIPELINE_TOOL_RESP" | jq -r '.id')
 if [ -z "$PIPELINE_TOOL_ID" ] || [ "$PIPELINE_TOOL_ID" = "null" ]; then
   echo "FAIL: could not create pipeline tool"
