@@ -141,33 +141,59 @@ const HTTP_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete']);
  * static route (`/orchestrations/validate`) is preferred over a parameterized
  * one (`/orchestrations/{orchestration_id}`).
  */
+type IndexedTemplate = {
+  template: string;
+  segments: string[];
+  paramCount: number;
+};
+
+let cachedTemplates: Map<number, IndexedTemplate[]> | null = null;
+
+/**
+ * The spec's path templates split once and bucketed by segment count, fewest
+ * brace segments first.
+ *
+ * `matchOpenApiPath` runs on every authenticated request now that the query
+ * check is not opt-in, and re-splitting ~275 templates per request to compare a
+ * handful of segments is work the spec already knows the answer to. Rebuilt
+ * only when the spec cache is.
+ */
+const templateIndex = (): Map<number, IndexedTemplate[]> => {
+  if (cachedTemplates) return cachedTemplates;
+
+  const index = new Map<number, IndexedTemplate[]>();
+  for (const template of Object.keys(getMergedOpenApiSpec().paths)) {
+    const segments = template.split('/').filter(Boolean);
+    const paramCount = segments.filter((segment) => {
+      return segment.startsWith('{') && segment.endsWith('}');
+    }).length;
+    const bucket = index.get(segments.length) ?? [];
+    bucket.push({ template, segments, paramCount });
+    index.set(segments.length, bucket);
+  }
+  for (const bucket of index.values()) {
+    bucket.sort((a, b) => {
+      return a.paramCount - b.paramCount;
+    });
+  }
+
+  cachedTemplates = index;
+  return index;
+};
+
 export const matchOpenApiPath = (args: { path: string }): string | null => {
   const requestSegments = args.path.split('/').filter(Boolean);
 
-  let best: string | null = null;
-  let bestParamCount = Number.POSITIVE_INFINITY;
-
-  for (const template of Object.keys(getMergedOpenApiSpec().paths)) {
-    const templateSegments = template.split('/').filter(Boolean);
-    if (templateSegments.length !== requestSegments.length) continue;
-
-    let paramCount = 0;
-    const matches = templateSegments.every((segment, index) => {
-      const isParam = segment.startsWith('{') && segment.endsWith('}');
-      if (isParam) {
-        paramCount += 1;
-        return requestSegments[index].length > 0;
-      }
-      return segment === requestSegments[index];
+  for (const candidate of templateIndex().get(requestSegments.length) ?? []) {
+    const matches = candidate.segments.every((segment, index) => {
+      return segment.startsWith('{') && segment.endsWith('}')
+        ? requestSegments[index].length > 0
+        : segment === requestSegments[index];
     });
-
-    if (matches && paramCount < bestParamCount) {
-      best = template;
-      bestParamCount = paramCount;
-    }
+    if (matches) return candidate.template;
   }
 
-  return best;
+  return null;
 };
 
 /**

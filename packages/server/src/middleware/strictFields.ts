@@ -38,38 +38,36 @@ export const STRICT_FIELDS_OPT_OUT: ReadonlySet<string> = new Set([
   'POST /api/v1/users/bootstrap',
 ]);
 
-/**
- * Routes whose query string is validated against the parameters their spec
- * declares. Every entry is a static path (no `{}` segment), so the lookup is on
- * the request path itself rather than a template match run on every request.
- *
- * Opt-in rather than universal: an unknown query parameter has been ignored on
- * every read route since the API existed, and rejecting them everywhere at once
- * would break callers that work today. These two are where ignoring one is a
- * *wrong* answer rather than a missing one — `model`, `session_id` and
- * `actor_id` all name real dimensions of a usage rollup, so a dropped filter
- * hands back the project-wide total under the caller's belief that it is one
- * model's or one end user's (#1265).
- */
-export const STRICT_QUERY_ROUTES: ReadonlySet<string> = new Set([
-  'GET /api/v1/usage/aggregate',
-  'GET /api/v1/usage/events',
-]);
-
 const isPlainObject = (value: unknown): value is Record<string, unknown> => {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 };
 
-// Rejects query parameters the route's spec does not declare, for the routes
-// that opted in. The declared set comes from the spec, so it cannot drift from
-// the contract the SDK, CLI and MCP surface are generated from.
+/**
+ * Rejects query parameters the route's spec does not declare.
+ *
+ * Every documented `/api/v1` route, not an allowlist: the accepted names are
+ * the operation's own `parameters`, so the check cannot drift from the contract
+ * the SDK, CLI and MCP surface are generated from, and a route is strict the
+ * moment it is documented. Ignoring an unknown parameter is not a missing
+ * answer but a wrong one — a dropped `?model=` hands back a project-wide usage
+ * total under the caller's belief that it is one model's (#1265) — and a
+ * `?limitt=5` that silently pages by 20 is the same failure in miniature.
+ *
+ * A path no operation documents (`/openapi.json`, the OAuth consent pages) is
+ * left alone, the rule the body half already applies. `tests/unit/tests/lib/
+ * queryParamContract.test.ts` pins that no handler reads a parameter its spec
+ * omits, so strictness can never make a working parameter unreachable.
+ */
 const validateQueryParams = (ctx: Context): void => {
   if (!ctx.authUser) return;
-  if (!STRICT_QUERY_ROUTES.has(`${ctx.method} ${ctx.path}`)) return;
+  if (!ctx.path.startsWith('/api/v1')) return;
+
+  const template = matchOpenApiPath({ path: ctx.path });
+  if (!template) return;
 
   const declared = getDeclaredQueryParams({
     method: ctx.method,
-    path: ctx.path,
+    path: template,
   });
   if (!declared) return;
 
@@ -91,11 +89,10 @@ const validateQueryParams = (ctx: Context): void => {
 };
 
 /**
- * Validates request bodies against the route's OpenAPI request schema, and the
- * query strings of `STRICT_QUERY_ROUTES` against the parameters it declares —
- * both derived
- * from the spec, the single source of truth for the REST contract, SDK, CLI,
- * and MCP surface — so an allowlist can never drift from the schema. Rejects
+ * Validates request bodies against the route's OpenAPI request schema, and
+ * every query string against the parameters its operation declares — both
+ * derived from the spec, the single source of truth for the REST contract, SDK,
+ * CLI, and MCP surface — so an allowlist can never drift from the schema. Rejects
  * unknown fields (at every nesting level) and missing top-level required fields
  * with `VALIDATION_FAILED` (400); see `validateRequestBody`.
  *
