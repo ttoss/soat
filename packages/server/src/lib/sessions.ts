@@ -2,6 +2,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { emitResourceEvent } from './eventBus';
 import { emptyPage, paginatedList } from './pagination';
+import { registerResourceFieldMap } from './policyCompiler';
 import { sessionIncludes, sessions } from './sessionAccessor';
 import { cancelDelayTimer } from './sessionDelayHelpers';
 import { mapSession } from './sessionMapper';
@@ -10,6 +11,12 @@ import { createSessionTransaction } from './sessionTransaction';
 import { applyTagFilter } from './tags';
 import { assertValidToolContextKeys } from './toolContext';
 import { rollUpUsageTotals } from './usageAggregate';
+
+registerResourceFieldMap({
+  resourceType: 'session',
+  publicIdColumn: { column: 'publicId' },
+  tagsColumn: { column: 'tags' },
+});
 
 const isSessionExpired = (session: InstanceType<(typeof db)['Session']>) => {
   const ttl = session.inactivityTtlSeconds;
@@ -175,6 +182,7 @@ export const listSessions = async (args: {
   actorId?: string;
   status?: string;
   tags?: Record<string, string>;
+  policyWhere?: Record<string, unknown>;
   limit?: number;
   offset?: number;
 }) => {
@@ -188,6 +196,10 @@ export const listSessions = async (args: {
     where.projectId = args.projectIds;
   }
   applyTagFilter({ where, tags: args.tags });
+
+  if (args.policyWhere) {
+    Object.assign(where, args.policyWhere);
+  }
 
   const resolved = await resolveSessionListFilters({
     where,
@@ -231,23 +243,29 @@ export const findSessionAccess = async (args: {
   agentId: number;
   agentPublicId: string;
   projectId: number;
+  projectPublicId: string;
+  tags: Record<string, string> | null;
 } | null> => {
   const session = await db.Session.findOne({
     where: { publicId: args.sessionId },
-    include: [{ model: db.Agent, as: 'agent' }],
+    include: [
+      { model: db.Agent, as: 'agent' },
+      { model: db.Project, as: 'project' },
+    ],
   });
   if (!session) {
     return null;
   }
-  const agent = (
-    session as InstanceType<(typeof db)['Session']> & {
-      agent?: InstanceType<(typeof db)['Agent']>;
-    }
-  ).agent;
+  const row = session as InstanceType<(typeof db)['Session']> & {
+    agent?: InstanceType<(typeof db)['Agent']>;
+    project?: InstanceType<(typeof db)['Project']>;
+  };
   return {
     agentId: session.agentId as number,
-    agentPublicId: agent?.publicId as string,
+    agentPublicId: row.agent?.publicId as string,
     projectId: session.projectId as number,
+    projectPublicId: row.project?.publicId as string,
+    tags: session.tags,
   };
 };
 

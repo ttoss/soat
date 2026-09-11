@@ -3,6 +3,7 @@ import type { Context } from 'src/Context';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 import { buildSrn } from 'src/lib/iam';
+import { compilePolicy } from 'src/lib/policyCompiler';
 import {
   createSession,
   deleteSession,
@@ -11,7 +12,7 @@ import {
   listSessions,
   updateSession,
 } from 'src/lib/sessions';
-import { readTagQuery } from 'src/lib/tags';
+import { buildResourceTagContext, readTagQuery } from 'src/lib/tags';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
 import { requireAuth, requireProjectAccess } from './helpers';
@@ -20,32 +21,55 @@ import { sessionSubResourcesRouter } from './sessionSubResources';
 export const sessionsRouter = new Router<Context>();
 
 /**
- * Resolves a session by its (globally unique) id and verifies the authenticated
- * user can access the project it belongs to.
+ * Resolves a session by its (globally unique) id and authorizes the action
+ * against the session's own SRN, carrying its tags as evaluation context.
+ *
+ * The session is loaded *before* the policy is evaluated, which is what makes
+ * `soat:ResourceTag/<key>` work: a conditioned statement can only match once
+ * the tags it names are known. The project-level probe this replaced asked
+ * `srn:<project>:session:*` with no context, so a conditioned statement never
+ * matched and the resource segment of a policy was never compared at all —
+ * sessions advertised tag-based access control they did not enforce (#1278).
  *
  * Throws `DomainError` with codes:
  *  - `UNAUTHORIZED`       – no authenticated user
- *  - `FORBIDDEN`          – user has no project access or the session belongs to
- *                           a project the user cannot access
+ *  - `FORBIDDEN`          – no policy allows the action on this session
  *  - `RESOURCE_NOT_FOUND` – session does not exist
  */
 export const checkSessionAccess = async (
   ctx: Context,
   action: string
-): Promise<{ agentId: number; agentPublicId: string; projectId: number }> => {
+): Promise<{
+  agentId: number;
+  agentPublicId: string;
+  projectId: number;
+  projectPublicId: string;
+  tags: Record<string, string> | null;
+}> => {
   requireAuth(ctx);
-  const projectIds = await requireProjectAccess({
-    ctx,
-    action,
-    resourceType: 'session',
-  });
+
   const access = await findSessionAccess({ sessionId: ctx.params.session_id });
   if (!access) {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Session not found');
   }
-  if (projectIds && !projectIds.includes(access.projectId)) {
+
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: access.projectPublicId,
+    action,
+    resource: buildSrn({
+      projectPublicId: access.projectPublicId,
+      resourceType: 'session',
+      resourceId: ctx.params.session_id,
+    }),
+    context: buildResourceTagContext({
+      resourceType: 'session',
+      tags: access.tags,
+    }),
+  });
+  if (!allowed) {
     throw new DomainError('FORBIDDEN', 'Forbidden');
   }
+
   return access;
 };
 
@@ -100,13 +124,8 @@ sessionsRouter.post('/sessions', async (ctx: Context) => {
 sessionsRouter.get('/sessions', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const projectIds = await requireProjectAccess({
-    ctx,
-    action: 'agents:ListSessions',
-    resourceType: 'session',
-  });
-
   const {
+    project_id: projectPublicId,
     agent_id: agentId,
     actor_id: actorId,
     status,
@@ -115,12 +134,38 @@ sessionsRouter.get('/sessions', async (ctx: Context) => {
   } = ctx.query as Record<string, string | undefined>;
   const tags = readTagQuery(ctx.query.tags);
 
+  const projectIds = await requireProjectAccess({
+    ctx,
+    projectPublicId,
+    action: 'agents:ListSessions',
+    resourceType: 'session',
+  });
+
+  // A list authorizes before it has rows, so the policy is compiled into the
+  // query instead: `soat:ResourceTag` conditions become JSONB predicates on the
+  // same column `?tags=` reads. One project at a time — a policy is read per
+  // project — so an unnarrowed listing stays project-level, as on `GET /actors`.
+  let policyWhere: Record<string, unknown> | undefined;
+  if (projectPublicId) {
+    const compiled = compilePolicy({
+      policies: await ctx.authUser.getPolicies(projectPublicId),
+      action: 'agents:ListSessions',
+      resourceType: 'session',
+      projectPublicId,
+    });
+    if (!compiled.hasAccess) {
+      throw new DomainError('FORBIDDEN', 'Forbidden');
+    }
+    policyWhere = compiled.where;
+  }
+
   ctx.body = await listSessions({
     projectIds,
     agentId,
     actorId,
     status,
     tags,
+    policyWhere,
     limit: limit ? Number(limit) : undefined,
     offset: offset ? Number(offset) : undefined,
   });
@@ -167,7 +212,7 @@ sessionsRouter.patch('/sessions/:session_id', async (ctx: Context) => {
 // ── Delete Session ───────────────────────────────────────────────────────
 
 sessionsRouter.delete('/sessions/:session_id', async (ctx: Context) => {
-  const { agentId, projectId } = await checkSessionAccess(
+  const { agentId, projectPublicId } = await checkSessionAccess(
     ctx,
     'agents:DeleteSession'
   );
@@ -175,18 +220,15 @@ sessionsRouter.delete('/sessions/:session_id', async (ctx: Context) => {
   // The success response is `204 No Content`, so the audit middleware has no
   // body to backfill the project/SRN from — hand it the resolved resource
   // before the delete runs (see `setAuditResourceHint`).
-  const project = await db.Project.findOne({ where: { id: projectId } });
-  if (project) {
-    setAuditResourceHint(ctx, {
-      projectPublicId: project.publicId as string,
-      resourceSrn: buildSrn({
-        projectPublicId: project.publicId as string,
-        resourceType: 'session',
-        resourceId: ctx.params.session_id,
-      }),
-      resourcePublicId: ctx.params.session_id,
-    });
-  }
+  setAuditResourceHint(ctx, {
+    projectPublicId,
+    resourceSrn: buildSrn({
+      projectPublicId,
+      resourceType: 'session',
+      resourceId: ctx.params.session_id,
+    }),
+    resourcePublicId: ctx.params.session_id,
+  });
 
   await deleteSession({
     agentId,
