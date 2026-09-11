@@ -80,6 +80,17 @@ paths:
       description: Returns sessions the caller can access, optionally filtered by agent, actor and status.
       operationId: listSessions
       parameters:
+        - name: project_id
+          in: query
+          required: false
+          description: >
+            Filter by project public ID. Required for `soat:ResourceTag`
+            policy conditions to narrow the listing: a policy is read per
+            project, so without it the listing is scoped to the projects the
+            caller can access and nothing further.
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
         - name: agent_id
           in: query
           required: false

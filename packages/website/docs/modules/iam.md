@@ -246,7 +246,14 @@ Tags are key-value pairs on resources, enabling ABAC via conditions. One mechani
 | Knowledge search (`tags` in the body) | Same containment rule across documents and memory entries |
 | Policy condition (`soat:ResourceTag/<key>`) | Same pairs, read from the same column |
 
-Which resources honor `soat:ResourceTag/<key>` in a policy condition today: actors, conversations, documents, files. Sessions, memories and memory entries store and filter tags but do not yet evaluate them in policies (tracked in [#1278](https://github.com/ttoss/soat/issues/1278) and [#1279](https://github.com/ttoss/soat/issues/1279)).
+Which resources honor `soat:ResourceTag/<key>` in a policy condition today: actors, conversations, documents, files, sessions. Memories and memory entries store and filter tags but do not yet evaluate them in policies (tracked in [#1279](https://github.com/ttoss/soat/issues/1279)).
+
+A condition applies differently to one resource than to a listing:
+
+| Route shape | How the condition applies |
+|---|---|
+| One resource ([`GET /sessions/{id}`](/docs/api/sessions/get-session), the tag sub-endpoints) | The resource is loaded before the policy is evaluated, so its tags are the context: an `Allow` or a `Deny` condition decides the request |
+| A listing ([`GET /sessions?project_id=`](/docs/api/sessions/list-sessions)) | The caller is authorized for the resource type with no tag context, then the conditions compile into the query, where a `Deny` condition removes rows. Without `?project_id=` there is no single project policy to compile and the listing is scoped by project only |
 
 ```json
 {
