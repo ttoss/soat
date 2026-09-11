@@ -6,6 +6,7 @@ import type { EmbeddingBillingProjectId } from './embedding';
 import { getEmbedding } from './embedding';
 import type { MemoryKnowledgeResult } from './knowledgeMemory';
 import { resolveMemorySearch } from './knowledgeMemory';
+import { hasPolicyConstraints, referencesAssociation } from './policyWhere';
 import { clampKnowledgeSearchLimit } from './requestBounds';
 import { applyTagFilter, hasTagFilter } from './tags';
 import { withIterativeVectorScan } from './vectorSearch';
@@ -218,12 +219,6 @@ const findChunksWithSearch = async (args: {
     fileInclude: args.fileInclude,
   });
 
-  const needsSubQueryFalse =
-    args.topLevelWhere !== undefined &&
-    Object.keys(args.topLevelWhere).some((k) => {
-      return k.startsWith('$');
-    });
-
   return withIterativeVectorScan({
     run: ({ transaction }) => {
       return db.DocumentChunk.findAll({
@@ -232,7 +227,7 @@ const findChunksWithSearch = async (args: {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         include: [docInclude] as any,
         order: distanceLiteral,
-        subQuery: needsSubQueryFalse ? false : undefined,
+        subQuery: referencesAssociation(args.topLevelWhere) ? false : undefined,
         limit: args.limit,
         transaction,
       }) as unknown as Promise<ChunkWithDocument[]>;
@@ -252,18 +247,12 @@ const findChunksWithoutSearch = async (args: {
     fileInclude: args.fileInclude,
   });
 
-  const needsSubQueryFalse =
-    args.topLevelWhere !== undefined &&
-    Object.keys(args.topLevelWhere).some((k) => {
-      return k.startsWith('$');
-    });
-
   return db.DocumentChunk.findAll({
     where: args.topLevelWhere,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     include: [docInclude] as any,
     order: [['chunkIndex', 'ASC']],
-    subQuery: needsSubQueryFalse ? false : undefined,
+    subQuery: referencesAssociation(args.topLevelWhere) ? false : undefined,
     limit: args.limit,
   }) as unknown as Promise<ChunkWithDocument[]>;
 };
@@ -278,26 +267,6 @@ const buildDocWhere = (args: {
   }
   applyTagFilter({ where, tags: args.tags });
   return Object.keys(where).length > 0 ? where : undefined;
-};
-
-/**
- * The `document` resourceType's policy alias (`$file.<column>$`) assumes the
- * `Document` model with `file` included directly, as used by `listDocuments`.
- * Here the query root is `DocumentChunk`, where `file` is nested one level
- * deeper under `document`, so a `$file.<column>$` key must be rewritten to
- * `$document.file.<column>$` or Sequelize throws "missing FROM-clause entry".
- */
-const remapPolicyWhereForChunks = (
-  policyWhere: Record<string, unknown>
-): Record<string, unknown> => {
-  return Object.fromEntries(
-    Object.entries(policyWhere).map(([key, value]) => {
-      const remappedKey = key.startsWith('$file.')
-        ? `$document.file.${key.slice('$file.'.length)}`
-        : key;
-      return [remappedKey, value];
-    })
-  );
 };
 
 export const resolveDocumentSearch = async (args: {
@@ -319,10 +288,11 @@ export const resolveDocumentSearch = async (args: {
     return [];
   }
 
-  const effectivePolicyWhere =
-    args.policyWhere && Object.keys(args.policyWhere).length > 0
-      ? remapPolicyWhereForChunks(args.policyWhere)
-      : undefined;
+  // Compiled with `columnRoot: 'document'` by the route, so every column it
+  // names is already relative to this query's root — see `resolvePolicyWhere`.
+  const effectivePolicyWhere = hasPolicyConstraints(args.policyWhere)
+    ? args.policyWhere
+    : undefined;
 
   const fileInclude = buildFileInclude({ projectIds, paths: config.paths });
   const docWhere = buildDocWhere({

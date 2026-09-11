@@ -50,6 +50,36 @@ export const registerResourceFieldMap = (map: ResourceFieldMap): void => {
   registeredMaps.set(map.resourceType, map);
 };
 
+const prefixColumn = (spec: ColumnSpec, root: string): ColumnSpec => {
+  return {
+    column: spec.column,
+    alias: spec.alias ? `${root}.${spec.alias}` : root,
+  };
+};
+
+/**
+ * Re-express a field map relative to `root`, for a query whose root model is
+ * not the resource itself — a knowledge search ranks `DocumentChunk` rows, so
+ * every `document` column it filters on is reached through the `document`
+ * association (`$document.tags$`, `$document.file.path$`).
+ *
+ * The alternative, rewriting the finished clause, cannot reach the column
+ * inside a `Sequelize.where(...)` fragment, so a `StringLike` tag condition
+ * would keep naming a column the query root does not have.
+ */
+const rootedFieldMap = (
+  map: ResourceFieldMap,
+  root: string | undefined
+): ResourceFieldMap => {
+  if (!root) return map;
+  return {
+    resourceType: map.resourceType,
+    publicIdColumn: prefixColumn(map.publicIdColumn, root),
+    pathColumn: map.pathColumn && prefixColumn(map.pathColumn, root),
+    tagsColumn: map.tagsColumn && prefixColumn(map.tagsColumn, root),
+  };
+};
+
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 const colRef = (spec: ColumnSpec): string => {
@@ -94,29 +124,52 @@ const buildResourceFragment = (
 };
 
 /**
- * Build a WHERE fragment for a single tag key-value pair with StringEquals.
+ * The right-hand side of a JSONB containment test.
+ *
+ * Sequelize types the operand from the model attribute, which it cannot resolve
+ * through an association reference (`$document.tags$`) — it rejects the object
+ * with "Invalid value". JSON text gives Postgres an unknown-typed literal it
+ * coerces to `jsonb` against the column, so the same `@>` runs either way.
  */
-const buildTagEqualsFragment = (
-  col: string,
+const containmentOperand = (
+  spec: ColumnSpec,
   tagKey: string,
   expected: string
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): Record<string, any> => {
-  return { [col]: { [Op.contains]: { [tagKey]: expected } } };
+): Record<string, string> | string => {
+  const pair = { [tagKey]: expected };
+  return spec.alias ? JSON.stringify(pair) : pair;
 };
 
 /**
- * Build a WHERE fragment for a single tag key-value pair with StringNotEquals.
+ * Build a WHERE fragment for a single tag key-value pair with StringEquals.
  */
-const buildTagNotEqualsFragment = (
-  col: string,
+const buildTagEqualsFragment = (
+  spec: ColumnSpec,
   tagKey: string,
   expected: string
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Record<string, any> => {
   return {
-    [Op.not]: { [col]: { [Op.contains]: { [tagKey]: expected } } },
+    [colRef(spec)]: {
+      [Op.contains]: containmentOperand(spec, tagKey, expected),
+    },
   };
+};
+
+/**
+ * Build a WHERE fragment for a single tag key-value pair with StringNotEquals.
+ *
+ * Negating containment, rather than comparing the extracted value, is what
+ * makes a resource carrying no such tag at all match — the same answer
+ * `evaluateCondition` gives when the context key is absent.
+ */
+const buildTagNotEqualsFragment = (
+  spec: ColumnSpec,
+  tagKey: string,
+  expected: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Record<string, any> => {
+  return { [Op.not]: buildTagEqualsFragment(spec, tagKey, expected) };
 };
 
 /**
@@ -146,16 +199,20 @@ const buildTagLikeFragment = (
  */
 const buildTagFragmentForKey = (args: {
   op: string;
-  col: string;
+  tagsColumn: ColumnSpec;
   tagKey: string;
   expected: string;
   fieldMap: ResourceFieldMap;
 }): Array<Record<string, unknown>> => {
   if (args.op === 'StringEquals') {
-    return [buildTagEqualsFragment(args.col, args.tagKey, args.expected)];
+    return [
+      buildTagEqualsFragment(args.tagsColumn, args.tagKey, args.expected),
+    ];
   }
   if (args.op === 'StringNotEquals') {
-    return [buildTagNotEqualsFragment(args.col, args.tagKey, args.expected)];
+    return [
+      buildTagNotEqualsFragment(args.tagsColumn, args.tagKey, args.expected),
+    ];
   }
   if (args.op === 'StringLike') {
     const frag = buildTagLikeFragment(
@@ -174,7 +231,7 @@ const buildTagFragments = (
 ): Array<Record<string, unknown>> => {
   if (!condition || !fieldMap.tagsColumn) return [];
 
-  const col = colRef(fieldMap.tagsColumn);
+  const tagsColumn = fieldMap.tagsColumn;
 
   const frags: Array<Record<string, unknown>> = [];
 
@@ -188,7 +245,7 @@ const buildTagFragments = (
 
       const tagFrags = buildTagFragmentForKey({
         op,
-        col,
+        tagsColumn,
         tagKey,
         expected,
         fieldMap,
@@ -315,13 +372,20 @@ export const compilePolicy = (args: {
   action: string;
   resourceType: string;
   projectPublicId: string;
+  /**
+   * Association alias the resource is reached through, when the query this
+   * clause is merged into is rooted at another model. Omit when the query is
+   * rooted at the resource itself.
+   */
+  columnRoot?: string;
 }): CompiledPolicy => {
-  const fieldMap = registeredMaps.get(args.resourceType);
-  if (!fieldMap) {
+  const registered = registeredMaps.get(args.resourceType);
+  if (!registered) {
     throw new Error(
       `No ResourceFieldMap registered for resourceType '${args.resourceType}'`
     );
   }
+  const fieldMap = rootedFieldMap(registered, args.columnRoot);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const allowFragments: Array<Record<string, any>> = [];

@@ -127,6 +127,12 @@ This does not make retrieved content safe to act on: a tool call made after read
 
 `project_id` is optional; when omitted, accessible projects come from the caller's identity (API key scope, admin wildcard, or policy grants).
 
+### Policy Conditions Narrow the Candidate Set
+
+With `project_id`, the caller's `knowledge:SearchKnowledge` policy for documents is compiled into the search query itself: an SRN restriction and a `soat:ResourceTag/<key>` condition both become part of the filter a chunk has to satisfy to be ranked at all. A document the policy excludes is not a candidate — it does not consume a `limit` slot and never reaches the agent. Walk it end to end in [Tag-Based Access Control](../tutorials/tag-based-access-control.md).
+
+Without `project_id` there is no single project policy to compile, and the search is scoped by project only.
+
 ### Result ceiling
 
 `limit` defaults to 10 and is clamped to **100**; a larger value returns up to 100 rows rather than being refused.

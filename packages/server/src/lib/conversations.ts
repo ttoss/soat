@@ -6,6 +6,7 @@ import {
   type CompiledPolicy,
   registerResourceFieldMap,
 } from './policyCompiler';
+import { hasPolicyConstraints } from './policyWhere';
 import { makeResourceAccessor } from './resourceAccessor';
 import { applyTagFilter, mergeTags } from './tags';
 
@@ -96,7 +97,7 @@ export const listConversations = async (args: {
     offset: args.offset,
     query: ({ limit, offset }) => {
       return db.Conversation.findAndCountAll({
-        where: Object.keys(where).length > 0 ? where : undefined,
+        where: hasPolicyConstraints(where) ? where : undefined,
         include: [
           { model: db.Project, as: 'project' },
           { model: db.Actor, as: 'actor' },

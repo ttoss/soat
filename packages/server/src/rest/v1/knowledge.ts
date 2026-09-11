@@ -63,6 +63,9 @@ const resolvePolicyWhere = async (
     action: 'knowledge:SearchKnowledge',
     resourceType: 'document',
     projectPublicId: body.project_id,
+    // The search ranks `DocumentChunk` rows, so a document column is reached
+    // through the `document` association rather than on the query root.
+    columnRoot: 'document',
   });
   if (!compiled.hasAccess) return { forbidden: true };
   return { forbidden: false, policyWhere: compiled.where };

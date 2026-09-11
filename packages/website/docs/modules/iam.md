@@ -254,6 +254,8 @@ Tags are key-value pairs on resources, enabling ABAC via conditions. One mechani
 
 Which resources honor `soat:ResourceTag/<key>` in a policy condition today: actors, conversations, documents, files, sessions. Memories and memory entries store and filter tags but do not yet evaluate them in policies (tracked in [#1279](https://github.com/ttoss/soat/issues/1279)).
 
+[Tag-Based Access Control](../tutorials/tag-based-access-control.md) walks the whole mechanism: tag two documents, condition a policy on the tag, and watch the listing and knowledge search narrow.
+
 A condition applies differently to one resource than to a listing:
 
 | Route shape | How the condition applies |
