@@ -267,6 +267,127 @@ describe('Knowledge', () => {
       ).toBe(true);
     });
 
+    describe('document_tags', () => {
+      beforeAll(async () => {
+        for (const doc of [
+          { name: 'finance-prod', tags: { team: 'finance', env: 'prod' } },
+          { name: 'finance-dev', tags: { team: 'finance', env: 'dev' } },
+          { name: 'sales-prod', tags: { team: 'sales', env: 'prod' } },
+          { name: 'untagged', tags: undefined },
+        ]) {
+          const res = await authenticatedTestClient(userToken)
+            .post('/api/v1/documents')
+            .send({
+              project_id: projectId,
+              content: `Tag probe ${doc.name}.`,
+              filename: `${doc.name}.txt`,
+              path: `/tag-probe/${doc.name}.txt`,
+              tags: doc.tags,
+            });
+          expect(res.status).toBe(201);
+        }
+      });
+
+      const pathsOf = (results: { path?: string }[]) => {
+        return results
+          .map((r) => {
+            return r.path;
+          })
+          .filter((p) => {
+            return p?.startsWith('/tag-probe/');
+          })
+          .sort();
+      };
+
+      test('filters documents by a single tag pair', async () => {
+        const response = await authenticatedTestClient(userToken)
+          .post('/api/v1/knowledge/search')
+          .send({ project_id: projectId, document_tags: { team: 'finance' } });
+        expect(response.status).toBe(200);
+        expect(pathsOf(response.body.results)).toEqual([
+          '/tag-probe/finance-dev.txt',
+          '/tag-probe/finance-prod.txt',
+        ]);
+      });
+
+      test('ANDs multiple tag pairs', async () => {
+        const response = await authenticatedTestClient(userToken)
+          .post('/api/v1/knowledge/search')
+          .send({
+            project_id: projectId,
+            document_tags: { team: 'finance', env: 'prod' },
+          });
+        expect(response.status).toBe(200);
+        expect(pathsOf(response.body.results)).toEqual([
+          '/tag-probe/finance-prod.txt',
+        ]);
+      });
+
+      test('matches values exactly and case-sensitively', async () => {
+        const response = await authenticatedTestClient(userToken)
+          .post('/api/v1/knowledge/search')
+          .send({ project_id: projectId, document_tags: { team: 'Finance' } });
+        expect(response.status).toBe(200);
+        expect(pathsOf(response.body.results)).toEqual([]);
+      });
+
+      test('intersects with document_paths and query', async () => {
+        const response = await authenticatedTestClient(userToken)
+          .post('/api/v1/knowledge/search')
+          .send({
+            project_id: projectId,
+            query: 'tag probe',
+            document_paths: ['/tag-probe/'],
+            document_tags: { env: 'prod' },
+          });
+        expect(response.status).toBe(200);
+        expect(pathsOf(response.body.results)).toEqual([
+          '/tag-probe/finance-prod.txt',
+          '/tag-probe/sales-prod.txt',
+        ]);
+      });
+
+      test('does not touch memory results', async () => {
+        const response = await authenticatedTestClient(userToken)
+          .post('/api/v1/knowledge/search')
+          .send({
+            project_id: projectId,
+            document_tags: { team: 'sales' },
+            memory_tags: ['knowledge-test'],
+          });
+        expect(response.status).toBe(200);
+        expect(pathsOf(response.body.results)).toEqual([
+          '/tag-probe/sales-prod.txt',
+        ]);
+        expect(
+          response.body.results.some((r: { source_type: string }) => {
+            return r.source_type === 'memory';
+          })
+        ).toBe(true);
+      });
+
+      test('returns 400 when document_tags is not an object of strings', async () => {
+        for (const bad of [
+          ['team'],
+          'team=finance',
+          { team: 1 },
+          { team: null },
+        ]) {
+          const response = await authenticatedTestClient(userToken)
+            .post('/api/v1/knowledge/search')
+            .send({ project_id: projectId, document_tags: bad });
+          expect(response.status).toBe(400);
+        }
+      });
+
+      test('ignores an empty document_tags object as a filter', async () => {
+        const response = await authenticatedTestClient(userToken)
+          .post('/api/v1/knowledge/search')
+          .send({ project_id: projectId, document_tags: {} });
+        expect(response.status).toBe(400);
+      });
+    });
+
     test('returns 403 when user has no permission', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .post('/api/v1/knowledge/search')

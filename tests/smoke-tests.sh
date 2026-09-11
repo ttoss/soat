@@ -836,7 +836,8 @@ DOC2_RESP=$($SOAT_CLI create-document \
   --project_id "$PROJECT_PUBLIC_ID" \
   --content "Machine learning models require large amounts of training data" \
   --filename ml.txt \
-  --path /tech/ml.txt)
+  --path /tech/ml.txt \
+  --tags '{"topic":"ml","env":"smoke"}')
 DOC2_ID=$(printf '%s\n' "$DOC2_RESP" | jq -r '.id')
 echo "Document 2 id: $DOC2_ID"
 
@@ -874,6 +875,19 @@ if [ "$PATH_SEARCH_COUNT" -lt 1 ]; then
   exit 1
 fi
 echo "Path-prefix search returned $PATH_SEARCH_COUNT result(s): OK"
+
+# 11d. Search knowledge by document tags
+echo "--- Search knowledge by document tags ---"
+TAG_SEARCH_RESP=$($SOAT_CLI search-knowledge \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --document-tags '{"topic":"ml","env":"smoke"}')
+TAG_SEARCH_IDS=$(printf '%s\n' "$TAG_SEARCH_RESP" | jq -r '[.results[].document_id] | unique | join(",")')
+if [ "$TAG_SEARCH_IDS" != "$DOC2_ID" ]; then
+  echo "ERROR: document_tags search expected only $DOC2_ID, got '$TAG_SEARCH_IDS'" >&2
+  echo "$TAG_SEARCH_RESP" >&2
+  exit 1
+fi
+echo "Document-tags search returned only the tagged document: OK"
 
 # 12. Search knowledge
 echo "--- Searching knowledge ---"

@@ -603,6 +603,18 @@ describe('mergeKnowledgeConfig', () => {
     );
   });
 
+  test('merges documentTags with the override winning per key', () => {
+    const result = mergeKnowledgeConfig({
+      base: { documentTags: { team: 'finance', env: 'dev' } },
+      override: { documentTags: { env: 'prod', region: 'eu' } },
+    });
+    expect(result?.documentTags).toEqual({
+      team: 'finance',
+      env: 'prod',
+      region: 'eu',
+    });
+  });
+
   test('scalar fields use the override value when present', () => {
     const result = mergeKnowledgeConfig({
       base: { minScore: 0.5, limit: 5 },
@@ -638,6 +650,7 @@ describe('readKnowledgeConfig', () => {
       memory_tags: ['tag1'],
       document_ids: ['doc_1'],
       document_paths: ['/docs/'],
+      document_tags: { team: 'finance' },
       min_score: 0.5,
       limit: 50,
       write_memory_id: 'mem_1',
@@ -653,6 +666,7 @@ describe('readKnowledgeConfig', () => {
       memoryTags: ['tag1'],
       documentIds: ['doc_1'],
       documentPaths: ['/docs/'],
+      documentTags: { team: 'finance' },
       minScore: 0.5,
       limit: 50,
       writeMemoryId: 'mem_1',

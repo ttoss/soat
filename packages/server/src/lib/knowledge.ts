@@ -19,6 +19,7 @@ export type DocumentQueryConfig = {
   limit?: number;
   paths?: string[];
   documentIds?: string[];
+  tags?: Record<string, string>;
 };
 
 export type QueryDocumentResult = {
@@ -268,9 +269,19 @@ const findChunksWithoutSearch = async (args: {
 
 const buildDocWhere = (args: {
   documentIds: string[] | undefined;
+  tags: Record<string, string> | undefined;
 }): Record<string, unknown> | undefined => {
-  if (!args.documentIds || args.documentIds.length === 0) return undefined;
-  return { publicId: args.documentIds };
+  const where: Record<string, unknown> = {};
+  if (args.documentIds && args.documentIds.length > 0) {
+    where.publicId = args.documentIds;
+  }
+  if (args.tags && Object.keys(args.tags).length > 0) {
+    // JSONB containment: every requested pair must be present with exactly
+    // that value, matching how IAM `soat:ResourceTag/<key>` conditions read
+    // the same column.
+    where.tags = { [Op.contains]: args.tags };
+  }
+  return Object.keys(where).length > 0 ? where : undefined;
 };
 
 /**
@@ -318,7 +329,10 @@ export const resolveDocumentSearch = async (args: {
       : undefined;
 
   const fileInclude = buildFileInclude({ projectIds, paths: config.paths });
-  const docWhere = buildDocWhere({ documentIds: config.documentIds });
+  const docWhere = buildDocWhere({
+    documentIds: config.documentIds,
+    tags: config.tags,
+  });
 
   const rawChunks = config.search
     ? await findChunksWithSearch({
@@ -358,6 +372,7 @@ type SearchKnowledgeArgs = {
   limit?: number;
   paths?: string[];
   documentIds?: string[];
+  documentTags?: Record<string, string>;
   memoryIds?: string[];
   memoryTags?: string[];
   /**
@@ -373,6 +388,12 @@ type SearchKnowledgeArgs = {
   policyWhere?: Record<string, any>;
 };
 
+export const hasDocumentTags = (
+  tags: Record<string, string> | undefined
+): tags is Record<string, string> => {
+  return tags !== undefined && Object.keys(tags).length > 0;
+};
+
 const getSearchFlags = (
   args: SearchKnowledgeArgs
 ): { hasDocumentSearch: boolean; hasMemorySearch: boolean } => {
@@ -380,7 +401,8 @@ const getSearchFlags = (
     args.includeDocuments !== false &&
     (args.query !== undefined ||
       (args.paths !== undefined && args.paths.length > 0) ||
-      (args.documentIds !== undefined && args.documentIds.length > 0));
+      (args.documentIds !== undefined && args.documentIds.length > 0) ||
+      hasDocumentTags(args.documentTags));
   const hasMemorySearch =
     (args.memoryIds !== undefined && args.memoryIds.length > 0) ||
     (args.memoryTags !== undefined && args.memoryTags.length > 0);
@@ -408,6 +430,7 @@ export const searchKnowledge = async (
             limit,
             paths: args.paths,
             documentIds: args.documentIds,
+            tags: args.documentTags,
           },
         })
       : Promise.resolve([]),

@@ -24,7 +24,7 @@ paths:
       tags:
         - Knowledge
       summary: Search knowledge
-      description: Searches across documents and memory entries using semantic search, file paths, document IDs, or memory IDs/tags. At least one of `query`, `document_paths`, `document_ids`, `memory_ids`, or `memory_tags` must be provided.
+      description: Searches across documents and memory entries using semantic search, file paths, document IDs, document tags, or memory IDs/tags. At least one of `query`, `document_paths`, `document_ids`, `document_tags`, `memory_ids`, or `memory_tags` must be provided.
       operationId: searchKnowledge
       x-iam-action: knowledge:SearchKnowledge
       requestBody:
@@ -90,6 +90,17 @@ paths:
                   items:
                     type: string
                   example: ['doc_V1StGXR8Z5jdHi6B']
+                document_tags:
+                  type: object
+                  description: >-
+                    Filter results to documents whose `tags` contain every one
+                    of these key-value pairs (exact, case-sensitive match).
+                    Intersects with `document_paths` and `document_ids`.
+                    Unlike `memory_tags`, this is a key-value object with no
+                    glob support, mirroring a document's own `tags`.
+                  additionalProperties:
+                    type: string
+                  example: { team: 'finance', env: 'prod' }
       responses:
         '200':
           description: Search results

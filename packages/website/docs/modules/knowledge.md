@@ -76,12 +76,19 @@ The [`POST /knowledge/search`](/docs/api/knowledge/search-knowledge) filters (at
 | `memory_tags`    | `string[]` | Match entries by tag at entry granularity: returns entries whose parent memory's tags match **or** whose own per-entry tags match any of these patterns (supports glob: `user*`) |
 | `document_paths` | `string[]` | Filter document results to paths starting with these prefixes                              |
 | `document_ids`   | `string[]` | Filter document results to specific document IDs                                           |
+| `document_tags`  | `object`   | Filter document results to documents whose `tags` contain every one of these key-value pairs (exact, case-sensitive; no glob). Intersects with `document_paths` and `document_ids` |
 
 With `query`, results carry `score` and `similarity_score`, ordered by descending `score`; `min_score` and `limit` apply. Walkthrough: [Agent with Persistent Memory — Step 12 (Query the knowledge layer directly)](/docs/tutorials/memories-agent#step-12--query-the-knowledge-layer-directly).
 
-Sources follow from the filters: documents when `query`, `document_paths`, or `document_ids` is passed; memory entries when `memory_ids` or `memory_tags` is. A `query` plus a memory filter searches both, merged and ranked by descending similarity before `limit`. `memory_ids` and `memory_tags` union.
+Sources follow from the filters: documents when `query`, `document_paths`, `document_ids`, or `document_tags` is passed; memory entries when `memory_ids` or `memory_tags` is. A `query` plus a memory filter searches both, merged and ranked by descending similarity before `limit`. `memory_ids` and `memory_tags` union.
 
 `memory_tags` matches at **entry granularity**: an entry is returned when its parent memory's tags match the globs or when the entry's own `tags` match — see [Memories — Entry-Level Tag Filtering](./memories.md#entry-level-tag-filtering).
+
+`document_tags` is a key-value object, mirroring a document's own `tags` and the IAM `soat:ResourceTag/<key>` condition. All pairs must match (JSONB containment):
+
+```json
+{ "query": "quarterly revenue", "document_tags": { "team": "finance", "env": "prod" } }
+```
 
 ### Relevance scoring
 

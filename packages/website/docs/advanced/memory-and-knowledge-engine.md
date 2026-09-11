@@ -155,12 +155,12 @@ One embedding model serves the deployment (`EMBEDDING_PROVIDER` — `ollama`, `o
 
 [`POST /api/v1/knowledge/search`](/docs/api/knowledge/search-knowledge), the generated `search-knowledge` SDK/CLI/MCP surface, the orchestration `knowledge` node, and agent injection all execute one function:
 
-1. **Decide sources from filters.** Document search runs when `query`, `document_paths`, or `document_ids` is present; memory search runs only when `memory_ids` or `memory_tags` is present. A bare `query` never searches memories.
+1. **Decide sources from filters.** Document search runs when `query`, `document_paths`, `document_ids`, or `document_tags` is present; memory search runs only when `memory_ids` or `memory_tags` is present. A bare `query` never searches memories.
 2. **Search each source in parallel.** With a `query`, each source embeds it and takes the top `limit` rows by cosine similarity (`score = 1 − cosine distance`), excluding invalidated memory entries. Without a `query`, the modes are deterministic reads: document chunks in `chunk_index` order, memory entries oldest-first.
 3. **Filter** by `min_score` (applied to `score`, after each source's top-k; a high floor shrinks the result set rather than searching deeper).
 4. **Merge and rank**: concatenate both lists, sort by descending `score` when a `query` ran, cut to `limit` (default `10`).
 
-`memory_tags` matches at entry granularity with glob patterns, `document_paths` are prefixes; full filter semantics: [Knowledge — Search Modes](../modules/knowledge.md#search-modes).
+`memory_tags` matches at entry granularity with glob patterns, `document_paths` are prefixes, `document_tags` is an exact key-value match; full filter semantics: [Knowledge — Search Modes](../modules/knowledge.md#search-modes).
 
 Ranking today is **single-signal**: `score` equals the raw cosine similarity. On the wire, `score` is an implementation-defined ranking (compare within one response; `min_score` filters on it) while `similarity_score` is pinned forever to raw cosine; see [Knowledge — Relevance scoring](../modules/knowledge.md#relevance-scoring).
 
@@ -188,8 +188,8 @@ Orchestrations read knowledge mid-flow with the `knowledge` node and write memor
 | `chunk_strategy` / `chunk_size` / `chunk_overlap` | document create/ingest bodies; ingestion rules | `page` (ingest) / `whole` (create); `1000`; `200` | chunking |
 | `native_extraction` | ingestion rule | `first` | run native extraction before the converter (`skip` to always convert) |
 | `file_delivery` | ingestion rule | `base64` | how the converter receives the file (`download_url` for large files) |
-| `query`, `min_score`, `limit`, `memory_ids`, `memory_tags`, `document_ids`, `document_paths` | [`POST /api/v1/knowledge/search`](/docs/api/knowledge/search-knowledge) body | `limit: 10` | retrieval |
-| `knowledge_config.{memory_ids, memory_tags, document_ids, document_paths, min_score, limit}` | agent record; per-generation override (arrays unioned, scalars overridden) | `limit: 5` injected | push retrieval |
+| `query`, `min_score`, `limit`, `memory_ids`, `memory_tags`, `document_ids`, `document_paths`, `document_tags` | [`POST /api/v1/knowledge/search`](/docs/api/knowledge/search-knowledge) body | `limit: 10` | retrieval |
+| `knowledge_config.{memory_ids, memory_tags, document_ids, document_paths, document_tags, min_score, limit}` | agent record; per-generation override (arrays unioned, scalars overridden) | `limit: 5` injected | push retrieval |
 | `knowledge_config.write_memory_id` | agent record | — | injects the `write_memory` tool; extraction target |
 | `knowledge_config.extraction` (`enabled`, `ai_provider_id`, `model`, `prompt`) | agent record | off | the extraction algorithm |
 | `extract` | [`POST /api/v1/agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation) body | follow agent config | per-turn extraction gate |

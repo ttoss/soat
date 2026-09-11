@@ -1,7 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
-import { searchKnowledge } from 'src/lib/knowledge';
+import { hasDocumentTags, searchKnowledge } from 'src/lib/knowledge';
 import { compilePolicy } from 'src/lib/policyCompiler';
 
 import { requireAuth, resolveReadProjectIds } from './helpers';
@@ -19,6 +19,35 @@ type KnowledgeSearchBody = {
   memory_tags?: string[] | string;
   document_paths?: string[] | string;
   document_ids?: string[] | string;
+  document_tags?: unknown;
+};
+
+/**
+ * `document_tags` is a key-value bag (like a document's own `tags`), not a
+ * pattern list like `memory_tags`. Anything else is a client error, not a
+ * filter to coerce.
+ */
+const readDocumentTags = (
+  value: unknown
+): Record<string, string> | undefined => {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'document_tags must be an object of string values'
+    );
+  }
+  const tags: Record<string, string> = {};
+  for (const [key, tagValue] of Object.entries(value)) {
+    if (typeof tagValue !== 'string') {
+      throw new DomainError(
+        'VALIDATION_FAILED',
+        `document_tags.${key} must be a string`
+      );
+    }
+    tags[key] = tagValue;
+  }
+  return tags;
 };
 
 /**
@@ -34,10 +63,14 @@ const toStringArray = (
   return Array.isArray(value) ? value : [value];
 };
 
-const hasSearchFilters = (body: KnowledgeSearchBody): boolean => {
+const hasSearchFilters = (
+  body: KnowledgeSearchBody,
+  documentTags: Record<string, string> | undefined
+): boolean => {
   const hasDocumentFilters =
     (body.document_paths !== undefined && body.document_paths.length > 0) ||
-    (body.document_ids !== undefined && body.document_ids.length > 0);
+    (body.document_ids !== undefined && body.document_ids.length > 0) ||
+    hasDocumentTags(documentTags);
   const hasMemoryFilters =
     (body.memory_ids !== undefined && body.memory_ids.length > 0) ||
     (body.memory_tags !== undefined && body.memory_tags.length > 0);
@@ -64,11 +97,12 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
   requireAuth(ctx);
 
   const body = ctx.request.body as KnowledgeSearchBody;
+  const documentTags = readDocumentTags(body.document_tags);
 
-  if (!hasSearchFilters(body)) {
+  if (!hasSearchFilters(body, documentTags)) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      'At least one of query, memory_ids, memory_tags, document_paths, or document_ids is required'
+      'At least one of query, memory_ids, memory_tags, document_paths, document_ids, or document_tags is required'
     );
   }
 
@@ -97,6 +131,7 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
     limit: body.limit,
     paths: toStringArray(body.document_paths),
     documentIds: toStringArray(body.document_ids),
+    documentTags,
     memoryIds: toStringArray(body.memory_ids),
     memoryTags: toStringArray(body.memory_tags),
   });

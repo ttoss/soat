@@ -1030,6 +1030,11 @@ components:
               type: array
               items:
                 type: string
+            document_tags:
+              type: object
+              additionalProperties:
+                type: string
+              description: Key-value pairs a document's `tags` must all contain (exact match)
             min_score:
               type: number
             limit:
@@ -1395,6 +1400,11 @@ components:
               type: array
               items:
                 type: string
+            document_tags:
+              type: object
+              additionalProperties:
+                type: string
+              description: Key-value pairs a document's `tags` must all contain (exact match)
             min_score:
               type: number
             limit:
@@ -1583,6 +1593,11 @@ components:
               type: array
               items:
                 type: string
+            document_tags:
+              type: object
+              additionalProperties:
+                type: string
+              description: Key-value pairs a document's `tags` must all contain (exact match)
             min_score:
               type: number
             limit:
@@ -1777,7 +1792,7 @@ components:
         knowledge_config:
           type: object
           nullable: true
-          description: Per-generation knowledge retrieval override. Array filters (memory_ids, memory_tags, document_ids, document_paths) are unioned with the agent's stored knowledge_config; scalar fields (min_score, limit) use the per-generation value when present.
+          description: Per-generation knowledge retrieval override. Array filters (memory_ids, memory_tags, document_ids, document_paths) are unioned with the agent's stored knowledge_config; `document_tags` pairs are merged with the override winning per key; scalar fields (min_score, limit) use the per-generation value when present.
           properties:
             memory_ids:
               x-soat-ref: memories
@@ -1797,6 +1812,11 @@ components:
               type: array
               items:
                 type: string
+            document_tags:
+              type: object
+              additionalProperties:
+                type: string
+              description: Key-value pairs a document's `tags` must all contain (exact match)
             min_score:
               type: number
             limit:

@@ -27,6 +27,7 @@ const KNOWLEDGE_CONFIG_KEYS: Record<string, string> = {
   memoryTags: 'memory_tags',
   documentIds: 'document_ids',
   documentPaths: 'document_paths',
+  documentTags: 'document_tags',
   minScore: 'min_score',
   writeMemoryId: 'write_memory_id',
 };

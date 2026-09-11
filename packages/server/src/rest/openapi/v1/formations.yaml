@@ -767,6 +767,11 @@ components:
               items:
                 type: string
               description: Retrieve from all documents matching these path prefixes
+            document_tags:
+              type: object
+              additionalProperties:
+                type: string
+              description: Retrieve from documents whose tags contain all these key-value pairs
             min_score:
               type: number
               description: Minimum similarity score (0–1) for retrieved chunks
