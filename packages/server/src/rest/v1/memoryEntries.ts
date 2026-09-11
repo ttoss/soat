@@ -10,12 +10,14 @@ import {
   assertMemoryEntryStorageQuota,
   deleteMemoryEntry,
   getMemoryEntry,
-  getMemoryEntryTags,
   listMemoryEntries,
   updateMemoryEntry,
-  updateMemoryEntryTags,
   writeMemoryEntry,
 } from 'src/lib/memoryEntries';
+import {
+  getMemoryEntryTags,
+  updateMemoryEntryTags,
+} from 'src/lib/memoryEntryTags';
 import { isStringRecord, readTagQuery } from 'src/lib/tags';
 
 import {
