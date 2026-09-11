@@ -1,7 +1,7 @@
-import { Op } from '@ttoss/postgresdb';
 import { db } from 'src/db';
 import { paginatedList } from 'src/lib/pagination';
 import { makeResourceAccessor } from 'src/lib/resourceAccessor';
+import { applyTagFilter, mergeTags } from 'src/lib/tags';
 
 type MemoryRow = InstanceType<(typeof db)['Memory']> & {
   project?: InstanceType<(typeof db)['Project']>;
@@ -54,12 +54,7 @@ export const listMemories = async (args: {
   offset?: number;
 }) => {
   const where: Record<string, unknown> = { projectId: args.projectIds };
-  if (args.tags && Object.keys(args.tags).length > 0) {
-    // JSONB containment: every requested pair must be present with exactly
-    // that value, the same rule knowledge search and IAM
-    // `soat:ResourceTag/<key>` conditions read this column with.
-    where.tags = { [Op.contains]: args.tags };
-  }
+  applyTagFilter({ where, tags: args.tags });
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
@@ -102,6 +97,31 @@ export const updateMemory = async (args: {
   await memory.save();
 
   return mapMemory(await memories.reload(memory));
+};
+
+export const getMemoryTags = async (args: { id: string }) => {
+  const memory = await db.Memory.findOne({ where: { publicId: args.id } });
+  if (!memory) return null;
+  return memory.tags ?? {};
+};
+
+export const updateMemoryTags = async (args: {
+  id: string;
+  tags: Record<string, string>;
+  merge?: boolean;
+}) => {
+  const memory = await db.Memory.findOne({ where: { publicId: args.id } });
+  if (!memory) return null;
+
+  const newTags = mergeTags({
+    current: memory.tags,
+    incoming: args.tags,
+    merge: args.merge,
+  });
+  await memory.update({ tags: newTags });
+
+  // The tag routes' contract is the tag map itself, not the memory.
+  return newTags;
 };
 
 export const deleteMemory = async (args: {

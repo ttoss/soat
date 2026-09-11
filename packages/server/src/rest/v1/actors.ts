@@ -13,6 +13,7 @@ import {
 } from 'src/lib/actors';
 import { buildSrn } from 'src/lib/iam';
 import { compilePolicy } from 'src/lib/policyCompiler';
+import { buildResourceTagContext, readTagQuery } from 'src/lib/tags';
 
 import {
   requireAuth,
@@ -40,6 +41,7 @@ actorsRouter.get('/actors', async (ctx: Context) => {
   const agentId = ctx.query.agent_id as string | undefined;
   const chatId = ctx.query.chat_id as string | undefined;
   const conversationId = ctx.query.conversation_id as string | undefined;
+  const tags = readTagQuery(ctx.query.tags);
   const limit = ctx.query.limit
     ? parseInt(ctx.query.limit as string, 10)
     : undefined;
@@ -82,6 +84,7 @@ actorsRouter.get('/actors', async (ctx: Context) => {
     agentId,
     chatId,
     conversationId,
+    tags,
     policyWhere,
     limit,
     offset,
@@ -98,10 +101,10 @@ actorsRouter.get('/actors/:actor_id', async (ctx: Context) => {
     resourceType: 'actor',
     resourceId: actor.id,
   });
-  const contextGet: Record<string, string> = { 'soat:ResourceType': 'actor' };
-  for (const [k, v] of Object.entries(actor.tags!)) {
-    contextGet[`soat:ResourceTag/${k}`] = v as string;
-  }
+  const contextGet = buildResourceTagContext({
+    resourceType: 'actor',
+    tags: actor.tags,
+  });
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: actor.project_id!,
     action: 'actors:GetActor',
@@ -196,10 +199,10 @@ actorsRouter.delete('/actors/:actor_id', async (ctx: Context) => {
     resourceType: 'actor',
     resourceId: actor.id,
   });
-  const contextDel: Record<string, string> = { 'soat:ResourceType': 'actor' };
-  for (const [k, v] of Object.entries(actor.tags!)) {
-    contextDel[`soat:ResourceTag/${k}`] = v as string;
-  }
+  const contextDel = buildResourceTagContext({
+    resourceType: 'actor',
+    tags: actor.tags,
+  });
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: actor.project_id!,
     action: 'actors:DeleteActor',
@@ -224,10 +227,10 @@ actorsRouter.patch('/actors/:actor_id', async (ctx: Context) => {
     resourceType: 'actor',
     resourceId: actor.id,
   });
-  const contextUpd: Record<string, string> = { 'soat:ResourceType': 'actor' };
-  for (const [k, v] of Object.entries(actor.tags!)) {
-    contextUpd[`soat:ResourceTag/${k}`] = v as string;
-  }
+  const contextUpd = buildResourceTagContext({
+    resourceType: 'actor',
+    tags: actor.tags,
+  });
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: actor.project_id!,
     action: 'actors:UpdateActor',

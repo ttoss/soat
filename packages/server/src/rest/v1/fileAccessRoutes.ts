@@ -14,6 +14,7 @@ import { db } from '../../db';
 import { canAccessFile } from '../../lib/fileAuthorization';
 import { verifyFileDownloadToken } from '../../lib/fileDownloadToken';
 import { type AuthenticatedContext, requireAuth } from './helpers';
+import { registerTagRoutes, type TagAccess } from './tagRoutes';
 
 const collectStreamToBuffer = async (args: {
   stream: AsyncIterable<unknown>;
@@ -46,7 +47,7 @@ const ensureAllowed = async (args: {
     id: string;
     project_id?: string | null;
     path?: string | null;
-    tags?: Record<string, unknown> | null;
+    tags?: Record<string, string> | null;
   };
 }): Promise<void> => {
   const allowed = await canAccessFile({
@@ -95,7 +96,7 @@ const registerDeleteFileRoute = (args: { filesRouter: Router<Context> }) => {
         id: file.publicId,
         project_id: file.project!.publicId,
         path: (file as { path?: string | null }).path,
-        tags: file.tags as Record<string, unknown> | null,
+        tags: file.tags,
       },
     });
 
@@ -218,49 +219,32 @@ const registerMetadataRoutes = (args: { filesRouter: Router<Context> }) => {
     });
   });
 
-  args.filesRouter.get('/files/:file_id/tags', async (ctx: Context) => {
-    requireAuth(ctx);
-
-    const file = await ensureFileExists({ ctx });
-
-    await ensureAllowed({ ctx, action: 'files:GetFile', file });
-    ctx.body = await getFileTags({ id: ctx.params.file_id });
-  });
-
-  args.filesRouter.put('/files/:file_id/tags', async (ctx: Context) => {
-    requireAuth(ctx);
-
-    const file = await ensureFileExists({ ctx });
-
+  const resolveFile = async (resolveArgs: {
+    ctx: AuthenticatedContext;
+    access: TagAccess;
+  }) => {
+    const file = await ensureFileExists({ ctx: resolveArgs.ctx });
     await ensureAllowed({
-      ctx,
-      action: 'files:UpdateFileMetadata',
+      ctx: resolveArgs.ctx,
+      action:
+        resolveArgs.access === 'read'
+          ? 'files:GetFile'
+          : 'files:UpdateFileMetadata',
       file,
     });
-    const tags = ctx.request.body as Record<string, string>;
-    ctx.body = await updateFileTags({
-      id: ctx.params.file_id,
-      tags,
-      merge: false,
-    });
-  });
+    return file;
+  };
 
-  args.filesRouter.patch('/files/:file_id/tags', async (ctx: Context) => {
-    requireAuth(ctx);
-
-    const file = await ensureFileExists({ ctx });
-
-    await ensureAllowed({
-      ctx,
-      action: 'files:UpdateFileMetadata',
-      file,
-    });
-    const tags = ctx.request.body as Record<string, string>;
-    ctx.body = await updateFileTags({
-      id: ctx.params.file_id,
-      tags,
-      merge: true,
-    });
+  registerTagRoutes({
+    router: args.filesRouter,
+    path: '/files/:file_id/tags',
+    resolve: resolveFile,
+    readTags: ({ resource }) => {
+      return getFileTags({ id: resource.id });
+    },
+    writeTags: ({ resource, tags, merge }) => {
+      return updateFileTags({ id: resource.id, tags, merge });
+    },
   });
 };
 

@@ -68,6 +68,10 @@ Listed messages carry the document's full `content`, `role`, `actor_id`, and `ag
 
 Removing a message also deletes its Document and File.
 
+### Tags
+
+Key-value string pairs managed via the tag sub-endpoints and matched by `soat:ResourceTag/<key>`. [`GET /api/v1/conversations`](/docs/api/conversations/list-conversations) filters by pair with `?tags=key:value` (repeatable, all must match). See [IAM — Tags](iam.md#tags).
+
 Tool-call chains (invocations and results alongside the final text) are preserved internally so later turns see the full exchange; this state is separate from `metadata` and never returned.
 
 #### Message ordering

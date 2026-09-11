@@ -85,6 +85,10 @@ The prefix is a **path boundary, not a substring**: `/reports` matches `/reports
 
 `?wait=true` blocks until completion and returns `201 Created` with `status: ready` (or `failed`). See [Synchronous & Asynchronous Execution](../advanced/sync-and-async.md) for the platform-wide `wait` contract. A file larger than `SYNC_INGESTION_MAX_BYTES` (default 10 MB) is rejected with `413 FILE_TOO_LARGE_FOR_SYNC`; ingest it in background mode instead.
 
+### Tags
+
+Key-value string pairs set at creation or ingestion, or via the tag sub-endpoints, and matched by `soat:ResourceTag/<key>`. [`GET /api/v1/documents`](/docs/api/documents/list-documents) filters by pair with `?tags=key:value` (repeatable, all must match); [Knowledge search](./knowledge.md) applies the same pairs to chunks. See [IAM — Tags](iam.md#tags).
+
 ### Polling Ingestion Status
 
 [`GET /documents/:id`](/docs/api/documents/get-document) returns the full chunk content, which can be megabytes. [`GET /api/v1/documents/:id/status`](/docs/api/documents/get-document-status) returns only the lifecycle fields:

@@ -7,7 +7,7 @@ import * as consolidationCompletion from 'src/lib/memoryConsolidationCompletion'
 import { paginatedList } from 'src/lib/pagination';
 import { assertStorageQuota, contentBytes } from 'src/lib/quotaStorage';
 import { makeResourceAccessor } from 'src/lib/resourceAccessor';
-import { mergeTags } from 'src/lib/tags';
+import { applyTagFilter, mergeTags } from 'src/lib/tags';
 import { withIterativeVectorScan } from 'src/lib/vectorSearch';
 
 /**
@@ -436,16 +436,19 @@ export const listMemoryEntries = async (args: {
   offset?: number;
   /** Invalidated (superseded) entries are excluded unless this is set. */
   includeInvalidated?: boolean;
+  tags?: Record<string, string>;
 }) => {
+  const where: Record<string, unknown> = {
+    memoryId: args.memoryId,
+    ...(args.includeInvalidated ? {} : { invalidatedAt: null }),
+  };
+  applyTagFilter({ where, tags: args.tags });
   return paginatedList({
     limit: args.limit,
     offset: args.offset,
     query: ({ limit, offset }) => {
       return db.MemoryEntry.findAndCountAll({
-        where: {
-          memoryId: args.memoryId,
-          ...(args.includeInvalidated ? {} : { invalidatedAt: null }),
-        },
+        where,
         include: memoryEntryIncludes(),
         order: [['createdAt', 'ASC']],
         distinct: true,
@@ -505,6 +508,35 @@ export const updateMemoryEntry = async (args: {
   await entry.save();
 
   return mapMemoryEntry(await memoryEntries.reload(entry));
+};
+
+export const getMemoryEntryTags = async (args: { id: string }) => {
+  const entry = await db.MemoryEntry.findOne({
+    where: { publicId: args.id },
+  });
+  if (!entry) return null;
+  return entry.tags ?? {};
+};
+
+export const updateMemoryEntryTags = async (args: {
+  id: string;
+  tags: Record<string, string>;
+  merge?: boolean;
+}) => {
+  const entry = await db.MemoryEntry.findOne({
+    where: { publicId: args.id },
+  });
+  if (!entry) return null;
+
+  const newTags = mergeTags({
+    current: entry.tags,
+    incoming: args.tags,
+    merge: args.merge,
+  });
+  await entry.update({ tags: newTags });
+
+  // The tag routes' contract is the tag map itself, not the entry.
+  return newTags;
 };
 
 export const deleteMemoryEntry = async (args: {

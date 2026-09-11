@@ -10,6 +10,7 @@ import {
   updateConversation,
 } from 'src/lib/conversations';
 import { compilePolicy } from 'src/lib/policyCompiler';
+import { readTagQuery } from 'src/lib/tags';
 
 import { checkConversationAccess } from './conversationHelpers';
 import { conversationSubResourcesRouter } from './conversationSubResources';
@@ -26,6 +27,7 @@ conversationsRouter.get('/conversations', async (ctx: Context) => {
 
   const projectPublicId = ctx.query.project_id as string | undefined;
   const actorId = ctx.query.actor_id as string | undefined;
+  const tags = readTagQuery(ctx.query.tags);
   const limit = ctx.query.limit
     ? parseInt(ctx.query.limit as string, 10)
     : undefined;
@@ -64,6 +66,7 @@ conversationsRouter.get('/conversations', async (ctx: Context) => {
   ctx.body = await listConversations({
     projectIds,
     actorId,
+    tags,
     policyWhere,
     limit,
     offset,

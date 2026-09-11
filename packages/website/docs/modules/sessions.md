@@ -72,6 +72,10 @@ An optional `idempotency_key` string can accompany either variant — see [Idemp
 | **Sessions**      | 1 user ↔ 1 agent — full tool support, automatic history, owned by an agent          |
 | **Conversations** | Multi-party dialogue engine — powers sessions internally, available as escape hatch |
 
+### Tags
+
+Key-value string pairs managed via the tag sub-endpoints. [`GET /api/v1/sessions`](/docs/api/sessions/list-sessions) filters by pair with `?tags=key:value` (repeatable, all must match). Session tags are stored and filterable but not yet evaluated by `soat:ResourceTag/<key>` policy conditions ([#1278](https://github.com/ttoss/soat/issues/1278)). See [IAM — Tags](iam.md#tags).
+
 ### The Session's End User (Actor)
 
 A session has an end user only when `actor_id` is supplied on create; [Actors](./actors.md) are never auto-created here. End-user attribution on the resulting [usage](./usage.md#end-user-attribution) events is derived from the session's actor, so a session without one produces generations that match no `actor`-scoped [quota](./quotas.md#actor-scope). Attach an actor before relying on a per-user spend cap.

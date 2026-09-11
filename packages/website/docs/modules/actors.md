@@ -97,7 +97,7 @@ Project-scoped API keys make `project_id` optional (omitted defaults to the key'
 
 ### Tags
 
-Key-value string pairs managed via `tags` or the tag sub-endpoints, matched by `soat:ResourceTag/<key>`. SRN type `actor` (`srn:proj_ABC:actor:actor_123`). See [IAM — Tags](iam.md#tags) and [SRNs](iam.md#soat-resource-names-srns).
+Key-value string pairs managed via `tags` or the tag sub-endpoints, matched by `soat:ResourceTag/<key>`. [`GET /api/v1/actors`](/docs/api/actors/list-actors) filters by pair with `?tags=key:value` (repeatable, all must match). SRN type `actor` (`srn:proj_ABC:actor:actor_123`). See [IAM — Tags](iam.md#tags) and [SRNs](iam.md#soat-resource-names-srns).
 
 ## Examples
 

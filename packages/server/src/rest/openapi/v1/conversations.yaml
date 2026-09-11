@@ -41,6 +41,20 @@ paths:
           schema:
             type: string
             example: 'actor_V1StGXR8Z5jdHi6B'
+        - name: tags
+          in: query
+          description: >
+            Filter by tag pairs, written `key:value` (split on the first
+            colon, so a value may contain colons). Repeat the parameter for
+            several pairs; **all** must be present with exactly that value.
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+          example:
+            - 'env:prod'
         - name: limit
           in: query
           required: false

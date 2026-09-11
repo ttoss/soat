@@ -40,6 +40,10 @@ Files belong to a project and are persisted through the configured backend (loca
 
 ## Key Concepts
 
+### Tags
+
+Key-value string pairs managed via the tag sub-endpoints and matched by `soat:ResourceTag/<key>`. [`GET /api/v1/files`](/docs/api/files/list-files) filters by pair with `?tags=key:value` (repeatable, all must match). See [IAM — Tags](iam.md#tags).
+
 ### Storage Backends
 
 Bytes are handled by a **storage provider** selected with `FILES_STORAGE_PROVIDER` (default `local`); the API is identical across backends. Each file records its backend, so reads and deletes route correctly after the active backend changes.

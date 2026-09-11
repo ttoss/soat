@@ -237,7 +237,16 @@ A statement matches a request when **all** of the following are true:
 
 ## Tags
 
-Tags are key-value pairs on resources, enabling ABAC via conditions. Taggable: documents, files, actors, conversations.
+Tags are key-value pairs on resources, enabling ABAC via conditions. One mechanism serves every tagged resource — actors, conversations, documents, files, sessions, memories and memory entries — so a tag is written, filtered and matched the same way everywhere:
+
+| Surface | Rule |
+|---|---|
+| Write (`tags` on create/update, `PUT`/`PATCH …/tags`) | A flat object of string values; anything else (an array, a nested object, a number) is `400 VALIDATION_FAILED`, never coerced |
+| List filter (`?tags=key:value`, repeatable) | JSONB containment: every pair present with exactly that value; split on the first colon; a pair without a colon is `400` |
+| Knowledge search (`tags` in the body) | Same containment rule across documents and memory entries |
+| Policy condition (`soat:ResourceTag/<key>`) | Same pairs, read from the same column |
+
+Which resources honor `soat:ResourceTag/<key>` in a policy condition today: actors, conversations, documents, files. Sessions, memories and memory entries store and filter tags but do not yet evaluate them in policies (tracked in [#1278](https://github.com/ttoss/soat/issues/1278) and [#1279](https://github.com/ttoss/soat/issues/1279)).
 
 ```json
 {
@@ -255,6 +264,12 @@ Managed via each resource's `tags` field or the tag sub-endpoints:
 PUT    /api/v1/<resource>/:id/tags    Replace all tags
 PATCH  /api/v1/<resource>/:id/tags    Merge tags
 GET    /api/v1/<resource>/:id/tags    Get tags
+```
+
+The response of all three is the tag map itself, not the resource. Every list endpoint of a tagged resource accepts the same filter:
+
+```
+GET /api/v1/<resources>?tags=env:prod&tags=team:finance
 ```
 
 ### Tag keys are stored verbatim

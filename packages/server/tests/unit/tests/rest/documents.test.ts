@@ -420,15 +420,13 @@ describe('Documents', () => {
           filename: 'tagged.txt',
           title: 'My Title',
           metadata: { source: 'test' },
-          tags: ['alpha', 'beta'],
+          tags: { tier: 'alpha', stage: 'beta' },
         });
 
       expect(response.status).toBe(201);
       expect(response.body.title).toBe('My Title');
       expect(response.body.metadata).toEqual({ source: 'test' });
-      expect(response.body.tags).toEqual(
-        expect.arrayContaining(['alpha', 'beta'])
-      );
+      expect(response.body.tags).toEqual({ tier: 'alpha', stage: 'beta' });
     });
   });
 
@@ -443,7 +441,7 @@ describe('Documents', () => {
           content: 'Original content.',
           filename: 'patchme.txt',
           title: 'Original Title',
-          tags: ['initial'],
+          tags: { stage: 'initial' },
         });
       documentId = res.body.id;
     });
@@ -469,12 +467,10 @@ describe('Documents', () => {
     test('updates tags', async () => {
       const response = await authenticatedTestClient(userToken)
         .patch(`/api/v1/documents/${documentId}`)
-        .send({ tags: ['new-tag', 'another'] });
+        .send({ tags: { tier: 'new-tag', stage: 'another' } });
 
       expect(response.status).toBe(200);
-      expect(response.body.tags).toEqual(
-        expect.arrayContaining(['new-tag', 'another'])
-      );
+      expect(response.body.tags).toEqual({ tier: 'new-tag', stage: 'another' });
     });
 
     test('updates metadata', async () => {

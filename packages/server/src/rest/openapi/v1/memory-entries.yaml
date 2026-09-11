@@ -35,6 +35,20 @@ paths:
           schema:
             type: string
             example: mem_V1StGXR8Z5jdHi6B
+        - name: tags
+          in: query
+          description: >
+            Filter by tag pairs, written `key:value` (split on the first
+            colon, so a value may contain colons). Repeat the parameter for
+            several pairs; **all** must be present with exactly that value.
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+          example:
+            - 'env:prod'
         - name: limit
           in: query
           required: false
@@ -280,6 +294,122 @@ paths:
           description: Memory or entry not found
         '500':
           description: Internal server error
+  /api/v1/memory-entries/{entry_id}/tags:
+    get:
+      tags:
+        - Memory Entries
+      summary: Get memory entry tags
+      description: Returns all tags attached to the memory entry
+      operationId: getMemoryEntryTags
+      x-iam-action: memories:GetMemoryEntry
+      parameters:
+        - name: entry_id
+          in: path
+          required: true
+          description: Memory entry ID
+          schema:
+            type: string
+            example: mem_entry_V1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: Memory entry tags
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Memory or entry not found
+    put:
+      tags:
+        - Memory Entries
+      summary: Replace memory entry tags
+      description: Replaces all tags on the memory entry with the provided tags (not merged)
+      operationId: replaceMemoryEntryTags
+      x-iam-action: memories:UpdateMemoryEntry
+      parameters:
+        - name: entry_id
+          in: path
+          required: true
+          description: Memory entry ID
+          schema:
+            type: string
+            example: mem_entry_V1StGXR8Z5jdHi6B
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties:
+                type: string
+              example:
+                team: support
+                env: prod
+      responses:
+        '200':
+          description: Tags replaced
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '400':
+          description: Body is not an object of string values
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Memory or entry not found
+    patch:
+      tags:
+        - Memory Entries
+      summary: Merge memory entry tags
+      description: Merges provided tags with existing tags (existing tags are preserved unless overridden)
+      operationId: mergeMemoryEntryTags
+      x-iam-action: memories:UpdateMemoryEntry
+      parameters:
+        - name: entry_id
+          in: path
+          required: true
+          description: Memory entry ID
+          schema:
+            type: string
+            example: mem_entry_V1StGXR8Z5jdHi6B
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties:
+                type: string
+              example:
+                priority: high
+      responses:
+        '200':
+          description: Tags merged
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '400':
+          description: Body is not an object of string values
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Memory or entry not found
 components:
   securitySchemes:
     bearerAuth:

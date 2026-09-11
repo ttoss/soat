@@ -17,7 +17,7 @@ import { recoverStaleDocument } from './ingestionCallback';
 import { emptyPage, paginatedList } from './pagination';
 import { registerResourceFieldMap } from './policyCompiler';
 import type { SoatEventTypeFor } from './soatEvents';
-import { mergeTags } from './tags';
+import { applyTagFilter, mergeTags } from './tags';
 
 export {
   enqueueDocumentIngestion,
@@ -86,6 +86,7 @@ const buildDocumentQueryOptions = (args: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   policyWhere?: Record<string, any>;
   pathPrefix?: string;
+  tags?: Record<string, string>;
   limit: number;
   offset: number;
 }) => {
@@ -94,6 +95,7 @@ const buildDocumentQueryOptions = (args: {
     args.policyWhere && Object.keys(args.policyWhere).length > 0
       ? { ...args.policyWhere }
       : {};
+  applyTagFilter({ where: topLevelWhere, tags: args.tags });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const file: Record<string, any> = {};
   if (args.projectIds !== undefined) file.projectId = args.projectIds;
@@ -136,6 +138,7 @@ export const listDocuments = async (args: {
   policyWhere?: Record<string, any>;
   /** Only documents filed under this directory (see `pathPrefixPattern`). */
   pathPrefix?: string;
+  tags?: Record<string, string>;
   limit?: number;
   offset?: number;
 }) => {
@@ -151,6 +154,7 @@ export const listDocuments = async (args: {
         projectIds: args.projectIds,
         policyWhere: args.policyWhere,
         pathPrefix: args.pathPrefix,
+        tags: args.tags,
         limit,
         offset,
       });

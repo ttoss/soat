@@ -18,8 +18,9 @@ import {
 } from 'src/lib/conversations';
 
 import { checkConversationAccess } from './conversationHelpers';
-import { requireAuth } from './helpers';
+import { type AuthenticatedContext, requireAuth } from './helpers';
 import { assertNotSystemRole } from './systemMessageGuard';
+import { registerTagRoutes, type TagAccess } from './tagRoutes';
 
 const conversationSubResourcesRouter = new Router<Context>();
 
@@ -157,96 +158,44 @@ conversationSubResourcesRouter.delete(
   }
 );
 
-conversationSubResourcesRouter.get(
-  '/conversations/:conversation_id/tags',
-  async (ctx: Context) => {
-    requireAuth(ctx);
+const resolveConversation = async (args: {
+  ctx: AuthenticatedContext;
+  access: TagAccess;
+}) => {
+  const conversation = await getConversation({
+    id: args.ctx.params.conversation_id,
+  });
 
-    const conversation = await getConversation({
-      id: ctx.params.conversation_id,
-    });
-
-    if (!conversation) {
-      throw new DomainError('RESOURCE_NOT_FOUND', 'Conversation not found');
-    }
-
-    if (
-      !(await checkConversationAccess(
-        ctx.authUser!,
-        conversation,
-        'conversations:GetConversation'
-      ))
-    ) {
-      throw new DomainError('FORBIDDEN', 'Forbidden');
-    }
-
-    ctx.body = await getConversationTags({ id: ctx.params.conversation_id });
+  if (!conversation) {
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Conversation not found');
   }
-);
 
-conversationSubResourcesRouter.put(
-  '/conversations/:conversation_id/tags',
-  async (ctx: Context) => {
-    requireAuth(ctx);
-
-    const conversation = await getConversation({
-      id: ctx.params.conversation_id,
-    });
-
-    if (!conversation) {
-      throw new DomainError('RESOURCE_NOT_FOUND', 'Conversation not found');
-    }
-
-    if (
-      !(await checkConversationAccess(
-        ctx.authUser!,
-        conversation,
-        'conversations:UpdateConversation'
-      ))
-    ) {
-      throw new DomainError('FORBIDDEN', 'Forbidden');
-    }
-
-    const tags = ctx.request.body as Record<string, string>;
-    ctx.body = await updateConversationTags({
-      id: ctx.params.conversation_id,
-      tags,
-      merge: false,
-    });
+  if (
+    !(await checkConversationAccess(
+      args.ctx.authUser,
+      conversation,
+      args.access === 'read'
+        ? 'conversations:GetConversation'
+        : 'conversations:UpdateConversation'
+    ))
+  ) {
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
-);
 
-conversationSubResourcesRouter.patch(
-  '/conversations/:conversation_id/tags',
-  async (ctx: Context) => {
-    requireAuth(ctx);
+  return conversation;
+};
 
-    const conversation = await getConversation({
-      id: ctx.params.conversation_id,
-    });
-
-    if (!conversation) {
-      throw new DomainError('RESOURCE_NOT_FOUND', 'Conversation not found');
-    }
-
-    if (
-      !(await checkConversationAccess(
-        ctx.authUser!,
-        conversation,
-        'conversations:UpdateConversation'
-      ))
-    ) {
-      throw new DomainError('FORBIDDEN', 'Forbidden');
-    }
-
-    const tags = ctx.request.body as Record<string, string>;
-    ctx.body = await updateConversationTags({
-      id: ctx.params.conversation_id,
-      tags,
-      merge: true,
-    });
-  }
-);
+registerTagRoutes({
+  router: conversationSubResourcesRouter,
+  path: '/conversations/:conversation_id/tags',
+  resolve: resolveConversation,
+  readTags: ({ resource }) => {
+    return getConversationTags({ id: resource.id });
+  },
+  writeTags: ({ resource, tags, merge }) => {
+    return updateConversationTags({ id: resource.id, tags, merge });
+  },
+});
 
 conversationSubResourcesRouter.post(
   '/conversations/:conversation_id/generate',

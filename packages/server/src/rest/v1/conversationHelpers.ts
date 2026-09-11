@@ -1,19 +1,17 @@
 import type { Context } from 'src/Context';
 import type { getConversation } from 'src/lib/conversations';
 import { buildSrn } from 'src/lib/iam';
+import { buildResourceTagContext } from 'src/lib/tags';
 
 export type ConversationRecord = Awaited<ReturnType<typeof getConversation>>;
 
 export const buildConversationContext = (
   conversation: NonNullable<ConversationRecord>
 ): Record<string, string> => {
-  const ctx: Record<string, string> = { 'soat:ResourceType': 'conversation' };
-  if (conversation.tags) {
-    for (const [k, v] of Object.entries(conversation.tags)) {
-      ctx[`soat:ResourceTag/${k}`] = v as string;
-    }
-  }
-  return ctx;
+  return buildResourceTagContext({
+    resourceType: 'conversation',
+    tags: conversation.tags,
+  });
 };
 
 export const checkConversationAccess = async (

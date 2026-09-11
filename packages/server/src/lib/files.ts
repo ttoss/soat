@@ -19,7 +19,7 @@ import {
   registerResourceFieldMap,
 } from './policyCompiler';
 import { assertStorageQuota } from './quotaStorage';
-import { mergeTags } from './tags';
+import { applyTagFilter, mergeTags } from './tags';
 import { rethrowAsConflict } from './uniqueViolation';
 
 export type { CompiledPolicy };
@@ -59,6 +59,7 @@ export const listFiles = async (args: {
   projectIds?: number[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   policyWhere?: Record<string, any>;
+  tags?: Record<string, string>;
   limit?: number;
   offset?: number;
 }) => {
@@ -72,6 +73,7 @@ export const listFiles = async (args: {
   if (args.projectIds !== undefined) {
     where.projectId = args.projectIds;
   }
+  applyTagFilter({ where, tags: args.tags });
 
   if (args.policyWhere && Object.keys(args.policyWhere).length > 0) {
     Object.assign(where, args.policyWhere);
