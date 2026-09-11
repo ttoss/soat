@@ -36,10 +36,10 @@ paths:
         - name: tags
           in: query
           description: >
-            Filter memories by tag patterns. Supports glob syntax (`*` matches
-            any substring, `?` matches any single character). Multiple values
-            are ORed — a memory is returned if any of its tags match any of the
-            provided patterns. Omit to return all memories.
+            Filter memories by tag pairs, written `key:value` (split on the
+            first colon, so a value may contain colons). Repeat the parameter
+            for several pairs; **all** must be present with exactly that value.
+            Omit to return all memories.
           schema:
             type: array
             items:
@@ -47,8 +47,8 @@ paths:
           style: form
           explode: true
           example:
-            - 'customer*'
-            - 'support'
+            - 'team:support'
+            - 'tier:enterprise'
         - name: limit
           in: query
           required: false
@@ -121,11 +121,13 @@ paths:
                   description: Optional description
                   example: Retrieves product docs for support queries
                 tags:
-                  type: array
-                  items:
+                  type: object
+                  additionalProperties:
                     type: string
-                  description: Optional list of tags for filtering in knowledge search
-                  example: ['projectA', 'customer-support']
+                  description: >
+                    Optional key-value tags. Scopes the memory in knowledge
+                    search, where every requested pair must match exactly.
+                  example: { team: 'support', tier: 'enterprise' }
       responses:
         '201':
           description: Memory created
@@ -198,11 +200,13 @@ paths:
                   nullable: true
                   description: Optional description
                 tags:
-                  type: array
+                  type: object
                   nullable: true
-                  items:
+                  additionalProperties:
                     type: string
-                  description: Optional list of tags for filtering in knowledge search
+                  description: >
+                    Optional key-value tags. Replaces the stored bag; `null`
+                    clears it.
       responses:
         '200':
           description: Memory updated
@@ -267,12 +271,12 @@ components:
           nullable: true
           example: Retrieves product docs for support queries
         tags:
-          type: array
+          type: object
           nullable: true
-          items:
+          additionalProperties:
             type: string
-          description: List of tags for filtering in knowledge search
-          example: ['projectA', 'customer-support']
+          description: Key-value tags for filtering in knowledge search
+          example: { team: 'support', tier: 'enterprise' }
         created_at:
           type: string
           format: date-time

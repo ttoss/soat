@@ -77,8 +77,8 @@ export class MemoryEntry extends Model {
   })
   declare sourceType: MemoryEntrySource;
 
-  @Column({ type: DataType.ARRAY(DataType.STRING), allowNull: true })
-  declare tags: string[] | null;
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare tags: Record<string, string> | null;
 
   @Column({ type: DataType.JSONB, allowNull: true })
   declare metadata: Record<string, unknown> | null;

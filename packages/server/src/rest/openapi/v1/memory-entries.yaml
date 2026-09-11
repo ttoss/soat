@@ -125,11 +125,13 @@ paths:
                   default: manual
                   example: manual
                 tags:
-                  type: array
-                  items:
+                  type: object
+                  additionalProperties:
                     type: string
-                  description: Per-entry tag strings, used for entry-granularity filtering in search-knowledge (memory_tags)
-                  example: [role:traffic-manager, source:rejected_approval]
+                  description: >
+                    Per-entry key-value tags, used for entry-granularity
+                    filtering by `tags` in search-knowledge.
+                  example: { role: traffic-manager, source: rejected_approval }
                 metadata:
                   type: object
                   additionalProperties: true
@@ -225,12 +227,14 @@ paths:
                   type: string
                   description: Updated text content
                 tags:
-                  type: array
+                  type: object
                   nullable: true
-                  items:
+                  additionalProperties:
                     type: string
-                  description: Replaces the entry's tags. Pass null or an empty array to clear.
-                  example: [role:traffic-manager]
+                  description: >
+                    Replaces the entry's tags. Pass null or an empty object to
+                    clear.
+                  example: { role: traffic-manager }
                 metadata:
                   type: object
                   nullable: true
@@ -301,12 +305,12 @@ components:
           enum: [manual, agent, extraction, orchestration]
           example: manual
         tags:
-          type: array
+          type: object
           nullable: true
-          items:
+          additionalProperties:
             type: string
-          description: Per-entry tag strings
-          example: [role:traffic-manager, source:rejected_approval]
+          description: Per-entry key-value tags
+          example: { role: traffic-manager, source: rejected_approval }
         metadata:
           type: object
           nullable: true

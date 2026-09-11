@@ -1587,7 +1587,7 @@ resources:
           properties: {
             name: 'Memory With Metadata',
             description: 'This is a memory with description',
-            tags: ['important', 'core'],
+            tags: { priority: 'important', scope: 'core' },
           },
         },
         ToolWithOptions: {
@@ -1762,7 +1762,7 @@ resources:
             properties: {
               name: 'Memory Updated',
               description: 'Updated description for memory',
-              tags: ['updated', 'modified'],
+              tags: { state: 'updated', change: 'modified' },
             },
           },
           ToolWithOptions: templateWithOptionalProps.resources.ToolWithOptions,
@@ -3398,7 +3398,7 @@ resources:
           name: `memory-entry-tags-formation-${Date.now()}`,
           template: makeTemplate({
             content: 'Tagged entry from formation',
-            tags: ['role:pilot', 'source:formation'],
+            tags: { role: 'pilot', source: 'formation' },
             metadata: { origin: 'formation' },
           }),
         });
@@ -3410,7 +3410,7 @@ resources:
       const created = await db.MemoryEntry.findOne({
         where: { publicId: physicalId },
       });
-      expect(created!.tags).toEqual(['role:pilot', 'source:formation']);
+      expect(created!.tags).toEqual({ role: 'pilot', source: 'formation' });
       expect(created!.metadata).toEqual({ origin: 'formation' });
 
       // Update to new tags + metadata.
@@ -3419,13 +3419,13 @@ resources:
         .send({
           template: makeTemplate({
             content: 'Tagged entry from formation',
-            tags: ['role:copilot'],
+            tags: { role: 'copilot' },
             metadata: { origin: 'formation-update' },
           }),
         });
       expect(updateRes.status).toBe(200);
       await created!.reload();
-      expect(created!.tags).toEqual(['role:copilot']);
+      expect(created!.tags).toEqual({ role: 'copilot' });
       expect(created!.metadata).toEqual({ origin: 'formation-update' });
 
       // Clear both via explicit null (nullable formation properties).

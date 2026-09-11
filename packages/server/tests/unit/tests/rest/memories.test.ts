@@ -61,11 +61,14 @@ describe('Memories', () => {
         .send({
           project_id: projectId,
           name: 'Tagged Memory',
-          tags: ['projectA', 'customer-support'],
+          tags: { project: 'A', team: 'customer-support' },
         });
 
       expect(response.status).toBe(201);
-      expect(response.body.tags).toEqual(['projectA', 'customer-support']);
+      expect(response.body.tags).toEqual({
+        project: 'A',
+        team: 'customer-support',
+      });
     });
 
     test('create without name returns 400', async () => {
@@ -446,16 +449,16 @@ describe('Memories', () => {
           .send({
             memory_id: freshMemoryId,
             content: 'Approve refunds under $50 automatically',
-            tags: ['role:traffic-manager', 'source:rejected_approval'],
+            tags: { role: 'traffic-manager', source: 'rejected_approval' },
             metadata: { action_id: 'act_01', evidence: 'high' },
           });
 
         expect(response.status).toBe(201);
         expect(response.body.action).toBe('created');
-        expect(response.body.tags).toEqual([
-          'role:traffic-manager',
-          'source:rejected_approval',
-        ]);
+        expect(response.body.tags).toEqual({
+          role: 'traffic-manager',
+          source: 'rejected_approval',
+        });
         expect(response.body.metadata).toEqual({
           action_id: 'act_01',
           evidence: 'high',
@@ -487,10 +490,10 @@ describe('Memories', () => {
         expect(response.body.source_type).toBe('orchestration');
       });
 
-      test('returns 400 when tags is not an array of strings', async () => {
+      test('returns 400 when tags is not an object of strings', async () => {
         const response = await authenticatedTestClient(userToken)
           .post('/api/v1/memory-entries')
-          .send({ memory_id: memoryId, content: 'x', tags: [1, 2, 3] });
+          .send({ memory_id: memoryId, content: 'x', tags: ['a', 'b'] });
 
         expect(response.status).toBe(400);
         expect(response.body.error.message).toMatch(/tags/);
@@ -634,9 +637,9 @@ describe('Memories', () => {
 
         const set = await authenticatedTestClient(userToken)
           .put(`/api/v1/memory-entries/${id}`)
-          .send({ tags: ['role:pilot'], metadata: { k: 'v' } });
+          .send({ tags: { role: 'pilot' }, metadata: { k: 'v' } });
         expect(set.status).toBe(200);
-        expect(set.body.tags).toEqual(['role:pilot']);
+        expect(set.body.tags).toEqual({ role: 'pilot' });
         expect(set.body.metadata).toEqual({ k: 'v' });
 
         const cleared = await authenticatedTestClient(userToken)
@@ -650,7 +653,7 @@ describe('Memories', () => {
       test('returns 400 when tags is invalid', async () => {
         const response = await authenticatedTestClient(userToken)
           .put(`/api/v1/memory-entries/${entryId}`)
-          .send({ tags: [1] });
+          .send({ tags: { role: 1 } });
 
         expect(response.status).toBe(400);
         expect(response.body.error.message).toMatch(/tags/);
@@ -903,7 +906,7 @@ describe('Memories', () => {
         .send({
           project_id: projectId,
           name: 'Tagged Memory Alpha',
-          tags: ['customer-support', 'crm'],
+          tags: { team: 'customer-support', system: 'crm' },
         });
       taggedMemoryId = taggedRes.body.id;
 
@@ -912,7 +915,7 @@ describe('Memories', () => {
         .send({
           project_id: projectId,
           name: 'Tagged Memory Beta',
-          tags: ['customer-prefs'],
+          tags: { team: 'customer-support', system: 'prefs' },
         });
       prefixedMemoryId = prefixedRes.body.id;
 
@@ -925,10 +928,10 @@ describe('Memories', () => {
       untaggedMemoryId = untaggedRes.body.id;
     });
 
-    test('exact tag match returns only matching memories', async () => {
+    test('a single key:value pair returns only memories carrying it', async () => {
       const response = await authenticatedTestClient(userToken)
         .get('/api/v1/memories')
-        .query({ project_id: projectId, tags: 'crm' });
+        .query({ project_id: projectId, tags: 'system:crm' });
 
       expect(response.status).toBe(200);
       const ids = response.body.data.map((m: { id: string }) => {
@@ -939,10 +942,10 @@ describe('Memories', () => {
       expect(ids).not.toContain(untaggedMemoryId);
     });
 
-    test('glob tag pattern matches multiple memories', async () => {
+    test('a shared pair matches every memory carrying it', async () => {
       const response = await authenticatedTestClient(userToken)
         .get('/api/v1/memories')
-        .query({ project_id: projectId, tags: 'customer*' });
+        .query({ project_id: projectId, tags: 'team:customer-support' });
 
       expect(response.status).toBe(200);
       const ids = response.body.data.map((m: { id: string }) => {
@@ -953,24 +956,70 @@ describe('Memories', () => {
       expect(ids).not.toContain(untaggedMemoryId);
     });
 
-    test('multiple tag patterns are ORed', async () => {
+    test('multiple pairs are ANDed', async () => {
       const response = await authenticatedTestClient(userToken)
         .get('/api/v1/memories')
-        .query({ project_id: projectId, tags: ['crm', 'customer-prefs'] });
+        .query({
+          project_id: projectId,
+          tags: ['team:customer-support', 'system:crm'],
+        });
 
       expect(response.status).toBe(200);
       const ids = response.body.data.map((m: { id: string }) => {
         return m.id;
       });
       expect(ids).toContain(taggedMemoryId);
-      expect(ids).toContain(prefixedMemoryId);
+      expect(ids).not.toContain(prefixedMemoryId);
       expect(ids).not.toContain(untaggedMemoryId);
     });
 
-    test('tag pattern with no match returns empty array', async () => {
+    test('matches values exactly and case-sensitively', async () => {
       const response = await authenticatedTestClient(userToken)
         .get('/api/v1/memories')
-        .query({ project_id: projectId, tags: 'nonexistent-tag-xyz*' });
+        .query({ project_id: projectId, tags: 'system:CRM' });
+
+      expect(response.status).toBe(200);
+      expect(
+        response.body.data.map((m: { id: string }) => {
+          return m.id;
+        })
+      ).not.toContain(taggedMemoryId);
+    });
+
+    test('returns 400 for a pair missing its colon', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .get('/api/v1/memories')
+        .query({ project_id: projectId, tags: 'crm' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.message).toMatch(/key:value/);
+    });
+
+    test('keeps colons inside a tag value', async () => {
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/memories')
+        .send({
+          project_id: projectId,
+          name: 'Colon Value Memory',
+          tags: { url: 'https://example.com/a' },
+        });
+
+      const response = await authenticatedTestClient(userToken)
+        .get('/api/v1/memories')
+        .query({ project_id: projectId, tags: 'url:https://example.com/a' });
+
+      expect(response.status).toBe(200);
+      expect(
+        response.body.data.map((m: { id: string }) => {
+          return m.id;
+        })
+      ).toContain(created.body.id);
+    });
+
+    test('a pair with no match returns an empty array', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .get('/api/v1/memories')
+        .query({ project_id: projectId, tags: 'system:nonexistent-xyz' });
 
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body.data)).toBe(true);

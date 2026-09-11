@@ -25,11 +25,13 @@ export type ExtractionConfig = {
 
 export type KnowledgeConfig = {
   memoryIds?: string[];
-  memoryTags?: string[];
   documentIds?: string[];
   documentPaths?: string[];
-  /** Key-value pairs a document's `tags` must all contain (exact match). */
-  documentTags?: Record<string, string>;
+  /**
+   * Key-value pairs a result's own `tags` must all contain (exact match).
+   * Scopes documents and memory entries alike.
+   */
+  tags?: Record<string, string>;
   minScore?: number;
   limit?: number;
   writeMemoryId?: string;
@@ -126,10 +128,9 @@ export const readKnowledgeConfig = (
   };
 
   set('memoryIds', readStringArray(value.memory_ids));
-  set('memoryTags', readStringArray(value.memory_tags));
   set('documentIds', readStringArray(value.document_ids));
   set('documentPaths', readStringArray(value.document_paths));
-  set('documentTags', readStringRecord(value.document_tags));
+  set('tags', readStringRecord(value.tags));
   set('minScore', readNumber(value.min_score));
   set('limit', readNumber(value.limit));
   set('writeMemoryId', readString(value.write_memory_id));
@@ -164,10 +165,10 @@ const unionArrays = (
 
 /**
  * Merges a per-generation `knowledge_config` override into the agent's
- * stored config. Array filters (memoryIds, memoryTags, documentIds,
+ * stored config. Array filters (memoryIds, documentIds,
  * documentPaths) are unioned so a single call can extend, not replace, the
- * agent's retrieval scope; `documentTags` pairs are merged with the override
- * winning per key; scalar fields use the override value when present.
+ * agent's retrieval scope; `tags` pairs are merged with the override winning
+ * per key; scalar fields use the override value when present.
  */
 export const mergeKnowledgeConfig = (args: {
   base: unknown;
@@ -181,32 +182,32 @@ export const mergeKnowledgeConfig = (args: {
     ...base,
     ...override,
     memoryIds: unionArrays(base.memoryIds, override.memoryIds),
-    memoryTags: unionArrays(base.memoryTags, override.memoryTags),
     documentIds: unionArrays(base.documentIds, override.documentIds),
     documentPaths: unionArrays(base.documentPaths, override.documentPaths),
-    documentTags: mergeRecords(base.documentTags, override.documentTags),
+    tags: mergeRecords(base.tags, override.tags),
   };
 };
 
 const hasKnowledgeFilters = (config: KnowledgeConfig): boolean => {
   return (
     anyLength(config.memoryIds) ||
-    anyLength(config.memoryTags) ||
     anyLength(config.documentPaths) ||
     anyLength(config.documentIds) ||
-    anyKeys(config.documentTags)
+    anyKeys(config.tags)
   );
 };
 
+// `tags` scopes both stores, so it counts on both sides: a tags-only config is
+// a scoped document search, not the unscoped widening `includeDocuments` guards.
 const hasMemoryFilters = (config: KnowledgeConfig): boolean => {
-  return anyLength(config.memoryIds) || anyLength(config.memoryTags);
+  return anyLength(config.memoryIds) || anyKeys(config.tags);
 };
 
 const hasDocumentFilters = (config: KnowledgeConfig): boolean => {
   return (
     anyLength(config.documentPaths) ||
     anyLength(config.documentIds) ||
-    anyKeys(config.documentTags)
+    anyKeys(config.tags)
   );
 };
 
@@ -288,10 +289,9 @@ export const buildKnowledgeMessages = async (args: {
     billingProjectId: args.billingProjectId,
     query,
     memoryIds: config.memoryIds,
-    memoryTags: config.memoryTags,
     paths: config.documentPaths,
     documentIds: config.documentIds,
-    documentTags: config.documentTags,
+    tags: config.tags,
     minScore: config.minScore,
     limit: config.limit,
     includeDocuments,

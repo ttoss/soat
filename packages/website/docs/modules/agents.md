@@ -391,20 +391,19 @@ Each tag names its source row: a memory result carries its entry id, resolvable 
 | Field            | Type       | Description                                                                                 |
 | ---------------- | ---------- | -------------------------------------------------------------------------------------------- |
 | `memory_ids`     | `string[]` | Search entries within these specific memories (`mem_` prefix)                               |
-| `memory_tags`    | `string[]` | Search entries in memories whose tags match any of these patterns (glob supported: `user*`) |
 | `document_ids`   | `string[]` | Scope document results to these specific document IDs                                       |
 | `document_paths` | `string[]` | Scope document results to files under these path prefixes                                   |
-| `document_tags`  | `object`   | Scope document results to documents whose `tags` contain all these key-value pairs (exact) |
+| `tags`           | `object`   | Scope **both** documents and memory entries to results whose `tags` contain all these key-value pairs (exact) |
 | `min_score`      | `number`   | Minimum relevance score (0–1) for results to be included (default: 0.5)                     |
 | `limit`          | `number`   | Maximum number of results to inject (default: 5)                                            |
 | `write_memory_id`| `string`   | When set, automatically injects a `write_memory` tool that writes facts to this memory      |
 | `extraction`     | `boolean` \| `object` | Automatic fact extraction from completed turns (requires `write_memory_id`). `true` enables defaults; the object form customizes provider, model, and prompt — see [Automatic Extraction](./memories.md#automatic-extraction) |
 
-`knowledge_config` in the [`POST /agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation) body overrides the stored config for one call: `memory_ids`, `memory_tags`, `document_ids` and `document_paths` are unioned with the stored arrays; `document_tags` pairs are merged, the override winning per key; `min_score` and `limit` take the per-generation value. `write_memory_id` and `extraction` are agent-level only; `write_memory` tool: [Memories](./memories.md#agent-integration).
+`knowledge_config` in the [`POST /agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation) body overrides the stored config for one call: `memory_ids`, `document_ids` and `document_paths` are unioned with the stored arrays; `tags` pairs are merged, the override winning per key; `min_score` and `limit` take the per-generation value. `write_memory_id` and `extraction` are agent-level only; `write_memory` tool: [Memories](./memories.md#agent-integration).
 
 The generate body's top-level `extract` gates extraction per turn: omitted follows the stored `extraction`; `extract: false` suppresses it; `extract: true` forces it, given a `write_memory_id`. Streaming and `requires_action` turns never extract. See [Automatic Extraction](./memories.md#automatic-extraction).
 
-Only `memory_ids`/`memory_tags` set → memory-only search. Document search runs when `document_ids`/`document_paths`/`document_tags` are set or no scoping filter is set ([Knowledge](./knowledge.md#search-modes)).
+Only `memory_ids` set → memory-only search. Document search runs when `document_ids`/`document_paths` are set or no scoping filter is set. `tags` scopes both stores, so it counts on both sides ([Knowledge](./knowledge.md#search-modes)).
 
 ### Orchestrated thinking
 

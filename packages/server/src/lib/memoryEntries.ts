@@ -7,6 +7,7 @@ import * as consolidationCompletion from 'src/lib/memoryConsolidationCompletion'
 import { paginatedList } from 'src/lib/pagination';
 import { assertStorageQuota, contentBytes } from 'src/lib/quotaStorage';
 import { makeResourceAccessor } from 'src/lib/resourceAccessor';
+import { mergeTags } from 'src/lib/tags';
 import { withIterativeVectorScan } from 'src/lib/vectorSearch';
 
 /**
@@ -111,15 +112,22 @@ const resolveProvenanceIds = async (args: {
 
 /**
  * Merges the incoming entry's tags/metadata into an existing entry during a
- * consolidation write, so tags accumulate rather than being lost. Tags are
- * unioned; metadata is shallow-merged with incoming keys winning.
+ * consolidation write, so tags accumulate rather than being lost. Both are
+ * shallow-merged with incoming keys winning — the same rule every other
+ * tagged resource applies through `mergeTags`.
  */
 const mergeEntryTags = (args: {
-  existing: string[] | null;
-  incoming?: string[] | null;
-}): string[] | null => {
-  if (!args.incoming || args.incoming.length === 0) return args.existing;
-  return [...new Set([...(args.existing ?? []), ...args.incoming])];
+  existing: Record<string, string> | null;
+  incoming?: Record<string, string> | null;
+}): Record<string, string> | null => {
+  if (!args.incoming || Object.keys(args.incoming).length === 0) {
+    return args.existing;
+  }
+  return mergeTags({
+    current: args.existing,
+    incoming: args.incoming,
+    merge: true,
+  });
 };
 
 const mergeEntryMetadata = (args: {
@@ -223,7 +231,7 @@ const findTopSimilarEntry = async (args: {
 const mergeAndUpdateEntry = async (args: {
   match: Awaited<ReturnType<typeof findTopSimilarEntry>>;
   incoming: string;
-  tags?: string[] | null;
+  tags?: Record<string, string> | null;
   metadata?: Record<string, unknown> | null;
   consolidation?: MemoryConsolidationContext;
 }): Promise<ReturnType<typeof mapMemoryEntry> | null> => {
@@ -281,7 +289,7 @@ type WriteMemoryEntryResult = {
 const resolveDedupAction = async (args: {
   memoryId: number;
   content: string;
-  tags?: string[] | null;
+  tags?: Record<string, string> | null;
   metadata?: Record<string, unknown> | null;
   duplicateThreshold?: number;
   updateThreshold?: number;
@@ -330,7 +338,7 @@ export const writeMemoryEntry = async (args: {
   memoryId: number;
   content: string;
   sourceType?: MemoryEntrySource;
-  tags?: string[] | null;
+  tags?: Record<string, string> | null;
   metadata?: Record<string, unknown> | null;
   duplicateThreshold?: number;
   /**
@@ -396,7 +404,7 @@ export const createMemoryEntry = async (args: {
   memoryId: number;
   content: string;
   sourceType?: MemoryEntrySource;
-  tags?: string[] | null;
+  tags?: Record<string, string> | null;
   metadata?: Record<string, unknown> | null;
 }) => {
   let embedding: number[] | null = null;
@@ -465,7 +473,7 @@ export const getMemoryEntry = async (args: { id: string }) => {
 export const updateMemoryEntry = async (args: {
   id: string;
   content?: string;
-  tags?: string[] | null;
+  tags?: Record<string, string> | null;
   metadata?: Record<string, unknown> | null;
 }) => {
   const entry = await db.MemoryEntry.findOne({

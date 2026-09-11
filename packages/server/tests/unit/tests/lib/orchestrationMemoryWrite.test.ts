@@ -9,26 +9,29 @@ describe('parseMemoryWriteInputs', () => {
     );
   });
 
-  test('passes a string tag array through unchanged', () => {
-    expect(
-      parseMemoryWriteInputs({ content: 'x', tags: ['role:pilot', 'a'] }).tags
-    ).toEqual(['role:pilot', 'a']);
-  });
-
-  test('flattens a { key: value } tag mapping into key:value strings', () => {
+  test('passes a { key: value } tag mapping through unchanged', () => {
     // The exact repro shape: input_mapping tags: { role: '<mapped>' }
     expect(
       parseMemoryWriteInputs({
         content: 'x',
         tags: { role: 'traffic-manager', source: 'rejected_approval' },
       }).tags
-    ).toEqual(['role:traffic-manager', 'source:rejected_approval']);
+    ).toEqual({ role: 'traffic-manager', source: 'rejected_approval' });
   });
 
-  test('drops non-string entries from a mixed tag array', () => {
+  test('coerces non-string tag values rather than dropping the pair', () => {
+    // An upstream node often maps a number or boolean into the tag bag;
+    // dropping it would write an entry the author believed was tagged.
     expect(
-      parseMemoryWriteInputs({ content: 'x', tags: ['ok', 5, null] }).tags
-    ).toEqual(['ok']);
+      parseMemoryWriteInputs({ content: 'x', tags: { count: 5, ok: true } })
+        .tags
+    ).toEqual({ count: '5', ok: 'true' });
+  });
+
+  test('ignores a tag value that is not a mapping', () => {
+    expect(
+      parseMemoryWriteInputs({ content: 'x', tags: ['role:pilot'] }).tags
+    ).toBeUndefined();
   });
 
   test('keeps a plain object metadata and rejects arrays/scalars', () => {

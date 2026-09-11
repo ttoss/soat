@@ -23,6 +23,22 @@ export const toNullableArray = <T>(value: unknown): T[] | null | undefined => {
   return Array.isArray(value) ? (value as T[]) : undefined;
 };
 
+/**
+ * A tag bag from a formation property: `null` clears, a flat string-valued
+ * object sets, anything else is not a tag bag and is ignored.
+ */
+export const toNullableStringRecord = (
+  value: unknown
+): Record<string, string> | null | undefined => {
+  if (value === null) return null;
+  if (typeof value !== 'object' || Array.isArray(value)) return undefined;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).filter(([, item]) => {
+      return typeof item === 'string';
+    })
+  ) as Record<string, string>;
+};
+
 export const toNullableObject = (value: unknown): object | null | undefined => {
   if (value === null) return null;
   return typeof value === 'object' && !Array.isArray(value)

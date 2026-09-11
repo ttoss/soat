@@ -7,6 +7,7 @@ import { getEmbedding } from './embedding';
 import type { MemoryKnowledgeResult } from './knowledgeMemory';
 import { resolveMemorySearch } from './knowledgeMemory';
 import { clampKnowledgeSearchLimit } from './requestBounds';
+import { hasTagFilter } from './tags';
 import { withIterativeVectorScan } from './vectorSearch';
 
 export type { MemoryQueryConfig } from './knowledgeMemory';
@@ -372,9 +373,13 @@ type SearchKnowledgeArgs = {
   limit?: number;
   paths?: string[];
   documentIds?: string[];
-  documentTags?: Record<string, string>;
   memoryIds?: string[];
-  memoryTags?: string[];
+  /**
+   * Key-value pairs a result's own `tags` must all contain. One filter for
+   * both stores: it narrows documents and memory entries alike, and is the
+   * only filter that turns on a source on both sides at once.
+   */
+  tags?: Record<string, string>;
   /**
    * Internal-only override (not exposed on the REST search endpoint) that
    * forces document search off even when `query` is set. Callers that derive
@@ -388,12 +393,6 @@ type SearchKnowledgeArgs = {
   policyWhere?: Record<string, any>;
 };
 
-export const hasDocumentTags = (
-  tags: Record<string, string> | undefined
-): tags is Record<string, string> => {
-  return tags !== undefined && Object.keys(tags).length > 0;
-};
-
 const getSearchFlags = (
   args: SearchKnowledgeArgs
 ): { hasDocumentSearch: boolean; hasMemorySearch: boolean } => {
@@ -402,10 +401,10 @@ const getSearchFlags = (
     (args.query !== undefined ||
       (args.paths !== undefined && args.paths.length > 0) ||
       (args.documentIds !== undefined && args.documentIds.length > 0) ||
-      hasDocumentTags(args.documentTags));
+      hasTagFilter(args.tags));
   const hasMemorySearch =
     (args.memoryIds !== undefined && args.memoryIds.length > 0) ||
-    (args.memoryTags !== undefined && args.memoryTags.length > 0);
+    hasTagFilter(args.tags);
   return { hasDocumentSearch, hasMemorySearch };
 };
 
@@ -430,7 +429,7 @@ export const searchKnowledge = async (
             limit,
             paths: args.paths,
             documentIds: args.documentIds,
-            tags: args.documentTags,
+            tags: args.tags,
           },
         })
       : Promise.resolve([]),
@@ -440,7 +439,7 @@ export const searchKnowledge = async (
           billingProjectId: args.billingProjectId,
           config: {
             memoryIds: args.memoryIds,
-            memoryTags: args.memoryTags,
+            tags: args.tags,
             search: args.query,
             minScore: args.minScore,
             limit,

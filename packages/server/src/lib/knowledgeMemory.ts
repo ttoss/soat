@@ -4,11 +4,12 @@ import { db } from '../db';
 import type { EmbeddingBillingProjectId } from './embedding';
 import { getEmbedding } from './embedding';
 import { clampKnowledgeSearchLimit } from './requestBounds';
+import { hasTagFilter } from './tags';
 import { withIterativeVectorScan } from './vectorSearch';
 
 export type MemoryQueryConfig = {
   memoryIds?: string[];
-  memoryTags?: string[];
+  tags?: Record<string, string>;
   search?: string;
   minScore?: number;
   limit?: number;
@@ -20,7 +21,7 @@ export type MemoryKnowledgeResult = {
   memory_id: string;
   memory_name: string;
   content: string;
-  tags: string[] | null;
+  tags: Record<string, string> | null;
   /**
    * Implementation-defined relevance ranking — higher is better. The ordering
    * it produces is the contract; the absolute value is not, and the formula
@@ -32,37 +33,20 @@ export type MemoryKnowledgeResult = {
   updated_at: Date;
 };
 
-const globToLikePattern = (tag: string): string => {
-  return tag.replace(/\*/g, '%').replace(/\?/g, '_');
-};
-
 /**
- * Builds an `EXISTS (SELECT 1 FROM unnest(<column>) …)` fragment that matches
- * when any element of a text[] column matches one of the glob tag patterns.
+ * JSONB containment: every requested pair must be present with exactly that
+ * value. One rule for both stores and for IAM `soat:ResourceTag/<key>`, which
+ * reads the same column shape.
  */
-const buildTagExistsLiteral = (args: { column: string; tags: string[] }) => {
-  const sequelize = db.Memory.sequelize!;
-  const likeConditions = args.tags
-    .map((tag) => {
-      return `tag ILIKE ${sequelize.escape(globToLikePattern(tag))}`;
-    })
-    .join(' OR ');
-  return sequelize.literal(
-    `EXISTS (SELECT 1 FROM unnest(${args.column}) AS t(tag) WHERE ${likeConditions})`
-  );
+const tagContainment = (tags: Record<string, string>) => {
+  return { [Op.contains]: tags };
 };
 
-const resolveMemoryIdsByGlobTags = async (args: {
-  tags: string[];
+const resolveMemoryIdsByTags = async (args: {
+  tags: Record<string, string>;
   projectIds?: number[];
 }): Promise<string[]> => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: any = {
-    [Op.and]: buildTagExistsLiteral({
-      column: '"Memory"."tags"',
-      tags: args.tags,
-    }),
-  };
+  const where: Record<string, unknown> = { tags: tagContainment(args.tags) };
   if (args.projectIds && args.projectIds.length > 0) {
     where.projectId = args.projectIds;
   }
@@ -185,16 +169,15 @@ const buildEntrySelection = async (args: {
   projectIds?: number[];
 }): Promise<Record<string, unknown> | null> => {
   const { config, projectIds } = args;
-  const hasMemoryTags =
-    Array.isArray(config.memoryTags) && config.memoryTags.length > 0;
+  const hasTags = hasTagFilter(config.tags);
 
-  // Container-level tag matching: memories whose own tags match the globs,
+  // Container-level tag matching: memories whose own tags contain the pairs,
   // unioned with any explicitly requested memory ids. Entries in these
   // containers are returned regardless of their own per-entry tags.
   const effectiveMemoryIds = [...(config.memoryIds ?? [])];
-  if (hasMemoryTags) {
-    const tagMatchedIds = await resolveMemoryIdsByGlobTags({
-      tags: config.memoryTags!,
+  if (hasTags) {
+    const tagMatchedIds = await resolveMemoryIdsByTags({
+      tags: config.tags!,
       projectIds,
     });
     effectiveMemoryIds.push(...tagMatchedIds);
@@ -211,13 +194,8 @@ const buildEntrySelection = async (args: {
   if (memoryInternalIds.length > 0) {
     selectionClauses.push({ memoryId: memoryInternalIds });
   }
-  if (hasMemoryTags) {
-    selectionClauses.push(
-      buildTagExistsLiteral({
-        column: '"MemoryEntry"."tags"',
-        tags: config.memoryTags!,
-      })
-    );
+  if (hasTags) {
+    selectionClauses.push({ tags: tagContainment(config.tags!) });
   }
 
   if (selectionClauses.length === 0) return null;
@@ -242,10 +220,8 @@ export const resolveMemorySearch = async (args: {
   const { config, projectIds } = args;
   const hasOriginalMemoryIds =
     Array.isArray(config.memoryIds) && config.memoryIds.length > 0;
-  const hasMemoryTags =
-    Array.isArray(config.memoryTags) && config.memoryTags.length > 0;
 
-  if (!hasOriginalMemoryIds && !hasMemoryTags) return [];
+  if (!hasOriginalMemoryIds && !hasTagFilter(config.tags)) return [];
 
   const selection = await buildEntrySelection({ config, projectIds });
   if (!selection) return [];

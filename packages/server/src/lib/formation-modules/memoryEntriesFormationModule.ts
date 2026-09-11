@@ -8,7 +8,10 @@ import {
   deleteMemoryEntry,
   getMemoryEntry,
 } from '../memoryEntries';
-import { toOptionalString } from '../resource-inputs/normalizers';
+import {
+  toNullableStringRecord,
+  toOptionalString,
+} from '../resource-inputs/normalizers';
 import { defineFormationModule } from './defineFormationModule';
 import { isObjectRecord } from './formationSpecLoader';
 
@@ -36,9 +39,7 @@ export const memoryEntriesFormationModule = defineFormationModule({
       content,
       sourceType: toOptionalString(properties.source_type) as
         MemoryEntrySource | undefined,
-      tags: Array.isArray(properties.tags)
-        ? (properties.tags as string[])
-        : null,
+      tags: toNullableStringRecord(properties.tags) ?? null,
       metadata: isObjectRecord(properties.metadata)
         ? properties.metadata
         : null,
@@ -60,9 +61,7 @@ export const memoryEntriesFormationModule = defineFormationModule({
     }
 
     if (properties.tags !== undefined) {
-      entry.tags = Array.isArray(properties.tags)
-        ? (properties.tags as string[])
-        : null;
+      entry.tags = toNullableStringRecord(properties.tags) ?? null;
     }
 
     if (properties.metadata !== undefined) {

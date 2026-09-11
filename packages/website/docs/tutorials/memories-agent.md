@@ -1020,6 +1020,6 @@ Provenance is set at creation and never rewritten by a later merge. A contradict
 
 ## What's next
 
-- **Tag-based filtering** — one memory per customer, `memory_tags` on the agent.
+- **Tag-based filtering** — one memory per customer, `tags` on the agent.
 - **Dedup threshold** — `duplicate_threshold` sets how close a fact must be to be skipped ([Memories](/docs/modules/memories#write-algorithm)).
 - **Audit what an agent was told** — pair provenance ids with the injected `<knowledge>` block ([Agents — Knowledge Config](/docs/modules/agents#knowledge-config)), whose source tags name the entry and document page behind each line.

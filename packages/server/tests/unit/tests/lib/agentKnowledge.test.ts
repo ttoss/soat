@@ -492,7 +492,7 @@ describe('buildKnowledgeMessages', () => {
     await buildKnowledgeMessages({
       billingProjectId: 7,
       knowledgeConfig: {
-        memoryTags: ['tag1'],
+        tags: { team: 'finance' },
         documentIds: [42],
         documentPaths: ['path/to/doc'],
         minScore: 0.5,
@@ -506,7 +506,7 @@ describe('buildKnowledgeMessages', () => {
       billingProjectId: 7,
       query: 'test',
       memoryIds: undefined,
-      memoryTags: ['tag1'],
+      tags: { team: 'finance' },
       paths: ['path/to/doc'],
       documentIds: [42],
       minScore: 0.5,
@@ -581,20 +581,22 @@ describe('mergeKnowledgeConfig', () => {
     );
   });
 
-  test('unions memoryTags, documentIds, and documentPaths independently', () => {
+  test('unions memoryIds, documentIds, and documentPaths independently', () => {
     const result = mergeKnowledgeConfig({
       base: {
-        memoryTags: ['a'],
+        memoryIds: ['mem_1'],
         documentIds: ['doc_1'],
         documentPaths: ['/base'],
       },
       override: {
-        memoryTags: ['b'],
+        memoryIds: ['mem_2'],
         documentIds: ['doc_2'],
         documentPaths: ['/override'],
       },
     });
-    expect(result?.memoryTags).toEqual(expect.arrayContaining(['a', 'b']));
+    expect(result?.memoryIds).toEqual(
+      expect.arrayContaining(['mem_1', 'mem_2'])
+    );
     expect(result?.documentIds).toEqual(
       expect.arrayContaining(['doc_1', 'doc_2'])
     );
@@ -603,12 +605,12 @@ describe('mergeKnowledgeConfig', () => {
     );
   });
 
-  test('merges documentTags with the override winning per key', () => {
+  test('merges tags with the override winning per key', () => {
     const result = mergeKnowledgeConfig({
-      base: { documentTags: { team: 'finance', env: 'dev' } },
-      override: { documentTags: { env: 'prod', region: 'eu' } },
+      base: { tags: { team: 'finance', env: 'dev' } },
+      override: { tags: { env: 'prod', region: 'eu' } },
     });
-    expect(result?.documentTags).toEqual({
+    expect(result?.tags).toEqual({
       team: 'finance',
       env: 'prod',
       region: 'eu',
@@ -647,10 +649,9 @@ describe('readKnowledgeConfig', () => {
   test('maps every stored snake_case field to its camelCase counterpart', () => {
     const result = readKnowledgeConfig({
       memory_ids: ['mem_1'],
-      memory_tags: ['tag1'],
       document_ids: ['doc_1'],
       document_paths: ['/docs/'],
-      document_tags: { team: 'finance' },
+      tags: { team: 'finance' },
       min_score: 0.5,
       limit: 50,
       write_memory_id: 'mem_1',
@@ -663,10 +664,9 @@ describe('readKnowledgeConfig', () => {
     });
     expect(result).toEqual({
       memoryIds: ['mem_1'],
-      memoryTags: ['tag1'],
       documentIds: ['doc_1'],
       documentPaths: ['/docs/'],
-      documentTags: { team: 'finance' },
+      tags: { team: 'finance' },
       minScore: 0.5,
       limit: 50,
       writeMemoryId: 'mem_1',

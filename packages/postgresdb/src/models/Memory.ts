@@ -51,8 +51,8 @@ export class Memory extends Model {
   @Column({ type: DataType.TEXT, allowNull: true })
   declare description: string | null;
 
-  @Column({ type: DataType.ARRAY(DataType.STRING), allowNull: true })
-  declare tags: string[] | null;
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare tags: Record<string, string> | null;
 
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
