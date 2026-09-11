@@ -4,7 +4,7 @@ import { db } from '../db';
 import type { EmbeddingBillingProjectId } from './embedding';
 import { getEmbedding } from './embedding';
 import { clampKnowledgeSearchLimit } from './requestBounds';
-import { hasTagFilter } from './tags';
+import { hasTagFilter, tagContainment } from './tags';
 import { withIterativeVectorScan } from './vectorSearch';
 
 export type MemoryQueryConfig = {
@@ -31,15 +31,6 @@ export type MemoryKnowledgeResult = {
   similarity_score?: number;
   created_at: Date;
   updated_at: Date;
-};
-
-/**
- * JSONB containment: every requested pair must be present with exactly that
- * value. One rule for both stores and for IAM `soat:ResourceTag/<key>`, which
- * reads the same column shape.
- */
-const tagContainment = (tags: Record<string, string>) => {
-  return { [Op.contains]: tags };
 };
 
 const resolveMemoryIdsByTags = async (args: {

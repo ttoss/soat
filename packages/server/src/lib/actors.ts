@@ -13,7 +13,7 @@ import {
   registerResourceFieldMap,
 } from './policyCompiler';
 import { makeResourceAccessor } from './resourceAccessor';
-import { mergeTags } from './tags';
+import { applyTagFilter, mergeTags } from './tags';
 
 const log = createDebug('soat:actors');
 
@@ -151,6 +151,7 @@ export const listActors = async (args: {
   agentId?: string;
   chatId?: string;
   conversationId?: string;
+  tags?: Record<string, string>;
   policyWhere?: Record<string, unknown>;
   limit?: number;
   offset?: number;
@@ -164,6 +165,7 @@ export const listActors = async (args: {
     externalId: args.externalId,
     name: args.name,
   });
+  applyTagFilter({ where, tags: args.tags });
 
   if (args.policyWhere) {
     Object.assign(where, args.policyWhere);

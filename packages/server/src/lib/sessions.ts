@@ -7,6 +7,7 @@ import { cancelDelayTimer } from './sessionDelayHelpers';
 import { mapSession } from './sessionMapper';
 import { abortSessionGeneration } from './sessionOperations';
 import { createSessionTransaction } from './sessionTransaction';
+import { applyTagFilter } from './tags';
 import { assertValidToolContextKeys } from './toolContext';
 import { rollUpUsageTotals } from './usageAggregate';
 
@@ -173,6 +174,7 @@ export const listSessions = async (args: {
   agentId?: string;
   actorId?: string;
   status?: string;
+  tags?: Record<string, string>;
   limit?: number;
   offset?: number;
 }) => {
@@ -185,6 +187,7 @@ export const listSessions = async (args: {
   if (args.projectIds !== undefined) {
     where.projectId = args.projectIds;
   }
+  applyTagFilter({ where, tags: args.tags });
 
   const resolved = await resolveSessionListFilters({
     where,

@@ -653,6 +653,34 @@ fi
 
 $SOAT_CLI list-actors --project_id "$PROJECT_PUBLIC_ID"
 
+# Tags mechanism (shared by every tagged resource): the sub-resource returns
+# the bag, the list filters by `key:value`, and a malformed body or pair is 400.
+echo "--- Actor tags: sub-resource, list filter, validation ---"
+ACTOR_TAGS_RESP=$(curl -s -X PUT "$SERVER_URL/api/v1/actors/$ACTOR_ID/tags" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"env":"smoke","team":"qa"}')
+if ! printf '%s\n' "$ACTOR_TAGS_RESP" | jq -e '. == {"env":"smoke","team":"qa"}' >/dev/null 2>&1; then
+  echo "ERROR: PUT actor tags did not return the tag map" >&2
+  echo "$ACTOR_TAGS_RESP" >&2
+  exit 1
+fi
+ACTOR_TAG_LIST=$($SOAT_CLI list-actors --project_id "$PROJECT_PUBLIC_ID" --tags env:smoke --tags team:qa)
+if ! printf '%s\n' "$ACTOR_TAG_LIST" | jq -e --arg id "$ACTOR_ID" \
+  '([.data[].id] | index($id) != null) and all(.data[]; .tags.env == "smoke")' >/dev/null 2>&1; then
+  echo "ERROR: list-actors --tags did not narrow to the tagged actor" >&2
+  echo "$ACTOR_TAG_LIST" >&2
+  exit 1
+fi
+ACTOR_BAD_TAGS_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X PATCH "$SERVER_URL/api/v1/actors/$ACTOR_ID/tags" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"env":["a","b"]}')
+if [ "$ACTOR_BAD_TAGS_STATUS" != "400" ]; then
+  echo "ERROR: non-string tag value expected 400, got $ACTOR_BAD_TAGS_STATUS" >&2
+  exit 1
+fi
+expect_cli_error_status 400 list-actors --project_id "$PROJECT_PUBLIC_ID" --tags smoke
+echo "Actor tags: OK"
+
 $SOAT_CLI get-actor --actor-id "$ACTOR_ID"
 
 $SOAT_CLI update-actor --actor-id "$ACTOR_ID" --name smoke-actor-updated
@@ -1296,6 +1324,30 @@ if ! printf '%s\n' "$MEM_UPDATE_RESP" | jq -e '.name == "Updated Smoke Memory"' 
   exit 1
 fi
 echo "Memory updated."
+
+# Memory tags sub-resource — the same three routes every tagged resource has.
+echo "--- Memory tags sub-resource ---"
+MEM_TAGS_RESP=$(curl -s -X PATCH "$SERVER_URL/api/v1/memories/$MEM_ID/tags" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"domain":"smoke"}')
+if ! printf '%s\n' "$MEM_TAGS_RESP" | jq -e '.domain == "smoke"' >/dev/null 2>&1; then
+  echo "ERROR: PATCH memory tags did not return the merged tag map" >&2
+  echo "$MEM_TAGS_RESP" >&2
+  exit 1
+fi
+MEM_TAGS_GET=$($SOAT_CLI get-memory-tags --memory-id "$MEM_ID")
+if ! printf '%s\n' "$MEM_TAGS_GET" | jq -e '.domain == "smoke"' >/dev/null 2>&1; then
+  echo "ERROR: get-memory-tags did not return the stored tags" >&2
+  echo "$MEM_TAGS_GET" >&2
+  exit 1
+fi
+MEM_TAG_LIST=$($SOAT_CLI list-memories --project_id "$PROJECT_PUBLIC_ID" --tags domain:smoke)
+if ! printf '%s\n' "$MEM_TAG_LIST" | jq -e --arg id "$MEM_ID" '[.data[].id] | index($id) != null' >/dev/null 2>&1; then
+  echo "ERROR: list-memories --tags did not return the tagged memory" >&2
+  echo "$MEM_TAG_LIST" >&2
+  exit 1
+fi
+echo "Memory tags: OK"
 
 # ── Memory entries — dedup write algorithm ────────────────────────────────────
 echo "--- Memory entries: first write (created) ---"

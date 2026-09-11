@@ -7,7 +7,7 @@ import { getEmbedding } from './embedding';
 import type { MemoryKnowledgeResult } from './knowledgeMemory';
 import { resolveMemorySearch } from './knowledgeMemory';
 import { clampKnowledgeSearchLimit } from './requestBounds';
-import { hasTagFilter } from './tags';
+import { applyTagFilter, hasTagFilter } from './tags';
 import { withIterativeVectorScan } from './vectorSearch';
 
 export type { MemoryQueryConfig } from './knowledgeMemory';
@@ -276,12 +276,7 @@ const buildDocWhere = (args: {
   if (args.documentIds && args.documentIds.length > 0) {
     where.publicId = args.documentIds;
   }
-  if (args.tags && Object.keys(args.tags).length > 0) {
-    // JSONB containment: every requested pair must be present with exactly
-    // that value, matching how IAM `soat:ResourceTag/<key>` conditions read
-    // the same column.
-    where.tags = { [Op.contains]: args.tags };
-  }
+  applyTagFilter({ where, tags: args.tags });
   return Object.keys(where).length > 0 ? where : undefined;
 };
 

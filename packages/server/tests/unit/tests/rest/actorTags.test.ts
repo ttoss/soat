@@ -217,4 +217,81 @@ describe('ActorTags', () => {
       expect(response.status).toBe(403);
     });
   });
+
+  describe('tag body validation', () => {
+    test('PUT rejects a non-string tag value', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .put(`/api/v1/actors/${actorId}/tags`)
+        .send({ team: ['a', 'b'] });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('PATCH rejects an array body', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/actors/${actorId}/tags`)
+        .send(['a', 'b']);
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+  });
+
+  describe('GET /api/v1/actors with tag filter', () => {
+    let prodActorId: string;
+    let stagingActorId: string;
+
+    beforeAll(async () => {
+      const prodRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/actors')
+        .send({ project_id: projectId, name: 'Prod Actor' });
+      prodActorId = prodRes.body.id;
+      await authenticatedTestClient(userToken)
+        .put(`/api/v1/actors/${prodActorId}/tags`)
+        .send({ env: 'prod', team: 'sales' });
+
+      const stagingRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/actors')
+        .send({ project_id: projectId, name: 'Staging Actor' });
+      stagingActorId = stagingRes.body.id;
+      await authenticatedTestClient(userToken)
+        .put(`/api/v1/actors/${stagingActorId}/tags`)
+        .send({ env: 'staging', team: 'sales' });
+    });
+
+    test('a key:value pair returns only actors carrying it', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .get('/api/v1/actors')
+        .query({ project_id: projectId, tags: 'env:prod' });
+
+      expect(response.status).toBe(200);
+      const ids = response.body.data.map((a: { id: string }) => {
+        return a.id;
+      });
+      expect(ids).toContain(prodActorId);
+      expect(ids).not.toContain(stagingActorId);
+    });
+
+    test('several pairs are ANDed', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .get('/api/v1/actors')
+        .query({ project_id: projectId, tags: ['team:sales', 'env:staging'] });
+
+      expect(response.status).toBe(200);
+      const ids = response.body.data.map((a: { id: string }) => {
+        return a.id;
+      });
+      expect(ids).toEqual([stagingActorId]);
+    });
+
+    test('a pair without a colon is rejected', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .get('/api/v1/actors')
+        .query({ project_id: projectId, tags: 'prod' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+  });
 });

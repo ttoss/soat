@@ -246,6 +246,122 @@ paths:
           description: Memory not found
         '500':
           description: Internal server error
+  /api/v1/memories/{memory_id}/tags:
+    get:
+      tags:
+        - Memories
+      summary: Get memory tags
+      description: Returns all tags attached to the memory
+      operationId: getMemoryTags
+      x-iam-action: memories:GetMemory
+      parameters:
+        - name: memory_id
+          in: path
+          required: true
+          description: Memory ID
+          schema:
+            type: string
+            example: mem_V1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: Memory tags
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Memory not found
+    put:
+      tags:
+        - Memories
+      summary: Replace memory tags
+      description: Replaces all tags on the memory with the provided tags (not merged)
+      operationId: replaceMemoryTags
+      x-iam-action: memories:UpdateMemory
+      parameters:
+        - name: memory_id
+          in: path
+          required: true
+          description: Memory ID
+          schema:
+            type: string
+            example: mem_V1StGXR8Z5jdHi6B
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties:
+                type: string
+              example:
+                team: support
+                env: prod
+      responses:
+        '200':
+          description: Tags replaced
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '400':
+          description: Body is not an object of string values
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Memory not found
+    patch:
+      tags:
+        - Memories
+      summary: Merge memory tags
+      description: Merges provided tags with existing tags (existing tags are preserved unless overridden)
+      operationId: mergeMemoryTags
+      x-iam-action: memories:UpdateMemory
+      parameters:
+        - name: memory_id
+          in: path
+          required: true
+          description: Memory ID
+          schema:
+            type: string
+            example: mem_V1StGXR8Z5jdHi6B
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties:
+                type: string
+              example:
+                priority: high
+      responses:
+        '200':
+          description: Tags merged
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '400':
+          description: Body is not an object of string values
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Memory not found
 components:
   securitySchemes:
     bearerAuth:

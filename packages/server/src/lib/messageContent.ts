@@ -9,6 +9,7 @@ import {
   validatePolicyDocument,
 } from './iam';
 import { soatTools } from './soatTools';
+import { buildResourceTagContext } from './tags';
 import { callTool, getTool } from './tools';
 
 export type ToolOutputMessageContent = {
@@ -91,19 +92,9 @@ const ensureAuthUser = (authUser?: AuthUser): AuthUser => {
 };
 
 const buildDocumentPermissionContext = (args: {
-  tags?: Record<string, unknown>;
+  tags?: Record<string, string> | null;
 }): Record<string, string> => {
-  const context: Record<string, string> = { 'soat:ResourceType': 'document' };
-
-  if (!args.tags) {
-    return context;
-  }
-
-  for (const [key, value] of Object.entries(args.tags)) {
-    context[`soat:ResourceTag/${key}`] = String(value);
-  }
-
-  return context;
+  return buildResourceTagContext({ resourceType: 'document', tags: args.tags });
 };
 
 const buildDocumentPermissionResources = (args: {

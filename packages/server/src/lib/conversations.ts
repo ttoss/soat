@@ -7,7 +7,7 @@ import {
   registerResourceFieldMap,
 } from './policyCompiler';
 import { makeResourceAccessor } from './resourceAccessor';
-import { mergeTags } from './tags';
+import { applyTagFilter, mergeTags } from './tags';
 
 export type { CompiledPolicy };
 
@@ -53,6 +53,7 @@ const mapConversation = (conversation: ConversationRow) => {
 export const listConversations = async (args: {
   projectIds?: number[];
   actorId?: string;
+  tags?: Record<string, string>;
   policyWhere?: Record<string, unknown>;
   limit?: number;
   offset?: number;
@@ -66,6 +67,7 @@ export const listConversations = async (args: {
   if (args.projectIds !== undefined) {
     where.projectId = args.projectIds;
   }
+  applyTagFilter({ where, tags: args.tags });
 
   if (args.actorId !== undefined) {
     const actor = await db.Actor.findOne({ where: { publicId: args.actorId } });

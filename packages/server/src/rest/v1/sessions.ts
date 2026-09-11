@@ -11,6 +11,7 @@ import {
   listSessions,
   updateSession,
 } from 'src/lib/sessions';
+import { readTagQuery } from 'src/lib/tags';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
 import { requireAuth, requireProjectAccess } from './helpers';
@@ -112,12 +113,14 @@ sessionsRouter.get('/sessions', async (ctx: Context) => {
     limit,
     offset,
   } = ctx.query as Record<string, string | undefined>;
+  const tags = readTagQuery(ctx.query.tags);
 
   ctx.body = await listSessions({
     projectIds,
     agentId,
     actorId,
     status,
+    tags,
     limit: limit ? Number(limit) : undefined,
     offset: offset ? Number(offset) : undefined,
   });

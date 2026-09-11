@@ -27,6 +27,21 @@
       "description": "Delete a memory configuration"
     },
     {
+      "operationId": "getMemoryTags",
+      "action": "memories:GetMemory",
+      "description": "Get a memory's tags"
+    },
+    {
+      "operationId": "replaceMemoryTags",
+      "action": "memories:UpdateMemory",
+      "description": "Replace a memory's tags"
+    },
+    {
+      "operationId": "mergeMemoryTags",
+      "action": "memories:UpdateMemory",
+      "description": "Merge a memory's tags"
+    },
+    {
       "operationId": "listMemoryEntries",
       "action": "memories:ListMemoryEntries",
       "description": "List entries in a memory"
@@ -50,6 +65,21 @@
       "operationId": "deleteMemoryEntry",
       "action": "memories:DeleteMemoryEntry",
       "description": "Delete a memory entry"
+    },
+    {
+      "operationId": "getMemoryEntryTags",
+      "action": "memories:GetMemoryEntry",
+      "description": "Get a memory entry's tags"
+    },
+    {
+      "operationId": "replaceMemoryEntryTags",
+      "action": "memories:UpdateMemoryEntry",
+      "description": "Replace a memory entry's tags"
+    },
+    {
+      "operationId": "mergeMemoryEntryTags",
+      "action": "memories:UpdateMemoryEntry",
+      "description": "Merge a memory entry's tags"
     }
   ]
 }

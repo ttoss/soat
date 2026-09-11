@@ -3,7 +3,7 @@ import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { searchKnowledge } from 'src/lib/knowledge';
 import { compilePolicy } from 'src/lib/policyCompiler';
-import { hasTagFilter, isStringRecord } from 'src/lib/tags';
+import { hasTagFilter, readTagBag } from 'src/lib/tags';
 
 import { requireAuth, resolveReadProjectIds } from './helpers';
 
@@ -20,23 +20,6 @@ type KnowledgeSearchBody = {
   document_paths?: string[] | string;
   document_ids?: string[] | string;
   tags?: unknown;
-};
-
-/**
- * `tags` is a key-value bag, the same shape every tagged resource stores.
- * Anything else — an array, a `k=v` string — is a client error, not a filter
- * to coerce: silently dropping it would return a wider result set than the
- * caller asked for.
- */
-const readTags = (value: unknown): Record<string, string> | undefined => {
-  if (value === undefined) return undefined;
-  if (!isStringRecord(value)) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'tags must be an object of string values'
-    );
-  }
-  return value;
 };
 
 /**
@@ -89,7 +72,7 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
   requireAuth(ctx);
 
   const body = ctx.request.body as KnowledgeSearchBody;
-  const tags = readTags(body.tags);
+  const tags = readTagBag(body.tags);
 
   if (!hasSearchFilters(body, tags)) {
     throw new DomainError(

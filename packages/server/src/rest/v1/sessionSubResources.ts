@@ -10,8 +10,9 @@ import {
   updateSessionTags,
 } from 'src/lib/sessions';
 
-import { requireProjectAccess } from './helpers';
+import { type AuthenticatedContext, requireProjectAccess } from './helpers';
 import { checkSessionAccess } from './sessions';
+import { registerTagRoutes, type TagAccess } from './tagRoutes';
 
 const sessionSubResourcesRouter = new Router<Context>();
 
@@ -233,48 +234,27 @@ sessionSubResourcesRouter.get(
 
 // ── Tags ─────────────────────────────────────────────────────────────────
 
-sessionSubResourcesRouter.get(
-  '/sessions/:session_id/tags',
-  async (ctx: Context) => {
-    const { agentId } = await checkSessionAccess(ctx, 'agents:GetSession');
+const resolveSession = async (args: {
+  ctx: AuthenticatedContext;
+  access: TagAccess;
+}) => {
+  const { agentId } = await checkSessionAccess(
+    args.ctx,
+    args.access === 'read' ? 'agents:GetSession' : 'agents:UpdateSession'
+  );
+  return { agentId, sessionId: args.ctx.params.session_id };
+};
 
-    ctx.body = await getSessionTags({
-      agentId,
-      sessionId: ctx.params.session_id,
-    });
-  }
-);
-
-sessionSubResourcesRouter.put(
-  '/sessions/:session_id/tags',
-  async (ctx: Context) => {
-    const { agentId } = await checkSessionAccess(ctx, 'agents:UpdateSession');
-
-    const tags = ctx.request.body as Record<string, string>;
-
-    ctx.body = await updateSessionTags({
-      agentId,
-      sessionId: ctx.params.session_id,
-      tags,
-      merge: false,
-    });
-  }
-);
-
-sessionSubResourcesRouter.patch(
-  '/sessions/:session_id/tags',
-  async (ctx: Context) => {
-    const { agentId } = await checkSessionAccess(ctx, 'agents:UpdateSession');
-
-    const tags = ctx.request.body as Record<string, string>;
-
-    ctx.body = await updateSessionTags({
-      agentId,
-      sessionId: ctx.params.session_id,
-      tags,
-      merge: true,
-    });
-  }
-);
+registerTagRoutes({
+  router: sessionSubResourcesRouter,
+  path: '/sessions/:session_id/tags',
+  resolve: resolveSession,
+  readTags: ({ resource }) => {
+    return getSessionTags(resource);
+  },
+  writeTags: ({ resource, tags, merge }) => {
+    return updateSessionTags({ ...resource, tags, merge });
+  },
+});
 
 export { sessionSubResourcesRouter };

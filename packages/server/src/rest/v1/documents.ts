@@ -16,14 +16,20 @@ import {
 import { buildSrn } from 'src/lib/iam';
 import { compilePolicy } from 'src/lib/policyCompiler';
 import { assertStorageQuota, contentBytes } from 'src/lib/quotaStorage';
+import {
+  buildResourceTagContext,
+  readTagBag,
+  readTagQuery,
+} from 'src/lib/tags';
 
-import type { ProjectOwned } from './helpers';
+import type { AuthenticatedContext, ProjectOwned } from './helpers';
 import {
   requireAuth,
   resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
 import { registerIngestionCallbackRoute } from './ingestionCallbackRoute';
+import { registerTagRoutes, type TagAccess } from './tagRoutes';
 
 const documentsRouter = new Router<Context>();
 
@@ -31,15 +37,9 @@ const documentsRouter = new Router<Context>();
  * Build context object from document tags for permission evaluation
  */
 const buildDocumentContext = (doc: {
-  tags?: Record<string, unknown>;
+  tags?: Record<string, string>;
 }): Record<string, string> => {
-  const context: Record<string, string> = { 'soat:ResourceType': 'document' };
-  if (doc.tags) {
-    for (const [k, v] of Object.entries(doc.tags)) {
-      context[`soat:ResourceTag/${k}`] = String(v);
-    }
-  }
-  return context;
+  return buildResourceTagContext({ resourceType: 'document', tags: doc.tags });
 };
 
 /**
@@ -79,7 +79,7 @@ const checkDocumentPermission = async (
   doc: {
     id: string;
     path?: string;
-    tags?: Record<string, unknown>;
+    tags?: Record<string, string>;
   } & ProjectOwned,
   action: string
 ): Promise<boolean> => {
@@ -108,6 +108,7 @@ documentsRouter.get('/documents', async (ctx: Context) => {
     ? parseInt(ctx.query.offset as string, 10)
     : undefined;
   const pathPrefix = ctx.query.path_prefix as string | undefined;
+  const tags = readTagQuery(ctx.query.tags);
 
   const projectIds = await resolveReadProjectIds({
     ctx,
@@ -138,13 +139,20 @@ documentsRouter.get('/documents', async (ctx: Context) => {
       projectIds,
       policyWhere,
       pathPrefix,
+      tags,
       limit,
       offset,
     });
     return;
   }
 
-  ctx.body = await listDocuments({ projectIds, pathPrefix, limit, offset });
+  ctx.body = await listDocuments({
+    projectIds,
+    pathPrefix,
+    tags,
+    limit,
+    offset,
+  });
 });
 
 documentsRouter.get('/documents/:document_id', async (ctx: Context) => {
@@ -171,7 +179,7 @@ documentsRouter.post('/documents', async (ctx: Context) => {
     filename?: string;
     title?: string;
     metadata?: Record<string, unknown>;
-    tags?: Record<string, string>;
+    tags?: unknown;
     chunk_strategy?: 'page' | 'whole' | 'size';
     chunk_size?: number;
     chunk_overlap?: number;
@@ -197,7 +205,7 @@ documentsRouter.post('/documents', async (ctx: Context) => {
     filename: body.filename,
     title: body.title,
     metadata: body.metadata,
-    tags: body.tags,
+    tags: readTagBag(body.tags),
     chunkStrategy: body.chunk_strategy,
     chunkSize: body.chunk_size,
     chunkOverlap: body.chunk_overlap,
@@ -243,7 +251,7 @@ documentsRouter.patch('/documents/:document_id', async (ctx: Context) => {
     title?: string;
     path?: string | null;
     metadata?: Record<string, unknown>;
-    tags?: Record<string, string>;
+    tags?: unknown;
   };
 
   const updated = await updateDocument({
@@ -252,7 +260,7 @@ documentsRouter.patch('/documents/:document_id', async (ctx: Context) => {
     title: body.title,
     path: body.path,
     metadata: body.metadata,
-    tags: body.tags,
+    tags: readTagBag(body.tags),
   });
   ctx.body = updated;
 });
@@ -281,59 +289,36 @@ documentsRouter.get('/documents/:document_id/status', async (ctx: Context) => {
   };
 });
 
-documentsRouter.get('/documents/:document_id/tags', async (ctx: Context) => {
-  requireAuth(ctx);
-
-  const doc = await getDocument({ id: ctx.params.document_id });
+const resolveDocument = async (args: {
+  ctx: AuthenticatedContext;
+  access: TagAccess;
+}) => {
+  const doc = await getDocument({ id: args.ctx.params.document_id });
   if (!doc) {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Document not found');
   }
 
-  if (!(await checkDocumentPermission(ctx, doc, 'documents:GetDocument'))) {
-    return;
-  }
+  await checkDocumentPermission(
+    args.ctx,
+    doc,
+    args.access === 'read'
+      ? 'documents:GetDocument'
+      : 'documents:UpdateDocument'
+  );
 
-  ctx.body = await getDocumentTags({ id: ctx.params.document_id });
-});
+  return doc;
+};
 
-documentsRouter.put('/documents/:document_id/tags', async (ctx: Context) => {
-  requireAuth(ctx);
-
-  const doc = await getDocument({ id: ctx.params.document_id });
-  if (!doc) {
-    throw new DomainError('RESOURCE_NOT_FOUND', 'Document not found');
-  }
-
-  if (!(await checkDocumentPermission(ctx, doc, 'documents:UpdateDocument'))) {
-    return;
-  }
-
-  const tags = ctx.request.body as Record<string, string>;
-  ctx.body = await updateDocumentTags({
-    id: ctx.params.document_id,
-    tags,
-    merge: false,
-  });
-});
-
-documentsRouter.patch('/documents/:document_id/tags', async (ctx: Context) => {
-  requireAuth(ctx);
-
-  const doc = await getDocument({ id: ctx.params.document_id });
-  if (!doc) {
-    throw new DomainError('RESOURCE_NOT_FOUND', 'Document not found');
-  }
-
-  if (!(await checkDocumentPermission(ctx, doc, 'documents:UpdateDocument'))) {
-    return;
-  }
-
-  const tags = ctx.request.body as Record<string, string>;
-  ctx.body = await updateDocumentTags({
-    id: ctx.params.document_id,
-    tags,
-    merge: true,
-  });
+registerTagRoutes({
+  router: documentsRouter,
+  path: '/documents/:document_id/tags',
+  resolve: resolveDocument,
+  readTags: ({ resource }) => {
+    return getDocumentTags({ id: resource.id });
+  },
+  writeTags: ({ resource, tags, merge }) => {
+    return updateDocumentTags({ id: resource.id, tags, merge });
+  },
 });
 
 documentsRouter.post('/documents/ingest', async (ctx: Context) => {
@@ -342,7 +327,7 @@ documentsRouter.post('/documents/ingest', async (ctx: Context) => {
     file_id: string;
     project_id?: string;
     path_prefix?: string;
-    tags?: Record<string, string>;
+    tags?: unknown;
     chunk_strategy?: 'page' | 'whole' | 'size';
     chunk_size?: number;
     chunk_overlap?: number;
@@ -361,7 +346,7 @@ documentsRouter.post('/documents/ingest', async (ctx: Context) => {
     fileId: body.file_id,
     projectId: Number(targetProjectId),
     pathPrefix: body.path_prefix,
-    tags: body.tags,
+    tags: readTagBag(body.tags),
     chunkStrategy: body.chunk_strategy,
     chunkSize: body.chunk_size,
     chunkOverlap: body.chunk_overlap,

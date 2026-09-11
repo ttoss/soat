@@ -7,6 +7,7 @@ import { createFile, listFiles, uploadFile } from 'src/lib/files';
 import { buildSrn } from 'src/lib/iam';
 import { compilePolicy } from 'src/lib/policyCompiler';
 import { getUploadMaxBytes } from 'src/lib/requestBounds';
+import { readTagQuery } from 'src/lib/tags';
 import { consumeUploadToken, createPresignedUrl } from 'src/lib/uploadTokens';
 
 import { registerFileAccessRoutes } from './fileAccessRoutes';
@@ -46,10 +47,11 @@ const listFilesWithPolicy = async (args: {
   authUser: NonNullable<Context['authUser']>;
   projectPublicId: string;
   projectIds: number[];
+  tags?: Record<string, string>;
   limit?: number;
   offset?: number;
 }) => {
-  const { authUser, projectPublicId, projectIds, limit, offset } = args;
+  const { authUser, projectPublicId, projectIds, tags, limit, offset } = args;
   const policies = await authUser.getPolicies(projectPublicId);
   const { where: policyWhere, hasAccess } = compilePolicy({
     policies,
@@ -62,13 +64,14 @@ const listFilesWithPolicy = async (args: {
     return { data: [], total: 0, limit: limit ?? 50, offset: offset ?? 0 };
   }
 
-  return listFiles({ projectIds, policyWhere, limit, offset });
+  return listFiles({ projectIds, policyWhere, tags, limit, offset });
 };
 
 filesRouter.get('/files', async (ctx: Context) => {
   requireAuth(ctx);
 
   const projectPublicId = (ctx.query as Record<string, string>).project_id;
+  const tags = readTagQuery(ctx.query.tags);
   const limit = ctx.query.limit
     ? parseInt(ctx.query.limit as string, 10)
     : undefined;
@@ -88,6 +91,7 @@ filesRouter.get('/files', async (ctx: Context) => {
       authUser: ctx.authUser,
       projectPublicId,
       projectIds: projectIds ?? [],
+      tags,
       limit,
       offset,
     });
@@ -96,6 +100,7 @@ filesRouter.get('/files', async (ctx: Context) => {
 
   ctx.body = await listFiles({
     projectIds: projectIds ?? undefined,
+    tags,
     limit,
     offset,
   });

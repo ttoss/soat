@@ -14,9 +14,18 @@ import {
   updateMemoryEntry,
   writeMemoryEntry,
 } from 'src/lib/memoryEntries';
-import { isStringRecord } from 'src/lib/tags';
+import {
+  getMemoryEntryTags,
+  updateMemoryEntryTags,
+} from 'src/lib/memoryEntryTags';
+import { isStringRecord, readTagQuery } from 'src/lib/tags';
 
-import { parsePagination, requireAuth } from './helpers';
+import {
+  type AuthenticatedContext,
+  parsePagination,
+  requireAuth,
+} from './helpers';
+import { registerTagRoutes, type TagAccess } from './tagRoutes';
 
 export const memoryEntriesRouter = new Router<Context>();
 
@@ -143,6 +152,7 @@ memoryEntriesRouter.get('/memory-entries', async (ctx: Context) => {
   ctx.body = await listMemoryEntries({
     memoryId: memoryRowId,
     includeInvalidated: ctx.query.include_invalidated === 'true',
+    tags: readTagQuery(ctx.query.tags),
     ...parsePagination(ctx),
   });
 });
@@ -235,6 +245,35 @@ memoryEntriesRouter.put('/memory-entries/:entry_id', async (ctx: Context) => {
         ? undefined
         : (body.metadata as Record<string, unknown> | null),
   });
+});
+
+const resolveEntry = async (args: {
+  ctx: AuthenticatedContext;
+  access: TagAccess;
+}) => {
+  const entry = await resolveEntryForAction(
+    args.ctx,
+    args.ctx.params.entry_id,
+    args.access === 'read'
+      ? 'memories:GetMemoryEntry'
+      : 'memories:UpdateMemoryEntry'
+  );
+  if (!entry) {
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Memory entry not found');
+  }
+  return entry;
+};
+
+registerTagRoutes({
+  router: memoryEntriesRouter,
+  path: '/memory-entries/:entry_id/tags',
+  resolve: resolveEntry,
+  readTags: ({ resource }) => {
+    return getMemoryEntryTags({ id: resource.id });
+  },
+  writeTags: ({ resource, tags, merge }) => {
+    return updateMemoryEntryTags({ id: resource.id, tags, merge });
+  },
 });
 
 memoryEntriesRouter.delete(

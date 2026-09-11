@@ -190,9 +190,11 @@ GET /api/v1/memories?tags=domain:customer&tags=system:crm
 
 The split is on the **first** colon, so a value may contain colons of its own (`url:https://example.com`). Repeat the parameter for several pairs; **all** must be present. A value with no colon is rejected rather than guessed at.
 
+The tag map is also its own sub-resource — [`GET /api/v1/memories/:id/tags`](/docs/api/memories/get-memory-tags), [`PUT /api/v1/memories/:id/tags`](/docs/api/memories/replace-memory-tags) (replace) and [`PATCH /api/v1/memories/:id/tags`](/docs/api/memories/merge-memory-tags) (merge) — the same three routes every tagged resource exposes. All three return the tag map, not the memory. See [IAM — Tags](./iam.md#tags).
+
 ### Entry-Level Tag Filtering
 
-Memory entries carry their own `tags` (and optional `metadata`), independent of the container's tags. `tags` in [Knowledge search](./knowledge.md) and an agent's `knowledge_config.tags` match at **entry granularity**: an entry is returned when its parent memory's tags contain the pairs (container-level, all entries returned) **or** its own tags do (only that entry returned). A single memory can thus hold entries for many roles/sources: tag captured rules with `role: traffic-manager` and `source: rejected_approval`, then search `tags: { "role": "traffic-manager" }` to read only those.
+Memory entries carry their own `tags` (and optional `metadata`), independent of the container's tags. [`GET /api/v1/memory-entries`](/docs/api/memory-entries/list-memory-entries) filters them with the same `?tags=key:value` parameter, and [`GET /api/v1/memory-entries/:id/tags`](/docs/api/memory-entries/get-memory-entry-tags), [`PUT /api/v1/memory-entries/:id/tags`](/docs/api/memory-entries/replace-memory-entry-tags) and [`PATCH /api/v1/memory-entries/:id/tags`](/docs/api/memory-entries/merge-memory-entry-tags) manage the bag without touching `content`. `tags` in [Knowledge search](./knowledge.md) and an agent's `knowledge_config.tags` match at **entry granularity**: an entry is returned when its parent memory's tags contain the pairs (container-level, all entries returned) **or** its own tags do (only that entry returned). A single memory can thus hold entries for many roles/sources: tag captured rules with `role: traffic-manager` and `source: rejected_approval`, then search `tags: { "role": "traffic-manager" }` to read only those.
 
 ```bash
 soat create-memory-entry \

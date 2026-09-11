@@ -1,27 +1,21 @@
 import type { Context } from 'src/Context';
 import { buildSrn } from 'src/lib/iam';
+import { buildResourceTagContext } from 'src/lib/tags';
 
 type FileAccessRecord = {
   id: string;
   projectId: string;
   path?: string | null;
-  tags?: Record<string, unknown> | null;
+  tags?: Record<string, string> | null;
 };
 
 const buildFileTagContext = (args: {
   file: Pick<FileAccessRecord, 'tags'>;
 }): Record<string, string> => {
-  const context: Record<string, string> = { 'soat:ResourceType': 'file' };
-
-  if (!args.file.tags) {
-    return context;
-  }
-
-  for (const [key, value] of Object.entries(args.file.tags)) {
-    context[`soat:ResourceTag/${key}`] = String(value);
-  }
-
-  return context;
+  return buildResourceTagContext({
+    resourceType: 'file',
+    tags: args.file.tags,
+  });
 };
 
 const buildFileResources = (args: {
