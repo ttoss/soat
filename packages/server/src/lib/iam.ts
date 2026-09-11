@@ -27,6 +27,25 @@ const VALID_OPERATORS: ConditionOperator[] = [
   'StringLike',
 ];
 
+/**
+ * The context keys the platform supplies to `evaluateCondition`, and the only
+ * keys a condition may name.
+ *
+ * `soat:ResourceTag/<tag>` carries an arbitrary tag name after the slash — tag
+ * keys are opaque (`.claude/rules/case-convention.md`), so only the prefix is
+ * checked and the name must be non-empty.
+ */
+const RESOURCE_TAG_CONDITION_PREFIX = 'soat:ResourceTag/';
+const CONDITION_KEYS = new Set(['soat:ResourceType']);
+
+const isValidConditionKey = (key: string): boolean => {
+  if (CONDITION_KEYS.has(key)) return true;
+  return (
+    key.startsWith(RESOURCE_TAG_CONDITION_PREFIX) &&
+    key.length > RESOURCE_TAG_CONDITION_PREFIX.length
+  );
+};
+
 const isValidAction = (action: string): boolean => {
   if (action === '*') return true;
   if (/^[a-zA-Z0-9_-]+:\*$/.test(action)) return true;
@@ -105,10 +124,17 @@ const validateConditionBlock = (args: {
     return;
   }
 
+  // A key the platform never supplies is absent from the evaluation context,
+  // so the statement carrying it can never match: an `Allow` silently stops
+  // granting and a `Deny` silently stops denying. The second is a fail-open
+  // from a typo, so the key set is checked here rather than the `soat:` prefix
+  // alone — the rule `isValidAction` already applies to action strings.
   for (const key of Object.keys(args.block)) {
-    if (!key.startsWith('soat:')) {
+    if (!isValidConditionKey(key)) {
       args.errors.push(
-        `${args.prefix}.condition.${args.op}: key "${key}" must start with "soat:"`
+        `${args.prefix}.condition.${args.op}: key "${key}" is not a condition key — must be ${[
+          ...CONDITION_KEYS,
+        ].join(', ')} or ${RESOURCE_TAG_CONDITION_PREFIX}<tag>`
       );
     }
   }
