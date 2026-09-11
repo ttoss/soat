@@ -150,6 +150,31 @@ describe('Policies', () => {
       expect(fetched.body.document.statement[0].condition).toEqual(condition);
     });
 
+    test('returns 400 for an unknown condition key', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          name: 'Unknown Condition Key Policy',
+          document: {
+            statement: [
+              {
+                effect: 'Deny',
+                action: ['files:GetFile'],
+                resource: ['*'],
+                // Plural typo: absent from the evaluation context, so this
+                // Deny would never deny.
+                condition: {
+                  StringEquals: { 'soat:ResourceTags/env': 'prod' },
+                },
+              },
+            ],
+          },
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
     test('returns 400 for a document with an invalid effect', async () => {
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/policies')

@@ -35,7 +35,7 @@ describe('IAM', () => {
             action: ['files:GetFile', 'files:*'],
             resource: ['srn:proj_ABC:file:*'],
             condition: {
-              StringEquals: { 'soat:tag:env': 'prod' },
+              StringEquals: { 'soat:ResourceTag/env': 'prod' },
             },
           },
         ],
@@ -167,6 +167,64 @@ describe('IAM', () => {
       };
       const result = validatePolicyDocument(doc);
       expect(result.valid).toBe(false);
+    });
+
+    /**
+     * A condition key the platform never supplies is absent from the
+     * evaluation context, so the statement it sits on can never match: an
+     * `Allow` silently stops granting and a `Deny` silently stops denying.
+     * The second is fail-open from a typo, so the key set is checked at
+     * authoring time rather than the `soat:` prefix alone.
+     */
+    const conditionDoc = (key: string) => {
+      return {
+        statement: [
+          {
+            effect: 'Allow',
+            action: ['files:GetFile'],
+            condition: { StringEquals: { [key]: 'prod' } },
+          },
+        ],
+      };
+    };
+
+    test.each(['soat:ResourceType', 'soat:ResourceTag/env'])(
+      'the supplied condition key %s passes',
+      (key) => {
+        expect(validatePolicyDocument(conditionDoc(key)).valid).toBe(true);
+      }
+    );
+
+    test('a tag key is opaque, so any spelling after the slash passes', () => {
+      expect(
+        validatePolicyDocument(conditionDoc('soat:ResourceTag/cost_center'))
+          .valid
+      ).toBe(true);
+      expect(
+        validatePolicyDocument(conditionDoc('soat:ResourceTag/costCenter'))
+          .valid
+      ).toBe(true);
+    });
+
+    test.each([
+      ['soat:ResourceTags/env', 'a plural typo'],
+      ['soat:resourcetype', 'the wrong case'],
+      ['soat:ResourceTag', 'the tag prefix with no tag'],
+      ['soat:ResourceTag/', 'an empty tag name'],
+      ['soat:PrincipalTag/team', 'a key no resource supplies'],
+    ])('the unknown condition key %s fails (%s)', (key) => {
+      const result = validatePolicyDocument(conditionDoc(key));
+      expect(result.valid).toBe(false);
+      expect(result.errors.join('\n')).toContain(key);
+    });
+
+    test('the error names the keys a condition may use', () => {
+      const result = validatePolicyDocument(
+        conditionDoc('soat:ResourceTags/env')
+      );
+      const message = result.errors.join('\n');
+      expect(message).toContain('soat:ResourceType');
+      expect(message).toContain('soat:ResourceTag/');
     });
 
     test('non-object input fails', () => {

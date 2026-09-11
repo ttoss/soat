@@ -449,6 +449,8 @@ Fires only when the text, minus a wrapping markdown fence, is one JSON object (o
 
 A `builtin` action must be allowed by both the **caller policy** (the user or API key that triggered the generation) and the agent's optional **`boundary_policy`**; the effective permission is the intersection, as for [API keys](./api-keys.md#permission-inheritance). Without `boundary_policy`, only the caller's apply.
 
+A `boundary_policy` that is not a valid policy document allows nothing — it fails closed, so a malformed boundary denies every action rather than widening one. Its `condition` keys are held to the same rule as a stored policy's ([IAM — Condition Keys](./iam.md#condition-keys)): a key the platform does not supply invalidates the document.
+
 The boundary also gates the native **`write_memory`** tool (`knowledge_config.write_memory_id`): denying `memories:CreateMemoryEntry` / `memories:UpdateMemoryEntry` (or `Deny action:["*"]`) blocks it fail-closed.
 
 Action strings are validated on write (`validate-formation`, `create-policy`, agent create/update); an unknown or mis-named action is rejected, so a typo'd `Deny` cannot no-op. `module:Operation` names: [Permissions Reference](../permissions.md). Only `builtin` actions are governed; `http`, `client` and `mcp` tools run outside the permission model.

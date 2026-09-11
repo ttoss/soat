@@ -164,6 +164,12 @@ Conditions add attribute-based constraints: an operator mapped to key-value pair
 | `soat:ResourceTag/<key>` | Resource tags | Tag value on the target resource        |
 | `soat:ResourceType`      | Request       | The type of the resource being accessed |
 
+These are the only keys a `condition` may name. Any other key — a typo like `soat:ResourceTags/env`, a different case like `soat:resourcetype`, or a key for a source the platform does not supply — is rejected with `400 VALIDATION_FAILED` when the policy is written, and the error names the key.
+
+The check exists because an unknown key is never present in the evaluation context, so the statement carrying it can never match: an `Allow` silently stops granting, and a `Deny` **silently stops denying**. The second is a fail-open, which is why a typo is refused at authoring time rather than discovered in production. The same rule already applies to [action strings](#actions).
+
+`<key>` after `soat:ResourceTag/` is an opaque tag name and is not checked beyond being non-empty — a condition may name a tag no resource carries yet.
+
 Operators and keys match **by exact string**; no case conversion applies to a `condition` block or to `tags` (see [Tag keys are stored verbatim](#tag-keys-are-stored-verbatim)).
 
 ## Authorization Model
