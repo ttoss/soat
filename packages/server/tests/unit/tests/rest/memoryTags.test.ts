@@ -96,6 +96,25 @@ describe('MemoryTags', () => {
       expect(memory.body.tags).toEqual({ env: 'prod', team: 'sales' });
     });
 
+    test('PUT /memories/:id with tags: null clears the bag', async () => {
+      const cleared = await createMemory({
+        name: 'Cleared Tags Memory',
+        tags: { team: 'support' },
+      });
+
+      const response = await authenticatedTestClient(userToken)
+        .put(`/api/v1/memories/${cleared}`)
+        .send({ tags: null });
+
+      expect(response.status).toBe(200);
+      expect(response.body.tags).toBeUndefined();
+
+      const tags = await authenticatedTestClient(userToken).get(
+        `/api/v1/memories/${cleared}/tags`
+      );
+      expect(tags.body).toEqual({});
+    });
+
     test('PUT rejects a non-string tag value', async () => {
       const response = await authenticatedTestClient(userToken)
         .put(`/api/v1/memories/${memoryId}/tags`)
@@ -151,6 +170,21 @@ describe('MemoryTags', () => {
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual({ role: 'manager' });
+    });
+
+    test('GET returns {} for an entry written without tags', async () => {
+      const memoryId = await createMemory({ name: 'Untagged Entry Memory' });
+      const untaggedId = await createEntry({
+        memoryId,
+        content: 'Entry without tags',
+      });
+
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/memory-entries/${untaggedId}/tags`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({});
     });
 
     test('PUT replaces and PATCH merges the tag map', async () => {

@@ -125,14 +125,9 @@ export const readNullableTagBag = (
  * caller believed it had narrowed.
  */
 export const readTagQuery = (
-  raw: unknown
+  raw: string | string[] | undefined
 ): Record<string, string> | undefined => {
-  if (raw === undefined) return undefined;
-  const values = Array.isArray(raw) ? raw : [raw];
-  const pairs = values.filter((value): value is string => {
-    return typeof value === 'string';
-  });
-  const tags = pairs.length === values.length ? parseTagPairs(pairs) : null;
+  const tags = parseTagPairs(raw);
   if (tags === null) {
     throw new DomainError(
       'VALIDATION_FAILED',

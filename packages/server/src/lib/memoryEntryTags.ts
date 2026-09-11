@@ -5,10 +5,9 @@ import { mergeTags } from 'src/lib/tags';
 // its memory's project through `resolveEntryForAction` first.
 
 export const getMemoryEntryTags = async (args: { id: string }) => {
-  const entry = await db.MemoryEntry.findOne({
+  const entry = (await db.MemoryEntry.findOne({
     where: { publicId: args.id },
-  });
-  if (!entry) return null;
+  }))!;
   return entry.tags ?? {};
 };
 
@@ -17,10 +16,9 @@ export const updateMemoryEntryTags = async (args: {
   tags: Record<string, string>;
   merge?: boolean;
 }) => {
-  const entry = await db.MemoryEntry.findOne({
+  const entry = (await db.MemoryEntry.findOne({
     where: { publicId: args.id },
-  });
-  if (!entry) return null;
+  }))!;
 
   const newTags = mergeTags({
     current: entry.tags,

@@ -1,7 +1,7 @@
 import type { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
-import { readTagBag } from 'src/lib/tags';
+import { isStringRecord } from 'src/lib/tags';
 
 import { type AuthenticatedContext, requireAuth } from './helpers';
 
@@ -34,27 +34,26 @@ export const registerTagRoutes = <TResource>(args: {
     merge: boolean;
   }) => Promise<Record<string, string> | null>;
 }): void => {
-  // `resolve` has already found the resource; a null here means it vanished
-  // between the two reads.
-  const requireBag = (bag: Record<string, string> | null) => {
-    if (bag === null) {
-      throw new DomainError('RESOURCE_NOT_FOUND', 'Resource not found');
-    }
-    return bag;
-  };
-
   args.router.get(args.path, async (ctx: Context) => {
     requireAuth(ctx);
     const resource = await args.resolve({ ctx, access: 'read' });
-    ctx.body = requireBag(await args.readTags({ resource }));
+    ctx.body = await args.readTags({ resource });
   });
 
   const write = (merge: boolean) => {
     return async (ctx: Context) => {
       requireAuth(ctx);
       const resource = await args.resolve({ ctx, access: 'write' });
-      const tags = readTagBag(ctx.request.body) ?? {};
-      ctx.body = requireBag(await args.writeTags({ resource, tags, merge }));
+      // The body parser hands an empty body over as `{}`, so the whole body
+      // is the bag; `String(["a","b"])` is "a,b", hence no coercion.
+      const body: unknown = ctx.request.body;
+      if (!isStringRecord(body)) {
+        throw new DomainError(
+          'VALIDATION_FAILED',
+          'tags must be an object of string values'
+        );
+      }
+      ctx.body = await args.writeTags({ resource, tags: body, merge });
     };
   };
 
