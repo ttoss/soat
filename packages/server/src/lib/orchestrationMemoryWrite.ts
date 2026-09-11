@@ -3,24 +3,24 @@ import { MEMORY_ENTRY_SOURCES } from '@soat/postgresdb';
 
 export type MemoryWriteInputs = {
   content: string;
-  tags?: string[];
+  tags?: Record<string, string>;
   metadata?: Record<string, unknown>;
   sourceType: MemoryEntrySource;
 };
 
-const parseTags = (rawTags: unknown): string[] | undefined => {
-  if (Array.isArray(rawTags)) {
-    return rawTags.filter((t): t is string => {
-      return typeof t === 'string';
-    });
+const parseTags = (rawTags: unknown): Record<string, string> | undefined => {
+  if (!rawTags || typeof rawTags !== 'object' || Array.isArray(rawTags)) {
+    return undefined;
   }
-  // A `{ role: 'x' }`-style mapping is flattened into `key:value` tag strings.
-  if (rawTags && typeof rawTags === 'object') {
-    return Object.entries(rawTags as Record<string, unknown>).map(([k, v]) => {
-      return `${k}:${String(v)}`;
-    });
-  }
-  return undefined;
+  // Non-string values are coerced rather than dropped: an orchestration's
+  // mapped input often arrives as a number or boolean from an upstream node,
+  // and losing the pair silently would write an entry the author believed
+  // was tagged.
+  return Object.fromEntries(
+    Object.entries(rawTags as Record<string, unknown>).map(([k, v]) => {
+      return [k, String(v)];
+    })
+  );
 };
 
 const parseMetadata = (
@@ -41,10 +41,10 @@ const parseSourceType = (rawSourceType: unknown): MemoryEntrySource => {
 
 /**
  * Normalizes a `memory_write` node's mapped inputs into the shape
- * `writeMemoryEntry` expects: `content` is coerced to a string, `tags` accepts
- * either a string array or a `{ key: value }` mapping (flattened to
- * `key:value`), `metadata` must be a plain object, and `sourceType` defaults to
- * `orchestration` when the mapping does not supply a valid value.
+ * `writeMemoryEntry` expects: `content` is coerced to a string, `tags` must be
+ * a `{ key: value }` mapping (values coerced to strings), `metadata` must be a
+ * plain object, and `sourceType` defaults to `orchestration` when the mapping
+ * does not supply a valid value.
  */
 export const parseMemoryWriteInputs = (
   inputs: Record<string, unknown>

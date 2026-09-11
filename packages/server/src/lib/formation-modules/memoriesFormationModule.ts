@@ -5,8 +5,8 @@ import {
   updateMemory,
 } from '../memories';
 import {
-  toNullableArray,
   toNullableString,
+  toNullableStringRecord,
   toOptionalString,
 } from '../resource-inputs/normalizers';
 import { defineFormationModule } from './defineFormationModule';
@@ -25,7 +25,7 @@ export const memoriesFormationModule = defineFormationModule({
       projectId,
       name: properties.name as string,
       description: toOptionalString(properties.description) ?? undefined,
-      tags: toNullableArray(properties.tags) as string[] | undefined,
+      tags: toNullableStringRecord(properties.tags) ?? undefined,
     });
   },
 
@@ -34,7 +34,7 @@ export const memoriesFormationModule = defineFormationModule({
       id: physicalResourceId,
       name: toOptionalString(properties.name) ?? undefined,
       description: toNullableString(properties.description),
-      tags: toNullableArray(properties.tags) as string[] | null | undefined,
+      tags: toNullableStringRecord(properties.tags),
     });
   },
 

@@ -267,8 +267,16 @@ const CASES: RoundTripCase[] = [
     resourceType: 'memory',
     build: () => {
       return {
-        create: { name: 'Mem A', description: 'a memory', tags: ['t1'] },
-        expectRead: { name: 'Mem A', description: 'a memory', tags: ['t1'] },
+        create: {
+          name: 'Mem A',
+          description: 'a memory',
+          tags: { tier: 't1' },
+        },
+        expectRead: {
+          name: 'Mem A',
+          description: 'a memory',
+          tags: { tier: 't1' },
+        },
         update: { name: 'Mem B' },
         expectAfterUpdate: { name: 'Mem B' },
       };

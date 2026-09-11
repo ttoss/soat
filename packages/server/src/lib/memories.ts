@@ -3,21 +3,6 @@ import { db } from 'src/db';
 import { paginatedList } from 'src/lib/pagination';
 import { makeResourceAccessor } from 'src/lib/resourceAccessor';
 
-const buildTagsGlobLiteral = (args: { tags: string[] }) => {
-  const sequelize = db.Memory.sequelize!;
-  const patterns = args.tags.map((tag) => {
-    return tag.replace(/\*/g, '%').replace(/\?/g, '_');
-  });
-  const conditions = patterns
-    .map((p) => {
-      return `tag ILIKE ${sequelize.escape(p)}`;
-    })
-    .join(' OR ');
-  return sequelize.literal(
-    `EXISTS (SELECT 1 FROM unnest("Memory"."tags") AS t(tag) WHERE ${conditions})`
-  );
-};
-
 type MemoryRow = InstanceType<(typeof db)['Memory']> & {
   project?: InstanceType<(typeof db)['Project']>;
 };
@@ -50,7 +35,7 @@ export const createMemory = async (args: {
   projectId: number;
   name: string;
   description?: string;
-  tags?: string[];
+  tags?: Record<string, string>;
 }) => {
   const memory = await db.Memory.create({
     projectId: args.projectId,
@@ -64,14 +49,16 @@ export const createMemory = async (args: {
 
 export const listMemories = async (args: {
   projectIds: number[];
-  tags?: string[];
+  tags?: Record<string, string>;
   limit?: number;
   offset?: number;
 }) => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: any = { projectId: args.projectIds };
-  if (args.tags && args.tags.length > 0) {
-    where[Op.and] = buildTagsGlobLiteral({ tags: args.tags });
+  const where: Record<string, unknown> = { projectId: args.projectIds };
+  if (args.tags && Object.keys(args.tags).length > 0) {
+    // JSONB containment: every requested pair must be present with exactly
+    // that value, the same rule knowledge search and IAM
+    // `soat:ResourceTag/<key>` conditions read this column with.
+    where.tags = { [Op.contains]: args.tags };
   }
   return paginatedList({
     limit: args.limit,
@@ -100,7 +87,7 @@ export const updateMemory = async (args: {
   id: string;
   name?: string;
   description?: string | null;
-  tags?: string[] | null;
+  tags?: Record<string, string> | null;
 }) => {
   const memory = await db.Memory.findOne({
     where: { publicId: args.id },

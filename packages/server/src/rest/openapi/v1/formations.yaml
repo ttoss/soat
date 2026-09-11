@@ -751,11 +751,6 @@ components:
               items:
                 type: string
               description: Public IDs of memories to retrieve from
-            memory_tags:
-              type: array
-              items:
-                type: string
-              description: Retrieve from all memories matching these tags
             document_ids:
               x-soat-ref: documents
               type: array
@@ -767,6 +762,13 @@ components:
               items:
                 type: string
               description: Retrieve from all documents matching these path prefixes
+            tags:
+              type: object
+              additionalProperties:
+                type: string
+              description: >-
+                Retrieve from documents and memory entries whose tags contain
+                all these key-value pairs
             min_score:
               type: number
               description: Minimum similarity score (0–1) for retrieved chunks
@@ -1164,11 +1166,11 @@ components:
           nullable: true
           description: What this memory stores
         tags:
-          type: array
+          type: object
           nullable: true
-          items:
+          additionalProperties:
             type: string
-          description: Tag strings for filtering
+          description: Key-value tags for filtering
 
     MemoryEntryResourceProperties:
       description: Adds a single text entry to a memory store.
@@ -1190,11 +1192,12 @@ components:
           enum: [manual, agent, extraction, orchestration]
           description: How this entry was created (defaults to manual)
         tags:
-          type: array
+          type: object
           nullable: true
-          items:
+          additionalProperties:
             type: string
-          description: Per-entry tag strings for entry-granularity filtering
+          description: >-
+            Per-entry key-value tags for entry-granularity filtering
         metadata:
           type: object
           nullable: true

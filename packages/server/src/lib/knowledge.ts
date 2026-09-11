@@ -7,6 +7,7 @@ import { getEmbedding } from './embedding';
 import type { MemoryKnowledgeResult } from './knowledgeMemory';
 import { resolveMemorySearch } from './knowledgeMemory';
 import { clampKnowledgeSearchLimit } from './requestBounds';
+import { hasTagFilter } from './tags';
 import { withIterativeVectorScan } from './vectorSearch';
 
 export type { MemoryQueryConfig } from './knowledgeMemory';
@@ -19,6 +20,7 @@ export type DocumentQueryConfig = {
   limit?: number;
   paths?: string[];
   documentIds?: string[];
+  tags?: Record<string, string>;
 };
 
 export type QueryDocumentResult = {
@@ -268,9 +270,19 @@ const findChunksWithoutSearch = async (args: {
 
 const buildDocWhere = (args: {
   documentIds: string[] | undefined;
+  tags: Record<string, string> | undefined;
 }): Record<string, unknown> | undefined => {
-  if (!args.documentIds || args.documentIds.length === 0) return undefined;
-  return { publicId: args.documentIds };
+  const where: Record<string, unknown> = {};
+  if (args.documentIds && args.documentIds.length > 0) {
+    where.publicId = args.documentIds;
+  }
+  if (args.tags && Object.keys(args.tags).length > 0) {
+    // JSONB containment: every requested pair must be present with exactly
+    // that value, matching how IAM `soat:ResourceTag/<key>` conditions read
+    // the same column.
+    where.tags = { [Op.contains]: args.tags };
+  }
+  return Object.keys(where).length > 0 ? where : undefined;
 };
 
 /**
@@ -318,7 +330,10 @@ export const resolveDocumentSearch = async (args: {
       : undefined;
 
   const fileInclude = buildFileInclude({ projectIds, paths: config.paths });
-  const docWhere = buildDocWhere({ documentIds: config.documentIds });
+  const docWhere = buildDocWhere({
+    documentIds: config.documentIds,
+    tags: config.tags,
+  });
 
   const rawChunks = config.search
     ? await findChunksWithSearch({
@@ -359,7 +374,12 @@ type SearchKnowledgeArgs = {
   paths?: string[];
   documentIds?: string[];
   memoryIds?: string[];
-  memoryTags?: string[];
+  /**
+   * Key-value pairs a result's own `tags` must all contain. One filter for
+   * both stores: it narrows documents and memory entries alike, and is the
+   * only filter that turns on a source on both sides at once.
+   */
+  tags?: Record<string, string>;
   /**
    * Internal-only override (not exposed on the REST search endpoint) that
    * forces document search off even when `query` is set. Callers that derive
@@ -380,10 +400,11 @@ const getSearchFlags = (
     args.includeDocuments !== false &&
     (args.query !== undefined ||
       (args.paths !== undefined && args.paths.length > 0) ||
-      (args.documentIds !== undefined && args.documentIds.length > 0));
+      (args.documentIds !== undefined && args.documentIds.length > 0) ||
+      hasTagFilter(args.tags));
   const hasMemorySearch =
     (args.memoryIds !== undefined && args.memoryIds.length > 0) ||
-    (args.memoryTags !== undefined && args.memoryTags.length > 0);
+    hasTagFilter(args.tags);
   return { hasDocumentSearch, hasMemorySearch };
 };
 
@@ -408,6 +429,7 @@ export const searchKnowledge = async (
             limit,
             paths: args.paths,
             documentIds: args.documentIds,
+            tags: args.tags,
           },
         })
       : Promise.resolve([]),
@@ -417,7 +439,7 @@ export const searchKnowledge = async (
           billingProjectId: args.billingProjectId,
           config: {
             memoryIds: args.memoryIds,
-            memoryTags: args.memoryTags,
+            tags: args.tags,
             search: args.query,
             minScore: args.minScore,
             limit,

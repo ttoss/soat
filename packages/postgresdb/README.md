@@ -47,6 +47,17 @@ pnpm run sync -e <your_environment>
 
 To alter the schema, add the flag `--alter`. Check the [@ttoss/postgresdb sync documentation](https://ttoss.dev/docs/modules/packages/postgresdb-cli/#sync) for more details.
 
+### Migrations `--alter` cannot perform
+
+`sync --alter` only adds; it never rewrites a column whose type Postgres
+refuses to cast automatically. Those changes live as dated SQL in
+`migrations/`, run by hand before deploying the release that carries the new
+models:
+
+| File | Change |
+| --- | --- |
+| `2026-09-11-memory-tags-to-jsonb.sql` | `memories.tags` and `memory_entries.tags` from `text[]` to key-value `jsonb` |
+
 ## Development
 
 ### Building

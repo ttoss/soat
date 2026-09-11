@@ -134,12 +134,12 @@ describe('writeMemoryEntry merge consolidation', () => {
     expect(mockRunConsolidationCompletion).not.toHaveBeenCalled();
   });
 
-  test('unions tags and shallow-merges metadata on an LLM-consolidated merge', async () => {
+  test('shallow-merges tags and metadata on an LLM-consolidated merge', async () => {
     const memoryId = await createMemoryId('Tagged Merge');
     await writeMemoryEntry({
       memoryId,
       content: 'First fact',
-      tags: ['role:manager'],
+      tags: { role: 'manager' },
       metadata: { a: 1 },
     });
 
@@ -148,16 +148,17 @@ describe('writeMemoryEntry merge consolidation', () => {
     const result = await writeMemoryEntry({
       memoryId,
       content: 'Second fact',
-      tags: ['source:rejected_approval'],
+      tags: { source: 'rejected_approval' },
       metadata: { b: 2 },
       consolidation: { agentId: 'agt_consolidate' },
       ...FORCE_MERGE,
     });
 
     expect(result.action).toBe('updated');
-    expect(result.entry.tags).toEqual(
-      expect.arrayContaining(['role:manager', 'source:rejected_approval'])
-    );
+    expect(result.entry.tags).toEqual({
+      role: 'manager',
+      source: 'rejected_approval',
+    });
     expect(result.entry.metadata).toEqual({ a: 1, b: 2 });
   });
 

@@ -35,7 +35,7 @@ Agents retrieve relevant entries via `knowledge_config` and write new facts with
 | `project_id`  | `string`          | ID of the owning project                  |
 | `name`        | `string`          | Human-readable name                       |
 | `description` | `string \| null`  | Optional description                      |
-| `tags`        | `string[] \| null`| Optional labels for filtering by category |
+| `tags`        | `object \| null`  | Optional key-value labels for filtering by category |
 | `created_at`  | `string`          | ISO 8601 creation timestamp               |
 | `updated_at`  | `string`          | ISO 8601 last-updated timestamp           |
 
@@ -49,7 +49,7 @@ When an entry is created or updated, its `content` is embedded for semantic simi
 | `memory_id`  | `string` | ID of the parent memory                                 |
 | `content`    | `string` | Text content of the entry                               |
 | `source_type` | `string` | How the entry was created: `manual` (default), `agent`, `extraction`, or `orchestration` |
-| `tags`       | `string[] \| null` | Per-entry labels for entry-granularity tag filtering in [Knowledge search](./knowledge.md) |
+| `tags`       | `object \| null`   | Per-entry key-value labels for entry-granularity tag filtering in [Knowledge search](./knowledge.md) |
 | `metadata`   | `object \| null`   | Arbitrary structured metadata attached to the entry     |
 | `source_generation_id` | `string \| null` | The [generation](./agents.md) whose turn produced the entry — see [Provenance](#provenance) |
 | `source_conversation_id` | `string \| null` | The [conversation](./conversations.md) the producing turn belonged to — see [Provenance](#provenance) |
@@ -115,7 +115,7 @@ Consolidation is best-effort: if the completion fails or comes back empty, the w
 creates too. Nothing is ever appended to an existing entry, so no write can lose a fact;
 a near-duplicate pair is possible and is merged by future arbitration.
 
-On a **merge**, the incoming `tags` are unioned into the existing entry's tags and `metadata` is shallow-merged (incoming keys win). [`PUT /api/v1/memory-entries/:id`](/docs/api/memory-entries/update-memory-entry) replaces `tags`/`metadata` outright; pass `null` (or `[]` for tags) to clear.
+On a **merge**, the incoming `tags` and `metadata` are both shallow-merged into the existing entry (incoming keys win). [`PUT /api/v1/memory-entries/:id`](/docs/api/memory-entries/update-memory-entry) replaces `tags`/`metadata` outright; pass `null` (or `{}` for tags) to clear.
 
 #### Response `action` Field
 
@@ -175,29 +175,30 @@ POST /api/v1/memories
 {
   "project_id": "proj_abc",
   "name": "Customer Preferences",
-  "tags": ["customer", "crm", "user-prefs"]
+  "tags": { "domain": "customer", "system": "crm" }
 }
 ```
 
-The `tags` query parameter on [`GET /api/v1/memories`](/docs/api/memories/list-memories) filters, with **glob patterns**:
+Tags are key-value pairs, the same shape documents, actors, files, conversations and sessions carry, and the shape the IAM `soat:ResourceTag/<key>` condition reads.
 
-| Pattern      | Matches                                          |
-| ------------ | ------------------------------------------------ |
-| `crm`        | Only `crm` (exact)                               |
-| `customer*`  | `customer`, `customer-support`, `customer-prefs` |
-| `user-?refs` | `user-prefs`, `user-xrefs`, etc.                 |
+The `tags` query parameter on [`GET /api/v1/memories`](/docs/api/memories/list-memories) filters by pair, written `key:value` in the query string:
 
-Multiple patterns are **ORed**. The same glob syntax applies to `memory_tags` in [Knowledge search](./knowledge.md).
+```bash
+# every pair must match, exactly and case-sensitively
+GET /api/v1/memories?tags=domain:customer&tags=system:crm
+```
+
+The split is on the **first** colon, so a value may contain colons of its own (`url:https://example.com`). Repeat the parameter for several pairs; **all** must be present. A value with no colon is rejected rather than guessed at.
 
 ### Entry-Level Tag Filtering
 
-Memory entries carry their own `tags` (and optional `metadata`), independent of the container's tags. `memory_tags` in [Knowledge search](./knowledge.md) and an agent's `knowledge_config.memory_tags` match at **entry granularity**: an entry is returned when its parent memory's tags match the globs (container-level, all entries returned) **or** its own tags match (only that entry returned). A single memory can thus hold entries for many roles/sources: tag captured rules with `role:traffic-manager` and `source:rejected_approval`, then search `memory_tags: ["role:traffic-manager"]` to read only those.
+Memory entries carry their own `tags` (and optional `metadata`), independent of the container's tags. `tags` in [Knowledge search](./knowledge.md) and an agent's `knowledge_config.tags` match at **entry granularity**: an entry is returned when its parent memory's tags contain the pairs (container-level, all entries returned) **or** its own tags do (only that entry returned). A single memory can thus hold entries for many roles/sources: tag captured rules with `role: traffic-manager` and `source: rejected_approval`, then search `tags: { "role": "traffic-manager" }` to read only those.
 
 ```bash
 soat create-memory-entry \
   --memory-id mem_01 \
   --content "Reject refunds above $500 for the traffic-manager role" \
-  --tags '["role:traffic-manager", "source:rejected_approval"]' \
+  --tags '{"role": "traffic-manager", "source": "rejected_approval"}' \
   --metadata '{"evidence": "high"}'
 ```
 
@@ -205,7 +206,7 @@ soat create-memory-entry \
 
 The orchestration `memory_write` node maps its `input_mapping` into a memory-entry write. Besides `content`, it honors:
 
-- `tags` — a string array, or a `{ key: value }` mapping flattened into `key:value` tag strings (`tags: { role: "traffic-manager" }` becomes `["role:traffic-manager"]`).
+- `tags` — a `{ key: value }` mapping. Non-string values are coerced (`{ count: 5 }` stores `"5"`) rather than dropped, since a mapped input often arrives as a number from an upstream node.
 - `metadata` — a plain object stored on the entry.
 - `source_type` — honored when supplied; defaults to `orchestration`.
 
@@ -288,7 +289,7 @@ See [Agent with Persistent Memory - Step 11 (Enable automatic extraction)](/docs
 soat create-memory \
   --project-id proj_ABC \
   --name "Customer Preferences" \
-  --tags '["customer", "crm"]'
+  --tags '{"domain": "customer", "system": "crm"}'
 ```
 
 </TabItem>
@@ -302,7 +303,7 @@ const { data, error } = await soat.memories.createMemory({
   body: {
     project_id: 'proj_ABC',
     name: 'Customer Preferences',
-    tags: ['customer', 'crm'],
+    tags: { domain: 'customer', system: 'crm' },
   },
 });
 if (error) throw new Error(JSON.stringify(error));
@@ -318,7 +319,7 @@ curl -X POST https://api.example.com/api/v1/memories \
   -d '{
     "project_id": "proj_ABC",
     "name": "Customer Preferences",
-    "tags": ["customer", "crm"]
+    "tags": { "domain": "customer", "system": "crm" }
   }'
 ```
 

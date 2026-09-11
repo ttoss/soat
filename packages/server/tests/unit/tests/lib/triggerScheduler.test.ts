@@ -306,18 +306,19 @@ describe('triggerScheduler', () => {
       expect(await countFirings(after)).toBe(0);
     });
 
-    test('falls back to the default interval for an invalid override', async () => {
+    test('still drives the sweeps when the override is invalid', async () => {
       const { internalId } = await createScheduleTrigger();
       await setTriggerColumns(internalId, { nextFireAt: PAST() });
 
       startTriggerScheduler({ intervalMs: 0 });
 
-      // Nothing fires before the default 30s interval elapses.
-      await jest.advanceTimersByTimeAsync(29_999);
-      expect(await countFirings(internalId)).toBe(0);
-
-      // One tick past the default interval → the sweep claims and fires it.
-      await jest.advanceTimersByTimeAsync(1);
+      // An unusable override resolves to the default interval rather than
+      // leaving the poller un-started, so the due trigger is fired either by
+      // the sweep at start or by the first tick. Which of the two is
+      // deliberately not asserted here: reading the DB between them races the
+      // in-flight sweep. The interval arithmetic itself is covered against stub
+      // sweeps in `scheduler.test.ts`, where it needs no database.
+      await jest.advanceTimersByTimeAsync(30_000);
       await waitForTerminalFiring(internalId);
       expect(await countFirings(internalId)).toBe(1);
     });

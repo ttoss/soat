@@ -17,6 +17,7 @@ import type { ToolNodeGateResult } from './orchestrationToolGuardrail';
 import { runToolNodeGate } from './orchestrationToolGuardrail';
 import { stripMarkdownJsonFence } from './outputSchema';
 import { isPlainObject } from './plainObject';
+import { isStringRecord } from './tags';
 import { callTool } from './tools';
 
 const log = createDebug('soat:orchestrations');
@@ -301,9 +302,7 @@ export const executeKnowledgeNode = async (args: {
     memoryIds: Array.isArray(inputs['memoryIds'])
       ? (inputs['memoryIds'] as string[])
       : undefined,
-    memoryTags: Array.isArray(inputs['memoryTags'])
-      ? (inputs['memoryTags'] as string[])
-      : undefined,
+    tags: isStringRecord(inputs['tags']) ? inputs['tags'] : undefined,
   });
 
   return { kind: 'artifact', artifact: { results } };

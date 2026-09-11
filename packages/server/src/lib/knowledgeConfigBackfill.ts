@@ -24,7 +24,6 @@ const log = createDebug('soat:knowledge');
  */
 const KNOWLEDGE_CONFIG_KEYS: Record<string, string> = {
   memoryIds: 'memory_ids',
-  memoryTags: 'memory_tags',
   documentIds: 'document_ids',
   documentPaths: 'document_paths',
   minScore: 'min_score',

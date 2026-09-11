@@ -9,6 +9,7 @@ import {
   listMemories,
   updateMemory,
 } from 'src/lib/memories';
+import { isStringRecord, parseTagPairs } from 'src/lib/tags';
 
 import {
   parsePagination,
@@ -23,12 +24,14 @@ memoriesRouter.get('/memories', async (ctx: Context) => {
   requireAuth(ctx);
 
   const projectPublicId = ctx.query.project_id as string | undefined;
-  const rawTags = ctx.query.tags;
-  const tags: string[] | undefined = rawTags
-    ? Array.isArray(rawTags)
-      ? (rawTags as string[])
-      : [rawTags as string]
-    : undefined;
+  // `?tags=key:value` — the query-string spelling of the body's tag object.
+  const tags = parseTagPairs(ctx.query.tags as string | string[] | undefined);
+  if (tags === null) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'tags must be `key:value` pairs, e.g. tags=team:finance'
+    );
+  }
 
   const projectIds = await resolveReadProjectIds({
     ctx,
@@ -75,8 +78,15 @@ memoriesRouter.post('/memories', async (ctx: Context) => {
     project_id?: string;
     name: string;
     description?: string;
-    tags?: string[];
+    tags?: unknown;
   };
+
+  if (body.tags !== undefined && !isStringRecord(body.tags)) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'tags must be an object of string values'
+    );
+  }
 
   const targetProjectId = await resolveWriteProjectId({
     ctx,
@@ -119,8 +129,19 @@ memoriesRouter.put('/memories/:memory_id', async (ctx: Context) => {
   const body = ctx.request.body as {
     name?: string;
     description?: string | null;
-    tags?: string[] | null;
+    tags?: unknown;
   };
+
+  if (
+    body.tags !== undefined &&
+    body.tags !== null &&
+    !isStringRecord(body.tags)
+  ) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'tags must be an object of string values'
+    );
+  }
 
   const updated = await updateMemory({
     id: ctx.params.memory_id,

@@ -201,7 +201,7 @@ echo "AI_PROVIDER_ID: $AI_PROVIDER_ID"
 
 ## Step 4 — Create a memory
 
-A [Memory](/docs/modules/memories#key-concepts) is a named container of text entries; `tags` let an agent search a subset of a project's memories.
+A [Memory](/docs/modules/memories#key-concepts) is a named container of text entries; key-value `tags` let an agent search a subset of a project's memories.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -211,7 +211,7 @@ MEMORY_ID=$(soat create-memory \
   --project-id "$PROJECT_ID" \
   --name "Alice Profile" \
   --description "Facts about customer Alice gathered during support interactions" \
-  --tags '["alice","customer"]' | jq -r '.id')
+  --tags '{"customer":"alice","kind":"profile"}' | jq -r '.id')
 echo "MEMORY_ID: $MEMORY_ID"
 ```
 
@@ -226,7 +226,7 @@ const { data: memory } = await Memories.createMemory({
     name: 'Alice Profile',
     description:
       'Facts about customer Alice gathered during support interactions',
-    tags: ['alice', 'customer'],
+    tags: { customer: 'alice', kind: 'profile' },
   },
 });
 const MEMORY_ID = memory.id;
@@ -239,7 +239,7 @@ const MEMORY_ID = memory.id;
 MEMORY_ID=$(curl -s -X POST "$SOAT_URL/api/v1/memories" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"Alice Profile\",\"description\":\"Facts about customer Alice gathered during support interactions\",\"tags\":[\"alice\",\"customer\"]}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"Alice Profile\",\"description\":\"Facts about customer Alice gathered during support interactions\",\"tags\":{\"customer\":\"alice\",\"kind\":\"profile\"}}" \
   | jq -r '.id')
 echo "MEMORY_ID: $MEMORY_ID"
 ```
@@ -1020,6 +1020,6 @@ Provenance is set at creation and never rewritten by a later merge. A contradict
 
 ## What's next
 
-- **Tag-based filtering** — one memory per customer, `memory_tags` on the agent.
+- **Tag-based filtering** — one memory per customer, `tags` on the agent.
 - **Dedup threshold** — `duplicate_threshold` sets how close a fact must be to be skipped ([Memories](/docs/modules/memories#write-algorithm)).
 - **Audit what an agent was told** — pair provenance ids with the injected `<knowledge>` block ([Agents — Knowledge Config](/docs/modules/agents#knowledge-config)), whose source tags name the entry and document page behind each line.

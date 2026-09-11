@@ -70,7 +70,7 @@ describe('Knowledge', () => {
       .send({
         project_id: projectId,
         name: 'Knowledge Test Memory',
-        tags: ['knowledge-test'],
+        tags: { scope: 'knowledge-test' },
       });
     memoryId = memoryRes.body.id;
     await authenticatedTestClient(adminToken)
@@ -265,6 +265,143 @@ describe('Knowledge', () => {
           return r.path === '/scalar-probe/scalar.txt';
         })
       ).toBe(true);
+    });
+
+    describe('tags', () => {
+      beforeAll(async () => {
+        for (const doc of [
+          { name: 'finance-prod', tags: { team: 'finance', env: 'prod' } },
+          { name: 'finance-dev', tags: { team: 'finance', env: 'dev' } },
+          { name: 'sales-prod', tags: { team: 'sales', env: 'prod' } },
+          { name: 'untagged', tags: undefined },
+        ]) {
+          const res = await authenticatedTestClient(userToken)
+            .post('/api/v1/documents')
+            .send({
+              project_id: projectId,
+              content: `Tag probe ${doc.name}.`,
+              filename: `${doc.name}.txt`,
+              path: `/tag-probe/${doc.name}.txt`,
+              tags: doc.tags,
+            });
+          expect(res.status).toBe(201);
+        }
+      });
+
+      const pathsOf = (results: { path?: string }[]) => {
+        return results
+          .map((r) => {
+            return r.path;
+          })
+          .filter((p) => {
+            return p?.startsWith('/tag-probe/');
+          })
+          .sort();
+      };
+
+      test('filters documents by a single tag pair', async () => {
+        const response = await authenticatedTestClient(userToken)
+          .post('/api/v1/knowledge/search')
+          .send({ project_id: projectId, tags: { team: 'finance' } });
+        expect(response.status).toBe(200);
+        expect(pathsOf(response.body.results)).toEqual([
+          '/tag-probe/finance-dev.txt',
+          '/tag-probe/finance-prod.txt',
+        ]);
+      });
+
+      test('ANDs multiple tag pairs', async () => {
+        const response = await authenticatedTestClient(userToken)
+          .post('/api/v1/knowledge/search')
+          .send({
+            project_id: projectId,
+            tags: { team: 'finance', env: 'prod' },
+          });
+        expect(response.status).toBe(200);
+        expect(pathsOf(response.body.results)).toEqual([
+          '/tag-probe/finance-prod.txt',
+        ]);
+      });
+
+      test('matches values exactly and case-sensitively', async () => {
+        const response = await authenticatedTestClient(userToken)
+          .post('/api/v1/knowledge/search')
+          .send({ project_id: projectId, tags: { team: 'Finance' } });
+        expect(response.status).toBe(200);
+        expect(pathsOf(response.body.results)).toEqual([]);
+      });
+
+      test('intersects with document_paths and query', async () => {
+        const response = await authenticatedTestClient(userToken)
+          .post('/api/v1/knowledge/search')
+          .send({
+            project_id: projectId,
+            query: 'tag probe',
+            document_paths: ['/tag-probe/'],
+            tags: { env: 'prod' },
+          });
+        expect(response.status).toBe(200);
+        expect(pathsOf(response.body.results)).toEqual([
+          '/tag-probe/finance-prod.txt',
+          '/tag-probe/sales-prod.txt',
+        ]);
+      });
+
+      test('one tags filter matches documents and memory entries together', async () => {
+        // The point of unifying the filter: a single `tags` bag reaches both
+        // stores in one search, which no pre-unification filter could do.
+        const memoryRes = await authenticatedTestClient(adminToken)
+          .post('/api/v1/memories')
+          .send({
+            project_id: projectId,
+            name: 'Cross-source Tag Memory',
+            tags: { team: 'finance', env: 'prod' },
+          });
+        await authenticatedTestClient(adminToken)
+          .post('/api/v1/memory-entries')
+          .send({
+            memory_id: memoryRes.body.id,
+            content: 'Finance closes the books on the third business day.',
+          });
+
+        const response = await authenticatedTestClient(adminToken)
+          .post('/api/v1/knowledge/search')
+          .send({
+            project_id: projectId,
+            tags: { team: 'finance', env: 'prod' },
+            limit: 50,
+          });
+
+        expect(response.status).toBe(200);
+        const sources = new Set(
+          response.body.results.map((r: { source_type: string }) => {
+            return r.source_type;
+          })
+        );
+        expect(sources.has('document')).toBe(true);
+        expect(sources.has('memory')).toBe(true);
+      });
+
+      test('returns 400 when tags is not an object of strings', async () => {
+        for (const bad of [
+          ['team'],
+          'team=finance',
+          { team: 1 },
+          { team: null },
+        ]) {
+          const response = await authenticatedTestClient(userToken)
+            .post('/api/v1/knowledge/search')
+            .send({ project_id: projectId, tags: bad });
+          expect(response.status).toBe(400);
+        }
+      });
+
+      test('ignores an empty tags object as a filter', async () => {
+        const response = await authenticatedTestClient(userToken)
+          .post('/api/v1/knowledge/search')
+          .send({ project_id: projectId, tags: {} });
+        expect(response.status).toBe(400);
+      });
     });
 
     test('returns 403 when user has no permission', async () => {
@@ -478,12 +615,12 @@ describe('Knowledge', () => {
       expect(memoryHits).toHaveLength(0);
     });
 
-    test('returns memory entries when searching by memory_tags', async () => {
+    test('returns memory entries when searching by tags', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/knowledge/search')
         .send({
           project_id: projectId,
-          memory_tags: ['knowledge-test'],
+          tags: { scope: 'knowledge-test' },
         });
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body.results)).toBe(true);
@@ -496,13 +633,13 @@ describe('Knowledge', () => {
       expect(memResult.source_type).toBe('memory');
     });
 
-    test('returns memory entries when searching by memory_tags without a project_id (admin, cross-project)', async () => {
+    test('returns memory entries when searching by tags without a project_id (admin, cross-project)', async () => {
       // An admin JWT with no project_id resolves to `undefined`, exercising the
       // unscoped branch — every other test here passes an explicit project_id.
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/knowledge/search')
         .send({
-          memory_tags: ['knowledge-test'],
+          tags: { scope: 'knowledge-test' },
         });
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body.results)).toBe(true);
@@ -515,7 +652,7 @@ describe('Knowledge', () => {
       expect(memResult.memory_id).toBe(memoryId);
     });
 
-    test('memory_tags filters at entry granularity via per-entry tags', async () => {
+    test('tags filter at entry granularity via per-entry tags', async () => {
       // A memory container whose OWN tags do NOT match the searched tag, but
       // holding one entry tagged with it. Entry-granularity filtering must
       // return only that entry, proving the tag match happens per entry rather
@@ -525,7 +662,7 @@ describe('Knowledge', () => {
         .send({
           project_id: projectId,
           name: 'Entry-tag Memory',
-          tags: ['unrelated-container-tag'],
+          tags: { container: 'unrelated' },
         });
       const containerId = containerRes.body.id;
 
@@ -534,14 +671,14 @@ describe('Knowledge', () => {
         .send({
           memory_id: containerId,
           content: 'Reject refunds above $500 for the traffic-manager role',
-          tags: ['role:traffic-manager'],
+          tags: { role: 'traffic-manager' },
         });
 
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/knowledge/search')
         .send({
           project_id: projectId,
-          memory_tags: ['role:traffic-manager'],
+          tags: { role: 'traffic-manager' },
         });
 
       expect(response.status).toBe(200);

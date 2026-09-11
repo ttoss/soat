@@ -1017,10 +1017,6 @@ components:
               type: array
               items:
                 type: string
-            memory_tags:
-              type: array
-              items:
-                type: string
             document_ids:
               x-soat-ref: documents
               type: array
@@ -1030,6 +1026,13 @@ components:
               type: array
               items:
                 type: string
+            tags:
+              type: object
+              additionalProperties:
+                type: string
+              description: >-
+                Key-value pairs a result's own `tags` must all contain (exact
+                match). Scopes documents and memory entries alike.
             min_score:
               type: number
             limit:
@@ -1382,10 +1385,6 @@ components:
               type: array
               items:
                 type: string
-            memory_tags:
-              type: array
-              items:
-                type: string
             document_ids:
               x-soat-ref: documents
               type: array
@@ -1395,6 +1394,13 @@ components:
               type: array
               items:
                 type: string
+            tags:
+              type: object
+              additionalProperties:
+                type: string
+              description: >-
+                Key-value pairs a result's own `tags` must all contain (exact
+                match). Scopes documents and memory entries alike.
             min_score:
               type: number
             limit:
@@ -1570,10 +1576,6 @@ components:
               type: array
               items:
                 type: string
-            memory_tags:
-              type: array
-              items:
-                type: string
             document_ids:
               x-soat-ref: documents
               type: array
@@ -1583,6 +1585,13 @@ components:
               type: array
               items:
                 type: string
+            tags:
+              type: object
+              additionalProperties:
+                type: string
+              description: >-
+                Key-value pairs a result's own `tags` must all contain (exact
+                match). Scopes documents and memory entries alike.
             min_score:
               type: number
             limit:
@@ -1777,14 +1786,10 @@ components:
         knowledge_config:
           type: object
           nullable: true
-          description: Per-generation knowledge retrieval override. Array filters (memory_ids, memory_tags, document_ids, document_paths) are unioned with the agent's stored knowledge_config; scalar fields (min_score, limit) use the per-generation value when present.
+          description: Per-generation knowledge retrieval override. Array filters (memory_ids, document_ids, document_paths) are unioned with the agent's stored knowledge_config; `tags` pairs are merged with the override winning per key; scalar fields (min_score, limit) use the per-generation value when present.
           properties:
             memory_ids:
               x-soat-ref: memories
-              type: array
-              items:
-                type: string
-            memory_tags:
               type: array
               items:
                 type: string
@@ -1797,6 +1802,13 @@ components:
               type: array
               items:
                 type: string
+            tags:
+              type: object
+              additionalProperties:
+                type: string
+              description: >-
+                Key-value pairs a result's own `tags` must all contain (exact
+                match). Scopes documents and memory entries alike.
             min_score:
               type: number
             limit:

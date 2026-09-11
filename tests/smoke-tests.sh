@@ -836,7 +836,8 @@ DOC2_RESP=$($SOAT_CLI create-document \
   --project_id "$PROJECT_PUBLIC_ID" \
   --content "Machine learning models require large amounts of training data" \
   --filename ml.txt \
-  --path /tech/ml.txt)
+  --path /tech/ml.txt \
+  --tags '{"topic":"ml","env":"smoke"}')
 DOC2_ID=$(printf '%s\n' "$DOC2_RESP" | jq -r '.id')
 echo "Document 2 id: $DOC2_ID"
 
@@ -874,6 +875,19 @@ if [ "$PATH_SEARCH_COUNT" -lt 1 ]; then
   exit 1
 fi
 echo "Path-prefix search returned $PATH_SEARCH_COUNT result(s): OK"
+
+# 11d. Search knowledge by tags (document side)
+echo "--- Search knowledge by tags (documents) ---"
+TAG_SEARCH_RESP=$($SOAT_CLI search-knowledge \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --tags '{"topic":"ml","env":"smoke"}')
+TAG_SEARCH_IDS=$(printf '%s\n' "$TAG_SEARCH_RESP" | jq -r '[.results[] | select(.source_type == "document") | .document_id] | unique | join(",")')
+if [ "$TAG_SEARCH_IDS" != "$DOC2_ID" ]; then
+  echo "ERROR: tags search expected only $DOC2_ID, got '$TAG_SEARCH_IDS'" >&2
+  echo "$TAG_SEARCH_RESP" >&2
+  exit 1
+fi
+echo "Tag search returned only the tagged document: OK"
 
 # 12. Search knowledge
 echo "--- Searching knowledge ---"
@@ -1346,17 +1360,17 @@ echo "--- Memory entries: write with tags and metadata ---"
 ME_TAG_RESP=$($SOAT_CLI create-memory-entry \
   --memory-id "$MEM_ID" \
   --content "Smoke test reject refunds above 500 for the traffic-manager role" \
-  --tags '["role:smoke-traffic-manager", "source:rejected_approval"]' \
+  --tags '{"role":"smoke-traffic-manager","source":"rejected_approval","env":"smoke"}' \
   --metadata '{"evidence": "high"}')
 ME_TAG_ACTION=$(printf '%s\n' "$ME_TAG_RESP" | jq -r '.action')
-ME_TAG_TAG0=$(printf '%s\n' "$ME_TAG_RESP" | jq -r '.tags[0]')
+ME_TAG_ROLE=$(printf '%s\n' "$ME_TAG_RESP" | jq -r '.tags.role')
 ME_TAG_META=$(printf '%s\n' "$ME_TAG_RESP" | jq -r '.metadata.evidence')
 if [ "$ME_TAG_ACTION" != "created" ]; then
   echo "ERROR: Expected action=created for tagged entry, got $ME_TAG_ACTION" >&2
   echo "$ME_TAG_RESP" >&2
   exit 1
 fi
-if [ "$ME_TAG_TAG0" != "role:smoke-traffic-manager" ] || [ "$ME_TAG_META" != "high" ]; then
+if [ "$ME_TAG_ROLE" != "smoke-traffic-manager" ] || [ "$ME_TAG_META" != "high" ]; then
   echo "ERROR: tagged entry did not persist tags/metadata" >&2
   echo "$ME_TAG_RESP" >&2
   exit 1
@@ -1404,10 +1418,10 @@ if [ "$ME_INVAL_COUNT" -ne "$ME_LIST_COUNT" ]; then
 fi
 echo "include_invalidated listing returned $ME_INVAL_COUNT entries."
 
-echo "--- Knowledge search via per-entry memory_tags (entry granularity) ---"
+echo "--- Knowledge search via per-entry tags (entry granularity) ---"
 KS_TAG_RESP=$($SOAT_CLI search-knowledge \
   --project-id "$PROJECT_PUBLIC_ID" \
-  --memory-tags '["role:smoke-traffic-manager"]')
+  --tags '{"role":"smoke-traffic-manager"}')
 KS_TAG_MATCH=$(printf '%s\n' "$KS_TAG_RESP" | jq -r '[.results[] | select(.source_type == "memory")] | length')
 if [ "$KS_TAG_MATCH" -lt 1 ]; then
   echo "ERROR: entry-tag knowledge search returned 0 memory results" >&2
@@ -1415,6 +1429,29 @@ if [ "$KS_TAG_MATCH" -lt 1 ]; then
   exit 1
 fi
 echo "Entry-granularity tag search returned $KS_TAG_MATCH memory result(s)."
+
+# One `tags` bag reaches both stores — the point of unifying the filter. The
+# section-11 documents are already deleted by here, so this makes its own.
+echo "--- Knowledge search: one tags bag spans documents and memory ---"
+XSRC_DOC_RESP=$($SOAT_CLI create-document \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --content "Cross-source tag probe document." \
+  --filename "cross-source.txt" \
+  --path "/cross-source/probe.txt" \
+  --tags '{"env":"smoke"}')
+XSRC_DOC_ID=$(printf '%s\n' "$XSRC_DOC_RESP" | jq -r '.id')
+KS_BOTH_RESP=$($SOAT_CLI search-knowledge \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --tags '{"env":"smoke"}' \
+  --limit 50)
+KS_BOTH_SOURCES=$(printf '%s\n' "$KS_BOTH_RESP" | jq -r '[.results[].source_type] | unique | sort | join(",")')
+if [ "$KS_BOTH_SOURCES" != "document,memory" ]; then
+  echo "ERROR: cross-source tag search expected document,memory got '$KS_BOTH_SOURCES'" >&2
+  echo "$KS_BOTH_RESP" >&2
+  exit 1
+fi
+$SOAT_CLI delete-document --document-id "$XSRC_DOC_ID" >/dev/null
+echo "One tags bag returned both document and memory results: OK"
 
 echo "--- Knowledge search via memory_ids ---"
 KS_RESP=$($SOAT_CLI search-knowledge \

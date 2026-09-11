@@ -13,7 +13,9 @@ import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
  */
 const PRE_SINGLE_CASING_CONFIG = {
   memoryIds: ['mem_seed'],
-  memoryTags: ['tag1'],
+  // `tags` has no camelCase spelling to rewrite, so it must survive the pass
+  // untouched — the case a rename map gets wrong by over-reaching.
+  tags: { team: 'finance' },
   documentIds: ['doc_1'],
   documentPaths: ['/docs/'],
   minScore: 0.4,
@@ -29,7 +31,7 @@ const PRE_SINGLE_CASING_CONFIG = {
 
 const WIRE_CONFIG = {
   memory_ids: ['mem_seed'],
-  memory_tags: ['tag1'],
+  tags: { team: 'finance' },
   document_ids: ['doc_1'],
   document_paths: ['/docs/'],
   min_score: 0.4,

@@ -14,6 +14,7 @@ import {
   updateMemoryEntry,
   writeMemoryEntry,
 } from 'src/lib/memoryEntries';
+import { isStringRecord } from 'src/lib/tags';
 
 import { parsePagination, requireAuth } from './helpers';
 
@@ -23,15 +24,6 @@ const normalizeSourceType = (value: unknown): MemoryEntrySource | undefined => {
   return MEMORY_ENTRY_SOURCES.includes(value as MemoryEntrySource)
     ? (value as MemoryEntrySource)
     : undefined;
-};
-
-const isStringArray = (value: unknown): value is string[] => {
-  return (
-    Array.isArray(value) &&
-    value.every((v) => {
-      return typeof v === 'string';
-    })
-  );
 };
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> => {
@@ -53,9 +45,9 @@ const validateTagsMetadata = (
   if (
     body.tags !== undefined &&
     !nullable(body.tags) &&
-    !isStringArray(body.tags)
+    !isStringRecord(body.tags)
   ) {
-    return 'tags must be an array of strings';
+    return 'tags must be an object of string values';
   }
   if (
     body.metadata !== undefined &&
@@ -188,7 +180,7 @@ memoryEntriesRouter.post('/memory-entries', async (ctx: Context) => {
     memoryId: memoryRowId,
     content: body.content,
     sourceType: normalizeSourceType(body.source_type) ?? 'manual',
-    tags: isStringArray(body.tags) ? body.tags : undefined,
+    tags: isStringRecord(body.tags) ? body.tags : undefined,
     metadata: isPlainObject(body.metadata) ? body.metadata : undefined,
     duplicateThreshold: body.duplicate_threshold,
   });
@@ -234,7 +226,10 @@ memoryEntriesRouter.put('/memory-entries/:entry_id', async (ctx: Context) => {
   ctx.body = await updateMemoryEntry({
     id: ctx.params.entry_id,
     content: body.content,
-    tags: body.tags === undefined ? undefined : (body.tags as string[] | null),
+    tags:
+      body.tags === undefined
+        ? undefined
+        : (body.tags as Record<string, string> | null),
     metadata:
       body.metadata === undefined
         ? undefined

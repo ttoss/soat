@@ -79,7 +79,7 @@ Create one [Memory](./memories.md) per end user (keyed by `external_id`, for ins
 }
 ```
 
-`memory_ids` and `memory_tags` are **unioned** with the agent's stored config, so a per-actor memory extends the shared scope. Without a mapping table, tag the memory (`tags`) or name it after the `external_id` and look it up with [`GET /memories`](/docs/api/memories/list-memories).
+`memory_ids` is **unioned** with the agent's stored config and `tags` pairs are merged, so a per-actor memory extends the shared scope. Without a mapping table, tag the memory (`tags`, e.g. `{ "actor": "<external_id>" }`) or name it after the `external_id` and look it up with [`GET /memories`](/docs/api/memories/list-memories).
 
 Deleting an actor deletes nothing in any memory.
 

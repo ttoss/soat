@@ -235,7 +235,7 @@ describe('formationsResourceHandlers', () => {
         resolvedProperties: {
           name: 'frh-create-memory',
           description: 'Important facts',
-          tags: ['core', 'shared'],
+          tags: { scope: 'core', visibility: 'shared' },
         },
       });
 
@@ -244,7 +244,7 @@ describe('formationsResourceHandlers', () => {
       expect(read).toMatchObject({
         name: 'frh-create-memory',
         description: 'Important facts',
-        tags: ['core', 'shared'],
+        tags: { scope: 'core', visibility: 'shared' },
       });
     });
 
