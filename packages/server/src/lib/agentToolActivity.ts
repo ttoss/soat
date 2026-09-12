@@ -108,3 +108,52 @@ export const recordToolActivity = (args: {
   }
   return recorded;
 };
+
+/**
+ * Records that a tool binding resolved to nothing because its source could not
+ * be reached — an unreachable MCP server, most often.
+ *
+ * The resolver drops such a binding rather than failing the turn, which is the
+ * right call (one flaky server must not take an agent down) but used to be
+ * indistinguishable from an agent that simply has no tools: the generation
+ * completed, carried no warning and no error, and answered without the tools it
+ * was configured to have. That is a correctness problem, not a cost one, and it
+ * is only visible here — the prompt is the one place the absence shows, and
+ * nobody reads the prompt.
+ *
+ * Fire-and-forget like the execution recording beside it: a feed hiccup must
+ * not fail a turn that is otherwise fine.
+ */
+export const recordToolResolutionFailure = (args: {
+  toolId: string | null;
+  toolType: string;
+  toolName: string;
+  reason: string;
+  activity?: ActivityCallContext;
+}): void => {
+  const { activity } = args;
+  if (!activity) return;
+
+  log(
+    'recordToolResolutionFailure: agentId=%s toolName=%s reason=%s',
+    activity.agentId,
+    args.toolName,
+    args.reason
+  );
+
+  void emitActivityEntry({
+    projectId: activity.projectId,
+    kind: 'tool_resolution_failed',
+    summary: `Tool '${args.toolName}' could not be resolved for agent '${activity.agentId}' and was left out of the turn`,
+    detail: {
+      toolId: args.toolId,
+      toolType: args.toolType,
+      toolName: args.toolName,
+      reason: args.reason,
+      generationId: activity.generationId ?? null,
+    },
+    orchestrationRunId: activity.orchestrationRunId ?? null,
+    agentId: activity.agentId,
+    refId: args.toolId,
+  });
+};

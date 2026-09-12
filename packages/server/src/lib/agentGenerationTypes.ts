@@ -45,6 +45,7 @@ export type TypedAgent = {
   temperature: unknown;
   knowledgeConfig: unknown;
   outputSchema: unknown;
+  promptCaching: unknown;
   guardrailIds?: string[] | null;
   /**
    * Internal row id of the live agent. Present on a row loaded from the DB;
@@ -127,6 +128,10 @@ export const fromAgentConfig = (pending: PendingGeneration): TypedAgent => {
     boundaryPolicy: null,
     temperature: pending.agentConfig.temperature,
     knowledgeConfig: null,
+    // The cache breakpoint was marked when the paused turn's history was
+    // assembled and is persisted on it, so a continuation replays the mark
+    // rather than re-deriving it from a config that may have changed since.
+    promptCaching: null,
     outputSchema: pending.agentConfig.outputSchema,
     project: { id: pending.projectId, publicId: pending.projectPublicId },
     aiProvider: { publicId: '' },

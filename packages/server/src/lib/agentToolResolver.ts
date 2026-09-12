@@ -13,15 +13,14 @@ import { DomainError } from '../errors';
 import {
   type ActivityCallContext,
   recordToolActivity,
+  recordToolResolutionFailure,
 } from './agentToolActivity';
 import {
   gateResolvedToolsWithGuardrails,
   type ResolverGuardrailContext,
 } from './agentToolGuardrail';
-import {
-  resolveMcpTools,
-  resolveSoatTools,
-} from './agentToolResolverExternalTools';
+import { resolveSoatTools } from './agentToolResolverExternalTools';
+import { resolveMcpTools } from './agentToolResolverMcp';
 import { HttpToolError } from './httpToolError';
 import { applyToolOutputMapping } from './jsonLogicMapping';
 import { isPlainObject } from './plainObject';
@@ -753,7 +752,8 @@ const resolveClientTool = (
 
 const resolveMcpToolEntry = async (
   typedTool: AgentToolRow,
-  toolContext?: Record<string, string>
+  toolContext?: Record<string, string>,
+  activity?: ActivityCallContext
 ): Promise<Record<string, Tool>> => {
   if (!typedTool.mcp?.url) return {};
   try {
@@ -781,6 +781,15 @@ const resolveMcpToolEntry = async (
       toolContext,
       buildContextHeaders,
       logToolCallingError,
+      reportResolutionFailure: ({ reason }) => {
+        recordToolResolutionFailure({
+          toolId: typedTool.publicId,
+          toolType: typedTool.type,
+          toolName: typedTool.name,
+          reason,
+          activity,
+        });
+      },
     });
   } catch (error) {
     // The swallow is for an unreachable MCP server, not a missing
@@ -792,7 +801,17 @@ const resolveMcpToolEntry = async (
     ) {
       throw error;
     }
-    // Network errors resolving MCP tools should not abort entire resolution
+    // What is left here is a binding that never reached the network — an
+    // unresolvable `{{secret:...}}` in the URL or a header template. Dropped
+    // like an unreachable server, and recorded for the same reason: from every
+    // read surface it is indistinguishable from an agent with no tools.
+    recordToolResolutionFailure({
+      toolId: typedTool.publicId,
+      toolType: typedTool.type,
+      toolName: typedTool.name,
+      reason: error instanceof Error ? error.message : String(error),
+      activity,
+    });
     return {};
   }
 };
@@ -959,6 +978,7 @@ const resolveToolByType = async (
     rootTraceId?: string | null;
     remainingDepth?: number;
     projectPublicId?: string;
+    activity?: ActivityCallContext;
   }
 ): Promise<Record<string, Tool>> => {
   const toolType = typedTool.type;
@@ -992,7 +1012,7 @@ const resolveToolByType = async (
         }),
       };
     case 'mcp':
-      return resolveMcpToolEntry(typedTool, args.toolContext);
+      return resolveMcpToolEntry(typedTool, args.toolContext, args.activity);
     case 'builtin':
       return resolveSoatTools({
         typedTool,
@@ -1127,6 +1147,7 @@ type ResolveToolByTypeArgs = {
   parentTraceId?: string | null;
   rootTraceId?: string | null;
   remainingDepth?: number;
+  activity?: ActivityCallContext;
 };
 
 // Resolves one persisted-tool binding into its (output-mapped, optionally
@@ -1148,7 +1169,10 @@ const resolveReferenceBinding = async (args: {
   if (!agentTool) return {};
 
   const typedTool = agentTool as unknown as AgentToolRow;
-  const resolved = await resolveToolByType(typedTool, args.resolveArgs);
+  const resolved = await resolveToolByType(typedTool, {
+    ...args.resolveArgs,
+    activity: args.activity,
+  });
   // Activity recording sits innermost, so it only fires for a call that actually
   // reached (and returned from) the tool — see `recordToolActivity`.
   const tools = recordToolActivity({

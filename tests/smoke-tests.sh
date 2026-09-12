@@ -2782,6 +2782,26 @@ AGENT_RESP=$($SOAT_CLI create-agent \
 AGENT_ID=$(printf '%s\n' "$AGENT_RESP" | jq -r '.id')
 echo "Agent id: $AGENT_ID"
 
+# 20b. Prompt caching is a config toggle, not a generation-visible one: Ollama
+# ignores the breakpoint, so this asserts the flag round-trips and that a
+# misspelled key is refused rather than stored inert.
+echo "--- Agent prompt caching toggle ---"
+CACHING_AGENT_RESP=$($SOAT_CLI patch-agent --agent-id "$AGENT_ID" \
+  --prompt_caching '{"enabled":true}')
+if [ "$(printf '%s\n' "$CACHING_AGENT_RESP" | jq -r '.prompt_caching.enabled')" != "true" ]; then
+  echo "ERROR: patch-agent did not persist prompt_caching" >&2
+  printf '%s\n' "$CACHING_AGENT_RESP" >&2
+  exit 1
+fi
+
+expect_cli_error_status 400 patch-agent --agent-id "$AGENT_ID" \
+  --prompt_caching '{"enable":true}'
+
+# Left enabled on purpose: the generation below then also proves that an agent
+# asking for caching still runs normally through a provider that ignores the
+# breakpoint.
+echo "Prompt caching toggle OK"
+
 # 21. Run the agent — ask it to list projects (non-streaming)
 echo "--- Running agent generation ---"
 GEN_RESP=$($SOAT_CLI create-agent-generation --wait true --agent-id "$AGENT_ID" \

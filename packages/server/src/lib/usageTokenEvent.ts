@@ -21,6 +21,7 @@ export type UsageTokens = {
   inputTokens: number;
   outputTokens: number;
   cachedTokens: number;
+  cacheWriteTokens: number;
   reasoningTokens: number;
 };
 
@@ -37,6 +38,7 @@ export const extractUsageTokens = (
       inputTokens: 0,
       outputTokens: 0,
       cachedTokens: 0,
+      cacheWriteTokens: 0,
       reasoningTokens: 0,
     };
   }
@@ -44,9 +46,13 @@ export const extractUsageTokens = (
     inputTokens: usage.inputTokens ?? 0,
     outputTokens: usage.outputTokens ?? 0,
     cachedTokens: usage.inputTokenDetails?.cacheReadTokens ?? 0,
+    cacheWriteTokens: usage.inputTokenDetails?.cacheWriteTokens ?? 0,
     reasoningTokens: usage.outputTokenDetails?.reasoningTokens ?? 0,
   };
 };
+
+/** The components that price against `input_tokens` when they have no row. */
+const CACHE_COMPONENTS = new Set(['cached_tokens', 'cache_write_tokens']);
 
 export type PricedComponent = TokenComponent & {
   unitPrice: string | null;
@@ -55,8 +61,11 @@ export type PricedComponent = TokenComponent & {
 };
 
 // Priced at write time from the row effective now, most-specific first:
-// provider instance → project + slug → global. `cached_tokens` falls back to
-// the `input_tokens` rate, i.e. no cache discount.
+// provider instance → project + slug → global. Both cache dimensions fall back
+// to the `input_tokens` rate — no discount on a read, no surcharge on a write —
+// so an unpriced cache column meters at the plain input rate rather than
+// silently at zero, which would understate `cost_usd` without ever showing a
+// gap.
 const priceComponent = async (args: {
   component: TokenComponent;
   provider: string;
@@ -80,7 +89,7 @@ const priceComponent = async (args: {
     ...lookup,
     component: args.component.component,
   });
-  if (!price && args.component.component === 'cached_tokens') {
+  if (!price && CACHE_COMPONENTS.has(args.component.component)) {
     price = await getEffectivePrice({ ...lookup, component: 'input_tokens' });
   }
 

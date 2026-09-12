@@ -57,6 +57,7 @@ paths:
                 approval_resolved,
                 exception_created,
                 schedule_fired,
+                tool_resolution_failed,
               ]
         - name: severity
           in: query
@@ -128,8 +129,14 @@ components:
               approval_resolved,
               exception_created,
               schedule_fired,
+              tool_resolution_failed,
             ]
-          description: How the entry was produced
+          description: >-
+            How the entry was produced. `tool_resolution_failed` means a tool
+            binding's source could not be reached (an unreachable MCP server,
+            most often) and the turn ran without it — the generation itself
+            completes, carrying no error, so this is the only signal that it
+            answered with fewer tools than it was configured to have.
         severity:
           type: string
           enum: [info, warning, critical]

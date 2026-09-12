@@ -533,6 +533,7 @@ describe('Usage', () => {
         input_tokens: 0,
         output_tokens: 0,
         cached_tokens: 0,
+        cache_write_tokens: 0,
         reasoning_tokens: 0,
       });
     });

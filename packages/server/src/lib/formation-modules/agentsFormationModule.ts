@@ -133,6 +133,7 @@ const mapAgentProperties = (properties: Record<string, unknown>) => {
       toStoredKnowledgeConfig(properties.knowledge_config)
     ),
     outputSchema: toOptional(toNullableObject(properties.output_schema)),
+    promptCaching: toOptional(toNullableObject(properties.prompt_caching)),
   };
 };
 
@@ -196,6 +197,7 @@ export const agentsFormationModule = defineFormationModule({
       traceContentMode: toNullableString(properties.trace_content_mode),
       knowledgeConfig: toStoredKnowledgeConfig(properties.knowledge_config),
       outputSchema: toNullableObject(properties.output_schema),
+      promptCaching: toNullableObject(properties.prompt_caching),
     });
   },
 
@@ -238,6 +240,7 @@ export const agentsFormationModule = defineFormationModule({
       trace_content_mode: agent.trace_content_mode,
       knowledge_config: agent.knowledge_config,
       output_schema: agent.output_schema,
+      prompt_caching: agent.prompt_caching,
     };
   },
 });

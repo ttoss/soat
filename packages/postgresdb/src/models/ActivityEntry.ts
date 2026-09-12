@@ -70,7 +70,8 @@ export class ActivityEntry extends Model {
       'approval_created',
       'approval_resolved',
       'exception_created',
-      'schedule_fired'
+      'schedule_fired',
+      'tool_resolution_failed'
     ),
     allowNull: false,
   })
@@ -79,7 +80,8 @@ export class ActivityEntry extends Model {
     | 'approval_created'
     | 'approval_resolved'
     | 'exception_created'
-    | 'schedule_fired';
+    | 'schedule_fired'
+    | 'tool_resolution_failed';
 
   // ExceptionItem's vocabulary, so the two surfaces stay consistent.
   @Column({

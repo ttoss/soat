@@ -136,6 +136,7 @@ const archivedConfigToUpdateArgs = (config: AgentConfigSnapshot) => {
     temperature: configNumber(config.temperature),
     knowledgeConfig: configObject(config.knowledge_config),
     outputSchema: configObject(config.output_schema),
+    promptCaching: configObject(config.prompt_caching),
     maxContextMessages: configNumber(config.max_context_messages),
     singleSessionPerActor: configBoolean(config.single_session_per_actor),
     guardrailIds: configArray<string>(config.guardrail_ids),

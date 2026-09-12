@@ -1064,6 +1064,24 @@ components:
           type: object
           nullable: true
           description: 'JSON Schema describing the structured object the model must return. When set, non-streaming generations constrain output to this schema and the parsed value is returned as `output.object`. The schema is enforced on the way back, not just sent to the model: an object that violates it fails the generation with 502 `OUTPUT_SCHEMA_VALIDATION_FAILED`, naming the violated field. Constraints beyond `required`/`type` (`minLength`, `enum`, `pattern`, `minItems`) are honored and are what reject a structurally valid but degenerate answer. See the Structured Output section in the Agents module docs.'
+        prompt_caching:
+          type: object
+          nullable: true
+          description: >-
+            Prompt caching for this agent's turns. `{"enabled": true}` marks a
+            cache breakpoint at the end of the turn's static prefix — the tool
+            definitions and the instructions together — so a provider that
+            caches by explicit breakpoint reads that prefix back on every later
+            step of the turn and every later turn of the session instead of
+            being charged for it again. Null or omitted is off: a cache write
+            costs more than an uncached token, so an agent whose prefix is never
+            re-read would pay for the privilege. An agent with no `instructions`
+            has no block to mark and caches nothing. Cache reads are reported as
+            `cached_tokens` and cache writes as `cache_write_tokens` on usage.
+          properties:
+            enabled:
+              type: boolean
+              description: Whether the breakpoint is marked. Defaults to false.
         max_context_messages:
           type: integer
           nullable: true
@@ -1431,6 +1449,24 @@ components:
           type: object
           nullable: true
           description: 'JSON Schema describing the structured object the model must return. When set, non-streaming generations constrain output to this schema and the parsed value is returned as `output.object`. The schema is enforced on the way back, not just sent to the model: an object that violates it fails the generation with 502 `OUTPUT_SCHEMA_VALIDATION_FAILED`, naming the violated field. Constraints beyond `required`/`type` (`minLength`, `enum`, `pattern`, `minItems`) are honored and are what reject a structurally valid but degenerate answer. See the Structured Output section in the Agents module docs.'
+        prompt_caching:
+          type: object
+          nullable: true
+          description: >-
+            Prompt caching for this agent's turns. `{"enabled": true}` marks a
+            cache breakpoint at the end of the turn's static prefix — the tool
+            definitions and the instructions together — so a provider that
+            caches by explicit breakpoint reads that prefix back on every later
+            step of the turn and every later turn of the session instead of
+            being charged for it again. Null or omitted is off: a cache write
+            costs more than an uncached token, so an agent whose prefix is never
+            re-read would pay for the privilege. An agent with no `instructions`
+            has no block to mark and caches nothing. Cache reads are reported as
+            `cached_tokens` and cache writes as `cache_write_tokens` on usage.
+          properties:
+            enabled:
+              type: boolean
+              description: Whether the breakpoint is marked. Defaults to false.
         max_context_messages:
           type: integer
           description: Maximum number of recent messages included in the context window. Null means no limit.
@@ -1621,6 +1657,24 @@ components:
           type: object
           nullable: true
           description: 'JSON Schema describing the structured object the model must return. When set, non-streaming generations constrain output to this schema and the parsed value is returned as `output.object`. The schema is enforced on the way back, not just sent to the model: an object that violates it fails the generation with 502 `OUTPUT_SCHEMA_VALIDATION_FAILED`, naming the violated field. Constraints beyond `required`/`type` (`minLength`, `enum`, `pattern`, `minItems`) are honored and are what reject a structurally valid but degenerate answer. See the Structured Output section in the Agents module docs.'
+        prompt_caching:
+          type: object
+          nullable: true
+          description: >-
+            Prompt caching for this agent's turns. `{"enabled": true}` marks a
+            cache breakpoint at the end of the turn's static prefix — the tool
+            definitions and the instructions together — so a provider that
+            caches by explicit breakpoint reads that prefix back on every later
+            step of the turn and every later turn of the session instead of
+            being charged for it again. Null or omitted is off: a cache write
+            costs more than an uncached token, so an agent whose prefix is never
+            re-read would pay for the privilege. An agent with no `instructions`
+            has no block to mark and caches nothing. Cache reads are reported as
+            `cached_tokens` and cache writes as `cache_write_tokens` on usage.
+          properties:
+            enabled:
+              type: boolean
+              description: Whether the breakpoint is marked. Defaults to false.
         max_context_messages:
           type: integer
           nullable: true

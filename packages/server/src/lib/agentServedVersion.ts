@@ -65,6 +65,7 @@ const buildTypedAgentFromConfig = (args: {
     temperature: configNumber(config.temperature),
     knowledgeConfig: configObject(config.knowledge_config),
     outputSchema: configObject(config.output_schema),
+    promptCaching: configObject(config.prompt_caching),
     guardrailIds: configArray<string>(config.guardrail_ids),
     project: live.project,
     aiProvider: joinRef(configString(config.ai_provider_id)),

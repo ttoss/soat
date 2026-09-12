@@ -4,26 +4,27 @@ import { extractUsageTokens } from 'src/lib/usage';
  * Pure mapping from the AI SDK `LanguageModelUsage` to the meter's token
  * columns. Covers the branches that are awkward to drive through a real
  * provider over HTTP: usage entirely absent, and a provider that reports
- * totals but omits the cached/reasoning breakdown (must record 0, not null).
+ * totals but omits the cache/reasoning breakdown (must record 0, not null).
  */
 describe('extractUsageTokens', () => {
-  test('maps input, output, cached, and reasoning tokens', () => {
+  test('maps input, output, cache reads, cache writes and reasoning tokens', () => {
     expect(
       extractUsageTokens({
-        inputTokens: 10,
+        inputTokens: 13,
         outputTokens: 20,
-        totalTokens: 30,
+        totalTokens: 33,
         inputTokenDetails: {
           noCacheTokens: 6,
           cacheReadTokens: 4,
-          cacheWriteTokens: 0,
+          cacheWriteTokens: 3,
         },
         outputTokenDetails: { textTokens: 13, reasoningTokens: 7 },
       })
     ).toEqual({
-      inputTokens: 10,
+      inputTokens: 13,
       outputTokens: 20,
       cachedTokens: 4,
+      cacheWriteTokens: 3,
       reasoningTokens: 7,
     });
   });
@@ -33,11 +34,12 @@ describe('extractUsageTokens', () => {
       inputTokens: 0,
       outputTokens: 0,
       cachedTokens: 0,
+      cacheWriteTokens: 0,
       reasoningTokens: 0,
     });
   });
 
-  test('records 0 cached/reasoning when the provider omits the breakdown', () => {
+  test('records 0 cache/reasoning counts when the provider omits the breakdown', () => {
     expect(
       extractUsageTokens({
         inputTokens: 5,
@@ -57,6 +59,7 @@ describe('extractUsageTokens', () => {
       inputTokens: 5,
       outputTokens: 8,
       cachedTokens: 0,
+      cacheWriteTokens: 0,
       reasoningTokens: 0,
     });
   });
@@ -81,6 +84,7 @@ describe('extractUsageTokens', () => {
       inputTokens: 0,
       outputTokens: 0,
       cachedTokens: 0,
+      cacheWriteTokens: 0,
       reasoningTokens: 0,
     });
   });

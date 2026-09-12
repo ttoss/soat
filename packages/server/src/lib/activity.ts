@@ -21,13 +21,16 @@ export type ActivityKind =
   | 'approval_created'
   | 'approval_resolved'
   | 'exception_created'
-  | 'schedule_fired';
+  | 'schedule_fired'
+  | 'tool_resolution_failed';
 
 /**
  * Default severity per kind, applied when a producer emits without an
  * explicit severity. `exception_created` defaults to `warning` because an
- * exception was already filed (an anomaly, by definition); the other kinds are
- * routine autonomous operation, an approval waiting on a human included.
+ * exception was already filed (an anomaly, by definition), and
+ * `tool_resolution_failed` because the turn ran without tools it was configured
+ * to have; the other kinds are routine autonomous operation, an approval
+ * waiting on a human included.
  */
 const DEFAULT_SEVERITY_BY_KIND: Record<ActivityKind, ActivitySeverity> = {
   action_executed: 'info',
@@ -35,6 +38,7 @@ const DEFAULT_SEVERITY_BY_KIND: Record<ActivityKind, ActivitySeverity> = {
   approval_resolved: 'info',
   exception_created: 'warning',
   schedule_fired: 'info',
+  tool_resolution_failed: 'warning',
 };
 
 type ActivityInstance = InstanceType<(typeof db)['ActivityEntry']> & {

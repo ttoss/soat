@@ -747,11 +747,17 @@ components:
           description: Sum of priced component costs; null when nothing was priced
         input_tokens:
           type: integer
-          description: Full prompt tokens (uncached input + cached), reconstructed from components
+          description: >-
+            Full prompt tokens — uncached input + `cached_tokens` +
+            `cache_write_tokens` — reconstructed from components.
         output_tokens:
           type: integer
         cached_tokens:
           type: integer
+          description: Prompt tokens served from the provider's prompt cache.
+        cache_write_tokens:
+          type: integer
+          description: Prompt tokens written into the provider's prompt cache.
         reasoning_tokens:
           type: integer
 

@@ -100,22 +100,31 @@ describe('priceCompute', () => {
   });
 
   describe('buildTokenComponents', () => {
-    test('splits input into uncached input + cached and keeps output', () => {
-      const components = buildTokenComponents({
-        inputTokens: 10,
-        outputTokens: 20,
-        cachedTokens: 4,
-        reasoningTokens: 7,
-      });
-      const byName = Object.fromEntries(
+    const byComponent = (
+      components: ReturnType<typeof buildTokenComponents>
+    ) => {
+      return Object.fromEntries(
         components.map((c) => {
           return [c.component, c];
         })
       );
-      // uncached input = 10 - 4
-      expect(byName.input_tokens.quantity).toBe(6);
+    };
+
+    test('splits input into uncached input, cache reads and cache writes', () => {
+      const components = buildTokenComponents({
+        inputTokens: 10,
+        outputTokens: 20,
+        cachedTokens: 4,
+        cacheWriteTokens: 3,
+        reasoningTokens: 7,
+      });
+      const byName = byComponent(components);
+      // uncached input = 10 - 4 - 3
+      expect(byName.input_tokens.quantity).toBe(3);
       expect(byName.input_tokens.billable).toBe(true);
       expect(byName.cached_tokens.quantity).toBe(4);
+      expect(byName.cache_write_tokens.quantity).toBe(3);
+      expect(byName.cache_write_tokens.billable).toBe(true);
       expect(byName.output_tokens.quantity).toBe(20);
       // reasoning is a non-billable detail of output
       expect(byName.reasoning_tokens.quantity).toBe(7);
@@ -127,11 +136,31 @@ describe('priceCompute', () => {
       ).toBe(true);
     });
 
-    test('drops zero-quantity cached and reasoning components', () => {
+    // The three input dimensions price differently, so the billable ones have
+    // to partition the provider's figure rather than overlap it.
+    test('the billable input dimensions sum back to the reported input', () => {
+      const components = buildTokenComponents({
+        inputTokens: 10,
+        outputTokens: 0,
+        cachedTokens: 4,
+        cacheWriteTokens: 3,
+        reasoningTokens: 0,
+      });
+      const byName = byComponent(components);
+
+      expect(
+        byName.input_tokens.quantity +
+          byName.cached_tokens.quantity +
+          byName.cache_write_tokens.quantity
+      ).toBe(10);
+    });
+
+    test('drops zero-quantity cache and reasoning components', () => {
       const components = buildTokenComponents({
         inputTokens: 5,
         outputTokens: 8,
         cachedTokens: 0,
+        cacheWriteTokens: 0,
         reasoningTokens: 0,
       });
       const names = components.map((c) => {

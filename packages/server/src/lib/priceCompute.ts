@@ -103,19 +103,28 @@ export type TokenComponent = {
 
 /**
  * Decomposes an LLM call's token counts into disjoint, additive components.
- * `input_tokens` is the *uncached* input (cached tokens are billed separately
- * at their own rate), and `reasoning_tokens` is a non-billable detail — it is a
- * subset of `output_tokens` reported for visibility, so it is never priced and
- * never double-counted into billable totals. Zero-quantity billable components
- * are dropped so a call only records the dimensions it actually used.
+ *
+ * The provider reports one input figure covering three different prices, so
+ * `input_tokens` here is the *uncached* input alone and the two cache
+ * dimensions are their own components: a cache **read** is far cheaper than an
+ * uncached token and a cache **write** is dearer than one, so folding either
+ * into `input_tokens` prices it at a rate nobody charges. `reasoning_tokens` is
+ * a non-billable detail — a subset of `output_tokens` reported for visibility,
+ * so it is never priced and never double-counted into billable totals.
+ * Zero-quantity billable components are dropped so a call only records the
+ * dimensions it actually used.
  */
 export const buildTokenComponents = (tokens: {
   inputTokens: number;
   outputTokens: number;
   cachedTokens: number;
+  cacheWriteTokens: number;
   reasoningTokens: number;
 }): TokenComponent[] => {
-  const uncachedInput = Math.max(0, tokens.inputTokens - tokens.cachedTokens);
+  const uncachedInput = Math.max(
+    0,
+    tokens.inputTokens - tokens.cachedTokens - tokens.cacheWriteTokens
+  );
   const components: TokenComponent[] = [
     {
       component: 'input_tokens',
@@ -134,6 +143,14 @@ export const buildTokenComponents = (tokens: {
     components.push({
       component: 'cached_tokens',
       quantity: tokens.cachedTokens,
+      unit: 'token',
+      billable: true,
+    });
+  }
+  if (tokens.cacheWriteTokens > 0) {
+    components.push({
+      component: 'cache_write_tokens',
+      quantity: tokens.cacheWriteTokens,
       unit: 'token',
       billable: true,
     });

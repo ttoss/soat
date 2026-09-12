@@ -48,6 +48,7 @@ Unlike [Chats](./chats.md), agents call tools, observe results and keep reasonin
 | `temperature`              | number        | Sampling temperature                                                                                                             |
 | `knowledge_config`         | object        | Knowledge retrieval config injected before every generation — see [Knowledge Config](#knowledge-config)                          |
 | `output_schema`            | object        | JSON Schema constraining the model's final answer to a structured object — see [Structured Output](#structured-output)          |
+| `prompt_caching`           | object/null   | `{ "enabled": true }` caches the turn's static prefix on providers that support it — see [Prompt Caching](#prompt-caching)       |
 | `max_context_messages`     | number        | Maximum number of recent messages sent to the model per generation — see [Context Window Limiting](#context-window-limiting)     |
 | `single_session_per_actor` | boolean       | When `true`, only one open session per `actor_id` is allowed — see [Single Session Per Actor](#single-session-per-actor)         |
 | `trace_content_mode` | string \| null | `null` (default) inherits the project's setting; `none` opts this agent into [zero-retention](#zero-retention) — its trace and generation content is never written |
@@ -352,6 +353,27 @@ Forwarded to `http` and `mcp` tools, propagated into nested generations for `bui
 
 A [session](./sessions.md) auto-populates `session_id`, `actor_id` and `actor_external_id`; caller keys override. Key→header rule, `400 INVALID_TOOL_CONTEXT_KEY`, header trust and PII egress: [Tool Context reference](../advanced/tool-context.md).
 
+### Prompt Caching
+
+Every step of a turn re-sends the same prefix: the tool definitions, then the instructions, then the conversation so far. On an agent with a large tool surface that prefix dominates the bill — a 45k-token MCP tool block bought again on every step of every turn — and none of it changes between those steps.
+
+`prompt_caching` marks a cache breakpoint at the end of that static prefix, so a provider that caches by explicit breakpoint serves it from cache instead of charging for it again:
+
+```bash
+soat patch-agent --agent-id agent_xyz --prompt-caching '{"enabled": true}'
+```
+
+The breakpoint sits on the **last system block**, which is what puts both the tool definitions and the instructions inside the cached prefix — the request is ordered tools → system → messages, and the cache covers everything up to the mark. The conversation after it is never marked: it grows every step, so caching it would write a prefix that never repeats.
+
+Consequences worth knowing before turning it on:
+
+- **It is off by default, per agent.** A cache write costs more than an uncached token, so an agent whose prefix is never re-read pays for the privilege. It pays off where the prefix is large and repeatedly re-sent — a multi-step tool-using agent, a long-running session — and not on one-shot calls with short instructions.
+- **An agent with no `instructions` caches nothing.** There is no system block to mark, and marking the first user message instead would cache a prefix containing that turn's own question.
+- **Who honors it.** Anthropic, and Anthropic models served through Bedrock, cache by explicit breakpoint and act on the mark. Providers that cache automatically (OpenAI) and providers that do not cache at all are unaffected — the mark travels as provider-specific metadata each one either reads or ignores, so a `model_route` that fails over between them needs no per-provider configuration.
+- **What you get back.** Cache reads are metered as `cached_tokens` and cache writes as `cache_write_tokens` — separate components, because they are separately priced. See [Usage — Token Components](./usage.md#token-components).
+
+Nothing else about the turn changes: the same messages, tools and instructions are sent, and the model sees an identical prompt.
+
 ### Context Window Limiting
 
 `max_context_messages` caps the recent messages sent to the model per generation; older ones leave the context but stay stored. `null` (default) sends all.
@@ -496,7 +518,7 @@ soat update-agent --agent-id agent_V1StGXR8Z5jdHi6B \
 
 #### What a version captures
 
-`config` holds every mutable field (`instructions`, `model`, `tool_bindings`, `max_steps`, `tool_choice`, `stop_conditions`, `active_tool_ids`, `step_rules`, `boundary_policy`, `temperature`, `knowledge_config`, `output_schema`, `max_context_messages`, `single_session_per_actor`, `trace_content_mode`, `guardrail_ids`, `ai_provider_id`, `model_route_id`, `name`), no identity or bookkeeping field (`id`, `project_id`, `version`, `active_release`, timestamps).
+`config` holds every mutable field (`instructions`, `model`, `tool_bindings`, `max_steps`, `tool_choice`, `stop_conditions`, `active_tool_ids`, `step_rules`, `boundary_policy`, `temperature`, `knowledge_config`, `output_schema`, `prompt_caching`, `max_context_messages`, `single_session_per_actor`, `trace_content_mode`, `guardrail_ids`, `ai_provider_id`, `model_route_id`, `name`), no identity or bookkeeping field (`id`, `project_id`, `version`, `active_release`, timestamps).
 
 Runtime-injected context is not snapshotted: a version records the `knowledge_config`, not the documents or memories it resolves at generation time.
 

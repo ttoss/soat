@@ -142,6 +142,9 @@ describe('Agent versions', () => {
           // agent behaved, so a restore has to bring it back.
           'on_approval_expiry',
           'output_schema',
+          // Configuration: whether a turn marked a cache breakpoint changes
+          // what the provider was billed for, so a restore has to bring it back.
+          'prompt_caching',
           'single_session_per_actor',
           'step_rules',
           'stop_conditions',
