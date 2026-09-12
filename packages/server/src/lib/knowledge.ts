@@ -4,7 +4,10 @@ import { db } from '../db';
 import { mapDocument } from './documentMapper';
 import type { EmbeddingBillingProjectId } from './embedding';
 import { getEmbedding } from './embedding';
-import type { MemoryKnowledgeResult } from './knowledgeMemory';
+import type {
+  MemoryKnowledgeResult,
+  MemoryPolicyWhere,
+} from './knowledgeMemory';
 import { resolveMemorySearch } from './knowledgeMemory';
 import { hasPolicyConstraints, referencesAssociation } from './policyWhere';
 import { clampKnowledgeSearchLimit } from './requestBounds';
@@ -354,8 +357,17 @@ type SearchKnowledgeArgs = {
    * document search, while still passing `query` through for memory ranking.
    */
   includeDocuments?: boolean;
+  policyWhere?: KnowledgePolicyWhere;
+};
+
+/**
+ * The caller's compiled policy, one clause per store the search reads. Keyed
+ * by resource type because each clause names columns of a different model, and
+ * a clause applied to the wrong one either throws or filters nothing.
+ */
+export type KnowledgePolicyWhere = MemoryPolicyWhere & {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  policyWhere?: Record<string, any>;
+  document?: Record<string, any>;
 };
 
 const getSearchFlags = (
@@ -387,7 +399,7 @@ export const searchKnowledge = async (
       ? resolveDocumentSearch({
           projectIds: args.projectIds,
           billingProjectId: args.billingProjectId,
-          policyWhere: args.policyWhere,
+          policyWhere: args.policyWhere?.document,
           config: {
             search: args.query,
             minScore: args.minScore,
@@ -402,6 +414,7 @@ export const searchKnowledge = async (
       ? resolveMemorySearch({
           projectIds: args.projectIds,
           billingProjectId: args.billingProjectId,
+          policyWhere: args.policyWhere,
           config: {
             memoryIds: args.memoryIds,
             tags: args.tags,

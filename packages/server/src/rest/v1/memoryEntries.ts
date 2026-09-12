@@ -18,7 +18,12 @@ import {
   getMemoryEntryTags,
   updateMemoryEntryTags,
 } from 'src/lib/memoryEntryTags';
-import { isStringRecord, readTagQuery } from 'src/lib/tags';
+import { compilePolicy } from 'src/lib/policyCompiler';
+import {
+  buildResourceTagContext,
+  isStringRecord,
+  readTagQuery,
+} from 'src/lib/tags';
 
 import {
   type AuthenticatedContext,
@@ -28,6 +33,13 @@ import {
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
 
 export const memoryEntriesRouter = new Router<Context>();
+
+/**
+ * A memory id no row can carry, so the entry listing matches nothing. Used when
+ * the caller holds no Allow for the action in this project: a list route
+ * answers with an empty page, never an error.
+ */
+const NO_MEMORY = -1;
 
 const normalizeSourceType = (value: unknown): MemoryEntrySource | undefined => {
   return MEMORY_ENTRY_SOURCES.includes(value as MemoryEntrySource)
@@ -71,16 +83,18 @@ const validateTagsMetadata = (
 // Memory entries are a top-level resource (/memory-entries) but every entry
 // belongs to a memory; access is governed by the owning memory's project.
 
+type LoadedMemory = NonNullable<Awaited<ReturnType<typeof getMemory>>>;
+
 /**
  * Resolves the memory a request targets (by public id) and verifies the caller
- * may perform `action` on it. Returns the memory's internal id, or null after
- * setting the appropriate error response.
+ * may perform `action` on it, with the memory's own tags as the condition
+ * context. Returns the memory and its internal id.
  */
 const resolveMemoryForAction = async (
   ctx: Context,
   memoryPublicId: string | undefined,
   action: string
-): Promise<number | null> => {
+): Promise<{ memory: LoadedMemory; memoryRowId: number }> => {
   if (!memoryPublicId) {
     throw new DomainError('VALIDATION_FAILED', 'memory_id is required');
   }
@@ -96,6 +110,10 @@ const resolveMemoryForAction = async (
       resourceType: 'memory',
       resourceId: memory.id,
     }),
+    context: buildResourceTagContext({
+      resourceType: 'memory',
+      tags: memory.tags,
+    }),
   });
   if (!allowed) {
     throw new DomainError('FORBIDDEN', 'Forbidden');
@@ -103,7 +121,7 @@ const resolveMemoryForAction = async (
   const memoryRow = await db.Memory.findOne({
     where: { publicId: memoryPublicId },
   });
-  return memoryRow!.id as number;
+  return { memory, memoryRowId: memoryRow!.id as number };
 };
 
 /**
@@ -124,35 +142,71 @@ const resolveEntryForAction = async (
   if (!memory) {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Memory entry not found');
   }
-  const allowed = await ctx.authUser!.isAllowed({
-    projectPublicId: memory.project_id!,
-    action,
-    resource: buildSrn({
+
+  // Two tag bags govern an entry, so the action is evaluated once against each.
+  // An entry carries its own tags, and it is never more visible than the memory
+  // holding it: a condition that hides the memory hides its entries too. Both
+  // passes offer the same SRNs — a policy scoped to either level still matches,
+  // and only the condition context differs.
+  const resources = [
+    buildSrn({
       projectPublicId: memory.project_id!,
       resourceType: 'memoryEntry',
       resourceId: entry.id,
     }),
-  });
-  if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
+    buildSrn({
+      projectPublicId: memory.project_id!,
+      resourceType: 'memory',
+      resourceId: memory.id,
+    }),
+  ];
+  const contexts = [
+    buildResourceTagContext({
+      resourceType: 'memoryEntry',
+      tags: entry.tags,
+    }),
+    buildResourceTagContext({ resourceType: 'memory', tags: memory.tags }),
+  ];
+  for (const context of contexts) {
+    const allowed = await ctx.authUser!.isAllowed({
+      projectPublicId: memory.project_id!,
+      action,
+      resources,
+      context,
+    });
+    if (!allowed) {
+      throw new DomainError('FORBIDDEN', 'Forbidden');
+    }
   }
+
   return entry;
 };
 
 memoryEntriesRouter.get('/memory-entries', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const memoryRowId = await resolveMemoryForAction(
+  const { memory, memoryRowId } = await resolveMemoryForAction(
     ctx,
     ctx.query.memory_id as string | undefined,
     'memories:ListMemoryEntries'
   );
-  if (memoryRowId === null) return;
+
+  // The memory itself already passed the check above; this narrows the listing
+  // by each entry's own tags, which the container check cannot see.
+  const projectPublicId = memory.project_id!;
+  const policies = await ctx.authUser.getPolicies(projectPublicId);
+  const { where: policyWhere, hasAccess } = compilePolicy({
+    policies,
+    action: 'memories:ListMemoryEntries',
+    resourceType: 'memoryEntry',
+    projectPublicId,
+  });
 
   ctx.body = await listMemoryEntries({
-    memoryId: memoryRowId,
+    memoryId: hasAccess ? memoryRowId : NO_MEMORY,
     includeInvalidated: ctx.query.include_invalidated === 'true',
     tags: readTagQuery(ctx.query.tags),
+    policyWhere,
     ...parsePagination(ctx),
   });
 });
@@ -174,12 +228,11 @@ memoryEntriesRouter.post('/memory-entries', async (ctx: Context) => {
     throw new DomainError('VALIDATION_FAILED', validationError);
   }
 
-  const memoryRowId = await resolveMemoryForAction(
+  const { memoryRowId } = await resolveMemoryForAction(
     ctx,
     body.memory_id,
     'memories:CreateMemoryEntry'
   );
-  if (memoryRowId === null) return;
 
   await assertMemoryEntryStorageQuota({
     memoryId: memoryRowId,

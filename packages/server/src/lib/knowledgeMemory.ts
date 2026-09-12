@@ -3,6 +3,7 @@ import { Op } from '@ttoss/postgresdb';
 import { db } from '../db';
 import type { EmbeddingBillingProjectId } from './embedding';
 import { getEmbedding } from './embedding';
+import { hasPolicyConstraints } from './policyWhere';
 import { clampKnowledgeSearchLimit } from './requestBounds';
 import { hasTagFilter, tagContainment } from './tags';
 import { withIterativeVectorScan } from './vectorSearch';
@@ -202,11 +203,59 @@ const buildEntrySelection = async (args: {
   return orWhere;
 };
 
+/**
+ * The caller's compiled policy, split by the model each clause names. The
+ * container clause filters the `memory` join and the entry clause the entry
+ * rows, so an entry is returned only when both its memory and itself are
+ * permitted — the same rule the entry routes enforce.
+ */
+export type MemoryPolicyWhere = {
+  memory?: Record<string, unknown>;
+  memoryEntry?: Record<string, unknown>;
+};
+
+/**
+ * The two WHERE clauses a memory search runs with: one on the entry rows it
+ * ranks, one on the `memory` join. Each policy clause goes to the model whose
+ * columns it names — an entry clause on the join, or the reverse, would filter
+ * the wrong table or name a column that is not there.
+ */
+const buildSearchWheres = (args: {
+  selection: Record<string, unknown>;
+  projectIds?: number[];
+  policyWhere?: MemoryPolicyWhere;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+}): { entryWhere: any; memoryWhere: Record<string, unknown> } => {
+  // A superseded entry stays readable through the entries API for audit, but
+  // must never be injected into a generation as though it still held. `Op.and`
+  // composes with the selection's own `Op.or` without flattening it.
+  const entryWhere = {
+    [Op.and]: [
+      args.selection,
+      { invalidatedAt: null },
+      ...(hasPolicyConstraints(args.policyWhere?.memoryEntry)
+        ? [args.policyWhere.memoryEntry]
+        : []),
+    ],
+  };
+
+  const memoryWhere: Record<string, unknown> = {};
+  if (args.projectIds && args.projectIds.length > 0) {
+    memoryWhere.projectId = args.projectIds;
+  }
+  if (hasPolicyConstraints(args.policyWhere?.memory)) {
+    Object.assign(memoryWhere, args.policyWhere.memory);
+  }
+
+  return { entryWhere, memoryWhere };
+};
+
 export const resolveMemorySearch = async (args: {
   projectIds?: number[];
   /** See `resolveDocumentSearch` in `knowledge.ts`. */
   billingProjectId: EmbeddingBillingProjectId;
   config: MemoryQueryConfig;
+  policyWhere?: MemoryPolicyWhere;
 }): Promise<MemoryKnowledgeResult[]> => {
   const { config, projectIds } = args;
   const hasOriginalMemoryIds =
@@ -217,16 +266,11 @@ export const resolveMemorySearch = async (args: {
   const selection = await buildEntrySelection({ config, projectIds });
   if (!selection) return [];
 
-  // A superseded entry stays readable through the entries API for audit, but
-  // must never be injected into a generation as though it still held. `Op.and`
-  // composes with the selection's own `Op.or` without flattening it.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const entryWhere: any = {
-    [Op.and]: [selection, { invalidatedAt: null }],
-  };
-
-  const memoryWhere: Record<string, unknown> = {};
-  if (projectIds && projectIds.length > 0) memoryWhere.projectId = projectIds;
+  const { entryWhere, memoryWhere } = buildSearchWheres({
+    selection,
+    projectIds,
+    policyWhere: args.policyWhere,
+  });
 
   const limit = clampKnowledgeSearchLimit(config.limit);
 

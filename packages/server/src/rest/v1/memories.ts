@@ -11,7 +11,13 @@ import {
   updateMemory,
   updateMemoryTags,
 } from 'src/lib/memories';
-import { readNullableTagBag, readTagBag, readTagQuery } from 'src/lib/tags';
+import { compilePolicy } from 'src/lib/policyCompiler';
+import {
+  buildResourceTagContext,
+  readNullableTagBag,
+  readTagBag,
+  readTagQuery,
+} from 'src/lib/tags';
 
 import {
   type AuthenticatedContext,
@@ -23,6 +29,45 @@ import {
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
 
 const memoriesRouter = new Router<Context>();
+
+type LoadedMemory = NonNullable<Awaited<ReturnType<typeof getMemory>>>;
+
+/**
+ * Loads the memory a request targets and authorizes `action` against it, with
+ * the memory's own tags as the condition context. Shared so a route cannot
+ * authorize a memory without supplying that context — a missing context makes
+ * every `soat:ResourceTag/<key>` condition evaluate against nothing, which
+ * silently drops a `Deny`.
+ */
+const requireMemory = async (args: {
+  ctx: Context;
+  memoryPublicId: string;
+  action: string;
+}): Promise<LoadedMemory> => {
+  const memory = await getMemory({ id: args.memoryPublicId });
+  if (!memory) {
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Memory not found');
+  }
+
+  const allowed = await args.ctx.authUser!.isAllowed({
+    projectPublicId: memory.project_id!,
+    action: args.action,
+    resource: buildSrn({
+      projectPublicId: memory.project_id!,
+      resourceType: 'memory',
+      resourceId: memory.id,
+    }),
+    context: buildResourceTagContext({
+      resourceType: 'memory',
+      tags: memory.tags,
+    }),
+  });
+  if (!allowed) {
+    throw new DomainError('FORBIDDEN', 'Forbidden');
+  }
+
+  return memory;
+};
 
 memoriesRouter.get('/memories', async (ctx: Context) => {
   requireAuth(ctx);
@@ -37,6 +82,28 @@ memoriesRouter.get('/memories', async (ctx: Context) => {
     resourceType: 'memory',
   });
 
+  // Without a single project there is no policy to compile against: the caller
+  // spans several, each with its own statements. The listing stays scoped by
+  // project, as it was before conditions reached memories.
+  if (projectPublicId) {
+    const policies = await ctx.authUser.getPolicies(projectPublicId);
+    const { where: policyWhere, hasAccess } = compilePolicy({
+      policies,
+      action: 'memories:ListMemories',
+      resourceType: 'memory',
+      projectPublicId,
+    });
+    ctx.body = await listMemories({
+      // No Allow statement matches the action in this project, so the caller
+      // reads nothing here — an empty scope, not an error, as on every listing.
+      projectIds: hasAccess ? (projectIds ?? []) : [],
+      tags,
+      policyWhere,
+      ...parsePagination(ctx),
+    });
+    return;
+  }
+
   ctx.body = await listMemories({
     projectIds: projectIds ?? [],
     tags,
@@ -47,26 +114,11 @@ memoriesRouter.get('/memories', async (ctx: Context) => {
 memoriesRouter.get('/memories/:memory_id', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const memory = await getMemory({ id: ctx.params.memory_id });
-
-  if (!memory) {
-    throw new DomainError('RESOURCE_NOT_FOUND', 'Memory not found');
-  }
-
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: memory.project_id!,
+  ctx.body = await requireMemory({
+    ctx,
+    memoryPublicId: ctx.params.memory_id,
     action: 'memories:GetMemory',
-    resource: buildSrn({
-      projectPublicId: memory.project_id!,
-      resourceType: 'memory',
-      resourceId: memory.id,
-    }),
   });
-  if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
-  }
-
-  ctx.body = memory;
 });
 
 memoriesRouter.post('/memories', async (ctx: Context) => {
@@ -100,23 +152,11 @@ memoriesRouter.post('/memories', async (ctx: Context) => {
 memoriesRouter.put('/memories/:memory_id', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const memory = await getMemory({ id: ctx.params.memory_id });
-  if (!memory) {
-    throw new DomainError('RESOURCE_NOT_FOUND', 'Memory not found');
-  }
-
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: memory.project_id!,
+  await requireMemory({
+    ctx,
+    memoryPublicId: ctx.params.memory_id,
     action: 'memories:UpdateMemory',
-    resource: buildSrn({
-      projectPublicId: memory.project_id!,
-      resourceType: 'memory',
-      resourceId: memory.id,
-    }),
   });
-  if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
-  }
 
   const body = ctx.request.body as {
     name?: string;
@@ -138,26 +178,12 @@ const resolveMemory = async (args: {
   ctx: AuthenticatedContext;
   access: TagAccess;
 }) => {
-  const memory = await getMemory({ id: args.ctx.params.memory_id });
-  if (!memory) {
-    throw new DomainError('RESOURCE_NOT_FOUND', 'Memory not found');
-  }
-
-  const allowed = await args.ctx.authUser.isAllowed({
-    projectPublicId: memory.project_id!,
+  return requireMemory({
+    ctx: args.ctx,
+    memoryPublicId: args.ctx.params.memory_id,
     action:
       args.access === 'read' ? 'memories:GetMemory' : 'memories:UpdateMemory',
-    resource: buildSrn({
-      projectPublicId: memory.project_id!,
-      resourceType: 'memory',
-      resourceId: memory.id,
-    }),
   });
-  if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
-  }
-
-  return memory;
 };
 
 registerTagRoutes({
@@ -175,23 +201,11 @@ registerTagRoutes({
 memoriesRouter.delete('/memories/:memory_id', async (ctx: Context) => {
   requireAuth(ctx);
 
-  const memory = await getMemory({ id: ctx.params.memory_id });
-  if (!memory) {
-    throw new DomainError('RESOURCE_NOT_FOUND', 'Memory not found');
-  }
-
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: memory.project_id!,
+  await requireMemory({
+    ctx,
+    memoryPublicId: ctx.params.memory_id,
     action: 'memories:DeleteMemory',
-    resource: buildSrn({
-      projectPublicId: memory.project_id!,
-      resourceType: 'memory',
-      resourceId: memory.id,
-    }),
   });
-  if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
-  }
 
   await deleteMemory({ id: ctx.params.memory_id });
 
