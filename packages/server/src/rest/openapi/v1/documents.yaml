@@ -750,7 +750,7 @@ paths:
       tags:
         - Documents
       summary: Merge document tags
-      description: Merges provided tags with existing tags (existing tags are preserved unless overridden)
+      description: Merges provided tags into the document's existing tags (existing tags are preserved unless overridden)
       operationId: mergeDocumentTags
       parameters:
         - name: document_id

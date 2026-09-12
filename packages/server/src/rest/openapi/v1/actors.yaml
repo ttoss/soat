@@ -420,7 +420,7 @@ paths:
       tags:
         - Actors
       summary: Merge actor tags
-      description: Merges provided tags with existing tags (existing tags are preserved unless overridden)
+      description: Merges provided tags into the actor's existing tags (existing tags are preserved unless overridden)
       operationId: mergeActorTags
       parameters:
         - name: actor_id
