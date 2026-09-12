@@ -25,9 +25,11 @@ resource that hand-rolls any of them is a bug. Everything shared lives in
       `applyTagFilter({ where, tags })` in the lib list function
 - [ ] Writes: `readTagBag(body.tags)` (or `readNullableTagBag` when `null`
       clears) on every create/update body that carries `tags`
-- [ ] Spec: the `tags` query parameter on the list operation, the three tag
-      paths (`get<X>Tags`, `replace<X>Tags`, `merge<X>Tags`), inline
-      `additionalProperties: { type: string }` — no cross-file `$ref` (#1280)
+- [ ] Spec: the `tags` query parameter on the list operation and the three tag
+      paths (`get<X>Tags`, `replace<X>Tags`, `merge<X>Tags`), every one of them
+      a `$ref` into `openapi/v1/tags.yaml` — `TagBag`, `NullableTagBag` where
+      `null` clears the bag, `TagsQuery` for the parameter. Never re-inline
+      `additionalProperties: { type: string }` (`tagSchemaContract.test.ts`)
 - [ ] Permissions: the three operationIds in `src/permissions/<module>.json`
 - [ ] Docs: a `### Tags` entry under Key Concepts naming the `?tags=` filter;
       `iam.md` §Tags lists the resource
@@ -37,6 +39,21 @@ resource that hand-rolls any of them is a bug. Everything shared lives in
 
 ## Rules
 
+- The shape is declared once, in `openapi/v1/tags.yaml`. A site that needs its
+  own wording keeps it beside a single-member `allOf`, never as a sibling of
+  `$ref` — OpenAPI 3.0 ignores those:
+
+  ```yaml
+  tags:
+    description: Replaces the stored bag; `null` clears it.
+    allOf:
+      - $ref: './tags.yaml#/components/schemas/NullableTagBag'
+  ```
+
+  The server, the SDK generator and the docs pages all resolve those refs.
+  `@ttoss/openapi-codegen` does not, so `packages/cli/scripts/localizeSpecs.ts`
+  inlines the shared components on the way into the CLI manifest; a new shared
+  component is picked up automatically as long as its file declares no paths.
 - Tag bags are opaque values (`case-convention.md`): never read, rename or
   case-convert a key.
 - One matching rule: `?tags=`, knowledge search and `soat:ResourceTag/<key>`

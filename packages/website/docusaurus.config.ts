@@ -10,10 +10,18 @@ import { HEAD_TAGS } from './src/data/structuredData';
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
+/**
+ * One docs section per module spec. A spec declaring no paths is a shared
+ * components file (`tags.yaml`) rather than a module: every other spec `$ref`s
+ * into it, and the plugin dereferences those, so registering it too would only
+ * add an empty section to the API sidebar.
+ */
 const buildOpenApiConfig = () => {
   const specsDir = path.resolve(__dirname, '../server/src/rest/openapi/v1');
   const files = fs.readdirSync(specsDir).filter((f) => {
-    return f.endsWith('.yaml');
+    if (!f.endsWith('.yaml')) return false;
+    const source = fs.readFileSync(path.join(specsDir, f), 'utf-8');
+    return !/^paths:\s*\{\s*\}\s*$/m.test(source);
   });
   return Object.fromEntries(
     files.map((file) => {

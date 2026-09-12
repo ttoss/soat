@@ -47,20 +47,7 @@ paths:
           schema:
             type: string
             example: '/reports/'
-        - name: tags
-          in: query
-          description: >
-            Filter by tag pairs, written `key:value` (split on the first
-            colon, so a value may contain colons). Repeat the parameter for
-            several pairs; **all** must be present with exactly that value.
-          schema:
-            type: array
-            items:
-              type: string
-          style: form
-          explode: true
-          example:
-            - 'env:prod'
+        - $ref: './tags.yaml#/components/parameters/TagsQuery'
         - name: limit
           in: query
           required: false
@@ -145,10 +132,7 @@ paths:
                     are stored and returned verbatim in the casing supplied —
                     they are not converted between snake_case and camelCase.
                 tags:
-                  type: object
-                  additionalProperties:
-                    type: string
-                  description: Key-value tags
+                  $ref: './tags.yaml#/components/schemas/TagBag'
                 chunk_strategy:
                   type: string
                   enum: [page, whole, size]
@@ -248,10 +232,7 @@ paths:
                   description: Path prefix under which to store the document (e.g. /docs/). The filename is appended automatically.
                   example: '/docs/'
                 tags:
-                  type: object
-                  additionalProperties:
-                    type: string
-                  description: Key-value tags to attach to the document.
+                  $ref: './tags.yaml#/components/schemas/TagBag'
                 chunk_strategy:
                   type: string
                   enum: [page, whole, size]
@@ -422,10 +403,7 @@ paths:
                     are stored and returned verbatim in the casing supplied —
                     they are not converted between snake_case and camelCase.
                 tags:
-                  type: object
-                  additionalProperties:
-                    type: string
-                  description: Key-value tags
+                  $ref: './tags.yaml#/components/schemas/TagBag'
       responses:
         '200':
           description: Document updated
@@ -704,9 +682,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties:
-                  type: string
+                $ref: './tags.yaml#/components/schemas/TagBag'
         '401':
           description: Unauthorized
           content:
@@ -744,21 +720,14 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties:
-                type: string
-              example:
-                category: research
-                status: draft
+              $ref: './tags.yaml#/components/schemas/TagBag'
       responses:
         '200':
           description: Tags replaced
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties:
-                  type: string
+                $ref: './tags.yaml#/components/schemas/TagBag'
         '401':
           description: Unauthorized
           content:
@@ -796,20 +765,14 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties:
-                type: string
-              example:
-                priority: high
+              $ref: './tags.yaml#/components/schemas/TagBag'
       responses:
         '200':
           description: Tags merged
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties:
-                  type: string
+                $ref: './tags.yaml#/components/schemas/TagBag'
         '401':
           description: Unauthorized
           content:

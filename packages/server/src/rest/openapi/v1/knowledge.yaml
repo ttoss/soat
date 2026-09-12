@@ -85,7 +85,6 @@ paths:
                     type: string
                   example: ['doc_V1StGXR8Z5jdHi6B']
                 tags:
-                  type: object
                   description: >-
                     Filter results to documents and memory entries whose `tags`
                     contain every one of these key-value pairs (exact,
@@ -93,9 +92,8 @@ paths:
                     stores, so passing it alone searches both. For memory it
                     matches at entry granularity: an entry is returned when its
                     parent memory's tags match or its own do.
-                  additionalProperties:
-                    type: string
-                  example: { team: 'finance', env: 'prod' }
+                  allOf:
+                    - $ref: './tags.yaml#/components/schemas/TagBag'
       responses:
         '200':
           description: Search results
@@ -208,12 +206,7 @@ components:
             not `strapi_document_id`) — it is not converted between
             snake_case and camelCase like other response fields.
         tags:
-          type: object
-          additionalProperties:
-            type: string
-          description: Key-value tags
-          example:
-            department: sales
+          $ref: './tags.yaml#/components/schemas/TagBag'
         content:
           type: string
           nullable: true
