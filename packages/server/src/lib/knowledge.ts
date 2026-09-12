@@ -1,50 +1,26 @@
-import { Op } from '@ttoss/postgresdb';
-
-import { db } from '../db';
-import { mapDocument } from './documentMapper';
 import type { EmbeddingBillingProjectId } from './embedding';
-import { getEmbedding } from './embedding';
+import type { QueryDocumentResult } from './knowledgeDocuments';
+import { resolveDocumentSearchLists } from './knowledgeDocuments';
 import type {
   MemoryKnowledgeResult,
   MemoryPolicyWhere,
 } from './knowledgeMemory';
-import { resolveMemorySearch } from './knowledgeMemory';
-import { hasPolicyConstraints, referencesAssociation } from './policyWhere';
+import { resolveMemorySearchLists } from './knowledgeMemory';
+import type { SearchCandidates, SignalCandidate } from './knowledgeRanking';
+import {
+  fuseByReciprocalRank,
+  mergeSignalShards,
+  resolveRrfK,
+} from './knowledgeRanking';
 import { clampKnowledgeSearchLimit } from './requestBounds';
-import { applyTagFilter, hasTagFilter } from './tags';
-import { withIterativeVectorScan } from './vectorSearch';
+import { hasTagFilter } from './tags';
 
-export type { MemoryQueryConfig } from './knowledgeMemory';
-
-// ── Types ────────────────────────────────────────────────────────────────
-
-export type DocumentQueryConfig = {
-  search?: string;
-  minScore?: number;
-  limit?: number;
-  paths?: string[];
-  documentIds?: string[];
-  tags?: Record<string, string>;
-};
-
-export type QueryDocumentResult = {
-  id: string;
-  chunk_id: string;
-  file_id?: string;
-  project_id?: string;
-  path?: string;
-  filename?: string;
-  size?: number;
-  title?: string;
-  metadata?: unknown;
-  tags?: Record<string, string>;
-  content: string | null;
-  page?: number;
-  score?: number;
-  similarity_score?: number;
-  created_at: Date;
-  updated_at: Date;
-};
+/**
+ * Unified search across the two knowledge stores. Each store's own queries live
+ * beside it — `knowledgeDocuments.ts`, `knowledgeMemory.ts`; this module owns
+ * only what needs both: which stores a request reaches, and the fusion that
+ * puts their results in one order.
+ */
 
 export type KnowledgeResult =
   | {
@@ -62,9 +38,9 @@ export type KnowledgeResult =
       content: string | null;
       page?: number;
       /**
-       * Implementation-defined relevance ranking — higher is better. The
-       * ordering it produces is the contract; the absolute value is not.
-       * `similarity_score` stays pinned to raw cosine.
+       * Fused relevance ranking — higher is better. The ordering it produces is
+       * the contract; the absolute value is not. `similarity_score` stays
+       * pinned to raw cosine.
        */
       score?: number;
       similarity_score?: number;
@@ -73,271 +49,18 @@ export type KnowledgeResult =
     }
   | MemoryKnowledgeResult;
 
-// ── Private helpers ──────────────────────────────────────────────────────
-
-const buildFileInclude = (args: {
-  projectIds?: number[];
-  paths?: string[];
-}) => {
-  const conditions: unknown[] = [];
-  if (args.projectIds !== undefined) {
-    conditions.push({ projectId: args.projectIds });
-  }
-  if (args.paths && args.paths.length > 0) {
-    conditions.push({
-      [Op.or]: args.paths.map((p) => {
-        // Stored paths are leading-slash normalized, so a prefix without one
-        // must be too or the `LIKE` never fires. The trailing slash stays, to
-        // keep folder-prefix semantics.
-        const prefix = p.startsWith('/') ? p : `/${p}`;
-        return { path: { [Op.like]: `${prefix}%` } };
-      }),
-    });
-  }
-  const where = conditions.length > 0 ? { [Op.and]: conditions } : undefined;
-  return {
-    model: db.File,
-    as: 'file',
-    where: where as Record<string, unknown> | undefined,
-    include: [{ model: db.Project, as: 'project' }],
-  };
-};
-
-type ChunkWithDocument = InstanceType<(typeof db)['DocumentChunk']> & {
-  document?: InstanceType<(typeof db)['Document']> & {
-    file?: InstanceType<(typeof db)['File']> & {
-      project?: InstanceType<(typeof db)['Project']>;
-    };
-  };
-};
-
-const computeChunkScore = (
-  chunk: ChunkWithDocument,
-  config: DocumentQueryConfig
-): number | undefined => {
-  if (!config.search) return undefined;
-  const distance = parseFloat(
-    (chunk.getDataValue('distance') as string) ?? '1'
-  );
-  return 1 - distance;
-};
-
-type DocumentBase = ReturnType<typeof mapDocument>;
-
-const pickDocumentFields = (
-  base: DocumentBase | null
-): Pick<
-  QueryDocumentResult,
-  | 'file_id'
-  | 'project_id'
-  | 'path'
-  | 'filename'
-  | 'size'
-  | 'title'
-  | 'metadata'
-  | 'tags'
-> => {
-  if (!base) {
-    return {
-      file_id: undefined,
-      project_id: undefined,
-      path: undefined,
-      filename: undefined,
-      size: undefined,
-      title: undefined,
-      metadata: undefined,
-      tags: undefined,
-    };
-  }
-  return {
-    file_id: base.file_id,
-    project_id: base.project_id,
-    path: base.path,
-    filename: base.filename,
-    size: base.size,
-    title: base.title,
-    metadata: base.metadata,
-    tags: base.tags,
-  };
-};
-
-const mapChunkResult = (
-  chunk: ChunkWithDocument,
-  config: DocumentQueryConfig
-): QueryDocumentResult => {
-  const doc = chunk.document;
-  const base = doc ? mapDocument(doc) : null;
-  const similarityScore = computeChunkScore(chunk, config);
-
-  return {
-    id: doc ? doc.publicId : '',
-    chunk_id: chunk.publicId,
-    ...pickDocumentFields(base),
-    content: chunk.content,
-    page: chunk.pageNumber ?? undefined,
-    // Single-signal ranking today, so `score` is the cosine value.
-    score: similarityScore,
-    similarity_score: similarityScore,
-    created_at: chunk.createdAt,
-    updated_at: chunk.updatedAt,
-  };
-};
-
-// ── Query engine ─────────────────────────────────────────────────────────
-
-const buildDocumentInclude = (args: {
-  docWhere: Record<string, unknown> | undefined;
-  fileInclude: ReturnType<typeof buildFileInclude>;
-}): unknown => {
-  const fileRequired = args.fileInclude.where !== undefined;
-  return {
-    model: db.Document,
-    as: 'document',
-    where: args.docWhere,
-    required: args.docWhere !== undefined || fileRequired,
-    include: [{ ...args.fileInclude, required: fileRequired }],
-  };
-};
-
-const findChunksWithSearch = async (args: {
-  config: DocumentQueryConfig;
-  billingProjectId: EmbeddingBillingProjectId;
-  docWhere: Record<string, unknown> | undefined;
-  fileInclude: ReturnType<typeof buildFileInclude>;
-  limit: number;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  topLevelWhere?: Record<string, any>;
-}): Promise<ChunkWithDocument[]> => {
-  const embedding = await getEmbedding({
-    text: args.config.search!,
-    projectId: args.billingProjectId,
-  });
-  const embeddingLiteral = `[${embedding.join(',')}]`;
-  const distanceLiteral = db.DocumentChunk.sequelize!.literal(
-    `"DocumentChunk"."embedding" <=> '${embeddingLiteral}'`
-  );
-
-  const docInclude = buildDocumentInclude({
-    docWhere: args.docWhere,
-    fileInclude: args.fileInclude,
-  });
-
-  return withIterativeVectorScan({
-    run: ({ transaction }) => {
-      return db.DocumentChunk.findAll({
-        where: args.topLevelWhere,
-        attributes: { include: [[distanceLiteral, 'distance']] },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        include: [docInclude] as any,
-        order: distanceLiteral,
-        subQuery: referencesAssociation(args.topLevelWhere) ? false : undefined,
-        limit: args.limit,
-        transaction,
-      }) as unknown as Promise<ChunkWithDocument[]>;
-    },
-  });
-};
-
-const findChunksWithoutSearch = async (args: {
-  docWhere: Record<string, unknown> | undefined;
-  fileInclude: ReturnType<typeof buildFileInclude>;
-  limit: number;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  topLevelWhere?: Record<string, any>;
-}): Promise<ChunkWithDocument[]> => {
-  const docInclude = buildDocumentInclude({
-    docWhere: args.docWhere,
-    fileInclude: args.fileInclude,
-  });
-
-  return db.DocumentChunk.findAll({
-    where: args.topLevelWhere,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    include: [docInclude] as any,
-    order: [['chunkIndex', 'ASC']],
-    subQuery: referencesAssociation(args.topLevelWhere) ? false : undefined,
-    limit: args.limit,
-  }) as unknown as Promise<ChunkWithDocument[]>;
-};
-
-const buildDocWhere = (args: {
-  documentIds: string[] | undefined;
-  tags: Record<string, string> | undefined;
-}): Record<string, unknown> | undefined => {
-  const where: Record<string, unknown> = {};
-  if (args.documentIds && args.documentIds.length > 0) {
-    where.publicId = args.documentIds;
-  }
-  applyTagFilter({ where, tags: args.tags });
-  return Object.keys(where).length > 0 ? where : undefined;
-};
-
-export const resolveDocumentSearch = async (args: {
-  projectIds?: number[];
-  /**
-   * The project the query embedding is billed to. Separate from `projectIds`,
-   * which is an access filter that may name many projects or none: a search
-   * that spans a caller's whole scope has no single project to charge.
-   */
-  billingProjectId: EmbeddingBillingProjectId;
-  config: DocumentQueryConfig;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  policyWhere?: Record<string, any>;
-}): Promise<QueryDocumentResult[]> => {
-  const { config, projectIds } = args;
-  const limit = clampKnowledgeSearchLimit(config.limit);
-
-  if (projectIds !== undefined && projectIds.length === 0) {
-    return [];
-  }
-
-  // Compiled with `columnRoot: 'document'` by the route, so every column it
-  // names is already relative to this query's root — see `resolvePolicyWhere`.
-  const effectivePolicyWhere = hasPolicyConstraints(args.policyWhere)
-    ? args.policyWhere
-    : undefined;
-
-  const fileInclude = buildFileInclude({ projectIds, paths: config.paths });
-  const docWhere = buildDocWhere({
-    documentIds: config.documentIds,
-    tags: config.tags,
-  });
-
-  const rawChunks = config.search
-    ? await findChunksWithSearch({
-        config,
-        billingProjectId: args.billingProjectId,
-        docWhere,
-        fileInclude,
-        limit,
-        topLevelWhere: effectivePolicyWhere,
-      })
-    : await findChunksWithoutSearch({
-        docWhere,
-        fileInclude,
-        limit,
-        topLevelWhere: effectivePolicyWhere,
-      });
-
-  const mapped = rawChunks.map((chunk) => {
-    return mapChunkResult(chunk, config);
-  });
-
-  if (!config.search || config.minScore === undefined) return mapped;
-  const minScore = config.minScore;
-  return mapped.filter((r) => {
-    // Filters on `score`, the documented ranking, so a future change to how
-    // `score` is computed carries `min_score` with it automatically.
-    return (r.score ?? -1) >= minScore;
-  });
-};
-
 type SearchKnowledgeArgs = {
   projectIds?: number[];
-  /** See {@link resolveDocumentSearch}. Required, so a caller has to say. */
+  /** See {@link resolveDocumentSearchLists}. Required, so a caller has to say. */
   billingProjectId: EmbeddingBillingProjectId;
   query?: string;
-  minScore?: number;
+  /**
+   * Raw-cosine floor a **vector** candidate must clear to enter fusion.
+   * Lexical candidates are never subject to it.
+   */
+  minSimilarity?: number;
+  /** The `k` in `1 / (k + rank)`. See {@link resolveRrfK}. */
+  rrfK?: number;
   limit?: number;
   paths?: string[];
   documentIds?: string[];
@@ -385,6 +108,73 @@ const getSearchFlags = (
   return { hasDocumentSearch, hasMemorySearch };
 };
 
+const toDocumentResult = (doc: QueryDocumentResult): KnowledgeResult => {
+  return {
+    source_type: 'document' as const,
+    document_id: doc.id,
+    chunk_id: doc.chunk_id,
+    file_id: doc.file_id,
+    project_id: doc.project_id,
+    path: doc.path,
+    filename: doc.filename,
+    size: doc.size,
+    title: doc.title,
+    metadata: doc.metadata,
+    tags: doc.tags,
+    content: doc.content,
+    page: doc.page,
+    similarity_score: doc.similarity_score,
+    created_at: doc.created_at,
+    updated_at: doc.updated_at,
+  };
+};
+
+const toDocumentCandidate = (
+  candidate: SignalCandidate<QueryDocumentResult>
+): SignalCandidate<KnowledgeResult> => {
+  return { item: toDocumentResult(candidate.item), signal: candidate.signal };
+};
+
+/**
+ * What a store contributes when the search never reached it — carrying the same
+ * discriminant that store would have returned for this request, so a skipped
+ * store needs no special case downstream.
+ */
+const emptyCandidates = <T>(query?: string): SearchCandidates<T> => {
+  return query
+    ? { ranked: true, vector: [], lexical: [] }
+    : { ranked: false, results: [] };
+};
+
+/**
+ * `ranked` follows the request's `query` in both stores, so these two are
+ * narrowings of the union rather than branches on store behavior: exactly one
+ * of them is non-empty for any one search.
+ */
+const signalShardsOf = <T>(
+  candidates: SearchCandidates<T>
+): {
+  vector: Array<SignalCandidate<T>>;
+  lexical: Array<SignalCandidate<T>>;
+} => {
+  return candidates.ranked ? candidates : { vector: [], lexical: [] };
+};
+
+const orderedResultsOf = <T>(candidates: SearchCandidates<T>): T[] => {
+  return candidates.ranked ? [] : candidates.results;
+};
+
+/**
+ * Fusion identity. A chunk and an entry can never collide — the two id spaces
+ * are prefixed — but keying on the discriminant as well says so in the code
+ * rather than relying on a property of the id generator.
+ */
+const knowledgeKey = (result: KnowledgeResult): string => {
+  return result.source_type === 'document'
+    ? `document:${result.chunk_id}`
+    : `memory:${result.entry_id}`;
+};
+
 export const searchKnowledge = async (
   args: SearchKnowledgeArgs
 ): Promise<KnowledgeResult[]> => {
@@ -394,24 +184,24 @@ export const searchKnowledge = async (
   // scan through this one function.
   const limit = clampKnowledgeSearchLimit(args.limit);
 
-  const [docs, memoryEntries] = await Promise.all([
+  const [documents, memories] = await Promise.all([
     !hasMemorySearch || hasDocumentSearch
-      ? resolveDocumentSearch({
+      ? resolveDocumentSearchLists({
           projectIds: args.projectIds,
           billingProjectId: args.billingProjectId,
           policyWhere: args.policyWhere?.document,
           config: {
             search: args.query,
-            minScore: args.minScore,
+            minSimilarity: args.minSimilarity,
             limit,
             paths: args.paths,
             documentIds: args.documentIds,
             tags: args.tags,
           },
         })
-      : Promise.resolve([]),
+      : Promise.resolve(emptyCandidates<QueryDocumentResult>(args.query)),
     hasMemorySearch
-      ? resolveMemorySearch({
+      ? resolveMemorySearchLists({
           projectIds: args.projectIds,
           billingProjectId: args.billingProjectId,
           policyWhere: args.policyWhere,
@@ -419,48 +209,52 @@ export const searchKnowledge = async (
             memoryIds: args.memoryIds,
             tags: args.tags,
             search: args.query,
-            minScore: args.minScore,
+            minSimilarity: args.minSimilarity,
             limit,
           },
         })
-      : Promise.resolve([]),
+      : Promise.resolve(emptyCandidates<MemoryKnowledgeResult>(args.query)),
   ]);
 
-  const docResults: KnowledgeResult[] = docs.map((doc) => {
-    return {
-      source_type: 'document' as const,
-      document_id: doc.id,
-      chunk_id: doc.chunk_id,
-      file_id: doc.file_id,
-      project_id: doc.project_id,
-      path: doc.path,
-      filename: doc.filename,
-      size: doc.size,
-      title: doc.title,
-      metadata: doc.metadata,
-      tags: doc.tags,
-      content: doc.content,
-      page: doc.page,
-      score: doc.score,
-      similarity_score: doc.similarity_score,
-      created_at: doc.created_at,
-      updated_at: doc.updated_at,
-    };
-  });
-
-  const allResults = [...docResults, ...memoryEntries];
-
-  if (args.query) {
-    allResults.sort((a, b) => {
-      // Ordering is defined against `score` — the field whose ranking is the
-      // contract — not against the raw cosine kept for debugging.
-      const aScore = a.score ?? 0;
-      const bScore = b.score ?? 0;
-      return bScore - aScore;
-    });
+  if (!args.query) {
+    // No query, no ranking signal: each store contributed its one deterministic
+    // read — chunk order, then oldest-first entries.
+    return [
+      ...orderedResultsOf(documents).map(toDocumentResult),
+      ...orderedResultsOf(memories),
+    ].slice(0, limit);
   }
 
-  // Top-k of an in-memory similarity search, not a page — named so it reads as
-  // distinct from the `limit`/`offset` list envelope.
-  return allResults.slice(0, limit);
+  const documentShards = signalShardsOf(documents);
+  const memoryShards = signalShardsOf(memories);
+
+  // Two rankings, not four: each signal's per-store shards are merged on that
+  // signal's own comparable value first, so a store cannot claim result slots
+  // by position alone. See `mergeSignalShards`.
+  const vector = mergeSignalShards<KnowledgeResult>({
+    shards: [
+      documentShards.vector.map(toDocumentCandidate),
+      memoryShards.vector,
+    ],
+  });
+  const lexical = mergeSignalShards<KnowledgeResult>({
+    shards: [
+      documentShards.lexical.map(toDocumentCandidate),
+      memoryShards.lexical,
+    ],
+  });
+
+  return (
+    fuseByReciprocalRank({
+      lists: [vector, lexical],
+      keyOf: knowledgeKey,
+      k: resolveRrfK(args.rrfK),
+    })
+      // Top-k of an in-memory similarity search, not a page — named so it reads
+      // as distinct from the `limit`/`offset` list envelope.
+      .slice(0, limit)
+      .map((fused) => {
+        return { ...fused.item, score: fused.score };
+      })
+  );
 };

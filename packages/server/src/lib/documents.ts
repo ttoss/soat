@@ -25,8 +25,11 @@ export {
   reingestDocument,
 } from './documentIngestion';
 export { completeIngestionCallback } from './ingestionCallback';
-export type { DocumentQueryConfig, QueryDocumentResult } from './knowledge';
-export { resolveDocumentSearch } from './knowledge';
+export type {
+  DocumentQueryConfig,
+  QueryDocumentResult,
+} from './knowledgeDocuments';
+export { resolveDocumentSearch } from './knowledgeDocuments';
 
 const log = createDebug('soat:documents');
 

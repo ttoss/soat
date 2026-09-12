@@ -1,5 +1,5 @@
 ---
-description: "Unified semantic search across a project's documents and memory entries, ranked by vector similarity and tagged by source."
+description: "Unified hybrid search across a project's documents and memory entries: a vector and a full-text query per store, fused by reciprocal rank and tagged by source."
 ---
 
 import Tabs from '@theme/Tabs';
@@ -9,7 +9,7 @@ import TabItem from '@theme/TabItem';
 
 ## Overview
 
-Unified semantic search across a project's documents and memory entries: one endpoint, ranked by vector similarity, interleaved and tagged by source.
+Unified search across a project's documents and memory entries: one endpoint, ranked by [hybrid retrieval](#hybrid-retrieval) — a vector query and a full-text query over each store, fused by reciprocal rank — and tagged by source.
 
 Each result carries `source_type` (`"document"` or `"memory"`). Agents use the same layer for retrieval: [Agent with Persistent Memory — Step 8 (Create an agent with knowledge_config)](/docs/tutorials/memories-agent#step-8--create-an-agent-with-knowledge_config) and the [Memory & Knowledge Engine](../advanced/memory-and-knowledge-engine.md) deep dive.
 
@@ -36,8 +36,8 @@ A `KnowledgeResult` is a discriminated union on `source_type`; source-specific f
 | ------------- | -------------------------- | -------------------------------------------------------- |
 | `source_type` | `"document"` \| `"memory"` | Discriminant for the knowledge source type               |
 | `content`     | `string\|null`             | Text content of the result                               |
-| `score`       | `number`                   | Relevance ranking; only present when `query` is used — see [Relevance scoring](#relevance-scoring) |
-| `similarity_score` | `number`              | Raw cosine similarity (0–1); only present when `query` is used |
+| `score`       | `number`                   | Fused relevance ranking; only present when `query` is used — see [Relevance scoring](#relevance-scoring) |
+| `similarity_score` | `number`              | Raw cosine similarity (0–1); present on every `query` result, absent only in the embedding-degrade path — see [Relevance scoring](#relevance-scoring) |
 | `created_at`  | `string`                   | ISO 8601 creation timestamp                              |
 | `updated_at`  | `string`                   | ISO 8601 last-updated timestamp                          |
 
@@ -71,15 +71,15 @@ The [`POST /knowledge/search`](/docs/api/knowledge/search-knowledge) filters (at
 
 | Parameter        | Type       | Description                                                                                |
 | ---------------- | ---------- | ------------------------------------------------------------------------------------------ |
-| `query`          | `string`   | Semantic search query — ranks results by vector similarity                                 |
+| `query`          | `string`   | Search query — ranks results by [hybrid retrieval](#hybrid-retrieval)                      |
 | `memory_ids`     | `string[]` | Search entries within these specific memories                                              |
 | `document_paths` | `string[]` | Filter document results to paths starting with these prefixes                              |
 | `document_ids`   | `string[]` | Filter document results to specific document IDs                                           |
 | `tags`           | `object`   | Filter **both** stores to results whose `tags` contain every one of these key-value pairs (exact, case-sensitive). The only filter that scopes documents and memory entries at once |
 
-With `query`, results carry `score` and `similarity_score`, ordered by descending `score`; `min_score` and `limit` apply. Walkthrough: [Agent with Persistent Memory — Step 12 (Query the knowledge layer directly)](/docs/tutorials/memories-agent#step-12--query-the-knowledge-layer-directly).
+With `query`, results carry `score` and `similarity_score`, ordered by descending `score`; `min_similarity`, `rrf_k` and `limit` apply. Walkthrough: [Agent with Persistent Memory — Step 12 (Query the knowledge layer directly)](/docs/tutorials/memories-agent#step-12--query-the-knowledge-layer-directly).
 
-Sources follow from the filters: documents when `query`, `document_paths`, or `document_ids` is passed; memory entries when `memory_ids` is. `tags` turns on **both**. A `query` plus a memory filter searches both, merged and ranked by descending similarity before `limit`.
+Sources follow from the filters: documents when `query`, `document_paths`, or `document_ids` is passed; memory entries when `memory_ids` is. `tags` turns on **both**. A `query` plus a memory filter searches both, ranked together before `limit`.
 
 `tags` is a key-value object, the same shape every tagged resource stores and the same one the IAM `soat:ResourceTag/<key>` condition reads. All pairs must match (JSONB containment), exact and case-sensitive:
 
@@ -89,27 +89,60 @@ Sources follow from the filters: documents when `query`, `document_paths`, or `d
 
 Against memory it matches at **entry granularity**: an entry is returned when its parent memory's tags contain the pairs (container-level, every entry returned) or when the entry's own `tags` do (that entry only) — see [Memories — Entry-Level Tag Filtering](./memories.md#entry-level-tag-filtering).
 
+### Hybrid retrieval
+
+A `query` runs **two** searches over each store, in parallel:
+
+| Channel | Query | Ranked by | Finds |
+| --- | --- | --- | --- |
+| Vector | `embedding <=> $query` (pgvector) | cosine distance | paraphrase, synonym, topic |
+| Lexical | `to_tsvector(content) @@ websearch_to_tsquery($query)` | `ts_rank_cd` | the exact token, verbatim |
+
+Neither channel can answer for the other. A chunk that literally contains `SKU-4711` may sit far from the query in embedding space, and a chunk that answers a paraphrased question may share no token with it.
+
+**The lexical channel is an exact-token and exact-phrase channel, by design.** The default text search configuration is `simple`, which removes no stopwords and does no stemming, and `websearch_to_tsquery` requires *every* term it produces. So a natural-language question almost never matches lexically — identifiers, error codes, product names and SKUs do. The vector channel carries the rest. Set `KNOWLEDGE_TEXT_SEARCH_CONFIG` to a language-specific configuration (`english`, `portuguese`, …) where the deployment's language is known and stemming is wanted; the trade is that the channel stops being exact.
+
+If the lexical query fails — a text search configuration that does not exist is the realistic case — the search answers from the vector channel alone. If the embedding provider is unreachable, it answers from the lexical channel alone, and every result comes back without `similarity_score`.
+
+**No full-text index ships with this.** `to_tsvector` is computed per candidate row, which is cheaper than an index to maintain until a corpus is large. Promote to a stored `tsvector` column with a GIN index when either holds: lexical p95 latency exceeds vector p95, or a project passes roughly 100k chunks.
+
 ### Relevance scoring
 
 Two fields on every `query` result, with different contracts:
 
 | Field | Contract |
 | --- | --- |
-| `score` | **Implementation-defined** relevance ranking, higher is better. The *ordering* it produces is the contract; the absolute value is not. Results are sorted by it and `min_score` filters on it. |
+| `score` | **Reciprocal rank fusion** value, higher is better. The *ordering* it produces is the contract; the absolute value is not, and nothing filters on it. |
 | `similarity_score` | Raw **cosine similarity** (0–1) between the query embedding and the result. Pinned to that meaning — it is never redefined. |
 
-Today the ranking is single-signal, so the two are equal; a later hybrid ranking would fuse signals into `score` while `similarity_score` keeps the cosine value.
+`score` is `Σ 1 / (k + rank)` over the channels that ranked the result, `k = 60` by default. A result both channels rank outranks one only a single channel ranks highly, which is the point: agreement is better evidence than either signal alone. The value is deliberately **not** rescaled into 0–1 — that would lend it a stability it does not have, since RRF encodes position, not quality: `1 / (k + 1)` is the same number for the best result of a perfect ranking and the best of a useless one.
 
 - `score` is comparable only *within one response*. Do not persist it, compare it across releases, or show it as a percentage.
-- `min_score` filters on `score`, so a threshold tuned against one ranking may not survive an upgrade; pin it per deployment and re-tune.
+- `similarity_score` is populated on every result of a `query` search, a lexical-only hit included. It is absent only when the embedding provider was unreachable and the search answered from the lexical channel alone.
 - For a stable number, read `similarity_score`.
+
+Each channel produces **one** ranking over the whole search, not one per store: documents and memory entries are queried separately because they are separate tables, and each channel's two result sets are merged on that channel's own value before fusion. Fusing them as separate rankings would let each store claim result slots by position — the tenth-best memory entry scoring the same as the tenth-best chunk, whatever either is worth.
+
+### Relevance knobs
+
+| Parameter | Default | Effect |
+| --- | --- | --- |
+| `min_similarity` | none | Minimum raw cosine a **vector** candidate must reach to be ranked at all, applied before fusion |
+| `rrf_k` | `KNOWLEDGE_RRF_K`, itself `60` | The `k` in `1 / (k + rank)`; smaller weights the top of each ranking more heavily |
+| `min_score` | none | **Deprecated** alias for `min_similarity`, removed in v2 |
+
+`min_similarity` filters cosine, never `score`. A floor on a fused value would be a rank cutoff wearing a similarity knob's clothes.
+
+**Lexical candidates are exempt from the floor.** A chunk that literally contains the searched token is the evidence; dropping it because its cosine is `0.4` is the failure hybrid retrieval exists to prevent.
+
+`min_score` is the field's earlier name and keeps working unchanged. While ranking was single-signal `score` equaled `similarity_score`, so `min_score` has only ever filtered cosine — an existing value, per request or as `knowledge_config.min_score` on an agent, returns the same results it always did, plus the lexical hits the floor was never meant to exclude. `min_similarity` wins if both are sent.
 
 ### Ranking is approximate
 
 Both vector columns carry an HNSW index, so `query` search is **approximate nearest neighbour**: it reads a bounded candidate list from the index instead of scanning every vector, keeping cost sub-linear in corpus size. The cost is exactness:
 
 - **Recall against the true top-k is below 1.0.** A result that would rank 10th can be missed. Both fields keep their meaning; the set being ordered is not guaranteed to be the exact best k.
-- **`min_score` needs re-tuning**: the candidate set feeding it changed.
+- **`min_similarity` needs re-tuning**: the candidate set feeding it changed.
 - **Filters do not silently shrink the result set.** Scope, `paths`, `document_ids` and permission filters apply *after* the index proposes candidates, so a narrow scope could return fewer than `limit` rows; SOAT enables pgvector's iterative index scan on every search, widening the candidate list until `limit` is satisfied post-filter.
 
 The last guarantee needs **pgvector 0.8 or newer** (`hnsw.iterative_scan`). On an older extension PostgreSQL discards the setting with a warning and a filtered search can come back short; see [Configuration](../self-hosting/configuration.md).
@@ -150,17 +183,17 @@ Metrics are computed over **raw result positions** at `limit: 10`, so a document
 
 | Scope         | recall@5 | recall@10 |    MRR |
 | ------------- | -------: | --------: | -----: |
-| Overall       |   0.8654 |    0.9038 | 0.8072 |
+| Overall       |   0.8846 |    0.9231 | 0.8397 |
 | `exact_token` |   1.0000 |    1.0000 | 1.0000 |
-| `exact_name`  |   1.0000 |    1.0000 | 0.9222 |
+| `exact_name`  |   1.0000 |    1.0000 | 0.9667 |
 | `entity`      |   1.0000 |    1.0000 | 0.9583 |
-| `semantic`    |   0.5333 |    0.6667 | 0.4429 |
+| `semantic`    |   0.6000 |    0.7333 | 0.5111 |
 
 Those numbers are committed as `baseline.json`, and the run exits non-zero when recall@10 drops below it — overall or for any single kind. A ranking change lands with the diff of that file as its before/after table.
 
 Two caveats on reading the absolute values:
 
-- **The embedder is a stand-in.** CI has no embedding provider, so the eval substitutes a deterministic feature hasher that ranks by term overlap. Being itself lexical, it starts the `exact_token` row saturated and understates the gap a real vector model shows between a lexical and a semantic match. What the gate measures reliably is _change_.
+- **The embedder is a stand-in.** CI has no embedding provider, so the eval substitutes a deterministic feature hasher that ranks by term overlap. Being itself lexical, it starts the `exact_token` row saturated — so the gate can prove [hybrid retrieval](#hybrid-retrieval) regresses nothing, but it cannot show the lexical channel's win; the proof of that is a targeted unit test over a chunk whose cosine sits below the floor. What the gate measures reliably is _change_.
 - **The corpus tracks these docs.** Fixtures that name a `source` and a `section` are read from the module docs at seed time, so editing one of those sections moves the numbers. Re-run with `--update-baseline` and commit the diff.
 
 ## Configuration
@@ -172,6 +205,8 @@ Two caveats on reading the absolute values:
 | `EMBEDDING_MODEL`      | Yes      | Model name, e.g. `qwen3-embedding:0.6b`                      |
 | `EMBEDDING_DIMENSIONS` | Yes      | Vector dimensions — must match the model output, e.g. `1024`, and be at most `2000` |
 | `OLLAMA_BASE_URL`      | No       | Ollama server URL, defaults to `http://localhost:11434`      |
+| `KNOWLEDGE_TEXT_SEARCH_CONFIG` | No | PostgreSQL text search configuration for the lexical channel, defaults to `simple` — see [Hybrid retrieval](#hybrid-retrieval) |
+| `KNOWLEDGE_RRF_K`      | No       | Deployment default for `rrf_k`, itself `60`. A request's own `rrf_k` wins |
 
 ## Examples
 

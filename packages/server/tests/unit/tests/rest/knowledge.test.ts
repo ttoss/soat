@@ -471,13 +471,16 @@ describe('Knowledge', () => {
         }
       );
 
-      // `score` is the ranking the ordering and `min_score` are defined
-      // against; `similarity_score` stays pinned to raw cosine. They are equal
-      // today because the ranking is single-signal.
+      // `score` is the fused ranking the ordering is defined against;
+      // `similarity_score` stays pinned to raw cosine. Since fusion they are
+      // different numbers — the fused value encodes rank position, not
+      // similarity — and `min_similarity` filters the cosine one.
       expect(doc.score).toBeDefined();
-      expect(doc.score).toBe(doc.similarity_score);
+      expect(doc.similarity_score).toBeDefined();
+      expect(doc.score).not.toBe(doc.similarity_score);
       expect(memory.score).toBeDefined();
-      expect(memory.score).toBe(memory.similarity_score);
+      expect(memory.similarity_score).toBeDefined();
+      expect(memory.score).not.toBe(memory.similarity_score);
     });
 
     test('results are ordered by descending score', async () => {
@@ -528,6 +531,75 @@ describe('Knowledge', () => {
         .send({ project_id: projectId, query: 'anything', min_score: 1.5 });
       expect(below.status).toBe(200);
       expect(below.body.results).toHaveLength(0);
+    });
+
+    test('min_similarity and the deprecated min_score are interchangeable', async () => {
+      const body = {
+        project_id: projectId,
+        query: 'anything',
+        memory_ids: [memoryId],
+      };
+
+      const deprecated = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send({ ...body, min_score: 0.5 });
+      const current = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send({ ...body, min_similarity: 0.5 });
+
+      expect(deprecated.status).toBe(200);
+      expect(current.status).toBe(200);
+      expect(deprecated.body.results.length).toBeGreaterThan(0);
+      expect(deprecated.body.results).toEqual(current.body.results);
+    });
+
+    test('min_similarity filters on similarity_score, not on score', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send({
+          project_id: projectId,
+          query: 'anything',
+          min_similarity: 0.5,
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.results.length).toBeGreaterThan(0);
+      for (const result of response.body.results) {
+        expect(result.similarity_score).toBeGreaterThanOrEqual(0.5);
+        // Every fused score sits far below the floor the request cleared,
+        // which is exactly why the floor is not applied to it.
+        expect(result.score).toBeLessThan(0.5);
+      }
+    });
+
+    test('rrf_k changes the fused magnitudes, not the result set', async () => {
+      const body = {
+        project_id: projectId,
+        query: 'anything',
+        memory_ids: [memoryId],
+      };
+
+      const tight = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send({ ...body, rrf_k: 1 });
+      const loose = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send({ ...body, rrf_k: 60 });
+
+      expect(tight.status).toBe(200);
+      expect(loose.status).toBe(200);
+      expect(tight.body.results[0].score).toBeGreaterThan(
+        loose.body.results[0].score
+      );
+      expect(
+        tight.body.results.map((r: { chunk_id?: string }) => {
+          return r.chunk_id;
+        })
+      ).toEqual(
+        loose.body.results.map((r: { chunk_id?: string }) => {
+          return r.chunk_id;
+        })
+      );
     });
 
     test('excludes invalidated memory entries', async () => {
