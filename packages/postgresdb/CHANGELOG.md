@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.48.0](https://github.com/ttoss/soat/compare/v0.47.0...v0.48.0) (2026-09-12)
+
+### Features
+
+* **agents:** add opt-in prompt caching, with cache writes metered separately ([#1290](https://github.com/ttoss/soat/issues/1290)) ([8c93eb6](https://github.com/ttoss/soat/commit/8c93eb6aa434c36320d0bcfacb0a986112d4a28e))
+
 # [0.47.0](https://github.com/ttoss/soat/compare/v0.46.0...v0.47.0) (2026-09-12)
 
 * feat(knowledge,memories)!: one key-value `tags` filter across both stores (#1275) ([f0691c9](https://github.com/ttoss/soat/commit/f0691c9dd14f7b1bee24b60d2c33002315a514b4)), closes [#1275](https://github.com/ttoss/soat/issues/1275)

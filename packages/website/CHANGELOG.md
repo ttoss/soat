@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.48.0](https://github.com/ttoss/soat/compare/v0.47.0...v0.48.0) (2026-09-12)
+
+### Features
+
+* **agents:** add opt-in prompt caching, with cache writes metered separately ([#1290](https://github.com/ttoss/soat/issues/1290)) ([8c93eb6](https://github.com/ttoss/soat/commit/8c93eb6aa434c36320d0bcfacb0a986112d4a28e))
+* **knowledge:** add the retrieval golden set and recall@k / MRR harness ([#1289](https://github.com/ttoss/soat/issues/1289)) ([033c1a0](https://github.com/ttoss/soat/commit/033c1a0ffb415ba07df420342e89784afeb949ad)), closes [#1271](https://github.com/ttoss/soat/issues/1271)
+
 # [0.47.0](https://github.com/ttoss/soat/compare/v0.46.0...v0.47.0) (2026-09-12)
 
 * fix(iam)!: validate condition keys against the keys the platform supplies (#1283) ([381c8c0](https://github.com/ttoss/soat/commit/381c8c00956a7f623d0c165dd03ce64dc34761be)), closes [#1283](https://github.com/ttoss/soat/issues/1283)
