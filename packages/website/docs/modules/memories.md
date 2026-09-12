@@ -192,6 +192,21 @@ The split is on the **first** colon, so a value may contain colons of its own (`
 
 The tag map is also its own sub-resource — [`GET /api/v1/memories/:id/tags`](/docs/api/memories/get-memory-tags), [`PUT /api/v1/memories/:id/tags`](/docs/api/memories/replace-memory-tags) (replace) and [`PATCH /api/v1/memories/:id/tags`](/docs/api/memories/merge-memory-tags) (merge) — the same three routes every tagged resource exposes. All three return the tag map, not the memory. See [IAM — Tags](./iam.md#tags).
 
+### Tag Conditions
+
+A policy condition on `soat:ResourceTag/<key>` reads these tags, so access can be granted by attribute rather than by id. Both bags take part, at the level that owns them:
+
+| Surface | What the condition reads |
+|---|---|
+| [`GET /api/v1/memories`](/docs/api/memories/list-memories), and every single-memory route | the memory's own tags |
+| [`GET /api/v1/memory-entries`](/docs/api/memory-entries/list-memory-entries) | the owning memory's tags to reach the listing at all, then each entry's own tags to narrow it |
+| A single entry, and the entry tag sub-routes | the entry's own tags **and** its memory's — both must permit |
+| [Knowledge search](./knowledge.md) | the same pair, compiled into the query: an entry is returned only when its memory and itself are both permitted |
+
+An entry is therefore never more visible than the memory holding it: a condition that hides a memory hides its entries, whatever the entries carry. A resource with no tag at all satisfies `StringNotEquals` — an absent key is not the excluded value — so untagged memories and entries stay visible under a `StringNotEquals` rule.
+
+Walk it end to end in [Tag-Based Access Control](../tutorials/tag-based-access-control.md).
+
 ### Entry-Level Tag Filtering
 
 Memory entries carry their own `tags` (and optional `metadata`), independent of the container's tags. [`GET /api/v1/memory-entries`](/docs/api/memory-entries/list-memory-entries) filters them with the same `?tags=key:value` parameter, and [`GET /api/v1/memory-entries/:id/tags`](/docs/api/memory-entries/get-memory-entry-tags), [`PUT /api/v1/memory-entries/:id/tags`](/docs/api/memory-entries/replace-memory-entry-tags) and [`PATCH /api/v1/memory-entries/:id/tags`](/docs/api/memory-entries/merge-memory-entry-tags) manage the bag without touching `content`. `tags` in [Knowledge search](./knowledge.md) and an agent's `knowledge_config.tags` match at **entry granularity**: an entry is returned when its parent memory's tags contain the pairs (container-level, all entries returned) **or** its own tags do (only that entry returned). A single memory can thus hold entries for many roles/sources: tag captured rules with `role: traffic-manager` and `source: rejected_approval`, then search `tags: { "role": "traffic-manager" }` to read only those.

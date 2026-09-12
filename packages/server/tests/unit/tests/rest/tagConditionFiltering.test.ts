@@ -15,12 +15,13 @@ describe('Tag-conditioned policies filter list and search surfaces', () => {
   let projectId: string;
   let financeDocId: string;
   let engDocId: string;
+  let untaggedDocId: string;
   let financeFileId: string;
   let engFileId: string;
 
   const createDocument = async (args: {
     path: string;
-    tags: Record<string, string>;
+    tags?: Record<string, string>;
   }) => {
     const res = await authenticatedTestClient(adminToken)
       .post('/api/v1/documents')
@@ -95,6 +96,9 @@ describe('Tag-conditioned policies filter list and search surfaces', () => {
       path: '/handbook/oncall.txt',
       tags: { team: 'eng' },
     });
+    // No `tags` at all, so the column stays NULL rather than `{}` — the two
+    // behave differently under JSONB containment.
+    untaggedDocId = await createDocument({ path: '/handbook/welcome.txt' });
 
     financeFileId = await createFile({
       filename: 'payroll.txt',
@@ -139,6 +143,20 @@ describe('Tag-conditioned policies filter list and search surfaces', () => {
     });
     expect(ids).toContain(engDocId);
     expect(ids).not.toContain(financeDocId);
+  });
+
+  test('GET /documents keeps a document carrying no tags at all', async () => {
+    const response = await authenticatedTestClient(restrictedToken)
+      .get('/api/v1/documents')
+      .query({ project_id: projectId });
+
+    // `StringNotEquals` holds when the key is absent, so an untagged resource
+    // is permitted. In SQL that needs an explicit null arm: `NULL @> x` is
+    // NULL, so a bare `NOT (tags @> x)` would drop the row instead.
+    const ids = response.body.data.map((d: { id: string }) => {
+      return d.id;
+    });
+    expect(ids).toContain(untaggedDocId);
   });
 
   test('GET /files omits a file the condition excludes', async () => {

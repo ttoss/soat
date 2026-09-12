@@ -5,10 +5,21 @@ import { getEmbedding } from 'src/lib/embedding';
 import { pickMergedContent } from 'src/lib/memoryConsolidation';
 import * as consolidationCompletion from 'src/lib/memoryConsolidationCompletion';
 import { paginatedList } from 'src/lib/pagination';
+import { registerResourceFieldMap } from 'src/lib/policyCompiler';
+import { hasPolicyConstraints } from 'src/lib/policyWhere';
 import { assertStorageQuota, contentBytes } from 'src/lib/quotaStorage';
 import { makeResourceAccessor } from 'src/lib/resourceAccessor';
 import { applyTagFilter, mergeTags } from 'src/lib/tags';
 import { withIterativeVectorScan } from 'src/lib/vectorSearch';
+
+// `memoryEntry`, not `memory_entry`: the IAM vocabulary is the SRN's, and
+// entries are addressed as `srn:<project>:memoryEntry:<id>`. The formation
+// template type (`memory_entry`) is a separate namespace.
+registerResourceFieldMap({
+  resourceType: 'memoryEntry',
+  publicIdColumn: { column: 'publicId' },
+  tagsColumn: { column: 'tags' },
+});
 
 /**
  * Context needed to consolidate a merge with an LLM. Present only for writes
@@ -437,12 +448,16 @@ export const listMemoryEntries = async (args: {
   /** Invalidated (superseded) entries are excluded unless this is set. */
   includeInvalidated?: boolean;
   tags?: Record<string, string>;
+  policyWhere?: Record<string, unknown>;
 }) => {
   const where: Record<string, unknown> = {
     memoryId: args.memoryId,
     ...(args.includeInvalidated ? {} : { invalidatedAt: null }),
   };
   applyTagFilter({ where, tags: args.tags });
+  if (hasPolicyConstraints(args.policyWhere)) {
+    Object.assign(where, args.policyWhere);
+  }
   return paginatedList({
     limit: args.limit,
     offset: args.offset,

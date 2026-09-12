@@ -157,6 +157,8 @@ Conditions add attribute-based constraints: an operator mapped to key-value pair
 | `StringNotEquals` | Negated exact match           |
 | `StringLike`      | Glob pattern match (`*`, `?`) |
 
+An **absent** key satisfies `StringNotEquals` and fails `StringEquals`: a resource carrying no `team` tag is not `team: finance`, so a `StringNotEquals` rule on that tag leaves it visible. The same holds whether the condition decides one resource or is compiled into a listing.
+
 ### Condition Keys
 
 | Key                      | Source        | Description                             |
@@ -252,7 +254,9 @@ Tags are key-value pairs on resources, enabling ABAC via conditions. One mechani
 | Knowledge search (`tags` in the body) | Same containment rule across documents and memory entries |
 | Policy condition (`soat:ResourceTag/<key>`) | Same pairs, read from the same column |
 
-Which resources honor `soat:ResourceTag/<key>` in a policy condition today: actors, conversations, documents, files, sessions. Memories and memory entries store and filter tags but do not yet evaluate them in policies (tracked in [#1279](https://github.com/ttoss/soat/issues/1279)).
+Every tagged resource honors `soat:ResourceTag/<key>` in a policy condition: actors, conversations, documents, files, sessions, memories and memory entries.
+
+A memory entry is the one resource governed by two tag bags — its own, and its memory's. Both are evaluated, so an entry is never more visible than the memory holding it; see [Memories — Tag Conditions](memories.md#tag-conditions).
 
 [Tag-Based Access Control](../tutorials/tag-based-access-control.md) walks the whole mechanism: tag two documents, condition a policy on the tag, and watch the listing and knowledge search narrow.
 

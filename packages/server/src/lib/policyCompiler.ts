@@ -160,8 +160,14 @@ const buildTagEqualsFragment = (
  * Build a WHERE fragment for a single tag key-value pair with StringNotEquals.
  *
  * Negating containment, rather than comparing the extracted value, is what
- * makes a resource carrying no such tag at all match — the same answer
- * `evaluateCondition` gives when the context key is absent.
+ * makes a resource whose bag holds a *different* value for the key match — the
+ * same answer `evaluateCondition` gives when the context key is absent.
+ *
+ * A resource with no tag bag at all needs the explicit `IS NULL` arm: `NULL @>
+ * x` is NULL, not false, so `NOT (tags @> x)` is NULL too and SQL drops the
+ * row. Without it an untagged resource silently disappears from every listing
+ * a `StringNotEquals` condition touches, which is the common case for memory
+ * entries.
  */
 const buildTagNotEqualsFragment = (
   spec: ColumnSpec,
@@ -169,7 +175,12 @@ const buildTagNotEqualsFragment = (
   expected: string
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Record<string, any> => {
-  return { [Op.not]: buildTagEqualsFragment(spec, tagKey, expected) };
+  return {
+    [Op.or]: [
+      { [Op.not]: buildTagEqualsFragment(spec, tagKey, expected) },
+      { [colRef(spec)]: null },
+    ],
+  };
 };
 
 /**

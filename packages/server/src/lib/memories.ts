@@ -1,7 +1,15 @@
 import { db } from 'src/db';
-import { paginatedList } from 'src/lib/pagination';
+import { emptyPage, paginatedList } from 'src/lib/pagination';
+import { registerResourceFieldMap } from 'src/lib/policyCompiler';
+import { hasPolicyConstraints } from 'src/lib/policyWhere';
 import { makeResourceAccessor } from 'src/lib/resourceAccessor';
 import { applyTagFilter, mergeTags } from 'src/lib/tags';
+
+registerResourceFieldMap({
+  resourceType: 'memory',
+  publicIdColumn: { column: 'publicId' },
+  tagsColumn: { column: 'tags' },
+});
 
 type MemoryRow = InstanceType<(typeof db)['Memory']> & {
   project?: InstanceType<(typeof db)['Project']>;
@@ -50,11 +58,17 @@ export const createMemory = async (args: {
 export const listMemories = async (args: {
   projectIds: number[];
   tags?: Record<string, string>;
+  policyWhere?: Record<string, unknown>;
   limit?: number;
   offset?: number;
 }) => {
+  if (args.projectIds.length === 0) return emptyPage(args);
+
   const where: Record<string, unknown> = { projectId: args.projectIds };
   applyTagFilter({ where, tags: args.tags });
+  if (hasPolicyConstraints(args.policyWhere)) {
+    Object.assign(where, args.policyWhere);
+  }
   return paginatedList({
     limit: args.limit,
     offset: args.offset,

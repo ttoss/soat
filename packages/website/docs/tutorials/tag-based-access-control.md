@@ -269,7 +269,12 @@ POLICY_ID=$(soat create-policy \
     "statement": [
       {
         "effect": "Allow",
-        "action": ["documents:ListDocuments", "knowledge:SearchKnowledge"],
+        "action": [
+          "documents:ListDocuments",
+          "memories:ListMemories",
+          "memories:ListMemoryEntries",
+          "knowledge:SearchKnowledge"
+        ],
         "resource": ["srn:'"$PROJECT_ID"':*:*"],
         "condition": {
           "StringNotEquals": { "soat:ResourceTag/team": "finance" }
@@ -303,7 +308,12 @@ const { data: policy, error: policyErr } =
         statement: [
           {
             effect: 'Allow',
-            action: ['documents:ListDocuments', 'knowledge:SearchKnowledge'],
+            action: [
+              'documents:ListDocuments',
+              'memories:ListMemories',
+              'memories:ListMemoryEntries',
+              'knowledge:SearchKnowledge',
+            ],
             resource: [`srn:${PROJECT_ID}:*:*`],
             condition: {
               StringNotEquals: { 'soat:ResourceTag/team': 'finance' },
@@ -350,7 +360,12 @@ POLICY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/policies" \
       \"statement\": [
         {
           \"effect\": \"Allow\",
-          \"action\": [\"documents:ListDocuments\", \"knowledge:SearchKnowledge\"],
+          \"action\": [
+            \"documents:ListDocuments\",
+            \"memories:ListMemories\",
+            \"memories:ListMemoryEntries\",
+            \"knowledge:SearchKnowledge\"
+          ],
           \"resource\": [\"srn:${PROJECT_ID}:*:*\"],
           \"condition\": {
             \"StringNotEquals\": {\"soat:ResourceTag/team\": \"finance\"}
@@ -493,7 +508,215 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/knowledge/search" \
 
 ---
 
-## Step 7 — A misspelled condition key is refused at write time
+## Step 7 — The same condition, on memories
+
+Documents are one store; the other is [Memories](/docs/modules/memories). A memory entry is the one resource with **two** tag bags — its own and its memory's — and both are evaluated, so an entry is never more visible than the memory holding it.
+
+Create two memories mirroring the documents, plus one entry that sits in the eng memory while carrying the finance tag itself. That last entry is what separates the two bags.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+FINANCE_MEM_ID=$(soat create-memory \
+  --project-id "$PROJECT_ID" \
+  --name payroll-notes \
+  --tags '{"team":"finance"}' | jq -r '.id')
+
+ENG_MEM_ID=$(soat create-memory \
+  --project-id "$PROJECT_ID" \
+  --name oncall-notes \
+  --tags '{"team":"eng"}' | jq -r '.id')
+
+soat create-memory-entry \
+  --memory-id "$FINANCE_MEM_ID" \
+  --content "Salary bands are reviewed every January."
+
+ENG_ENTRY_ID=$(soat create-memory-entry \
+  --memory-id "$ENG_MEM_ID" \
+  --content "Page the primary before escalating to the secondary." | jq -r '.id')
+
+# In the eng memory, but tagged finance itself
+FINANCE_ENTRY_ID=$(soat create-memory-entry \
+  --memory-id "$ENG_MEM_ID" \
+  --content "Contractor invoices are approved by the finance team." \
+  --tags '{"team":"finance"}' | jq -r '.id')
+```
+
+Dana sees the eng memory and not the finance one:
+
+```bash
+SOAT_TOKEN="$DANA_TOKEN" soat list-memories --project-id "$PROJECT_ID" \
+  | jq -e --arg eng "$ENG_MEM_ID" --arg fin "$FINANCE_MEM_ID" \
+      '[.data[].id] as $ids | ($ids | index($eng)) != null and ($ids | index($fin)) == null'
+```
+
+Inside the memory she can read, the entry carrying the excluded tag is still filtered out — the entry's own bag, not its container's:
+
+```bash
+SOAT_TOKEN="$DANA_TOKEN" soat list-memory-entries --memory-id "$ENG_MEM_ID" \
+  | jq -e --arg eng "$ENG_ENTRY_ID" --arg fin "$FINANCE_ENTRY_ID" \
+      '[.data[].id] as $ids | ($ids | index($eng)) != null and ($ids | index($fin)) == null'
+```
+
+And the finance memory is unreachable outright, so nothing inside it can be listed:
+
+```bash
+# → expect-fail
+SOAT_TOKEN="$DANA_TOKEN" soat list-memory-entries --memory-id "$FINANCE_MEM_ID"
+```
+
+Knowledge search reads both stores through the same policy. Asking for both memories returns only the entries Dana may read:
+
+```bash
+SOAT_TOKEN="$DANA_TOKEN" soat search-knowledge \
+  --project-id "$PROJECT_ID" \
+  --memory-ids '["'"$FINANCE_MEM_ID"'","'"$ENG_MEM_ID"'"]' \
+  --limit 50 \
+  | jq -e --arg eng "$ENG_ENTRY_ID" --arg fin "$FINANCE_ENTRY_ID" \
+      '[.results[].entry_id] as $ids | ($ids | index($eng)) != null and ($ids | index($fin)) == null'
+
+# Admin, same query, sees all three entries
+soat search-knowledge \
+  --project-id "$PROJECT_ID" \
+  --memory-ids '["'"$FINANCE_MEM_ID"'","'"$ENG_MEM_ID"'"]' \
+  --limit 50 \
+  | jq -e '[.results[].entry_id] | length == 3'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: financeMemory } = await adminSoat.memories.createMemory({
+  body: {
+    project_id: PROJECT_ID,
+    name: 'payroll-notes',
+    tags: { team: 'finance' },
+  },
+});
+
+const { data: engMemory } = await adminSoat.memories.createMemory({
+  body: {
+    project_id: PROJECT_ID,
+    name: 'oncall-notes',
+    tags: { team: 'eng' },
+  },
+});
+
+await adminSoat.memoryEntries.createMemoryEntry({
+  body: {
+    memory_id: financeMemory.id,
+    content: 'Salary bands are reviewed every January.',
+  },
+});
+
+const { data: engEntry } = await adminSoat.memoryEntries.createMemoryEntry({
+  body: {
+    memory_id: engMemory.id,
+    content: 'Page the primary before escalating to the secondary.',
+  },
+});
+
+// In the eng memory, but tagged finance itself
+const { data: financeEntry } = await adminSoat.memoryEntries.createMemoryEntry({
+  body: {
+    memory_id: engMemory.id,
+    content: 'Contractor invoices are approved by the finance team.',
+    tags: { team: 'finance' },
+  },
+});
+
+const { data: memories } = await danaSoat.memories.listMemories({
+  query: { project_id: PROJECT_ID },
+});
+console.log(memories.data.map((m) => m.id)); // [engMemory.id]
+
+const { data: entries } = await danaSoat.memoryEntries.listMemoryEntries({
+  query: { memory_id: engMemory.id },
+});
+console.log(entries.data.map((e) => e.id)); // [engEntry.id]
+
+const { error: financeEntriesErr } =
+  await danaSoat.memoryEntries.listMemoryEntries({
+    query: { memory_id: financeMemory.id },
+  });
+console.log(financeEntriesErr?.status); // 403
+
+const { data: search } = await danaSoat.knowledge.searchKnowledge({
+  body: {
+    project_id: PROJECT_ID,
+    memory_ids: [financeMemory.id, engMemory.id],
+    limit: 50,
+  },
+});
+// Only engEntry — financeEntry is excluded by its own tag, and the finance
+// memory's entries by their container's.
+console.log(search.results.map((r) => r.entry_id));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+FINANCE_MEM_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/memories" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"payroll-notes\",\"tags\":{\"team\":\"finance\"}}" \
+  | jq -r '.id')
+
+ENG_MEM_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/memories" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"oncall-notes\",\"tags\":{\"team\":\"eng\"}}" \
+  | jq -r '.id')
+
+curl -s -X POST "$SOAT_BASE_URL/api/v1/memory-entries" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"memory_id\":\"$FINANCE_MEM_ID\",\"content\":\"Salary bands are reviewed every January.\"}" > /dev/null
+
+ENG_ENTRY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/memory-entries" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"memory_id\":\"$ENG_MEM_ID\",\"content\":\"Page the primary before escalating to the secondary.\"}" \
+  | jq -r '.id')
+
+FINANCE_ENTRY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/memory-entries" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"memory_id\":\"$ENG_MEM_ID\",\"content\":\"Contractor invoices are approved by the finance team.\",\"tags\":{\"team\":\"finance\"}}" \
+  | jq -r '.id')
+
+# Dana's memories — only the eng one
+curl -s -G "$SOAT_BASE_URL/api/v1/memories" \
+  -H "Authorization: Bearer $DANA_TOKEN" \
+  --data-urlencode "project_id=$PROJECT_ID" | jq '[.data[].id]'
+
+# Dana's entries in the eng memory — the finance-tagged entry is absent
+curl -s -G "$SOAT_BASE_URL/api/v1/memory-entries" \
+  -H "Authorization: Bearer $DANA_TOKEN" \
+  --data-urlencode "memory_id=$ENG_MEM_ID" | jq '[.data[].id]'
+
+# The finance memory itself — 403
+curl -s -o /dev/null -w "%{http_code}\n" -G "$SOAT_BASE_URL/api/v1/memory-entries" \
+  -H "Authorization: Bearer $DANA_TOKEN" \
+  --data-urlencode "memory_id=$FINANCE_MEM_ID"
+
+# Knowledge search across both memories
+curl -s -X POST "$SOAT_BASE_URL/api/v1/knowledge/search" \
+  -H "Authorization: Bearer $DANA_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"memory_ids\":[\"$FINANCE_MEM_ID\",\"$ENG_MEM_ID\"],\"limit\":50}" \
+  | jq '[.results[].entry_id]'
+```
+
+</TabItem>
+</Tabs>
+
+---
+
+## Step 8 — A misspelled condition key is refused at write time
 
 `soat:ResourceType` and `soat:ResourceTag/<key>` are the only keys the platform supplies. A key it never supplies can never match, so a `Deny` carrying a typo would silently stop denying — a fail-open produced by a plural. [`POST /api/v1/policies`](/docs/api/policies/create-policy) rejects it with `400 VALIDATION_FAILED` instead ([IAM — Condition Keys](/docs/modules/iam#condition-keys)).
 
@@ -583,7 +806,7 @@ One tag bag, read three ways: `?tags=` filtered the listing, the same pairs scop
 
 The scope of a policy is then a property of the data, not a list of IDs: onboard a team by tagging its documents, and revoke by retagging.
 
-Tags work the same way on actors, conversations, files and sessions ([IAM — Tags](/docs/modules/iam#tags)). Memories and memory entries store and filter tags today but do not yet evaluate them in policy conditions — tracked in [#1279](https://github.com/ttoss/soat/issues/1279).
+One tag vocabulary spans both knowledge stores and every other tagged resource — actors, conversations, files and sessions read it the same way ([IAM — Tags](/docs/modules/iam#tags)). Memory entries are the one place two bags meet, and the stricter of the two wins.
 
 ## Next steps
 
