@@ -90,6 +90,13 @@ describe('resolveDocumentSearch — nested path filter with a limit', () => {
 // to `$document.file.<col>$` for `DocumentChunk` queries, where `file` sits a
 // level deeper than on the `Document` model the alias was designed for. No
 // REST-level test exercises a path-scoped policy against knowledge search.
+/**
+ * `compilePolicy` is given `columnRoot: 'document'` here (as `resolvePolicyWhere`
+ * does), so its column references are already relative to the `DocumentChunk`
+ * root this search ranks. The clause is written out rather than compiled so the
+ * vector branch, which no REST test reaches with an association reference, is
+ * exercised directly.
+ */
 describe('resolveDocumentSearch — policyWhere with a $-prefixed key', () => {
   let adminToken: string;
   let projectId: string;
@@ -122,7 +129,7 @@ describe('resolveDocumentSearch — policyWhere with a $-prefixed key', () => {
     const results = await resolveDocumentSearch({
       billingProjectId: null,
       config: { paths: ['/docs/'] },
-      policyWhere: { '$file.path$': documentPath },
+      policyWhere: { '$document.file.path$': documentPath },
     });
 
     expect(
@@ -136,7 +143,7 @@ describe('resolveDocumentSearch — policyWhere with a $-prefixed key', () => {
     const results = await resolveDocumentSearch({
       billingProjectId: null,
       config: { paths: ['/docs/'] },
-      policyWhere: { '$file.path$': '/docs/some-other-file.txt' },
+      policyWhere: { '$document.file.path$': '/docs/some-other-file.txt' },
     });
 
     expect(
@@ -146,7 +153,7 @@ describe('resolveDocumentSearch — policyWhere with a $-prefixed key', () => {
     ).toBe(false);
   });
 
-  test('search branch: does not throw when scoped by a $file.path$ policy', async () => {
+  test('search branch: does not throw when scoped by a path policy', async () => {
     // The DocumentChunk.embedding column is a fixed-dimension pgvector;
     // match its dimension so the `<=>` distance query is valid.
     jest
@@ -156,7 +163,7 @@ describe('resolveDocumentSearch — policyWhere with a $-prefixed key', () => {
     const results = await resolveDocumentSearch({
       billingProjectId: null,
       config: { search: 'restricted policy content' },
-      policyWhere: { '$file.path$': documentPath },
+      policyWhere: { '$document.file.path$': documentPath },
     });
 
     expect(Array.isArray(results)).toBe(true);

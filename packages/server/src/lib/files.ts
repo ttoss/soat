@@ -18,6 +18,7 @@ import {
   compilePolicy,
   registerResourceFieldMap,
 } from './policyCompiler';
+import { hasPolicyConstraints } from './policyWhere';
 import { assertStorageQuota } from './quotaStorage';
 import { applyTagFilter, mergeTags } from './tags';
 import { rethrowAsConflict } from './uniqueViolation';
@@ -75,7 +76,7 @@ export const listFiles = async (args: {
   }
   applyTagFilter({ where, tags: args.tags });
 
-  if (args.policyWhere && Object.keys(args.policyWhere).length > 0) {
+  if (hasPolicyConstraints(args.policyWhere)) {
     Object.assign(where, args.policyWhere);
   }
 
@@ -84,7 +85,7 @@ export const listFiles = async (args: {
     offset: args.offset,
     query: ({ limit, offset }) => {
       return db.File.findAndCountAll({
-        where: Object.keys(where).length > 0 ? where : undefined,
+        where: hasPolicyConstraints(where) ? where : undefined,
         limit,
         offset,
       });

@@ -12,6 +12,7 @@ import {
   type CompiledPolicy,
   registerResourceFieldMap,
 } from './policyCompiler';
+import { hasPolicyConstraints } from './policyWhere';
 import { makeResourceAccessor } from './resourceAccessor';
 import { applyTagFilter, mergeTags } from './tags';
 
@@ -187,7 +188,7 @@ export const listActors = async (args: {
     offset: args.offset,
     query: ({ limit, offset }) => {
       return db.Actor.findAndCountAll({
-        where: Object.keys(where).length > 0 ? where : undefined,
+        where: hasPolicyConstraints(where) ? where : undefined,
         include: actorIncludes(),
         distinct: true,
         limit,

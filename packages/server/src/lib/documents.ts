@@ -16,6 +16,7 @@ import { getStorageProvider } from './fileStorage';
 import { recoverStaleDocument } from './ingestionCallback';
 import { emptyPage, paginatedList } from './pagination';
 import { registerResourceFieldMap } from './policyCompiler';
+import { hasPolicyConstraints, referencesAssociation } from './policyWhere';
 import type { SoatEventTypeFor } from './soatEvents';
 import { applyTagFilter, mergeTags } from './tags';
 
@@ -91,10 +92,11 @@ const buildDocumentQueryOptions = (args: {
   offset: number;
 }) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const topLevelWhere: Record<string, any> =
-    args.policyWhere && Object.keys(args.policyWhere).length > 0
-      ? { ...args.policyWhere }
-      : {};
+  const topLevelWhere: Record<string, any> = hasPolicyConstraints(
+    args.policyWhere
+  )
+    ? { ...args.policyWhere }
+    : {};
   applyTagFilter({ where: topLevelWhere, tags: args.tags });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const file: Record<string, any> = {};
@@ -103,15 +105,10 @@ const buildDocumentQueryOptions = (args: {
     file.path = { [Op.like]: pathPrefixPattern(args.pathPrefix) };
   }
   const fileWhere = Object.keys(file).length > 0 ? file : undefined;
-  const needsSubQueryFalse =
-    args.policyWhere !== undefined &&
-    Object.keys(args.policyWhere).some((k) => {
-      return k.startsWith('$');
-    });
   return {
     topLevelWhere,
     fileWhere,
-    subQuery: needsSubQueryFalse ? false : undefined,
+    subQuery: referencesAssociation(args.policyWhere) ? false : undefined,
   };
 };
 
@@ -161,8 +158,7 @@ export const listDocuments = async (args: {
 
       return db.Document.findAndCountAll({
         distinct: true,
-        where:
-          Object.keys(topLevelWhere).length > 0 ? topLevelWhere : undefined,
+        where: hasPolicyConstraints(topLevelWhere) ? topLevelWhere : undefined,
         include: [
           {
             model: db.File,
