@@ -1,0 +1,53 @@
+openapi: 3.0.3
+info:
+  title: SOAT Tags
+  version: 1.0.0
+  description: >-
+    Shared components for the tag bag every tagged resource carries. This file
+    declares no paths: it exists so the shape of a tag bag, and the `?tags=`
+    filter that reads it, are defined once rather than once per module.
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+paths: {}
+components:
+  schemas:
+    TagBag:
+      type: object
+      additionalProperties:
+        type: string
+      description: >-
+        Key-value labels on a resource. A flat object of string values —
+        an array, a nested object or a number is rejected with
+        `400 VALIDATION_FAILED`, never coerced. Keys are opaque and stored
+        verbatim, so `cost_center` and `costCenter` are two different tags.
+        Matched by JSONB containment wherever tags are read: the `?tags=`
+        filter, knowledge search, and the IAM `soat:ResourceTag/<key>`
+        condition.
+      example: { team: 'finance', env: 'prod' }
+    NullableTagBag:
+      type: object
+      nullable: true
+      additionalProperties:
+        type: string
+      description: >-
+        A `TagBag` on a field where `null` is meaningful — a full-replacement
+        update that clears the bag, or a record whose bag was never set.
+      example: { team: 'finance', env: 'prod' }
+  parameters:
+    TagsQuery:
+      name: tags
+      in: query
+      required: false
+      description: >
+        Filter by tag pairs, written `key:value` (split on the first
+        colon, so a value may contain colons). Repeat the parameter for
+        several pairs; **all** must be present with exactly that value.
+      schema:
+        type: array
+        items:
+          type: string
+      style: form
+      explode: true
+      example:
+        - 'env:prod'

@@ -1027,12 +1027,11 @@ components:
               items:
                 type: string
             tags:
-              type: object
-              additionalProperties:
-                type: string
               description: >-
                 Key-value pairs a result's own `tags` must all contain (exact
                 match). Scopes documents and memory entries alike.
+              allOf:
+                - $ref: './tags.yaml#/components/schemas/TagBag'
             min_score:
               type: number
             limit:
@@ -1395,12 +1394,11 @@ components:
               items:
                 type: string
             tags:
-              type: object
-              additionalProperties:
-                type: string
               description: >-
                 Key-value pairs a result's own `tags` must all contain (exact
                 match). Scopes documents and memory entries alike.
+              allOf:
+                - $ref: './tags.yaml#/components/schemas/TagBag'
             min_score:
               type: number
             limit:
@@ -1586,12 +1584,11 @@ components:
               items:
                 type: string
             tags:
-              type: object
-              additionalProperties:
-                type: string
               description: >-
                 Key-value pairs a result's own `tags` must all contain (exact
                 match). Scopes documents and memory entries alike.
+              allOf:
+                - $ref: './tags.yaml#/components/schemas/TagBag'
             min_score:
               type: number
             limit:
@@ -1803,12 +1800,11 @@ components:
               items:
                 type: string
             tags:
-              type: object
-              additionalProperties:
-                type: string
               description: >-
                 Key-value pairs a result's own `tags` must all contain (exact
                 match). Scopes documents and memory entries alike.
+              allOf:
+                - $ref: './tags.yaml#/components/schemas/TagBag'
             min_score:
               type: number
             limit:

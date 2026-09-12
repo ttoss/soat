@@ -111,20 +111,7 @@ paths:
           schema:
             type: string
             enum: [open, closed, expired]
-        - name: tags
-          in: query
-          description: >
-            Filter by tag pairs, written `key:value` (split on the first
-            colon, so a value may contain colons). Repeat the parameter for
-            several pairs; **all** must be present with exactly that value.
-          schema:
-            type: array
-            items:
-              type: string
-          style: form
-          explode: true
-          example:
-            - 'env:prod'
+        - $ref: './tags.yaml#/components/parameters/TagsQuery'
         - name: limit
           in: query
           required: false
@@ -509,9 +496,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties:
-                  type: string
+                $ref: './tags.yaml#/components/schemas/TagBag'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -531,18 +516,14 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties:
-                type: string
+              $ref: './tags.yaml#/components/schemas/TagBag'
       responses:
         '200':
           description: Updated tags
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties:
-                  type: string
+                $ref: './tags.yaml#/components/schemas/TagBag'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -562,18 +543,14 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties:
-                type: string
+              $ref: './tags.yaml#/components/schemas/TagBag'
       responses:
         '200':
           description: Updated tags
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties:
-                  type: string
+                $ref: './tags.yaml#/components/schemas/TagBag'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -675,9 +652,7 @@ components:
             without one
           example: actor_V1StGXR8Z5jdHi6B
         tags:
-          type: object
-          additionalProperties:
-            type: string
+          $ref: './tags.yaml#/components/schemas/TagBag'
         auto_generate:
           type: boolean
           default: false
@@ -805,10 +780,7 @@ components:
           description: Optional name for the forked session
           example: retry with stricter system prompt
         tags:
-          type: object
-          additionalProperties:
-            type: string
-          description: Optional tags for the forked session
+          $ref: './tags.yaml#/components/schemas/TagBag'
         tool_context:
           type: object
           additionalProperties:

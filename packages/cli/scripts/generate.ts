@@ -6,6 +6,7 @@
  * Run via: pnpm generate
  */
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import * as url from 'node:url';
 
@@ -16,9 +17,23 @@ import {
 } from '@ttoss/openapi-codegen';
 import * as yaml from 'js-yaml';
 
+import { localizeSpecs } from './localizeSpecs';
+
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
-const SPECS_DIR = path.resolve(__dirname, '../../server/src/rest/openapi/v1');
+const SOURCE_SPECS_DIR = path.resolve(
+  __dirname,
+  '../../server/src/rest/openapi/v1'
+);
+
+/**
+ * The generator resolves a `$ref` only within one file, so every spec is first
+ * rewritten to carry the shared components and reference them locally. Reading
+ * the source directory directly would silently drop each `$ref`'d query
+ * parameter and mistype each `$ref`'d body property — see `localizeSpecs`.
+ */
+const SPECS_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'soat-cli-specs-'));
+localizeSpecs({ specsDir: SOURCE_SPECS_DIR, outDir: SPECS_DIR });
 const OUT_FILE = path.resolve(__dirname, '../src/generated/routes.ts');
 const MODULE_DOCS_BASE_URL = 'https://soat.ttoss.dev/docs/modules';
 

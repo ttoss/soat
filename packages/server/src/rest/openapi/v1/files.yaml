@@ -34,20 +34,7 @@ paths:
           schema:
             type: string
             example: 'proj_V1StGXR8Z5jdHi6B'
-        - name: tags
-          in: query
-          description: >
-            Filter by tag pairs, written `key:value` (split on the first
-            colon, so a value may contain colons). Repeat the parameter for
-            several pairs; **all** must be present with exactly that value.
-          schema:
-            type: array
-            items:
-              type: string
-          style: form
-          explode: true
-          example:
-            - 'env:prod'
+        - $ref: './tags.yaml#/components/parameters/TagsQuery'
         - name: limit
           in: query
           required: false
@@ -622,9 +609,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties:
-                  type: string
+                $ref: './tags.yaml#/components/schemas/TagBag'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -653,18 +638,14 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties:
-                type: string
+              $ref: './tags.yaml#/components/schemas/TagBag'
       responses:
         '200':
           description: Tags replaced
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties:
-                  type: string
+                $ref: './tags.yaml#/components/schemas/TagBag'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -693,18 +674,14 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties:
-                type: string
+              $ref: './tags.yaml#/components/schemas/TagBag'
       responses:
         '200':
           description: Tags merged
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties:
-                  type: string
+                $ref: './tags.yaml#/components/schemas/TagBag'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -849,10 +826,7 @@ components:
           description: JSON string with additional metadata
           example: '{"author":"John"}'
         tags:
-          type: object
-          additionalProperties:
-            type: string
-          description: Key-value tags attached to the file.
+          $ref: './tags.yaml#/components/schemas/TagBag'
         created_at:
           type: string
           format: date-time

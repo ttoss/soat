@@ -71,20 +71,7 @@ paths:
           schema:
             type: string
             example: 'conv_V1StGXR8Z5jdHi6B'
-        - name: tags
-          in: query
-          description: >
-            Filter by tag pairs, written `key:value` (split on the first
-            colon, so a value may contain colons). Repeat the parameter for
-            several pairs; **all** must be present with exactly that value.
-          schema:
-            type: array
-            items:
-              type: string
-          style: form
-          explode: true
-          example:
-            - 'env:prod'
+        - $ref: './tags.yaml#/components/parameters/TagsQuery'
         - name: limit
           in: query
           required: false
@@ -318,9 +305,7 @@ paths:
                   nullable: true
                   description: Chat to link this actor to. Mutually exclusive with agent_id.
                 tags:
-                  type: object
-                  additionalProperties:
-                    type: string
+                  $ref: './tags.yaml#/components/schemas/TagBag'
       responses:
         '200':
           description: Actor updated
@@ -367,9 +352,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties:
-                  type: string
+                $ref: './tags.yaml#/components/schemas/TagBag'
         '401':
           description: Unauthorized
           content:
@@ -407,21 +390,14 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties:
-                type: string
-              example:
-                type: customer
-                status: active
+              $ref: './tags.yaml#/components/schemas/TagBag'
       responses:
         '200':
           description: Tags replaced
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties:
-                  type: string
+                $ref: './tags.yaml#/components/schemas/TagBag'
         '401':
           description: Unauthorized
           content:
@@ -459,20 +435,14 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties:
-                type: string
-              example:
-                priority: high
+              $ref: './tags.yaml#/components/schemas/TagBag'
       responses:
         '200':
           description: Tags merged
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties:
-                  type: string
+                $ref: './tags.yaml#/components/schemas/TagBag'
         '401':
           description: Unauthorized
           content:
@@ -533,9 +503,7 @@ components:
           nullable: true
           description: Chat this actor is linked to (mutually exclusive with agentId).
         tags:
-          type: object
-          additionalProperties:
-            type: string
+          $ref: './tags.yaml#/components/schemas/TagBag'
         created_at:
           type: string
           format: date-time

@@ -35,20 +35,7 @@ paths:
           schema:
             type: string
             example: mem_V1StGXR8Z5jdHi6B
-        - name: tags
-          in: query
-          description: >
-            Filter by tag pairs, written `key:value` (split on the first
-            colon, so a value may contain colons). Repeat the parameter for
-            several pairs; **all** must be present with exactly that value.
-          schema:
-            type: array
-            items:
-              type: string
-          style: form
-          explode: true
-          example:
-            - 'env:prod'
+        - $ref: './tags.yaml#/components/parameters/TagsQuery'
         - name: limit
           in: query
           required: false
@@ -139,13 +126,11 @@ paths:
                   default: manual
                   example: manual
                 tags:
-                  type: object
-                  additionalProperties:
-                    type: string
-                  description: >
+                  description: >-
                     Per-entry key-value tags, used for entry-granularity
                     filtering by `tags` in search-knowledge.
-                  example: { role: traffic-manager, source: rejected_approval }
+                  allOf:
+                    - $ref: './tags.yaml#/components/schemas/TagBag'
                 metadata:
                   type: object
                   additionalProperties: true
@@ -241,14 +226,11 @@ paths:
                   type: string
                   description: Updated text content
                 tags:
-                  type: object
-                  nullable: true
-                  additionalProperties:
-                    type: string
-                  description: >
+                  description: >-
                     Replaces the entry's tags. Pass null or an empty object to
                     clear.
-                  example: { role: traffic-manager }
+                  allOf:
+                    - $ref: './tags.yaml#/components/schemas/NullableTagBag'
                 metadata:
                   type: object
                   nullable: true
@@ -316,9 +298,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties:
-                  type: string
+                $ref: './tags.yaml#/components/schemas/TagBag'
         '401':
           description: Unauthorized
         '403':
@@ -345,21 +325,14 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties:
-                type: string
-              example:
-                team: support
-                env: prod
+              $ref: './tags.yaml#/components/schemas/TagBag'
       responses:
         '200':
           description: Tags replaced
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties:
-                  type: string
+                $ref: './tags.yaml#/components/schemas/TagBag'
         '400':
           description: Body is not an object of string values
         '401':
@@ -388,20 +361,14 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties:
-                type: string
-              example:
-                priority: high
+              $ref: './tags.yaml#/components/schemas/TagBag'
       responses:
         '200':
           description: Tags merged
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties:
-                  type: string
+                $ref: './tags.yaml#/components/schemas/TagBag'
         '400':
           description: Body is not an object of string values
         '401':
@@ -435,12 +402,11 @@ components:
           enum: [manual, agent, extraction, orchestration]
           example: manual
         tags:
-          type: object
-          nullable: true
-          additionalProperties:
-            type: string
-          description: Per-entry key-value tags
-          example: { role: traffic-manager, source: rejected_approval }
+          description: >-
+            Per-entry key-value tags, matched at entry granularity by
+            knowledge search.
+          allOf:
+            - $ref: './tags.yaml#/components/schemas/NullableTagBag'
         metadata:
           type: object
           nullable: true

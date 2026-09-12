@@ -33,22 +33,7 @@ paths:
           schema:
             type: string
             example: proj_V1StGXR8Z5jdHi6B
-        - name: tags
-          in: query
-          description: >
-            Filter memories by tag pairs, written `key:value` (split on the
-            first colon, so a value may contain colons). Repeat the parameter
-            for several pairs; **all** must be present with exactly that value.
-            Omit to return all memories.
-          schema:
-            type: array
-            items:
-              type: string
-          style: form
-          explode: true
-          example:
-            - 'team:support'
-            - 'tier:enterprise'
+        - $ref: './tags.yaml#/components/parameters/TagsQuery'
         - name: limit
           in: query
           required: false
@@ -121,13 +106,11 @@ paths:
                   description: Optional description
                   example: Retrieves product docs for support queries
                 tags:
-                  type: object
-                  additionalProperties:
-                    type: string
-                  description: >
+                  description: >-
                     Optional key-value tags. Scopes the memory in knowledge
                     search, where every requested pair must match exactly.
-                  example: { team: 'support', tier: 'enterprise' }
+                  allOf:
+                    - $ref: './tags.yaml#/components/schemas/TagBag'
       responses:
         '201':
           description: Memory created
@@ -200,13 +183,11 @@ paths:
                   nullable: true
                   description: Optional description
                 tags:
-                  type: object
-                  nullable: true
-                  additionalProperties:
-                    type: string
-                  description: >
+                  description: >-
                     Optional key-value tags. Replaces the stored bag; `null`
                     clears it.
+                  allOf:
+                    - $ref: './tags.yaml#/components/schemas/NullableTagBag'
       responses:
         '200':
           description: Memory updated
@@ -268,9 +249,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties:
-                  type: string
+                $ref: './tags.yaml#/components/schemas/TagBag'
         '401':
           description: Unauthorized
         '403':
@@ -297,21 +276,14 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties:
-                type: string
-              example:
-                team: support
-                env: prod
+              $ref: './tags.yaml#/components/schemas/TagBag'
       responses:
         '200':
           description: Tags replaced
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties:
-                  type: string
+                $ref: './tags.yaml#/components/schemas/TagBag'
         '400':
           description: Body is not an object of string values
         '401':
@@ -340,20 +312,14 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties:
-                type: string
-              example:
-                priority: high
+              $ref: './tags.yaml#/components/schemas/TagBag'
       responses:
         '200':
           description: Tags merged
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties:
-                  type: string
+                $ref: './tags.yaml#/components/schemas/TagBag'
         '400':
           description: Body is not an object of string values
         '401':
@@ -387,12 +353,10 @@ components:
           nullable: true
           example: Retrieves product docs for support queries
         tags:
-          type: object
-          nullable: true
-          additionalProperties:
-            type: string
-          description: Key-value tags for filtering in knowledge search
-          example: { team: 'support', tier: 'enterprise' }
+          description: >-
+            Key-value tags for filtering in knowledge search.
+          allOf:
+            - $ref: './tags.yaml#/components/schemas/NullableTagBag'
         created_at:
           type: string
           format: date-time

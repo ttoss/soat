@@ -763,12 +763,11 @@ components:
                 type: string
               description: Retrieve from all documents matching these path prefixes
             tags:
-              type: object
-              additionalProperties:
-                type: string
               description: >-
                 Retrieve from documents and memory entries whose tags contain
-                all these key-value pairs
+                all these key-value pairs.
+              allOf:
+                - $ref: './tags.yaml#/components/schemas/TagBag'
             min_score:
               type: number
               description: Minimum similarity score (0–1) for retrieved chunks
@@ -1166,12 +1165,7 @@ components:
           nullable: true
           description: What this memory stores
         tags:
-          type: object
-          nullable: true
-          additionalProperties:
-            type: string
-          description: Key-value tags for filtering
-
+          $ref: './tags.yaml#/components/schemas/NullableTagBag'
     MemoryEntryResourceProperties:
       description: Adds a single text entry to a memory store.
       type: object
@@ -1192,12 +1186,11 @@ components:
           enum: [manual, agent, extraction, orchestration]
           description: How this entry was created (defaults to manual)
         tags:
-          type: object
-          nullable: true
-          additionalProperties:
-            type: string
           description: >-
-            Per-entry key-value tags for entry-granularity filtering
+            Per-entry key-value tags for entry-granularity filtering in
+            knowledge search.
+          allOf:
+            - $ref: './tags.yaml#/components/schemas/NullableTagBag'
         metadata:
           type: object
           nullable: true
