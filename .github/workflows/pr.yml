@@ -14,6 +14,7 @@ jobs:
     if: "!startsWith(github.event.pull_request.title, 'chore(release):')"
     outputs:
       code: ${{ steps.filter.outputs.code }}
+      knowledge_docs: ${{ steps.filter.outputs.knowledge_docs }}
 
     steps:
       - uses: dorny/paths-filter@v3
@@ -22,9 +23,20 @@ jobs:
           # `code` is true when the PR touches any file other than Markdown.
           # When only `*.md` files change, `code` is false and the build,
           # smoke, and tutorial jobs are skipped (docs-lint still runs).
+          #
+          # `knowledge_docs` is the one exception to that skip. The retrieval
+          # eval seeds part of its corpus from these pages at run time, so a
+          # Markdown-only edit to one of them moves the recall numbers; without
+          # this the drift lands silently and fails the next unrelated code PR.
+          # The whole directory rather than the ten files `golden.json` names
+          # today: a hand-kept list is exactly the skip list that drifts, and
+          # `knowledgeEvalTriggers.test.mjs` fails if a fixture is ever seeded
+          # from outside it.
           filters: |
             code:
               - '!**/*.md'
+            knowledge_docs:
+              - 'packages/website/docs/modules/**'
 
   docs-lint:
     name: Docs Lint
@@ -202,7 +214,9 @@ jobs:
     name: Knowledge Retrieval Eval
     runs-on: ubuntu-latest
     needs: changes
-    if: "!startsWith(github.event.pull_request.title, 'chore(release):') && needs.changes.outputs.code == 'true'"
+    # Also on a Markdown-only PR that edits the module docs: the corpus is
+    # seeded from them, so those edits move the numbers this job gates on.
+    if: "!startsWith(github.event.pull_request.title, 'chore(release):') && (needs.changes.outputs.code == 'true' || needs.changes.outputs.knowledge_docs == 'true')"
 
     steps:
       - uses: actions/checkout@v6
