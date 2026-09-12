@@ -5,6 +5,14 @@ import { db } from '../db';
 const log = createDebug('soat:knowledge');
 
 /**
+ * Sequelize's own fragment types, named through `db` rather than imported.
+ * `@ttoss/postgresdb` re-exports neither, and letting them be inferred makes
+ * the declaration name a path inside `.pnpm/sequelize@…` (TS2883).
+ */
+type SequelizeWhere = ReturnType<typeof db.sequelize.where>;
+type SequelizeFn = ReturnType<typeof db.sequelize.fn>;
+
+/**
  * The lexical half of hybrid retrieval: a PostgreSQL full-text query run beside
  * the pgvector one, over the same `content` column and under the same scope
  * filters.
@@ -40,7 +48,7 @@ export const getTextSearchConfig = (): string => {
  * but the string is caller-supplied and must not reach SQL unescaped for that
  * reason alone.
  */
-const contentTsVector = (args: { column: string }) => {
+const contentTsVector = (args: { column: string }): SequelizeFn => {
   return db.sequelize.fn(
     'to_tsvector',
     getTextSearchConfig(),
@@ -48,7 +56,7 @@ const contentTsVector = (args: { column: string }) => {
   );
 };
 
-const queryTsQuery = (args: { query: string }) => {
+const queryTsQuery = (args: { query: string }): SequelizeFn => {
   return db.sequelize.fn(
     'websearch_to_tsquery',
     getTextSearchConfig(),
@@ -57,7 +65,10 @@ const queryTsQuery = (args: { query: string }) => {
 };
 
 /** Matches rows whose `content` satisfies every term the query produced. */
-export const lexicalMatchWhere = (args: { column: string; query: string }) => {
+export const lexicalMatchWhere = (args: {
+  column: string;
+  query: string;
+}): SequelizeWhere => {
   return db.sequelize.where(
     contentTsVector({ column: args.column }),
     '@@',
@@ -73,7 +84,7 @@ export const lexicalMatchWhere = (args: { column: string; query: string }) => {
 export const lexicalRankExpression = (args: {
   column: string;
   query: string;
-}) => {
+}): SequelizeFn => {
   return db.sequelize.fn(
     'ts_rank_cd',
     contentTsVector({ column: args.column }),
