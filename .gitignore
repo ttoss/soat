@@ -127,3 +127,6 @@ tsup.config.bundled*.mjs
 .playwright-mcp/
 .claude/worktrees/
 
+# Written by `pnpm --filter @soat/server eval:knowledge`; `baseline.json` beside
+# it is the committed artifact.
+packages/server/tests/eval/knowledge/report.json

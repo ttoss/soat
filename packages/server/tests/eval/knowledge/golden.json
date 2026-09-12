@@ -1,0 +1,849 @@
+{
+  "version": 1,
+  "corpus": {
+    "documents": [
+      {
+        "key": "doc:knowledge#relevance-scoring",
+        "path": "/modules/knowledge/relevance-scoring.md",
+        "source": "packages/website/docs/modules/knowledge.md",
+        "section": "Relevance scoring"
+      },
+      {
+        "key": "doc:knowledge#search-modes",
+        "path": "/modules/knowledge/search-modes.md",
+        "source": "packages/website/docs/modules/knowledge.md",
+        "section": "Search Modes"
+      },
+      {
+        "key": "doc:knowledge#ranking-is-approximate",
+        "path": "/modules/knowledge/ranking-is-approximate.md",
+        "source": "packages/website/docs/modules/knowledge.md",
+        "section": "Ranking is approximate"
+      },
+      {
+        "key": "doc:knowledge#injected-knowledge-is-untrusted-input",
+        "path": "/modules/knowledge/injected-knowledge-is-untrusted-input.md",
+        "source": "packages/website/docs/modules/knowledge.md",
+        "section": "Injected knowledge is untrusted input"
+      },
+      {
+        "key": "doc:memories#write-algorithm",
+        "path": "/modules/memories/write-algorithm.md",
+        "source": "packages/website/docs/modules/memories.md",
+        "section": "Write Algorithm"
+      },
+      {
+        "key": "doc:memories#temporal-invalidation",
+        "path": "/modules/memories/temporal-invalidation.md",
+        "source": "packages/website/docs/modules/memories.md",
+        "section": "Temporal invalidation"
+      },
+      {
+        "key": "doc:memories#provenance",
+        "path": "/modules/memories/provenance.md",
+        "source": "packages/website/docs/modules/memories.md",
+        "section": "Provenance"
+      },
+      {
+        "key": "doc:memories#entry-level-tag-filtering",
+        "path": "/modules/memories/entry-level-tag-filtering.md",
+        "source": "packages/website/docs/modules/memories.md",
+        "section": "Entry-Level Tag Filtering"
+      },
+      {
+        "key": "doc:documents#file-ingestion-and-chunking",
+        "path": "/modules/documents/file-ingestion-and-chunking.md",
+        "source": "packages/website/docs/modules/documents.md",
+        "section": "File Ingestion and Chunking"
+      },
+      {
+        "key": "doc:documents#stuck-ingestion-recovery",
+        "path": "/modules/documents/stuck-ingestion-recovery.md",
+        "source": "packages/website/docs/modules/documents.md",
+        "section": "Stuck Ingestion Recovery"
+      },
+      {
+        "key": "doc:documents#path-based-srns",
+        "path": "/modules/documents/path-based-srns.md",
+        "source": "packages/website/docs/modules/documents.md",
+        "section": "Path-Based SRNs"
+      },
+      {
+        "key": "doc:embeddings#provider-selection",
+        "path": "/modules/embeddings/provider-selection.md",
+        "source": "packages/website/docs/modules/embeddings.md",
+        "section": "Provider selection"
+      },
+      {
+        "key": "doc:embeddings#pricing-embeddings",
+        "path": "/modules/embeddings/pricing-embeddings.md",
+        "source": "packages/website/docs/modules/embeddings.md",
+        "section": "Pricing embeddings"
+      },
+      {
+        "key": "doc:iam#condition-operators",
+        "path": "/modules/iam/condition-operators.md",
+        "source": "packages/website/docs/modules/iam.md",
+        "section": "Condition Operators"
+      },
+      {
+        "key": "doc:iam#what-a-denial-looks-like",
+        "path": "/modules/iam/what-a-denial-looks-like.md",
+        "source": "packages/website/docs/modules/iam.md",
+        "section": "What a Denial Looks Like"
+      },
+      {
+        "key": "doc:sessions#forking",
+        "path": "/modules/sessions/forking.md",
+        "source": "packages/website/docs/modules/sessions.md",
+        "section": "Forking"
+      },
+      {
+        "key": "doc:sessions#inactivity-ttl",
+        "path": "/modules/sessions/inactivity-ttl.md",
+        "source": "packages/website/docs/modules/sessions.md",
+        "section": "Inactivity TTL"
+      },
+      {
+        "key": "doc:webhooks#secret-and-signature-verification",
+        "path": "/modules/webhooks/secret-and-signature-verification.md",
+        "source": "packages/website/docs/modules/webhooks.md",
+        "section": "Secret and Signature Verification"
+      },
+      {
+        "key": "doc:approvals#expiry-is-a-hard-gate",
+        "path": "/modules/approvals/expiry-is-a-hard-gate.md",
+        "source": "packages/website/docs/modules/approvals.md",
+        "section": "Expiry is a hard gate"
+      },
+      {
+        "key": "doc:quotas#monitor-mode",
+        "path": "/modules/quotas/monitor-mode.md",
+        "source": "packages/website/docs/modules/quotas.md",
+        "section": "Monitor mode"
+      },
+      {
+        "key": "doc:quotas#actor-scope",
+        "path": "/modules/quotas/actor-scope.md",
+        "source": "packages/website/docs/modules/quotas.md",
+        "section": "Actor scope"
+      },
+      {
+        "key": "doc:secrets#secret-references",
+        "path": "/modules/secrets/secret-references.md",
+        "source": "packages/website/docs/modules/secrets.md",
+        "section": "Secret References (`{{secret:...}}`)"
+      },
+      {
+        "key": "doc:synthetic-catalog",
+        "path": "/synthetic/catalog.md",
+        "content": "# Warehouse catalog\n\nSKU-4711 is a stainless steel flange sold in packs of twelve. It ships from the Rotterdam facility and is stocked in aisle fourteen. Replacement gaskets are ordered separately under the accessories catalog, and the pack size cannot be split across two orders.\n"
+      },
+      {
+        "key": "doc:synthetic-invoice",
+        "path": "/synthetic/invoice.md",
+        "content": "# Invoice archive\n\nINVOICE-90210 covers the third-quarter licence renewal and was settled by bank transfer. The archive keeps one entry per settled invoice, recording the settlement date, the paying entity and the reference the bank returned.\n"
+      },
+      {
+        "key": "doc:synthetic-incident",
+        "path": "/synthetic/incident.md",
+        "content": "# Incident record\n\nINC-2291 describes a partial loss of write availability in the primary region. The trigger was an exhausted connection pool; the mitigation was to raise the pool ceiling and shed background traffic until the backlog had drained.\n"
+      },
+      {
+        "key": "doc:synthetic-runbook",
+        "path": "/synthetic/runbook.md",
+        "content": "# Failover runbook\n\nRUNBOOK-ZEPHYR is the procedure for draining a region before planned maintenance. It covers quiescing the queue workers, promoting the standby replica, and confirming that no lease is still held when the switch is thrown.\n"
+      },
+      {
+        "key": "doc:synthetic-datasheet",
+        "path": "/synthetic/datasheet.md",
+        "content": "# Component datasheet\n\nPart MX-88Q is a temperature-compensated pressure transducer rated for continuous duty. Its calibration interval is twelve months and its output is a four to twenty milliampere current loop.\n"
+      },
+      {
+        "key": "doc:synthetic-contract",
+        "path": "/synthetic/contract.md",
+        "content": "# Contract register\n\nCTR-5150 is the master services agreement covering managed hosting. Its renewal clause is automatic unless either party gives ninety days of written notice, and its liability cap is stated per incident rather than per year.\n"
+      },
+      {
+        "key": "doc:synthetic-release",
+        "path": "/synthetic/release.md",
+        "content": "# Release notes\n\nBuild orion-r7 ships the queue-draining fix and a faster startup path for the worker pool. Operators upgrading from an earlier build should expect one extra restart while the new lease format is adopted.\n"
+      },
+      {
+        "key": "doc:synthetic-telemetry",
+        "path": "/synthetic/telemetry.md",
+        "content": "# Telemetry alerts\n\nTELEMETRY_LAG_HIGH fires when the ingestion pipeline falls more than five minutes behind the producing edge. The alert clears on its own once the backlog drains, and a sustained firing points at a saturated consumer rather than a slow producer.\n"
+      },
+      {
+        "key": "doc:synthetic-warehouse",
+        "path": "/synthetic/warehouse.md",
+        "content": "# Facility register\n\nWH-ROT-02 is the secondary distribution facility, with a bonded storage area and a dedicated returns dock. Night shifts run Monday to Thursday, and cross-docked freight is never held overnight.\n"
+      },
+      {
+        "key": "doc:synthetic-onboarding",
+        "path": "/synthetic/onboarding.md",
+        "content": "# Onboarding checklist\n\nOB-3310 is the checklist a new field technician completes before the first unaccompanied call. It covers tooling issue, the safety briefing, vehicle assignment and the sign-off the supervising technician records.\n"
+      }
+    ],
+    "memories": [
+      {
+        "key": "mem:acme-billing",
+        "content": "Acme Corp is billed on NET-30 terms.",
+        "tags": {
+          "account": "acme"
+        }
+      },
+      {
+        "key": "mem:acme-contact",
+        "content": "The billing contact at Acme Corp is Dominique Leclerc.",
+        "tags": {
+          "account": "acme"
+        }
+      },
+      {
+        "key": "mem:zenith-renewal",
+        "content": "Zenith Logistics renews its managed hosting contract on 30 November 2026.",
+        "tags": {
+          "account": "zenith"
+        }
+      },
+      {
+        "key": "mem:zenith-tier",
+        "content": "Zenith Logistics is on the enterprise support tier.",
+        "tags": {
+          "account": "zenith"
+        }
+      },
+      {
+        "key": "mem:marisol-timezone",
+        "content": "Marisol Okonkwo works from the Europe/Lisbon timezone.",
+        "tags": {
+          "account": "internal"
+        }
+      },
+      {
+        "key": "mem:harbor-preference",
+        "content": "Harbor Freight Collective prefers to receive invoices as PDF attachments.",
+        "tags": {
+          "account": "harbor"
+        }
+      },
+      {
+        "key": "mem:nimbus-outage",
+        "content": "Nimbus Analytics reported a dashboard outage on 14 March 2026.",
+        "tags": {
+          "account": "nimbus"
+        }
+      },
+      {
+        "key": "mem:orchid-currency",
+        "content": "Orchid Retail is invoiced in Brazilian real.",
+        "tags": {
+          "account": "orchid"
+        }
+      },
+      {
+        "key": "mem:vertex-sla",
+        "content": "Vertex Robotics has a four-hour incident response commitment.",
+        "tags": {
+          "account": "vertex"
+        }
+      },
+      {
+        "key": "mem:lumen-locale",
+        "content": "Lumen Media requires every report in European date format.",
+        "tags": {
+          "account": "lumen"
+        }
+      },
+      {
+        "key": "mem:kestrel-contact",
+        "content": "The technical contact at Kestrel Freight is Amara Dubois.",
+        "tags": {
+          "account": "kestrel"
+        }
+      },
+      {
+        "key": "mem:solstice-orders",
+        "content": "Solstice Foods files every purchase order under the prefix PO-SOL.",
+        "tags": {
+          "account": "solstice"
+        }
+      }
+    ]
+  },
+  "queries": [
+    {
+      "id": "exact-token-001",
+      "query": "SKU-4711",
+      "kind": "exact_token",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:synthetic-catalog"
+        }
+      ]
+    },
+    {
+      "id": "exact-token-002",
+      "query": "INVOICE-90210",
+      "kind": "exact_token",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:synthetic-invoice"
+        }
+      ]
+    },
+    {
+      "id": "exact-token-003",
+      "query": "INC-2291",
+      "kind": "exact_token",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:synthetic-incident"
+        }
+      ]
+    },
+    {
+      "id": "exact-token-004",
+      "query": "RUNBOOK-ZEPHYR",
+      "kind": "exact_token",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:synthetic-runbook"
+        }
+      ]
+    },
+    {
+      "id": "exact-token-005",
+      "query": "MX-88Q",
+      "kind": "exact_token",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:synthetic-datasheet"
+        }
+      ]
+    },
+    {
+      "id": "exact-token-006",
+      "query": "CTR-5150",
+      "kind": "exact_token",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:synthetic-contract"
+        }
+      ]
+    },
+    {
+      "id": "exact-token-007",
+      "query": "orion-r7",
+      "kind": "exact_token",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:synthetic-release"
+        }
+      ]
+    },
+    {
+      "id": "exact-token-008",
+      "query": "TELEMETRY_LAG_HIGH",
+      "kind": "exact_token",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:synthetic-telemetry"
+        }
+      ]
+    },
+    {
+      "id": "exact-token-009",
+      "query": "WH-ROT-02",
+      "kind": "exact_token",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:synthetic-warehouse"
+        }
+      ]
+    },
+    {
+      "id": "exact-token-010",
+      "query": "OB-3310",
+      "kind": "exact_token",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:synthetic-onboarding"
+        }
+      ]
+    },
+    {
+      "id": "exact-name-001",
+      "query": "Relevance scoring",
+      "kind": "exact_name",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:knowledge#relevance-scoring"
+        }
+      ]
+    },
+    {
+      "id": "exact-name-002",
+      "query": "Search Modes",
+      "kind": "exact_name",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:knowledge#search-modes"
+        }
+      ]
+    },
+    {
+      "id": "exact-name-003",
+      "query": "Ranking is approximate",
+      "kind": "exact_name",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:knowledge#ranking-is-approximate"
+        }
+      ]
+    },
+    {
+      "id": "exact-name-004",
+      "query": "Write Algorithm",
+      "kind": "exact_name",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:memories#write-algorithm"
+        }
+      ]
+    },
+    {
+      "id": "exact-name-005",
+      "query": "Temporal invalidation",
+      "kind": "exact_name",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:memories#temporal-invalidation"
+        }
+      ]
+    },
+    {
+      "id": "exact-name-006",
+      "query": "Entry-Level Tag Filtering",
+      "kind": "exact_name",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:memories#entry-level-tag-filtering"
+        }
+      ]
+    },
+    {
+      "id": "exact-name-007",
+      "query": "File Ingestion and Chunking",
+      "kind": "exact_name",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:documents#file-ingestion-and-chunking"
+        }
+      ]
+    },
+    {
+      "id": "exact-name-008",
+      "query": "Stuck Ingestion Recovery",
+      "kind": "exact_name",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:documents#stuck-ingestion-recovery"
+        }
+      ]
+    },
+    {
+      "id": "exact-name-009",
+      "query": "Path-Based SRNs",
+      "kind": "exact_name",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:documents#path-based-srns"
+        }
+      ]
+    },
+    {
+      "id": "exact-name-010",
+      "query": "Provider selection",
+      "kind": "exact_name",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:embeddings#provider-selection"
+        }
+      ]
+    },
+    {
+      "id": "exact-name-011",
+      "query": "Pricing embeddings",
+      "kind": "exact_name",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:embeddings#pricing-embeddings"
+        }
+      ]
+    },
+    {
+      "id": "exact-name-012",
+      "query": "Condition Operators",
+      "kind": "exact_name",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:iam#condition-operators"
+        }
+      ]
+    },
+    {
+      "id": "exact-name-013",
+      "query": "Inactivity TTL",
+      "kind": "exact_name",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:sessions#inactivity-ttl"
+        }
+      ]
+    },
+    {
+      "id": "exact-name-014",
+      "query": "Monitor mode",
+      "kind": "exact_name",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:quotas#monitor-mode"
+        }
+      ]
+    },
+    {
+      "id": "exact-name-015",
+      "query": "Actor scope",
+      "kind": "exact_name",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:quotas#actor-scope"
+        }
+      ]
+    },
+    {
+      "id": "entity-001",
+      "query": "Acme Corp payment terms",
+      "kind": "entity",
+      "expected": [
+        {
+          "source_type": "memory",
+          "key": "mem:acme-billing"
+        }
+      ]
+    },
+    {
+      "id": "entity-002",
+      "query": "who is the billing contact at Acme Corp",
+      "kind": "entity",
+      "expected": [
+        {
+          "source_type": "memory",
+          "key": "mem:acme-contact"
+        }
+      ]
+    },
+    {
+      "id": "entity-003",
+      "query": "when does Zenith Logistics renew",
+      "kind": "entity",
+      "expected": [
+        {
+          "source_type": "memory",
+          "key": "mem:zenith-renewal"
+        }
+      ]
+    },
+    {
+      "id": "entity-004",
+      "query": "what support tier is Zenith Logistics on",
+      "kind": "entity",
+      "expected": [
+        {
+          "source_type": "memory",
+          "key": "mem:zenith-tier"
+        }
+      ]
+    },
+    {
+      "id": "entity-005",
+      "query": "Marisol Okonkwo timezone",
+      "kind": "entity",
+      "expected": [
+        {
+          "source_type": "memory",
+          "key": "mem:marisol-timezone"
+        }
+      ]
+    },
+    {
+      "id": "entity-006",
+      "query": "how does Harbor Freight Collective want invoices delivered",
+      "kind": "entity",
+      "expected": [
+        {
+          "source_type": "memory",
+          "key": "mem:harbor-preference"
+        }
+      ]
+    },
+    {
+      "id": "entity-007",
+      "query": "Nimbus Analytics outage",
+      "kind": "entity",
+      "expected": [
+        {
+          "source_type": "memory",
+          "key": "mem:nimbus-outage"
+        }
+      ]
+    },
+    {
+      "id": "entity-008",
+      "query": "what currency is Orchid Retail invoiced in",
+      "kind": "entity",
+      "expected": [
+        {
+          "source_type": "memory",
+          "key": "mem:orchid-currency"
+        }
+      ]
+    },
+    {
+      "id": "entity-009",
+      "query": "Vertex Robotics incident response commitment",
+      "kind": "entity",
+      "expected": [
+        {
+          "source_type": "memory",
+          "key": "mem:vertex-sla"
+        }
+      ]
+    },
+    {
+      "id": "entity-010",
+      "query": "what date format does Lumen Media require",
+      "kind": "entity",
+      "expected": [
+        {
+          "source_type": "memory",
+          "key": "mem:lumen-locale"
+        }
+      ]
+    },
+    {
+      "id": "entity-011",
+      "query": "technical contact at Kestrel Freight",
+      "kind": "entity",
+      "expected": [
+        {
+          "source_type": "memory",
+          "key": "mem:kestrel-contact"
+        }
+      ]
+    },
+    {
+      "id": "entity-012",
+      "query": "Solstice Foods purchase order prefix",
+      "kind": "entity",
+      "expected": [
+        {
+          "source_type": "memory",
+          "key": "mem:solstice-orders"
+        }
+      ]
+    },
+    {
+      "id": "semantic-001",
+      "query": "how does the platform decide which result comes first",
+      "kind": "semantic",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:knowledge#relevance-scoring"
+        }
+      ]
+    },
+    {
+      "id": "semantic-002",
+      "query": "why might the top hit not be the closest match",
+      "kind": "semantic",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:knowledge#ranking-is-approximate"
+        }
+      ]
+    },
+    {
+      "id": "semantic-003",
+      "query": "can text pulled from stored knowledge be trusted as instructions",
+      "kind": "semantic",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:knowledge#injected-knowledge-is-untrusted-input"
+        }
+      ]
+    },
+    {
+      "id": "semantic-004",
+      "query": "what happens when the same fact is written twice",
+      "kind": "semantic",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:memories#write-algorithm"
+        }
+      ]
+    },
+    {
+      "id": "semantic-005",
+      "query": "how do I mark an older fact as no longer true",
+      "kind": "semantic",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:memories#temporal-invalidation"
+        }
+      ]
+    },
+    {
+      "id": "semantic-006",
+      "query": "where did a remembered fact originally come from",
+      "kind": "semantic",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:memories#provenance"
+        }
+      ]
+    },
+    {
+      "id": "semantic-007",
+      "query": "how is a large uploaded file broken into pieces",
+      "kind": "semantic",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:documents#file-ingestion-and-chunking"
+        }
+      ]
+    },
+    {
+      "id": "semantic-008",
+      "query": "an upload has been processing forever",
+      "kind": "semantic",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:documents#stuck-ingestion-recovery"
+        }
+      ]
+    },
+    {
+      "id": "semantic-009",
+      "query": "which vendor computes the vectors",
+      "kind": "semantic",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:embeddings#provider-selection"
+        }
+      ]
+    },
+    {
+      "id": "semantic-010",
+      "query": "what does it cost to turn text into vectors",
+      "kind": "semantic",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:embeddings#pricing-embeddings"
+        }
+      ]
+    },
+    {
+      "id": "semantic-011",
+      "query": "the caller was refused, what does the response say",
+      "kind": "semantic",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:iam#what-a-denial-looks-like"
+        }
+      ]
+    },
+    {
+      "id": "semantic-012",
+      "query": "a conversation left idle eventually closes itself",
+      "kind": "semantic",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:sessions#inactivity-ttl"
+        }
+      ]
+    },
+    {
+      "id": "semantic-013",
+      "query": "how do I branch a conversation from an earlier point",
+      "kind": "semantic",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:sessions#forking"
+        }
+      ]
+    },
+    {
+      "id": "semantic-014",
+      "query": "how do I prove a callback really came from the platform",
+      "kind": "semantic",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:webhooks#secret-and-signature-verification"
+        }
+      ]
+    },
+    {
+      "id": "semantic-015",
+      "query": "a pending decision nobody answered in time",
+      "kind": "semantic",
+      "expected": [
+        {
+          "source_type": "document",
+          "key": "doc:approvals#expiry-is-a-hard-gate"
+        }
+      ]
+    }
+  ]
+}

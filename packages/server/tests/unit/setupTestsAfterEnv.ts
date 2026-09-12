@@ -1,22 +1,8 @@
-import {
-  createServer,
-  type IncomingMessage,
-  type Server,
-  type ServerResponse,
-} from 'node:http';
-
-import { models } from '@soat/postgresdb';
 import type { Sequelize } from '@ttoss/postgresdb';
-import { initialize } from '@ttoss/postgresdb';
-import { app } from 'src/app';
-import { initializeDatabase } from 'src/db';
 import * as agentGenerationModule from 'src/lib/agentGeneration';
 
-import {
-  createTestDatabase,
-  dropTestDatabase,
-  readTestDatabaseConnection,
-} from './testDatabase';
+import { installEmbeddingStub } from './embeddingStub';
+import { installTestDatabase } from './testDatabaseLifecycle';
 
 beforeEach(() => {
   jest.spyOn(console, 'error').mockImplementation(() => {});
@@ -31,74 +17,17 @@ export const mockCreateGeneration = jest.spyOn(
   'createGeneration'
 );
 
-// A local OpenAI-compatible stub rather than a mock of the non-configurable `ai`
-// exports, which would collide with the generation tests' own `ai` mocks. This
-// also exercises the real request serialization.
-let embeddingServer: Server;
-
-// One "token" per whitespace-separated word, so metering assertions have a
-// non-zero, deterministic count to read (a real provider reports its own).
-const countStubTokens = (inputs: Array<string | undefined>): number => {
-  return inputs.reduce((total, input) => {
-    const words = (input ?? '').trim().split(/\s+/).filter(Boolean);
-    return total + words.length;
-  }, 0);
-};
-
-const embeddingResponse = (body: {
-  input?: string | string[];
-  model?: string;
-}) => {
-  const inputs = Array.isArray(body.input) ? body.input : [body.input];
-  const vector = Array(Number(process.env.EMBEDDING_DIMENSIONS)).fill(0.1);
-  const data = inputs.map((_input, index) => {
-    return { object: 'embedding', index, embedding: vector };
-  });
-  const promptTokens = countStubTokens(inputs);
-  return {
-    object: 'list',
-    model: body.model ?? 'test-embedding',
-    data,
-    usage: { prompt_tokens: promptTokens, total_tokens: promptTokens },
-  };
-};
-
-const handleEmbeddingRequest = (req: IncomingMessage, res: ServerResponse) => {
-  let raw = '';
-  req.on('data', (chunk) => {
-    raw += chunk;
-  });
-  req.on('end', () => {
-    const body = raw ? JSON.parse(raw) : {};
-    res.setHeader('content-type', 'application/json');
-    res.end(JSON.stringify(embeddingResponse(body)));
-  });
-};
-
-beforeAll(async () => {
-  embeddingServer = createServer(handleEmbeddingRequest);
-
-  await new Promise<void>((resolve) => {
-    embeddingServer.listen(0, '127.0.0.1', resolve);
-  });
-
-  const address = embeddingServer.address();
-  const port = typeof address === 'object' && address ? address.port : 0;
-  process.env.EMBEDDING_BASE_URL = `http://127.0.0.1:${port}/v1`;
-});
-
-afterAll(async () => {
-  await new Promise<void>((resolve) => {
-    embeddingServer.close(() => {
-      resolve();
-    });
-  });
+// The unit suite asserts on *how* embeddings are stored and metered, never on
+// how they rank, so one constant vector for every input is exactly right here —
+// it keeps the fixtures free of vector noise. The retrieval eval installs the
+// same stub with a discriminating embedder instead.
+installEmbeddingStub({
+  embed: () => {
+    return Array(Number(process.env.EMBEDDING_DIMENSIONS)).fill(0.1);
+  },
 });
 
 export let sequelize: Sequelize;
-
-const connection = readTestDatabaseConnection();
-let database: string | undefined;
 
 jest.setTimeout(120000);
 
@@ -107,31 +36,8 @@ jest.setTimeout(120000);
  * built — the same isolation a per-file container gave, without paying for a
  * container start and a schema `sync()` 167 times over.
  */
-beforeAll(async () => {
-  try {
-    database = await createTestDatabase({ connection });
-
-    const db = await initialize({
-      models,
-      logging: false,
-      ...connection,
-      database,
-    });
-
-    await initializeDatabase(app);
-
-    sequelize = db.sequelize;
-  } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error('Error during database initialization:', error);
-    throw error;
-  }
-});
-
-afterAll(async () => {
-  await sequelize?.close();
-
-  if (database) {
-    await dropTestDatabase({ connection, database });
-  }
+installTestDatabase({
+  onReady: (db) => {
+    sequelize = db;
+  },
 });

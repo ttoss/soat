@@ -137,6 +137,32 @@ Without `project_id` there is no single project policy to compile, and the searc
 
 `limit` defaults to 10 and is clamped to **100**; a larger value returns up to 100 rows rather than being refused.
 
+### Retrieval baseline
+
+Ranking changes are gated on a versioned golden query set, not on judgement. `packages/server/tests/eval/knowledge/golden.json` seeds a corpus — module-doc sections, synthetic documents carrying identifiers that occur exactly once, and curated memory entries — then scores 52 labeled queries through `searchKnowledge`.
+
+```bash
+pnpm --filter @soat/server eval:knowledge                    # score and gate
+pnpm --filter @soat/server eval:knowledge --update-baseline  # rewrite the baseline
+```
+
+Metrics are computed over **raw result positions** at `limit: 10`, so a document occupying several slots counts as the caller experiences it; a hit is any chunk of the expected document.
+
+| Scope         | recall@5 | recall@10 |    MRR |
+| ------------- | -------: | --------: | -----: |
+| Overall       |   0.8654 |    0.9038 | 0.8072 |
+| `exact_token` |   1.0000 |    1.0000 | 1.0000 |
+| `exact_name`  |   1.0000 |    1.0000 | 0.9222 |
+| `entity`      |   1.0000 |    1.0000 | 0.9583 |
+| `semantic`    |   0.5333 |    0.6667 | 0.4429 |
+
+Those numbers are committed as `baseline.json`, and the run exits non-zero when recall@10 drops below it — overall or for any single kind. A ranking change lands with the diff of that file as its before/after table.
+
+Two caveats on reading the absolute values:
+
+- **The embedder is a stand-in.** CI has no embedding provider, so the eval substitutes a deterministic feature hasher that ranks by term overlap. Being itself lexical, it starts the `exact_token` row saturated and understates the gap a real vector model shows between a lexical and a semantic match. What the gate measures reliably is _change_.
+- **The corpus tracks these docs.** Fixtures that name a `source` and a `section` are read from the module docs at seed time, so editing one of those sections moves the numbers. Re-run with `--update-baseline` and commit the diff.
+
 ## Configuration
 
 | Environment Variable   | Required | Description                                                  |

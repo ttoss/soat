@@ -198,6 +198,37 @@ jobs:
           --cwd packages/server
           coverage-shards/*/coverage-final.json
 
+  knowledge-eval:
+    name: Knowledge Retrieval Eval
+    runs-on: ubuntu-latest
+    needs: changes
+    if: "!startsWith(github.event.pull_request.title, 'chore(release):') && needs.changes.outputs.code == 'true'"
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Same as `server-tests`: the eval imports the server from `src`, so only
+      # its workspace dependencies need building.
+      - name: Build workspace dependencies
+        run: pnpm turbo run build --filter='@soat/server^...'
+
+      # Its own job rather than a step inside the `server-tests` matrix: those
+      # shards run with `--shard=N/4`, and the eval scores one whole corpus in
+      # one run by definition. It gates on `baseline.json` and exits non-zero on
+      # any recall@10 drop.
+      - name: Run the retrieval eval
+        run: pnpm --filter @soat/server eval:knowledge
+
   smoke-test:
     name: Smoke Tests
     runs-on: ubuntu-latest
@@ -286,6 +317,7 @@ jobs:
       - build-test-and-deploy
       - server-tests
       - server-coverage
+      - knowledge-eval
       - smoke-test
       - tutorials-test
     if: always()
@@ -298,6 +330,7 @@ jobs:
             "${{ needs.build-test-and-deploy.result }}" \
             "${{ needs.server-tests.result }}" \
             "${{ needs.server-coverage.result }}" \
+            "${{ needs.knowledge-eval.result }}" \
             "${{ needs.smoke-test.result }}" \
             "${{ needs.tutorials-test.result }}"; do
             if [[ "$result" != "success" && "$result" != "skipped" ]]; then
