@@ -679,7 +679,7 @@ paths:
       tags:
         - Conversations
       summary: Merge conversation tags
-      description: Merges provided tags with existing tags
+      description: Merges provided tags into the conversation's existing tags (existing tags are preserved unless overridden)
       operationId: mergeConversationTags
       parameters:
         - name: conversation_id

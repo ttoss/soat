@@ -660,7 +660,7 @@ paths:
       tags:
         - Files
       summary: Merge file tags
-      description: Merges provided tags with existing tags
+      description: Merges provided tags into the file's existing tags (existing tags are preserved unless overridden)
       operationId: mergeFileTags
       parameters:
         - name: file_id

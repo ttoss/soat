@@ -345,7 +345,7 @@ paths:
       tags:
         - Memory Entries
       summary: Merge memory entry tags
-      description: Merges provided tags with existing tags (existing tags are preserved unless overridden)
+      description: Merges provided tags into the memory entry's existing tags (existing tags are preserved unless overridden)
       operationId: mergeMemoryEntryTags
       x-iam-action: memories:UpdateMemoryEntry
       parameters:
