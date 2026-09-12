@@ -788,6 +788,7 @@ describe('buildKnowledgeTools — formation-deployed agent casing', () => {
       temperature: null,
       knowledgeConfig,
       outputSchema: null,
+      promptCaching: null,
       project: { id: internalProjectId, publicId: projectId },
       aiProvider: { publicId: aiProviderId },
     };

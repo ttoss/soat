@@ -76,17 +76,25 @@ describe('collectSystemInstructions', () => {
     ).toBeUndefined();
   });
 
-  test('reads role and content only, leaving other keys untouched', () => {
+  /* The prompt-cache breakpoint rides on `providerOptions`, and the bare-string
+   * shorthand has nowhere to put it — collapsing to the string is what would
+   * leave a caching agent silently uncached. */
+  test('a single system message carrying providerOptions keeps its object form', () => {
     const message = {
       role: 'system',
       content: 'Be terse.',
-      providerOptions: { anthropic: { cache_control: { type: 'ephemeral' } } },
+      providerOptions: { anthropic: { cacheControl: { type: 'ephemeral' } } },
     };
 
-    expect(collectSystemInstructions([message])).toBe('Be terse.');
-    expect(message.providerOptions).toEqual({
-      anthropic: { cache_control: { type: 'ephemeral' } },
-    });
+    expect(collectSystemInstructions([message])).toEqual([message]);
+  });
+
+  test('reads role, content and providerOptions only, leaving other keys behind', () => {
+    expect(
+      collectSystemInstructions([
+        { role: 'system', content: 'Be terse.', metadata: { seen: true } },
+      ])
+    ).toBe('Be terse.');
   });
 });
 

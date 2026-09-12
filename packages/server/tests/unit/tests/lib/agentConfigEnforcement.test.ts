@@ -146,6 +146,11 @@ const ENFORCEMENT: Record<(typeof AGENT_SCALAR_FIELDS)[number], Declaration> = {
     modules: ['agentGenerationHelpers.ts'],
     enforces: 'Constrains the response to a structured output shape.',
   },
+  promptCaching: {
+    modules: ['agentGenerationContext.ts'],
+    enforces:
+      'Marks the cache breakpoint on the assembled history, at the end of the static prefix.',
+  },
   maxContextMessages: {
     modules: ['conversationGeneration.ts'],
     enforces: 'Truncates the conversation history sent with the turn.',

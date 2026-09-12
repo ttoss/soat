@@ -21,9 +21,16 @@ export type UsageThresholdWindow = (typeof USAGE_THRESHOLD_WINDOWS)[number];
 // The webhook event fired when a project's windowed usage crosses a threshold.
 export const USAGE_THRESHOLD_CROSSED_EVENT = 'usage.threshold_crossed';
 
-// The token components that count toward a `tokens` threshold: input + output +
-// cached (the non-billable `reasoning_tokens` detail is excluded).
-const TOKEN_COMPONENTS = ['input_tokens', 'output_tokens', 'cached_tokens'];
+// The token components that count toward a `tokens` threshold: every billable
+// input dimension plus output (the non-billable `reasoning_tokens` detail is
+// excluded). The three input dimensions are disjoint, so this is the provider's
+// own total rather than a double count.
+const TOKEN_COMPONENTS = [
+  'input_tokens',
+  'output_tokens',
+  'cached_tokens',
+  'cache_write_tokens',
+];
 
 // A fired rolling_24h threshold re-arms only once the windowed value falls below
 // this fraction of the threshold (10% hysteresis band), preventing flapping.

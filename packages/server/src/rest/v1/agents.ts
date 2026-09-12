@@ -42,6 +42,7 @@ type CreateAgentBody = {
   temperature?: unknown;
   knowledge_config?: unknown;
   output_schema?: unknown;
+  prompt_caching?: unknown;
   max_context_messages?: unknown;
   single_session_per_actor?: unknown;
   guardrail_ids?: unknown;
@@ -86,6 +87,10 @@ const parseUpdateAgentBody = (body: Record<string, unknown>) => {
         ? undefined
         : toStoredKnowledgeConfig(body.knowledge_config),
     outputSchema: parseOptional<object | null>(body.output_schema),
+    // Forwarded unvalidated for the same reason as `trace_content_mode` below:
+    // the lib owns the shape, so an unknown key is a 400 rather than an agent
+    // its author believes caches and that never does.
+    promptCaching: parseOptional<object | null>(body.prompt_caching),
     maxContextMessages: parseOptional<number | null>(body.max_context_messages),
     singleSessionPerActor:
       typeof body.single_session_per_actor === 'boolean'
@@ -171,6 +176,7 @@ const buildCreateAgentArgs = (args: {
     knowledgeConfig: toStoredKnowledgeConfig(body.knowledge_config) as
       object | undefined,
     outputSchema: body.output_schema as object | undefined,
+    promptCaching: parseOptional<object>(body.prompt_caching),
     maxContextMessages: parseNumber(body.max_context_messages),
     singleSessionPerActor:
       typeof body.single_session_per_actor === 'boolean'

@@ -25,7 +25,7 @@ No public create endpoint; entries are platform-written. The feed is read-only, 
 |---|---|---|
 | `id` | string | Public ID, `acte_` prefix |
 | `project_id` | string | Owning project |
-| `kind` | string | `action_executed`, `approval_created`, `approval_resolved`, `exception_created`, `schedule_fired` |
+| `kind` | string | `action_executed`, `approval_created`, `approval_resolved`, `exception_created`, `schedule_fired`, `tool_resolution_failed` |
 | `severity` | string | `info`, `warning`, `critical` |
 | `summary` | string | Human-readable one-line description |
 | `detail` | object \| null | Kind-specific structured context (tool id, node id, generation id, guardrail policy version) |
@@ -76,6 +76,7 @@ Severity defaults per kind, and a producer may override it:
 | `approval_resolved` | `info` | Routine autonomous operation |
 | `exception_created` | `warning` | An exception was already filed — an anomaly, by definition |
 | `schedule_fired` | `info` | Routine autonomous operation |
+| `tool_resolution_failed` | `warning` | The turn ran without tools it was configured to have |
 
 `exception_created` **inherits the filed [exception](./exceptions.md#severity)'s severity**, so a `run_failed` exception (`critical`) records a `critical` entry; the `warning` default applies only when the event carries no recognized severity. This is the only path that writes `critical`, so `severity=critical` surfaces entries a `kind` filter cannot.
 
@@ -100,6 +101,9 @@ One producer per kind:
 - **`approval_resolved`** — subscribes to `approvals.approved` / `approvals.rejected`.
 - **`exception_created`** — subscribes to `exceptions.created` ([Exceptions](./exceptions.md#producers)).
 - **`schedule_fired`** — from the trigger scheduler's due-firing sweep, `source === 'schedule'` only; a manual or webhook [trigger](./triggers.md) fire does not produce it.
+- **`tool_resolution_failed`** — from the agent tool resolver, when a [tool](./tools.md) binding's source could not be listed: an unreachable `mcp` server, a refused request, or a `tools/list` that answered non-OK. `detail` carries `tool_id`, `tool_type`, `tool_name`, `reason` and `generation_id`.
+
+  The binding is dropped rather than failing the turn — one flaky server must not take an agent down — so the generation **completes, with no error and no warning of its own**, having answered with fewer tools than it was configured to have. The only place the absence shows is the prompt, which nobody reads; this entry is the signal that distinguishes a turn whose tools were dropped from an agent that had none to begin with. SOAT never routes or filters tools per turn, so a turn missing its tools is always this, never a decision the platform made.
 
 Every producer is fire-and-forget: a recording failure is logged and never disturbs the action, as in the [audit log](./audit-log.md).
 
@@ -114,7 +118,7 @@ Every producer is fire-and-forget: a recording failure is logged and never distu
 }
 ```
 
-- **Only `action_executed` counts.** The other kinds record what the platform did *about* an action.
+- **Only `action_executed` counts.** The other kinds record what the platform did *about* an action, or what it failed to assemble before one.
 - **An empty feed reads as `0`**, so a project with no actions yet passes a rate ceiling; unlike per-run usage keys, "no actions" is a real zero. A query that *fails* still fails closed.
 
 ## Examples

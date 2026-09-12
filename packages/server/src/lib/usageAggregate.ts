@@ -55,6 +55,7 @@ export type UsageAggregateBucket = {
   input_tokens: number;
   output_tokens: number;
   cached_tokens: number;
+  cache_write_tokens: number;
   reasoning_tokens: number;
   // Every component measured in the bucket, sorted by `component` then `unit`
   // so the rollup is stable regardless of event order.
@@ -143,12 +144,15 @@ const totalsFrom = (args: {
   components: ComponentSum[];
 }): UsageAggregateBucket => {
   const cached = quantityOf(args.components, 'cached_tokens');
+  const cacheWrite = quantityOf(args.components, 'cache_write_tokens');
   return {
     cost_usd: decimalToCost(args.costUsd),
     event_count: args.eventCount,
-    input_tokens: quantityOf(args.components, 'input_tokens') + cached,
+    input_tokens:
+      quantityOf(args.components, 'input_tokens') + cached + cacheWrite,
     output_tokens: quantityOf(args.components, 'output_tokens'),
     cached_tokens: cached,
+    cache_write_tokens: cacheWrite,
     reasoning_tokens: quantityOf(args.components, 'reasoning_tokens'),
     components: args.components.map(toAggregateComponent).sort((a, b) => {
       return (
@@ -337,6 +341,7 @@ export const rollUpUsageTotals = async (
     input_tokens: bucket.input_tokens,
     output_tokens: bucket.output_tokens,
     cached_tokens: bucket.cached_tokens,
+    cache_write_tokens: bucket.cache_write_tokens,
     reasoning_tokens: bucket.reasoning_tokens,
   };
 };

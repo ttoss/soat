@@ -22,6 +22,7 @@ import {
   type GenerationInputMessage,
   resolveGenerationInputMessages,
 } from './generationInputMessages';
+import { withPromptCacheBreakpoint } from './promptCaching';
 import { pinServerIdentityToolContext } from './toolContext';
 
 const log = createDebug('soat:generation');
@@ -114,10 +115,17 @@ const assembleContextMessages = async (args: {
     args.resolvedMessages.length
   );
 
-  const allMessages = buildAllMessages(args.typedAgent.instructions, [
-    ...knowledgeMessages,
-    ...args.resolvedMessages,
-  ]);
+  // The breakpoint is applied here, on the assembled history, rather than at
+  // either provider call: this array is what a paused turn persists, so a
+  // generation that resumes after an approval replays the same marked prefix
+  // instead of re-deriving one from an agent that may since have been edited.
+  const allMessages = withPromptCacheBreakpoint({
+    promptCaching: args.typedAgent.promptCaching,
+    messages: buildAllMessages(args.typedAgent.instructions, [
+      ...knowledgeMessages,
+      ...args.resolvedMessages,
+    ]),
+  });
 
   log('assembleContextMessages: allMessages=%o', allMessages);
 

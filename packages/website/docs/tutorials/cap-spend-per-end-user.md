@@ -352,6 +352,7 @@ One bucket per end user:
         "input_tokens": 36,
         "output_tokens": 14,
         "cached_tokens": 0,
+        "cache_write_tokens": 0,
         "reasoning_tokens": 0
       }
     ],
@@ -365,6 +366,7 @@ One bucket per end user:
     "input_tokens": 36,
     "output_tokens": 14,
     "cached_tokens": 0,
+    "cache_write_tokens": 0,
     "reasoning_tokens": 0
   }
 }

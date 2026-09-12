@@ -32,6 +32,8 @@ export type MappedAgent = {
   temperature: number | null;
   knowledge_config: object | null;
   output_schema: object | null;
+  /** `{ enabled }` — see `promptCaching.ts`. Null is off. */
+  prompt_caching: object | null;
   max_context_messages: number | null;
   single_session_per_actor: boolean;
   trace_content_mode: string | null;

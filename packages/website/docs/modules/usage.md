@@ -52,7 +52,7 @@ One priced dimension of an event: `quantity` is always in `unit`, and `cost_usd 
 
 | Field        | Type            | Description                                                                                   |
 | ------------ | --------------- | --------------------------------------------------------------------------------------------- |
-| `component`  | string          | The measured dimension: `input_tokens`, `output_tokens`, `cached_tokens`, `reasoning_tokens`, `compute_second`, `request`, `gb_day`, `chunk_count`, … |
+| `component`  | string          | The measured dimension: `input_tokens`, `output_tokens`, `cached_tokens`, `cache_write_tokens`, `reasoning_tokens`, `compute_second`, `request`, `gb_day`, `chunk_count`, … |
 | `quantity`   | number          | The measured amount, expressed in `unit`                                                      |
 | `unit`       | string          | Unit `quantity` is measured in (`token`, `compute_second`, `request`, `gb_day`, `count`)         |
 | `billable`   | boolean         | Whether the component contributes to cost. `reasoning_tokens` (a subset of `output_tokens`) is non-billable and excluded from cost and billable totals |
@@ -99,14 +99,26 @@ A per-project alert rule: when `metric` over `window` crosses `threshold`, a `us
 
 | `meter_type`     | What one event records                              | Components                                        |
 | ---------------- | --------------------------------------------------- | ------------------------------------------------- |
-| `llm_tokens`     | One completed LLM call's token usage | `input_tokens`, `output_tokens`, `cached_tokens`, `reasoning_tokens` |
+| `llm_tokens`     | One completed LLM call's token usage | `input_tokens`, `output_tokens`, `cached_tokens`, `cache_write_tokens`, `reasoning_tokens` |
 | `compute_execution` | Wall-clock compute time of a unit of work (orchestration node, agent generation, tool call) | `compute_second`                                     |
 | `api_request`    | A batch of API requests served for a project        | `request`                                         |
 | `storage`        | One project's stored footprint for one day          | `gb_day`, `chunk_count`                           |
 
 For platform meter types `(provider, model)` is a **SKU**: `provider` is `soat`, `model` the billable unit (`compute-second`, `gb-day`, `request`).
 
-Token components are disjoint and additive: `input_tokens` is **uncached** input, so full prompt tokens = `input_tokens` + `cached_tokens`; `reasoning_tokens` is a non-billable subset of `output_tokens`. Cached and reasoning components are recorded only when the provider reports them.
+#### Token components
+
+Token components are disjoint and additive. The provider reports one prompt figure covering three different prices, and SOAT splits it into three components so each is priced at the rate it is actually charged at:
+
+| Component | What it counts | How it prices against uncached input |
+| --- | --- | --- |
+| `input_tokens` | Prompt tokens neither read from nor written to the provider's prompt cache | the baseline |
+| `cached_tokens` | Prompt tokens served **from** the cache | far cheaper |
+| `cache_write_tokens` | Prompt tokens written **into** the cache | dearer |
+
+So full prompt tokens = `input_tokens` + `cached_tokens` + `cache_write_tokens`, and `input_tokens` is **uncached input alone** — never the provider's total. `reasoning_tokens` is a non-billable subset of `output_tokens`. The cache and reasoning components are recorded only when the provider reports them, so a call that cached nothing carries neither.
+
+Cache activity appears only for an agent that asked for it — see [Agents — Prompt Caching](./agents.md#prompt-caching).
 
 ### Coverage
 
@@ -191,9 +203,10 @@ An event carries the [actor](./actors.md) and [session](./sessions.md) it was pr
 
 ### Pricing
 
-Each component's cost is computed at write time from the effective price row for its `(provider, model, component)`, most-specific first: AI provider instance → project + provider-slug → global default. Costs are frozen; later price changes never alter them. `cached_tokens` falls back to the `input_tokens` rate when no cached price is set. A `null` `cost_usd` means no row covered the component; the quantity is still captured. Each component records `price_id`, so a receipt is auditable to the price applied.
+Each component's cost is computed at write time from the effective price row for its `(provider, model, component)`, most-specific first: AI provider instance → project + provider-slug → global default. Costs are frozen; later price changes never alter them. `cached_tokens` and `cache_write_tokens` each fall back to the `input_tokens` rate when no row of their own is set — never to zero, so an unpriced cache column meters at the plain input rate rather than quietly understating `cost_usd`. A `null` `cost_usd` means no row covered the component; the quantity is still captured. Each component records `price_id`, so a receipt is auditable to the price applied.
 
-- **`cached_tokens` is a component in its own right, not a slice of `input_tokens`.** The `input_tokens` *component* is uncached input only, so pricing both double-counts nothing; the reconstructed `input_tokens` *field* on receipt and aggregate totals is the full prompt count (`input_tokens` + `cached_tokens` components). Price the components; read the fields.
+- **The cache components are components in their own right, not slices of `input_tokens`.** The `input_tokens` *component* is uncached input only, so pricing all three double-counts nothing; the reconstructed `input_tokens` *field* on receipt and aggregate totals is the full prompt count (`input_tokens` + `cached_tokens` + `cache_write_tokens` components). Price the components; read the fields.
+- **Price the write, not just the read.** Until a `cache_write_tokens` row exists, a write bills at the uncached input rate — which understates it on every provider that charges a premium for one. Add the row before turning caching on at scale.
 - **Pricing is not retroactive.** A component metered before any row priced it stays `cost_usd: null`; there is no backfill. The [first-price exception](#pricing) lets the first row be dated now or earlier, so write it before the traffic. Quantities survive, so an unpriced window can still be costed outside the platform.
 - **Embeddings are the one exception.** No tier prices an embedding call: it carries no provider record and its rate is deployment configuration (`EMBEDDING_INPUT_1M_TOKEN_PRICE_USD`), so a price book row naming the embedding model is ignored. See [Pricing embeddings](./embeddings.md#pricing-embeddings).
 

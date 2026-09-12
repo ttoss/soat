@@ -4,10 +4,8 @@ import {
   parseHttpExecuteConfig,
   toHttpToolDomainError,
 } from './agentToolResolver';
-import {
-  buildMcpToolExecute,
-  executeSoatTool,
-} from './agentToolResolverExternalTools';
+import { executeSoatTool } from './agentToolResolverExternalTools';
+import { buildMcpToolExecute } from './agentToolResolverMcp';
 import { applyToolOutputMapping } from './jsonLogicMapping';
 import type { PipelineStepCaller } from './pipelineTools';
 import { runPipeline } from './pipelineTools';

@@ -82,7 +82,7 @@ A session has an end user only when `actor_id` is supplied on create; [Actors](.
 
 ### Session cost
 
-[`GET /api/v1/sessions/{session_id}`](/docs/api/sessions/get-session) carries a `usage` object — `cost_usd` plus `input_tokens`, `output_tokens`, `cached_tokens` and `reasoning_tokens` — summed across every metered generation dispatched through the session. It is the same shape an [orchestration run](./orchestrations.md#run-usage) reports.
+[`GET /api/v1/sessions/{session_id}`](/docs/api/sessions/get-session) carries a `usage` object — `cost_usd` plus `input_tokens`, `output_tokens`, `cached_tokens`, `cache_write_tokens` and `reasoning_tokens` — summed across every metered generation dispatched through the session. It is the same shape an [orchestration run](./orchestrations.md#run-usage) reports.
 
 - **Single read only.** Session and fork listings omit the field.
 - **A fork starts at zero.** It does not inherit what the copied history cost, so summing `usage` across a session and its forks never double-counts.

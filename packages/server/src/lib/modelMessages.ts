@@ -10,22 +10,26 @@
  * filter, which is why this is composable functions rather than one returning
  * both.
  *
- * All of them are key-blind: they read `role` and, for system content,
- * `content`, so a message's provider-specific payload travels through
- * untouched (`.claude/rules/case-convention.md`).
+ * All of them are key-blind apart from `providerOptions`, which the SDK itself
+ * defines on a system message and which carries the prompt-cache breakpoint: a
+ * message's other provider-specific payload travels through untouched
+ * (`.claude/rules/case-convention.md`).
  */
-
-/** Mirrors the AI SDK's `SystemModelMessage`: system content is a string. */
-type SystemModelMessage = { role: 'system'; content: string };
+import type { SystemModelMessage } from 'ai';
 
 /**
  * Mirrors the AI SDK's `Instructions`. The array form is what makes this
  * lossless: more than one system message needs no merge and no precedence rule,
- * because the SDK carries them ordered.
+ * because the SDK carries them ordered — and it is the only form that can carry
+ * a `providerOptions`, which is where a prompt-cache breakpoint lives.
  */
 export type Instructions = string | SystemModelMessage[];
 
-type RoledMessage = { role?: unknown; content?: unknown };
+type RoledMessage = {
+  role?: unknown;
+  content?: unknown;
+  providerOptions?: SystemModelMessage['providerOptions'];
+};
 
 const isSystem = (message: unknown): boolean => {
   return (message as RoledMessage | null)?.role === 'system';
@@ -41,25 +45,35 @@ const isSystem = (message: unknown): boolean => {
  * destroyed. Non-string content cannot be an instruction (providers accept only
  * a string), so it is skipped rather than coerced; surfaces that must reject
  * system content outright use {@link hasSystemMessage}.
+ *
+ * A `providerOptions` is carried across, because the prompt-cache breakpoint
+ * lives on it: dropping it here would leave every cached agent silently
+ * uncached, the failure mode the breakpoint exists to end.
  */
 export const collectSystemInstructions = (
   messages: readonly unknown[]
 ): Instructions | undefined => {
-  const contents = messages
+  const systemMessages = messages
     .filter(isSystem)
-    .map((message) => {
-      return (message as RoledMessage).content;
-    })
-    .filter((content): content is string => {
-      return typeof content === 'string';
+    .flatMap((message): SystemModelMessage[] => {
+      const { content, providerOptions } = message as RoledMessage;
+      if (typeof content !== 'string') return [];
+      return [
+        providerOptions
+          ? { role: 'system', content, providerOptions }
+          : { role: 'system', content },
+      ];
     });
 
-  if (contents.length === 0) return undefined;
-  if (contents.length === 1) return contents[0];
+  if (systemMessages.length === 0) return undefined;
+  // The bare string is the SDK's own shorthand for the single-instruction case,
+  // kept so the common call is unchanged on the wire. It cannot carry a
+  // `providerOptions`, so a message that has one stays in its object form.
+  if (systemMessages.length === 1 && !systemMessages[0].providerOptions) {
+    return systemMessages[0].content;
+  }
 
-  return contents.map((content) => {
-    return { role: 'system' as const, content };
-  });
+  return systemMessages;
 };
 
 /**

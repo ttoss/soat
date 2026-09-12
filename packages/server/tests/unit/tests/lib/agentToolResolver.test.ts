@@ -11,11 +11,13 @@ import {
   resolveUrlPathParams,
 } from 'src/lib/agentToolResolver';
 import {
-  buildMcpToolExecute,
   executeSoatTool,
-  resolveMcpTools,
   resolveSoatTools,
 } from 'src/lib/agentToolResolverExternalTools';
+import {
+  buildMcpToolExecute,
+  resolveMcpTools,
+} from 'src/lib/agentToolResolverMcp';
 import { buildSoatRequestBody } from 'src/lib/agentToolResolverSoatBody';
 import { withCallTimeout } from 'src/lib/inProcessApi';
 import { soatTools } from 'src/lib/soatTools';
@@ -1986,6 +1988,66 @@ describe('resolveAgentTools - mcp and soat types', () => {
     const tools = await resolveAgentTools({ toolIds: [mcpToolId] });
 
     expect(Object.keys(tools)).toHaveLength(0);
+  });
+
+  // Recording is fire-and-forget, so the read races the write the resolver set
+  // going rather than following it.
+  const waitForActivityEntry = async (args: {
+    projectId: number;
+    kind: string;
+    refId: string;
+  }) => {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const found = await db.ActivityEntry.findOne({
+        where: {
+          projectId: args.projectId,
+          kind: args.kind,
+          refId: args.refId,
+        },
+      });
+      if (found) return found;
+      await new Promise((resolve) => {
+        return setTimeout(resolve, 20);
+      });
+    }
+    return null;
+  };
+
+  // A dropped binding and an agent that simply has no tools produce the same
+  // generation: completed, no error, no warning, and a prompt nobody reads.
+  // The feed entry is the only thing that tells the two apart.
+  test('an unreachable mcp server is recorded on the activity feed', async () => {
+    jest
+      .spyOn(global, 'fetch')
+      .mockRejectedValueOnce(new Error('Network error'));
+
+    const project = await db.Project.findOne({
+      where: { publicId: projectId },
+    });
+
+    await resolveAgentTools({
+      toolIds: [mcpToolId],
+      activity: {
+        projectId: project!.id as number,
+        agentId: 'agent_resolverfail01',
+        generationId: 'gen_resolverfail01',
+      },
+    });
+
+    const entry = await waitForActivityEntry({
+      projectId: project!.id as number,
+      kind: 'tool_resolution_failed',
+      refId: mcpToolId,
+    });
+
+    expect(entry).toBeTruthy();
+    expect(entry!.severity).toBe('warning');
+    expect(entry!.agentId).toBe('agent_resolverfail01');
+    expect(entry!.detail).toMatchObject({
+      toolType: 'mcp',
+      toolName: 'myMcpServer',
+      generationId: 'gen_resolverfail01',
+    });
   });
 
   test('http tool execute appends query params with & when URL already has ?', async () => {

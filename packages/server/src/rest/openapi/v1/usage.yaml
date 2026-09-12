@@ -746,9 +746,18 @@ components:
       description: >
         One priced dimension of a usage event. Every meter type is expressed as
         components, so tokens and infra are uniform: an `llm_tokens` event has
-        `input_tokens` / `output_tokens` (+ `cached_tokens`, and a non-billable
+        `input_tokens` / `output_tokens` (+ `cached_tokens` for prompt-cache
+        reads, `cache_write_tokens` for prompt-cache writes, and a non-billable
         `reasoning_tokens` detail), a `compute_execution` event has one
         `compute_second` component.
+
+
+        The three input dimensions are disjoint and partition the provider's
+        reported prompt tokens: `input_tokens` is the uncached input **alone**.
+        They are separate components because they are separately priced — a
+        cache read costs a fraction of an uncached token and a cache write
+        costs more than one. A dimension with no price row of its own falls
+        back to the `input_tokens` rate, never to zero.
       properties:
         component:
           type: string
@@ -930,11 +939,17 @@ components:
           description: Sum of priced component costs; null when nothing was priced
         input_tokens:
           type: integer
-          description: Full prompt tokens (uncached input + cached), reconstructed from components
+          description: >-
+            Full prompt tokens — uncached input + `cached_tokens` +
+            `cache_write_tokens` — reconstructed from components.
         output_tokens:
           type: integer
         cached_tokens:
           type: integer
+          description: Prompt tokens served from the provider's prompt cache.
+        cache_write_tokens:
+          type: integer
+          description: Prompt tokens written into the provider's prompt cache.
         reasoning_tokens:
           type: integer
 
@@ -987,8 +1002,8 @@ components:
           type: string
           description: >
             The measured dimension: `input_tokens`, `cached_tokens`,
-            `output_tokens`, `reasoning_tokens`, `compute_second`, `request`,
-            `gb_day`, `chunk_count`, …
+            `cache_write_tokens`, `output_tokens`, `reasoning_tokens`,
+            `compute_second`, `request`, `gb_day`, `chunk_count`, …
         unit:
           type: string
           description: >
@@ -1396,9 +1411,10 @@ components:
               - effective_from
             description: >
               A price row for one component of a SKU. For LLM SKUs supply the
-              `input_tokens` / `output_tokens` (and optionally `cached_tokens`)
-              components with unit `token`; for platform SKUs supply the
-              platform component (e.g. `compute_second`).
+              `input_tokens` / `output_tokens` (and optionally `cached_tokens`
+              and `cache_write_tokens`) components with unit `token`; for
+              platform SKUs supply the platform component (e.g.
+              `compute_second`).
             properties:
               ai_provider_id:
                 x-soat-ref: ai-providers

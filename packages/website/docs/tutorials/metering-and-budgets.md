@@ -215,8 +215,8 @@ echo "GENERATION_ID: $GENERATION_ID"
 
 Each completed generation records one usage event whose
 [**components**](/docs/modules/usage#meter-types-and-components) carry
-`input_tokens`, `output_tokens`, `cached_tokens` and a non-billable
-`reasoning_tokens` detail. `cost_usd` is `null` until prices are registered;
+`input_tokens`, `output_tokens`, `cached_tokens`, `cache_write_tokens` and a
+non-billable `reasoning_tokens` detail. `cost_usd` is `null` until prices are registered;
 SOAT ships none by default.
 
 <Tabs groupId="client">

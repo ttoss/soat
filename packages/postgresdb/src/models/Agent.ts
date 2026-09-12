@@ -119,6 +119,15 @@ export class Agent extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare outputSchema: object | null;
 
+  /**
+   * `{ enabled }` — whether this agent's turns mark a prompt-cache breakpoint
+   * at the end of their static prefix. Null (the default) is off: a cache write
+   * costs more than an uncached token, so an agent whose prefix is never
+   * re-read would pay for the privilege.
+   */
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare promptCaching: object | null;
+
   @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
   declare singleSessionPerActor: boolean;
 

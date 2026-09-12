@@ -802,6 +802,17 @@ components:
           type: object
           nullable: true
           description: JSON Schema describing the structured object the model must return. Non-streaming generations are constrained to this schema; the parsed value is returned as `output.object`.
+        prompt_caching:
+          type: object
+          nullable: true
+          description: >-
+            Prompt caching for this agent's turns. `{"enabled": true}` marks a
+            cache breakpoint at the end of the turn's static prefix — the tool
+            definitions and the instructions together. Null or omitted is off.
+          properties:
+            enabled:
+              type: boolean
+              description: Whether the breakpoint is marked. Defaults to false.
 
     ActorResourceProperties:
       description: >-
@@ -1499,7 +1510,7 @@ components:
           description: SKU identifier — the model id for LLM SKUs, the platform unit otherwise
         component:
           type: string
-          description: The billable component this row prices (input_tokens, output_tokens, cached_tokens, compute_second, …)
+          description: The billable component this row prices (input_tokens, output_tokens, cached_tokens, cache_write_tokens, compute_second, …)
         unit:
           type: string
           description: Unit the unit_price is denominated in (token, compute_second, …); must match the metered component's unit
