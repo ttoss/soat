@@ -3,6 +3,53 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.47.0](https://github.com/ttoss/soat/compare/v0.46.0...v0.47.0) (2026-09-12)
+
+* fix(iam)!: validate condition keys against the keys the platform supplies (#1283) ([381c8c0](https://github.com/ttoss/soat/commit/381c8c00956a7f623d0c165dd03ce64dc34761be)), closes [#1283](https://github.com/ttoss/soat/issues/1283)
+* feat(sessions)!: honor `soat:ResourceTag` conditions on session routes (#1282) ([53fa24c](https://github.com/ttoss/soat/commit/53fa24c1ec2d152409c139aaa8148017d8524fd2)), closes [#1282](https://github.com/ttoss/soat/issues/1282) [#1278](https://github.com/ttoss/soat/issues/1278)
+* feat(knowledge,memories)!: one key-value `tags` filter across both stores (#1275) ([f0691c9](https://github.com/ttoss/soat/commit/f0691c9dd14f7b1bee24b60d2c33002315a514b4)), closes [#1275](https://github.com/ttoss/soat/issues/1275)
+
+### Bug Fixes
+
+* **iam:** apply compiled policy conditions on documents, files and knowledge search ([#1285](https://github.com/ttoss/soat/issues/1285)) ([4d43f56](https://github.com/ttoss/soat/commit/4d43f5622499f39229a1470c0ce210945c7fd0a9)), closes [#1284](https://github.com/ttoss/soat/issues/1284) [#1284](https://github.com/ttoss/soat/issues/1284)
+
+### Features
+
+* **memories:** honor `soat:ResourceTag` conditions on memories and memory entries ([#1286](https://github.com/ttoss/soat/issues/1286)) ([595d4d2](https://github.com/ttoss/soat/commit/595d4d2c04aeadf4b99df404ec235b760d2a34ab)), closes [#1275](https://github.com/ttoss/soat/issues/1275) [#1279](https://github.com/ttoss/soat/issues/1279)
+* **tags:** one mechanism for every tagged resource ([#1281](https://github.com/ttoss/soat/issues/1281)) ([5a7ce6a](https://github.com/ttoss/soat/commit/5a7ce6a9a71c1f49d0091be67e2635ef506d2bb7)), closes [#1278](https://github.com/ttoss/soat/issues/1278) [#1279](https://github.com/ttoss/soat/issues/1279) [#1277](https://github.com/ttoss/soat/issues/1277) [#1276](https://github.com/ttoss/soat/issues/1276)
+
+### BREAKING CHANGES
+
+* **memories:** a policy condition on memories or memory entries is now
+  enforced on their list routes and on knowledge search, and a resource carrying
+  no tags is no longer filtered out by a `StringNotEquals` condition. A caller
+  whose policy excluded memory rows was receiving them; a caller whose policy
+  should have returned untagged rows was not.
+* **iam:** a policy condition or SRN restriction on documents, files or
+  knowledge search is now enforced on list and search results. A caller whose
+  policy excluded rows was receiving them; that caller now sees the narrower set
+  the policy always described.
+* An IAM `condition` may only name `soat:ResourceType` or
+  `soat:ResourceTag/<tag>`. A policy write carrying any other context key is
+  `400 VALIDATION_FAILED`, and an agent `boundary_policy` carrying one is
+  invalid, which denies every action it gates.
+* memory and memory-entry `tags` are key-value objects, not
+  string arrays, on every read and write path (REST, SDK, CLI, MCP, formations,
+  the orchestration `memory_write` node). `memory_tags` on knowledge search and
+  on `knowledge_config` is replaced by `tags`. Stored tag literals convert
+  cleanly, but a saved glob filter has no key-value equivalent and must be
+  rewritten as exact pairs. Run
+  packages/postgresdb/migrations/2026-09-11-memory-tags-to-jsonb.sql before
+  deploying this release.
+* session routes now enforce the `resource` segment of an IAM
+  policy. A statement granting a session action with a `resource` narrower than
+  `*` (an SRN naming another project, another resource type, or another session
+  id) was never compared against the session before and so worked by accident;
+  it is now enforced and such a request becomes `403`. A statement conditioned on
+  `soat:ResourceTag/<key>` was ignored and is now evaluated, which can both grant
+  and refuse where it previously did neither. Policies granting session actions
+  on `*` or on `srn:<project>:session:*` are unaffected.
+
 # [0.46.0](https://github.com/ttoss/soat/compare/v0.45.0...v0.46.0) (2026-09-10)
 
 * feat(server)!: narrow usage cost by any id or value, and validate query strings (#1265) ([d8c656d](https://github.com/ttoss/soat/commit/d8c656d1410c38292a84551f521bba3b9cd197fc)), closes [#1265](https://github.com/ttoss/soat/issues/1265)

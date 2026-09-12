@@ -3,6 +3,21 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.47.0](https://github.com/ttoss/soat/compare/v0.46.0...v0.47.0) (2026-09-12)
+
+* feat(knowledge,memories)!: one key-value `tags` filter across both stores (#1275) ([f0691c9](https://github.com/ttoss/soat/commit/f0691c9dd14f7b1bee24b60d2c33002315a514b4)), closes [#1275](https://github.com/ttoss/soat/issues/1275)
+
+### BREAKING CHANGES
+
+* memory and memory-entry `tags` are key-value objects, not
+  string arrays, on every read and write path (REST, SDK, CLI, MCP, formations,
+  the orchestration `memory_write` node). `memory_tags` on knowledge search and
+  on `knowledge_config` is replaced by `tags`. Stored tag literals convert
+  cleanly, but a saved glob filter has no key-value equivalent and must be
+  rewritten as exact pairs. Run
+  packages/postgresdb/migrations/2026-09-11-memory-tags-to-jsonb.sql before
+  deploying this release.
+
 # [0.46.0](https://github.com/ttoss/soat/compare/v0.45.0...v0.46.0) (2026-09-10)
 
 **Note:** Version bump only for package @soat/postgresdb
