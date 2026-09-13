@@ -119,10 +119,69 @@ type McpToolListing = {
 };
 
 /**
+ * The JSON-RPC message in a `text/event-stream` answer. The resolver's own
+ * `Accept` offers SSE, so a server framing its reply that way is answering
+ * correctly; reading only the `data:` lines is what makes that answer usable
+ * rather than a parse error.
+ */
+const parseSseFramedMessage = (raw: string): unknown => {
+  const payload = raw
+    .split(/\r?\n/)
+    .filter((line) => {
+      return line.startsWith('data:');
+    })
+    .map((line) => {
+      return line.slice('data:'.length).trimStart();
+    })
+    .join('');
+  if (payload === '') throw new Error('SSE response carried no data line');
+  return JSON.parse(payload);
+};
+
+const parseListingBody = async (response: Response): Promise<unknown> => {
+  const raw = await response.text();
+  return (response.headers.get('content-type') ?? '').includes(
+    'text/event-stream'
+  )
+    ? parseSseFramedMessage(raw)
+    : JSON.parse(raw);
+};
+
+const jsonRpcErrorReason = (body: unknown): string | null => {
+  if (typeof body !== 'object' || body === null || !('error' in body)) {
+    return null;
+  }
+  const { error } = body as { error: unknown };
+  if (typeof error !== 'object' || error === null) return null;
+  const { code, message } = error as { code?: unknown; message?: unknown };
+  return `tools/list answered the JSON-RPC error ${String(code)}: ${String(message)}`;
+};
+
+/**
+ * A 200 is not on its own a listing. JSON-RPC carries its errors in a
+ * 200 body, and reading such an answer as `result?.tools ?? []` made a refused
+ * listing indistinguishable from an empty catalogue: the turn ran with no
+ * tools, carried no warning, and nothing anywhere recorded that it had.
+ */
+const readListing = (
+  listBody: unknown
+): { tools: McpToolListing[] } | { failure: string } => {
+  const errorReason = jsonRpcErrorReason(listBody);
+  if (errorReason !== null) return { failure: errorReason };
+
+  const tools = (listBody as { result?: { tools?: unknown } } | null)?.result
+    ?.tools;
+  if (!Array.isArray(tools)) {
+    return { failure: 'tools/list answered 200 with no `result.tools` array' };
+  }
+  return { tools: tools as McpToolListing[] };
+};
+
+/**
  * The `tools/list` half of MCP resolution: everything that can fail before
  * there is a surface to build. `null` is "no listing" — unreachable, refused,
- * or a non-OK answer — which the caller reports; an empty array is a server
- * that really exposes nothing, which is not a failure.
+ * or an answer this could not be read out of — which the caller reports; an
+ * empty array is a server that really exposes nothing.
  */
 const fetchMcpToolListing = async (args: {
   mcpUrl: string;
@@ -145,10 +204,13 @@ const fetchMcpToolListing = async (args: {
       return null;
     }
 
-    const listBody = (await listResponse.json()) as {
-      result?: { tools?: McpToolListing[] };
-    };
-    return listBody.result?.tools ?? [];
+    const listing = readListing(await parseListingBody(listResponse));
+    if ('failure' in listing) {
+      args.reportResolutionFailure?.({ reason: listing.failure });
+      return null;
+    }
+
+    return listing.tools;
   } catch (error) {
     args.logToolCallingError({
       toolName: args.mcpUrl,
@@ -162,6 +224,20 @@ const fetchMcpToolListing = async (args: {
     });
     return null;
   }
+};
+
+/** The binding's allowlist and denylist, as one predicate over tool names. */
+const buildActionFilter = (typedTool: {
+  actions?: string[] | null;
+  deniedActions?: string[] | null;
+}): ((name: string) => boolean) => {
+  const allowed = typedTool.actions != null ? new Set(typedTool.actions) : null;
+  const denied =
+    typedTool.deniedActions != null ? new Set(typedTool.deniedActions) : null;
+  return (name) => {
+    if (allowed && !allowed.has(name)) return false;
+    return !denied?.has(name);
+  };
 };
 
 export const resolveMcpTools = async (args: {
@@ -190,20 +266,16 @@ export const resolveMcpTools = async (args: {
   }) => Record<string, string>;
   logToolCallingError: LogToolCallingError;
   /**
-   * Called when the listing could not be obtained. Reporting, not control: an
-   * unreachable server still yields an empty surface rather than failing the
-   * turn, but a turn that ran without its tools must not be indistinguishable
-   * from one that had none to begin with.
+   * Called when the binding contributed no tool to the turn — the listing could
+   * not be obtained, or it was obtained and left nothing to attach. Reporting,
+   * not control: an unreachable server still yields an empty surface rather
+   * than failing the turn, but a turn that ran without its tools must not be
+   * indistinguishable from one that had none to begin with.
    */
   reportResolutionFailure?: (args: { reason: string }) => void;
 }): Promise<Record<string, Tool>> => {
   const result: Record<string, Tool> = {};
-  const allowedActions =
-    args.typedTool.actions != null ? new Set(args.typedTool.actions) : null;
-  const deniedActions =
-    args.typedTool.deniedActions != null
-      ? new Set(args.typedTool.deniedActions)
-      : null;
+  const isBound = buildActionFilter(args.typedTool);
   const mcpUrl = args.typedTool.mcp.url;
   const mcpHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -224,8 +296,7 @@ export const resolveMcpTools = async (args: {
   if (!listing) return result;
 
   for (const mcpTool of listing) {
-    if (allowedActions && !allowedActions.has(mcpTool.name)) continue;
-    if (deniedActions && deniedActions.has(mcpTool.name)) continue;
+    if (!isBound(mcpTool.name)) continue;
     result[mcpTool.name] = buildMcpToolEntry({
       mcpTool,
       mcpUrl,
@@ -233,6 +304,18 @@ export const resolveMcpTools = async (args: {
       presetParameters: args.typedTool.presetParameters,
       toolContext: args.toolContext,
       logToolCallingError: args.logToolCallingError,
+    });
+  }
+
+  // A readable listing that leaves nothing to attach is not a transport
+  // failure, but the turn still runs without the tools the agent is configured
+  // to have — the one outcome that must never be silent.
+  if (Object.keys(result).length === 0) {
+    args.reportResolutionFailure?.({
+      reason:
+        listing.length === 0
+          ? 'tools/list returned no tools'
+          : `every tool tools/list returned was excluded by the binding's actions/denied_actions`,
     });
   }
 

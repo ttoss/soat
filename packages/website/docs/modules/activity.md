@@ -101,7 +101,18 @@ One producer per kind:
 - **`approval_resolved`** — subscribes to `approvals.approved` / `approvals.rejected`.
 - **`exception_created`** — subscribes to `exceptions.created` ([Exceptions](./exceptions.md#producers)).
 - **`schedule_fired`** — from the trigger scheduler's due-firing sweep, `source === 'schedule'` only; a manual or webhook [trigger](./triggers.md) fire does not produce it.
-- **`tool_resolution_failed`** — from the agent tool resolver, when a [tool](./tools.md) binding's source could not be listed: an unreachable `mcp` server, a refused request, or a `tools/list` that answered non-OK. `detail` carries `tool_id`, `tool_type`, `tool_name`, `reason` and `generation_id`.
+- **`tool_resolution_failed`** — from the agent tool resolver, when a [tool](./tools.md) binding contributed no tool to the turn. `detail` carries `tool_id`, `tool_type`, `tool_name`, `reason` and `generation_id`. The `reason` separates the cases:
+
+  | `reason` | What happened |
+  | --- | --- |
+  | a transport error | The `mcp` server was unreachable, or a `{{secret:…}}`/header template would not resolve |
+  | `tools/list answered <status>` | The listing was refused with a non-OK status |
+  | `tools/list answered the JSON-RPC error <code>: <message>` | A 200 carrying a JSON-RPC error rather than a result |
+  | ``tools/list answered 200 with no `result.tools` array`` | A 200 whose body is not a `tools/list` result |
+  | `tools/list returned no tools` | A well-formed listing of an empty catalogue |
+  | `every tool tools/list returned was excluded by the binding's actions/denied_actions` | The binding's allowlist/denylist left nothing |
+
+  The last two are not transport failures, but the turn still ran without the tools the agent is configured to have, which is the outcome worth monitoring.
 
   The binding is dropped rather than failing the turn — one flaky server must not take an agent down — so the generation **completes, with no error and no warning of its own**, having answered with fewer tools than it was configured to have. The only place the absence shows is the prompt, which nobody reads; this entry is the signal that distinguishes a turn whose tools were dropped from an agent that had none to begin with. SOAT never routes or filters tools per turn, so a turn missing its tools is always this, never a decision the platform made.
 
