@@ -17,6 +17,7 @@ type KnowledgeSearchBody = {
   min_score?: number;
   min_similarity?: number;
   rrf_k?: number;
+  recency_half_life_days?: number;
   limit?: number;
   // Array-typed filters. Typed loosely to tolerate non-conforming clients that
   // send a single value as a bare scalar; `toStringArray` normalizes them.
@@ -151,6 +152,7 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
     query: body.query,
     minSimilarity: resolveSimilarityFloor(body),
     rrfK: body.rrf_k,
+    recencyHalfLifeDays: body.recency_half_life_days,
     limit: body.limit,
     paths: toStringArray(body.document_paths),
     documentIds: toStringArray(body.document_ids),

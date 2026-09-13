@@ -1,6 +1,9 @@
 import {
+  DEFAULT_RECENCY_HALF_LIFE_DAYS,
   DEFAULT_RRF_K,
   fuseByReciprocalRank,
+  recencyDecayFactor,
+  resolveRecencyHalfLifeDays,
   resolveRrfK,
 } from 'src/lib/knowledgeRanking';
 
@@ -174,5 +177,103 @@ describe('resolveRrfK', () => {
     expect(resolveRrfK(7.9)).toBe(7);
     expect(resolveRrfK(0)).toBe(DEFAULT_RRF_K);
     expect(resolveRrfK(Number.NaN)).toBe(DEFAULT_RRF_K);
+  });
+});
+
+describe('resolveRecencyHalfLifeDays', () => {
+  const original = process.env.KNOWLEDGE_RECENCY_HALF_LIFE_DAYS;
+
+  afterEach(() => {
+    if (original === undefined) {
+      delete process.env.KNOWLEDGE_RECENCY_HALF_LIFE_DAYS;
+    } else {
+      process.env.KNOWLEDGE_RECENCY_HALF_LIFE_DAYS = original;
+    }
+  });
+
+  test('defaults to 0, which disables the blend', () => {
+    delete process.env.KNOWLEDGE_RECENCY_HALF_LIFE_DAYS;
+    expect(resolveRecencyHalfLifeDays()).toBe(DEFAULT_RECENCY_HALF_LIFE_DAYS);
+    expect(DEFAULT_RECENCY_HALF_LIFE_DAYS).toBe(0);
+  });
+
+  test('prefers the request value over the deployment default', () => {
+    process.env.KNOWLEDGE_RECENCY_HALF_LIFE_DAYS = '30';
+    expect(resolveRecencyHalfLifeDays(7)).toBe(7);
+  });
+
+  test('falls back to KNOWLEDGE_RECENCY_HALF_LIFE_DAYS when the request names none', () => {
+    process.env.KNOWLEDGE_RECENCY_HALF_LIFE_DAYS = '30';
+    expect(resolveRecencyHalfLifeDays()).toBe(30);
+  });
+
+  test('lets a request 0 turn a deployment-wide blend off', () => {
+    // The archival query on a deployment that otherwise wants decay.
+    process.env.KNOWLEDGE_RECENCY_HALF_LIFE_DAYS = '30';
+    expect(resolveRecencyHalfLifeDays(0)).toBe(0);
+  });
+
+  test('keeps a sub-day half-life reachable', () => {
+    delete process.env.KNOWLEDGE_RECENCY_HALF_LIFE_DAYS;
+    expect(resolveRecencyHalfLifeDays(0.5)).toBe(0.5);
+    process.env.KNOWLEDGE_RECENCY_HALF_LIFE_DAYS = '0.5';
+    expect(resolveRecencyHalfLifeDays()).toBe(0.5);
+  });
+
+  test('ignores a non-numeric or negative deployment default', () => {
+    process.env.KNOWLEDGE_RECENCY_HALF_LIFE_DAYS = 'thirty';
+    expect(resolveRecencyHalfLifeDays()).toBe(DEFAULT_RECENCY_HALF_LIFE_DAYS);
+    process.env.KNOWLEDGE_RECENCY_HALF_LIFE_DAYS = '-1';
+    expect(resolveRecencyHalfLifeDays()).toBe(DEFAULT_RECENCY_HALF_LIFE_DAYS);
+  });
+
+  test('falls back rather than throwing on an invalid request value', () => {
+    process.env.KNOWLEDGE_RECENCY_HALF_LIFE_DAYS = '30';
+    expect(resolveRecencyHalfLifeDays(-1)).toBe(30);
+    expect(resolveRecencyHalfLifeDays(Number.NaN)).toBe(30);
+    expect(resolveRecencyHalfLifeDays(Number.POSITIVE_INFINITY)).toBe(30);
+  });
+});
+
+describe('recencyDecayFactor', () => {
+  const now = Date.parse('2026-09-13T00:00:00Z');
+  const daysAgo = (days: number): Date => {
+    return new Date(now - days * 86400000);
+  };
+
+  test('halves the factor once per half-life', () => {
+    const factor = (days: number): number => {
+      return recencyDecayFactor({
+        updatedAt: daysAgo(days),
+        now,
+        halfLifeDays: 30,
+      });
+    };
+
+    expect(factor(0)).toBe(1);
+    expect(factor(30)).toBeCloseTo(0.5, 10);
+    expect(factor(60)).toBeCloseTo(0.25, 10);
+    expect(factor(1)).toBeCloseTo(2 ** (-1 / 30), 12);
+  });
+
+  test('leaves every result untouched at a half-life of 0', () => {
+    expect(
+      recencyDecayFactor({
+        updatedAt: daysAgo(3650),
+        now,
+        halfLifeDays: 0,
+      })
+    ).toBe(1);
+  });
+
+  test('never promotes a result whose timestamp is in the future', () => {
+    // Clock skew between the writer and the reader is not freshness evidence.
+    expect(
+      recencyDecayFactor({
+        updatedAt: daysAgo(-30),
+        now,
+        halfLifeDays: 30,
+      })
+    ).toBe(1);
   });
 });

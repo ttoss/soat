@@ -572,6 +572,87 @@ describe('Knowledge', () => {
       }
     });
 
+    test('recency_half_life_days decays a memory result, never a document', async () => {
+      const entry = await authenticatedTestClient(adminToken)
+        .post('/api/v1/memory-entries')
+        .send({
+          memory_id: memoryId,
+          content: 'The harbour crane is serviced every second Tuesday.',
+        });
+      // No product path sets `updated_at` — the column is Sequelize-managed and
+      // every model-level write stamps the current time over an explicit value
+      // — so the one way to give a fixture an age is raw SQL.
+      await db.sequelize.query(
+        'UPDATE memory_entries SET updated_at = :updatedAt WHERE public_id = :publicId',
+        {
+          replacements: {
+            updatedAt: new Date(Date.now() - 60 * 86400000),
+            publicId: entry.body.id,
+          },
+        }
+      );
+
+      const body = {
+        project_id: projectId,
+        query: 'anything',
+        memory_ids: [memoryId],
+      };
+      type Result = {
+        source_type: string;
+        entry_id?: string;
+        chunk_id?: string;
+        score: number;
+      };
+      const scores = (results: Result[]) => {
+        return new Map(
+          results.map((result) => {
+            return [result.entry_id ?? result.chunk_id, result.score];
+          })
+        );
+      };
+
+      const plain = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send(body);
+      const blended = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send({ ...body, recency_half_life_days: 30 });
+
+      expect(plain.status).toBe(200);
+      expect(blended.status).toBe(200);
+
+      const before = scores(plain.body.results);
+      const after = scores(blended.body.results);
+
+      // Two half-lives: the aged fact keeps a quarter of its fused score.
+      expect(after.get(entry.body.id)).toBeCloseTo(
+        before.get(entry.body.id)! * 0.25,
+        7
+      );
+      for (const result of plain.body.results as Result[]) {
+        if (result.source_type !== 'document') continue;
+        expect(after.get(result.chunk_id)).toBe(before.get(result.chunk_id));
+      }
+    });
+
+    test('recency_half_life_days of 0 leaves the ranking exactly as it was', async () => {
+      const body = {
+        project_id: projectId,
+        query: 'anything',
+        memory_ids: [memoryId],
+      };
+
+      const omitted = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send(body);
+      const disabled = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send({ ...body, recency_half_life_days: 0 });
+
+      expect(disabled.status).toBe(200);
+      expect(disabled.body.results).toEqual(omitted.body.results);
+    });
+
     test('rrf_k changes the fused magnitudes, not the result set', async () => {
       const body = {
         project_id: projectId,

@@ -208,46 +208,69 @@ export const readBaseline = (): Report | null => {
   }
 };
 
+/**
+ * The metrics the gate refuses a drop in.
+ *
+ * recall@10 alone cannot gate a ranking change that only ever *demotes* a
+ * result — the recency blend is one: a relevant entry it pushes from rank 1 to
+ * rank 2 is still retrieved, so recall cannot move, and the whole effect is
+ * invisible. Position is what MRR measures, which is why both are compared.
+ *
+ * recall@5 is reported but not gated: it is recall@10 read at a tighter cutoff,
+ * and gating it would refuse a change that moves a result from rank 5 to rank 6
+ * while MRR and recall@10 both improve.
+ */
+const GATED_METRICS = ['recall_at_10', 'mrr'] as const;
+
+type GatedMetric = (typeof GATED_METRICS)[number];
+
 export type RegressionFailure = {
   scope: string;
+  metric: GatedMetric;
   baseline: number;
   current: number;
 };
 
+const compareMetrics = (args: {
+  scope: string;
+  baseline: Metrics;
+  /** `undefined` where this run did not score the scope at all. */
+  current: Metrics | undefined;
+}): RegressionFailure[] => {
+  return GATED_METRICS.flatMap((metric) => {
+    const baseline = args.baseline[metric];
+    const current = args.current?.[metric] ?? 0;
+    if (current >= baseline) return [];
+    return [{ scope: args.scope, metric, baseline, current }];
+  });
+};
+
 /**
- * Zero tolerance on recall@10, globally and per kind. Per kind matters as much
- * as the global number: a change that trades every exact-token hit for a
- * semantic one can leave the global figure untouched.
+ * Zero tolerance on every {@link GATED_METRICS} entry, globally and per kind.
+ * Per kind matters as much as the global number: a change that trades every
+ * exact-token hit for a semantic one can leave the global figure untouched.
  */
 export const findRegressions = (args: {
   report: Report;
   baseline: Report;
 }): RegressionFailure[] => {
-  const failures: RegressionFailure[] = [];
-
-  const compare = (scope: string, baseline: number, current: number) => {
-    if (current < baseline) failures.push({ scope, baseline, current });
-  };
-
-  compare(
-    'overall',
-    args.baseline.metrics.recall_at_10,
-    args.report.metrics.recall_at_10
-  );
+  const failures = compareMetrics({
+    scope: 'overall',
+    baseline: args.baseline.metrics,
+    current: args.report.metrics,
+  });
 
   for (const [kind, metrics] of Object.entries(args.baseline.by_kind)) {
     const current = args.report.by_kind[kind];
-    if (current === undefined) {
-      // A kind the baseline scores and the report does not means the golden set
-      // lost those queries — never a pass.
-      failures.push({
-        scope: `${kind} (absent from this run)`,
-        baseline: metrics.recall_at_10,
-        current: 0,
-      });
-      continue;
-    }
-    compare(kind, metrics.recall_at_10, current.recall_at_10);
+    failures.push(
+      ...compareMetrics({
+        // A kind the baseline scores and the report does not means the golden
+        // set lost those queries — never a pass.
+        scope: current === undefined ? `${kind} (absent from this run)` : kind,
+        baseline: metrics,
+        current,
+      })
+    );
   }
 
   return failures;

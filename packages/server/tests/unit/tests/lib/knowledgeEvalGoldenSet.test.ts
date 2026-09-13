@@ -123,6 +123,93 @@ describe('knowledge eval golden set', () => {
     }).toThrow(/not both and not neither/);
   });
 
+  test('reads a memory fixture age and the container it belongs to', () => {
+    const golden = parseGoldenSet({
+      raw: {
+        version: 1,
+        corpus: {
+          documents: [],
+          memories: [
+            { key: 'mem:a', content: 'a' },
+            {
+              key: 'mem:b',
+              content: 'b',
+              age_days: 180.5,
+              memory: 'Prior quarter',
+            },
+          ],
+        },
+        queries: [],
+      },
+    });
+
+    expect(golden.corpus.memories).toEqual([
+      {
+        key: 'mem:a',
+        content: 'a',
+        tags: undefined,
+        age_days: undefined,
+        memory: undefined,
+      },
+      {
+        key: 'mem:b',
+        content: 'b',
+        tags: undefined,
+        age_days: 180.5,
+        memory: 'Prior quarter',
+      },
+    ]);
+  });
+
+  test('rejects a negative or non-finite memory age', () => {
+    const withAge = (age_days: unknown) => {
+      return () => {
+        return parseGoldenSet({
+          raw: {
+            version: 1,
+            corpus: {
+              documents: [],
+              memories: [{ key: 'mem:a', content: 'a', age_days }],
+            },
+            queries: [],
+          },
+        });
+      };
+    };
+
+    expect(withAge(-1)).toThrow(/age_days/);
+    expect(withAge('180')).toThrow(/age_days/);
+  });
+
+  test('gives every freshness query a fresh answer and an aged distractor elsewhere', () => {
+    // The blend only ever demotes, so a freshness query measures nothing
+    // without an aged near-twin for the decay to overtake — and it has to sit
+    // in another container, since `writeMemoryEntry` dedups twins sharing one
+    // at 0.95 and the seeder refuses anything but a `created` write.
+    const byKey = new Map(
+      golden.corpus.memories.map((memory) => {
+        return [memory.key, memory];
+      })
+    );
+    const freshness = golden.queries.filter((query) => {
+      return query.kind === 'freshness';
+    });
+    expect(freshness.length).toBeGreaterThan(0);
+
+    for (const query of freshness) {
+      expect(query.expected).toHaveLength(1);
+      const fresh = byKey.get(query.expected[0].key)!;
+      const aged = golden.corpus.memories.filter((memory) => {
+        return (memory.age_days ?? 0) > 0 && memory.memory !== fresh.memory;
+      });
+      expect({
+        id: query.id,
+        freshAge: fresh.age_days ?? 0,
+        aged: aged.length > 0,
+      }).toEqual({ id: query.id, freshAge: 0, aged: true });
+    }
+  });
+
   test('rejects an unknown query kind', () => {
     expect(() => {
       return parseGoldenSet({

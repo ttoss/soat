@@ -23,7 +23,7 @@ import { CORPUS_TAGS, seedGoldenCorpus } from './seedCorpus';
  *
  * Seeds the golden corpus, runs every labeled query through `searchKnowledge`,
  * scores recall@5, recall@10 and MRR globally and per query kind, writes the
- * report, and fails when recall@10 falls below the committed baseline.
+ * report, and fails when recall@10 or MRR falls below the committed baseline.
  *
  *   pnpm --filter @soat/server eval:knowledge
  *   pnpm --filter @soat/server eval:knowledge --update-baseline
@@ -133,7 +133,7 @@ describe('knowledge retrieval golden set', () => {
     // out of the failure instead of re-running the eval to find out.
     expect(
       regressions.map((failure) => {
-        return `${failure.scope}: recall@10 ${failure.current} < baseline ${failure.baseline}`;
+        return `${failure.scope}: ${failure.metric} ${failure.current} < baseline ${failure.baseline}`;
       })
     ).toEqual([]);
   });

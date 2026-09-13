@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "corpus": {
     "documents": [
       {
@@ -191,84 +191,144 @@
         "content": "Acme Corp is billed on NET-30 terms.",
         "tags": {
           "account": "acme"
-        }
+        },
+        "age_days": 12
       },
       {
         "key": "mem:acme-contact",
         "content": "The billing contact at Acme Corp is Dominique Leclerc.",
         "tags": {
           "account": "acme"
-        }
+        },
+        "age_days": 3
       },
       {
         "key": "mem:zenith-renewal",
         "content": "Zenith Logistics renews its managed hosting contract on 30 November 2026.",
         "tags": {
           "account": "zenith"
-        }
+        },
+        "age_days": 45
       },
       {
         "key": "mem:zenith-tier",
         "content": "Zenith Logistics is on the enterprise support tier.",
         "tags": {
           "account": "zenith"
-        }
+        },
+        "age_days": 150
       },
       {
         "key": "mem:marisol-timezone",
         "content": "Marisol Okonkwo works from the Europe/Lisbon timezone.",
         "tags": {
           "account": "internal"
-        }
+        },
+        "age_days": 7
       },
       {
         "key": "mem:harbor-preference",
         "content": "Harbor Freight Collective prefers to receive invoices as PDF attachments.",
         "tags": {
           "account": "harbor"
-        }
+        },
+        "age_days": 210
       },
       {
         "key": "mem:nimbus-outage",
         "content": "Nimbus Analytics reported a dashboard outage on 14 March 2026.",
         "tags": {
           "account": "nimbus"
-        }
+        },
+        "age_days": 90
       },
       {
         "key": "mem:orchid-currency",
         "content": "Orchid Retail is invoiced in Brazilian real.",
         "tags": {
           "account": "orchid"
-        }
+        },
+        "age_days": 30
       },
       {
         "key": "mem:vertex-sla",
         "content": "Vertex Robotics has a four-hour incident response commitment.",
         "tags": {
           "account": "vertex"
-        }
+        },
+        "age_days": 365
       },
       {
         "key": "mem:lumen-locale",
         "content": "Lumen Media requires every report in European date format.",
         "tags": {
           "account": "lumen"
-        }
+        },
+        "age_days": 120
       },
       {
         "key": "mem:kestrel-contact",
         "content": "The technical contact at Kestrel Freight is Amara Dubois.",
         "tags": {
           "account": "kestrel"
-        }
+        },
+        "age_days": 60
       },
       {
         "key": "mem:solstice-orders",
         "content": "Solstice Foods files every purchase order under the prefix PO-SOL.",
         "tags": {
           "account": "solstice"
+        },
+        "age_days": 400
+      },
+      {
+        "key": "mem:pinnacle-rate",
+        "content": "Pinnacle Freight is billed at 6.40 USD per kilogram of air freight.",
+        "tags": {
+          "account": "pinnacle"
         }
+      },
+      {
+        "key": "mem:pinnacle-rate-superseded",
+        "content": "Pinnacle Freight is billed at 4.10 USD per kilogram of air freight.",
+        "tags": {
+          "account": "pinnacle"
+        },
+        "age_days": 240,
+        "memory": "Knowledge golden corpus (prior quarter)"
+      },
+      {
+        "key": "mem:cascade-contact",
+        "content": "The primary contact at Cascade Dairy is Ines Halvorsen.",
+        "tags": {
+          "account": "cascade"
+        }
+      },
+      {
+        "key": "mem:cascade-contact-superseded",
+        "content": "The primary contact at Cascade Dairy is Tobias Renner.",
+        "tags": {
+          "account": "cascade"
+        },
+        "age_days": 300,
+        "memory": "Knowledge golden corpus (prior quarter)"
+      },
+      {
+        "key": "mem:meridian-window",
+        "content": "Meridian Press has support coverage from 08:00 to 20:00 UTC.",
+        "tags": {
+          "account": "meridian"
+        }
+      },
+      {
+        "key": "mem:meridian-window-superseded",
+        "content": "Meridian Press has support coverage from 09:00 to 17:00 UTC.",
+        "tags": {
+          "account": "meridian"
+        },
+        "age_days": 420,
+        "memory": "Knowledge golden corpus (prior quarter)"
       }
     ]
   },
@@ -842,6 +902,39 @@
         {
           "source_type": "document",
           "key": "doc:approvals#expiry-is-a-hard-gate"
+        }
+      ]
+    },
+    {
+      "id": "freshness-001",
+      "query": "Pinnacle Freight air freight rate per kilogram",
+      "kind": "freshness",
+      "expected": [
+        {
+          "source_type": "memory",
+          "key": "mem:pinnacle-rate"
+        }
+      ]
+    },
+    {
+      "id": "freshness-002",
+      "query": "who is the primary contact at Cascade Dairy",
+      "kind": "freshness",
+      "expected": [
+        {
+          "source_type": "memory",
+          "key": "mem:cascade-contact"
+        }
+      ]
+    },
+    {
+      "id": "freshness-003",
+      "query": "Meridian Press support coverage hours",
+      "kind": "freshness",
+      "expected": [
+        {
+          "source_type": "memory",
+          "key": "mem:meridian-window"
         }
       ]
     }

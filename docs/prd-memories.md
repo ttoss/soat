@@ -16,7 +16,7 @@ that landed with the v1 RC — is documented in the
 | Entity extraction on write     | ❌ Not started | Async, off the request path; LLM extracts subject/predicate/object triples after the entry persists (Phase 6)                    |
 | Entity-based knowledge queries | ❌ Not started | Memory-side `resolveEntitySearch()` (entity/actor → edges → entries). Query surface specced in prd-knowledge.md Phase 3 (Phase 6) |
 | Extraction coverage            | ❌ Not started | Extraction trigger for streaming, `requires_action`, and background (`wait=false`) direct completions (Phase 7)                  |
-| Decay, importance & compaction | ❌ Not started | Importance scoring, access tracking, retrieval-time recency blend, compaction (Phase 8)                                          |
+| Decay, importance & compaction | ❌ Not started | Importance scoring, access tracking, compaction (Phase 8); the retrieval-time recency blend shipped with knowledge Phase 5       |
 | Profile memory                 | ❌ Not started | Always-injected bounded profile blocks, agent-editable (Phase 9)                                                                 |
 | Indexes on `memory_entries`    | ❌ Not started | Only declared index is the `public_id` unique — no vector index on `embedding`, none on `memory_id`; every similarity search is a sequential scan (see [Engine Review Findings](#engine-review-findings-2026-08)) |
 
@@ -241,6 +241,12 @@ periodically.
   provided
 - `lastAccessedAt` + `accessCount` on `MemoryEntry`, updated fire-and-forget when an entry is
   returned by knowledge search
+- ~~Retrieval-time **recency** decay for memory results~~ — shipped with knowledge Phase 5 as
+  `recency_half_life_days` / `KNOWLEDGE_RECENCY_HALF_LIFE_DAYS`, a plain exponential on
+  `updated_at` applied to the fused score, off by default. What is left here is the
+  **`importance`** factor of the blend, which needs the column below, and a dedicated
+  reaffirmation timestamp if `updated_at` — which any write to the entry bumps, a tag edit
+  included — turns out to be too coarse a proxy for "still true"
 - Retrieval-time scoring blend for memory results — similarity × recency decay × importance —
   owned by the knowledge module's ranking layer (see
   [prd-knowledge.md Phase 5](./prd-knowledge.md#phase-5--hybrid-retrieval-and-ranking--future))

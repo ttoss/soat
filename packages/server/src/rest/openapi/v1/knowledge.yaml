@@ -81,6 +81,21 @@ paths:
                     60 by default. Only applies when `query` is provided.
                   minimum: 1
                   example: 60
+                recency_half_life_days:
+                  type: number
+                  description: >-
+                    Half-life, in days, of a recency decay applied to **memory** results
+                    after fusion: a result's `score` is multiplied by
+                    `2 ^ (-age_in_days / recency_half_life_days)`, where age is measured
+                    from its `updated_at`. Document results are never decayed. `0` — the
+                    default, and the default of the deployment's
+                    `KNOWLEDGE_RECENCY_HALF_LIFE_DAYS` — disables the blend entirely; it
+                    is a switch, not a lower bound, and sending `0` turns off a
+                    deployment-wide decay for this one request. Accepts fractions
+                    (`0.5` is twelve hours). How many ranks a given half-life costs
+                    depends on `rrf_k`. Only applies when `query` is provided.
+                  minimum: 0
+                  example: 30
                 limit:
                   type: integer
                   description: >-

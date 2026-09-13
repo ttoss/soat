@@ -16,12 +16,13 @@ import path from 'node:path';
 export type GoldenSourceType = 'document' | 'memory';
 
 export type GoldenQueryKind =
-  'exact_token' | 'exact_name' | 'entity' | 'semantic';
+  'exact_token' | 'exact_name' | 'entity' | 'semantic' | 'freshness';
 
 export const GOLDEN_QUERY_KINDS: GoldenQueryKind[] = [
   'entity',
   'exact_name',
   'exact_token',
+  'freshness',
   'semantic',
 ];
 
@@ -46,6 +47,26 @@ export type GoldenMemory = {
   key: string;
   content: string;
   tags?: Record<string, string>;
+  /**
+   * How far in the past the seeder backdates this entry's `updated_at`,
+   * relative to the run — never an absolute timestamp, so two runs a month
+   * apart score the same ranking.
+   *
+   * Omitted means "written by this run", which is what every fixture was
+   * before the recency blend existed: at age zero every decay factor is 1 and
+   * the blend leaves the ranking exactly as it found it.
+   */
+  age_days?: number;
+  /**
+   * The memory container to write this entry to, defaulting to the corpus's
+   * single one.
+   *
+   * `writeMemoryEntry` dedups against the most similar entry **of the same
+   * memory** at 0.95, so a near-twin — which is the only fixture a freshness
+   * query can be scored against — has to live somewhere else or it merges
+   * into its own twin and never reaches the corpus.
+   */
+  memory?: string;
 };
 
 export type GoldenExpectation = {
@@ -107,6 +128,24 @@ const readTags = (args: {
   return tags;
 };
 
+/** A non-negative, finite count — the one shape `age_days` may take. */
+const readOptionalAge = (args: {
+  value: unknown;
+  field: string;
+}): number | undefined => {
+  if (args.value === undefined) return undefined;
+  if (
+    typeof args.value !== 'number' ||
+    !Number.isFinite(args.value) ||
+    args.value < 0
+  ) {
+    throw new Error(
+      `golden.json: ${args.field} must be a non-negative finite number`
+    );
+  }
+  return args.value;
+};
+
 const readArray = (args: { value: unknown; field: string }): unknown[] => {
   if (!Array.isArray(args.value)) {
     throw new Error(`golden.json: ${args.field} must be an array`);
@@ -162,6 +201,14 @@ const readMemory = (args: { value: unknown; field: string }): GoldenMemory => {
       field: `${args.field}.content`,
     }),
     tags: readTags({ value: args.value.tags, field: `${args.field}.tags` }),
+    age_days: readOptionalAge({
+      value: args.value.age_days,
+      field: `${args.field}.age_days`,
+    }),
+    memory: readOptionalString({
+      value: args.value.memory,
+      field: `${args.field}.memory`,
+    }),
   };
 };
 

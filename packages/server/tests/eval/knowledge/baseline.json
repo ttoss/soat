@@ -1,9 +1,9 @@
 {
-  "version": 1,
+  "version": 2,
   "metrics": {
-    "recall_at_5": 0.8846,
-    "recall_at_10": 0.9231,
-    "mrr": 0.8397
+    "recall_at_5": 0.8909,
+    "recall_at_10": 0.9273,
+    "mrr": 0.8303
   },
   "by_kind": {
     "entity": {
@@ -20,6 +20,11 @@
       "recall_at_5": 1,
       "recall_at_10": 1,
       "mrr": 1
+    },
+    "freshness": {
+      "recall_at_5": 1,
+      "recall_at_10": 1,
+      "mrr": 0.6667
     },
     "semantic": {
       "recall_at_5": 0.6,
@@ -490,6 +495,33 @@
     {
       "id": "semantic-015",
       "kind": "semantic",
+      "first_relevant_rank": 1,
+      "hit_at_5": true,
+      "hit_at_10": true,
+      "recall_at_5": 1,
+      "recall_at_10": 1
+    },
+    {
+      "id": "freshness-001",
+      "kind": "freshness",
+      "first_relevant_rank": 2,
+      "hit_at_5": true,
+      "hit_at_10": true,
+      "recall_at_5": 1,
+      "recall_at_10": 1
+    },
+    {
+      "id": "freshness-002",
+      "kind": "freshness",
+      "first_relevant_rank": 2,
+      "hit_at_5": true,
+      "hit_at_10": true,
+      "recall_at_5": 1,
+      "recall_at_10": 1
+    },
+    {
+      "id": "freshness-003",
+      "kind": "freshness",
       "first_relevant_rank": 1,
       "hit_at_5": true,
       "hit_at_10": true,
