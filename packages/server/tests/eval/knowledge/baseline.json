@@ -1,9 +1,9 @@
 {
-  "version": 2,
+  "version": 3,
   "metrics": {
-    "recall_at_5": 0.8909,
-    "recall_at_10": 0.9273,
-    "mrr": 0.8303
+    "recall_at_5": 0.8966,
+    "recall_at_10": 0.931,
+    "mrr": 0.8218
   },
   "by_kind": {
     "entity": {
@@ -523,6 +523,33 @@
       "id": "freshness-003",
       "kind": "freshness",
       "first_relevant_rank": 1,
+      "hit_at_5": true,
+      "hit_at_10": true,
+      "recall_at_5": 1,
+      "recall_at_10": 1
+    },
+    {
+      "id": "freshness-004",
+      "kind": "freshness",
+      "first_relevant_rank": 2,
+      "hit_at_5": true,
+      "hit_at_10": true,
+      "recall_at_5": 1,
+      "recall_at_10": 1
+    },
+    {
+      "id": "freshness-005",
+      "kind": "freshness",
+      "first_relevant_rank": 1,
+      "hit_at_5": true,
+      "hit_at_10": true,
+      "recall_at_5": 1,
+      "recall_at_10": 1
+    },
+    {
+      "id": "freshness-006",
+      "kind": "freshness",
+      "first_relevant_rank": 2,
       "hit_at_5": true,
       "hit_at_10": true,
       "recall_at_5": 1,
