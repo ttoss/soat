@@ -674,6 +674,7 @@ describe('Agent Generation Routes', () => {
           stepRules: null,
           temperature: null,
           outputSchema: null,
+          promptCaching: null,
         },
         resolvedTools: {},
       };
@@ -775,6 +776,7 @@ describe('Agent Generation Routes', () => {
           stepRules: null,
           temperature: null,
           outputSchema: null,
+          promptCaching: null,
         },
         resolvedTools: {},
       });
@@ -1130,6 +1132,7 @@ describe('Agent Generation Routes', () => {
             stepRules: null,
             temperature: null,
             outputSchema: null,
+            promptCaching: null,
           },
           // A client tool: bound to the turn, with no `execute` of its own.
           resolvedTools: {

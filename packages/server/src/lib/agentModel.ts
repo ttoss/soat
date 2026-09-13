@@ -106,6 +106,11 @@ export const resolveBedrockCredentials = (args: {
   return { region, credentialProvider: fromNodeProviderChain() };
 };
 
+/**
+ * Converse, for every vendor Bedrock serves. Anthropic-only features (tool
+ * search, model betas) are InvokeModel-only and would need the SDK's separate
+ * Bedrock-Anthropic path — see `modules/ai-providers.md`, Bedrock request path.
+ */
 const buildBedrockModel = (args: BuildModelArgs): LanguageModel => {
   const options = resolveBedrockCredentials(args);
   return createAmazonBedrock({ ...options, fetch: egressGuardedFetch })(

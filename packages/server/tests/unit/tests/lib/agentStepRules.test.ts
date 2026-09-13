@@ -209,6 +209,44 @@ describe('buildPrepareStep', () => {
     });
   });
 
+  test('buildPrepareStep leaves the tool block whole for a forced tool under prompt caching', () => {
+    // The tool block is inside the cached prefix, so narrowing it to the forced
+    // tool costs a cache entry to save tokens `toolChoice` already saves (#1301).
+    const prepareStep = buildPrepareStep({
+      stepRules: [
+        { step: 1, tool_choice: { type: 'tool', tool_name: 'lookup' } },
+      ],
+      logContext: 'non_stream',
+      promptCaching: { enabled: true },
+    });
+
+    expect(prepareStep!({ stepNumber: 0 })).toEqual({
+      toolChoice: { type: 'tool', toolName: 'lookup' },
+    });
+  });
+
+  test('buildPrepareStep still honors an explicit active_tool_ids under prompt caching', () => {
+    // A restriction the author wrote is a capability decision, not a token
+    // saving: it narrows whether or not it costs the prefix.
+    const prepareStep = buildPrepareStep({
+      stepRules: [
+        {
+          step: 1,
+          tool_choice: { type: 'tool', tool_name: 'search' },
+          active_tool_ids: ['tool_abc'],
+        },
+      ],
+      logContext: 'non_stream',
+      toolIdToName: { tool_abc: 'search', tool_def: 'analyze' },
+      promptCaching: { enabled: true },
+    });
+
+    expect(prepareStep!({ stepNumber: 0 })).toEqual({
+      toolChoice: { type: 'tool', toolName: 'search' },
+      activeTools: ['search'],
+    });
+  });
+
   test('buildPrepareStep restricts activeTools to a step rule active_tool_ids, resolved via id→name map', () => {
     // `active_tool_ids` on a step rule holds persisted tool ids
     // (`modules/agents.md` — Step Rules), while the AI SDK's `activeTools`

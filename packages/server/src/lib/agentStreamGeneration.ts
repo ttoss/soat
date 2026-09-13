@@ -240,6 +240,7 @@ export const runStreamGeneration = async (args: {
     stepRules: args.typedAgent.stepRules,
     logContext: 'stream',
     toolIdToName: await resolveAgentStepRuleToolIdToName(args.typedAgent),
+    promptCaching: args.typedAgent.promptCaching,
   });
   log(
     'runStreamGeneration: agentId=%s toolCount=%d stepRulesCount=%d',

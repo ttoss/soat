@@ -85,13 +85,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
     post:
       tags:
         - Documents
@@ -158,19 +158,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '409':
           description: >-
             The project's `storage_bytes` quota is exceeded
@@ -180,7 +180,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
   /api/v1/documents/ingest:
     post:
       tags:
@@ -264,31 +264,31 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '409':
           description: The file already backs a Document (a file can only be ingested once — use `POST /documents/{document_id}/ingest` to re-process the existing document, or upload a new copy of the file to ingest it separately), or the project's `storage_bytes` quota is exceeded (`QUOTA_STORAGE_EXCEEDED`; delete stored content or raise the quota — no `Retry-After` is sent, since no window reset clears a stored total).
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '413':
           description: The file is too large to ingest synchronously (`?wait=true`). Retry in background mode and poll the document status.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
   /api/v1/documents/{document_id}:
     get:
       tags:
@@ -316,19 +316,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: Document not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
     delete:
       tags:
         - Documents
@@ -351,19 +351,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: Document not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
     patch:
       tags:
         - Documents
@@ -416,19 +416,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: Document not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
   /api/v1/documents/{document_id}/status:
     get:
       tags:
@@ -463,19 +463,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: Document not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
   /api/v1/documents/{document_id}/ingest:
     post:
       tags:
@@ -543,19 +543,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: Document not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '409':
           description: >-
             The project's `storage_bytes` quota is exceeded
@@ -565,13 +565,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '413':
           description: The file is too large to re-ingest synchronously (`?wait=true`). Retry in background mode.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
   /api/v1/documents/{document_id}/ingestion-callback:
     post:
       tags:
@@ -640,13 +640,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: Document not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '409':
           description: >-
             The document is no longer awaiting this conversion attempt
@@ -654,13 +654,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '422':
           description: The output shape is unrecognized.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
   /api/v1/documents/{document_id}/tags:
     get:
       tags:
@@ -688,19 +688,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: Document not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
     put:
       tags:
         - Documents
@@ -733,19 +733,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: Document not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
     patch:
       tags:
         - Documents
@@ -778,19 +778,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: Document not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
 components:
   securitySchemes:
     bearerAuth:
@@ -906,45 +906,3 @@ components:
           nullable: true
           description: Failure reason when `status` is `failed` (e.g. `FILE_PARSE_FAILED`, `INGESTION_TIMEOUT`).
           example: 'INGESTION_TIMEOUT'
-    ErrorResponse:
-      type: object
-      required:
-        - error
-      properties:
-        error:
-          type: object
-          description: >-
-            Structured error. Every error response uses this shape — 401, 403
-            and the 500 catch-all included — so `code` can be read without
-            first checking the type of `error`.
-          required:
-            - code
-            - message
-            - hint
-            - docs_url
-          properties:
-            code:
-              type: string
-              description: A key from the server's ERROR_CODES registry.
-              example: RESOURCE_NOT_FOUND
-            message:
-              type: string
-              example: 'Resource not found'
-            hint:
-              type: string
-              description: >-
-                What to do about this error. Resolved per code, so a caller that
-                has never seen the code before can act on the response without
-                leaving it.
-              example: >-
-                Check the id, and check that the credential can see the project
-                that owns the resource.
-            docs_url:
-              type: string
-              format: uri
-              description: The reference-page anchor documenting this code.
-              example: >-
-                https://soat.ttoss.dev/docs/error-codes#resource_not_found
-            meta:
-              type: object
-              description: Optional structured context for the error.

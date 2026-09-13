@@ -169,7 +169,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '200':
           description: Paginated list of usage events
           content:
@@ -192,13 +192,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
 
   /api/v1/usage/aggregate:
     get:
@@ -450,19 +450,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
 
   /api/v1/usage/thresholds:
     get:
@@ -525,13 +525,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
     post:
       tags:
         - Usage
@@ -559,19 +559,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
 
   /api/v1/usage/thresholds/{threshold_id}:
     delete:
@@ -597,19 +597,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: Threshold not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
 
   /api/v1/usage/receipt:
     get:
@@ -652,19 +652,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: Generation not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
 
   /api/v1/usage/prices:
     get:
@@ -688,7 +688,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
     put:
       tags:
         - Usage
@@ -719,19 +719,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
 
 components:
   securitySchemes:
@@ -790,9 +790,11 @@ components:
     UsageEvent:
       type: object
       description: >
-        One metered occurrence (a completed LLM call, a node execution, …).
-        Attribution and total cost live here; the measured quantities live in
-        `components`.
+        One metered occurrence: a whole generation, a node execution, an
+        embedding call. A generation is one event however many steps it took —
+        a four-step turn is four LLM calls and one event, written when the turn
+        ends. Attribution and total cost live here; the measured quantities
+        live in `components`.
       properties:
         id:
           type: string
@@ -1446,46 +1448,3 @@ components:
                 type: string
                 format: date-time
                 description: Must be in the future; past prices are immutable
-
-    ErrorResponse:
-      type: object
-      required:
-        - error
-      properties:
-        error:
-          type: object
-          description: >-
-            Structured error. Every error response uses this shape — 401, 403
-            and the 500 catch-all included — so `code` can be read without
-            first checking the type of `error`.
-          required:
-            - code
-            - message
-            - hint
-            - docs_url
-          properties:
-            code:
-              type: string
-              description: A key from the server's ERROR_CODES registry.
-              example: RESOURCE_NOT_FOUND
-            message:
-              type: string
-              example: 'Resource not found'
-            hint:
-              type: string
-              description: >-
-                What to do about this error. Resolved per code, so a caller that
-                has never seen the code before can act on the response without
-                leaving it.
-              example: >-
-                Check the id, and check that the credential can see the project
-                that owns the resource.
-            docs_url:
-              type: string
-              format: uri
-              description: The reference-page anchor documenting this code.
-              example: >-
-                https://soat.ttoss.dev/docs/error-codes#resource_not_found
-            meta:
-              type: object
-              description: Optional structured context for the error.

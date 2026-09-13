@@ -1873,14 +1873,28 @@ describe('Tools', () => {
           body += chunk;
         });
         req.on('end', () => {
-          const parsed = JSON.parse(body) as { method: string };
+          const parsed = JSON.parse(body) as {
+            method: string;
+            params?: { name?: string };
+          };
           res.setHeader('Content-Type', 'application/json');
           if (parsed.method === 'tools/call') {
             res.end(
               JSON.stringify({
                 jsonrpc: '2.0',
                 id: 2,
-                result: { content: [{ text: JSON.stringify({ ok: true }) }] },
+                ...(parsed.params?.name === 'failing-remote-tool'
+                  ? {
+                      result: {
+                        isError: true,
+                        content: [{ type: 'text', text: 'the widget is gone' }],
+                      },
+                    }
+                  : {
+                      result: {
+                        content: [{ text: JSON.stringify({ ok: true }) }],
+                      },
+                    }),
               })
             );
             return;
@@ -2134,6 +2148,30 @@ describe('Tools', () => {
 
       expect(callRes.status).toBe(200);
       expect(callRes.body).toEqual({ ok: true });
+    });
+
+    // A tool the server itself reported as failed reached the server and was
+    // answered, so it is a `502` naming the failure — not the `500` an
+    // unmapped throw would be, and not the `200` it used to be.
+    test('calling an mcp tool the server answers isError returns 502', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'failing-mcp-tool',
+          type: 'mcp',
+          mcp: { url: mcpServerUrl },
+        });
+      expect(createRes.status).toBe(201);
+
+      const callRes = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${createRes.body.id}/call`)
+        .send({ action: 'failing-remote-tool', input: {} });
+
+      expect(callRes.status).toBe(502);
+      expect(callRes.body.error.code).toBe('MCP_TOOL_ERROR');
+      expect(callRes.body.error.message).toMatch(/the widget is gone/);
+      expect(callRes.body.error.meta.mcp_tool).toBe('failing-remote-tool');
     });
 
     test('an mcp tool round-trips its actions allowlist', async () => {

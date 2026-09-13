@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 import type { JSONSchema7, Tool } from 'ai';
 import { jsonSchema, tool } from 'ai';
 import createDebug from 'debug';

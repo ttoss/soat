@@ -16,6 +16,7 @@ import createDebug from 'debug';
 
 import type { TypedAgent } from './agentGenerationTypes';
 import { resolveToolIdsToNames } from './agentToolSelection';
+import { readPromptCachingConfig } from './promptCaching';
 
 const log = createDebug('soat:generation');
 
@@ -108,6 +109,25 @@ export const resolveStepActiveTools = (args: {
 };
 
 /**
+ * The active set for a rule that names a tool and narrows nothing itself.
+ *
+ * `toolChoice` already obliges the model to call that tool, so trimming the
+ * tool block to it changes no outcome — it is a token saving, and the default.
+ *
+ * Under `prompt_caching` it stops being one. The tool block sits inside the
+ * cached prefix, so a trimmed step writes its own cache entry and the next
+ * step — back to the full block — writes another: the prefix is bought twice
+ * to save it once (#1301). An `active_tool_ids` the author wrote is a
+ * capability restriction and narrows either way; this synthesized one is not.
+ */
+const forcedToolActiveTools = (args: {
+  toolName: string;
+  promptCachingEnabled: boolean;
+}): string[] | undefined => {
+  return args.promptCachingEnabled ? undefined : [args.toolName];
+};
+
+/**
  * Combines a rule's normalized `tool_choice` and resolved `active_tool_ids`
  * into the shape `prepareStep` returns. Split out of `buildPrepareStep`'s
  * closure so the closure body stays a thin log-and-delegate wrapper.
@@ -115,6 +135,7 @@ export const resolveStepActiveTools = (args: {
 export const resolvePrepareStepResult = (args: {
   ruleToolChoice: ReturnType<typeof normalizeToolChoice>;
   ruleActiveTools: string[] | undefined;
+  promptCachingEnabled?: boolean;
 }): {
   toolChoice?: ToolChoice<Record<string, Tool>>;
   activeTools?: string[];
@@ -124,10 +145,15 @@ export const resolvePrepareStepResult = (args: {
     return ruleActiveTools ? { activeTools: ruleActiveTools } : {};
   }
   if (typeof ruleToolChoice === 'object' && ruleToolChoice.type === 'tool') {
-    return {
-      toolChoice: ruleToolChoice,
-      activeTools: ruleActiveTools ?? [ruleToolChoice.toolName],
-    };
+    const activeTools =
+      ruleActiveTools ??
+      forcedToolActiveTools({
+        toolName: ruleToolChoice.toolName,
+        promptCachingEnabled: args.promptCachingEnabled === true,
+      });
+    return activeTools
+      ? { toolChoice: ruleToolChoice, activeTools }
+      : { toolChoice: ruleToolChoice };
   }
   // A string choice ('auto' | 'required' | 'none') overrides the agent's own
   // tool_choice for this step; no tool is named, so the active tool set is
@@ -168,6 +194,12 @@ export const buildPrepareStep = (args: {
   logContext: 'stream' | 'non_stream';
   toolIdToName?: Record<string, string>;
   /**
+   * The agent's `prompt_caching`, as stored. Read for one decision only —
+   * whether a forced tool may trim the tool block — never to place a
+   * breakpoint, which `withPromptCacheBreakpoint` did once for the whole turn.
+   */
+  promptCaching?: unknown;
+  /**
    * Steps the turn spent before this segment. Rules are numbered from the
    * first step of the *turn*, and a resume after `submit-tool-outputs`
    * continues one — the AI SDK's `stepNumber` restarts at 0 there regardless.
@@ -185,6 +217,9 @@ export const buildPrepareStep = (args: {
 
   const rules = args.stepRules as StepRule[];
   const toolIdToName = args.toolIdToName ?? {};
+  const promptCachingEnabled = readPromptCachingConfig(
+    args.promptCaching
+  ).enabled;
   log('buildPrepareStep (%s): rules=%o', args.logContext, rules);
 
   const stepsAlreadySpent = args.stepsAlreadySpent ?? 0;
@@ -211,6 +246,7 @@ export const buildPrepareStep = (args: {
         activeToolIds: rule?.active_tool_ids,
         toolIdToName,
       }),
+      promptCachingEnabled,
     });
     log('prepareStep (%s): result=%o', args.logContext, result);
     return result;

@@ -2317,7 +2317,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
     }
   });
 
-  test('mcp tool execute returns full body when tools/call has no text content', async () => {
+  test('mcp tool execute returns the result when tools/call has no text content', async () => {
     jest
       .spyOn(global, 'fetch')
       .mockResolvedValueOnce(
@@ -2349,7 +2349,9 @@ describe('resolveAgentTools - mcp and soat types', () => {
 
     if ('execute' in mcpTool && typeof mcpTool.execute === 'function') {
       const result = await mcpTool.execute({}, {} as never);
-      expect(result).toEqual({ result: { content: [] } });
+      // The JSON-RPC envelope around it (`jsonrpc`, `id`) is transport, not an
+      // answer, and handing it to the model was never meant.
+      expect(result).toEqual({ content: [] });
     }
   });
 

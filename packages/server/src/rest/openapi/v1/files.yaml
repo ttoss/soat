@@ -72,7 +72,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
     post:
       tags:
         - Files
@@ -128,13 +128,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '500':
           description: Internal server error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
   /api/v1/files/upload:
     post:
       tags:
@@ -184,7 +184,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -198,7 +198,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '413':
           description: >-
             The upload is over this deployment's byte ceiling
@@ -208,7 +208,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
   /api/v1/files/upload/base64:
     post:
       tags:
@@ -234,7 +234,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -248,7 +248,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
   /api/v1/files/presigned-url:
     post:
       tags:
@@ -281,7 +281,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -338,13 +338,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: Upload token not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '409':
           description: >-
             Upload token already used, or the project's `storage_bytes` quota
@@ -352,13 +352,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '410':
           description: Upload token expired
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '413':
           description: >-
             The upload is over this deployment's byte ceiling
@@ -368,7 +368,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
   /api/v1/files/{file_id}:
     get:
       tags:
@@ -396,13 +396,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '500':
           description: Internal server error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
     delete:
       tags:
         - Files
@@ -425,13 +425,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '500':
           description: Internal server error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
   /api/v1/files/{file_id}/download:
     get:
       tags:
@@ -478,7 +478,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
   /api/v1/files/{file_id}/metadata:
     patch:
       tags:
@@ -529,13 +529,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '409':
           description: A file already exists at the target path in this project
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
   /api/v1/files/{file_id}/download/base64:
     get:
       tags:
@@ -588,7 +588,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
   /api/v1/files/{file_id}/tags:
     get:
       tags:
@@ -619,7 +619,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
     put:
       tags:
         - Files
@@ -655,7 +655,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
     patch:
       tags:
         - Files
@@ -691,7 +691,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
 components:
   securitySchemes:
     bearerAuth:
@@ -835,61 +835,19 @@ components:
           type: string
           format: date-time
           description: Last update timestamp
-    ErrorResponse:
-      type: object
-      required:
-        - error
-      properties:
-        error:
-          type: object
-          description: >-
-            Structured error. Every error response uses this shape — 401, 403
-            and the 500 catch-all included — so `code` can be read without
-            first checking the type of `error`.
-          required:
-            - code
-            - message
-            - hint
-            - docs_url
-          properties:
-            code:
-              type: string
-              description: A key from the server's ERROR_CODES registry.
-              example: RESOURCE_NOT_FOUND
-            message:
-              type: string
-              example: 'Resource not found'
-            hint:
-              type: string
-              description: >-
-                What to do about this error. Resolved per code, so a caller that
-                has never seen the code before can act on the response without
-                leaving it.
-              example: >-
-                Check the id, and check that the credential can see the project
-                that owns the resource.
-            docs_url:
-              type: string
-              format: uri
-              description: The reference-page anchor documenting this code.
-              example: >-
-                https://soat.ttoss.dev/docs/error-codes#resource_not_found
-            meta:
-              type: object
-              description: Optional structured context for the error.
   responses:
     Unauthorized:
       description: Authentication required
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: './errors.yaml#/components/schemas/ErrorResponse'
     Forbidden:
       description: Insufficient permissions
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: './errors.yaml#/components/schemas/ErrorResponse'
           example:
             error:
               code: 'FORBIDDEN'

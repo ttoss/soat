@@ -103,6 +103,7 @@ describe('stop_conditions', () => {
       boundaryPolicy: null,
       temperature: null,
       outputSchema: null,
+      promptCaching: null,
       project: { id: projectDbId, publicId: projectPublicId },
       aiProvider: { publicId: 'aip_stopcond' },
     } as never;
@@ -237,6 +238,7 @@ describe('stop_conditions', () => {
           stepRules: null,
           temperature: null,
           outputSchema: null,
+          promptCaching: null,
         },
       },
     });
@@ -285,6 +287,7 @@ describe('stop_conditions', () => {
           stepRules: null,
           temperature: null,
           outputSchema: null,
+          promptCaching: null,
         },
       },
     });

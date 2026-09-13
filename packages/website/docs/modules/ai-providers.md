@@ -108,6 +108,14 @@ If neither field is present the default AWS credential chain (environment variab
 
 The `region` field in `config` defaults to `us-east-1`. An `apiKey` in `config` (without a linked secret) also works for quick testing; link a secret in production.
 
+### Bedrock request path
+
+Bedrock models are built on the **Converse** API — one path for every vendor Bedrock serves, and the reason a cache breakpoint is spelled `cachePoint` on `bedrock` and `cacheControl` on `anthropic`.
+
+Converse is the common denominator, so Anthropic-only features (tool search with `defer_loading`, model betas) are not reachable through it: those are InvokeModel, which the AI SDK exposes as a separate Bedrock path with full Anthropic parity.
+
+**Decision (pre-v1):** when one of those features is wanted, Anthropic models on Bedrock move to InvokeModel and every other vendor stays on Converse. Until then nothing changes. Recorded now because the switch is observable to agents that already exist — the breakpoint spelling, which features resolve, and how tokens are accounted — and a v1 contract should not freeze Converse by default merely because no one wrote the choice down.
+
 ### Vertex AI authentication
 
 The `vertex` provider reaches Gemini models through [Google Vertex AI](https://cloud.google.com/vertex-ai/generative-ai/docs): `google` calls the Gemini Developer API with a plain API key; `vertex` calls a Google Cloud project's regional endpoint and bills through that project (your own GCP project, VPC, and quota).

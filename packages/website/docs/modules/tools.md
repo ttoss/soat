@@ -251,6 +251,14 @@ An `mcp` tool proxies a [Model Context Protocol](https://modelcontextprotocol.io
 
 `mcp.url` and `mcp.headers` accept [secret references](./secrets.md#secret-references-secret) (resolved before connecting, as for [`http` headers](#secret-references-in-execute)); `mcp.headers` also accepts [`{{context:<key>}}`](#context-references-in-headers).
 
+#### What the protocol carries
+
+Discovery follows `nextCursor` until the catalogue is exhausted, so a paginated server is registered in full. A tool's `title`, `annotations` (`destructiveHint`, `readOnlyHint`, …) and `output_schema` are carried onto the registered tool — not sent to the model, which sees name, description and input schema, but readable from the tool's call parts. A page that fails after an earlier one succeeded resolves nothing: a partial catalogue is a turn missing tools, which is [reported](./agents.md#tool-bindings) rather than run silently.
+
+A call's `structured_content` is the result when the server sends one; otherwise the `content` blocks, text blocks joined and parsed as JSON when they are JSON, and handed over as the block array when any block is not text (an image is never flattened away).
+
+A call the server answers with `is_error`, or with a JSON-RPC `error`, is a **failed** tool call: the model is told the tool failed and the failure is logged. Through [`POST /tools/{id}/call`](/docs/api/tools/call-tool) it is `502 MCP_TOOL_ERROR`, with the tool name and server URL in `meta`. Neither is a transport failure — an unreachable server is `TOOL_EGRESS_BLOCKED` or a resolution failure instead.
+
 #### Scoping an MCP tool to a subset of actions
 
 By default an `mcp` tool exposes the whole server surface. `actions` allowlists MCP tool names:

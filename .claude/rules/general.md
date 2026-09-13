@@ -12,6 +12,10 @@ ttoss ecosystem conventions: https://ttoss.dev/ttoss-instructions.txt
   (reference the issue). Never restate the code, leave commented-out code,
   `TODO`/`FIXME`, or task narration. Applies to every package and to tests.
 - Lint a file: `pnpm eslint --fix path/to/file`.
+- **Module ceiling: 400 code lines** (`max-lines` in `eslint.config.js`; blanks
+  and comments not counted). Over it, split the module — never disable the rule
+  inline. The files already over it are listed in `MAX_LINES_EXEMPT` in that
+  file; `tests/harness/moduleCeiling.test.mjs` keeps the list shrinking.
 - Schema changes: follow `packages/postgresdb/README.md`; a dev database that
   will not `--alter` may be dropped and recreated.
 - Docs are English, for developers: concise, code over prose.

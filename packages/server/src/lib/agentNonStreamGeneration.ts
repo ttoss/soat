@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 import type { LanguageModel, LanguageModelUsage, ModelMessage, Tool } from 'ai';
 import { generateText } from 'ai';
 import createDebug from 'debug';
@@ -347,6 +346,7 @@ export const runNonStreamGeneration = async (args: {
     stepRules: args.typedAgent.stepRules,
     logContext: 'non_stream',
     toolIdToName: await resolveAgentStepRuleToolIdToName(args.typedAgent),
+    promptCaching: args.typedAgent.promptCaching,
   });
 
   log(
@@ -457,6 +457,7 @@ export const runToolOutputsGeneration = async (args: {
         logContext: 'non_stream',
         toolIdToName,
         stepsAlreadySpent,
+        promptCaching: args.pending.agentConfig.promptCaching,
       }),
       // The turn is the agent's on both sides of the pause. What keeps a
       // forcing value from demanding the same tool forever is the budget above,

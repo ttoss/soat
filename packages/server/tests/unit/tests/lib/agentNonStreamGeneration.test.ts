@@ -332,6 +332,7 @@ describe('agentNonStreamGeneration', () => {
         stepRules: null,
         temperature: null,
         outputSchema: null,
+        promptCaching: null,
       },
       resolvedTools: {
         'send-reply': { description: 'Send reply', inputSchema: {} } as never,
@@ -378,6 +379,7 @@ describe('agentNonStreamGeneration', () => {
           stepRules: null,
           temperature: null,
           outputSchema: null,
+          promptCaching: null,
         },
       });
 
@@ -515,6 +517,7 @@ describe('agentNonStreamGeneration', () => {
       boundaryPolicy: null,
       temperature: null,
       outputSchema: null,
+      promptCaching: null,
       project: { id: realProjectId, publicId: realProjectPublicId },
       aiProvider: { publicId: 'aip_test' },
     } as never;
@@ -750,6 +753,7 @@ describe('runNonStreamGeneration tool-failure fallback (stub server)', () => {
         boundaryPolicy: null,
         temperature: null,
         outputSchema: null,
+        promptCaching: null,
         project: { id: projectDbId, publicId: projectPublicId },
         aiProvider: { publicId: 'aip_fallback' },
       } as never,

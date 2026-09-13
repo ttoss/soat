@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 import createDebug from 'debug';
 
 import { db } from '../db';

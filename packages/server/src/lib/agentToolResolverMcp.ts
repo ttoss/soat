@@ -3,15 +3,18 @@
  *
  * Split from `agentToolResolverExternalTools.ts`, which held this and the
  * `builtin` (SOAT) resolution: the two share nothing but the shape of the
- * error callback, and together they had grown past the module ceiling.
+ * error callback, and together they had grown past the module ceiling. The
+ * protocol reading itself lives in `mcpProtocol.ts` and `mcpToolListing.ts`.
  */
-import type { JSONSchema7, Tool } from 'ai';
+import type { JSONSchema7, JSONValue, Tool } from 'ai';
 import { jsonSchema, tool } from 'ai';
 
 import {
   type LogToolCallingError,
   SOAT_TOOL_CALL_TIMEOUT_MS,
 } from './externalToolCall';
+import { parseJsonRpcBody, readMcpCallResult } from './mcpProtocol';
+import { fetchMcpToolListing, type McpToolListing } from './mcpToolListing';
 import { fetchWithEgressGuard } from './toolEgress';
 import {
   mergePresetParameters,
@@ -53,16 +56,11 @@ export const buildMcpToolExecute = (args: {
           params: { name: args.mcpToolName, arguments: callArgs },
         }),
       });
-      const callBody = (await callResponse.json()) as {
-        result?: { content?: Array<{ text?: string }> };
-      };
-      const text = callBody.result?.content?.[0]?.text;
-      if (!text) return callBody;
-      try {
-        return JSON.parse(text);
-      } catch {
-        return text;
-      }
+      return readMcpCallResult({
+        body: await parseJsonRpcBody(callResponse),
+        toolName: args.mcpToolName,
+        url: args.mcpUrl,
+      });
     } catch (error) {
       args.logToolCallingError({
         toolName: args.mcpToolName,
@@ -76,24 +74,40 @@ export const buildMcpToolExecute = (args: {
   };
 };
 
+/**
+ * What the server says about the tool that the model is not shown.
+ *
+ * The AI SDK sends the provider `name`, `description` and `inputSchema` only,
+ * so this rides along on the resolved tool and onto its call parts — which is
+ * where a gating mechanism reading `annotations.destructiveHint` would look.
+ */
+const toolMetadata = (
+  mcpTool: McpToolListing
+): Record<string, JSONValue> | undefined => {
+  const metadata = {
+    ...(mcpTool.annotations ? { annotations: mcpTool.annotations } : {}),
+    ...(mcpTool._meta ? { meta: mcpTool._meta } : {}),
+  };
+  return Object.keys(metadata).length > 0 ? metadata : undefined;
+};
+
 /** One listed MCP tool, as the model sees it and as it dispatches. */
 const buildMcpToolEntry = (args: {
-  mcpTool: {
-    name: string;
-    description?: string;
-    inputSchema?: Record<string, unknown>;
-  };
+  mcpTool: McpToolListing;
   mcpUrl: string;
   mcpHeaders: Record<string, string>;
   presetParameters?: object | null;
   toolContext?: Record<string, string>;
   logToolCallingError: LogToolCallingError;
 }): Tool => {
-  return tool({
-    description: args.mcpTool.description ?? undefined,
+  const { mcpTool } = args;
+  const entry = {
+    description: mcpTool.description ?? undefined,
+    title: mcpTool.title,
+    metadata: toolMetadata(mcpTool),
     inputSchema: jsonSchema(
       stripPresetKeysFromSchema(
-        (args.mcpTool.inputSchema ?? {
+        (mcpTool.inputSchema ?? {
           type: 'object',
           properties: {},
         }) as JSONSchema7,
@@ -103,127 +117,23 @@ const buildMcpToolEntry = (args: {
     execute: buildMcpToolExecute({
       mcpUrl: args.mcpUrl,
       mcpHeaders: args.mcpHeaders,
-      mcpToolName: args.mcpTool.name,
+      mcpToolName: mcpTool.name,
       presetParameters: args.presetParameters,
       toolContext: args.toolContext,
-      presetSchema: args.mcpTool.inputSchema,
+      presetSchema: mcpTool.inputSchema,
       logToolCallingError: args.logToolCallingError,
     }),
-  });
-};
+  };
 
-type McpToolListing = {
-  name: string;
-  description?: string;
-  inputSchema?: Record<string, unknown>;
-};
-
-/**
- * The JSON-RPC message in a `text/event-stream` answer. The resolver's own
- * `Accept` offers SSE, so a server framing its reply that way is answering
- * correctly; reading only the `data:` lines is what makes that answer usable
- * rather than a parse error.
- */
-const parseSseFramedMessage = (raw: string): unknown => {
-  const payload = raw
-    .split(/\r?\n/)
-    .filter((line) => {
-      return line.startsWith('data:');
-    })
-    .map((line) => {
-      return line.slice('data:'.length).trimStart();
-    })
-    .join('');
-  if (payload === '') throw new Error('SSE response carried no data line');
-  return JSON.parse(payload);
-};
-
-const parseListingBody = async (response: Response): Promise<unknown> => {
-  const raw = await response.text();
-  return (response.headers.get('content-type') ?? '').includes(
-    'text/event-stream'
-  )
-    ? parseSseFramedMessage(raw)
-    : JSON.parse(raw);
-};
-
-const jsonRpcErrorReason = (body: unknown): string | null => {
-  if (typeof body !== 'object' || body === null || !('error' in body)) {
-    return null;
-  }
-  const { error } = body as { error: unknown };
-  if (typeof error !== 'object' || error === null) return null;
-  const { code, message } = error as { code?: unknown; message?: unknown };
-  return `tools/list answered the JSON-RPC error ${String(code)}: ${String(message)}`;
-};
-
-/**
- * A 200 is not on its own a listing. JSON-RPC carries its errors in a
- * 200 body, and reading such an answer as `result?.tools ?? []` made a refused
- * listing indistinguishable from an empty catalogue: the turn ran with no
- * tools, carried no warning, and nothing anywhere recorded that it had.
- */
-const readListing = (
-  listBody: unknown
-): { tools: McpToolListing[] } | { failure: string } => {
-  const errorReason = jsonRpcErrorReason(listBody);
-  if (errorReason !== null) return { failure: errorReason };
-
-  const tools = (listBody as { result?: { tools?: unknown } } | null)?.result
-    ?.tools;
-  if (!Array.isArray(tools)) {
-    return { failure: 'tools/list answered 200 with no `result.tools` array' };
-  }
-  return { tools: tools as McpToolListing[] };
-};
-
-/**
- * The `tools/list` half of MCP resolution: everything that can fail before
- * there is a surface to build. `null` is "no listing" — unreachable, refused,
- * or an answer this could not be read out of — which the caller reports; an
- * empty array is a server that really exposes nothing.
- */
-const fetchMcpToolListing = async (args: {
-  mcpUrl: string;
-  mcpHeaders: Record<string, string>;
-  logToolCallingError: LogToolCallingError;
-  reportResolutionFailure?: (args: { reason: string }) => void;
-}): Promise<McpToolListing[] | null> => {
-  try {
-    const listResponse = await fetchWithEgressGuard(args.mcpUrl, {
-      method: 'POST',
-      headers: args.mcpHeaders,
-      signal: AbortSignal.timeout(SOAT_TOOL_CALL_TIMEOUT_MS),
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
-    });
-
-    if (!listResponse.ok) {
-      args.reportResolutionFailure?.({
-        reason: `tools/list answered ${listResponse.status}`,
-      });
-      return null;
-    }
-
-    const listing = readListing(await parseListingBody(listResponse));
-    if ('failure' in listing) {
-      args.reportResolutionFailure?.({ reason: listing.failure });
-      return null;
-    }
-
-    return listing.tools;
-  } catch (error) {
-    args.logToolCallingError({
-      toolName: args.mcpUrl,
-      toolType: 'mcp',
-      url: args.mcpUrl,
-      method: 'POST',
-      error,
-    });
-    args.reportResolutionFailure?.({
-      reason: error instanceof Error ? error.message : String(error),
-    });
-    return null;
-  }
+  // Two calls rather than an optional key: `outputSchema` is what the SDK
+  // infers a tool's output type from, and an `outputSchema: undefined` in the
+  // literal makes that inference `never`.
+  return mcpTool.outputSchema
+    ? tool({
+        ...entry,
+        outputSchema: jsonSchema<unknown>(mcpTool.outputSchema as JSONSchema7),
+      })
+    : tool(entry);
 };
 
 /** The binding's allowlist and denylist, as one predicate over tool names. */

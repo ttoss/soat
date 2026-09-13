@@ -1,0 +1,56 @@
+openapi: 3.0.3
+info:
+  title: SOAT Errors
+  version: 1.0.0
+  description: >-
+    The shape every error response carries. This file declares no paths: it
+    exists so the envelope is defined once rather than once per module, which
+    is what kept eighteen byte-identical copies of it in step by hand.
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+paths: {}
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          description: >-
+            Structured error. Every error response uses this shape — 401, 403
+            and the 500 catch-all included — so `code` can be read without
+            first checking the type of `error`.
+          required:
+            - code
+            - message
+            - hint
+            - docs_url
+          properties:
+            code:
+              type: string
+              description: A key from the server's ERROR_CODES registry.
+              example: RESOURCE_NOT_FOUND
+            message:
+              type: string
+              example: 'Resource not found'
+            hint:
+              type: string
+              description: >-
+                What to do about this error. Resolved per code, so a caller that
+                has never seen the code before can act on the response without
+                leaving it.
+              example: >-
+                Check the id, and check that the credential can see the project
+                that owns the resource.
+            docs_url:
+              type: string
+              format: uri
+              description: The reference-page anchor documenting this code.
+              example: >-
+                https://soat.ttoss.dev/docs/error-codes#resource_not_found
+            meta:
+              type: object
+              description: Optional structured context for the error.

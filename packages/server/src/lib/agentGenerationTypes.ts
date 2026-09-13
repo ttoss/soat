@@ -85,6 +85,13 @@ export type PendingAgentConfig = {
   stepRules: unknown;
   temperature: number | null;
   outputSchema: unknown;
+  /**
+   * The agent's `prompt_caching` as it stood when the turn started. Read by
+   * `buildPrepareStep` alone: the resumed segment must make the same tool-block
+   * decision as the segment it continues, and the live agent may have been
+   * edited in between.
+   */
+  promptCaching: unknown;
 };
 
 /** The AI SDK's default step budget, applied when the agent names none. */
@@ -107,6 +114,7 @@ export const toAgentConfig = (typedAgent: TypedAgent): PendingAgentConfig => {
     stepRules: typedAgent.stepRules,
     temperature: typedAgent.temperature as number | null,
     outputSchema: typedAgent.outputSchema,
+    promptCaching: typedAgent.promptCaching,
   };
 };
 
