@@ -47,6 +47,23 @@ export const SELF_DESCRIBING_SOURCES = [
   'README.md',
 ];
 
+/** The workflow that publishes to npm, and therefore the list of record. */
+const RELEASE_WORKFLOW = path.resolve(__dirname, '../../.github/workflows/main.yml');
+
+/**
+ * The packages the release job actually runs `pnpm publish` for, read off the
+ * workflow rather than restated here — a list written twice is a list that
+ * drifts.
+ */
+const publishedByWorkflow = () => {
+  const workflow = fs.readFileSync(RELEASE_WORKFLOW, 'utf-8');
+  return [
+    ...workflow.matchAll(/pnpm --filter (\S+) publish\b/g),
+  ].map((match) => {
+    return match[1];
+  });
+};
+
 const readPackages = () => {
   return fs
     .readdirSync(PACKAGES_DIR)
@@ -69,6 +86,40 @@ const publishedPackages = () => {
 };
 
 describe('published package metadata', () => {
+  /**
+   * A package npm could accept but CI never publishes is a trap: nothing fails
+   * while the release job names its packages one by one, and the day anyone
+   * switches that step to `lerna publish` (`lerna.json` sets `noPrivate: true`)
+   * it is suddenly in scope, with no trusted publisher registered — a `404` on
+   * the OIDC exchange, mid-release. `private: true` is what says "this ships
+   * another way"; @soat/server ships as the Docker image.
+   */
+  test('every publishable package is one the release job publishes', () => {
+    const shipped = new Set(publishedByWorkflow());
+    const offenders = publishedPackages()
+      .filter((pkg) => {
+        return !shipped.has(pkg.name);
+      })
+      .map((pkg) => {
+        return pkg.name;
+      });
+
+    assert.deepEqual(offenders, []);
+  });
+
+  test('the workflow publishes nothing marked private', () => {
+    const publishable = new Set(
+      publishedPackages().map((pkg) => {
+        return pkg.name;
+      })
+    );
+    const offenders = publishedByWorkflow().filter((name) => {
+      return !publishable.has(name);
+    });
+
+    assert.deepEqual(offenders, []);
+  });
+
   test('there are published packages to check', () => {
     assert.ok(
       publishedPackages().length > 0,
