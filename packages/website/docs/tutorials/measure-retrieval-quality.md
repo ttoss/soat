@@ -359,9 +359,7 @@ echo "$GOLDEN" | jq 'length'
 
 ## Step 5 — Run the golden set through search
 
-One search per row at `limit: 10`, keeping only the ranked list of ids. The metrics are computed over **raw result positions**: a document that occupies several slots costs the slots the caller sees, and a hit is the first slot any chunk of the expected document holds ([Relevance scoring](/docs/modules/knowledge#relevance-scoring)).
-
-The `score` field is not read at all. Its ordering is the contract; its value is not, and a metric built on it would break at the next fusion change.
+One search per row at `limit: 10`, keeping only the ranked list of ids. Positions are raw result positions and `score` is never read ([Retrieval Quality — Metrics](/docs/advanced/retrieval-quality#metrics)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -423,12 +421,7 @@ echo "$RESULTS" | jq -e 'all(.[]; (.ranked | length) > 0)' > /dev/null && echo "
 
 For each row, `rank` is the 1-based position of `expected` in `ranked`, `0` when it is missing.
 
-| Metric | Per row | Reads as |
-| --- | --- | --- |
-| recall@k | `1` if `0 < rank <= k`, else `0` | Was the answer retrieved at all within the top `k`? |
-| MRR | `1 / rank`, `0` when missing | How high did it land? Rank 1 scores `1.0`, rank 2 `0.5`, rank 10 `0.1` |
-
-Both are averaged over the rows of a slice, and over every row for the overall figure.
+Definitions: [Retrieval Quality — Metrics](/docs/advanced/retrieval-quality#metrics).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -514,11 +507,7 @@ EOF
 </TabItem>
 </Tabs>
 
-Three rules for reading the table:
-
-- **recall@k cannot gate a change that only demotes.** Push a rank-1 answer to rank 2 and it is still retrieved: recall@5 and recall@10 do not move. MRR does, from `1.0` to `0.5` on that row. A ranking change is judged on both, and a gate that reads recall alone passes every demotion vacuously.
-- **The overall row hides a slice collapse.** With six document rows and four memory rows, a change that drops every memory answer out of the top ten costs overall recall@10 `0.4`, a figure that reads like a moderate regression. The `memory` row reads `0.0000`. Keep the per-slice rows; the overall figure is a summary of them, never a substitute.
-- **Never pin the numbers.** They depend on the embedding model. A check that runs on every deploy asserts structure (a metric was produced, a slice did not fall to zero) and a *direction* against the previous run, not a value.
+How to read it, and why both metrics are needed: [Retrieval Quality — Reading the table](/docs/advanced/retrieval-quality#reading-the-table).
 
 ---
 
@@ -526,7 +515,7 @@ Three rules for reading the table:
 
 The method for any knob: change one parameter, re-run [Step 5](#step-5--run-the-golden-set-through-search) and [Step 6](#step-6--compute-recallk-and-mrr), compare the two tables slice by slice. This step does it for `rrf_k` and shows what a `score` on fused output is worth ([Relevance knobs](/docs/modules/knowledge#relevance-knobs)).
 
-Fused scores are compressed. At `rrf_k = 60` a result contributes `1 / (60 + rank)` per channel, so the top ten of one channel span `1/61` = `0.0164` to `1/70` = `0.0143`: the whole top ten sits inside 13% of the top score. A multiplier of `0.87` on a rank-1 result is therefore already a full rank lost, and under the [recency blend](/docs/modules/knowledge#relevance-knobs) that multiplier is `2^(-age/half_life)`, six days of age at a 30-day half-life. Set `rrf_k` lower and the same multiplier costs less.
+Fused scores are compressed, so a multiplier applied after fusion is far stronger than it looks; the figures are in [Retrieval Quality — What a multiplier costs](/docs/advanced/retrieval-quality#what-a-multiplier-costs-on-fused-output). The block below reproduces them.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -605,7 +594,7 @@ done
 </TabItem>
 </Tabs>
 
-The recency blend is measured the same way, with one constraint this corpus cannot meet: every entry above was written seconds ago, so `2^(-age/half_life)` is `1.0` for all of them and `recency_half_life_days` reorders nothing here. On a memory with real ages, run Step 5 with `--recency-half-life-days 30`, compute Step 6 again, and read the `memory` row against the run without it. Start with a long half-life and shorten it only while that row holds.
+The recency blend is measured the same way, with one constraint this corpus cannot meet: every entry above was written seconds ago, so `2^(-age/half_life)` is `1.0` for all of them and `recency_half_life_days` reorders nothing here. On a memory with real ages, run Step 5 with `--recency-half-life-days 30`, compute Step 6 again, and read the `memory` row against the run without it ([the blend is never free](/docs/advanced/retrieval-quality#the-recency-blend-is-never-free)).
 
 ---
 

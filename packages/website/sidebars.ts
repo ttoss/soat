@@ -145,6 +145,7 @@ const sidebars: SidebarsConfig = {
         'advanced/expressions-and-templating',
         'advanced/sync-and-async',
         'advanced/memory-and-knowledge-engine',
+        'advanced/retrieval-quality',
         'advanced/tool-context',
       ],
     },
