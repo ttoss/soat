@@ -167,7 +167,7 @@ A server that has no embedding provider configured is not that case, and fails w
 
 `document_paths` are prefixes; `tags` is an exact key-value containment match, applied at entry granularity against memory (the entry's own tags or its container's); full filter semantics: [Knowledge — Search Modes](../modules/knowledge.md#search-modes).
 
-On the wire, `score` is the fused value — compare within one response, nothing filters on it — while `similarity_score` is pinned forever to raw cosine; see [Knowledge — Relevance scoring](../modules/knowledge.md#relevance-scoring).
+On the wire, `score` is the fused value — compare within one response, nothing filters on it — while `similarity_score` is pinned forever to raw cosine; see [Knowledge — Relevance scoring](../modules/knowledge.md#relevance-scoring). How the ranking is measured: [Retrieval Quality](./retrieval-quality.md).
 
 ### Injection into generations (push retrieval)
 

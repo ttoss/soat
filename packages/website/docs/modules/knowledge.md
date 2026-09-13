@@ -23,6 +23,8 @@ See the [Permissions Reference](../permissions.md) for the IAM action strings fo
 - [Agent with Persistent Memory - Step 12 (Query the knowledge layer directly)](/docs/tutorials/memories-agent#step-12--query-the-knowledge-layer-directly)
 - [Agent over a Library of PDFs - Step 8 (Search the knowledge layer directly)](/docs/tutorials/agent-with-pdfs#step-8--search-the-knowledge-layer-directly-plan-d)
 - [Agent over a Library of PDFs - Step 12 (Give the agent a knowledge tool)](/docs/tutorials/agent-with-pdfs#step-12--give-the-agent-a-knowledge-tool-plan-d)
+- [Measuring Retrieval Quality - Step 6 (Compute recall@k and MRR)](/docs/tutorials/measure-retrieval-quality#step-6--compute-recallk-and-mrr)
+- [Measuring Retrieval Quality - Step 7 (Read a knob off the table)](/docs/tutorials/measure-retrieval-quality#step-7--read-a-knob-off-the-table)
 
 ## Data Model
 
@@ -157,20 +159,7 @@ so at equal relevance a fresh fact outranks a stale one. Document results are ne
 - **The clock is read once per response**, so two results in one answer are always ordered against the same instant.
 - **Retrieval only.** The memory write algorithm's duplicate shortlist reads raw cosine and is unaffected: an entry old enough for the blend to bury is still the duplicate a restatement of it merges into.
 
-**How much a half-life costs depends on `rrf_k`.** Fused scores are compressed — at `k = 60` the top ten sit between `1/61` = 0.0164 and `1/70` = 0.0143 — so a decay factor of `0.87` is already enough to move a rank-1 result behind the tenth. At a 30-day half-life that is **six days of age**. A smaller `k` widens the gaps and buys more room; a larger one less.
-
-**Measure before you enable it.** On the [retrieval baseline](#retrieval-baseline) corpus, whose memory fixtures carry ages of 3 to 400 days, every half-life from 7 days to 20 years lifts the `freshness` kind's MRR to 1.0 — and every one of them also costs the `entity` kind, where the answer is a memory entry competing against undecayed document chunks:
-
-| `KNOWLEDGE_RECENCY_HALF_LIFE_DAYS` | `freshness` MRR | `entity` recall@10 | `entity` MRR | overall MRR |
-| --- | --: | --: | --: | --: |
-| `0` (off) | 0.6667 | 1.0000 | 0.9583 | 0.8303 |
-| `30` | 1.0000 | 0.1667 | 0.1250 | 0.6667 |
-| `90` | 1.0000 | 0.4167 | 0.3500 | 0.7158 |
-| `365` | 1.0000 | 0.7500 | 0.5097 | 0.7506 |
-| `1825` | 1.0000 | 1.0000 | 0.7736 | 0.8082 |
-| `7300` | 1.0000 | 1.0000 | 0.9167 | 0.8394 |
-
-There is no value on that corpus at which the blend is free: the decay applies to memory results and not to the document chunks they share a result list with, so ageing a fact costs it ground against every chunk as well as against fresher facts. Pick a half-life from a run of the eval against **your** corpus, start long, and prefer scoping the search to `memory_ids` where freshness is what you are actually ranking on.
+How many ranks a half-life costs depends on `rrf_k`, and on a corpus mixing documents and memories it is never free. Figures and the method for choosing a value: [Retrieval Quality](../advanced/retrieval-quality.md).
 
 ### Ranking is approximate
 
@@ -207,34 +196,14 @@ Without `project_id` there is no single project policy to compile, and the searc
 
 ### Retrieval baseline
 
-Ranking changes are gated on a versioned golden query set, not on judgement. `packages/server/tests/eval/knowledge/golden.json` seeds a corpus — module-doc sections, synthetic documents carrying identifiers that occur exactly once, and curated memory entries — then scores 55 labeled queries through `searchKnowledge`.
+Ranking changes are gated on a versioned golden query set (`packages/server/tests/eval/knowledge/golden.json`, figures in `baseline.json`); the run exits non-zero when recall@10 or MRR drops below the baseline, overall or for any single kind. It is a contributor harness, not a way to measure a deployment.
 
 ```bash
 pnpm --filter @soat/server eval:knowledge                    # score and gate
 pnpm --filter @soat/server eval:knowledge --update-baseline  # rewrite the baseline
 ```
 
-Metrics are computed over **raw result positions** at `limit: 10`, so a document occupying several slots counts as the caller experiences it; a hit is any chunk of the expected document.
-
-| Scope         | recall@5 | recall@10 |    MRR |
-| ------------- | -------: | --------: | -----: |
-| Overall       |   0.8909 |    0.9273 | 0.8303 |
-| `exact_token` |   1.0000 |    1.0000 | 1.0000 |
-| `exact_name`  |   1.0000 |    1.0000 | 0.9667 |
-| `entity`      |   1.0000 |    1.0000 | 0.9583 |
-| `freshness`   |   1.0000 |    1.0000 | 0.6667 |
-| `semantic`    |   0.6000 |    0.7333 | 0.5111 |
-
-Those numbers are committed as `baseline.json`, and the run exits non-zero when **recall@10 or MRR** drops below it — overall or for any single kind. A ranking change lands with the diff of that file as its before/after table.
-
-MRR is gated alongside recall because a change that only ever *demotes* a result cannot move recall at all: the [recency blend](#relevance-knobs) pushing a relevant entry from rank 1 to rank 2 still retrieves it. Position is what MRR measures. recall@5 is reported but not gated — it is recall@10 read at a tighter cutoff.
-
-The `freshness` kind is the recency blend's own fixture: each of its queries has one answer whose stale near-twin, seeded into a second memory container at a fixture `age_days` in the past, ranks above it while the blend is off. Its `0.6667` is that "blend disabled" figure — the default this ships with, not a defect.
-
-Two caveats on reading the absolute values:
-
-- **The embedder is a stand-in.** CI has no embedding provider, so the eval substitutes a deterministic feature hasher that ranks by term overlap. Being itself lexical, it starts the `exact_token` row saturated — so the gate can prove [hybrid retrieval](#hybrid-retrieval) regresses nothing, but it cannot show the lexical channel's win; the proof of that is a targeted unit test over a chunk whose cosine sits below the floor. What the gate measures reliably is _change_.
-- **The corpus tracks these docs.** Fixtures that name a `source` and a `section` are read from the module docs at seed time, so editing one of those sections moves the numbers. Re-run with `--update-baseline` and commit the diff.
+Metric definitions, the baseline table, its caveats and the per-deployment method: [Retrieval Quality](../advanced/retrieval-quality.md), [Measuring Retrieval Quality](../tutorials/measure-retrieval-quality.md).
 
 ## Configuration
 
