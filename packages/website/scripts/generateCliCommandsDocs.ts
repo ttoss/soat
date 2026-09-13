@@ -1,5 +1,4 @@
 /* eslint-disable complexity */
-/* eslint-disable max-lines */
 /**
  * Generates packages/website/docs/cli/commands.md from OpenAPI YAML specs.
  * Run with: pnpm tsx scripts/generateCliCommandsDocs.ts

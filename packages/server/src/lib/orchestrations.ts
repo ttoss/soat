@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 

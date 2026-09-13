@@ -1,4 +1,4 @@
-import { jsonSchema } from 'ai';
+import { asSchema } from 'ai';
 import { resolveMcpTools } from 'src/lib/agentToolResolverMcp';
 import { McpToolError } from 'src/lib/mcpProtocol';
 
@@ -158,12 +158,10 @@ describe('MCP protocol fidelity', () => {
         annotations: { destructiveHint: true, readOnlyHint: false },
         meta: { source: 'vendor' },
       });
-      expect(await entry.outputSchema!.jsonSchema).toEqual(
-        await jsonSchema({
-          type: 'object',
-          properties: { deleted: { type: 'integer' } },
-        }).jsonSchema
-      );
+      expect(await asSchema(entry.outputSchema!).jsonSchema).toEqual({
+        type: 'object',
+        properties: { deleted: { type: 'integer' } },
+      });
     });
 
     test('leaves the extras off a tool that declares none', async () => {

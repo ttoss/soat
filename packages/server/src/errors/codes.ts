@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 export const ERROR_CODES = {
   RESOURCE_NOT_FOUND: {
     httpStatus: 404,

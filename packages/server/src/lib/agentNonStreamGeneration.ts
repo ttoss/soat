@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 import type { LanguageModel, LanguageModelUsage, ModelMessage, Tool } from 'ai';
 import { generateText } from 'ai';
 import createDebug from 'debug';
