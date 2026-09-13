@@ -1,5 +1,5 @@
 ---
-description: "Usage events record the cost of every metered occurrence — a completed LLM call, an orchestration node's compute, API requests, and stored bytes — attributed to a project, agent, and generation."
+description: "Usage events record the cost of every metered occurrence — a whole generation, an orchestration node's compute, API requests, and stored bytes — attributed to a project, agent, and generation."
 ---
 
 import Tabs from '@theme/Tabs';
@@ -99,7 +99,7 @@ A per-project alert rule: when `metric` over `window` crosses `threshold`, a `us
 
 | `meter_type`     | What one event records                              | Components                                        |
 | ---------------- | --------------------------------------------------- | ------------------------------------------------- |
-| `llm_tokens`     | One completed LLM call's token usage | `input_tokens`, `output_tokens`, `cached_tokens`, `cache_write_tokens`, `reasoning_tokens` |
+| `llm_tokens`     | One whole generation's token usage — a four-step turn is four LLM calls and one event, written when the turn ends | `input_tokens`, `output_tokens`, `cached_tokens`, `cache_write_tokens`, `reasoning_tokens` |
 | `compute_execution` | Wall-clock compute time of a unit of work (orchestration node, agent generation, tool call) | `compute_second`                                     |
 | `api_request`    | A batch of API requests served for a project        | `request`                                         |
 | `storage`        | One project's stored footprint for one day          | `gb_day`, `chunk_count`                           |

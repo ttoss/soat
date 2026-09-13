@@ -68,25 +68,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: AI provider not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
     get:
       tags:
         - Agents
@@ -142,13 +142,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
 
   /api/v1/agents/{agent_id}:
     get:
@@ -175,19 +175,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: Not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
     put:
       tags:
         - Agents
@@ -218,19 +218,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: Not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
     patch:
       tags:
         - Agents
@@ -261,19 +261,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: Not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
     delete:
       tags:
         - Agents
@@ -306,19 +306,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: Not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '409':
           description: >
             Agent has dependent generations or traces (pass `force=true` to
@@ -327,7 +327,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
 
   /api/v1/agents/{agent_id}/generate:
     post:
@@ -425,25 +425,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: Agent or AI provider not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '502':
           description: >
             Upstream AI provider error (AI_PROVIDER_ERROR); model output that
@@ -460,7 +460,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
 
   /api/v1/agents/{agent_id}/generate/{generation_id}/tool-outputs:
     post:
@@ -500,25 +500,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: Agent or generation not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '502':
           description: >
             Upstream AI provider error (AI_PROVIDER_ERROR); model output that
@@ -530,7 +530,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
 
   /api/v1/agents/{agent_id}/versions:
     get:
@@ -591,19 +591,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: Agent not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
 
   /api/v1/agents/{agent_id}/versions/{version}:
     get:
@@ -638,25 +638,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: Agent or version not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
 
   /api/v1/agents/{agent_id}/versions/{version}/restore:
     post:
@@ -705,25 +705,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: Agent or version not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
 
   /api/v1/agents/{agent_id}/release:
     put:
@@ -769,25 +769,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: Agent not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
 
   /api/v1/agents/{agent_id}/release/promote:
     post:
@@ -825,19 +825,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: Agent not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '409':
           description: >-
             Conflict — the agent has no active release
@@ -846,7 +846,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
 
   /api/v1/agents/{agent_id}/release/abort:
     post:
@@ -877,25 +877,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '404':
           description: Agent not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
         '409':
           description: Conflict — the agent has no active release
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
 components:
   securitySchemes:
     bearerAuth:
@@ -2043,46 +2043,3 @@ components:
                   args:
                     type: object
                     description: Arguments for the tool call
-
-    ErrorResponse:
-      type: object
-      required:
-        - error
-      properties:
-        error:
-          type: object
-          description: >-
-            Structured error. Every error response uses this shape — 401, 403
-            and the 500 catch-all included — so `code` can be read without
-            first checking the type of `error`.
-          required:
-            - code
-            - message
-            - hint
-            - docs_url
-          properties:
-            code:
-              type: string
-              description: A key from the server's ERROR_CODES registry.
-              example: RESOURCE_NOT_FOUND
-            message:
-              type: string
-              example: 'Resource not found'
-            hint:
-              type: string
-              description: >-
-                What to do about this error. Resolved per code, so a caller that
-                has never seen the code before can act on the response without
-                leaving it.
-              example: >-
-                Check the id, and check that the credential can see the project
-                that owns the resource.
-            docs_url:
-              type: string
-              format: uri
-              description: The reference-page anchor documenting this code.
-              example: >-
-                https://soat.ttoss.dev/docs/error-codes#resource_not_found
-            meta:
-              type: object
-              description: Optional structured context for the error.
