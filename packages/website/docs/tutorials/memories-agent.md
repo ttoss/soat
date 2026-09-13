@@ -872,15 +872,15 @@ Expected output (two `source_type` values):
 ```json
 { "score": 0.69, "similarity_score": 0.69, "source_type": "document", "content": "Alice Corp Support Policy: All priority-1 incidents must receive an initial response within 2 hours ..." }
 { "score": 0.62, "similarity_score": 0.62, "source_type": "memory", "content": "Alice prefers email, especially for billing inquiries; she checks it twice a day" }
-{ "score": 0.50, "similarity_score": 0.50, "source_type": "memory", "content": "The Alice Corp fiscal year ends in March; she starts renewal discussions in January" }
+{ "score": 0.0328, "similarity_score": 0.50, "source_type": "memory", "content": "The Alice Corp fiscal year ends in March; she starts renewal discussions in January" }
 ```
 
 Two scores, two contracts ([Relevance scoring](/docs/modules/knowledge#relevance-scoring)):
 
-- **`score`**: relevance ranking; results are ordered by it and `min_score` filters on it. Implementation-defined: the ordering is the contract, the number is not. Re-tune `min_score` after an upgrade.
-- **`similarity_score`**: raw cosine similarity, stable for comparing or logging.
+- **`score`**: the reciprocal-rank-fusion value results are ordered by. The ordering is the contract, the number is not — do not persist it or show it as a percentage.
+- **`similarity_score`**: raw cosine similarity, stable for comparing or logging, and the field `min_similarity` filters on.
 
-They are equal here because the ranking is currently single-signal.
+They are different numbers: `score` encodes each result's position in the vector and lexical rankings, not how similar it is.
 
 </TabItem>
 <TabItem value="sdk" label="SDK">

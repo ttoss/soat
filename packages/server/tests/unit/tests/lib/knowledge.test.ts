@@ -1,6 +1,6 @@
 import { db } from 'src/db';
 import * as embeddingModule from 'src/lib/embedding';
-import { resolveDocumentSearch } from 'src/lib/knowledge';
+import { resolveDocumentSearch } from 'src/lib/knowledgeDocuments';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 

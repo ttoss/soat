@@ -1,9 +1,9 @@
 {
   "version": 1,
   "metrics": {
-    "recall_at_5": 0.8654,
-    "recall_at_10": 0.9038,
-    "mrr": 0.8072
+    "recall_at_5": 0.8846,
+    "recall_at_10": 0.9231,
+    "mrr": 0.8397
   },
   "by_kind": {
     "entity": {
@@ -14,7 +14,7 @@
     "exact_name": {
       "recall_at_5": 1,
       "recall_at_10": 1,
-      "mrr": 0.9222
+      "mrr": 0.9667
     },
     "exact_token": {
       "recall_at_5": 1,
@@ -22,9 +22,9 @@
       "mrr": 1
     },
     "semantic": {
-      "recall_at_5": 0.5333,
-      "recall_at_10": 0.6667,
-      "mrr": 0.4429
+      "recall_at_5": 0.6,
+      "recall_at_10": 0.7333,
+      "mrr": 0.5111
     }
   },
   "queries": [
@@ -139,7 +139,7 @@
     {
       "id": "exact-name-003",
       "kind": "exact_name",
-      "first_relevant_rank": 3,
+      "first_relevant_rank": 1,
       "hit_at_5": true,
       "hit_at_10": true,
       "recall_at_5": 1,
@@ -166,7 +166,7 @@
     {
       "id": "exact-name-006",
       "kind": "exact_name",
-      "first_relevant_rank": 1,
+      "first_relevant_rank": 2,
       "hit_at_5": true,
       "hit_at_10": true,
       "recall_at_5": 1,
@@ -247,7 +247,7 @@
     {
       "id": "exact-name-015",
       "kind": "exact_name",
-      "first_relevant_rank": 2,
+      "first_relevant_rank": 1,
       "hit_at_5": true,
       "hit_at_10": true,
       "recall_at_5": 1,
@@ -364,11 +364,11 @@
     {
       "id": "semantic-001",
       "kind": "semantic",
-      "first_relevant_rank": null,
-      "hit_at_5": false,
-      "hit_at_10": false,
-      "recall_at_5": 0,
-      "recall_at_10": 0
+      "first_relevant_rank": 1,
+      "hit_at_5": true,
+      "hit_at_10": true,
+      "recall_at_5": 1,
+      "recall_at_10": 1
     },
     {
       "id": "semantic-002",
@@ -445,7 +445,7 @@
     {
       "id": "semantic-010",
       "kind": "semantic",
-      "first_relevant_rank": 7,
+      "first_relevant_rank": 6,
       "hit_at_5": false,
       "hit_at_10": true,
       "recall_at_5": 0,

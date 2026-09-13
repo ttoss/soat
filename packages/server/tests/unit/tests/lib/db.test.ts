@@ -1,5 +1,7 @@
 import {
   buildDatabaseConfig,
+  CONNECTIONS_PER_HYBRID_SEARCH,
+  DEFAULT_POOL_MAX,
   getSchemaSyncLockTimeoutMs,
   isConcurrentExtensionCreationError,
   logDatabaseConnectionError,
@@ -16,9 +18,15 @@ describe('buildDatabaseConfig', () => {
     name: process.env.DATABASE_NAME,
     user: process.env.DATABASE_USER,
     password: process.env.DATABASE_PASSWORD,
+    poolMax: process.env.DATABASE_POOL_MAX,
   };
 
   afterEach(() => {
+    if (savedEnv.poolMax === undefined) {
+      delete process.env.DATABASE_POOL_MAX;
+    } else {
+      process.env.DATABASE_POOL_MAX = savedEnv.poolMax;
+    }
     process.env.DATABASE_HOST = savedEnv.host;
     process.env.DATABASE_PORT = savedEnv.port;
     process.env.DATABASE_NAME = savedEnv.name;
@@ -36,6 +44,30 @@ describe('buildDatabaseConfig', () => {
 
   test('always creates the vector extension', () => {
     expect(buildDatabaseConfig().createVectorExtension).toBe(true);
+  });
+
+  test('pools enough connections for concurrent hybrid knowledge searches', () => {
+    delete process.env.DATABASE_POOL_MAX;
+
+    // One hybrid search opens four: a vector and a lexical query per store,
+    // two of them inside their own `SET LOCAL` transaction. Sequelize's own
+    // default of 5 would queue the second concurrent search and time out
+    // acquiring under modest load.
+    expect(buildDatabaseConfig().pool?.max).toBeGreaterThanOrEqual(
+      2 * CONNECTIONS_PER_HYBRID_SEARCH
+    );
+  });
+
+  test('DATABASE_POOL_MAX overrides the pool ceiling', () => {
+    process.env.DATABASE_POOL_MAX = '25';
+    expect(buildDatabaseConfig().pool?.max).toBe(25);
+  });
+
+  test('ignores a DATABASE_POOL_MAX that is not a positive integer', () => {
+    for (const invalid of ['0', '-3', 'many', '2.5']) {
+      process.env.DATABASE_POOL_MAX = invalid;
+      expect(buildDatabaseConfig().pool?.max).toBe(DEFAULT_POOL_MAX);
+    }
   });
 
   test('maps DATABASE_* env vars to the connection config', () => {

@@ -416,7 +416,7 @@ Each tag names its source row: a memory result carries its entry id, resolvable 
 | `document_ids`   | `string[]` | Scope document results to these specific document IDs                                       |
 | `document_paths` | `string[]` | Scope document results to files under these path prefixes                                   |
 | `tags`           | `object`   | Scope **both** documents and memory entries to results whose `tags` contain all these key-value pairs (exact) |
-| `min_score`      | `number`   | Minimum relevance score (0–1) for results to be included (default: 0.5)                     |
+| `min_score`      | `number`   | Minimum raw cosine similarity (0–1) a vector candidate must reach to be ranked (default: 0.5). The same floor the search endpoint now spells `min_similarity` — see [Knowledge — Relevance knobs](./knowledge.md#relevance-knobs) |
 | `limit`          | `number`   | Maximum number of results to inject (default: 5)                                            |
 | `write_memory_id`| `string`   | When set, automatically injects a `write_memory` tool that writes facts to this memory      |
 | `extraction`     | `boolean` \| `object` | Automatic fact extraction from completed turns (requires `write_memory_id`). `true` enables defaults; the object form customizes provider, model, and prompt — see [Automatic Extraction](./memories.md#automatic-extraction) |

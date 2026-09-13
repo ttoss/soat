@@ -13,7 +13,10 @@ const knowledgeRouter = new Router<Context>();
 type KnowledgeSearchBody = {
   project_id?: string;
   query?: string;
+  /** Deprecated alias for `min_similarity`; see {@link resolveSimilarityFloor}. */
   min_score?: number;
+  min_similarity?: number;
+  rrf_k?: number;
   limit?: number;
   // Array-typed filters. Typed loosely to tolerate non-conforming clients that
   // send a single value as a bare scalar; `toStringArray` normalizes them.
@@ -21,6 +24,21 @@ type KnowledgeSearchBody = {
   document_paths?: string[] | string;
   document_ids?: string[] | string;
   tags?: unknown;
+};
+
+/**
+ * The cosine floor this request asks for.
+ *
+ * `min_score` is the deprecated spelling, kept because it has only ever
+ * filtered cosine: while `score` equaled `similarity_score`, the two were the
+ * same number, so honoring an existing `min_score` as `min_similarity` returns
+ * every caller exactly the results it got before — plus the lexical hits the
+ * floor was never meant to exclude. `min_similarity` wins when both are sent.
+ */
+const resolveSimilarityFloor = (
+  body: KnowledgeSearchBody
+): number | undefined => {
+  return body.min_similarity ?? body.min_score;
 };
 
 /**
@@ -131,7 +149,8 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
     billingProjectId: projectIds?.length === 1 ? projectIds[0] : null,
     policyWhere,
     query: body.query,
-    minScore: body.min_score,
+    minSimilarity: resolveSimilarityFloor(body),
+    rrfK: body.rrf_k,
     limit: body.limit,
     paths: toStringArray(body.document_paths),
     documentIds: toStringArray(body.document_ids),

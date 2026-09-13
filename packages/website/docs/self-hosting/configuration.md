@@ -16,6 +16,9 @@ sidebar_label: Configuration
 | `DATABASE_NAME`     | `soat_dev`      | Database name     |
 | `DATABASE_USER`     | `soat_user`     | Database user     |
 | `DATABASE_PASSWORD` | `soat_password` | Database password |
+| `DATABASE_POOL_MAX` | `10`            | Maximum pooled connections per server process |
+
+`DATABASE_POOL_MAX` is sized for two concurrent hybrid knowledge searches with headroom: one such search holds four connections at once — a vector and a lexical query over each store, two of them inside their own transaction. Raise it for a hotter deployment, keeping `DATABASE_POOL_MAX × <number of tasks>` below the database's `max_connections`.
 
 The database needs [pgvector](https://github.com/pgvector/pgvector) **0.8 or newer** (the `pgvector/pgvector` image, or a manual install). Semantic search sets `hnsw.iterative_scan`, added in 0.8; an older extension discards the setting with a warning and a scoped or path-filtered search can silently come back short. See [Ranking is approximate](../modules/knowledge.md#ranking-is-approximate).
 

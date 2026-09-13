@@ -1,6 +1,6 @@
 import { db } from 'src/db';
 import * as embeddingModule from 'src/lib/embedding';
-import { resolveDocumentSearch } from 'src/lib/knowledge';
+import { resolveDocumentSearch } from 'src/lib/knowledgeDocuments';
 import { resolveMemorySearch } from 'src/lib/knowledgeMemory';
 import { writeMemoryEntry } from 'src/lib/memoryEntries';
 

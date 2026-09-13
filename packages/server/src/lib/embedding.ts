@@ -3,6 +3,7 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { type EmbeddingModel, embedMany } from 'ai';
 import createDebug from 'debug';
 
+import { DomainError } from '../errors';
 import { resolveBedrockCredentials } from './agentModel';
 import { recordEmbeddingUsage } from './usageEmbeddingRecording';
 
@@ -65,7 +66,10 @@ export const buildEmbeddingModel = (args: {
     case 'bedrock':
       return buildBedrockEmbeddingModel(args);
     default:
-      throw new Error(`Unsupported embedding provider: ${args.provider}`);
+      throw new DomainError(
+        'EMBEDDING_NOT_CONFIGURED',
+        `Unsupported embedding provider: ${args.provider}`
+      );
   }
 };
 
@@ -91,14 +95,21 @@ export const getEmbeddings = async (args: {
   const provider = process.env.EMBEDDING_PROVIDER;
   const model = process.env.EMBEDDING_MODEL;
 
+  // `DomainError`, not a bare `Error`: a caller that degrades on an unreachable
+  // provider must not also degrade on a server that was never configured. The
+  // class is the signal — see `embedQueryOrDegrade`.
   if (!provider || !model) {
-    throw new Error(
+    throw new DomainError(
+      'EMBEDDING_NOT_CONFIGURED',
       'EMBEDDING_PROVIDER and EMBEDDING_MODEL environment variables must be set'
     );
   }
 
   if (!isEmbeddingProvider(provider)) {
-    throw new Error(`Unsupported embedding provider: ${provider}`);
+    throw new DomainError(
+      'EMBEDDING_NOT_CONFIGURED',
+      `Unsupported embedding provider: ${provider}`
+    );
   }
 
   log(

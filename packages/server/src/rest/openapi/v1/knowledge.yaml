@@ -24,7 +24,7 @@ paths:
       tags:
         - Knowledge
       summary: Search knowledge
-      description: Searches across documents and memory entries using semantic search, file paths, document IDs, memory IDs, or tags. At least one of `query`, `tags`, `document_paths`, `document_ids`, or `memory_ids` must be provided.
+      description: Searches across documents and memory entries using hybrid retrieval — a vector query and a full-text query per source, fused by reciprocal rank — or by file paths, document IDs, memory IDs, or tags. At least one of `query`, `tags`, `document_paths`, `document_ids`, or `memory_ids` must be provided.
       operationId: searchKnowledge
       x-iam-action: knowledge:SearchKnowledge
       requestBody:
@@ -41,19 +41,46 @@ paths:
                   example: 'proj_V1StGXR8Z5jdHi6B'
                 query:
                   type: string
-                  description: Semantic search query text
+                  description: >-
+                    Search query text. Runs a vector query and a full-text query over each
+                    store and fuses the rankings; the full-text channel matches exact tokens
+                    and phrases, the vector channel everything else.
                   example: 'customer communication preferences'
-                min_score:
+                min_similarity:
                   type: number
                   description: >-
-                    Minimum `score` a result must reach to be returned. Filters on the
-                    implementation-defined `score`, not on `similarity_score`, so the
-                    cutoff follows the ranking. Only applies when `query` is provided.
-                    Because the scale behind `score` is not part of the contract, treat a
-                    tuned value as tied to the deployment rather than portable.
+                    Minimum raw cosine `similarity_score` a **vector** candidate must
+                    reach to take part in ranking, applied before fusion. Only applies
+                    when `query` is provided. Lexical candidates are deliberately exempt:
+                    a result that literally contains the searched token is the evidence,
+                    and dropping it for a low cosine is the failure hybrid search exists
+                    to prevent. Not a floor on `score`, whose fused value encodes rank
+                    position rather than similarity.
                   minimum: 0
                   maximum: 1
                   example: 0.5
+                min_score:
+                  type: number
+                  deprecated: true
+                  description: >-
+                    Deprecated alias for `min_similarity`, with identical behavior.
+                    While ranking was single-signal `score` equaled `similarity_score`,
+                    so this has only ever filtered cosine and an existing value keeps
+                    returning the same results. `min_similarity` wins when both are sent.
+                    Removed in v2.
+                  minimum: 0
+                  maximum: 1
+                  example: 0.5
+                rrf_k:
+                  type: integer
+                  description: >-
+                    The `k` in the reciprocal rank fusion term `1 / (k + rank)`, which
+                    sets how steeply a result's contribution decays with its position in
+                    each ranked list. A smaller value weights the very top of each list
+                    more heavily. Defaults to the deployment's `KNOWLEDGE_RRF_K`, itself
+                    60 by default. Only applies when `query` is provided.
+                  minimum: 1
+                  example: 60
                 limit:
                   type: integer
                   description: >-
@@ -214,16 +241,21 @@ components:
         score:
           type: number
           description: >-
-            Implementation-defined relevance ranking — higher is better. The **ordering**
-            it produces is the contract; the absolute value is not, and the formula behind
-            it may change (a future hybrid ranking would fuse several signals here). It is
-            the field `min_score` filters on and the field results are sorted by. Only
-            present when `query` was provided. Use `similarity_score` when you need the raw
-            cosine value.
-          example: 0.82
+            Reciprocal-rank-fusion relevance ranking — higher is better. The **ordering**
+            it produces is the contract; the absolute value is not, is deliberately not
+            rescaled into 0–1, and the formula behind it may change. Results are sorted by
+            it. Nothing filters on it: `min_similarity` filters `similarity_score`. Only
+            present when `query` was provided. Use `similarity_score` when you need the
+            raw cosine value.
+          example: 0.0328
         similarity_score:
           type: number
-          description: Raw cosine similarity (0–1) between the query and this result. Pinned to that meaning — unlike `score`, it is never redefined. Only present when `query` was provided.
+          description: >-
+            Raw cosine similarity (0–1) between the query and this result. Pinned to that
+            meaning — unlike `score`, it is never redefined — and populated on every
+            result of a `query` search, a lexical-only hit included. Absent only when the
+            embedding provider was unreachable and the search answered from the lexical
+            channel alone, where there is no query vector to measure against.
           minimum: 0
           maximum: 1
           example: 0.82
@@ -271,16 +303,21 @@ components:
         score:
           type: number
           description: >-
-            Implementation-defined relevance ranking — higher is better. The **ordering**
-            it produces is the contract; the absolute value is not, and the formula behind
-            it may change (a future hybrid ranking would fuse several signals here). It is
-            the field `min_score` filters on and the field results are sorted by. Only
-            present when `query` was provided. Use `similarity_score` when you need the raw
-            cosine value.
-          example: 0.79
+            Reciprocal-rank-fusion relevance ranking — higher is better. The **ordering**
+            it produces is the contract; the absolute value is not, is deliberately not
+            rescaled into 0–1, and the formula behind it may change. Results are sorted by
+            it. Nothing filters on it: `min_similarity` filters `similarity_score`. Only
+            present when `query` was provided. Use `similarity_score` when you need the
+            raw cosine value.
+          example: 0.0161
         similarity_score:
           type: number
-          description: Raw cosine similarity (0–1) between the query and this result. Pinned to that meaning — unlike `score`, it is never redefined. Only present when `query` was provided.
+          description: >-
+            Raw cosine similarity (0–1) between the query and this result. Pinned to that
+            meaning — unlike `score`, it is never redefined — and populated on every
+            result of a `query` search, a lexical-only hit included. Absent only when the
+            embedding provider was unreachable and the search answered from the lexical
+            channel alone, where there is no query vector to measure against.
           minimum: 0
           maximum: 1
           example: 0.79

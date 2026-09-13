@@ -43,7 +43,7 @@ flowchart TB
 | Memory write decision | Cosine dedup: skip / create everywhere; merge band on agent paths only | `duplicate_threshold` |
 | Memory merge | LLM consolidation into one atomic fact; a failed or blank completion creates instead | presence of an agent context; extraction's provider/model override |
 | Fact extraction | Tool-less LLM completion over the finished turn | `knowledge_config.extraction`, per-turn `extract` |
-| Retrieval ranking | Cosine similarity top-k per source, merged and re-sorted | `min_score`, `limit`, source filters |
+| Retrieval ranking | Hybrid: a vector and a full-text top-k per store, fused by reciprocal rank | `min_similarity`, `rrf_k`, `limit`, source filters |
 | Injection | Fenced `<knowledge>` block as a `user`-role message | `knowledge_config` |
 
 ## The write side — how memory is created
@@ -156,13 +156,18 @@ One embedding model serves the deployment (`EMBEDDING_PROVIDER` — `ollama`, `o
 [`POST /api/v1/knowledge/search`](/docs/api/knowledge/search-knowledge), the generated `search-knowledge` SDK/CLI/MCP surface, the orchestration `knowledge` node, and agent injection all execute one function:
 
 1. **Decide sources from filters.** Document search runs when `query`, `document_paths`, or `document_ids` is present; memory search runs when `memory_ids` is present. `tags` turns on both — it is the one filter that scopes either store. A bare `query` never searches memories.
-2. **Search each source in parallel.** With a `query`, each source embeds it and takes the top `limit` rows by cosine similarity (`score = 1 − cosine distance`), excluding invalidated memory entries. Without a `query`, the modes are deterministic reads: document chunks in `chunk_index` order, memory entries oldest-first.
-3. **Filter** by `min_score` (applied to `score`, after each source's top-k; a high floor shrinks the result set rather than searching deeper).
-4. **Merge and rank**: concatenate both lists, sort by descending `score` when a `query` ran, cut to `limit` (default `10`).
+2. **Run every channel in parallel.** With a `query`, each store runs two queries: `ORDER BY embedding <=> $query` (pgvector) and `to_tsvector(content) @@ websearch_to_tsquery($query)` ranked by `ts_rank_cd`, each taking `limit` rows and excluding invalidated memory entries. Up to four queries; each also selects the row's cosine, so a lexical-only hit still reports `similarity_score`. Without a `query`, the modes are deterministic reads: document chunks in `chunk_index` order, memory entries oldest-first.
+3. **Filter** by `min_similarity` — raw cosine, on the **vector** candidates only, before fusion. Lexical candidates are exempt: an exact token match is its own evidence. The floor runs over the rows step 2 already took, and does not search deeper to refill: `limit: 10` with `min_similarity: 0.8` can return three rows because seven of that store's ten nearest fell below the floor, not because the corpus holds only three above it.
+4. **Assemble one ranking per channel.** Each channel's two result sets are merged on that channel's own value — cosine, or `ts_rank_cd` — so a store cannot claim result slots by position alone.
+5. **Fuse and cut**: `score = Σ 1 / (k + rank)` over the channels that ranked each result, `k = rrf_k` (default `60`), sorted descending, cut to `limit` (default `10`).
+
+A channel that fails degrades rather than failing the search: a broken lexical query leaves vector-only results, and an unreachable embedding provider leaves lexical-only ones, which carry no `similarity_score`.
+
+A server that has no embedding provider configured is not that case, and fails with `503 EMBEDDING_NOT_CONFIGURED` instead. Degrading there would answer `200` with an empty list for every natural-language query — the default `simple` text-search configuration requires every term — so a deployment missing `EMBEDDING_PROVIDER` would look like a corpus with nothing relevant in it, including through agent injection.
 
 `document_paths` are prefixes; `tags` is an exact key-value containment match, applied at entry granularity against memory (the entry's own tags or its container's); full filter semantics: [Knowledge — Search Modes](../modules/knowledge.md#search-modes).
 
-Ranking today is **single-signal**: `score` equals the raw cosine similarity. On the wire, `score` is an implementation-defined ranking (compare within one response; `min_score` filters on it) while `similarity_score` is pinned forever to raw cosine; see [Knowledge — Relevance scoring](../modules/knowledge.md#relevance-scoring).
+On the wire, `score` is the fused value — compare within one response, nothing filters on it — while `similarity_score` is pinned forever to raw cosine; see [Knowledge — Relevance scoring](../modules/knowledge.md#relevance-scoring).
 
 ### Injection into generations (push retrieval)
 
@@ -188,7 +193,8 @@ Orchestrations read knowledge mid-flow with the `knowledge` node and write memor
 | `chunk_strategy` / `chunk_size` / `chunk_overlap` | document create/ingest bodies; ingestion rules | `page` (ingest) / `whole` (create); `1000`; `200` | chunking |
 | `native_extraction` | ingestion rule | `first` | run native extraction before the converter (`skip` to always convert) |
 | `file_delivery` | ingestion rule | `base64` | how the converter receives the file (`download_url` for large files) |
-| `query`, `min_score`, `limit`, `memory_ids`, `document_ids`, `document_paths`, `tags` | [`POST /api/v1/knowledge/search`](/docs/api/knowledge/search-knowledge) body | `limit: 10` | retrieval |
+| `query`, `min_similarity`, `rrf_k`, `limit`, `memory_ids`, `document_ids`, `document_paths`, `tags` | [`POST /api/v1/knowledge/search`](/docs/api/knowledge/search-knowledge) body | `limit: 10`, `rrf_k: 60` | retrieval |
+| `KNOWLEDGE_TEXT_SEARCH_CONFIG`, `KNOWLEDGE_RRF_K` | server environment | `simple`, `60` | the lexical channel and the fusion constant |
 | `knowledge_config.{memory_ids, document_ids, document_paths, tags, min_score, limit}` | agent record; per-generation override (arrays unioned, `tags` merged per key, scalars overridden) | `limit: 5` injected | push retrieval |
 | `knowledge_config.write_memory_id` | agent record | — | injects the `write_memory` tool; extraction target |
 | `knowledge_config.extraction` (`enabled`, `ai_provider_id`, `model`, `prompt`) | agent record | off | the extraction algorithm |
@@ -196,7 +202,7 @@ Orchestrations read knowledge mid-flow with the `knowledge` node and write memor
 | `include_invalidated` | [`GET /api/v1/memory-entries`](/docs/api/memory-entries/list-memory-entries) query | `false` | whether superseded entries appear in listings |
 | `EMBEDDING_*` env vars | server environment | — | the shared vector space |
 
-Fixed today (no knob): the cosine distance metric, the merge band's `0.75` floor (agent paths only), the retrieval ranking formula, the injection preamble and source-tag format, the extraction candidate cap (20), and the per-source embedding concurrency during ingestion.
+Fixed today (no knob): the cosine distance metric, the merge band's `0.75` floor (agent paths only), the fusion formula itself and the relative weight of the two channels, the injection preamble and source-tag format, the extraction candidate cap (20), and the per-source embedding concurrency during ingestion.
 
 ## Extending the engine today
 
@@ -206,7 +212,7 @@ The same seam shape the evaluations engine exposes as [custom scorers](../module
 - **Custom chunking — via pre-chunking.** Run your own splitter and create one document per chunk with `chunk_strategy: whole`, encoding structure in `path`, `title`, `tags`, and `metadata`. Retrieval treats your chunks like engine-made ones.
 - **Custom extraction behavior.** `extraction.prompt` changes *what* the fact miner looks for; `extraction.ai_provider_id`/`model` route it to another model.
 - **Custom write policy.** Curation pipelines writing through [`POST /api/v1/memory-entries`](/docs/api/memory-entries/create-memory-entry) tune `duplicate_threshold` per write: lower to skip more aggressively, raise toward `1.0` to keep near-duplicates distinct. Manual writes never merge.
-- **Custom retrieval composition.** For reranking, fusion with your own lexical index, or recency weighting, call [`POST /api/v1/knowledge/search`](/docs/api/knowledge/search-knowledge) with a generous `limit`, re-rank on your side using `similarity_score` plus your own features, and pass the survivors as input messages.
+- **Custom retrieval composition.** Exact-term matching no longer needs an index of your own — the lexical channel is built in. For reranking, recency weighting, or fusion with a signal the engine does not have, call [`POST /api/v1/knowledge/search`](/docs/api/knowledge/search-knowledge) with a generous `limit`, re-rank on your side using `similarity_score` plus your own features, and pass the survivors as input messages.
 
 ## Design headroom — where the engine is going
 

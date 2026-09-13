@@ -931,8 +931,8 @@ fi
 echo "Search returned $SEARCH_COUNT result(s)."
 
 # A query search ranks results, so both scoring fields must come back: `score`
-# is the ranking that ordering and --min_score are defined against, and
-# similarity_score is the raw cosine pinned alongside it.
+# is the fused reciprocal-rank value the ordering is defined against, and
+# similarity_score is the raw cosine that --min_similarity filters on.
 SEARCH_SCORE=$(printf '%s\n' "$SEARCH_RESP" | jq -r '.results[0].score')
 SEARCH_SIMILARITY=$(printf '%s\n' "$SEARCH_RESP" | jq -r '.results[0].similarity_score')
 if [ "$SEARCH_SCORE" = "null" ] || [ "$SEARCH_SIMILARITY" = "null" ]; then
@@ -941,6 +941,47 @@ if [ "$SEARCH_SCORE" = "null" ] || [ "$SEARCH_SIMILARITY" = "null" ]; then
   exit 1
 fi
 echo "Search results carry score=$SEARCH_SCORE similarity_score=$SEARCH_SIMILARITY."
+
+# 12a. Hybrid retrieval: the lexical channel finds an exact token that the
+# vector channel cannot reach. The identifier sits inside unrelated prose, so a
+# one-token query embeds far from the chunk; --min_similarity 0.9 removes the
+# vector candidates and only a lexical match can answer.
+echo "--- Hybrid retrieval: exact-token recall under a similarity floor ---"
+LEXICAL_DOC_RESP=$($SOAT_CLI create-document \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --content "The replacement part SMOKE-SKU-4711 is stocked in the Lisbon warehouse and ships on weekdays." \
+  --filename parts.txt \
+  --path /parts/catalog.txt)
+LEXICAL_DOC_ID=$(printf '%s\n' "$LEXICAL_DOC_RESP" | jq -r '.id')
+
+LEXICAL_SEARCH_RESP=$($SOAT_CLI search-knowledge \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --query "SMOKE-SKU-4711" \
+  --min_similarity 0.9 \
+  --rrf_k 60 \
+  --limit 5)
+LEXICAL_HIT=$(printf '%s\n' "$LEXICAL_SEARCH_RESP" | jq -r --arg id "$LEXICAL_DOC_ID" '[.results[] | select(.document_id == $id)] | length')
+if [ "$LEXICAL_HIT" -lt 1 ]; then
+  echo "ERROR: exact-token search did not return $LEXICAL_DOC_ID under --min_similarity 0.9" >&2
+  echo "$LEXICAL_SEARCH_RESP" >&2
+  exit 1
+fi
+echo "Exact-token search reached the chunk below the similarity floor: OK"
+
+# --min_score is the deprecated spelling of the same floor, so the same value
+# must return the same results.
+DEPRECATED_FLOOR_RESP=$($SOAT_CLI search-knowledge \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --query "SMOKE-SKU-4711" \
+  --min_score 0.9 \
+  --limit 5)
+DEPRECATED_IDS=$(printf '%s\n' "$DEPRECATED_FLOOR_RESP" | jq -c '[.results[].chunk_id]')
+CURRENT_IDS=$(printf '%s\n' "$LEXICAL_SEARCH_RESP" | jq -c '[.results[].chunk_id]')
+if [ "$DEPRECATED_IDS" != "$CURRENT_IDS" ]; then
+  echo "ERROR: --min_score and --min_similarity disagreed: $DEPRECATED_IDS vs $CURRENT_IDS" >&2
+  exit 1
+fi
+echo "Deprecated --min_score matches --min_similarity: OK"
 
 # 12b. Ingest a PDF file
 echo "--- Ingesting a PDF file ---"
