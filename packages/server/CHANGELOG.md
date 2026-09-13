@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.49.0](https://github.com/ttoss/soat/compare/v0.48.0...v0.49.0) (2026-09-13)
+
+### Bug Fixes
+
+* **agents:** never drop an mcp tool listing silently ([#1296](https://github.com/ttoss/soat/issues/1296)) ([4bf7128](https://github.com/ttoss/soat/commit/4bf71287f34944eaeaa9b2a3fd205b47312abd77))
+* **agents:** read the MCP protocol on both sides, single-source the error envelope, enforce the module ceiling ([#1302](https://github.com/ttoss/soat/issues/1302)) ([11b1c0f](https://github.com/ttoss/soat/commit/11b1c0fbc64e9ebc490cd085780252d1e667de17)), closes [#1301](https://github.com/ttoss/soat/issues/1301)
+
+### Features
+
+* **knowledge:** hybrid lexical + vector search fused by reciprocal rank ([#1294](https://github.com/ttoss/soat/issues/1294)) ([c1e16b3](https://github.com/ttoss/soat/commit/c1e16b381700f802c4f12cb1ecdb42cd99356dfc)), closes [#1272](https://github.com/ttoss/soat/issues/1272)
+* **knowledge:** recency blend for memory results in knowledge search ([#1295](https://github.com/ttoss/soat/issues/1295)) ([81dcd33](https://github.com/ttoss/soat/commit/81dcd3309598968b88e023a8e72574cb94a194d2)), closes [#1273](https://github.com/ttoss/soat/issues/1273) [#1294](https://github.com/ttoss/soat/issues/1294)
+* **usage:** one token shape at every altitude, plus tool_surface ([#1305](https://github.com/ttoss/soat/issues/1305)) ([6673f67](https://github.com/ttoss/soat/commit/6673f674c93d063fb2c4251ab26b362ff5fb8c04)), closes [#1300](https://github.com/ttoss/soat/issues/1300)
+
 # [0.48.0](https://github.com/ttoss/soat/compare/v0.47.0...v0.48.0) (2026-09-12)
 
 ### Bug Fixes

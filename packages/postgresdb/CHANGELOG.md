@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.49.0](https://github.com/ttoss/soat/compare/v0.48.0...v0.49.0) (2026-09-13)
+
+### Features
+
+* **usage:** one token shape at every altitude, plus tool_surface ([#1305](https://github.com/ttoss/soat/issues/1305)) ([6673f67](https://github.com/ttoss/soat/commit/6673f674c93d063fb2c4251ab26b362ff5fb8c04)), closes [#1300](https://github.com/ttoss/soat/issues/1300)
+
 # [0.48.0](https://github.com/ttoss/soat/compare/v0.47.0...v0.48.0) (2026-09-12)
 
 ### Features
