@@ -68,8 +68,8 @@ semantic similarity and consumed as context.
 
 Retrieval is **approximate**: `memory_entries.embedding` carries an HNSW index, so a
 similarity search reads a bounded candidate list rather than scanning every entry. Recall
-against the exact top-k is below 1.0, and `min_score` thresholds tuned against an exact
-scan may select a slightly different set. See
+against the exact top-k is below 1.0, and `min_similarity` thresholds tuned against an
+exact scan may select a slightly different set. See
 [Ranking is approximate](./knowledge.md#ranking-is-approximate); it applies to entry
 search and to the consolidation similarity check below alike.
 

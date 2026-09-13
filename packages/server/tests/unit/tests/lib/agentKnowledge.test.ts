@@ -509,7 +509,9 @@ describe('buildKnowledgeMessages', () => {
       tags: { team: 'finance' },
       paths: ['path/to/doc'],
       documentIds: [42],
-      minScore: 0.5,
+      // The agent record still spells it `min_score`; it has always meant the
+      // cosine floor, which is what `minSimilarity` is.
+      minSimilarity: 0.5,
       limit: 5,
       includeDocuments: true,
     });

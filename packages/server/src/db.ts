@@ -64,6 +64,30 @@ export const syncSchemaWithAdvisoryLock = async (args: {
 };
 
 /**
+ * Connections one hybrid knowledge search holds at once: a vector and a lexical
+ * query over each of the two stores, run in parallel, two of them inside their
+ * own `SET LOCAL` transaction (`withIterativeVectorScan`).
+ */
+export const CONNECTIONS_PER_HYBRID_SEARCH = 4;
+
+/**
+ * Pool ceiling. Sequelize's own default is 5, which one hybrid search nearly
+ * exhausts and two exceed — the second would queue and could reach
+ * `ConnectionAcquireTimeoutError` under modest load. Sized for two concurrent
+ * searches with headroom for the rest of the request mix.
+ *
+ * Raise it with `DATABASE_POOL_MAX` where a deployment runs hotter, remembering
+ * that the server's total is this times the number of tasks, and that the total
+ * has to stay under the database's own `max_connections`.
+ */
+export const DEFAULT_POOL_MAX = 2 * CONNECTIONS_PER_HYBRID_SEARCH + 2;
+
+const getPoolMax = (): number => {
+  const raw = Number(process.env.DATABASE_POOL_MAX);
+  return Number.isInteger(raw) && raw > 0 ? raw : DEFAULT_POOL_MAX;
+};
+
+/**
  * Build the options passed to `@ttoss/postgresdb`'s `initialize`.
  *
  * `keepDefaultTimezone: true` stops Sequelize from issuing
@@ -80,6 +104,7 @@ export const buildDatabaseConfig = () => {
     models,
     createVectorExtension: true,
     keepDefaultTimezone: true,
+    pool: { max: getPoolMax() },
     host: process.env.DATABASE_HOST,
     port: Number(process.env.DATABASE_PORT),
     database: process.env.DATABASE_NAME,
