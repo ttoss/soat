@@ -186,6 +186,7 @@ const sidebars: SidebarsConfig = {
         'tutorials/embeddings',
         'tutorials/agent-with-pdfs',
         'tutorials/ingest-images-and-audio',
+        'tutorials/measure-retrieval-quality',
       ],
     },
     {

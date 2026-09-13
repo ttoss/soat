@@ -23,6 +23,8 @@ See the [Permissions Reference](../permissions.md) for the IAM action strings fo
 - [Agent with Persistent Memory - Step 12 (Query the knowledge layer directly)](/docs/tutorials/memories-agent#step-12--query-the-knowledge-layer-directly)
 - [Agent over a Library of PDFs - Step 8 (Search the knowledge layer directly)](/docs/tutorials/agent-with-pdfs#step-8--search-the-knowledge-layer-directly-plan-d)
 - [Agent over a Library of PDFs - Step 12 (Give the agent a knowledge tool)](/docs/tutorials/agent-with-pdfs#step-12--give-the-agent-a-knowledge-tool-plan-d)
+- [Measuring Retrieval Quality - Step 6 (Compute recall@k and MRR)](/docs/tutorials/measure-retrieval-quality#step-6--compute-recallk-and-mrr)
+- [Measuring Retrieval Quality - Step 7 (Read a knob off the table)](/docs/tutorials/measure-retrieval-quality#step-7--read-a-knob-off-the-table)
 
 ## Data Model
 
@@ -170,7 +172,7 @@ so at equal relevance a fresh fact outranks a stale one. Document results are ne
 | `1825` | 1.0000 | 1.0000 | 0.7736 | 0.8082 |
 | `7300` | 1.0000 | 1.0000 | 0.9167 | 0.8394 |
 
-There is no value on that corpus at which the blend is free: the decay applies to memory results and not to the document chunks they share a result list with, so ageing a fact costs it ground against every chunk as well as against fresher facts. Pick a half-life from a run of the eval against **your** corpus, start long, and prefer scoping the search to `memory_ids` where freshness is what you are actually ranking on.
+There is no value on that corpus at which the blend is free: the decay applies to memory results and not to the document chunks they share a result list with, so ageing a fact costs it ground against every chunk as well as against fresher facts. Pick a half-life from a run against **your** corpus ([Measuring Retrieval Quality](../tutorials/measure-retrieval-quality.md)), start long, and prefer scoping the search to `memory_ids` where freshness is what you are actually ranking on.
 
 ### Ranking is approximate
 
@@ -207,7 +209,7 @@ Without `project_id` there is no single project policy to compile, and the searc
 
 ### Retrieval baseline
 
-Ranking changes are gated on a versioned golden query set, not on judgement. `packages/server/tests/eval/knowledge/golden.json` seeds a corpus — module-doc sections, synthetic documents carrying identifiers that occur exactly once, and curated memory entries — then scores 55 labeled queries through `searchKnowledge`.
+Ranking changes are gated on a versioned golden query set, not on judgement. This is the contributor harness for SOAT's own ranking; to score a deployment's corpus through the API, follow [Measuring Retrieval Quality](../tutorials/measure-retrieval-quality.md). `packages/server/tests/eval/knowledge/golden.json` seeds a corpus — module-doc sections, synthetic documents carrying identifiers that occur exactly once, and curated memory entries — then scores 55 labeled queries through `searchKnowledge`.
 
 ```bash
 pnpm --filter @soat/server eval:knowledge                    # score and gate
