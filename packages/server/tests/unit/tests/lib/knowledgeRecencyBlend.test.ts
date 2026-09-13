@@ -3,6 +3,7 @@ import { createDocument } from 'src/lib/documents';
 import * as embeddingModule from 'src/lib/embedding';
 import { searchKnowledge } from 'src/lib/knowledge';
 import { resolveDocumentSearch } from 'src/lib/knowledgeDocuments';
+import { resolveMemorySearch } from 'src/lib/knowledgeMemory';
 import { createMemory } from 'src/lib/memories';
 import { writeMemoryEntry } from 'src/lib/memoryEntries';
 import { createProject } from 'src/lib/projects';
@@ -284,6 +285,28 @@ describe('knowledge recency blend', () => {
         return { id: result.chunk_id, score: result.score };
       })
     );
+  });
+
+  test('decays the same way at the memory-only entry point', async () => {
+    // `resolveMemorySearch` fuses one store's two shards rather than four, so
+    // it reaches the blend by its own path — and every result it can return is
+    // a fact, which is what its `isMemory` answers.
+    const results = await resolveMemorySearch({
+      projectIds: [fixtures.projectId],
+      billingProjectId: fixtures.projectId,
+      config: {
+        memoryIds: fixtures.memoryIds,
+        search: QUERY,
+        recencyHalfLifeDays: 30,
+        limit: 10,
+      },
+    });
+
+    expect(
+      results.map((result) => {
+        return result.entry_id;
+      })
+    ).toEqual([fixtures.freshEntryId, fixtures.staleEntryId]);
   });
 
   test('changes nothing with no half-life configured anywhere', async () => {
