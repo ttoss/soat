@@ -8,6 +8,29 @@ import {
 
 const golden = loadGoldenSet();
 
+const memoriesByKey = new Map(
+  golden.corpus.memories.map((memory) => {
+    return [memory.key, memory];
+  })
+);
+
+/** Each `freshness` query's answer paired with the aged twin it must outrank. */
+const freshnessTwins = golden.queries
+  .filter((query) => {
+    return query.kind === 'freshness';
+  })
+  .map((query) => {
+    const fresh = memoriesByKey.get(query.expected[0].key)!;
+    const superseded = memoriesByKey.get(`${fresh.key}-superseded`);
+    return {
+      id: query.id,
+      expected: query.expected.length,
+      fresh,
+      superseded,
+      gapDays: (superseded?.age_days ?? 0) - (fresh.age_days ?? 0),
+    };
+  });
+
 describe('knowledge eval golden set', () => {
   test('carries at least 50 labeled pairs', () => {
     expect(golden.queries.length).toBeGreaterThanOrEqual(50);
@@ -181,33 +204,58 @@ describe('knowledge eval golden set', () => {
     expect(withAge('180')).toThrow(/age_days/);
   });
 
-  test('gives every freshness query a fresh answer and an aged distractor elsewhere', () => {
+  test('pairs every freshness query with an older twin in another container', () => {
     // The blend only ever demotes, so a freshness query measures nothing
     // without an aged near-twin for the decay to overtake — and it has to sit
     // in another container, since `writeMemoryEntry` dedups twins sharing one
     // at 0.95 and the seeder refuses anything but a `created` write.
-    const byKey = new Map(
-      golden.corpus.memories.map((memory) => {
-        return [memory.key, memory];
-      })
-    );
-    const freshness = golden.queries.filter((query) => {
-      return query.kind === 'freshness';
-    });
-    expect(freshness.length).toBeGreaterThan(0);
+    //
+    // The twin is the answer's key suffixed `-superseded`: pairing them by name
+    // is what lets the gap be asserted per query, rather than the corpus merely
+    // holding some aged entry somewhere.
+    expect(freshnessTwins).not.toHaveLength(0);
 
-    for (const query of freshness) {
-      expect(query.expected).toHaveLength(1);
-      const fresh = byKey.get(query.expected[0].key)!;
-      const aged = golden.corpus.memories.filter((memory) => {
-        return (memory.age_days ?? 0) > 0 && memory.memory !== fresh.memory;
-      });
+    for (const twin of freshnessTwins) {
       expect({
-        id: query.id,
-        freshAge: fresh.age_days ?? 0,
-        aged: aged.length > 0,
-      }).toEqual({ id: query.id, freshAge: 0, aged: true });
+        id: twin.id,
+        // More than one expected key and the query stops measuring the twin.
+        expected: twin.expected,
+        superseded: twin.superseded !== undefined,
+        elsewhere: twin.superseded?.memory !== twin.fresh.memory,
+        older: twin.gapDays > 0,
+      }).toEqual({
+        id: twin.id,
+        expected: 1,
+        superseded: true,
+        elsewhere: true,
+        older: true,
+      });
     }
+  });
+
+  test('exercises twin age gaps a bounded decay cannot all reach', () => {
+    // A multiplicative blend demotes a twin by a factor of its age, so a corpus
+    // of far-apart twins is the easy case: every gap here was 240 days or more
+    // until #1298 measured that a 40-day one flips at no setting that leaves
+    // the other kinds intact. Keeping a small gap labeled is what stops a
+    // ranking change from reading as a win on the easy half alone.
+    const gaps = freshnessTwins.map((twin) => {
+      return twin.gapDays;
+    });
+
+    expect(Math.min(...gaps)).toBeLessThanOrEqual(60);
+    expect(Math.max(...gaps)).toBeGreaterThanOrEqual(240);
+  });
+
+  test('labels a freshness answer that is itself aged', () => {
+    // Every answer sat at age zero until #1298: decay factors there are exactly
+    // `1`, so the corpus never covered the ordinary case where both twins have
+    // aged and the blend has to separate two decayed scores rather than one.
+    const aged = freshnessTwins.filter((twin) => {
+      return (twin.fresh.age_days ?? 0) > 0;
+    });
+
+    expect(aged.length).toBeGreaterThan(0);
   });
 
   test('rejects an unknown query kind', () => {

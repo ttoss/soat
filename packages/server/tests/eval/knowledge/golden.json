@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "corpus": {
     "documents": [
       {
@@ -328,6 +328,57 @@
           "account": "meridian"
         },
         "age_days": 420,
+        "memory": "Knowledge golden corpus (prior quarter)"
+      },
+      {
+        "key": "mem:aurora-discount",
+        "content": "Aurora Metals receives a 12 percent volume discount.",
+        "tags": {
+          "account": "aurora"
+        },
+        "age_days": 30
+      },
+      {
+        "key": "mem:aurora-discount-superseded",
+        "content": "Aurora Metals receives a 5 percent volume discount.",
+        "tags": {
+          "account": "aurora"
+        },
+        "age_days": 400,
+        "memory": "Knowledge golden corpus (prior quarter)"
+      },
+      {
+        "key": "mem:borealis-portal",
+        "content": "Borealis Textiles submits support tickets through the Zendesk portal.",
+        "tags": {
+          "account": "borealis"
+        },
+        "age_days": 10
+      },
+      {
+        "key": "mem:borealis-portal-superseded",
+        "content": "Borealis Textiles submits support tickets through the email queue.",
+        "tags": {
+          "account": "borealis"
+        },
+        "age_days": 120,
+        "memory": "Knowledge golden corpus (prior quarter)"
+      },
+      {
+        "key": "mem:calder-incoterms",
+        "content": "Calder Ceramics ships on DDP incoterms.",
+        "tags": {
+          "account": "calder"
+        },
+        "age_days": 5
+      },
+      {
+        "key": "mem:calder-incoterms-superseded",
+        "content": "Calder Ceramics ships on FOB incoterms.",
+        "tags": {
+          "account": "calder"
+        },
+        "age_days": 45,
         "memory": "Knowledge golden corpus (prior quarter)"
       }
     ]
@@ -935,6 +986,39 @@
         {
           "source_type": "memory",
           "key": "mem:meridian-window"
+        }
+      ]
+    },
+    {
+      "id": "freshness-004",
+      "query": "Aurora Metals volume discount percentage",
+      "kind": "freshness",
+      "expected": [
+        {
+          "source_type": "memory",
+          "key": "mem:aurora-discount"
+        }
+      ]
+    },
+    {
+      "id": "freshness-005",
+      "query": "how does Borealis Textiles submit support tickets",
+      "kind": "freshness",
+      "expected": [
+        {
+          "source_type": "memory",
+          "key": "mem:borealis-portal"
+        }
+      ]
+    },
+    {
+      "id": "freshness-006",
+      "query": "Calder Ceramics shipping incoterms",
+      "kind": "freshness",
+      "expected": [
+        {
+          "source_type": "memory",
+          "key": "mem:calder-incoterms"
         }
       ]
     }
