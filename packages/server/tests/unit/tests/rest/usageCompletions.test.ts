@@ -49,7 +49,13 @@ describe('Usage — chat completion metering', () => {
             finish_reason: 'stop',
           },
         ],
-        usage: { prompt_tokens: 11, completion_tokens: 5, total_tokens: 16 },
+        usage: {
+          prompt_tokens: 11,
+          completion_tokens: 5,
+          total_tokens: 16,
+          prompt_tokens_details: { cached_tokens: 3 },
+          completion_tokens_details: { reasoning_tokens: 2 },
+        },
       })
     );
   };
@@ -207,8 +213,12 @@ describe('Usage — chat completion metering', () => {
     // No Generation row backs a chat completion — the event stands alone.
     expect(rows[0].generation_id).toBeNull();
     expect(rows[0].agent_id).toBeNull();
-    expect(quantityOf(rows[0], 'input_tokens')).toBe(11);
+    // The `input_tokens` component is the uncached input alone: the stub
+    // reports 11 prompt tokens of which 3 were served from cache.
+    expect(quantityOf(rows[0], 'input_tokens')).toBe(8);
+    expect(quantityOf(rows[0], 'cached_tokens')).toBe(3);
     expect(quantityOf(rows[0], 'output_tokens')).toBe(5);
+    expect(quantityOf(rows[0], 'reasoning_tokens')).toBe(2);
   });
 
   test('a chat-scoped completion writes its own llm_tokens event', async () => {
@@ -224,7 +234,7 @@ describe('Usage — chat completion metering', () => {
 
     const rows = await waitForMeters(2);
     expect(rows).toHaveLength(2);
-    expect(quantityOf(rows[0], 'input_tokens')).toBe(11);
+    expect(quantityOf(rows[0], 'input_tokens')).toBe(8);
   });
 
   test('a streamed stateless completion meters once the stream finishes', async () => {
@@ -255,5 +265,24 @@ describe('Usage — chat completion metering', () => {
 
     const rows = await waitForMeters(5);
     expect(rows).toHaveLength(5);
+  });
+  test("the completion response reports usage in OpenAI's own shape", async () => {
+    const res = await authenticatedTestClient(userToken)
+      .post('/api/v1/chat/completions')
+      .send({
+        ai_provider_id: aiProviderId,
+        messages: [{ role: 'user', content: 'Hello' }],
+      });
+    expect(res.status).toBe(200);
+
+    // Deliberately not UsageTotals: this endpoint exists to be targeted by an
+    // OpenAI SDK on base URL alone, and that SDK reads these field names.
+    expect(res.body.usage).toEqual({
+      prompt_tokens: 11,
+      completion_tokens: 5,
+      total_tokens: 16,
+      prompt_tokens_details: { cached_tokens: 3 },
+      completion_tokens_details: { reasoning_tokens: 2 },
+    });
   });
 });

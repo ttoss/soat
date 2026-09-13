@@ -235,9 +235,9 @@ describe('validateQuotaShape', () => {
   test('rejects a meter type outside the metered vocabulary', () => {
     // An unrecorded meter type matches no event, so the cap would aggregate 0
     // forever — the same silent no-op `SCOPES_BY_METRIC` refuses.
-    expect(
-      validateQuotaShape({ ...costBase, meterType: 'llm_token' })
-    ).toMatch(/meter_type/);
+    expect(validateQuotaShape({ ...costBase, meterType: 'llm_token' })).toMatch(
+      /meter_type/
+    );
   });
   test('rejects a meter scope on a metric with no cost dimension', () => {
     expect(

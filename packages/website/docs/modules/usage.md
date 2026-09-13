@@ -220,6 +220,21 @@ Past-effective prices are immutable; corrections ship as future-dated rows. A **
 
 Each `PUT` takes a batch and stops at the first refused row. Both refusals, an unparseable `effective_from` and a now-or-past-dated write onto an already priced `(provider, model, component)`, return `400 VALIDATION_FAILED` with the failing row in `error.meta` as `provider`, `model`, `component` and `effective_from`.
 
+### One shape at every altitude
+
+Token counts are reported in one schema, `UsageTotals`, wherever they appear — so a client sums a step, a turn and a month with one type:
+
+| Altitude | Where | Notes |
+|---|---|---|
+| Step | [`GET /generations/{id}/transcript`](/docs/api/generations/get-generation-transcript) → `steps[].usage` | `cost_usd` is always `null`: the ledger prices one event per generation, and a per-step price would disagree with it after any price change. Null for the whole object means the step reported nothing. |
+| Generation | [`GET /generations/{id}`](/docs/api/generations/get-generation) → `usage` | Single read only; the listing omits it. `null` until something is metered. |
+| Session / run | [`GET /sessions/{id}`](/docs/api/sessions/get-session), [`GET /orchestration-runs/{id}`](/docs/api/orchestrations/get-orchestration-run) | Summed across the generations each contains. |
+| Window | [`GET /usage/aggregate`](/docs/api/usage/get-usage-aggregate), [`GET /usage/receipt`](/docs/api/usage/get-usage-receipt) | Buckets and receipt totals. |
+
+`input_tokens` is the **full prompt** at every altitude, and `uncached_input_tokens` is what is left after the two cache dimensions — so `input_tokens` = `uncached_input_tokens` + `cached_tokens` + `cache_write_tokens`, checkable by the caller. Mind the one collision: the `input_tokens` **component** on a usage event is the uncached figure, because components are what get priced. Price the components; read the fields.
+
+The single exception is [`POST /chat/completions`](/docs/api/chats/create-chat-completion), which reports `usage` in OpenAI's field names (`prompt_tokens`, `completion_tokens`, `prompt_tokens_details.cached_tokens`, …). That endpoint exists so an OpenAI SDK can target SOAT by base URL alone, and compatibility wins there.
+
 ### Receipts and reconciliation
 
 [`GET /api/v1/usage/receipt?generation_id=…`](/docs/api/usage/get-usage-receipt) returns a billing **receipt** for a completed generation: one line item per usage event, a `by_meter_type` cost split, reconstructed token totals (`input_tokens` is uncached input + cached), and a grand total. Every component carries its price-book version and frozen cost, so receipts are reproducible and reconcile against the provider's invoice within a small tolerance (target ±2%).

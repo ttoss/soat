@@ -25,7 +25,7 @@ import {
   resolveIdNarrowings,
   valueNarrowings,
 } from './usageNarrowings';
-import type { UsageTotals } from './usageReceipt';
+import type { UsageTotals } from './usageTotals';
 
 const log = createDebug('soat:usage');
 
@@ -53,6 +53,7 @@ export type UsageAggregateBucket = {
   // Events measured in the bucket. On `totals` it counts the whole window.
   event_count: number;
   input_tokens: number;
+  uncached_input_tokens: number;
   output_tokens: number;
   cached_tokens: number;
   cache_write_tokens: number;
@@ -145,11 +146,12 @@ const totalsFrom = (args: {
 }): UsageAggregateBucket => {
   const cached = quantityOf(args.components, 'cached_tokens');
   const cacheWrite = quantityOf(args.components, 'cache_write_tokens');
+  const uncached = quantityOf(args.components, 'input_tokens');
   return {
     cost_usd: decimalToCost(args.costUsd),
     event_count: args.eventCount,
-    input_tokens:
-      quantityOf(args.components, 'input_tokens') + cached + cacheWrite,
+    input_tokens: uncached + cached + cacheWrite,
+    uncached_input_tokens: uncached,
     output_tokens: quantityOf(args.components, 'output_tokens'),
     cached_tokens: cached,
     cache_write_tokens: cacheWrite,
@@ -339,6 +341,7 @@ export const rollUpUsageTotals = async (
   return {
     cost_usd: bucket.cost_usd,
     input_tokens: bucket.input_tokens,
+    uncached_input_tokens: bucket.uncached_input_tokens,
     output_tokens: bucket.output_tokens,
     cached_tokens: bucket.cached_tokens,
     cache_write_tokens: bucket.cache_write_tokens,

@@ -15,10 +15,15 @@ import {
   suppressContentWrites,
 } from './generationContentSuppression';
 import { applyGenerationScopeFilters } from './generationListFilters';
-import { mapGeneration, type PersistedGeneration } from './generationMapper';
+import {
+  mapGeneration,
+  mapGenerationWithUsage,
+  type PersistedGeneration,
+} from './generationMapper';
 import { findOrCreateTrace, findTraceDbId } from './generationTrace';
 import { emptyPage, paginatedList } from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
+import { rollUpUsageTotals } from './usageAggregate';
 
 // The row → wire mapper lives in its own module; re-exported so the many
 // existing `from './generations'` imports of the type keep working.
@@ -82,6 +87,7 @@ const commitGenerationWithTrace = async (helperArgs: {
     rootGenerationId?: string | null;
     startedByPrincipalType?: string | null;
     startedByPrincipalId?: string | null;
+    toolSurface?: Record<string, unknown> | null;
   };
   agentDbId: number;
   initiatorDbId: number | null;
@@ -126,6 +132,9 @@ const commitGenerationWithTrace = async (helperArgs: {
         lastActivityAt: null,
         stopReason: null,
         error: null,
+        // Not a content column: three integers describing the request, which a
+        // purge and zero-retention both leave standing.
+        toolSurface: args.toolSurface ?? null,
         ...attributionColumns(args),
         ...contentColumns,
       },
@@ -156,6 +165,8 @@ export const createGenerationRecord = async (
     // be promoted into an eval dataset item. Content, so zero-retention refuses
     // it exactly as it refuses `metadata`.
     inputMessages?: unknown[] | null;
+    // Measured, never caller-supplied. Not content — see the column.
+    toolSurface?: Record<string, unknown> | null;
   }
 ) => {
   const [agent, initiatorGeneration] = await Promise.all([
@@ -400,6 +411,7 @@ export const listGenerationsByTraceIds = async (args: {
 export const getGeneration = async (args: {
   publicId: string;
   projectIds?: number[];
+  includeUsage?: boolean;
 }) => {
   const gen = await generations.findByPublicId({
     id: args.publicId,
@@ -407,7 +419,19 @@ export const getGeneration = async (args: {
   });
   if (!gen) return null;
 
-  return mapGeneration(gen);
+  if (!args.includeUsage) return mapGeneration(gen);
+
+  // The turn's own events. A generation is metered once, so this is a roll-up
+  // of one row in the ordinary case — but sub-agent turns meter against their
+  // own generation, so summing is what keeps a delegating turn honest.
+  const usage = await rollUpUsageTotals({
+    projectId: gen.projectId,
+    from: null,
+    to: null,
+    generationId: gen.id,
+  });
+
+  return mapGenerationWithUsage(gen, usage);
 };
 
 // Shallow-merged so repeated patches accumulate. The bag holds only caller

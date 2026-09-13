@@ -21,6 +21,8 @@ import {
   readGenerationSteps,
 } from './generationTurn';
 import { isPlainObject } from './plainObject';
+import type { UsageTotals } from './usageTotals';
+import { readReportedUsage, usageTotalsFromReported } from './usageTotals';
 
 const log = createDebug('soat:generation-transcript');
 
@@ -40,19 +42,13 @@ export type TranscriptToolResult = {
   error: unknown;
 };
 
-export type TranscriptUsage = {
-  input_tokens: number | null;
-  output_tokens: number | null;
-  total_tokens: number | null;
-};
-
 export type TranscriptStep = {
   index: number;
   text: string;
   finish_reason: string | null;
   tool_calls: TranscriptToolCall[];
   tool_results: TranscriptToolResult[];
-  usage: TranscriptUsage | null;
+  usage: UsageTotals | null;
 };
 
 export type GenerationTranscript = {
@@ -158,20 +154,17 @@ const projectToolResults = (
   return [...results, ...errors];
 };
 
-const asTokenCount = (value: unknown): number | null => {
-  return typeof value === 'number' ? value : null;
-};
-
-const projectUsage = (
-  step: Record<string, unknown>
-): TranscriptUsage | null => {
+/**
+ * One step's counts, in the shape every other altitude reports.
+ *
+ * Null means the step recorded no usage at all; within a step a dimension the
+ * provider did not report is 0, not null — the distinction the whole-object
+ * null keeps is the one worth keeping, and one shape across altitudes is worth
+ * more than a per-dimension "not reported" no aggregate has ever had.
+ */
+const projectUsage = (step: Record<string, unknown>): UsageTotals | null => {
   if (!isPlainObject(step.usage)) return null;
-
-  return {
-    input_tokens: asTokenCount(step.usage.inputTokens),
-    output_tokens: asTokenCount(step.usage.outputTokens),
-    total_tokens: asTokenCount(step.usage.totalTokens),
-  };
+  return usageTotalsFromReported(readReportedUsage(step.usage));
 };
 
 const EMPTY_STEP = {

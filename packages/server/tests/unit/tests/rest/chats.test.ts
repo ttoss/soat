@@ -587,6 +587,13 @@ describe('Chats', () => {
         model: 'mock-model',
         content: 'Mock AI response',
         finishReason: 'stop',
+        usage: {
+          prompt_tokens: 0,
+          completion_tokens: 0,
+          total_tokens: 0,
+          prompt_tokens_details: { cached_tokens: 0 },
+          completion_tokens_details: { reasoning_tokens: 0 },
+        },
       });
 
       const response = await authenticatedTestClient(userToken)
@@ -613,6 +620,13 @@ describe('Chats', () => {
         model: 'direct-model',
         content: 'Direct completion response',
         finishReason: 'stop',
+        usage: {
+          prompt_tokens: 0,
+          completion_tokens: 0,
+          total_tokens: 0,
+          prompt_tokens_details: { cached_tokens: 0 },
+          completion_tokens_details: { reasoning_tokens: 0 },
+        },
       });
 
       const response = await authenticatedTestClient(userToken)

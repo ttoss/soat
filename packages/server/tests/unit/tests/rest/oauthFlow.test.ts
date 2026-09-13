@@ -490,7 +490,9 @@ describe('GET /.well-known/oauth-authorization-server (RFC 8414)', () => {
 
     expect(res.status).toBe(200);
     expect(typeof res.body.issuer).toBe('string');
-    expect(res.body.authorization_endpoint).toBe(`${res.body.issuer}/authorize`);
+    expect(res.body.authorization_endpoint).toBe(
+      `${res.body.issuer}/authorize`
+    );
     expect(res.body.token_endpoint).toBe(`${res.body.issuer}/token`);
     // Dynamic Client Registration (RFC 7591) is what lets an MCP client
     // onboard itself with no operator step — the self-serve half of the flow.

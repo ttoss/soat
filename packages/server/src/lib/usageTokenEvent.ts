@@ -8,6 +8,8 @@ import {
   computeComponentCostUsd,
   type TokenComponent,
 } from './priceCompute';
+import type { UsageTokens } from './usageTotals';
+import { readReportedUsage } from './usageTotals';
 
 /**
  * The shared primitives every `llm_tokens` event goes through: normalizing the
@@ -17,38 +19,11 @@ import {
  * a metered call is priced and persisted identically wherever it came from.
  */
 
-export type UsageTokens = {
-  inputTokens: number;
-  outputTokens: number;
-  cachedTokens: number;
-  cacheWriteTokens: number;
-  reasoningTokens: number;
-};
-
-/**
- * Normalizes an AI SDK `LanguageModelUsage` into token counts. Every field
- * defaults to 0 so a provider that omits a breakdown records 0 rather than
- * null — the counts stay summable.
- */
+/** Normalizes an AI SDK `LanguageModelUsage` into the five token counts. */
 export const extractUsageTokens = (
   usage: LanguageModelUsage | undefined
 ): UsageTokens => {
-  if (!usage) {
-    return {
-      inputTokens: 0,
-      outputTokens: 0,
-      cachedTokens: 0,
-      cacheWriteTokens: 0,
-      reasoningTokens: 0,
-    };
-  }
-  return {
-    inputTokens: usage.inputTokens ?? 0,
-    outputTokens: usage.outputTokens ?? 0,
-    cachedTokens: usage.inputTokenDetails?.cacheReadTokens ?? 0,
-    cacheWriteTokens: usage.inputTokenDetails?.cacheWriteTokens ?? 0,
-    reasoningTokens: usage.outputTokenDetails?.reasoningTokens ?? 0,
-  };
+  return readReportedUsage(usage);
 };
 
 /** The components that price against `input_tokens` when they have no row. */

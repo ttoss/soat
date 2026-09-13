@@ -1,5 +1,5 @@
 import type { SessionRow } from './sessionAccessor';
-import type { UsageTotals } from './usageReceipt';
+import type { UsageTotals } from './usageTotals';
 
 /**
  * The wire shape of a session.

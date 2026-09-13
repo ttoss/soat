@@ -516,6 +516,9 @@ describe('Usage', () => {
       expect(res.body.usage.cached_tokens).toBe(4);
       expect(res.body.usage.reasoning_tokens).toBe(7);
       expect('cost_usd' in res.body.usage).toBe(true);
+      // The partition the component rows store but the roll-up hid: the
+      // caller can check input = uncached + cached + cache_write itself.
+      expect(res.body.usage.uncached_input_tokens).toBe(6);
     });
 
     test('a session that has generated nothing reports zeros', async () => {
@@ -531,11 +534,41 @@ describe('Usage', () => {
       expect(res.body.usage).toEqual({
         cost_usd: null,
         input_tokens: 0,
+        uncached_input_tokens: 0,
         output_tokens: 0,
         cached_tokens: 0,
         cache_write_tokens: 0,
         reasoning_tokens: 0,
       });
+    });
+
+    test('a generation read carries what it cost', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/generations/${generationId}`
+      );
+      expect(res.status).toBe(200);
+      // The unit everyone asks "what did this cost" about, in the shape a
+      // session and a run already report.
+      expect(res.body.usage).toEqual({
+        cost_usd: null,
+        input_tokens: 10,
+        uncached_input_tokens: 6,
+        output_tokens: 20,
+        cached_tokens: 4,
+        cache_write_tokens: 0,
+        reasoning_tokens: 7,
+      });
+    });
+
+    test('the generation listing omits usage', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        '/api/v1/generations'
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.data.length).toBeGreaterThan(0);
+      for (const generation of res.body.data) {
+        expect(generation.usage).toBeUndefined();
+      }
     });
 
     test('the session listing omits usage', async () => {

@@ -24,6 +24,8 @@ import {
 } from './generationInputMessages';
 import { withPromptCacheBreakpoint } from './promptCaching';
 import { pinServerIdentityToolContext } from './toolContext';
+import type { ToolSurface } from './toolSurfaceMeasure';
+import { measureToolSurface } from './toolSurfaceMeasure';
 
 const log = createDebug('soat:generation');
 
@@ -31,6 +33,12 @@ export type GenerationContext = {
   typedAgent: TypedAgent;
   model: LanguageModel;
   resolvedTools: Record<string, Tool>;
+  /**
+   * What {@link GenerationContext.resolvedTools} costs to send, measured before
+   * the provider sees it. Stamped on the generation record; a resumed turn
+   * re-resolves the same surface and does not rewrite the figure.
+   */
+  toolSurface: ToolSurface;
   allMessages: Array<{ role: string; content: unknown }>;
   /**
    * The caller's messages after content resolution, without the agent's
@@ -237,6 +245,7 @@ export const buildGenerationContext = async (
     typedAgent,
     model,
     resolvedTools,
+    toolSurface: await measureToolSurface({ tools: resolvedTools }),
     allMessages,
     inputMessages: resolvedMessages,
     generationId,

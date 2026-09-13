@@ -50,7 +50,13 @@ describe('GET /api/v1/generations/:generation_id/transcript', () => {
           finish_reason: 'stop',
         },
       ],
-      usage: { prompt_tokens: 412, completion_tokens: 22, total_tokens: 434 },
+      usage: {
+        prompt_tokens: 412,
+        completion_tokens: 22,
+        total_tokens: 434,
+        prompt_tokens_details: { cached_tokens: 12 },
+        completion_tokens_details: { reasoning_tokens: 5 },
+      },
     };
   };
 
@@ -263,10 +269,16 @@ describe('GET /api/v1/generations/:generation_id/transcript', () => {
       tool_calls: [],
       tool_results: [],
     });
+    // The same shape every other altitude reports. `cost_usd` is null here by
+    // construction: the ledger prices one event per generation, not per step.
     expect(res.body.steps[0].usage).toEqual({
+      cost_usd: null,
       input_tokens: 412,
+      uncached_input_tokens: 400,
       output_tokens: 22,
-      total_tokens: 434,
+      cached_tokens: 12,
+      cache_write_tokens: 0,
+      reasoning_tokens: 5,
     });
 
     expect(res.body.output).toEqual({
@@ -275,6 +287,31 @@ describe('GET /api/v1/generations/:generation_id/transcript', () => {
     });
     expect(res.body.error).toBeNull();
     expect(res.body.content_redacted_at).toBeNull();
+  });
+
+  test("records what the turn's tool definitions cost to send", async () => {
+    stubResponses = [toolCallCompletion(), textCompletion(ASSISTANT_TEXT)];
+    const generation = await runGeneration({ agentId: toolAgentId });
+
+    const res = await asUser().get(`/api/v1/generations/${generation.id}`);
+    expect(res.status).toBe(200);
+    expect(res.body.tool_surface.tools).toBe(1);
+    expect(res.body.tool_surface.bytes).toBeGreaterThan(0);
+    expect(res.body.tool_surface.estimated_tokens).toBeGreaterThan(0);
+  });
+
+  test('an agent with no tools measures zero rather than reading unmeasured', async () => {
+    const generation = await runGeneration({});
+
+    const res = await asUser().get(`/api/v1/generations/${generation.id}`);
+    expect(res.status).toBe(200);
+    // Zero is a measurement. Null would mean the surface was never taken, and
+    // collapsing the two would make every pre-existing row look tool-less.
+    expect(res.body.tool_surface).toEqual({
+      tools: 0,
+      bytes: 0,
+      estimated_tokens: 0,
+    });
   });
 
   test('projects real tool calls and their results out of the stored steps', async () => {

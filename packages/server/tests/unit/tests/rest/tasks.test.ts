@@ -660,7 +660,9 @@ describe('Tasks', () => {
                 },
               },
             ],
-            transitions: [{ name: 'to_writing', from: ['idea'], to: 'writing' }],
+            transitions: [
+              { name: 'to_writing', from: ['idea'], to: 'writing' },
+            ],
           })
       ).body.id;
 

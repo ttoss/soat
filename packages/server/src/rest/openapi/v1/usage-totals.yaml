@@ -1,0 +1,58 @@
+openapi: 3.0.3
+info:
+  title: SOAT Usage Totals
+  version: 1.0.0
+  description: >-
+    The token and cost roll-up every usage surface reports. This file declares
+    no paths: it exists so one shape serves a step, a generation, a session, an
+    orchestration run, an aggregate bucket and a receipt, which is what lets a
+    client sum across altitudes with one type.
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+paths: {}
+components:
+  schemas:
+    UsageTotals:
+      type: object
+      description: >
+        Token counts and cost for one slice of the meter. Tokens and cost only:
+        a `compute_second` or `gb_day` meter is reported by the aggregate's
+        `components` array.
+
+
+        The three input dimensions partition the prompt —
+        `input_tokens` = `uncached_input_tokens` + `cached_tokens` +
+        `cache_write_tokens` — and are separate because they are separately
+        priced. Note that the `input_tokens` **component** on a usage event is
+        the uncached figure alone; here `input_tokens` is the whole prompt.
+      properties:
+        cost_usd:
+          type: number
+          nullable: true
+          description: >-
+            Sum of priced component costs; null when nothing in the slice was
+            priced. Always null at step altitude — the ledger prices one event
+            per generation at write time, and a price read back per step would
+            disagree with it after any price change.
+        input_tokens:
+          type: integer
+          description: Full prompt tokens, reconstructed from the components.
+        uncached_input_tokens:
+          type: integer
+          description: >-
+            Prompt tokens priced at the plain input rate — the prompt minus
+            cache reads and cache writes.
+        output_tokens:
+          type: integer
+        cached_tokens:
+          type: integer
+          description: Prompt tokens served from the provider's prompt cache.
+        cache_write_tokens:
+          type: integer
+          description: Prompt tokens written into the provider's prompt cache.
+        reasoning_tokens:
+          type: integer
+          description: >-
+            A non-billable subset of `output_tokens`, reported where the
+            provider breaks it out.

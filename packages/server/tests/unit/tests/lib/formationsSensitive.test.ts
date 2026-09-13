@@ -3,8 +3,8 @@ import {
   redactPlanChanges,
   redactSensitiveOutputs,
   redactTemplateSecrets,
-  sensitiveOutputNames,
   SENSITIVE_PLACEHOLDER,
+  sensitiveOutputNames,
 } from 'src/lib/formationsSensitive';
 import type { FormationTemplate } from 'src/lib/formationsTypes';
 
@@ -62,9 +62,9 @@ describe('redactTemplateSecrets', () => {
         X: { type: 'not_a_real_type', properties: { value: 'kept' } },
       },
     };
-    expect(redactTemplateSecrets({ template }).resources.X.properties.value).toBe(
-      'kept'
-    );
+    expect(
+      redactTemplateSecrets({ template }).resources.X.properties.value
+    ).toBe('kept');
   });
 
   test('tolerates a declaration with no properties bag', () => {
@@ -104,9 +104,7 @@ describe('redactPlanChanges', () => {
 
   test('leaves a change with no diff alone', () => {
     const [change] = redactPlanChanges({
-      changes: [
-        { logicalId: 'Key', resourceType: 'secret', action: 'delete' },
-      ],
+      changes: [{ logicalId: 'Key', resourceType: 'secret', action: 'delete' }],
     });
     expect(change.diff).toBeUndefined();
   });
@@ -147,7 +145,10 @@ describe('isSensitiveAttribute', () => {
 
   test('an unknown resource type is not', () => {
     expect(
-      isSensitiveAttribute({ resourceType: 'not_a_real_type', attrName: 'secret' })
+      isSensitiveAttribute({
+        resourceType: 'not_a_real_type',
+        attrName: 'secret',
+      })
     ).toBe(false);
   });
 });

@@ -1,6 +1,7 @@
 import { db } from '../db';
 import { orchestrationRuns } from './orchestrationAccessor';
 import { sumComponentCostUsd } from './priceCompute';
+import type { UsageTotals } from './usageTotals';
 
 const assocPublicId = (
   assoc: { publicId: string } | null | undefined
@@ -36,24 +37,6 @@ export type UsageReceiptLine = {
 export type UsageReceiptMeterTypeTotal = {
   meter_type: string;
   cost_usd: number | null;
-};
-
-/**
- * The token/cost roll-up every usage surface reports, in one shape.
- *
- * A receipt, an aggregate bucket and an orchestration run's spend are the same
- * figures; reported under three different field sets they could not be
- * summed by one client type. Tokens and cost only — a `compute_second` or
- * `gb_day` meter is the aggregate's `components` array, which is a decision of
- * its own rather than one this shape should settle.
- */
-export type UsageTotals = {
-  cost_usd: number | null;
-  input_tokens: number;
-  output_tokens: number;
-  cached_tokens: number;
-  cache_write_tokens: number;
-  reasoning_tokens: number;
 };
 
 /** A receipt is a response body, so the type is the wire shape. */
@@ -180,6 +163,7 @@ const assembleReceipt = (
   // cache writes.
   const cached = sumQuantity(lineItems, 'cached_tokens');
   const cacheWrite = sumQuantity(lineItems, 'cache_write_tokens');
+  const uncached = sumQuantity(lineItems, 'input_tokens');
   return {
     ...identity,
     currency: 'USD',
@@ -187,8 +171,8 @@ const assembleReceipt = (
     by_meter_type: groupByMeterType(lineItems),
     totals: {
       cost_usd: sumLineCosts(lineItems),
-      input_tokens:
-        sumQuantity(lineItems, 'input_tokens') + cached + cacheWrite,
+      input_tokens: uncached + cached + cacheWrite,
+      uncached_input_tokens: uncached,
       output_tokens: sumQuantity(lineItems, 'output_tokens'),
       cached_tokens: cached,
       cache_write_tokens: cacheWrite,

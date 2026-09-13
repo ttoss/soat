@@ -15,7 +15,7 @@ import { authenticatedTestClient, loginAs } from '../../testClient';
  * which is where a merge order or a builder that reads the wrong key would
  * show up.
  */
-describe('a builtin tool acts on the generation\'s project', () => {
+describe("a builtin tool acts on the generation's project", () => {
   let adminToken: string;
   let projectId: string;
   let otherProjectId: string;
@@ -110,7 +110,7 @@ describe('a builtin tool acts on the generation\'s project', () => {
     expect(listed).not.toContain(agentInOtherProject);
   });
 
-  test('omitting it reaches the generation\'s project all the same', async () => {
+  test("omitting it reaches the generation's project all the same", async () => {
     const listed = await listedAgentIds({}, resolveListAgents(projectId));
 
     expect(listed).toContain(agentInProject);
