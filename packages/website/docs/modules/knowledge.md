@@ -174,7 +174,7 @@ Without `project_id` there is no single project policy to compile, and the searc
 
 ### Retrieval baseline
 
-Ranking changes are gated on a versioned golden query set, not on judgement. `packages/server/tests/eval/knowledge/golden.json` seeds a corpus — module-doc sections, synthetic documents carrying identifiers that occur exactly once, and curated memory entries — then scores 52 labeled queries through `searchKnowledge`.
+Ranking changes are gated on a versioned golden query set, not on judgement. `packages/server/tests/eval/knowledge/golden.json` seeds a corpus — module-doc sections, synthetic documents carrying identifiers that occur exactly once, and curated memory entries — then scores 55 labeled queries through `searchKnowledge`.
 
 ```bash
 pnpm --filter @soat/server eval:knowledge                    # score and gate
@@ -185,13 +185,18 @@ Metrics are computed over **raw result positions** at `limit: 10`, so a document
 
 | Scope         | recall@5 | recall@10 |    MRR |
 | ------------- | -------: | --------: | -----: |
-| Overall       |   0.8846 |    0.9231 | 0.8397 |
+| Overall       |   0.8909 |    0.9273 | 0.8303 |
 | `exact_token` |   1.0000 |    1.0000 | 1.0000 |
 | `exact_name`  |   1.0000 |    1.0000 | 0.9667 |
 | `entity`      |   1.0000 |    1.0000 | 0.9583 |
+| `freshness`   |   1.0000 |    1.0000 | 0.6667 |
 | `semantic`    |   0.6000 |    0.7333 | 0.5111 |
 
-Those numbers are committed as `baseline.json`, and the run exits non-zero when recall@10 drops below it — overall or for any single kind. A ranking change lands with the diff of that file as its before/after table.
+Those numbers are committed as `baseline.json`, and the run exits non-zero when **recall@10 or MRR** drops below it — overall or for any single kind. A ranking change lands with the diff of that file as its before/after table.
+
+MRR is gated alongside recall because a change that only ever *demotes* a result cannot move recall at all: the [recency blend](#relevance-knobs) pushing a relevant entry from rank 1 to rank 2 still retrieves it. Position is what MRR measures. recall@5 is reported but not gated — it is recall@10 read at a tighter cutoff.
+
+The `freshness` kind is the recency blend's own fixture: each of its queries has one answer whose stale near-twin, seeded into a second memory container at a fixture `age_days` in the past, ranks above it while the blend is off. Its `0.6667` is that "blend disabled" figure — the default this ships with, not a defect.
 
 Two caveats on reading the absolute values:
 

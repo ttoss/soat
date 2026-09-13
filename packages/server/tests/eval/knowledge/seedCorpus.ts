@@ -19,7 +19,10 @@ export const CORPUS_TAGS: Record<string, string> = {
   corpus: 'knowledge-golden',
 };
 
+/** The container every fixture that names no `memory` of its own is written to. */
 const MEMORY_NAME = 'Knowledge golden corpus';
+
+const MS_PER_DAY = 86400000;
 
 export type SeededCorpus = {
   projectId: number;
@@ -52,6 +55,33 @@ const resolveMemoryId = async (args: { publicId: string }): Promise<number> => {
 };
 
 /**
+ * Backdates an entry's `updated_at` by the fixture's `age_days`.
+ *
+ * Raw SQL because there is no model-level way in: `writeMemoryEntry` takes no
+ * timestamp, and the column is managed, so Sequelize stamps the current time
+ * over an explicit `updatedAt` on every write path — `silent`, `fields` and a
+ * forced `changed()` on the instance included (all three were measured).
+ *
+ * The offset is applied against the run's own clock, so the corpus ages with it
+ * and the ranking a fixture produces does not depend on the day it is run.
+ */
+const backdateEntry = async (args: {
+  publicId: string;
+  ageDays: number;
+  seededAt: number;
+}) => {
+  await db.sequelize.query(
+    'UPDATE memory_entries SET updated_at = :updatedAt WHERE public_id = :publicId',
+    {
+      replacements: {
+        updatedAt: new Date(args.seededAt - args.ageDays * MS_PER_DAY),
+        publicId: args.publicId,
+      },
+    }
+  );
+};
+
+/**
  * Seeds the golden corpus into a project of its own, through the same lib
  * functions the product uses: `createDocument` chunks and embeds inline, and
  * ingestion never reaches the LLM boundary, so this exercises the real
@@ -80,18 +110,25 @@ export const seedGoldenCorpus = async (args: {
     documentKeys.set(created.id, fixture.key);
   }
 
-  const memory = await createMemory({
-    projectId,
-    name: MEMORY_NAME,
-    tags: CORPUS_TAGS,
-  });
-  const memoryId = await resolveMemoryId({ publicId: memory.id });
+  // One clock read for the whole corpus: two fixtures with the same `age_days`
+  // must land on the same timestamp however long seeding takes.
+  const seededAt = Date.now();
+  const memoryIds = new Map<string, number>();
+
+  const resolveContainer = async (name: string): Promise<number> => {
+    const existing = memoryIds.get(name);
+    if (existing !== undefined) return existing;
+    const created = await createMemory({ projectId, name, tags: CORPUS_TAGS });
+    const id = await resolveMemoryId({ publicId: created.id });
+    memoryIds.set(name, id);
+    return id;
+  };
 
   const memoryEntryKeys = new Map<string, string>();
 
   for (const fixture of args.golden.corpus.memories) {
     const written = await writeMemoryEntry({
-      memoryId,
+      memoryId: await resolveContainer(fixture.memory ?? MEMORY_NAME),
       content: fixture.content,
       tags: fixture.tags ?? null,
     });
@@ -102,6 +139,13 @@ export const seedGoldenCorpus = async (args: {
       throw new Error(
         `seed: memory fixture '${fixture.key}' was ${written.action} instead of created — it is too similar to an entry already seeded`
       );
+    }
+    if (fixture.age_days !== undefined) {
+      await backdateEntry({
+        publicId: written.entry.id,
+        ageDays: fixture.age_days,
+        seededAt,
+      });
     }
     memoryEntryKeys.set(written.entry.id, fixture.key);
   }
