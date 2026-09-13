@@ -58,6 +58,12 @@ type SearchKnowledgeArgs = {
   minSimilarity?: number;
   /** The `k` in `1 / (k + rank)`. See {@link resolveRrfK}. */
   rrfK?: number;
+  /**
+   * Half-life in days of the recency decay applied to **memory** results after
+   * fusion. `0` — the default — disables it. See
+   * {@link resolveRecencyHalfLifeDays}.
+   */
+  recencyHalfLifeDays?: number;
   limit?: number;
   paths?: string[];
   documentIds?: string[];
@@ -161,6 +167,11 @@ const orderedResultsOf = <T>(candidates: SearchCandidates<T>): T[] => {
   return candidates.ranked ? [] : candidates.results;
 };
 
+/** The recency blend's one input beyond the clock: which results carry a fact. */
+const isMemoryResult = (result: KnowledgeResult): boolean => {
+  return result.source_type === 'memory';
+};
+
 /**
  * Fusion identity. A chunk and an entry can never collide — the two id spaces
  * are prefixed — but keying on the discriminant as well says so in the code
@@ -250,6 +261,8 @@ export const searchKnowledge = async (
     ],
     keyOf: knowledgeKey,
     rrfK: args.rrfK,
+    isMemory: isMemoryResult,
+    recencyHalfLifeDays: args.recencyHalfLifeDays,
     limit,
   });
 };

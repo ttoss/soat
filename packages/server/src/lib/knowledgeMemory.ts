@@ -22,6 +22,8 @@ export type MemoryQueryConfig = {
   /** Cosine floor on the **vector** candidates only. */
   minSimilarity?: number;
   rrfK?: number;
+  /** Half-life in days of the recency decay; `0` disables it. */
+  recencyHalfLifeDays?: number;
   limit?: number;
 };
 
@@ -471,6 +473,11 @@ export const resolveMemorySearch = async (args: {
       return result.entry_id;
     },
     rrfK: args.config.rrfK,
+    // Every result of this entry point is a memory entry.
+    isMemory: () => {
+      return true;
+    },
+    recencyHalfLifeDays: args.config.recencyHalfLifeDays,
     limit: clampKnowledgeSearchLimit(args.config.limit),
   });
 };

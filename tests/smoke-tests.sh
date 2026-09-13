@@ -983,6 +983,22 @@ if [ "$DEPRECATED_IDS" != "$CURRENT_IDS" ]; then
 fi
 echo "Deprecated --min_score matches --min_similarity: OK"
 
+# The recency blend ships off, and 0 is its disable sentinel at either level,
+# so naming it explicitly must return exactly what omitting it returns.
+RECENCY_OFF_RESP=$($SOAT_CLI search-knowledge \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --query "SMOKE-SKU-4711" \
+  --min_similarity 0.9 \
+  --rrf_k 60 \
+  --recency_half_life_days 0 \
+  --limit 5)
+RECENCY_OFF_IDS=$(printf '%s\n' "$RECENCY_OFF_RESP" | jq -c '[.results[].chunk_id]')
+if [ "$RECENCY_OFF_IDS" != "$CURRENT_IDS" ]; then
+  echo "ERROR: --recency_half_life_days 0 changed the ranking: $RECENCY_OFF_IDS vs $CURRENT_IDS" >&2
+  exit 1
+fi
+echo "Disabled recency blend leaves the ranking untouched: OK"
+
 # 12b. Ingest a PDF file
 echo "--- Ingesting a PDF file ---"
 PDF_BASE64="JVBERi0xLjQKMSAwIG9iago8PC9UeXBlL0NhdGFsb2cvUGFnZXMgMiAwIFI+PgplbmRvYmoKMiAwIG9iago8PC9UeXBlL1BhZ2VzL0tpZHNbMyAwIFJdL0NvdW50IDE+PgplbmRvYmoKMyAwIG9iago8PC9UeXBlL1BhZ2UvUGFyZW50IDIgMCBSL01lZGlhQm94WzAgMCA2MTIgNzkyXS9Db250ZW50cyA0IDAgUi9SZXNvdXJjZXM8PC9Gb250PDwvRjEgNSAwIFI+Pj4+Pj4KZW5kb2JqCjQgMCBvYmoKPDwvTGVuZ3RoIDQ0Pj4Kc3RyZWFtCkJUIC9GMSAxMiBUZiAxMDAgNzAwIFRkIChIZWxsbyBXb3JsZCkgVGogRVQKZW5kc3RyZWFtCmVuZG9iago1IDAgb2JqCjw8L1R5cGUvRm9udC9TdWJ0eXBlL1R5cGUxL0Jhc2VGb250L0hlbHZldGljYT4+CmVuZG9iagp4cmVmCjAgNgowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMDkgMDAwMDAgbiAKMDAwMDAwMDA1NCAwMDAwMCBuIAowMDAwMDAwMTA1IDAwMDAwIG4gCjAwMDAwMDAyMTcgMDAwMDAgbiAKMDAwMDAwMDMwOCAwMDAwMCBuIAp0cmFpbGVyCjw8L1NpemUgNi9Sb290IDEgMCBSPj4Kc3RhcnR4cmVmCjM3MQolJUVPRg=="

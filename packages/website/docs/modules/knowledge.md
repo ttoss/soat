@@ -129,6 +129,7 @@ Each channel produces **one** ranking over the whole search, not one per store: 
 | --- | --- | --- |
 | `min_similarity` | none | Minimum raw cosine a **vector** candidate must reach to be ranked at all, applied before fusion |
 | `rrf_k` | `KNOWLEDGE_RRF_K`, itself `60` | The `k` in `1 / (k + rank)`; smaller weights the top of each ranking more heavily |
+| `recency_half_life_days` | `KNOWLEDGE_RECENCY_HALF_LIFE_DAYS`, itself `0` (off) | Half-life of a decay applied to **memory** results after fusion; `0` disables it |
 | `min_score` | none | **Deprecated** alias for `min_similarity`, removed in v2 |
 
 `min_similarity` filters cosine, never `score`. A floor on a fused value would be a rank cutoff wearing a similarity knob's clothes.
@@ -138,6 +139,38 @@ Each channel produces **one** ranking over the whole search, not one per store: 
 **The floor filters, it does not refill.** It runs over the `limit` rows each store's vector query already took, so `limit: 10` with `min_similarity: 0.8` returning three rows means seven of that store's ten nearest fell below the floor — not that the corpus holds only three above it. Raise `limit` to widen the candidate set the floor is applied to.
 
 `min_score` is the field's earlier name and keeps working unchanged. While ranking was single-signal `score` equaled `similarity_score`, so `min_score` has only ever filtered cosine — an existing value, per request or as `knowledge_config.min_score` on an agent, returns the same results it always did, plus the lexical hits the floor was never meant to exclude. `min_similarity` wins if both are sent.
+
+#### Recency blend
+
+A memory fact decays in usefulness; a paragraph of a manual does not. With a half-life set, each **memory** result's fused `score` is multiplied after fusion by
+
+```txt
+2 ^ (-age_in_days / recency_half_life_days)
+```
+
+so at equal relevance a fresh fact outranks a stale one. Document results are never touched, and `similarity_score` — raw cosine — is never touched either.
+
+- **`0` disables the blend, at either level.** Zero days is not a meaningful half-life, so the value is a switch rather than a lower bound. It is also the default at both levels, so an upgrade reorders nothing until someone turns it on. A request `recency_half_life_days: 0` turns off a deployment-wide decay for that one query — the archival search on a deployment that otherwise wants freshness.
+- **Days, as a float.** `0.5` is twelve hours; `30` stays readable.
+- **Age is read from `updated_at`, not `created_at`**, so a [consolidation merge](./memories.md#write-algorithm) that re-asserts a fact refreshes it instead of ageing out knowledge the system keeps re-confirming. Every write to the entry counts as a re-assertion — a `PATCH` of its content and a tag edit included. A tag-only edit therefore resets a fact's age to zero.
+- **An invalid value falls back rather than failing.** A negative or non-finite `recency_half_life_days` resolves to the deployment value, then to `0`, the same way `rrf_k` does.
+- **The clock is read once per response**, so two results in one answer are always ordered against the same instant.
+- **Retrieval only.** The memory write algorithm's duplicate shortlist reads raw cosine and is unaffected: an entry old enough for the blend to bury is still the duplicate a restatement of it merges into.
+
+**How much a half-life costs depends on `rrf_k`.** Fused scores are compressed — at `k = 60` the top ten sit between `1/61` = 0.0164 and `1/70` = 0.0143 — so a decay factor of `0.87` is already enough to move a rank-1 result behind the tenth. At a 30-day half-life that is **six days of age**. A smaller `k` widens the gaps and buys more room; a larger one less.
+
+**Measure before you enable it.** On the [retrieval baseline](#retrieval-baseline) corpus, whose memory fixtures carry ages of 3 to 400 days, every half-life from 7 days to 20 years lifts the `freshness` kind's MRR to 1.0 — and every one of them also costs the `entity` kind, where the answer is a memory entry competing against undecayed document chunks:
+
+| `KNOWLEDGE_RECENCY_HALF_LIFE_DAYS` | `freshness` MRR | `entity` recall@10 | `entity` MRR | overall MRR |
+| --- | --: | --: | --: | --: |
+| `0` (off) | 0.6667 | 1.0000 | 0.9583 | 0.8303 |
+| `30` | 1.0000 | 0.1667 | 0.1250 | 0.6667 |
+| `90` | 1.0000 | 0.4167 | 0.3500 | 0.7158 |
+| `365` | 1.0000 | 0.7500 | 0.5097 | 0.7506 |
+| `1825` | 1.0000 | 1.0000 | 0.7736 | 0.8082 |
+| `7300` | 1.0000 | 1.0000 | 0.9167 | 0.8394 |
+
+There is no value on that corpus at which the blend is free: the decay applies to memory results and not to the document chunks they share a result list with, so ageing a fact costs it ground against every chunk as well as against fresher facts. Pick a half-life from a run of the eval against **your** corpus, start long, and prefer scoping the search to `memory_ids` where freshness is what you are actually ranking on.
 
 ### Ranking is approximate
 

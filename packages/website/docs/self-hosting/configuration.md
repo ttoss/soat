@@ -243,6 +243,18 @@ A tool server that does not respond within `SOAT_TOOL_CALL_TIMEOUT_MS` (default 
 
 `TOOL_CONTEXT_HEADER_PREFIX` renames the [context headers](../advanced/tool-context.md#configuring-the-header-prefix) a deployment emits (e.g. to hide the SOAT name from third-party tool providers). Prepended verbatim, so include the trailing `-` (`X-Acme-Context-` + `userId` → `X-Acme-Context-userId`). Must be a valid HTTP header-name prefix (letters, digits and ``!#$%&'*+-.^_`|~``); an invalid value fails the tool call with an error naming the variable. Empty or unset keeps the default; the prefix cannot be removed, since an unprefixed key could land on `Authorization`. Changing it breaks every tool endpoint already reading these headers: set it before wiring up tools, or update both sides together.
 
+### Knowledge search
+
+Retrieval defaults for [knowledge search](../modules/knowledge.md). Every one of them is also a per-request field, and the request wins; an invalid value falls back to the variable, then to the default, rather than failing the search.
+
+| Variable                             | Default  | Description                                                                                                       |
+| ------------------------------------ | -------- | ----------------------------------------------------------------------------------------------------------------- |
+| `KNOWLEDGE_RRF_K`                    | `60`     | The `k` in the reciprocal rank fusion term `1 / (k + rank)`; smaller weights the top of each ranked list more heavily |
+| `KNOWLEDGE_RECENCY_HALF_LIFE_DAYS`   | `0`      | Half-life in days of a recency decay applied to **memory** results after fusion. `0` disables the blend            |
+| `KNOWLEDGE_TEXT_SEARCH_CONFIG`       | `simple` | PostgreSQL text search configuration backing the lexical channel (e.g. `english`, `portuguese`)                    |
+
+`KNOWLEDGE_RECENCY_HALF_LIFE_DAYS` ships at `0`, so nothing decays until it is set and an upgrade reorders nothing. It accepts fractions (`0.5` is twelve hours), reads age from an entry's `updated_at`, and never touches document results. How many ranks a given half-life costs depends on `KNOWLEDGE_RRF_K`, and on a corpus mixing documents and memories it can cost more than it looks — measure it against your own data before enabling it. See [Recency blend](../modules/knowledge.md#recency-blend).
+
 ### Embeddings
 
 [Ollama](https://ollama.com) by default; [OpenAI](https://platform.openai.com/docs/guides/embeddings) and [Amazon Bedrock](https://docs.aws.amazon.com/bedrock/latest/userguide/titan-embedding-models.html) are supported.
