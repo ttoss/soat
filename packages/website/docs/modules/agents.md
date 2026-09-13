@@ -246,6 +246,8 @@ For dynamic control, pause on `client` tools and pass overrides with the tool ou
 
 **Priority** (highest → lowest): next-step overrides → `step_rules` for that step → `defaults` → agent config.
 
+**With [`prompt_caching`](#prompt-caching), prefer `tool_choice`.** A rule naming a tool narrows the active set to it by default; on a caching agent it does not, since the tool block sits inside the cached prefix and `tool_choice` already forces the call. An `active_tool_ids` you write always narrows — and costs that step's prefix.
+
 ### Stop Conditions
 
 `stop_conditions` adds stops on top of `max_steps`, each bounding one axis:
@@ -371,6 +373,7 @@ Consequences worth knowing before turning it on:
 - **An agent with no `instructions` caches nothing.** There is no system block to mark, and marking the first user message instead would cache a prefix containing that turn's own question.
 - **Who honors it.** Anthropic, and Anthropic models served through Bedrock, cache by explicit breakpoint and act on the mark. Providers that cache automatically (OpenAI) and providers that do not cache at all are unaffected — the mark travels as provider-specific metadata each one either reads or ignores, so a `model_route` that fails over between them needs no per-provider configuration.
 - **What you get back.** Cache reads are metered as `cached_tokens` and cache writes as `cache_write_tokens` — separate components, because they are separately priced. See [Usage — Token Components](./usage.md#token-components).
+- **`active_tool_ids` on a step rule breaks the prefix.** The tool block is inside the cached prefix, so a [step rule](#step-rules) that changes the active set makes that step write a new cache entry, and the step after it — back to the full set — write another: the prefix is bought twice to save it once. Narrowing by `active_tool_ids` is a capability restriction and is honored anyway; a rule that only forces a tool by name does not narrow on a caching agent, because `tool_choice` already obliges the call.
 
 Nothing else about the turn changes: the same messages, tools and instructions are sent, and the model sees an identical prompt.
 

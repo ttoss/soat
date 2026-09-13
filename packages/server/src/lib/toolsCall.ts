@@ -7,6 +7,7 @@ import {
 import { executeSoatTool } from './agentToolResolverExternalTools';
 import { buildMcpToolExecute } from './agentToolResolverMcp';
 import { applyToolOutputMapping } from './jsonLogicMapping';
+import { McpToolError } from './mcpProtocol';
 import type { PipelineStepCaller } from './pipelineTools';
 import { runPipeline } from './pipelineTools';
 import { resolveSecretRefsInString } from './secrets';
@@ -24,6 +25,15 @@ import {
 } from './toolTemplates';
 
 const noopLogToolCallingError = () => {};
+
+const toMcpToolDomainError = (error: unknown): DomainError | null => {
+  if (!(error instanceof McpToolError)) return null;
+  // Meta keys are snake_case to match the external REST contract.
+  return new DomainError('MCP_TOOL_ERROR', error.message, {
+    mcp_tool: error.toolName,
+    mcp_url: error.url,
+  });
+};
 
 // ── Shared Tool Definition Types ─────────────────────────────────────────────
 
@@ -237,7 +247,11 @@ export const callMcpTool = async (
     mcpToolName: action,
     // Presets are merged by `callResolvedTool` on this path, already resolved.
     logToolCallingError: noopLogToolCallingError,
-  })(mergedInput);
+    // A tool the server itself reported as failed is a `502`, not the `500` an
+    // unmapped throw would be: the call reached the server and it answered.
+  })(mergedInput).catch((error: unknown) => {
+    throw toMcpToolDomainError(error) ?? error;
+  });
 };
 
 // ── Resolved Tool Execution ───────────────────────────────────────────────

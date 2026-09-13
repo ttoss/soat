@@ -49,6 +49,8 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'Delete stored content — files, documents, or memory entries — until the project is back under the cap; `meta.current_bytes` and `meta.limit` say by how much. Waiting does not help: a storage quota caps a stored total, not a rate. Alternatively raise the cap with `PATCH /api/v1/quotas/{quota_id}`, or switch it to `monitor` mode to stop blocking while you measure.',
   TOOL_EGRESS_BLOCKED:
     'The deployment only makes outbound requests to publicly routable addresses, and this destination is not one — `meta.tool_url` names it and `meta.tool_address` the address it resolved to. Point the tool, webhook or provider `base_url` at a public host, or have the operator list this destination in TOOL_EGRESS_ALLOWED_HOSTS. It is not a permissions problem: no policy grants it.',
+  MCP_TOOL_ERROR:
+    'The MCP server answered the call with a failure rather than a result — `meta.mcp_tool` names the tool and `meta.mcp_url` the server. The message carries what the server said; fix the arguments or the server-side condition it names, then retry. The call reached the server, so this is not a connectivity or allowlist problem.',
   AI_PROVIDER_ERROR:
     'The upstream model provider failed, not this server. Check the provider credential and the account behind it (credits, rate limits, model access), then retry with backoff.',
   AI_PROVIDER_MISCONFIGURED:

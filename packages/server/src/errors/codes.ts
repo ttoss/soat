@@ -435,6 +435,11 @@ export const ERROR_CODES = {
     description:
       'An http-type tool call returned a non-2xx response. The error `meta` carries the real upstream status code, response body, URL, and method.',
   },
+  MCP_TOOL_ERROR: {
+    httpStatus: 502,
+    description:
+      'An mcp-type tool call reached the MCP server and came back a failure: a JSON-RPC `error` member, or a result the server flagged `isError`. The error `meta` carries the tool name and the server URL. Distinct from `TOOL_HTTP_ERROR`, which is the transport itself refusing the call.',
+  },
   TOOL_AUTH_FAILED: {
     httpStatus: 502,
     description:
