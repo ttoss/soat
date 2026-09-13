@@ -26,7 +26,6 @@ export type {
   UsageReceiptComponent,
   UsageReceiptLine,
   UsageReceiptMeterTypeTotal,
-  UsageTotals,
 } from './usageReceipt';
 export {
   getOrchestrationRunReceipt,
@@ -46,8 +45,8 @@ export {
   USAGE_THRESHOLD_METRICS,
   USAGE_THRESHOLD_WINDOWS,
 } from './usageThresholds';
-export type { UsageTokens } from './usageTokenEvent';
 export { extractUsageTokens } from './usageTokenEvent';
+export type { UsageTokens, UsageTotals } from './usageTotals';
 
 export type PersistedUsageComponent = {
   component: string;

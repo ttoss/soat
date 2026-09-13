@@ -246,6 +246,14 @@ export class Generation extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare pendingState: Record<string, unknown> | null;
 
+  // What the turn's tool definitions cost to send (`toolSurfaceMeasure.ts`).
+  // Three integers and no text, so unlike `inputMessages` it is not content: it
+  // survives a purge, which is what keeps it readable on a zero-retention
+  // project. Written once at turn start; a resumed turn re-resolves the same
+  // surface and does not rewrite it.
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare toolSurface: Record<string, unknown> | null;
+
   // Caller-owned. The server writes nothing here, so there is no reserved-key
   // list to maintain and no key a caller sets that reaches platform state.
   @Column({ type: DataType.JSONB, allowNull: true })

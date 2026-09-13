@@ -1384,7 +1384,7 @@ components:
             $ref: '#/components/schemas/NodeExecution'
         usage:
           allOf:
-            - $ref: '#/components/schemas/UsageTotals'
+            - $ref: './usage-totals.yaml#/components/schemas/UsageTotals'
           description: >-
             What the run cost: token counts and `cost_usd` summed across every
             metered generation it produced **and every run it started** through
@@ -1400,7 +1400,7 @@ components:
             carry a `node_id` from one graph only.
         usage_own:
           allOf:
-            - $ref: '#/components/schemas/UsageTotals'
+            - $ref: './usage-totals.yaml#/components/schemas/UsageTotals'
           description: >-
             The same roll-up restricted to **this run's own nodes**, excluding
             every nested run it started. Equal to `usage` for a run with no
@@ -1441,35 +1441,6 @@ components:
         updated_at:
           type: string
           format: date-time
-
-    UsageTotals:
-      type: object
-      description: >
-        The token and cost figures every usage surface reports, in one shape —
-        a receipt's `totals`, an aggregate bucket, and an orchestration run's
-        `usage` / `usage_own`, so one client type sums all three. Tokens and
-        cost only: a `compute_second` or `gb_day` meter is reported by the
-        aggregate's `components` array.
-      properties:
-        cost_usd:
-          type: number
-          nullable: true
-          description: Sum of priced component costs; null when nothing was priced
-        input_tokens:
-          type: integer
-          description: >-
-            Full prompt tokens — uncached input + `cached_tokens` +
-            `cache_write_tokens` — reconstructed from components.
-        output_tokens:
-          type: integer
-        cached_tokens:
-          type: integer
-          description: Prompt tokens served from the provider's prompt cache.
-        cache_write_tokens:
-          type: integer
-          description: Prompt tokens written into the provider's prompt cache.
-        reasoning_tokens:
-          type: integer
 
     NodeExecution:
       type: object

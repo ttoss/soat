@@ -1,7 +1,7 @@
 import { models } from '@soat/postgresdb';
 import { App, Router } from '@ttoss/http-server';
 import { APICallError } from 'ai';
-import { DomainError, docsUrlFor, resolutionFor } from 'src/errors';
+import { docsUrlFor, DomainError, resolutionFor } from 'src/errors';
 import { errorLoggerMiddleware } from 'src/middleware/errorLogger';
 import request from 'supertest';
 

@@ -357,6 +357,7 @@ chatsRouter.post('/chat/completions', async (ctx: Context) => {
           finish_reason: result.finishReason,
         },
       ],
+      usage: result.usage,
     };
   } catch (error) {
     if (error instanceof Error && error.message === 'AI provider not found') {

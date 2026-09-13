@@ -557,6 +557,57 @@ components:
             skipped:
               type: integer
               description: Number of candidates skipped (e.g. duplicates)
+        tool_surface:
+          type: object
+          nullable: true
+          description: >-
+            What this turn's tool definitions cost to send — the one part of a
+            prompt no provider reports and no caller can derive, since the tool
+            block is a constant inside the reported totals and identical on
+            every step.
+
+
+            Null when the surface was never measured: a generation from before
+            the field, or a path that resolves none. That is **not** what
+            `tools: 0` means, which is a measured agent with nothing bound.
+
+
+            Not a meter. `estimated_tokens` is an estimate and is never
+            priced — `usage` and the usage events are the billing record.
+          properties:
+            tools:
+              type: integer
+              description: >-
+                Tools resolved for the turn, before any per-step narrowing by
+                `step_rules`.
+              example: 61
+            bytes:
+              type: integer
+              description: >-
+                Serialized length of those definitions — name, description and
+                input schema — in canonical JSON, not the provider's wire
+                format. Exact, and comparable across providers, which is what
+                makes two agents' surfaces worth comparing.
+              example: 152161
+            estimated_tokens:
+              type: integer
+              description: >-
+                `bytes` over a measured bytes-per-token ratio. An estimate, and
+                named one.
+              example: 45148
+        usage:
+          allOf:
+            - $ref: './usage-totals.yaml#/components/schemas/UsageTotals'
+          nullable: true
+          description: >-
+            What the turn cost: token counts and `cost_usd` for every event
+            metered against this generation. Present on the single-generation
+            read; omitted from the listing, where it would be a query per row.
+
+
+            Null when nothing has been metered yet — a turn still in flight, or
+            one whose metering failed. A turn is metered once at the end, so
+            this is one event's figures in the ordinary case.
         routing:
           type: object
           nullable: true
@@ -661,23 +712,6 @@ components:
             team: payments
             ticket_id: OPS-4821
 
-    TranscriptUsage:
-      type: object
-      description: >
-        Token counts for one step. A field is null when the provider did not
-        report it — null rather than 0, so "not reported" stays distinguishable
-        from "none used".
-      properties:
-        input_tokens:
-          type: integer
-          nullable: true
-        output_tokens:
-          type: integer
-          nullable: true
-        total_tokens:
-          type: integer
-          nullable: true
-
     TranscriptToolCall:
       type: object
       description: One tool call the model made during a step.
@@ -763,9 +797,14 @@ components:
             $ref: '#/components/schemas/TranscriptToolResult'
         usage:
           allOf:
-            - $ref: '#/components/schemas/TranscriptUsage'
+            - $ref: './usage-totals.yaml#/components/schemas/UsageTotals'
           nullable: true
-          description: Null when the step recorded no usage.
+          description: >-
+            What this step reported, in the shape every usage surface uses.
+            Null when the step recorded no usage at all; within a step a
+            dimension the provider did not report reads 0. `cost_usd` is always
+            null here — the ledger prices one event per generation, so a
+            per-step price would disagree with it after any price change.
 
     GenerationTranscript:
       type: object

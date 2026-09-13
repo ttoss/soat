@@ -155,6 +155,7 @@ const resolveContextAndRecord = async (args: {
     // The turn's own input, so a completed generation stays promotable into an
     // eval dataset item long after the request that produced it is gone.
     inputMessages: ctx.inputMessages,
+    toolSurface: ctx.toolSurface,
   }).catch((error) => {
     log(
       'resolveContextAndRecord: failed to create generation record generationId=%s error=%s',

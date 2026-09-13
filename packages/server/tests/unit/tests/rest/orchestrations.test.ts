@@ -2771,7 +2771,10 @@ describe('Orchestrations', () => {
       expect(res.status).toBe(200);
       expect(
         res.body.data.every(
-          (r: { status: string; parent_orchestration_run_id: string | null }) => {
+          (r: {
+            status: string;
+            parent_orchestration_run_id: string | null;
+          }) => {
             return (
               r.status === 'succeeded' && r.parent_orchestration_run_id === null
             );

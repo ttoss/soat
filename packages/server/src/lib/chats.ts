@@ -22,6 +22,7 @@ import {
 } from './modelRoutes';
 import { paginatedList, type PaginatedResult } from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
+import { openAiUsageFromReported, readReportedUsage } from './usageTotals';
 
 /**
  * A completion message on the wire. `system` is deliberately absent: system
@@ -350,7 +351,12 @@ const prepareChatCompletion = async (args: ChatCompletionArgs) => {
 
 export const createChatCompletion = async (
   args: ChatCompletionArgs
-): Promise<{ model: string; content: string; finishReason: string }> => {
+): Promise<{
+  model: string;
+  content: string;
+  finishReason: string;
+  usage: ReturnType<typeof openAiUsageFromReported>;
+}> => {
   const { fallbackModel, instructions, messages, resolvedModel } =
     await prepareChatCompletion(args);
 
@@ -371,6 +377,7 @@ export const createChatCompletion = async (
     model,
     content: result.text,
     finishReason: result.finishReason,
+    usage: openAiUsageFromReported(readReportedUsage(result.usage)),
   };
 };
 

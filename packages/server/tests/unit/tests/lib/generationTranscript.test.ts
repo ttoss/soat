@@ -57,7 +57,15 @@ describe('projectTranscriptSteps', () => {
           },
         ],
         tool_results: [],
-        usage: { input_tokens: 412, output_tokens: 22, total_tokens: 434 },
+        usage: {
+          cost_usd: null,
+          input_tokens: 412,
+          uncached_input_tokens: 412,
+          output_tokens: 22,
+          cached_tokens: 0,
+          cache_write_tokens: 0,
+          reasoning_tokens: 0,
+        },
       },
     ]);
   });
@@ -198,8 +206,10 @@ describe('projectTranscriptSteps', () => {
     expect(projectTranscriptSteps(steps)[0].usage).toBeNull();
   });
 
-  test('defaults missing token counts to null rather than 0', () => {
-    // A provider that omits a breakdown must not read as "used no tokens".
+  test('a dimension the provider omitted reads 0, not null', () => {
+    // The step reports the shape every other altitude reports, so a dimension
+    // is a number. "Nothing reported at all" is still distinguishable — the
+    // whole `usage` object is null then (asserted above).
     const steps = [
       {
         finishReason: 'stop',
@@ -209,9 +219,40 @@ describe('projectTranscriptSteps', () => {
     ];
 
     expect(projectTranscriptSteps(steps)[0].usage).toEqual({
+      cost_usd: null,
       input_tokens: 10,
-      output_tokens: null,
-      total_tokens: null,
+      uncached_input_tokens: 10,
+      output_tokens: 0,
+      cached_tokens: 0,
+      cache_write_tokens: 0,
+      reasoning_tokens: 0,
+    });
+  });
+
+  test('carries the cache and reasoning dimensions the meter already recorded', () => {
+    const steps = [
+      {
+        finishReason: 'stop',
+        content: [],
+        usage: {
+          inputTokens: 412,
+          outputTokens: 22,
+          inputTokenDetails: { cacheReadTokens: 12, cacheWriteTokens: 100 },
+          outputTokenDetails: { reasoningTokens: 5 },
+        },
+      },
+    ];
+
+    // Read straight out of the stored step, so this works on generations
+    // recorded long before the field was projected.
+    expect(projectTranscriptSteps(steps)[0].usage).toEqual({
+      cost_usd: null,
+      input_tokens: 412,
+      uncached_input_tokens: 300,
+      output_tokens: 22,
+      cached_tokens: 12,
+      cache_write_tokens: 100,
+      reasoning_tokens: 5,
     });
   });
 

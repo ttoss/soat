@@ -675,7 +675,7 @@ components:
           example: 7
         usage:
           allOf:
-            - $ref: '#/components/schemas/UsageTotals'
+            - $ref: './usage-totals.yaml#/components/schemas/UsageTotals'
           description: >-
             What the session's generations cost: token counts and `cost_usd`
             summed across every metered generation dispatched through it.
@@ -689,35 +689,6 @@ components:
             platform does around a session without a generation of its own (a
             memory extraction pass, for instance) is metered on the project, not
             here.
-
-    UsageTotals:
-      type: object
-      description: >
-        The token and cost figures every usage surface reports, in one shape —
-        a receipt's `totals`, an aggregate bucket, and an orchestration run's
-        `usage` / `usage_own`, so one client type sums all three. Tokens and
-        cost only: a `compute_second` or `gb_day` meter is reported by the
-        aggregate's `components` array.
-      properties:
-        cost_usd:
-          type: number
-          nullable: true
-          description: Sum of priced component costs; null when nothing was priced
-        input_tokens:
-          type: integer
-          description: >-
-            Full prompt tokens — uncached input + `cached_tokens` +
-            `cache_write_tokens` — reconstructed from components.
-        output_tokens:
-          type: integer
-        cached_tokens:
-          type: integer
-          description: Prompt tokens served from the provider's prompt cache.
-        cache_write_tokens:
-          type: integer
-          description: Prompt tokens written into the provider's prompt cache.
-        reasoning_tokens:
-          type: integer
 
     ForkSessionRequest:
       type: object

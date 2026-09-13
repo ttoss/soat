@@ -1,4 +1,5 @@
 import type { db } from '../db';
+import type { UsageTotals } from './usageTotals';
 
 export type PersistedGeneration = {
   id: string;
@@ -26,6 +27,14 @@ export type PersistedGeneration = {
   source: string | null;
   routing: Record<string, unknown> | null;
   extraction: Record<string, unknown> | null;
+  /**
+   * What the turn cost. Present on the single read, absent from the listing:
+   * it is a second query per generation, and a page of them would be a page of
+   * queries. Undefined is "not asked for"; null is "asked for, nothing metered
+   * yet" — a turn still in flight, or one whose metering failed.
+   */
+  usage?: UsageTotals | null;
+  tool_surface: Record<string, unknown> | null;
   metadata: Record<string, unknown> | null;
   content_redacted_at: Date | null;
   content_redacted_by_principal_type: string | null;
@@ -81,6 +90,7 @@ export const mapGeneration = (
     source: gen.source,
     routing: gen.routing,
     extraction: gen.extraction,
+    tool_surface: gen.toolSurface,
     // Caller-owned bag, verbatim. `pendingState` has no entry here at all.
     metadata: gen.metadata,
     content_redacted_at: gen.contentRedactedAt,
@@ -89,4 +99,19 @@ export const mapGeneration = (
     created_at: gen.createdAt,
     updated_at: gen.updatedAt,
   };
+};
+
+/**
+ * The same record with its usage roll-up attached.
+ *
+ * A second function rather than an optional argument on `mapGeneration`: the
+ * branch cost that mapper its complexity budget, and point-free
+ * `rows.map(mapGeneration)` on a listing would otherwise hand it the array
+ * index as the roll-up.
+ */
+export const mapGenerationWithUsage = (
+  gen: Parameters<typeof mapGeneration>[0],
+  usage: UsageTotals | null
+): PersistedGeneration => {
+  return { ...mapGeneration(gen), usage };
 };

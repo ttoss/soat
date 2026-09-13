@@ -186,6 +186,30 @@ A purged generation returns the skeleton even though the trace's steps object ma
 exist (see the warning under [Content Purge](#content-purge)); the redaction marker
 governs the whole transcript.
 
+### What the turn cost, and what it cost to ask
+
+Two different figures, deliberately kept apart.
+
+`usage` is what the provider **reported and was billed for** — token counts and `cost_usd`, in the [shape every usage surface uses](./usage.md#one-shape-at-every-altitude). Present on the single-generation read, omitted from the listing (it is a query per row), and `null` until the turn is metered.
+
+`tool_surface` is what SOAT **sent**: how many tool definitions the turn carried and how large they were.
+
+| Field | Meaning |
+|---|---|
+| `tools` | Tools resolved for the turn, before any per-step narrowing by [`step_rules`](./agents.md#step-rules) |
+| `bytes` | Serialized length of the definitions — name, description, input schema — in canonical JSON, not the provider's wire format, so two agents are comparable |
+| `estimated_tokens` | `bytes` over a measured bytes-per-token ratio |
+
+It answers the one question the meter cannot. A provider reports totals, and the tool block is a constant inside them — byte-identical on every step of a turn — so it cannot be recovered by differencing steps either. An agent bound to a large MCP catalogue can spend most of its prompt describing tools it never calls, and without this nothing says so.
+
+:::warning[`tool_surface` is not a meter]
+`estimated_tokens` is an estimate and is never priced. `usage` and the [usage events](./usage.md) are the billing record.
+:::
+
+`null` means the surface was never measured — a generation from before the field, or a path that resolves none. That is **not** `{"tools": 0}`, which is a measured agent with nothing bound. Reading the two as one would make every older row look tool-less.
+
+Being three integers and no text, `tool_surface` is not content: it survives a [purge](#content-purge) and is written even on a zero-retention agent.
+
 ### Content Purge
 
 [`DELETE /generations/{generation_id}/content`](/docs/api/generations/purge-generation-content) clears the generation's content — `metadata`, `error`, `extraction`, the recorded input messages, and the internal recovery state of a paused run — and stamps `content_redacted_at`. It requires the `generations:PurgeGenerationContent` action.

@@ -529,3 +529,33 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ChatCompletionChoice'
+        usage:
+          type: object
+          description: >-
+            What the call reported, in OpenAI's field names rather than the
+            `UsageTotals` every other surface uses: this endpoint exists so an
+            OpenAI SDK can target SOAT by base URL alone, and that SDK reads
+            these names. A dimension the provider did not report is 0.
+
+
+            A completion is metered like any other call — see
+            [usage](/docs/modules/usage). This is the provider's report, not
+            the priced ledger line.
+          properties:
+            prompt_tokens:
+              type: integer
+              description: Full prompt tokens, cache reads included.
+            completion_tokens:
+              type: integer
+            total_tokens:
+              type: integer
+            prompt_tokens_details:
+              type: object
+              properties:
+                cached_tokens:
+                  type: integer
+            completion_tokens_details:
+              type: object
+              properties:
+                reasoning_tokens:
+                  type: integer

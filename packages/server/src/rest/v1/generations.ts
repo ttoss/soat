@@ -88,6 +88,7 @@ generationsRouter.get('/generations/:generation_id', async (ctx: Context) => {
   const generation = await getGeneration({
     publicId: ctx.params.generation_id,
     projectIds,
+    includeUsage: true,
   });
 
   if (!generation) {

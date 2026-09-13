@@ -26,10 +26,8 @@ import {
   type PaginatedResult,
   resolvePagination,
 } from './pagination';
-import {
-  getOrchestrationRunUsageRollups,
-  type UsageTotals,
-} from './usageReceipt';
+import { getOrchestrationRunUsageRollups } from './usageReceipt';
+import type { UsageTotals } from './usageTotals';
 
 const log = createDebug('soat:orchestrations');
 
