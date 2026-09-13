@@ -2050,6 +2050,141 @@ describe('resolveAgentTools - mcp and soat types', () => {
     });
   });
 
+  /**
+   * A binding that resolved to nothing is invisible from every read surface
+   *: the generation completes, `warnings` is empty, and the only trace
+   * is an input-token count nobody monitors. These pin the answer the feed
+   * gives for each way a listing can come back unusable.
+   */
+  const createMcpTool = async (name: string) => {
+    const res = await authenticatedTestClient(adminToken)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name,
+        type: 'mcp',
+        description: 'Test MCP server',
+        mcp: { url: 'http://localhost:19999/mcp' },
+      });
+    return res.body.id as string;
+  };
+
+  const resolveAndWaitForFailure = async (args: {
+    toolId: string;
+    response: Response;
+  }) => {
+    jest.spyOn(global, 'fetch').mockResolvedValueOnce(args.response);
+
+    const project = await db.Project.findOne({
+      where: { publicId: projectId },
+    });
+
+    const tools = await resolveAgentTools({
+      toolIds: [args.toolId],
+      activity: {
+        projectId: project!.id as number,
+        agentId: 'agent_resolverfail01',
+        generationId: 'gen_resolverfail01',
+      },
+    });
+
+    const entry = await waitForActivityEntry({
+      projectId: project!.id as number,
+      kind: 'tool_resolution_failed',
+      refId: args.toolId,
+    });
+
+    return { tools, entry };
+  };
+
+  // JSON-RPC puts an error in a 200 body. Read as `result?.tools ?? []` it is
+  // indistinguishable from a server that exposes nothing.
+  test('a tools/list JSON-RPC error at HTTP 200 is recorded, not read as an empty catalogue', async () => {
+    const toolId = await createMcpTool('mcpJsonRpcError');
+
+    const { tools, entry } = await resolveAndWaitForFailure({
+      toolId,
+      response: new Response(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          error: { code: -32600, message: 'Server not initialized' },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      ),
+    });
+
+    expect(Object.keys(tools)).toHaveLength(0);
+    expect(entry).toBeTruthy();
+    expect(entry!.detail).toMatchObject({ toolType: 'mcp' });
+    expect(String((entry!.detail as { reason: string }).reason)).toContain(
+      'Server not initialized'
+    );
+  });
+
+  // Covers a 200 whose body is any shape but a legacy `tools/list` result —
+  // a bare `{ tools: [...] }`, a `result` without `tools`, anything.
+  test('a tools/list 200 carrying no result.tools array is recorded', async () => {
+    const toolId = await createMcpTool('mcpNoResultTools');
+
+    const { tools, entry } = await resolveAndWaitForFailure({
+      toolId,
+      response: new Response(JSON.stringify({ tools: [{ name: 'search' }] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    });
+
+    expect(Object.keys(tools)).toHaveLength(0);
+    expect(entry).toBeTruthy();
+  });
+
+  // A well-formed listing of zero tools is not a transport failure, but the
+  // turn still runs without the tools the agent is configured to have — which
+  // is the thing that must not be silent.
+  test('an mcp server that lists no tools is recorded', async () => {
+    const toolId = await createMcpTool('mcpEmptyCatalogue');
+
+    const { tools, entry } = await resolveAndWaitForFailure({
+      toolId,
+      response: new Response(
+        JSON.stringify({ jsonrpc: '2.0', id: 1, result: { tools: [] } }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      ),
+    });
+
+    expect(Object.keys(tools)).toHaveLength(0);
+    expect(entry).toBeTruthy();
+  });
+
+  // The resolver's own `Accept` invites `text/event-stream`, so a server that
+  // takes it up is answering correctly and must be read, not dropped.
+  test('an SSE-framed tools/list response resolves its tools', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValueOnce(
+      new Response(
+        `event: message\ndata: ${JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          result: {
+            tools: [
+              {
+                name: 'sseSearch',
+                description: 'Search tool',
+                inputSchema: { type: 'object', properties: {} },
+              },
+            ],
+          },
+        })}\n\n`,
+        { status: 200, headers: { 'content-type': 'text/event-stream' } }
+      )
+    );
+
+    const toolId = await createMcpTool('mcpSseServer');
+    const tools = await resolveAgentTools({ toolIds: [toolId] });
+
+    expect(tools).toHaveProperty('sseSearch');
+  });
+
   test('http tool execute appends query params with & when URL already has ?', async () => {
     const urlWithQueryRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/tools')
