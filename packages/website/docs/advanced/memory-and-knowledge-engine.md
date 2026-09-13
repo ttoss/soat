@@ -157,11 +157,13 @@ One embedding model serves the deployment (`EMBEDDING_PROVIDER` — `ollama`, `o
 
 1. **Decide sources from filters.** Document search runs when `query`, `document_paths`, or `document_ids` is present; memory search runs when `memory_ids` is present. `tags` turns on both — it is the one filter that scopes either store. A bare `query` never searches memories.
 2. **Run every channel in parallel.** With a `query`, each store runs two queries: `ORDER BY embedding <=> $query` (pgvector) and `to_tsvector(content) @@ websearch_to_tsquery($query)` ranked by `ts_rank_cd`, each taking `limit` rows and excluding invalidated memory entries. Up to four queries; each also selects the row's cosine, so a lexical-only hit still reports `similarity_score`. Without a `query`, the modes are deterministic reads: document chunks in `chunk_index` order, memory entries oldest-first.
-3. **Filter** by `min_similarity` — raw cosine, on the **vector** candidates only, before fusion. Lexical candidates are exempt: an exact token match is its own evidence.
+3. **Filter** by `min_similarity` — raw cosine, on the **vector** candidates only, before fusion. Lexical candidates are exempt: an exact token match is its own evidence. The floor runs over the rows step 2 already took, and does not search deeper to refill: `limit: 10` with `min_similarity: 0.8` can return three rows because seven of that store's ten nearest fell below the floor, not because the corpus holds only three above it.
 4. **Assemble one ranking per channel.** Each channel's two result sets are merged on that channel's own value — cosine, or `ts_rank_cd` — so a store cannot claim result slots by position alone.
 5. **Fuse and cut**: `score = Σ 1 / (k + rank)` over the channels that ranked each result, `k = rrf_k` (default `60`), sorted descending, cut to `limit` (default `10`).
 
 A channel that fails degrades rather than failing the search: a broken lexical query leaves vector-only results, and an unreachable embedding provider leaves lexical-only ones, which carry no `similarity_score`.
+
+A server that has no embedding provider configured is not that case, and fails with `503 EMBEDDING_NOT_CONFIGURED` instead. Degrading there would answer `200` with an empty list for every natural-language query — the default `simple` text-search configuration requires every term — so a deployment missing `EMBEDDING_PROVIDER` would look like a corpus with nothing relevant in it, including through agent injection.
 
 `document_paths` are prefixes; `tags` is an exact key-value containment match, applied at entry granularity against memory (the entry's own tags or its container's); full filter semantics: [Knowledge — Search Modes](../modules/knowledge.md#search-modes).
 

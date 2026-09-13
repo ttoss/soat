@@ -135,6 +135,8 @@ Each channel produces **one** ranking over the whole search, not one per store: 
 
 **Lexical candidates are exempt from the floor.** A chunk that literally contains the searched token is the evidence; dropping it because its cosine is `0.4` is the failure hybrid retrieval exists to prevent.
 
+**The floor filters, it does not refill.** It runs over the `limit` rows each store's vector query already took, so `limit: 10` with `min_similarity: 0.8` returning three rows means seven of that store's ten nearest fell below the floor — not that the corpus holds only three above it. Raise `limit` to widen the candidate set the floor is applied to.
+
 `min_score` is the field's earlier name and keeps working unchanged. While ranking was single-signal `score` equaled `similarity_score`, so `min_score` has only ever filtered cosine — an existing value, per request or as `knowledge_config.min_score` on an agent, returns the same results it always did, plus the lexical hits the floor was never meant to exclude. `min_similarity` wins if both are sent.
 
 ### Ranking is approximate

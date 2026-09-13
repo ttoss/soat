@@ -29,7 +29,6 @@ export type {
   DocumentQueryConfig,
   QueryDocumentResult,
 } from './knowledgeDocuments';
-export { resolveDocumentSearch } from './knowledgeDocuments';
 
 const log = createDebug('soat:documents');
 

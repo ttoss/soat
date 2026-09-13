@@ -140,3 +140,36 @@ export const fuseByReciprocalRank = <T>(args: {
     return b.score - a.score;
   });
 };
+
+/**
+ * The whole ranking step of a search: merge each signal's per-store shards,
+ * fuse the two resulting rankings, take the top `limit`, and stamp the fused
+ * score onto each result.
+ *
+ * One function rather than the same six lines at each call site — the two
+ * single-store entry points and the cross-store one differ only in how many
+ * shards they hand each signal.
+ *
+ * `slice` is a top-k of an in-memory ranking, not a page: there is no stable
+ * order to offset into, which is why knowledge search has no `offset`.
+ */
+export const fuseCandidates = <T extends { score?: number }>(args: {
+  vector: Array<ReadonlyArray<SignalCandidate<T>>>;
+  lexical: Array<ReadonlyArray<SignalCandidate<T>>>;
+  keyOf: (item: T) => string;
+  rrfK?: number;
+  limit: number;
+}): T[] => {
+  return fuseByReciprocalRank({
+    lists: [
+      mergeSignalShards({ shards: args.vector }),
+      mergeSignalShards({ shards: args.lexical }),
+    ],
+    keyOf: args.keyOf,
+    k: resolveRrfK(args.rrfK),
+  })
+    .slice(0, args.limit)
+    .map((fused) => {
+      return { ...fused.item, score: fused.score };
+    });
+};

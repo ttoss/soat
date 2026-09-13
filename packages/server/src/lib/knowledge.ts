@@ -1,17 +1,14 @@
 import type { EmbeddingBillingProjectId } from './embedding';
 import type { QueryDocumentResult } from './knowledgeDocuments';
 import { resolveDocumentSearchLists } from './knowledgeDocuments';
+import { embedQueryOrDegrade } from './knowledgeEmbedding';
 import type {
   MemoryKnowledgeResult,
   MemoryPolicyWhere,
 } from './knowledgeMemory';
 import { resolveMemorySearchLists } from './knowledgeMemory';
 import type { SearchCandidates, SignalCandidate } from './knowledgeRanking';
-import {
-  fuseByReciprocalRank,
-  mergeSignalShards,
-  resolveRrfK,
-} from './knowledgeRanking';
+import { fuseCandidates } from './knowledgeRanking';
 import { clampKnowledgeSearchLimit } from './requestBounds';
 import { hasTagFilter } from './tags';
 
@@ -184,11 +181,22 @@ export const searchKnowledge = async (
   // scan through this one function.
   const limit = clampKnowledgeSearchLimit(args.limit);
 
+  // Once, for both stores. Embedding per store would bill the same text twice
+  // and let the halves disagree: one call failing would leave documents with a
+  // `similarity_score` and memories without, which the contract reserves for a
+  // search that answered from the lexical channel alone.
+  const embedding = args.query
+    ? await embedQueryOrDegrade({
+        text: args.query,
+        projectId: args.billingProjectId,
+      })
+    : undefined;
+
   const [documents, memories] = await Promise.all([
     !hasMemorySearch || hasDocumentSearch
       ? resolveDocumentSearchLists({
           projectIds: args.projectIds,
-          billingProjectId: args.billingProjectId,
+          embedding,
           policyWhere: args.policyWhere?.document,
           config: {
             search: args.query,
@@ -203,7 +211,7 @@ export const searchKnowledge = async (
     hasMemorySearch
       ? resolveMemorySearchLists({
           projectIds: args.projectIds,
-          billingProjectId: args.billingProjectId,
+          embedding,
           policyWhere: args.policyWhere,
           config: {
             memoryIds: args.memoryIds,
@@ -231,30 +239,17 @@ export const searchKnowledge = async (
   // Two rankings, not four: each signal's per-store shards are merged on that
   // signal's own comparable value first, so a store cannot claim result slots
   // by position alone. See `mergeSignalShards`.
-  const vector = mergeSignalShards<KnowledgeResult>({
-    shards: [
+  return fuseCandidates<KnowledgeResult>({
+    vector: [
       documentShards.vector.map(toDocumentCandidate),
       memoryShards.vector,
     ],
-  });
-  const lexical = mergeSignalShards<KnowledgeResult>({
-    shards: [
+    lexical: [
       documentShards.lexical.map(toDocumentCandidate),
       memoryShards.lexical,
     ],
+    keyOf: knowledgeKey,
+    rrfK: args.rrfK,
+    limit,
   });
-
-  return (
-    fuseByReciprocalRank({
-      lists: [vector, lexical],
-      keyOf: knowledgeKey,
-      k: resolveRrfK(args.rrfK),
-    })
-      // Top-k of an in-memory similarity search, not a page — named so it reads
-      // as distinct from the `limit`/`offset` list envelope.
-      .slice(0, limit)
-      .map((fused) => {
-        return { ...fused.item, score: fused.score };
-      })
-  );
 };

@@ -1,4 +1,5 @@
 import { db } from 'src/db';
+import { DomainError } from 'src/errors';
 import { createDocument } from 'src/lib/documents';
 import * as embeddingModule from 'src/lib/embedding';
 import { searchKnowledge } from 'src/lib/knowledge';
@@ -292,7 +293,37 @@ describe('hybrid knowledge search', () => {
     expect(tight[0].score).toBeGreaterThan(loose[0].score!);
   });
 
+  test('embeds the query once for a search spanning both stores', async () => {
+    const embed = jest.spyOn(embeddingModule, 'getEmbedding');
+
+    await searchKnowledge({
+      projectIds: [fixtures.projectId],
+      billingProjectId: fixtures.projectId,
+      query: RARE_TOKEN,
+      memoryIds: [fixtures.memoryId],
+    });
+
+    // One text, one vector, one billed call. Embedding per store also let the
+    // two halves disagree: if only one call failed, documents would carry
+    // `similarity_score` and memories would not, which the contract says
+    // happens only when the whole search answered from the lexical channel.
+    expect(embed).toHaveBeenCalledTimes(1);
+  });
+
   describe('degrade paths', () => {
+    const originalTextSearchConfig = process.env.KNOWLEDGE_TEXT_SEARCH_CONFIG;
+
+    // Restored here rather than after the awaited call: a rejection there would
+    // leave the bogus configuration set, and every later test in the file would
+    // fail for a reason that is not its own.
+    afterEach(() => {
+      if (originalTextSearchConfig === undefined) {
+        delete process.env.KNOWLEDGE_TEXT_SEARCH_CONFIG;
+      } else {
+        process.env.KNOWLEDGE_TEXT_SEARCH_CONFIG = originalTextSearchConfig;
+      }
+    });
+
     test('falls back to lexical-only when the embedding provider fails', async () => {
       jest
         .spyOn(embeddingModule, 'getEmbedding')
@@ -316,6 +347,29 @@ describe('hybrid knowledge search', () => {
       expect(hit!.similarity_score).toBeUndefined();
     });
 
+    test('surfaces a misconfigured provider instead of degrading', async () => {
+      jest
+        .spyOn(embeddingModule, 'getEmbedding')
+        .mockRejectedValue(
+          new DomainError(
+            'EMBEDDING_NOT_CONFIGURED',
+            'Embedding service is not configured on this server.'
+          )
+        );
+
+      // Degrading here would answer `200 []` forever: under the default
+      // `simple` configuration a natural-language query matches nothing
+      // lexically, so a server missing EMBEDDING_PROVIDER would look like a
+      // corpus with no relevant rows rather than a server to fix.
+      await expect(
+        searchKnowledge({
+          projectIds: [fixtures.projectId],
+          billingProjectId: fixtures.projectId,
+          query: RARE_TOKEN,
+        })
+      ).rejects.toThrow(DomainError);
+    });
+
     test('falls back to vector-only when the lexical query fails', async () => {
       process.env.KNOWLEDGE_TEXT_SEARCH_CONFIG = 'not_a_real_config';
 
@@ -324,8 +378,6 @@ describe('hybrid knowledge search', () => {
         billingProjectId: fixtures.projectId,
         query: RARE_TOKEN,
       });
-
-      delete process.env.KNOWLEDGE_TEXT_SEARCH_CONFIG;
 
       // With the lexical channel alive the exact-token document leads; with it
       // gone the order is the vector one, nearest cosine first.

@@ -10,11 +10,7 @@ import {
   withLexicalDegrade,
 } from './knowledgeLexical';
 import type { SearchCandidates, SignalCandidate } from './knowledgeRanking';
-import {
-  fuseByReciprocalRank,
-  mergeSignalShards,
-  resolveRrfK,
-} from './knowledgeRanking';
+import { fuseCandidates } from './knowledgeRanking';
 import { hasPolicyConstraints, referencesAssociation } from './policyWhere';
 import { clampKnowledgeSearchLimit } from './requestBounds';
 import { applyTagFilter } from './tags';
@@ -92,9 +88,18 @@ const buildFileInclude = (args: {
 
 /** Sequelize fragment types `@ttoss/postgresdb` does not re-export. */
 type Literal = ReturnType<typeof db.sequelize.literal>;
-type ChunkWhere = NonNullable<
-  NonNullable<Parameters<typeof db.DocumentChunk.findAll>[0]>['where']
+type ChunkFindOptions = NonNullable<
+  Parameters<typeof db.DocumentChunk.findAll>[0]
 >;
+type ChunkWhere = NonNullable<ChunkFindOptions['where']>;
+/**
+ * The eager-load shape the three chunk queries share, named once.
+ *
+ * Derived from `findAll` rather than restated, so the include is typed at the
+ * one place it is built instead of being cast back to `any` at each of the
+ * three call sites (`.claude/rules/quality-assurance.md`).
+ */
+type ChunkIncludes = NonNullable<ChunkFindOptions['include']>;
 
 type ChunkWithDocument = InstanceType<(typeof db)['DocumentChunk']> & {
   document?: InstanceType<(typeof db)['Document']> & {
@@ -218,15 +223,17 @@ const toLexicalCandidate = (
 const buildDocumentInclude = (args: {
   docWhere: Record<string, unknown> | undefined;
   fileInclude: ReturnType<typeof buildFileInclude>;
-}): unknown => {
+}): ChunkIncludes => {
   const fileRequired = args.fileInclude.where !== undefined;
-  return {
-    model: db.Document,
-    as: 'document',
-    where: args.docWhere,
-    required: args.docWhere !== undefined || fileRequired,
-    include: [{ ...args.fileInclude, required: fileRequired }],
-  };
+  return [
+    {
+      model: db.Document,
+      as: 'document',
+      where: args.docWhere as ChunkWhere | undefined,
+      required: args.docWhere !== undefined || fileRequired,
+      include: [{ ...args.fileInclude, required: fileRequired }],
+    },
+  ];
 };
 
 const CHUNK_CONTENT_COLUMN = '"DocumentChunk"."content"';
@@ -257,7 +264,7 @@ const chunkAttributes = (args: {
 
 const findChunksByVector = async (args: {
   distanceLiteral: Literal;
-  docInclude: unknown;
+  docInclude: ChunkIncludes;
   limit: number;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   topLevelWhere?: Record<string, any>;
@@ -267,13 +274,12 @@ const findChunksByVector = async (args: {
       return db.DocumentChunk.findAll({
         where: args.topLevelWhere,
         attributes: chunkAttributes({ distanceLiteral: args.distanceLiteral }),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        include: [args.docInclude] as any,
+        include: args.docInclude,
         order: args.distanceLiteral,
         subQuery: referencesAssociation(args.topLevelWhere) ? false : undefined,
         limit: args.limit,
         transaction,
-      }) as unknown as Promise<ChunkWithDocument[]>;
+      });
     },
   });
 };
@@ -288,7 +294,7 @@ const findChunksByVector = async (args: {
 const findChunksByLexical = async (args: {
   query: string;
   distanceLiteral?: Literal;
-  docInclude: unknown;
+  docInclude: ChunkIncludes;
   limit: number;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   topLevelWhere?: Record<string, any>;
@@ -316,12 +322,11 @@ const findChunksByLexical = async (args: {
           distanceLiteral: args.distanceLiteral,
           lexicalRank,
         }),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        include: [args.docInclude] as any,
+        include: args.docInclude,
         order: [[lexicalRank, 'DESC']],
         subQuery: referencesAssociation(args.topLevelWhere) ? false : undefined,
         limit: args.limit,
-      }) as unknown as Promise<ChunkWithDocument[]>;
+      });
     },
   });
 };
@@ -336,7 +341,8 @@ const findChunksByLexical = async (args: {
  */
 const findChunksWithSearch = async (args: {
   config: DocumentQueryConfig;
-  billingProjectId: EmbeddingBillingProjectId;
+  /** The query vector, or `undefined` where the search degraded to lexical. */
+  embedding: number[] | undefined;
   docWhere: Record<string, unknown> | undefined;
   fileInclude: ReturnType<typeof buildFileInclude>;
   limit: number;
@@ -344,10 +350,7 @@ const findChunksWithSearch = async (args: {
   topLevelWhere?: Record<string, any>;
 }): Promise<ChunkWithDocument[][]> => {
   const search = args.config.search!;
-  const embedding = await embedQueryOrDegrade({
-    text: search,
-    projectId: args.billingProjectId,
-  });
+  const { embedding } = args;
   const distanceLiteral = embedding
     ? db.DocumentChunk.sequelize!.literal(
         distanceExpression({ column: CHUNK_EMBEDDING_COLUMN, embedding })
@@ -394,12 +397,11 @@ const findChunksWithoutSearch = async (args: {
 
   return db.DocumentChunk.findAll({
     where: args.topLevelWhere,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    include: [docInclude] as any,
+    include: docInclude,
     order: [['chunkIndex', 'ASC']],
     subQuery: referencesAssociation(args.topLevelWhere) ? false : undefined,
     limit: args.limit,
-  }) as unknown as Promise<ChunkWithDocument[]>;
+  });
 };
 
 const buildDocWhere = (args: {
@@ -421,11 +423,14 @@ const buildDocWhere = (args: {
 export const resolveDocumentSearchLists = async (args: {
   projectIds?: number[];
   /**
-   * The project the query embedding is billed to. Separate from `projectIds`,
-   * which is an access filter that may name many projects or none: a search
-   * that spans a caller's whole scope has no single project to charge.
+   * The query vector, embedded once by the caller, or `undefined` where the
+   * provider was unreachable and the search degraded to lexical-only.
+   *
+   * Passed in rather than embedded here so a search that reads both stores
+   * makes one provider call and bills one usage row — and so both stores
+   * measure against the same vector, or against none.
    */
-  billingProjectId: EmbeddingBillingProjectId;
+  embedding: number[] | undefined;
   config: DocumentQueryConfig;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   policyWhere?: Record<string, any>;
@@ -463,7 +468,7 @@ export const resolveDocumentSearchLists = async (args: {
 
   const [vector, lexical] = await findChunksWithSearch({
     config,
-    billingProjectId: args.billingProjectId,
+    embedding: args.embedding,
     docWhere,
     fileInclude,
     limit,
@@ -495,21 +500,24 @@ export const resolveDocumentSearch = async (args: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   policyWhere?: Record<string, any>;
 }): Promise<QueryDocumentResult[]> => {
-  const candidates = await resolveDocumentSearchLists(args);
+  const candidates = await resolveDocumentSearchLists({
+    ...args,
+    embedding: args.config.search
+      ? await embedQueryOrDegrade({
+          text: args.config.search,
+          projectId: args.billingProjectId,
+        })
+      : undefined,
+  });
   if (!candidates.ranked) return candidates.results;
 
-  return fuseByReciprocalRank({
-    lists: [
-      mergeSignalShards({ shards: [candidates.vector] }),
-      mergeSignalShards({ shards: [candidates.lexical] }),
-    ],
+  return fuseCandidates({
+    vector: [candidates.vector],
+    lexical: [candidates.lexical],
     keyOf: (result) => {
       return result.chunk_id;
     },
-    k: resolveRrfK(args.config.rrfK),
-  })
-    .slice(0, clampKnowledgeSearchLimit(args.config.limit))
-    .map((fused) => {
-      return { ...fused.item, score: fused.score };
-    });
+    rrfK: args.config.rrfK,
+    limit: clampKnowledgeSearchLimit(args.config.limit),
+  });
 };

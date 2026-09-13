@@ -9,11 +9,7 @@ import {
   withLexicalDegrade,
 } from './knowledgeLexical';
 import type { SearchCandidates, SignalCandidate } from './knowledgeRanking';
-import {
-  fuseByReciprocalRank,
-  mergeSignalShards,
-  resolveRrfK,
-} from './knowledgeRanking';
+import { fuseCandidates } from './knowledgeRanking';
 import { hasPolicyConstraints } from './policyWhere';
 import { clampKnowledgeSearchLimit } from './requestBounds';
 import { hasTagFilter, tagContainment } from './tags';
@@ -242,15 +238,13 @@ const findEntriesByLexical = async (args: {
 const findEntriesWithSearch = async (args: {
   entryWhere: Record<string, unknown>;
   memoryWhere: Record<string, unknown>;
-  billingProjectId: EmbeddingBillingProjectId;
+  /** The query vector, or `undefined` where the search degraded to lexical. */
+  embedding: number[] | undefined;
   search: string;
   limit: number;
   minSimilarity?: number;
 }): Promise<SearchCandidates<MemoryKnowledgeResult>> => {
-  const embedding = await embedQueryOrDegrade({
-    text: args.search,
-    projectId: args.billingProjectId,
-  });
+  const { embedding } = args;
   const distanceLiteral = embedding
     ? db.MemoryEntry.sequelize!.literal(
         distanceExpression({ column: ENTRY_EMBEDDING_COLUMN, embedding })
@@ -397,8 +391,8 @@ const buildSearchWheres = (args: {
  */
 export const resolveMemorySearchLists = async (args: {
   projectIds?: number[];
-  /** See `resolveDocumentSearchLists` in `knowledge.ts`. */
-  billingProjectId: EmbeddingBillingProjectId;
+  /** See `resolveDocumentSearchLists` in `knowledgeDocuments.ts`. */
+  embedding: number[] | undefined;
   config: MemoryQueryConfig;
   policyWhere?: MemoryPolicyWhere;
 }): Promise<SearchCandidates<MemoryKnowledgeResult>> => {
@@ -426,7 +420,7 @@ export const resolveMemorySearchLists = async (args: {
     return findEntriesWithSearch({
       entryWhere,
       memoryWhere,
-      billingProjectId: args.billingProjectId,
+      embedding: args.embedding,
       search: config.search,
       limit,
       minSimilarity: config.minSimilarity,
@@ -459,21 +453,24 @@ export const resolveMemorySearch = async (args: {
   config: MemoryQueryConfig;
   policyWhere?: MemoryPolicyWhere;
 }): Promise<MemoryKnowledgeResult[]> => {
-  const candidates = await resolveMemorySearchLists(args);
+  const candidates = await resolveMemorySearchLists({
+    ...args,
+    embedding: args.config.search
+      ? await embedQueryOrDegrade({
+          text: args.config.search,
+          projectId: args.billingProjectId,
+        })
+      : undefined,
+  });
   if (!candidates.ranked) return candidates.results;
 
-  return fuseByReciprocalRank({
-    lists: [
-      mergeSignalShards({ shards: [candidates.vector] }),
-      mergeSignalShards({ shards: [candidates.lexical] }),
-    ],
+  return fuseCandidates({
+    vector: [candidates.vector],
+    lexical: [candidates.lexical],
     keyOf: (result) => {
       return result.entry_id;
     },
-    k: resolveRrfK(args.config.rrfK),
-  })
-    .slice(0, clampKnowledgeSearchLimit(args.config.limit))
-    .map((fused) => {
-      return { ...fused.item, score: fused.score };
-    });
+    rrfK: args.config.rrfK,
+    limit: clampKnowledgeSearchLimit(args.config.limit),
+  });
 };
