@@ -82,16 +82,10 @@ const apiCallDomainError = (error: APICallError): DomainError => {
 
 /**
  * The `AI_PROVIDER_ERROR` for a fault `ai` reports as its own typed error
- * rather than as a failed request — an error frame the provider streamed
- * mid-run, or an answer that ignored a forced `tool_choice`. Both are
- * upstream-caused in the same way as `OUTPUT_SCHEMA_VALIDATION_FAILED`: the
- * request was well-formed, the model output was not.
- *
- * `ai` 7.0.99 introduced both classes. The streamed frame used to arrive as
- * raw JSON, which `streamedProviderErrorMessage` matched; wrapped in an
- * `Error` it fell through to the generic wrapper again (#1084). A violated
- * `tool_choice` was not reported at all before, and unmapped it reads as a
- * fault in the runtime (500) rather than in the model.
+ * rather than as a failed request — a frame streamed mid-run, or an answer
+ * that ignored a forced `tool_choice`. Upstream-caused like
+ * `OUTPUT_SCHEMA_VALIDATION_FAILED`; unmapped they read as a fault in the
+ * runtime (500) rather than in the model (#1084).
  */
 const modelFaultDomainError = (error: unknown): DomainError | null => {
   if (StreamProviderError.isInstance(error)) {

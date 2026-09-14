@@ -308,8 +308,8 @@ const withTraceWriteLock = async <T>(
  *
  * - nothing readable to build on (no file, or unparseable bytes);
  * - content written before the object was segmented, whose steps cannot be
- *   attributed to a generation. That write is replaced exactly as it was before
- *   this change, and the trace is indexed from here on.
+ *   attributed to a generation. That write is replaced exactly as it was
+ *   before segmentation, and the trace is indexed from here on.
  */
 const readTraceBase = async (
   trace: InstanceType<(typeof db)['Trace']> | null

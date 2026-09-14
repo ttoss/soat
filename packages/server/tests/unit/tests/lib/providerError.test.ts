@@ -94,12 +94,9 @@ describe('toProviderDomainError', () => {
     expect(error?.message).toContain('model overloaded');
   });
 
-  /**
-   * From `ai` 7.0.99 the SDK wraps a streamed error frame in a real `Error`
-   * before handing it to `onError`, so the raw-object branch above no longer
-   * sees it. Left unmatched it reached the record as `{name, message}` and the
-   * caller as "Internal Server Error" — the same regression #1084 fixed.
-   */
+  // The SDK wraps a streamed frame in an `Error`, so the raw-object branch
+  // above no longer sees it; unmatched it reaches the caller as "Internal
+  // Server Error" again (#1084).
   test('maps a streamed provider error the SDK wrapped in StreamProviderError', () => {
     const error = toProviderDomainError(
       new StreamProviderError({
@@ -116,12 +113,7 @@ describe('toProviderDomainError', () => {
     expect(error?.meta?.providerStatusCode).toBe(529);
   });
 
-  /**
-   * A model that answers with text while `tool_choice` forces a tool is
-   * upstream-caused in the same way as `OUTPUT_SCHEMA_VALIDATION_FAILED`: the
-   * request was well-formed and the output was not. `ai` only began enforcing
-   * it in 7.0.99, where it surfaces as a runtime fault (500) unless mapped.
-   */
+  // Unmapped, a violated forced `tool_choice` reads as a runtime fault (500).
   test('maps a violated forced tool_choice to an upstream fault', () => {
     const error = toProviderDomainError(
       new ToolChoiceViolationError({
