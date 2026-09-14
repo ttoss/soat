@@ -163,10 +163,16 @@ const forcedToolName = (toolChoice) => {
  *
  * `toolNames` is an allowlist, and it is deliberately narrow. Other CI flows
  * force tools whose arguments carry meaning only the model can supply — the
- * guardrail-gated tool in the smoke suite, the per-step `step_rules` forcing in
- * the formations tutorial (document ids, the poem text). Synthesizing those
- * would be worse than the status quo, so a tool that is not listed keeps going
- * to the real model exactly as it does today.
+ * guardrail-gated tool in the smoke suite — and synthesizing those would be
+ * worse than leaving them to the real model.
+ *
+ * That trade only holds where an unhonored `tool_choice` costs nothing. Since
+ * `ai` 7.0.99 enforces it, an unlisted forced tool the model declines fails the
+ * generation, so a flow that must reach its next step belongs on the list even
+ * when an argument is the model's (see the tutorials stack's sonnet tools).
+ * A tool whose parameters are all pinned by `preset_parameters` is free either
+ * way: the model sees an empty schema, so the synthesized call carries the same
+ * empty arguments a real one would.
  *
  * The `reject` case exists because this shim's only purpose is to make a forced
  * **allowlisted** call deterministic. If such a call arrives and the tool is not
