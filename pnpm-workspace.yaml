@@ -9,11 +9,16 @@ packages:
 #   (SDK generator) and @typescript-eslint/typescript-estree both fail against
 #   it. Stay on 6.x until those support TS 7.
 # - eslint held at 9.x: 10.x is not adopted yet in this repo's config stack.
+# - google-auth-library held at 10.x: `@ai-sdk/google-vertex` asks for ^10.6.2,
+#   and `vertexAwsCredentials.ts` hands it an `AuthClient` built here. A second
+#   copy in the graph is both a type error and an `instanceof` hazard at
+#   runtime, so this tracks whatever the Vertex provider depends on.
 updateConfig:
   ignoreDependencies:
     - '@stoplight/spectral-cli'
     - 'typescript'
     - 'eslint'
+    - 'google-auth-library'
 minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
   - 'carlin'
@@ -53,6 +58,24 @@ allowBuilds:
   ssh2: true
   unrs-resolver: true
 overrides:
+  # eslint-plugin-formatjs (via @ttoss/eslint-config) imports
+  # `@unicode/unicode-17.0.0/Binary_Property/*/regex.js`, but declares the
+  # range as `2` — and 2.0.7 ships .mjs only, so eslint fails to load. Hold the
+  # data package at the last release carrying those files; the tables it
+  # exposes are identical. Drop this once the plugin imports the .mjs entry.
+  '@unicode/unicode-17.0.0': 2.0.6
+  # webpack-dev-server (via @docusaurus/core) resolves
+  # webpack-dev-middleware@7.4.6, a 7.x backport published after the 8.x line
+  # started shipping provenance — so it reads as a trust downgrade. Hold the
+  # 7.x line at its last accepted release rather than weakening the guard;
+  # docusaurus moving to webpack-dev-middleware 8 drops this.
+  webpack-dev-middleware: 7.4.5
+  # docusaurus-plugin-openapi-docs pulls openapi-to-postmanv2@6.3.3, published
+  # without trust evidence after 6.3.2 shipped with provenance — that trips
+  # `trustPolicy: no-downgrade`. Pin to the last trusted release (the plugin
+  # asks for ^6.0.0) instead of adding the package to trustPolicyExclude, so
+  # the guard stays in force. Drop this once a trusted 6.3.3+ is published.
+  openapi-to-postmanv2: 6.3.2
   # mermaid (via @docusaurus/theme-mermaid) pulls cytoscape@3.34.1, which was
   # published without trust evidence while earlier versions had a trusted
   # publisher — that trips `trustPolicy: no-downgrade`. Pin to the last trusted
