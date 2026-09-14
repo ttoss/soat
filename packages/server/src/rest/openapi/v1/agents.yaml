@@ -961,7 +961,6 @@ components:
             is left of it, so a turn that arrives with nothing left completes
             with `stop_reason: "max_steps"` instead of calling the model again.
         tool_choice:
-          nullable: true
           description: 'Tool choice strategy. Accepts a string (`"auto"`, `"required"`) or an object (`{ "type": "tool", "tool_name": "my_tool" }`). A forcing value (`"required"` or the object form) forbids a final assistant message on every step of every turn, including a resumed or continued one, so it requires a `has_tool_call` entry in `stop_conditions` — otherwise the write is refused with `FORCED_TOOL_CHOICE_CANNOT_STOP`.'
         stop_conditions:
           type: array
@@ -1548,7 +1547,6 @@ components:
           type: integer
           nullable: true
         tool_choice:
-          nullable: true
           description: 'Tool choice strategy. Accepts a string (`"auto"`, `"required"`) or an object (`{ "type": "tool", "tool_name": "my_tool" }`). A forcing value (`"required"` or the object form) forbids a final assistant message on every step of every turn, including a resumed or continued one, so it requires a `has_tool_call` entry in `stop_conditions` — otherwise the write is refused with `FORCED_TOOL_CHOICE_CANNOT_STOP`.'
         stop_conditions:
           type: array

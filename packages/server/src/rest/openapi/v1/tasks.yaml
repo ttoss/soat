@@ -471,7 +471,6 @@ components:
             tenant_account_id: '42'
             source: zendesk
         last_result:
-          nullable: true
           description: >-
             Server-owned. The result of the current state's last completed
             dispatch, overwritten on every dispatch. Read-only — exposed to
