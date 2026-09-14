@@ -115,6 +115,31 @@ Generation endpoints return HTTP `502` with the `AI_PROVIDER_ERROR` code when th
 
 `meta` carries the `generation_id` and `trace_id` of the failed run for inspection via [`GET /generations/:generation_id`](/docs/api/generations/get-generation) and [`GET /traces/:trace_id`](/docs/api/traces/get-trace).
 
+### Provider control markup
+
+Some models write their own control markup into the text channel instead of
+out-of-band. Every model is built through one normaliser, for every provider —
+the provider slug is not the vendor (`bedrock` serves several, and `gateway`,
+`custom` and `ollama` serve anything), so the rules are global.
+
+| Markup | What happens |
+| --- | --- |
+| Tokenizer special tokens — `<\|im_start\|>`, `<｜tool▁calls▁begin｜>`, a dangling `<｜DSML｜function_calls` | Removed from `content` |
+| Reasoning tags — `<thinking>`, `<think>`, `<reasoning>`, `<scratchpad>` | Removed from `content` |
+| Paired channel markers — `<\|channel\|>`, `<\|message\|>`, `<\|start\|>`, `<\|end\|>`, `<\|return\|>`, `<\|constrain\|>` | Left as sent |
+
+In-band ASCII markers (`[INST]`, `<<SYS>>`, `<s>`) are left alone: they collide
+with text a caller may legitimately send. Channel markers are left alone
+because removing them would keep the analysis body they frame, reading as the
+answer.
+
+Whitespace is layout, not markup: only the markup is removed. A part left with
+nothing but whitespace is dropped rather than returned blank.
+
+Reasoning tag content is not returned on the generation. Adding it is a
+contract change, tracked in
+[#1315](https://github.com/ttoss/soat/issues/1315).
+
 ### Metadata
 
 `metadata` is a **caller-owned** bag, returned verbatim, for per-run audit attribution (e.g. which knowledge-corpus version produced an AI action).

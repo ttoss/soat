@@ -1,13 +1,17 @@
 import { DomainError } from 'src/errors';
 import {
   buildModel,
+  buildProviderModel,
   resolveBedrockCredentials,
   resolveVertexSettings,
 } from 'src/lib/agentModel';
 import { egressGuardedFetch } from 'src/lib/egressFetch';
 
 // The returned model exposes enough (`modelId`, `config.provider`, `config.url`)
-// to assert the wiring landed, rather than only that `buildModel` didn't throw.
+// to assert the wiring landed, rather than only that the builder didn't throw.
+// That is the provider's own object, so these read `buildProviderModel`:
+// `buildModel` wraps it for text normalisation and the wrapper carries no
+// `config`. `buildModel` itself is asserted to be that wrapper, below.
 
 const asConfigured = (model: unknown) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -51,10 +55,10 @@ const withAmbientCredentials = (
   }
 };
 
-describe('buildModel', () => {
+describe('buildProviderModel', () => {
   test('throws for unsupported provider', () => {
     expect(() => {
-      buildModel({
+      buildProviderModel({
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         provider: 'unsupported_provider' as any,
         secretValue: null,
@@ -65,7 +69,7 @@ describe('buildModel', () => {
 
   test('builds openai model wired to the default OpenAI endpoint', () => {
     const model = asConfigured(
-      buildModel({
+      buildProviderModel({
         provider: 'openai',
         secretValue: 'test-key',
         model: 'gpt-4o',
@@ -80,7 +84,7 @@ describe('buildModel', () => {
 
   test('builds anthropic model with the requested model id', () => {
     const model = asConfigured(
-      buildModel({
+      buildProviderModel({
         provider: 'anthropic',
         secretValue: 'test-key',
         model: 'claude-3-5-sonnet-20241022',
@@ -92,7 +96,7 @@ describe('buildModel', () => {
 
   test('builds google model with the requested model id', () => {
     const model = asConfigured(
-      buildModel({
+      buildProviderModel({
         provider: 'google',
         secretValue: 'test-key',
         model: 'gemini-2.0-flash',
@@ -104,7 +108,7 @@ describe('buildModel', () => {
 
   test('builds xai model with the requested model id', () => {
     const model = asConfigured(
-      buildModel({
+      buildProviderModel({
         provider: 'xai',
         secretValue: 'test-key',
         model: 'grok-2-latest',
@@ -116,7 +120,7 @@ describe('buildModel', () => {
 
   test('builds groq model with the requested model id', () => {
     const model = asConfigured(
-      buildModel({
+      buildProviderModel({
         provider: 'groq',
         secretValue: 'test-key',
         model: 'llama-3.3-70b-versatile',
@@ -128,7 +132,7 @@ describe('buildModel', () => {
 
   test('builds azure model wired to the configured resource name', () => {
     const model = asConfigured(
-      buildModel({
+      buildProviderModel({
         provider: 'azure',
         secretValue: 'test-key',
         model: 'gpt-4o',
@@ -143,7 +147,7 @@ describe('buildModel', () => {
 
   test('builds azure model with defaults when secretValue and resourceName are not provided', () => {
     const model = asConfigured(
-      buildModel({
+      buildProviderModel({
         provider: 'azure',
         secretValue: null,
         model: 'gpt-4o',
@@ -157,7 +161,7 @@ describe('buildModel', () => {
 
   test('builds ollama model wired to the default local base URL', () => {
     const model = asConfigured(
-      buildModel({
+      buildProviderModel({
         provider: 'ollama',
         secretValue: null,
         model: 'qwen2.5:0.5b',
@@ -171,7 +175,7 @@ describe('buildModel', () => {
 
   test('builds gateway model wired to the configured base URL', () => {
     const model = asConfigured(
-      buildModel({
+      buildProviderModel({
         provider: 'gateway',
         secretValue: 'test-key',
         model: 'gpt-4o',
@@ -186,7 +190,7 @@ describe('buildModel', () => {
 
   test('builds custom model wired to the configured base URL', () => {
     const model = asConfigured(
-      buildModel({
+      buildProviderModel({
         provider: 'custom',
         secretValue: 'test-key',
         model: 'my-custom-model',
@@ -204,7 +208,7 @@ describe('buildModel', () => {
 
   test('builds bedrock model with the requested model id and region', () => {
     const model = asConfigured(
-      buildModel({
+      buildProviderModel({
         provider: 'bedrock',
         secretValue: 'ABSKexample',
         model: 'anthropic.claude-3-5-sonnet-20241022-v2:0',
@@ -219,7 +223,7 @@ describe('buildModel', () => {
 
   test('builds vertex model wired to the configured project and location', () => {
     const model = asConfigured(
-      buildModel({
+      buildProviderModel({
         provider: 'vertex',
         secretValue: SERVICE_ACCOUNT_SECRET,
         model: 'gemini-2.0-flash',
@@ -235,7 +239,7 @@ describe('buildModel', () => {
 
   test('builds vertex model taking the project from the service-account secret', () => {
     const model = asConfigured(
-      buildModel({
+      buildProviderModel({
         provider: 'vertex',
         secretValue: SERVICE_ACCOUNT_SECRET,
         model: 'gemini-2.0-flash',
@@ -249,7 +253,7 @@ describe('buildModel', () => {
 
   test('builds vertex model in express mode from a plain API-key secret', () => {
     const model = asConfigured(
-      buildModel({
+      buildProviderModel({
         provider: 'vertex',
         secretValue: 'AIzaSyExpressModeKey',
         model: 'gemini-2.0-flash',
@@ -269,14 +273,14 @@ describe('buildModel', () => {
       private_key: '-----BEGIN PRIVATE KEY-----\nnot-a-real-key\n-----END',
     });
     expect(() => {
-      buildModel({
+      buildProviderModel({
         provider: 'vertex',
         secretValue: projectlessKey,
         model: 'gemini-2.0-flash',
       });
     }).toThrow(DomainError);
     expect(() => {
-      buildModel({
+      buildProviderModel({
         provider: 'vertex',
         secretValue: projectlessKey,
         model: 'gemini-2.0-flash',
@@ -537,7 +541,7 @@ describe('outbound provider requests go through the egress guard', () => {
     ['groq', 'llama-3.3-70b-versatile'],
   ])('%s is built with the guarded fetch', (provider, model) => {
     const built = asConfigured(
-      buildModel({
+      buildProviderModel({
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         provider: provider as any,
         secretValue: 'test-key',
@@ -549,7 +553,7 @@ describe('outbound provider requests go through the egress guard', () => {
 
   test('vertex is built with the guarded fetch', () => {
     const built = asConfigured(
-      buildModel({
+      buildProviderModel({
         provider: 'vertex',
         secretValue: SERVICE_ACCOUNT_SECRET,
         model: 'gemini-2.0-flash',
@@ -561,7 +565,7 @@ describe('outbound provider requests go through the egress guard', () => {
 
   test('ollama is built with the guarded fetch', () => {
     const built = asConfigured(
-      buildModel({
+      buildProviderModel({
         provider: 'ollama',
         secretValue: null,
         model: 'llama3',
@@ -569,6 +573,28 @@ describe('outbound provider requests go through the egress guard', () => {
       })
     );
     expect(built.config.fetch).toBe(egressGuardedFetch);
+  });
+});
+
+// Normalisation is wired at `buildModel` because that is the one place every
+// language model is built. Asserting the wrapper here is what keeps a later
+// caller from reaching past it for the provider's raw object.
+describe('buildModel wraps the provider model for text normalization', () => {
+  test('returns a model that strips provider control markup', async () => {
+    const built = buildModel({
+      provider: 'openai',
+      secretValue: 'test-key',
+      model: 'gpt-4o',
+    });
+    expect(built).not.toBe(
+      buildProviderModel({
+        provider: 'openai',
+        secretValue: 'test-key',
+        model: 'gpt-4o',
+      })
+    );
+    expect(asConfigured(built).modelId).toBe('gpt-4o');
+    expect(asConfigured(built).provider).toBe('openai.responses');
   });
 });
 

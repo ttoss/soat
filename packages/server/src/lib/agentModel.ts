@@ -15,6 +15,8 @@ import { DomainError } from '../errors';
 import { readUrlConfigValue } from './aiProviderConfigValidation';
 import { assertAmbientCredentialsAllowed } from './ambientCredentials';
 import { egressGuardedFetch } from './egressFetch';
+import type { ProviderModel } from './modelTextNormalization';
+import { withModelTextNormalization } from './modelTextNormalization';
 import { loadAwsExternalAccountAuthClient } from './vertexAwsCredentials';
 
 type BuildModelArgs = {
@@ -111,7 +113,7 @@ export const resolveBedrockCredentials = (args: {
  * search, model betas) are InvokeModel-only and would need the SDK's separate
  * Bedrock-Anthropic path — see `modules/ai-providers.md`, Bedrock request path.
  */
-const buildBedrockModel = (args: BuildModelArgs): LanguageModel => {
+const buildBedrockModel = (args: BuildModelArgs): ProviderModel => {
   const options = resolveBedrockCredentials(args);
   return createAmazonBedrock({ ...options, fetch: egressGuardedFetch })(
     args.model
@@ -267,7 +269,7 @@ const withAwsWorkloadIdentity = (settings: VertexSettings): VertexSettings => {
   return { ...settings, googleAuthOptions: { authClient } };
 };
 
-const buildVertexModel = (args: BuildModelArgs): LanguageModel => {
+const buildVertexModel = (args: BuildModelArgs): ProviderModel => {
   return createVertex({
     ...withAwsWorkloadIdentity(resolveVertexSettings(args)),
     fetch: egressGuardedFetch,
@@ -281,7 +283,7 @@ const buildVertexModel = (args: BuildModelArgs): LanguageModel => {
  * it. A `base_url` on the provider record is the tenant-written half, and that
  * is what an allowlist has to answer for.
  */
-const buildOllamaModel = (args: BuildModelArgs): LanguageModel => {
+const buildOllamaModel = (args: BuildModelArgs): ProviderModel => {
   const base =
     args.baseUrl ?? process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434';
   return createOpenAI({
@@ -291,7 +293,7 @@ const buildOllamaModel = (args: BuildModelArgs): LanguageModel => {
   }).chat(args.model);
 };
 
-const buildAzureModel = (args: BuildModelArgs): LanguageModel => {
+const buildAzureModel = (args: BuildModelArgs): ProviderModel => {
   const apiKey = args.secretValue ?? '';
   const resourceName =
     readUrlConfigValue({
@@ -304,7 +306,7 @@ const buildAzureModel = (args: BuildModelArgs): LanguageModel => {
   );
 };
 
-const buildSimpleOpenAiCompatModel = (args: BuildModelArgs): LanguageModel => {
+const buildSimpleOpenAiCompatModel = (args: BuildModelArgs): ProviderModel => {
   const apiKey = args.secretValue ?? '';
   return createOpenAI({
     apiKey,
@@ -313,7 +315,7 @@ const buildSimpleOpenAiCompatModel = (args: BuildModelArgs): LanguageModel => {
   }).chat(args.model);
 };
 
-type ProviderBuilder = (args: BuildModelArgs) => LanguageModel;
+type ProviderBuilder = (args: BuildModelArgs) => ProviderModel;
 
 const PROVIDER_BUILDERS: Partial<Record<AiProviderSlug, ProviderBuilder>> = {
   openai: (a) => {
@@ -356,10 +358,32 @@ const PROVIDER_BUILDERS: Partial<Record<AiProviderSlug, ProviderBuilder>> = {
   custom: buildSimpleOpenAiCompatModel,
 };
 
-export const buildModel = (args: BuildModelArgs): LanguageModel => {
+/**
+ * The provider's own model, before normalisation wraps it.
+ *
+ * Exported because `buildModel`'s wrapper is a fresh V4 object carrying none of
+ * the provider's `config`, and the credential wiring is only assertable on the
+ * object the provider built.
+ */
+export const buildProviderModel = (args: BuildModelArgs): ProviderModel => {
   const builder = PROVIDER_BUILDERS[args.provider];
   if (!builder) {
     throw new Error(`Unsupported AI provider: ${args.provider}`);
   }
   return builder(args);
+};
+
+/**
+ * The one place every language model is built, and so the one place provider
+ * control markup can be normalised out of the text channel for every provider
+ * at once. Scoping the rules to a vendor is not available here: the slug is not
+ * the vendor — `bedrock` serves several, and `gateway`, `custom` and `ollama`
+ * serve anything.
+ */
+export const buildModel = (args: BuildModelArgs): LanguageModel => {
+  return withModelTextNormalization({
+    model: buildProviderModel(args),
+    provider: args.provider,
+    modelId: args.model,
+  });
 };
