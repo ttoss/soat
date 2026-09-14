@@ -30,11 +30,8 @@ describe('Step rules narrowing tools under prompt caching', () => {
   /**
    * Answers the first call of each turn with a call to `alpha_tool` — a client
    * tool, so the turn pauses and the next step arrives as its own request — and
-   * every later call with text, unless the request forces a tool.
-   *
-   * Honouring a forced `tool_choice` is what `tests/mocks/ollamaToolChoiceProxy.mjs`
-   * does for Ollama: the AI SDK rejects an answer that ignores one, so a stub
-   * replying with text fails the turn before the assertion is reached.
+   * every later call with text, unless the request forces a tool: the AI SDK
+   * rejects an answer that ignores a forced `tool_choice`.
    */
   const startStubServer = async (): Promise<string> => {
     stubServer = createServer((req, res: ServerResponse) => {
