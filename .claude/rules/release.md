@@ -25,7 +25,7 @@ missing publisher shows as `404` on the OIDC exchange
 ```bash
 git fetch --tags origin                      # lerna needs the last tag
 
-# environment runs Node 22 / pnpm 10; project declares ^24 / ^11
+# environment runs Node 22 / pnpm 10; project declares ^24 / ^12
 node -e "
 const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));
 p.engines.node='>=22.0.0';p.engines.pnpm='>=10.0.0';
@@ -35,7 +35,7 @@ pnpm lerna version --yes --no-push           # or: patch | minor | major
 
 node -e "
 const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));
-p.engines.node='^24.0.0';p.engines.pnpm='^11.0.0';
+p.engines.node='^24.0.0';p.engines.pnpm='^12.0.0';
 fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n');" \
   && git add package.json && git commit --amend --no-edit
 git tag -d "v$(node -e "console.log(require('./lerna.json').version)")"  # orphaned by the amend; CI tags
