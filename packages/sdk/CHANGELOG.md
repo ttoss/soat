@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.49.1](https://github.com/ttoss/soat/compare/v0.49.0...v0.49.1) (2026-09-14)
+
+### Bug Fixes
+
+* **deps:** update all packages and remap the AI SDK's new provider faults ([#1309](https://github.com/ttoss/soat/issues/1309)) ([baf8f99](https://github.com/ttoss/soat/commit/baf8f9965ffc1983846d958ab03f5cf04428f51e)), closes [#1084](https://github.com/ttoss/soat/issues/1084)
+
 # [0.49.0](https://github.com/ttoss/soat/compare/v0.48.0...v0.49.0) (2026-09-13)
 
 **Note:** Version bump only for package @soat/sdk
