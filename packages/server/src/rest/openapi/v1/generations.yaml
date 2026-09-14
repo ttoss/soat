@@ -732,7 +732,6 @@ components:
             The arguments the model supplied, as a value. This payload is
             tool-owned: its keys are passed through exactly as they were
             recorded and are never inspected or rewritten by SOAT.
-          nullable: true
           example:
             cityName: Paris
 
@@ -755,12 +754,10 @@ components:
           description: >
             What the tool returned, as a value. Tool-owned: keys are passed
             through verbatim. Null when the call errored.
-          nullable: true
           example:
             tempC: 18
         error:
           description: The tool's failure, when the step recorded one.
-          nullable: true
           example: null
 
     TranscriptStep:
