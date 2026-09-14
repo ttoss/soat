@@ -1,5 +1,5 @@
 ---
-description: "Agents are persistent configurations for multi-step AI workflows that run reasoning-and-acting loops with tools in SOAT."
+description: 'Agents are persistent configurations for multi-step AI workflows that run reasoning-and-acting loops with tools in SOAT.'
 ---
 
 import Tabs from '@theme/Tabs';
@@ -28,35 +28,35 @@ Unlike [Chats](./chats.md), agents call tools, observe results and keep reasonin
 
 ### Agent
 
-| Field                      | Type          | Description                                                                                                                      |
-| -------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                       | string        | Unique identifier (`agent_` prefix)                                                                                              |
-| `project_id`               | string        | Project the agent belongs to                                                                                                     |
-| `ai_provider_id`           | string        | AI provider used for the model. `null` when the agent routes through `model_route_id`                                            |
-| `model_route_id`           | string        | [Model route](./model-routes.md) resolving the model with ordered failover. `null` when a provider is pinned. Mutually exclusive with `ai_provider_id` and `model` |
-| `name`                     | string        | Display name                                                                                                                     |
-| `instructions`             | string        | System instructions guiding agent behavior                                                                                       |
-| `model`                    | string        | Model identifier (falls back to AI provider default)                                                                             |
-| `tool_bindings`            | array         | Tools attached to this agent, one binding object per tool — see [Tool Bindings](#tool-bindings)                                  |
-| `max_steps`                | number        | Maximum reasoning steps before stopping (default: `20`)                                                                          |
-| `tool_choice`              | string/object | How the model selects tools — see [Tool Choice](#tool-choice)                                                                    |
-| `stop_conditions`          | array         | Turn- and chain-scoped stop conditions — see [Stop Conditions](#stop-conditions)                                                  |
-| `active_tool_ids`          | array         | Subset of bound tool IDs available at each step — see [Active Tools](#active-tools)                                              |
-| `guardrail_ids`            | array         | Guardrails attached at the agent scope, governing every tool call the agent makes — see [Guardrails — Attachment](./guardrails.md#attachment) |
-| `step_rules`               | array         | Per-step overrides for `tool_choice` and `active_tool_ids` — see [Step Rules](#step-rules)                                       |
-| `boundary_policy`          | object        | Boundary policy that limits which `builtin` actions the agent can perform — see [SOAT Action Permissions](#soat-action-permissions) |
-| `temperature`              | number        | Sampling temperature                                                                                                             |
-| `knowledge_config`         | object        | Knowledge retrieval config injected before every generation — see [Knowledge Config](#knowledge-config)                          |
-| `output_schema`            | object        | JSON Schema constraining the model's final answer to a structured object — see [Structured Output](#structured-output)          |
-| `prompt_caching`           | object/null   | `{ "enabled": true }` caches the turn's static prefix on providers that support it — see [Prompt Caching](#prompt-caching)       |
-| `max_context_messages`     | number        | Maximum number of recent messages sent to the model per generation — see [Context Window Limiting](#context-window-limiting)     |
-| `single_session_per_actor` | boolean       | When `true`, only one open session per `actor_id` is allowed — see [Single Session Per Actor](#single-session-per-actor)         |
-| `trace_content_mode` | string \| null | `null` (default) inherits the project's setting; `none` opts this agent into [zero-retention](#zero-retention) — its trace and generation content is never written |
-| `on_approval_expiry` | string \| null | What happens when a held tool call expires un-approved — `null`/`terminate` (default) ends the chain, `react` reports it to the agent. See [Approval Expiry](#approval-expiry) |
-| `version`                  | number        | Current config version, starting at `1` — see [Versioning and Staged Rollout](#versioning-and-staged-rollout)                    |
-| `active_release`            | object/null   | Staged rollout in progress, or `null` when all traffic serves this config — see [Staged Rollout](#staged-rollout)                |
-| `created_at`               | string        | ISO 8601 creation timestamp                                                                                                      |
-| `updated_at`               | string        | ISO 8601 last-updated timestamp                                                                                                  |
+| Field                      | Type           | Description                                                                                                                                                                    |
+| -------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`                       | string         | Unique identifier (`agent_` prefix)                                                                                                                                            |
+| `project_id`               | string         | Project the agent belongs to                                                                                                                                                   |
+| `ai_provider_id`           | string         | AI provider used for the model. `null` when the agent routes through `model_route_id`                                                                                          |
+| `model_route_id`           | string         | [Model route](./model-routes.md) resolving the model with ordered failover. `null` when a provider is pinned. Mutually exclusive with `ai_provider_id` and `model`             |
+| `name`                     | string         | Display name                                                                                                                                                                   |
+| `instructions`             | string         | System instructions guiding agent behavior                                                                                                                                     |
+| `model`                    | string         | Model identifier (falls back to AI provider default)                                                                                                                           |
+| `tool_bindings`            | array          | Tools attached to this agent, one binding object per tool — see [Tool Bindings](#tool-bindings)                                                                                |
+| `max_steps`                | number         | Maximum reasoning steps before stopping (default: `20`)                                                                                                                        |
+| `tool_choice`              | string/object  | How the model selects tools — see [Tool Choice](#tool-choice)                                                                                                                  |
+| `stop_conditions`          | array          | Turn- and chain-scoped stop conditions — see [Stop Conditions](#stop-conditions)                                                                                               |
+| `active_tool_ids`          | array          | Subset of bound tool IDs available at each step — see [Active Tools](#active-tools)                                                                                            |
+| `guardrail_ids`            | array          | Guardrails attached at the agent scope, governing every tool call the agent makes — see [Guardrails — Attachment](./guardrails.md#attachment)                                  |
+| `step_rules`               | array          | Per-step overrides for `tool_choice` and `active_tool_ids` — see [Step Rules](#step-rules)                                                                                     |
+| `boundary_policy`          | object         | Boundary policy that limits which `builtin` actions the agent can perform — see [SOAT Action Permissions](#soat-action-permissions)                                            |
+| `temperature`              | number         | Sampling temperature                                                                                                                                                           |
+| `knowledge_config`         | object         | Knowledge retrieval config injected before every generation — see [Knowledge Config](#knowledge-config)                                                                        |
+| `output_schema`            | object         | JSON Schema constraining the model's final answer to a structured object — see [Structured Output](#structured-output)                                                         |
+| `prompt_caching`           | object/null    | `{ "enabled": true }` caches the turn's static prefix on providers that support it — see [Prompt Caching](#prompt-caching)                                                     |
+| `max_context_messages`     | number         | Maximum number of recent messages sent to the model per generation — see [Context Window Limiting](#context-window-limiting)                                                   |
+| `single_session_per_actor` | boolean        | When `true`, only one open session per `actor_id` is allowed — see [Single Session Per Actor](#single-session-per-actor)                                                       |
+| `trace_content_mode`       | string \| null | `null` (default) inherits the project's setting; `none` opts this agent into [zero-retention](#zero-retention) — its trace and generation content is never written             |
+| `on_approval_expiry`       | string \| null | What happens when a held tool call expires un-approved — `null`/`terminate` (default) ends the chain, `react` reports it to the agent. See [Approval Expiry](#approval-expiry) |
+| `version`                  | number         | Current config version, starting at `1` — see [Versioning and Staged Rollout](#versioning-and-staged-rollout)                                                                  |
+| `active_release`           | object/null    | Staged rollout in progress, or `null` when all traffic serves this config — see [Staged Rollout](#staged-rollout)                                                              |
+| `created_at`               | string         | ISO 8601 creation timestamp                                                                                                                                                    |
+| `updated_at`               | string         | ISO 8601 last-updated timestamp                                                                                                                                                |
 
 `version_label` (create/update body only) tags the version the write archives — see [Versioning and Staged Rollout](#versioning-and-staged-rollout).
 
@@ -64,47 +64,47 @@ Unlike [Chats](./chats.md), agents call tools, observe results and keep reasonin
 
 Immutable archive of one config version, written on create and on every config-changing write.
 
-| Field        | Type        | Description                                                                            |
-| ------------ | ----------- | -------------------------------------------------------------------------------------- |
-| `id`         | string      | Unique identifier (`agver_` prefix)                                                    |
-| `agent_id`   | string      | Agent this version belongs to                                                          |
-| `version`    | number      | The archived version number                                                            |
-| `config`     | object      | The agent's mutable surface as it stood at this version — see [What a version captures](#what-a-version-captures) |
-| `label`      | string/null | Optional human tag, e.g. `pre-tone-change`                                             |
-| `eval_run_id`| string/null | [Eval run](./evaluations.md) that cleared the release's `promotion_gate` when this version was promoted — see [Eval-gated promotion](#eval-gated-promotion) |
-| `created_by` | string/null | User whose action produced this version                                                |
-| `created_at` | string      | ISO 8601 creation timestamp                                                            |
+| Field         | Type        | Description                                                                                                                                                 |
+| ------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`          | string      | Unique identifier (`agver_` prefix)                                                                                                                         |
+| `agent_id`    | string      | Agent this version belongs to                                                                                                                               |
+| `version`     | number      | The archived version number                                                                                                                                 |
+| `config`      | object      | The agent's mutable surface as it stood at this version — see [What a version captures](#what-a-version-captures)                                           |
+| `label`       | string/null | Optional human tag, e.g. `pre-tone-change`                                                                                                                  |
+| `eval_run_id` | string/null | [Eval run](./evaluations.md) that cleared the release's `promotion_gate` when this version was promoted — see [Eval-gated promotion](#eval-gated-promotion) |
+| `created_by`  | string/null | User whose action produced this version                                                                                                                     |
+| `created_at`  | string      | ISO 8601 creation timestamp                                                                                                                                 |
 
 ### Agent Release
 
 The `active_release` object on an agent, not a standalone resource: set with `set-agent-release`, cleared by `promote-agent-release` or `abort-agent-release`.
 
-| Field            | Type   | Description                                                            |
-| ---------------- | ------ | ---------------------------------------------------------------------- |
-| `stable_version` | number | Version served to traffic not assigned to the canary                   |
-| `canary_version` | number | Version under trial. Must differ from `stable_version`                 |
-| `canary_percent` | number | Percentage of traffic (`0`–`100`) assigned to `canary_version`         |
+| Field            | Type        | Description                                                                                                                                                                            |
+| ---------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `stable_version` | number      | Version served to traffic not assigned to the canary                                                                                                                                   |
+| `canary_version` | number      | Version under trial. Must differ from `stable_version`                                                                                                                                 |
+| `canary_percent` | number      | Percentage of traffic (`0`–`100`) assigned to `canary_version`                                                                                                                         |
 | `promotion_gate` | string/null | [Eval](./evaluations.md) that must be green against `canary_version` before `promote` is allowed, or `null` for an ungated rollout — see [Eval-gated promotion](#eval-gated-promotion) |
 
 ### Generation
 
 One agent execution; its steps are on its [trace](./traces.md).
 
-| Field                     | Type        | Description                                             |
-| ------------------------- | ----------- | ------------------------------------------------------- |
-| `id`                      | string      | Public identifier (`gen_` prefix)                       |
-| `project_id`              | string      | Project the generation belongs to                       |
-| `agent_id`                | string      | Agent that was executed                                 |
-| `trace_id`                | string      | Associated trace ID — see [Traces](./traces.md)         |
-| `initiator_generation_id` | string/null | Generation that spawned this one (for nested calls)     |
-| `status`                  | string      | Current lifecycle state — see [Generation Status](#generation-status) |
-| `started_at`              | string      | ISO 8601 timestamp when execution began                 |
-| `completed_at`            | string/null | ISO 8601 timestamp when execution finished              |
-| `last_activity_at`        | string/null | ISO 8601 timestamp of last step activity                |
-| `stop_reason`             | string/null | Why the generation ended — see [Stop Reason](#stop-reason) |
-| `started_by_principal_type` | string/null | Type of the principal that triggered the generation |
-| `started_by_principal_id` | string/null | Public id of that principal |
-| `created_at`              | string      | ISO 8601 creation timestamp                             |
+| Field                       | Type        | Description                                                           |
+| --------------------------- | ----------- | --------------------------------------------------------------------- |
+| `id`                        | string      | Public identifier (`gen_` prefix)                                     |
+| `project_id`                | string      | Project the generation belongs to                                     |
+| `agent_id`                  | string      | Agent that was executed                                               |
+| `trace_id`                  | string      | Associated trace ID — see [Traces](./traces.md)                       |
+| `initiator_generation_id`   | string/null | Generation that spawned this one (for nested calls)                   |
+| `status`                    | string      | Current lifecycle state — see [Generation Status](#generation-status) |
+| `started_at`                | string      | ISO 8601 timestamp when execution began                               |
+| `completed_at`              | string/null | ISO 8601 timestamp when execution finished                            |
+| `last_activity_at`          | string/null | ISO 8601 timestamp of last step activity                              |
+| `stop_reason`               | string/null | Why the generation ended — see [Stop Reason](#stop-reason)            |
+| `started_by_principal_type` | string/null | Type of the principal that triggered the generation                   |
+| `started_by_principal_id`   | string/null | Public id of that principal                                           |
+| `created_at`                | string      | ISO 8601 creation timestamp                                           |
 
 #### Generation Status
 
@@ -119,14 +119,14 @@ One agent execution; its steps are on its [trace](./traces.md).
 
 Set when `status` is `completed`:
 
-| Stop Reason    | Description                                                                       |
-| -------------- | --------------------------------------------------------------------------------- |
-| `stop`         | The model produced a final response with no tool calls                             |
-| `tool-calls`   | The turn ended on a tool call — either one the platform is still settling (a pause), or the one a `has_tool_call` [stop condition](#stop-conditions) named |
-| `max_steps`    | The turn spent its whole `max_steps` budget on tool calls and could not finish      |
-| `depth_guard`  | A nested call exceeded `max_call_depth`                                             |
-| `chain_limit`  | A [continuation chain](./chains.md) reached its generation budget and was not resumed |
-| `error`        | The turn failed; the `error` field carries the details                              |
+| Stop Reason   | Description                                                                                                                                                |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `stop`        | The model produced a final response with no tool calls                                                                                                     |
+| `tool-calls`  | The turn ended on a tool call — either one the platform is still settling (a pause), or the one a `has_tool_call` [stop condition](#stop-conditions) named |
+| `max_steps`   | The turn spent its whole `max_steps` budget on tool calls and could not finish                                                                             |
+| `depth_guard` | A nested call exceeded `max_call_depth`                                                                                                                    |
+| `chain_limit` | A [continuation chain](./chains.md) reached its generation budget and was not resumed                                                                      |
+| `error`       | The turn failed; the `error` field carries the details                                                                                                     |
 
 Other values are the provider's finish reason (`length`, `content-filter`, …) relayed unchanged; `max_steps` is platform-named because the provider reports `tool-calls` for an exhausted budget and a pause alike.
 
@@ -142,16 +142,26 @@ Agents attach [Tools](./tools.md) through `tool_bindings`; a persisted tool can 
 
 Each entry in `tool_bindings` is an object:
 
-| Property          | Type           | Description                                                                                                          |
-| ----------------- | -------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `tool_id`         | string         | Public ID of a persisted tool. Exactly one of `tool_id` / `tool` per entry.                                           |
-| `tool`            | object         | Inline (ephemeral) tool definition — see [Inline (Ephemeral) Tool Definitions](#inline-ephemeral-tool-definitions).   |
+| Property  | Type   | Description                                                                                                         |
+| --------- | ------ | ------------------------------------------------------------------------------------------------------------------- |
+| `tool_id` | string | Public ID of a persisted tool. Exactly one of `tool_id` / `tool` per entry.                                         |
+| `tool`    | object | Inline (ephemeral) tool definition — see [Inline (Ephemeral) Tool Definitions](#inline-ephemeral-tool-definitions). |
 
 ```json
 {
   "tool_bindings": [
     { "tool_id": "tool_k8x2f3np" },
-    { "tool": { "name": "lookup", "type": "http", "execute": { "url": "https://api.example.com/lookup" }, "parameters": { "type": "object", "properties": { "q": { "type": "string" } } } } }
+    {
+      "tool": {
+        "name": "lookup",
+        "type": "http",
+        "execute": { "url": "https://api.example.com/lookup" },
+        "parameters": {
+          "type": "object",
+          "properties": { "q": { "type": "string" } }
+        }
+      }
+    }
   ]
 }
 ```
@@ -206,6 +216,8 @@ With a model route the model resolves through the route's ordered provider+model
 
 Otherwise [`FORCED_TOOL_CHOICE_CANNOT_STOP`](../error-codes.md#forced_tool_choice_cannot_stop). `max_chain_generations` bounds a chain, not a turn, and does not satisfy it. The check reads the resulting config: removing the condition from a forcing agent, or a [version restore](#versioning-and-staged-rollout) to such a config, is refused too. Or keep `"auto"` and force one step with [Step Rules](#step-rules).
 
+**A forcing value is enforced on the answer, not only on the request.** A model that replies with text instead of calling the tool it was told to call fails the generation with [`AI_PROVIDER_ERROR`](../error-codes.md#ai_provider_error) — returning that text as the answer would be a silent data-integrity failure, the same reason [`TEXT_ENCODED_TOOL_CALL`](../error-codes.md#text_encoded_tool_call) exists.
+
 **Every turn of a chain uses the agent's `tool_choice`**, continuations included; a turn ending on the step budget reports `stop_reason: "max_steps"`.
 
 **A resumption is part of the turn.** After `submit-tool-outputs` a [client-tool](./tools.md#client) pause resumes under the agent's `tool_choice` and the same `max_steps`, steps spent counted; an agent forcing its client tool by name proposes it again after every submit until `stop_reason: "max_steps"`. `step_rules` numbering spans the pause (`{ "step": 1, … }` forces only the pausing call). The resumed turn gets the full tool surface (bound tools narrowed by `active_tool_ids`, plus `write_memory` from `knowledge_config.write_memory_id`), even after a server restart.
@@ -252,10 +264,10 @@ For dynamic control, pause on `client` tools and pass overrides with the tool ou
 
 `stop_conditions` adds stops on top of `max_steps`, each bounding one axis:
 
-| Condition                                                  | Scope | Stops when                                                        |
-| ---------------------------------------------------------- | ----- | ----------------------------------------------------------------- |
-| `{ type: "has_tool_call", tool_name: "<name>" }`              | turn  | The model calls the named tool                                    |
-| `{ type: "max_chain_generations", max_generations: <n> }`     | chain | The [continuation chain](./chains.md) has spawned `n` generations |
+| Condition                                                 | Scope | Stops when                                                        |
+| --------------------------------------------------------- | ----- | ----------------------------------------------------------------- |
+| `{ type: "has_tool_call", tool_name: "<name>" }`          | turn  | The model calls the named tool                                    |
+| `{ type: "max_chain_generations", max_generations: <n> }` | chain | The [continuation chain](./chains.md) has spawned `n` generations |
 
 ```json
 {
@@ -413,16 +425,16 @@ Customer prefers email over phone calls.
 
 Each tag names its source row: a memory result carries its entry id, resolvable via [`GET /api/v1/memory-entries/{entry_id}`](/docs/api/memory-entries/get-memory-entry) even once [superseded](./memories.md#temporal-invalidation); a document chunk carries its page when it has one (else `[Document: /reports/q1.txt]`).
 
-| Field            | Type       | Description                                                                                 |
-| ---------------- | ---------- | -------------------------------------------------------------------------------------------- |
-| `memory_ids`     | `string[]` | Search entries within these specific memories (`mem_` prefix)                               |
-| `document_ids`   | `string[]` | Scope document results to these specific document IDs                                       |
-| `document_paths` | `string[]` | Scope document results to files under these path prefixes                                   |
-| `tags`           | `object`   | Scope **both** documents and memory entries to results whose `tags` contain all these key-value pairs (exact) |
-| `min_score`      | `number`   | Minimum raw cosine similarity (0–1) a vector candidate must reach to be ranked (default: 0.5). The same floor the search endpoint now spells `min_similarity` — see [Knowledge — Relevance knobs](./knowledge.md#relevance-knobs) |
-| `limit`          | `number`   | Maximum number of results to inject (default: 5)                                            |
-| `write_memory_id`| `string`   | When set, automatically injects a `write_memory` tool that writes facts to this memory      |
-| `extraction`     | `boolean` \| `object` | Automatic fact extraction from completed turns (requires `write_memory_id`). `true` enables defaults; the object form customizes provider, model, and prompt — see [Automatic Extraction](./memories.md#automatic-extraction) |
+| Field             | Type                  | Description                                                                                                                                                                                                                       |
+| ----------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `memory_ids`      | `string[]`            | Search entries within these specific memories (`mem_` prefix)                                                                                                                                                                     |
+| `document_ids`    | `string[]`            | Scope document results to these specific document IDs                                                                                                                                                                             |
+| `document_paths`  | `string[]`            | Scope document results to files under these path prefixes                                                                                                                                                                         |
+| `tags`            | `object`              | Scope **both** documents and memory entries to results whose `tags` contain all these key-value pairs (exact)                                                                                                                     |
+| `min_score`       | `number`              | Minimum raw cosine similarity (0–1) a vector candidate must reach to be ranked (default: 0.5). The same floor the search endpoint now spells `min_similarity` — see [Knowledge — Relevance knobs](./knowledge.md#relevance-knobs) |
+| `limit`           | `number`              | Maximum number of results to inject (default: 5)                                                                                                                                                                                  |
+| `write_memory_id` | `string`              | When set, automatically injects a `write_memory` tool that writes facts to this memory                                                                                                                                            |
+| `extraction`      | `boolean` \| `object` | Automatic fact extraction from completed turns (requires `write_memory_id`). `true` enables defaults; the object form customizes provider, model, and prompt — see [Automatic Extraction](./memories.md#automatic-extraction)     |
 
 `knowledge_config` in the [`POST /agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation) body overrides the stored config for one call: `memory_ids`, `document_ids` and `document_paths` are unioned with the stored arrays; `tags` pairs are merged, the override winning per key; `min_score` and `limit` take the per-generation value. `write_memory_id` and `extraction` are agent-level only; `write_memory` tool: [Memories](./memories.md#agent-integration).
 
@@ -444,7 +456,10 @@ Only `memory_ids` set → memory-only search. Document search runs when `documen
     "type": "object",
     "properties": {
       "summary": { "type": "string" },
-      "sentiment": { "type": "string", "enum": ["positive", "neutral", "negative"] }
+      "sentiment": {
+        "type": "string",
+        "enum": ["positive", "neutral", "negative"]
+      }
     },
     "required": ["summary", "sentiment"]
   }
@@ -588,8 +603,8 @@ Deleting an agent with dependent generations or traces is `409 Conflict` with er
 
 Dispatched to project [webhooks](./webhooks.md) over a generation's lifecycle; for a background generation (the default) a caller that took its `202` has no other channel to learn how the turn ended.
 
-| Event type                          | Trigger                                                    |
-| ----------------------------------- | ---------------------------------------------------------- |
+| Event type                          | Trigger                                                     |
+| ----------------------------------- | ----------------------------------------------------------- |
 | `agents.generation.completed`       | The model loop finished and the turn is recorded            |
 | `agents.generation.failed`          | The turn ended in an error, which is recorded on the record |
 | `agents.generation.requires_action` | The turn paused on a client tool call awaiting outputs      |
@@ -601,10 +616,10 @@ Every generation event carries the generation `id` and `trace_id`; `agents.gener
 
 A [held tool call](./approvals.md) nobody decides expires after its TTL; `on_approval_expiry` decides what follows:
 
-| Value | Behavior |
-| --- | --- |
-| `null` / `"terminate"` (default) | The chain ends there. No generation is spawned and no model call is paid for. |
-| `"react"` | A [continuation](#continuation-chains) is spawned to report the staleness to the agent, which may then act on it. |
+| Value                            | Behavior                                                                                                          |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `null` / `"terminate"` (default) | The chain ends there. No generation is spawned and no model call is paid for.                                     |
+| `"react"`                        | A [continuation](#continuation-chains) is spawned to report the staleness to the agent, which may then act on it. |
 
 Termination still records: the approval reads `expired`, the `approvals.expired` webhook fires and an [`approval_expired` exception](./exceptions.md#producers) is filed. A continuation adds no record and costs a model call; set `react` only for an agent that handles staleness (retrying differently, notifying through an ungated tool). A lapsed call inside an existing [chain](./chains.md) moves it to `expired`. Approved and rejected approvals always continue.
 
@@ -642,7 +657,10 @@ soat create-agent \
 
 ```ts
 import { SoatClient } from '@soat/sdk';
-const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
+const soat = new SoatClient({
+  baseUrl: 'https://api.example.com',
+  token: 'sk_...',
+});
 
 const { data, error } = await soat.agents.createAgent({
   body: {

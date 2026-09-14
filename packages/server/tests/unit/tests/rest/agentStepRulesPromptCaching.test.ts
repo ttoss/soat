@@ -30,7 +30,11 @@ describe('Step rules narrowing tools under prompt caching', () => {
   /**
    * Answers the first call of each turn with a call to `alpha_tool` — a client
    * tool, so the turn pauses and the next step arrives as its own request — and
-   * every later call with text.
+   * every later call with text, unless the request forces a tool.
+   *
+   * Honouring a forced `tool_choice` is what `tests/mocks/ollamaToolChoiceProxy.mjs`
+   * does for Ollama: the AI SDK rejects an answer that ignores one, so a stub
+   * replying with text fails the turn before the assertion is reached.
    */
   const startStubServer = async (): Promise<string> => {
     stubServer = createServer((req, res: ServerResponse) => {
@@ -41,9 +45,14 @@ describe('Step rules narrowing tools under prompt caching', () => {
       req.on('end', () => {
         const body = JSON.parse(raw);
         requestBodies.push(body);
+        const forcedTool =
+          body.tool_choice?.type === 'tool'
+            ? (body.tool_choice.name as string)
+            : null;
         const isFirstStep = !JSON.stringify(body.messages ?? []).includes(
           'tool_result'
         );
+        const calledTool = isFirstStep ? 'alpha_tool' : forcedTool;
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(
           JSON.stringify({
@@ -51,15 +60,15 @@ describe('Step rules narrowing tools under prompt caching', () => {
             type: 'message',
             role: 'assistant',
             model: 'claude-haiku-4-5',
-            stop_reason: isFirstStep ? 'tool_use' : 'end_turn',
+            stop_reason: calledTool ? 'tool_use' : 'end_turn',
             stop_sequence: null,
             usage,
-            content: isFirstStep
+            content: calledTool
               ? [
                   {
                     type: 'tool_use',
                     id: 'toolu_stub_1',
-                    name: 'alpha_tool',
+                    name: calledTool,
                     input: { value: 'first' },
                   },
                 ]

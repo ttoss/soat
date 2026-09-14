@@ -1,4 +1,9 @@
-import { APICallError, RetryError } from 'ai';
+import {
+  APICallError,
+  RetryError,
+  StreamProviderError,
+  ToolChoiceViolationError,
+} from 'ai';
 import { DomainError } from 'src/errors';
 import { toProviderDomainError } from 'src/lib/providerError';
 
@@ -87,6 +92,51 @@ describe('toProviderDomainError', () => {
 
     expect(error?.code).toBe('AI_PROVIDER_ERROR');
     expect(error?.message).toContain('model overloaded');
+  });
+
+  /**
+   * From `ai` 7.0.99 the SDK wraps a streamed error frame in a real `Error`
+   * before handing it to `onError`, so the raw-object branch above no longer
+   * sees it. Left unmatched it reached the record as `{name, message}` and the
+   * caller as "Internal Server Error" — the same regression #1084 fixed.
+   */
+  test('maps a streamed provider error the SDK wrapped in StreamProviderError', () => {
+    const error = toProviderDomainError(
+      new StreamProviderError({
+        message: 'upstream capacity exceeded',
+        type: 'server_error',
+        statusCode: 529,
+      })
+    );
+
+    expect(error).toBeInstanceOf(DomainError);
+    expect(error?.code).toBe('AI_PROVIDER_ERROR');
+    expect(error?.httpStatus).toBe(502);
+    expect(error?.message).toContain('upstream capacity exceeded');
+    expect(error?.meta?.providerStatusCode).toBe(529);
+  });
+
+  /**
+   * A model that answers with text while `tool_choice` forces a tool is
+   * upstream-caused in the same way as `OUTPUT_SCHEMA_VALIDATION_FAILED`: the
+   * request was well-formed and the output was not. `ai` only began enforcing
+   * it in 7.0.99, where it surfaces as a runtime fault (500) unless mapped.
+   */
+  test('maps a violated forced tool_choice to an upstream fault', () => {
+    const error = toProviderDomainError(
+      new ToolChoiceViolationError({
+        toolChoice: { type: 'tool', toolName: 'beta_tool' },
+        finishReason: 'stop',
+        provider: 'anthropic',
+        modelId: 'claude-haiku-4-5',
+        content: [{ type: 'text', text: 'done' }],
+      })
+    );
+
+    expect(error).toBeInstanceOf(DomainError);
+    expect(error?.code).toBe('AI_PROVIDER_ERROR');
+    expect(error?.httpStatus).toBe(502);
+    expect(error?.message).toContain('beta_tool');
   });
 
   test('returns null for non-provider errors', () => {

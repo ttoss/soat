@@ -83,7 +83,11 @@ describe('ollamaToolChoiceProxy', () => {
 
     proxy = createToolChoiceProxy({
       upstreamBaseUrl: upstreamUrl,
-      toolNames: ['get_order_status', 'get_weather'],
+      toolNames: [
+        'get_order_status',
+        'get_weather',
+        'call-stanza-1_create-agent-generation',
+      ],
     });
     proxyUrl = await listen(proxy);
   });
@@ -131,6 +135,29 @@ describe('ollamaToolChoiceProxy', () => {
       before,
       'a forced call must not reach the model'
     );
+  });
+
+  // `preset_parameters` are stripped from the schema the model sees
+  // (`modelVisibleSchema`), so a fully-pinned builtin reaches the shim with no
+  // properties: the synthesized call must carry the empty arguments a real one
+  // would, not an inferred value.
+  test('synthesizes an empty-argument call for a tool with no properties', async () => {
+    const name = 'call-stanza-1_create-agent-generation';
+    const res = await chat({
+      model: 'qwen2.5:0.5b',
+      messages: [{ role: 'user', content: 'Write a sonnet.' }],
+      tools: [
+        {
+          type: 'function',
+          function: { name, parameters: { type: 'object', properties: {} } },
+        },
+      ],
+      tool_choice: { type: 'function', function: { name } },
+    });
+
+    const call = (await res.json()).choices[0].message.tool_calls[0];
+    assert.equal(call.function.name, name);
+    assert.deepEqual(JSON.parse(call.function.arguments), {});
   });
 
   test('fills an argument named in the prompt', async () => {

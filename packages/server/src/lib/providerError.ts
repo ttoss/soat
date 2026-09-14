@@ -1,5 +1,11 @@
 import type { LanguageModelUsage } from 'ai';
-import { APICallError, NoObjectGeneratedError, RetryError } from 'ai';
+import {
+  APICallError,
+  NoObjectGeneratedError,
+  RetryError,
+  StreamProviderError,
+  ToolChoiceViolationError,
+} from 'ai';
 
 import { DomainError } from '../errors';
 
@@ -75,6 +81,39 @@ const apiCallDomainError = (error: APICallError): DomainError => {
 };
 
 /**
+ * The `AI_PROVIDER_ERROR` for a fault `ai` reports as its own typed error
+ * rather than as a failed request — an error frame the provider streamed
+ * mid-run, or an answer that ignored a forced `tool_choice`. Both are
+ * upstream-caused in the same way as `OUTPUT_SCHEMA_VALIDATION_FAILED`: the
+ * request was well-formed, the model output was not.
+ *
+ * `ai` 7.0.99 introduced both classes. The streamed frame used to arrive as
+ * raw JSON, which `streamedProviderErrorMessage` matched; wrapped in an
+ * `Error` it fell through to the generic wrapper again (#1084). A violated
+ * `tool_choice` was not reported at all before, and unmapped it reads as a
+ * fault in the runtime (500) rather than in the model.
+ */
+const modelFaultDomainError = (error: unknown): DomainError | null => {
+  if (StreamProviderError.isInstance(error)) {
+    return new DomainError(
+      'AI_PROVIDER_ERROR',
+      `Provider request failed: ${error.message}`,
+      {
+        ...(error.statusCode !== undefined && {
+          providerStatusCode: error.statusCode,
+        }),
+      }
+    );
+  }
+
+  if (ToolChoiceViolationError.isInstance(error)) {
+    return new DomainError('AI_PROVIDER_ERROR', error.message);
+  }
+
+  return null;
+};
+
+/**
  * The token usage a failed turn already spent, or `undefined` when the failure
  * carries none.
  *
@@ -132,6 +171,11 @@ export const toProviderDomainError = (error: unknown): DomainError | null => {
 
   if (APICallError.isInstance(unwrapped)) {
     return apiCallDomainError(unwrapped);
+  }
+
+  const modelFault = modelFaultDomainError(unwrapped);
+  if (modelFault) {
+    return modelFault;
   }
 
   if (RetryError.isInstance(error)) {
