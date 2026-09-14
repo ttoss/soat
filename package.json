@@ -32,7 +32,7 @@
     "@lerna-lite/list": "^5.6.1",
     "@lerna-lite/version": "^5.6.1",
     "@ttoss/config": "^1.38.0",
-    "@ttoss/eslint-config": "^1.28.0",
+    "@ttoss/eslint-config": "^1.28.1",
     "@ttoss/monorepo": "^1.29.18",
     "carlin": "^2.5.0",
     "eslint": "^9",
@@ -46,7 +46,7 @@
   },
   "engines": {
     "node": "^24.0.0",
-    "pnpm": "^11.0.0"
+    "pnpm": "^12.0.0"
   },
-  "packageManager": "pnpm@11.23.0"
+  "packageManager": "pnpm@12.4.1"
 }
