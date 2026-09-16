@@ -49,9 +49,9 @@ const emptySummary = (candidates: number): RuleFiringSummary => {
  */
 const resolveGenerationPublicId = (event: SoatEvent): string | undefined => {
   if (event.type === 'agents.generation.completed') return event.resourceId;
-  const generationId = isPlainObject(event.data)
-    ? event.data.generationId
-    : undefined;
+  // `data` is the envelope's own `Record<string, unknown>`, so only the value
+  // needs narrowing, not the bag.
+  const { generationId } = event.data;
   return typeof generationId === 'string' ? generationId : undefined;
 };
 
@@ -62,15 +62,14 @@ const resolveGenerationPublicId = (event: SoatEvent): string | undefined => {
  */
 const resolveAssistantContent = async (event: SoatEvent): Promise<string> => {
   if (event.type === 'agents.generation.completed') {
-    const output = isPlainObject(event.data) ? event.data.output : undefined;
+    const output = event.data.output;
     const content = isPlainObject(output) ? output.content : undefined;
     return typeof content === 'string' ? content : '';
   }
-  return (
-    (await readGeneratedMessageContent({
-      documentPublicId: event.resourceId,
-    })) ?? ''
-  );
+  const content = await readGeneratedMessageContent({
+    documentPublicId: event.resourceId,
+  });
+  return content ?? '';
 };
 
 const readInputMessages = (generation: GenerationRow): ExtractionMessage[] => {
@@ -176,12 +175,14 @@ const writeCandidates = async (args: {
  * event has run, so there is no read-modify-write to race. Only the turn-level
  * event records it; a `conversations.message.generated` firing is visible in
  * the assertion ledger, which is where every firing lands either way.
+ *
+ * Only ever called with at least one rule's counts: the dispatcher returns
+ * before the loop when nothing matched.
  */
 const recordFiringSummary = async (args: {
   generationPublicId: string;
   summaries: Record<string, RuleFiringSummary>;
 }): Promise<void> => {
-  if (Object.keys(args.summaries).length === 0) return;
   const updated = await updateGenerationRecord({
     publicId: args.generationPublicId,
     extraction: args.summaries,

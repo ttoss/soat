@@ -459,8 +459,24 @@ const CASES: RoundTripCase[] = [
           agent_id: null,
           tool_id: null,
         },
-        update: { enabled: false },
-        expectAfterUpdate: { enabled: false, prompt: 'Only deployment facts' },
+        // A handler in camelCase, which is also the only shape that resolves an
+        // `agent_id` ref rather than leaving the built-in extractor in place.
+        camel: {
+          memoryStoreId: memoryStoreId,
+          on: 'agents.generation.completed',
+          agentId,
+        },
+        camelExpectRead: {
+          memory_store_id: memoryStoreId,
+          agent_id: agentId,
+        },
+        // `null` widens the selector back to every agent in the project.
+        update: { enabled: false, source_agent_ids: null },
+        expectAfterUpdate: {
+          enabled: false,
+          source_agent_ids: null,
+          prompt: 'Only deployment facts',
+        },
       };
     },
   },

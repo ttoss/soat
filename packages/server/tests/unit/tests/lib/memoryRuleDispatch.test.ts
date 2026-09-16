@@ -3,7 +3,8 @@ import type { AddressInfo } from 'node:net';
 
 import { db } from 'src/db';
 import type { SoatEvent } from 'src/lib/eventBus';
-import { emitEvent } from 'src/lib/eventBus';
+import { droppedEventCount, emitEvent } from 'src/lib/eventBus';
+import * as generationsModule from 'src/lib/generations';
 import * as extractionCompletionModule from 'src/lib/memoryExtractionCompletion';
 import { dispatchMemoryRules } from 'src/lib/memoryRuleDispatch';
 
@@ -111,6 +112,8 @@ describe('memory rule dispatch', () => {
     userMessage: string;
     source?: string;
     where?: ProjectScope;
+    /** Omit the recorded messages, as a zero-retention project does. */
+    withoutInputMessages?: boolean;
   }): Promise<string> => {
     const where = args.where ?? scope;
     seq += 1;
@@ -129,7 +132,9 @@ describe('memory rule dispatch', () => {
       status: 'completed',
       startedAt: new Date(),
       source: args.source ?? null,
-      inputMessages: [{ role: 'user', content: args.userMessage }],
+      inputMessages: args.withoutInputMessages
+        ? null
+        : [{ role: 'user', content: args.userMessage }],
     });
     return publicId;
   };
@@ -310,6 +315,115 @@ describe('memory rule dispatch', () => {
       ).resolves.toBeUndefined();
 
       expect(await listMemories(storeId)).toHaveLength(0);
+    });
+  });
+
+  describe('events it cannot read', () => {
+    test('an event type no rule may bind to is ignored', async () => {
+      const where = await createProject('Unhandled Event Project');
+      const storeId = await createStore('Unhandled Event Store', where);
+      const agentId = await createAgent('UnhandledEventAgent', where);
+      await createRule({ memory_store_id: storeId, source_agent_ids: null });
+      const generationId = await seedGeneration({
+        agentId,
+        userMessage: 'A fact from a turn nothing is bound to.',
+        where,
+      });
+
+      await dispatchMemoryRules({
+        ...completedEvent({
+          generationId,
+          assistantContent: 'Noted.',
+          where,
+        }),
+        // Fires per message, including the user's and before the reply, which
+        // is why no rule may bind to it.
+        type: 'conversations.message.created',
+      });
+
+      expect(mockRunExtractionCompletion).not.toHaveBeenCalled();
+      expect(await listMemories(storeId)).toHaveLength(0);
+    });
+
+    test('a message event that names no generation is ignored', async () => {
+      const where = await createProject('No Generation Project');
+      const storeId = await createStore('No Generation Store', where);
+      const handlerAgentId = await createAgent('NoGenerationHandler', where);
+      await createRule({
+        memory_store_id: storeId,
+        on: 'conversations.message.generated',
+        source_agent_ids: null,
+        agent_id: handlerAgentId,
+      });
+
+      await dispatchMemoryRules({
+        type: 'conversations.message.generated',
+        projectId: where.internalProjectId,
+        projectPublicId: where.projectId,
+        resourceType: 'conversation_message',
+        resourceId: 'doc_nothing_to_read',
+        data: { conversationId: 'conv_x' },
+        timestamp: new Date().toISOString(),
+      });
+
+      expect(mockCreateGeneration).not.toHaveBeenCalled();
+      expect(await listMemories(storeId)).toHaveLength(0);
+    });
+
+    test('a completed event carrying no output text still fires the rule', async () => {
+      const where = await createProject('No Output Project');
+      const storeId = await createStore('No Output Store', where);
+      const agentId = await createAgent('NoOutputAgent', where);
+      await createRule({ memory_store_id: storeId, source_agent_ids: null });
+      const generationId = await seedGeneration({
+        agentId,
+        userMessage: 'The badge code is 4417.',
+        where,
+      });
+
+      mockRunExtractionCompletion.mockResolvedValueOnce(
+        '["The badge code is 4417"]'
+      );
+
+      await dispatchMemoryRules({
+        ...completedEvent({ generationId, assistantContent: '', where }),
+        data: { id: generationId, status: 'completed' },
+      });
+
+      // The turn's own messages are transcript enough.
+      const prompt = mockRunExtractionCompletion.mock.calls[0][0].prompt;
+      expect(prompt).toContain('The badge code is 4417.');
+      expect(await listMemories(storeId)).toHaveLength(1);
+    });
+
+    test('a turn whose messages were never recorded extracts from the reply alone', async () => {
+      const where = await createProject('Zero Retention Project');
+      const storeId = await createStore('Zero Retention Store', where);
+      const agentId = await createAgent('ZeroRetentionAgent', where);
+      await createRule({ memory_store_id: storeId, source_agent_ids: null });
+      // A zero-retention project never writes `input_messages`.
+      const generationId = await seedGeneration({
+        agentId,
+        userMessage: 'never recorded',
+        withoutInputMessages: true,
+        where,
+      });
+
+      mockRunExtractionCompletion.mockResolvedValueOnce(
+        '["The office moves in March"]'
+      );
+
+      await dispatchMemoryRules(
+        completedEvent({
+          generationId,
+          assistantContent: 'The office moves in March.',
+          where,
+        })
+      );
+
+      const prompt = mockRunExtractionCompletion.mock.calls[0][0].prompt;
+      expect(prompt).toContain('The office moves in March.');
+      expect(await listMemories(storeId)).toHaveLength(1);
     });
   });
 
@@ -584,6 +698,56 @@ describe('memory rule dispatch', () => {
 
       expect(memories).toHaveLength(1);
       expect(memories[0].content).toBe('The standup is at 09:30');
+    });
+
+    test('a firing the database refuses is recorded as a dropped event', async () => {
+      const where = await createProject('Dropped Event Project');
+      const storeId = await createStore('Dropped Event Store', where);
+      const agentId = await createAgent('DroppedEventAgent', where);
+      await createRule({ memory_store_id: storeId, source_agent_ids: null });
+      const generationId = await seedGeneration({
+        agentId,
+        userMessage: 'The lock combination is 12-4-31.',
+        where,
+      });
+
+      mockRunExtractionCompletion.mockResolvedValueOnce(
+        '["The lock combination is 12-4-31"]'
+      );
+      // Sanctioned spy: the subscriber's `.catch` exists for a database failure
+      // after the turn has already committed, and there is no other way to
+      // reach it. Everything before the summary write runs on the real
+      // database. Restored here rather than through `restoreAllMocks`, which
+      // would disconnect this file's shared spies permanently.
+      const summaryWrite = jest
+        .spyOn(generationsModule, 'updateGenerationRecord')
+        .mockRejectedValueOnce(new Error('database unavailable'));
+
+      try {
+        const before = droppedEventCount({ stage: 'memory_rule_dispatch' });
+
+        emitEvent(
+          completedEvent({ generationId, assistantContent: 'Noted.', where })
+        );
+
+        // The drop counter is the side effect to poll: the write it follows is
+        // the last thing a firing does.
+        const deadline = Date.now() + 10_000;
+        while (
+          droppedEventCount({ stage: 'memory_rule_dispatch' }) === before &&
+          Date.now() < deadline
+        ) {
+          await listMemories(storeId);
+        }
+
+        expect(droppedEventCount({ stage: 'memory_rule_dispatch' })).toBe(
+          before + 1
+        );
+        // The candidates it had already written are not lost with the summary.
+        expect(await listMemories(storeId)).toHaveLength(1);
+      } finally {
+        summaryWrite.mockRestore();
+      }
     });
   });
 

@@ -1,12 +1,7 @@
 import type { MemoryRuleEvent } from '@soat/postgresdb';
 
-import { db } from '../../db';
-import {
-  lookupAgentInternalId,
-  lookupMemoryStoreInternalId,
-  lookupToolInternalId,
-} from '../formationsHelpers';
-import { assertSourceAgentIds } from '../memoryRuleRefs';
+import { lookupMemoryStoreInternalId } from '../formationsHelpers';
+import { assertSourceAgentIds, resolveMemoryRuleRefs } from '../memoryRuleRefs';
 import {
   createMemoryRule,
   deleteMemoryRule,
@@ -31,31 +26,6 @@ const asRefPresence = (value: unknown): string | undefined => {
   return typeof value === 'string' ? value : 'unresolved-ref';
 };
 
-const resolveRef = async (args: {
-  value: unknown;
-  projectId: number;
-  lookup: (a: { publicId: string; projectId: number }) => Promise<number>;
-}): Promise<number | null | undefined> => {
-  if (args.value === null) return null;
-  const publicId = toNullableString(args.value);
-  if (!publicId) return undefined;
-  return args.lookup({ publicId, projectId: args.projectId });
-};
-
-const resolveAiProviderId = async (args: {
-  value: unknown;
-  projectId: number;
-}): Promise<number | null | undefined> => {
-  if (args.value === null) return null;
-  const publicId = toNullableString(args.value);
-  if (!publicId) return undefined;
-  const provider = await db.AiProvider.findOne({
-    where: { publicId, projectId: args.projectId },
-  });
-  if (!provider) throw new Error(`AI provider not found: ${publicId}`);
-  return provider.id as number;
-};
-
 const asSourceAgentIds = (value: unknown): string[] | null | undefined => {
   if (value === null) return null;
   if (!Array.isArray(value)) return undefined;
@@ -68,27 +38,22 @@ const asEvent = (value: unknown): MemoryRuleEvent | undefined => {
   return typeof value === 'string' ? (value as MemoryRuleEvent) : undefined;
 };
 
-const resolveHandlerRefs = async (args: {
+/**
+ * The handler and provider refs, through the same resolver the REST route uses.
+ * By apply time a `{ "ref": … }` has become a plain public id, so there is
+ * nothing here the route does not also do — and one resolver is what keeps the
+ * two doors from disagreeing about what "not found in this project" means.
+ */
+const resolveHandlerRefs = (args: {
   properties: Record<string, unknown>;
   projectId: number;
 }) => {
-  const [agentId, toolId, aiProviderId] = await Promise.all([
-    resolveRef({
-      value: args.properties.agent_id,
-      projectId: args.projectId,
-      lookup: lookupAgentInternalId,
-    }),
-    resolveRef({
-      value: args.properties.tool_id,
-      projectId: args.projectId,
-      lookup: lookupToolInternalId,
-    }),
-    resolveAiProviderId({
-      value: args.properties.ai_provider_id,
-      projectId: args.projectId,
-    }),
-  ]);
-  return { agentId, toolId, aiProviderId };
+  return resolveMemoryRuleRefs({
+    projectId: args.projectId,
+    agentId: toNullableString(args.properties.agent_id),
+    toolId: toNullableString(args.properties.tool_id),
+    aiProviderId: toNullableString(args.properties.ai_provider_id),
+  });
 };
 
 const writeArgs = (properties: Record<string, unknown>) => {

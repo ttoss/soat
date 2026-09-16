@@ -1,7 +1,6 @@
 import type { MemoryRuleEvent } from '@soat/postgresdb';
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
-import { DomainError } from 'src/errors';
 import { buildSrn } from 'src/lib/iam';
 import {
   assertSourceAgentIds,
@@ -23,7 +22,6 @@ import { requireMemoryStore } from './memoryStoreAccess';
 const memoryRulesRouter = new Router<Context>();
 
 type RuleBody = {
-  memory_store_id?: string;
   on?: MemoryRuleEvent;
   source_agent_ids?: string[] | null;
   agent_id?: string | null;
@@ -36,7 +34,20 @@ type RuleBody = {
   enabled?: boolean;
 };
 
-type StoreScope = { id: number; projectId: number; publicId: string };
+/**
+ * `memory_store_id` is `required` in the spec, so `strictFields` has already
+ * answered `400` for a body without it before a handler runs. Typed as present
+ * rather than re-checked here: a second guard on the same field would be dead
+ * code claiming to be a safety net.
+ */
+type CreateBody = RuleBody & { memory_store_id: string };
+
+type StoreScope = {
+  id: number;
+  projectId: number;
+  publicId: string;
+  projectPublicId: string;
+};
 
 /**
  * Authorizes `action` against the memory store and returns its internal scope.
@@ -48,19 +59,20 @@ type StoreScope = { id: number; projectId: number; publicId: string };
  */
 const authorizeStore = async (args: {
   ctx: Context;
-  memoryStorePublicId: string | undefined;
+  memoryStorePublicId: string;
   action: string;
 }): Promise<StoreScope> => {
-  if (!args.memoryStorePublicId) {
-    throw new DomainError('VALIDATION_FAILED', 'memory_store_id is required');
-  }
-  await requireMemoryStore({
+  const store = await requireMemoryStore({
     ctx: args.ctx,
     memoryStorePublicId: args.memoryStorePublicId,
     action: args.action,
   });
   const scope = await findMemoryStoreScope({ id: args.memoryStorePublicId });
-  return { ...scope!, publicId: args.memoryStorePublicId };
+  return {
+    ...scope!,
+    publicId: args.memoryStorePublicId,
+    projectPublicId: store.project_id!,
+  };
 };
 
 /**
@@ -157,7 +169,7 @@ memoryRulesRouter.get('/memory-rules/:memory_rule_id', async (ctx: Context) => {
 
 memoryRulesRouter.post('/memory-rules', async (ctx: Context) => {
   requireAuth(ctx);
-  const body = ctx.request.body as RuleBody;
+  const body = ctx.request.body as CreateBody;
 
   const store = await authorizeStore({
     ctx,
@@ -211,18 +223,15 @@ memoryRulesRouter.delete(
     // `204 No Content` leaves the audit middleware no body to backfill the
     // project and SRN from, so it is handed the resolved resource first. The
     // SRN is the store's, which is what the request was authorized against.
-    const rule = await getMemoryRule({ id: ctx.params.memory_rule_id });
-    if (rule.project_id) {
-      setAuditResourceHint(ctx, {
-        projectPublicId: rule.project_id,
-        resourceSrn: buildSrn({
-          projectPublicId: rule.project_id,
-          resourceType: 'memory_store',
-          resourceId: store.publicId,
-        }),
-        resourcePublicId: rule.id,
-      });
-    }
+    setAuditResourceHint(ctx, {
+      projectPublicId: store.projectPublicId,
+      resourceSrn: buildSrn({
+        projectPublicId: store.projectPublicId,
+        resourceType: 'memory_store',
+        resourceId: store.publicId,
+      }),
+      resourcePublicId: ctx.params.memory_rule_id,
+    });
 
     await deleteMemoryRule({ id: ctx.params.memory_rule_id });
     ctx.status = 204;
