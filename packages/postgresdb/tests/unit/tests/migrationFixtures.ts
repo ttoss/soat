@@ -52,12 +52,12 @@ export const dropDatabase = async (name: string): Promise<void> => {
 };
 
 /**
- * The schema as it stood before `2026-09-16`: `memories` is the container and
- * `memory_entries` the item. Only the columns and indexes the migrations touch
- * are reproduced, plus the two tables they join against.
+ * The schema as it stood before `memories-rename-and-provenance`: `memories` is
+ * the container and `memory_entries` the item. Only the columns and indexes the
+ * migrations touch are reproduced, plus the tables they join against.
  *
- * `tagsType` distinguishes a database that has had the `2026-09-11` tags
- * migration (`jsonb`) from one that has not (`text[]`).
+ * `tagsType` distinguishes a database that has had `memory-tags-to-jsonb`
+ * (`jsonb`) from one that has not (`text[]`).
  */
 export const createLegacySchema = async (args: {
   client: Sequelize;
