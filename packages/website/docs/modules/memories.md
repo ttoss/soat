@@ -128,7 +128,7 @@ On a **supersede**, the retired memory's `tags` and `metadata` are shallow-merge
 
 Below `supersede_threshold`, cosine covers both "same fact, changed" and "related but distinct" (*prefers email* vs *prefers Portuguese*), and embeddings sit close on negations. `created` is the outcome there because a near-duplicate stays searchable while a wrongly retired fact does not.
 
-#### Where the thresholds come from
+### Where the thresholds come from
 
 Three layers, resolved request → store → constant, each value independently; the first non-null wins.
 
