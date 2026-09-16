@@ -11,7 +11,6 @@ import {
   executeDelayNode,
   executeHumanNode,
   executeKnowledgeNode,
-  executeMemoryWriteNode,
   executeToolNode,
   executeTransformNode,
 } from './orchestrationNodeExecutors';
@@ -192,8 +191,6 @@ const dispatchNodeExecution = async (
         projectIds,
         billingProjectId: projectId ?? null,
       });
-    case 'memory_write':
-      return executeMemoryWriteNode({ node: nodeDefn, state });
     default:
       throw new DomainError(
         'ORCHESTRATION_NODE_FAILED',

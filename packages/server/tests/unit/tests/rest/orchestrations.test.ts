@@ -1107,35 +1107,6 @@ describe('Orchestrations', () => {
       expect(runRes.body.status).toBe('succeeded');
     });
 
-    test('memory_write node with fake memoryId causes run to fail', async () => {
-      const createRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/orchestrations')
-        .send({
-          name: 'Memory Write Test',
-          nodes: [
-            {
-              id: 'write',
-              type: 'memory_write',
-              memory_id: 'mem_nonexistent12345',
-              input_mapping: { content: { var: 'text' } },
-            },
-          ],
-          edges: [],
-          project_id: projectId,
-        });
-      expect(createRes.status).toBe(201);
-
-      const runRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/orchestration-runs')
-        .send({
-          wait: true,
-          orchestration_id: createRes.body.id,
-          input: { text: 'hello world' },
-        });
-      expect(runRes.status).toBe(201);
-      expect(runRes.body.status).toBe('failed');
-    });
-
     test('agent node with fake agentId causes run to fail', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations')

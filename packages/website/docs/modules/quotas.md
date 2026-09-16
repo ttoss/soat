@@ -132,7 +132,7 @@ Enforced on the caller-facing corpus writes, all creates, so a refusal leaves no
 
 The `file`, `document`, `memory_entry` and `dataset_item` [formation](./formations.md) resources are held to the same cap.
 
-**Writes driven from inside a generation or run are exempt**, since a refusal would leave the turn or run half persisted: [conversation](./conversations.md) messages (each a `Document` with chunks and embeddings), memory entries from the `write_memory` tool, [automatic extraction](./memories.md) or an [orchestration](./orchestrations.md) `memory_write` node, and [`eval_results`](./evaluations.md) rows. The cap bounds deliberate ingest; `monitor`-mode data says whether that is enough.
+**Writes driven from inside a generation or run are exempt**, since a refusal would leave the turn or run half persisted: [conversation](./conversations.md) messages (each a `Document` with chunks and embeddings), memory entries from the `write_memory` tool or [automatic extraction](./memories.md), and [`eval_results`](./evaluations.md) rows. The cap bounds deliberate ingest; `monitor`-mode data says whether that is enough.
 
 #### Measured against the last snapshot
 

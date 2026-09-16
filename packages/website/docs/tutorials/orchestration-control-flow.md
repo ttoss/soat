@@ -492,6 +492,5 @@ All [node types](/docs/modules/orchestrations#node-types):
 | `sub_orchestration` | Same `orchestration_id` field the `loop` uses here — runs a child orchestration as a single step |
 | `agent` | [Orchestrate a Sonnet](/docs/tutorials/orchestrate-a-sonnet), [Multi-Agent Orchestration](/docs/tutorials/multi-agent-orchestration) |
 | `knowledge` | [Knowledge](/docs/modules/knowledge) — searches a knowledge source into state |
-| `memory_write` | [Memories](/docs/modules/memories) — writes a memory entry |
 | `human` | [Orchestrations — Node Types](/docs/modules/orchestrations#node-types) — pauses the run for external input |
 | `webhook` | [Orchestrations — Node Types](/docs/modules/orchestrations#node-types) — emits or awaits an HTTP callback |

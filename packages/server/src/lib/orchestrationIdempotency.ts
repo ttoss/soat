@@ -14,7 +14,6 @@ const log = createDebug('soat:orchestrations');
 const SIDE_EFFECTING_NODE_TYPES = new Set([
   'agent',
   'tool',
-  'memory_write',
   'emit_event',
   'sub_orchestration',
   'loop',

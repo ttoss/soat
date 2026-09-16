@@ -24,8 +24,8 @@ registerResourceFieldMap({
 /**
  * Context needed to consolidate a merge with an LLM. Present only for writes
  * with an agent context (the `write_memory` tool and automatic extraction);
- * absent for manual REST writes and orchestration `memory_write` nodes, which
- * have no model to consolidate with and therefore never merge.
+ * absent for manual REST writes, which have no model to consolidate with and
+ * therefore never merge.
  */
 export type MemoryConsolidationContext = {
   agentId: string;
@@ -167,10 +167,10 @@ const resolveMemoryProjectId = async (args: {
  * The project's `storage_bytes` cap applied to a caller-driven entry write.
  *
  * Called from the REST route and the formation resource rather than from
- * `writeMemoryEntry` itself: the `write_memory` tool, automatic extraction and
- * an orchestration's `memory_write` node all reach that function mid-turn, and
- * a refusal there would fail a generation already under way — the corpus cap
- * is a request-boundary refusal by design (#1249).
+ * `writeMemoryEntry` itself: the `write_memory` tool and automatic extraction
+ * both reach that function mid-turn, and a refusal there would fail a
+ * generation already under way — the corpus cap is a request-boundary refusal
+ * by design (#1249).
  */
 export const assertMemoryEntryStorageQuota = async (args: {
   memoryId: number;

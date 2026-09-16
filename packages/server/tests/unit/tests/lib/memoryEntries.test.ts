@@ -117,8 +117,8 @@ describe('writeMemoryEntry merge consolidation', () => {
     expect(result.entry.content).toBe('Beta fact');
   });
 
-  // No agent context (manual REST, the orchestration `memory_write` node)
-  // means no model to consolidate with, so a merge-band write creates.
+  // No agent context (a manual REST write) means no model to consolidate
+  // with, so a merge-band write creates.
   test('creates without calling the LLM when there is no consolidation context', async () => {
     const memoryId = await createMemoryId('Manual Merge');
     await writeMemoryEntry({ memoryId, content: 'Alpha' });
