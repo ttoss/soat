@@ -3,7 +3,7 @@ import { defineMigration } from '@ttoss/postgresdb';
 
 /**
  * The two tables that carried a `text[]` tags column, under the names they had
- * before `memories-rename-and-provenance` renamed both. This migration runs
+ * before `2026-09-16-memories-rename-and-provenance` renamed both. It runs
  * first, so it always meets that vocabulary.
  */
 const TAGGED_TABLES = ['memories', 'memory_entries'] as const;
@@ -69,7 +69,7 @@ const convert = (table: string) => {
 };
 
 export const memoryTagsToJsonb = defineMigration({
-  name: 'memory-tags-to-jsonb',
+  name: '2026-09-11-memory-tags-to-jsonb',
   description:
     'Memory tags from text[] to key-value jsonb, aligning them with every other tagged resource.',
   /**

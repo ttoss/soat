@@ -48,7 +48,7 @@ const RENAME_SQL = `
 `;
 
 export const memoriesRenameAndProvenance = defineMigration({
-  name: 'memories-rename-and-provenance',
+  name: '2026-09-16-memories-rename-and-provenance',
   description:
     'memories -> memory_stores and memory_entries -> memories, with source_conversation_id and source_generation_id collapsed into source_id.',
   /**

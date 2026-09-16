@@ -58,10 +58,10 @@ and recorded in a `schema_migrations` table it maintains itself.
 The flow they follow is
 [PostgreSQL Migrations](https://ttoss.dev/docs/engineering/guidelines/postgres-migrations).
 
-| Migration                        | Change                                                                                                                                       |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `memory-tags-to-jsonb`           | `memories.tags` and `memory_entries.tags` from `text[]` to key-value `jsonb`                                                                 |
-| `memories-rename-and-provenance` | `memories` -> `memory_stores` and `memory_entries` -> `memories`, `source_conversation_id`/`source_generation_id` collapsed into `source_id` |
+| Migration                                   | Change                                                                                                                                       |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `2026-09-11-memory-tags-to-jsonb`           | `memories.tags` and `memory_entries.tags` from `text[]` to key-value `jsonb`                                                                 |
+| `2026-09-16-memories-rename-and-provenance` | `memories` -> `memory_stores` and `memory_entries` -> `memories`, `source_conversation_id`/`source_generation_id` collapsed into `source_id` |
 
 Run them from the server package, which owns the entrypoint:
 
@@ -82,9 +82,13 @@ models' indexes mid-way calls `context.sync()` itself.
 
 #### Adding one
 
-1. A module in `src/migrations/`, built with `defineMigration`.
-2. Append it to `MIGRATIONS` in `src/migrations/index.ts`. **Order is a
-   contract**, and a name is permanent identity once merged — renaming or
+1. A module in `src/migrations/`, built with `defineMigration`, named
+   `YYYY-MM-DD-<change>` — the date it is written. Both the file and the
+   migration's `name` carry it, so `ls` and `migrate status` read in the order
+   they run.
+2. Append it to `MIGRATIONS` in `src/migrations/index.ts`. **That array is the
+   order**, not the prefix; a test fails if the two disagree. Order is a
+   contract, and a name is permanent identity once merged — renaming or
    deleting one that has run anywhere makes the runner refuse to start.
 3. Write `isApplied`. It reads the migration's own change back out of the
    schema, so a database that already carries it — one `sync` has just built,

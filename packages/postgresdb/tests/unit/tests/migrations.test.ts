@@ -21,6 +21,9 @@ import {
 
 jest.setTimeout(180_000);
 
+/** `YYYY-MM-DD-<kebab-case>`, the name a migration is recorded under. */
+const DATED_NAME = /^(\d{4}-\d{2}-\d{2})-[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
 const databases: string[] = [];
 let counter = 0;
 
@@ -71,16 +74,28 @@ describe('the migration list', () => {
     expect(withoutProbe).toEqual([]);
   });
 
-  test('names are unique and kebab-case', () => {
+  test('names are unique', () => {
     const names = MIGRATIONS.map((migration) => {
       return migration.name;
     });
 
     expect(new Set(names).size).toBe(names.length);
+  });
 
-    for (const name of names) {
-      expect(name).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/);
+  test('every name carries its date as a prefix', () => {
+    for (const migration of MIGRATIONS) {
+      expect(migration.name).toMatch(DATED_NAME);
     }
+  });
+
+  test('the list is in date order, so reading order is execution order', () => {
+    // The prefix earns its keep only if it agrees with the array, which is what
+    // actually decides the order the runner applies them in.
+    const dates = MIGRATIONS.map((migration) => {
+      return DATED_NAME.exec(migration.name)?.[1];
+    });
+
+    expect(dates).toEqual([...dates].sort());
   });
 
   test('every migration carries a description', () => {
@@ -90,7 +105,7 @@ describe('the migration list', () => {
   });
 });
 
-describe('memory-tags-to-jsonb', () => {
+describe('2026-09-11-memory-tags-to-jsonb', () => {
   let client: Sequelize;
 
   beforeAll(async () => {
@@ -115,7 +130,9 @@ describe('memory-tags-to-jsonb', () => {
 
     // By name: the rename that follows it would take both tables out from
     // under these assertions.
-    await runnerFor({ client }).run({ names: ['memory-tags-to-jsonb'] });
+    await runnerFor({ client }).run({
+      names: ['2026-09-11-memory-tags-to-jsonb'],
+    });
   });
 
   afterAll(async () => {
@@ -168,7 +185,7 @@ describe('memory-tags-to-jsonb', () => {
     const report = await runnerFor({ client }).status();
 
     const entry = report.migrations.find((migration) => {
-      return migration.name === 'memory-tags-to-jsonb';
+      return migration.name === '2026-09-11-memory-tags-to-jsonb';
     });
 
     expect(entry?.applied).not.toBeNull();
@@ -176,7 +193,7 @@ describe('memory-tags-to-jsonb', () => {
   });
 });
 
-describe('memories-rename-and-provenance', () => {
+describe('2026-09-16-memories-rename-and-provenance', () => {
   let client: Sequelize;
 
   beforeAll(async () => {

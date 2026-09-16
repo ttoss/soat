@@ -142,7 +142,8 @@ export const createSchemaMigrationRunner = (args: { sequelize: Sequelize }) => {
  * Prepares the schema: the migrations `sync` cannot perform, then the sync.
  *
  * That order inverts the guideline's default and is load-bearing —
- * `memories-rename-and-provenance` renames a table the models already describe
+ * `2026-09-16-memories-rename-and-provenance` renames a table the models
+ * already describe
  * under its new name, so a sync running first would create an empty
  * `memory_stores` beside the populated `memories` and then fail building an
  * index over a column the old table has not got.
