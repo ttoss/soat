@@ -484,6 +484,29 @@ A generation whose final assistant text is entirely such a call is recorded `fai
 
 Fires only when the text, minus a wrapping markdown fence, is one JSON object (or an array of them) whose keys are all tool-call vocabulary (`name` / `tool` / `tool_name` / `function`, `arguments` / `args` / `parameters` / `input`, `id`, `type`) and whose name is a tool bound to the agent. Agents with an `output_schema` are exempt.
 
+### Who may act on an agent
+
+Every route that acts on one agent — read it, change it, run it, or move its
+release — is authorized against **that agent's** SRN,
+`srn:<project_id>:agent:<agent_id>`, not against the project. A policy may
+therefore name the agents it covers:
+
+```json
+{
+  "statement": [
+    {
+      "effect": "Allow",
+      "action": ["agents:GetAgent", "agents:CreateAgentGeneration"],
+      "resource": ["srn:proj_V1StGXR8Z5jdHi6B:agent:agent_V1StGXR8Z5jdHi6B"]
+    }
+  ]
+}
+```
+
+Refusals keep the shapes [IAM](./iam.md#what-a-denial-looks-like) defines: a read the caller may not perform is `404` (an agent it may not see does not announce itself), a write or a run is `403`, and a credential scoped to another project is `403 API_KEY_PROJECT_SCOPE`.
+
+Listing agents stays project-scoped: [`GET /api/v1/agents`](/docs/api/agents/list-agents) asks whether the caller may list agents in a project at all, so a policy that names individual agents grants no listing.
+
 ### SOAT Action Permissions
 
 A `builtin` action must be allowed by both the **caller policy** (the user or API key that triggered the generation) and the agent's optional **`boundary_policy`**; the effective permission is the intersection, as for [API keys](./api-keys.md#permission-inheritance). Without `boundary_policy`, only the caller's apply.
@@ -532,12 +555,13 @@ The SRN is the one the route enforces, which is not always the id in the argumen
 | --- | --- |
 | Memory store, memory, memory rule | ✅ against the store's SRN and tags |
 | Actor, conversation, session | ✅ against its own SRN and tags |
+| Agent | ✅ against its own SRN (agents carry no tags) |
 | Everything else | evaluated against `*` |
 
 Two cases stay `*`, and both refuse rather than admit when a statement names a resource:
 
 - **An action that names no resource** — a listing, a create, anything project-scoped. `*` is the whole truth about it; scope those with the caller's policy.
-- **A module not yet scoped** (agents, documents, files, tools, triggers and the rest). Their routes are still resource-checked for the caller; only the agent boundary is action-level there.
+- **A module not yet scoped** (documents, files, tools, triggers and the rest). Their routes are still resource-checked for the caller; only the agent boundary is action-level there.
 
 An id that resolves to nothing is treated the same way: no SRN, so a scoped boundary denies the call before it is made.
 

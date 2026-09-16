@@ -9,6 +9,7 @@ import { parseWireToolBindings } from 'src/lib/agentToolBindings';
 import { buildSrn } from 'src/lib/iam';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
+import { authorizeAgentRead, authorizeAgentWrite } from './agentAccess';
 import { agentGenerationRouter } from './agentGeneration';
 import { agentVersionsRouter } from './agentVersions';
 import {
@@ -263,53 +264,36 @@ agentsRouter.get('/agents', async (ctx: Context) => {
 });
 
 agentsRouter.get('/agents/:agent_id', async (ctx: Context) => {
-  requireAuth(ctx);
-
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await authorizeAgentRead({
     ctx,
     action: 'agents:GetAgent',
-    resourceType: 'agent',
   });
 
-  const result = await getAgent({
-    projectIds,
-    id: ctx.params.agent_id,
-  });
-
-  ctx.body = result;
+  ctx.body = await getAgent({ projectIds, id: ctx.params.agent_id });
 });
 
 agentsRouter.put('/agents/:agent_id', async (ctx: Context) => {
-  requireAuth(ctx);
-
-  const projectIds = await requireProjectAccess({
+  const { projectIds } = await authorizeAgentWrite({
     ctx,
     action: 'agents:UpdateAgent',
-    resourceType: 'agent',
   });
 
   ctx.body = await runAgentUpdate({ ctx, projectIds });
 });
 
 agentsRouter.patch('/agents/:agent_id', async (ctx: Context) => {
-  requireAuth(ctx);
-
-  const projectIds = await requireProjectAccess({
+  const { projectIds } = await authorizeAgentWrite({
     ctx,
     action: 'agents:UpdateAgent',
-    resourceType: 'agent',
   });
 
   ctx.body = await runAgentUpdate({ ctx, projectIds });
 });
 
 agentsRouter.delete('/agents/:agent_id', async (ctx: Context) => {
-  requireAuth(ctx);
-
-  const projectIds = await requireProjectAccess({
+  const { projectIds } = await authorizeAgentWrite({
     ctx,
     action: 'agents:DeleteAgent',
-    resourceType: 'agent',
   });
 
   // The success response is `204 No Content`, so the audit middleware has no

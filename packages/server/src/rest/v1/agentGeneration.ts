@@ -17,7 +17,7 @@ import { mapGenerationResult } from 'src/lib/agentGenerationHelpers';
 import type { GenerationInputMessage } from 'src/lib/generationInputMessages';
 import { validateMetadataBag } from 'src/lib/metadataBag';
 
-import { requireAuth, requireProjectAccess } from './helpers';
+import { authorizeAgentWrite } from './agentAccess';
 import { assertNoSystemMessage } from './systemMessageGuard';
 
 const pipeStreamToResponse = async (
@@ -175,12 +175,9 @@ const resolveWait = (args: { ctx: Context; stream?: boolean }): boolean => {
 agentGenerationRouter.post(
   '/agents/:agent_id/generate',
   async (ctx: Context) => {
-    requireAuth(ctx);
-
-    const projectIds = await requireProjectAccess({
+    const { projectIds } = await authorizeAgentWrite({
       ctx,
       action: 'agents:CreateAgentGeneration',
-      resourceType: 'agent',
     });
 
     const body = ctx.request.body as GenerateRequestBody;
@@ -222,12 +219,9 @@ agentGenerationRouter.post(
 agentGenerationRouter.post(
   '/agents/:agent_id/generate/:generation_id/tool-outputs',
   async (ctx: Context) => {
-    requireAuth(ctx);
-
-    const projectIds = await requireProjectAccess({
+    const { projectIds } = await authorizeAgentWrite({
       ctx,
       action: 'agents:CreateAgentGeneration',
-      resourceType: 'agent',
     });
 
     const { tool_outputs: toolOutputs } = ctx.request.body as {

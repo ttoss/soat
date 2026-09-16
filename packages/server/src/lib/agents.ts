@@ -1,3 +1,5 @@
+import createDebug from 'debug';
+
 import { db } from '../db';
 import {
   type AgentRow,
@@ -43,6 +45,8 @@ export type { AgentToolBinding, InlineToolDefinition, MappedAgent };
 // ── Mapped Types ─────────────────────────────────────────────────────────
 
 // ── Map Functions ────────────────────────────────────────────────────────
+
+const log = createDebug('soat:agents');
 
 const mapAgent = (agent: AgentRow): MappedAgent => {
   const toolBindings = readAgentToolBindings(agent);
@@ -254,6 +258,33 @@ export const createAgent = async (
   });
 
   return mapped;
+};
+
+/**
+ * The project an agent belongs to, by both ids: the public one an SRN names
+ * and the internal one a scoped lookup filters by.
+ *
+ * Agent routes authorize against the agent itself, so they resolve it before
+ * the permission check rather than narrowing by the caller's projects first —
+ * the same order `rest/v1/memories.ts` uses for a store.
+ */
+export const findAgentScope = async (args: {
+  id: string;
+}): Promise<{ projectId: number; projectPublicId: string } | null> => {
+  log('findAgentScope: id=%s', args.id);
+
+  const agent = await db.Agent.findOne({
+    where: { publicId: args.id },
+    include: [{ model: db.Project, as: 'project', attributes: ['publicId'] }],
+  });
+  if (!agent) return null;
+  const row = agent as InstanceType<(typeof db)['Agent']> & {
+    project?: InstanceType<(typeof db)['Project']>;
+  };
+  return {
+    projectId: agent.projectId as number,
+    projectPublicId: row.project!.publicId,
+  };
 };
 
 export const listAgents = async (args: {

@@ -402,6 +402,45 @@ describe('each annotated resource kind resolves the scope its route checks', () 
     );
   });
 
+  test('an agent is bounded by its own SRN', async () => {
+    const provider = await authenticatedTestClient(adminToken)
+      .post('/api/v1/ai-providers')
+      .send({
+        project_id: projectId,
+        name: 'Kinds Target Provider',
+        provider: 'ollama',
+        default_model: 'llama3.2',
+      });
+    const client = authenticatedTestClient(adminToken);
+    const target = await client.post('/api/v1/agents').send({
+      project_id: projectId,
+      name: 'Kinds Target Agent',
+      ai_provider_id: provider.body.id,
+    });
+    const otherTarget = await client.post('/api/v1/agents').send({
+      project_id: projectId,
+      name: 'Kinds Other Target Agent',
+      ai_provider_id: provider.body.id,
+    });
+
+    const resource = `srn:${projectId}:agent:${target.body.id}`;
+    const allowed = await callTool({
+      action: 'get-agent',
+      input: { agent_id: target.body.id },
+      resource,
+    });
+    const denied = await callTool({
+      action: 'get-agent',
+      input: { agent_id: otherTarget.body.id },
+      resource,
+    });
+
+    expect(allowed.id).toBe(target.body.id);
+    expect(denied.error).toBe(
+      'Forbidden: boundary policy denies agents:GetAgent'
+    );
+  });
+
   test('an id that resolves to nothing is refused by a scoped boundary', async () => {
     const result = await callTool({
       action: 'get-memory-store',

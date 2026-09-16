@@ -157,6 +157,9 @@ paths:
       summary: Get an agent
       description: Returns a single agent by ID.
       operationId: getAgent
+      x-soat-resource:
+        kind: agent
+        from: agent_id
       parameters:
         - name: agent_id
           in: path
@@ -194,6 +197,9 @@ paths:
       summary: Update an agent
       description: Updates an existing agent. Identical to PATCH — both perform partial updates.
       operationId: updateAgent
+      x-soat-resource:
+        kind: agent
+        from: agent_id
       parameters:
         - name: agent_id
           in: path
@@ -237,6 +243,9 @@ paths:
       summary: Partially update an agent
       description: Partially updates an existing agent. Identical to PUT — both perform partial updates.
       operationId: patchAgent
+      x-soat-resource:
+        kind: agent
+        from: agent_id
       parameters:
         - name: agent_id
           in: path
@@ -283,6 +292,9 @@ paths:
         generations or traces, unless `force=true` is passed, in which case
         those generations and traces are deleted along with the agent.
       operationId: deleteAgent
+      x-soat-resource:
+        kind: agent
+        from: agent_id
       parameters:
         - name: agent_id
           in: path
@@ -342,6 +354,9 @@ paths:
         tools pause the generation and return `requires_action`. Streaming
         (`stream: true`) implies waiting.
       operationId: createAgentGeneration
+      x-soat-resource:
+        kind: agent
+        from: agent_id
       parameters:
         - name: agent_id
           in: path
@@ -471,6 +486,9 @@ paths:
         Resumes a generation that was paused due to client tool calls.
         Provide tool outputs for each pending tool call.
       operationId: submitAgentToolOutputs
+      x-soat-resource:
+        kind: agent
+        from: agent_id
       parameters:
         - name: agent_id
           in: path
@@ -543,6 +561,9 @@ paths:
         through the REST API or a formation apply alike. See
         [Versioning and Staged Rollout](/docs/modules/agents#versioning-and-staged-rollout).
       operationId: listAgentVersions
+      x-soat-resource:
+        kind: agent
+        from: agent_id
       parameters:
         - name: agent_id
           in: path
@@ -614,6 +635,9 @@ paths:
         Returns the exact configuration the agent held at a given version, so a
         generation can be traced back to the config that produced it.
       operationId: getAgentVersion
+      x-soat-resource:
+        kind: agent
+        from: agent_id
       parameters:
         - name: agent_id
           in: path
@@ -675,6 +699,9 @@ paths:
         config, so a tool, provider, or guardrail deleted since the snapshot was
         taken fails the request instead of writing a broken agent.
       operationId: restoreAgentVersion
+      x-soat-resource:
+        kind: agent
+        from: agent_id
       parameters:
         - name: agent_id
           in: path
@@ -745,6 +772,9 @@ paths:
         further edits archive new versions but do not disturb either side of the
         running split. End the rollout with `promote` or `abort`.
       operationId: setAgentRelease
+      x-soat-resource:
+        kind: agent
+        from: agent_id
       parameters:
         - name: agent_id
           in: path
@@ -807,6 +837,9 @@ paths:
         the rollout is left running untouched. The run that cleared the gate is
         recorded as `eval_run_id` on the version that goes live.
       operationId: promoteAgentRelease
+      x-soat-resource:
+        kind: agent
+        from: agent_id
       parameters:
         - name: agent_id
           in: path
@@ -859,6 +892,9 @@ paths:
         rollout was measured against — not to whatever draft the live columns
         happened to hold.
       operationId: abortAgentRelease
+      x-soat-resource:
+        kind: agent
+        from: agent_id
       parameters:
         - name: agent_id
           in: path
