@@ -143,10 +143,9 @@ export const createSchemaMigrationRunner = (args: { sequelize: Sequelize }) => {
  *
  * That order inverts the guideline's default and is load-bearing —
  * `2026-09-16-memories-rename-and-provenance` renames a table the models
- * already describe
- * under its new name, so a sync running first would create an empty
- * `memory_stores` beside the populated `memories` and then fail building an
- * index over a column the old table has not got.
+ * already describe under its new name, so a sync running first would create an
+ * empty `memory_stores` beside the populated `memories` and then fail building
+ * an index over a column the old table has not got.
  *
  * The two steps take different advisory locks, sequentially and never nested,
  * so concurrent runners serialize on each without deadlocking one another.
