@@ -7,11 +7,11 @@ import {
   restoreOrchestrationVersion,
 } from 'src/lib/orchestrationVersions';
 
+import { parsePagination } from './helpers';
 import {
-  parsePagination,
-  requireProjectAccess,
-  resolveReadProjectIds,
-} from './helpers';
+  authorizeOrchestrationRead,
+  authorizeOrchestrationWrite,
+} from './orchestrationAccess';
 
 /**
  * Orchestration graph version history (issue #872).
@@ -47,10 +47,9 @@ const parseVersionParam = (raw: string): number => {
 orchestrationVersionsRouter.get(
   '/orchestrations/:orchestration_id/versions',
   async (ctx: Context) => {
-    const projectIds = await resolveReadProjectIds({
+    const { projectIds } = await authorizeOrchestrationRead({
       ctx,
       action: 'orchestrations:ListOrchestrationVersions',
-      resourceType: 'orchestration',
     });
     ctx.body = await listOrchestrationVersions({
       projectIds,
@@ -69,10 +68,9 @@ orchestrationVersionsRouter.get(
 orchestrationVersionsRouter.get(
   '/orchestrations/:orchestration_id/versions/:version',
   async (ctx: Context) => {
-    const projectIds = await resolveReadProjectIds({
+    const { projectIds } = await authorizeOrchestrationRead({
       ctx,
       action: 'orchestrations:GetOrchestrationVersion',
-      resourceType: 'orchestration',
     });
     ctx.body = await getOrchestrationVersion({
       projectIds,
@@ -91,10 +89,9 @@ orchestrationVersionsRouter.get(
 orchestrationVersionsRouter.post(
   '/orchestrations/:orchestration_id/versions/:version/restore',
   async (ctx: Context) => {
-    const projectIds = await requireProjectAccess({
+    const { projectIds } = await authorizeOrchestrationWrite({
       ctx,
       action: 'orchestrations:RestoreOrchestrationVersion',
-      resourceType: 'orchestration',
     });
     const body = ctx.request.body as { label?: unknown };
 

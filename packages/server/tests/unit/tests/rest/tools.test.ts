@@ -229,12 +229,18 @@ describe('Tools', () => {
       expect(response.status).toBe(404);
     });
 
-    test('project-scoped API key without GetTool permission returns 403', async () => {
+    // A read a caller may not perform is indistinguishable from absence, now
+    // that the route authorizes against the tool's own SRN rather than the
+    // project wildcard (#1339). It used to be `403` only because the refusal
+    // came from the project probe, before any tool was resolved — the write
+    // routes below keep `403`, which is the deliberate half of the pair.
+    test('project-scoped API key without GetTool permission returns 404', async () => {
       const rawKey = await createRestrictedApiKey('tools:GetTool');
       const response = await authenticatedTestClient(rawKey).get(
         `/api/v1/tools/${toolId}`
       );
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
+      expect(response.body.error.code).toBe('RESOURCE_NOT_FOUND');
     });
   });
 

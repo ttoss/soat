@@ -47,6 +47,7 @@ describe('resolveResourceScope', () => {
     expect(scope).toEqual({
       resourceType: 'memory_store',
       resourceId: taggedStoreId,
+      projectId,
       projectPublicId,
       tags: { env: 'prod' },
     });
@@ -74,6 +75,7 @@ describe('resolveResourceScope', () => {
     expect(scope).toEqual({
       resourceType: 'memory_store',
       resourceId: taggedStoreId,
+      projectId,
       projectPublicId,
       tags: { env: 'prod' },
     });
@@ -96,6 +98,7 @@ describe('resolveResourceScope', () => {
     expect(scope).toEqual({
       resourceType: 'memory_store',
       resourceId: storeId,
+      projectId,
       projectPublicId,
       tags: null,
     });
@@ -122,6 +125,7 @@ describe('resolveResourceScope', () => {
     expect(scope).toEqual({
       resourceType: 'agent',
       resourceId: agent.publicId,
+      projectId,
       projectPublicId,
       // Agents carry no tags column, so a tag condition reads no pairs.
       tags: null,
@@ -139,6 +143,7 @@ describe('resolveResourceScope', () => {
     expect(scope).toEqual({
       resourceType: 'actor',
       resourceId: actor.id,
+      projectId,
       projectPublicId,
       // The column defaults to an empty bag rather than null, so a condition
       // over resource tags reads no pairs — not a missing context.
@@ -157,6 +162,7 @@ describe('resolveResourceScope', () => {
     expect(scope).toEqual({
       resourceType: 'conversation',
       resourceId: conversation.id,
+      projectId,
       projectPublicId,
       tags: {},
     });
@@ -194,6 +200,7 @@ describe('resolveResourceScope', () => {
     expect(scope).toEqual({
       resourceType: 'session',
       resourceId: session.publicId,
+      projectId,
       projectPublicId,
       tags: { env: 'staging' },
     });

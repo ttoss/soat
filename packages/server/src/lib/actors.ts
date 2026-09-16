@@ -61,7 +61,7 @@ const actorIncludes = (): ResourceIncludes => {
   ];
 };
 
-const actors = makeResourceAccessor<ActorRow>({
+export const actors = makeResourceAccessor<ActorRow>({
   model: () => {
     return db.Actor;
   },

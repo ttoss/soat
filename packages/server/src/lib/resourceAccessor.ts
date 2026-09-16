@@ -1,10 +1,14 @@
+import createDebug from 'debug';
+
+import { db } from '../db';
 import { DomainError, type ErrorCode } from '../errors';
 import type { ResourceIncludes } from './modelIncludes';
+import { isStringRecord } from './tags';
 
 /**
  * The minimum a `db.*` model has to offer for the accessor to drive it. Kept
- * structural (rather than importing a Sequelize `ModelStatic`) so this module
- * has no dependency beyond `../errors`.
+ * structural rather than naming a Sequelize `ModelStatic`, which is not
+ * portably nameable from an emitted declaration.
  */
 type FinderModel = {
   findOne: (options: {
@@ -40,6 +44,37 @@ export const scopedWhere = (args: {
   const where: Record<string, unknown> = { publicId: args.id, ...args.where };
   if (args.projectIds !== undefined) where.projectId = args.projectIds;
   return where;
+};
+
+/**
+ * Everything an authorization preamble needs about a resource *before* it
+ * decides: which project it belongs to — in both spellings, the numeric id the
+ * lib layer filters on and the public id an SRN names — and the tags a
+ * `soat:ResourceTag/<key>` condition reads.
+ *
+ * The tags travel with the scope rather than alongside it so an SRN and the
+ * condition context can never come from two different rows, which is the one
+ * way a `Deny` scoped by tag silently stops matching.
+ */
+export type ResourceScope = {
+  projectId: number;
+  projectPublicId: string;
+  /** `null` for a model with no `tags` column: a condition reads no pairs. */
+  tags: Record<string, string> | null;
+};
+
+const log = createDebug('soat:resourceAccessor');
+
+/**
+ * What {@link makeResourceAccessor}'s `findScope` reads off the row it loads.
+ * Every field is optional and checked at runtime, because a model with no
+ * `projectId` type-checks here and must answer `null` rather than an SRN built
+ * out of `undefined`.
+ */
+type ScopedProjectRow = {
+  projectId?: unknown;
+  project?: { publicId?: unknown } | null;
+  tags?: unknown;
 };
 
 /**
@@ -119,6 +154,47 @@ export const makeResourceAccessor = <TRow extends { id?: unknown }>(config: {
   };
 
   /**
+   * The project a public id belongs to: what a route has to know *before* it
+   * can authorize against the resource's own SRN.
+   *
+   * Loaded with a `publicId`-only `Project` include rather than the module's
+   * own `includes`, because this runs ahead of the authorization decision: a
+   * caller who turns out not to be allowed must not have paid for the
+   * resource's full association graph, and no part of it is read here.
+   *
+   * `null` is every reason the lookup cannot answer — no such id, or a model
+   * with no project to answer with. Both fail closed: the route has no SRN to
+   * check, and answers `404` from {@link notFound}.
+   *
+   * A resource whose model carries no `projectId` (`DatasetItem`, `EvalRun`,
+   * `GuardrailVersion`, `OrchestrationVersion`) is not one of these — it
+   * authorizes through the parent that does, the way a memory authorizes
+   * through its store.
+   */
+  const findScope = async (args: {
+    id: string;
+  }): Promise<ResourceScope | null> => {
+    log('findScope: label=%s id=%s', config.label, args.id);
+
+    const row = (await config.model().findOne({
+      where: { publicId: args.id },
+      include: [{ model: db.Project, as: 'project', attributes: ['publicId'] }],
+    })) as ScopedProjectRow | null;
+
+    const projectId = row?.projectId;
+    const projectPublicId = row?.project?.publicId;
+    if (typeof projectId !== 'number' || typeof projectPublicId !== 'string') {
+      return null;
+    }
+
+    // A JSONB column is `unknown` until something checks it; a bag that is not
+    // flat strings is no bag, not a bag to coerce (`.claude/rules/tags.md`).
+    const tags = isStringRecord(row?.tags) ? row.tags : null;
+
+    return { projectId, projectPublicId, tags };
+  };
+
+  /**
    * Re-reads a row by its internal id with the module's includes attached —
    * the step after a `create` or `update`, whose result the module's mapper
    * needs the associations of.
@@ -131,5 +207,12 @@ export const makeResourceAccessor = <TRow extends { id?: unknown }>(config: {
     return reloaded as TRow;
   };
 
-  return { findByPublicId, getByPublicId, notFound, reload, scopedWhere };
+  return {
+    findByPublicId,
+    findScope,
+    getByPublicId,
+    notFound,
+    reload,
+    scopedWhere,
+  };
 };

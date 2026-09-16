@@ -1,98 +1,24 @@
 /**
- * The authorization preamble every route that acts on one agent shares.
+ * The agent's binding of the shared item-route preamble.
  *
- * Agents used to authorize at project level: the caller's policy was probed
- * with `srn:<project>:agent:*`, which a statement naming one agent can never
- * match, so a policy scoped to one agent reached *nothing* while an action-only
- * one reached every agent in the project. The check now names the agent, the
- * way actors, conversations and memory stores already do — which is also what
- * lets an agent `boundary_policy` be scoped to an agent, since a boundary may
- * only promise the granularity the caller path enforces (#1323).
- *
- * The two refusals the module already answered are kept exactly as they were,
- * because they are a deliberate contract rather than an accident of which
- * helper each route reached for:
- *
- * - a **read** a caller may not perform is `404`, so an agent in a project
- *   they cannot see — or one their policy does not name — does not announce
- *   its existence (`agentVersions.test.ts` pins the tenant boundary);
- * - a **write** is `403`, so a caller who can read an agent is told plainly
- *   that changing it is refused (#1029).
- *
- * An id that names no agent at all is `404` on both, from the same
- * `RESOURCE_NOT_FOUND` the accessor throws.
+ * Agents were the first module moved off the project-level probe (#1336) and
+ * the shape held for every other one, so the decision itself now lives in
+ * `resourceAccess.ts`. What stays here is only what is agent-specific: the
+ * accessor the scope comes from, the SRN's type, and the noun a `404` names.
  */
-import type { Context } from 'src/Context';
-import { DomainError } from 'src/errors';
-import { findAgentScope } from 'src/lib/agents';
-import { buildSrn } from 'src/lib/iam';
+import { agents } from 'src/lib/agentAccessor';
 
-import { assertCredentialProjectScope, requireAuth } from './helpers';
+import { makeItemRouteAuthorizer } from './resourceAccess';
 
-type AgentAccess = { projectIds: number[]; projectPublicId: string };
-
-const authorizeAgent = async (args: {
-  ctx: Context;
-  action: string;
-  /** What a refusal reads as; see the module comment. */
-  onDenied: 'hide' | 'refuse';
-}): Promise<AgentAccess> => {
-  const { ctx } = args;
-  requireAuth(ctx);
-
-  const agentId = ctx.params.agent_id;
-  const notFound = new DomainError(
-    'RESOURCE_NOT_FOUND',
-    `Agent '${agentId}' not found.`
-  );
-
-  const scope = await findAgentScope({ id: agentId });
-  if (!scope) throw notFound;
-
-  // A credential pinned to another project keeps its own refusal, with the
-  // remedy in the message; without this it would read as a plain denial.
-  assertCredentialProjectScope({
-    ctx,
-    requestedProjectPublicId: scope.projectPublicId,
-    action: args.action,
-  });
-
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: scope.projectPublicId,
-    action: args.action,
-    resource: buildSrn({
-      projectPublicId: scope.projectPublicId,
-      resourceType: 'agent',
-      resourceId: agentId,
-    }),
-  });
-  if (!allowed) {
-    throw args.onDenied === 'hide'
-      ? notFound
-      : new DomainError('FORBIDDEN', 'Forbidden');
-  }
-
-  // The lib calls keep taking a project scope: authorization is settled here,
-  // and narrowing to the agent's own project keeps a lookup from reaching past
-  // it.
-  return {
-    projectIds: [scope.projectId],
-    projectPublicId: scope.projectPublicId,
-  };
-};
+const agentAccess = makeItemRouteAuthorizer({
+  findScope: agents.findScope,
+  resourceType: 'agent',
+  param: 'agent_id',
+  label: 'Agent',
+});
 
 /** `Get` / `List` on one agent: a refusal is indistinguishable from absence. */
-export const authorizeAgentRead = async (args: {
-  ctx: Context;
-  action: string;
-}): Promise<AgentAccess> => {
-  return authorizeAgent({ ...args, onDenied: 'hide' });
-};
+export const authorizeAgentRead = agentAccess.authorizeRead;
 
 /** Anything that changes an agent or runs it: a refusal says so. */
-export const authorizeAgentWrite = async (args: {
-  ctx: Context;
-  action: string;
-}): Promise<AgentAccess> => {
-  return authorizeAgent({ ...args, onDenied: 'refuse' });
-};
+export const authorizeAgentWrite = agentAccess.authorizeWrite;

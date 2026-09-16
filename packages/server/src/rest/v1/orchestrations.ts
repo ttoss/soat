@@ -31,8 +31,13 @@ import {
   resolveReadProjectIds,
 } from './helpers';
 import {
+  authorizeOrchestrationRead,
+  authorizeOrchestrationWrite,
+  authorizeRunRead,
+  authorizeRunWrite,
+} from './orchestrationAccess';
+import {
   hintAuditResourceForOrchestration,
-  resolveRunAuth,
   resolveStartRunScope,
 } from './orchestrationAuth';
 import {
@@ -168,10 +173,9 @@ orchestrationsRouter.get('/orchestrations', async (ctx: Context) => {
 orchestrationsRouter.get(
   '/orchestrations/:orchestration_id',
   async (ctx: Context) => {
-    const projectIds = await resolveReadProjectIds({
+    const { projectIds } = await authorizeOrchestrationRead({
       ctx,
       action: 'orchestrations:GetOrchestration',
-      resourceType: 'orchestration',
     });
     const orchestrationId = ctx.params['orchestration_id'] as string;
 
@@ -196,10 +200,9 @@ orchestrationsRouter.get(
 orchestrationsRouter.patch(
   '/orchestrations/:orchestration_id',
   async (ctx: Context) => {
-    const projectIds = await requireProjectAccess({
+    const { projectIds } = await authorizeOrchestrationWrite({
       ctx,
       action: 'orchestrations:UpdateOrchestration',
-      resourceType: 'orchestration',
     });
     const orchestrationId = ctx.params['orchestration_id'] as string;
     const body = ctx.request.body as RawUpdateBody;
@@ -223,10 +226,9 @@ orchestrationsRouter.patch(
 orchestrationsRouter.delete(
   '/orchestrations/:orchestration_id',
   async (ctx: Context) => {
-    const projectIds = await requireProjectAccess({
+    const { projectIds } = await authorizeOrchestrationWrite({
       ctx,
       action: 'orchestrations:DeleteOrchestration',
-      resourceType: 'orchestration',
     });
     const target = {
       id: ctx.params['orchestration_id'] as string,
@@ -364,10 +366,9 @@ orchestrationsRouter.get('/orchestration-runs', async (ctx: Context) => {
 orchestrationsRouter.get(
   '/orchestration-runs/:orchestration_run_id',
   async (ctx: Context) => {
-    const projectIds = await resolveReadProjectIds({
+    const { projectIds } = await authorizeRunRead({
       ctx,
       action: 'orchestrations:GetRun',
-      resourceType: 'orchestration',
     });
     const orchestrationRunId = ctx.params['orchestration_run_id'] as string;
 
@@ -396,7 +397,10 @@ orchestrationsRouter.post(
   '/orchestration-runs/:orchestration_run_id/cancel',
   async (ctx: Context) => {
     const orchestrationRunId = ctx.params['orchestration_run_id'] as string;
-    const auth = await resolveRunAuth(ctx, 'orchestrations:CancelRun');
+    const auth = await authorizeRunWrite({
+      ctx,
+      action: 'orchestrations:CancelRun',
+    });
 
     const result = await cancelOrchestrationRun({
       runPublicId: orchestrationRunId,
@@ -416,7 +420,10 @@ orchestrationsRouter.post(
   '/orchestration-runs/:orchestration_run_id/pause',
   async (ctx: Context) => {
     const orchestrationRunId = ctx.params['orchestration_run_id'] as string;
-    const auth = await resolveRunAuth(ctx, 'orchestrations:PauseRun');
+    const auth = await authorizeRunWrite({
+      ctx,
+      action: 'orchestrations:PauseRun',
+    });
 
     const body = ctx.request.body as { reason?: unknown };
 
@@ -437,7 +444,10 @@ orchestrationsRouter.post(
   '/orchestration-runs/:orchestration_run_id/human-input',
   async (ctx: Context) => {
     const orchestrationRunId = ctx.params['orchestration_run_id'] as string;
-    const auth = await resolveRunAuth(ctx, 'orchestrations:SubmitHumanInput');
+    const auth = await authorizeRunWrite({
+      ctx,
+      action: 'orchestrations:SubmitHumanInput',
+    });
 
     const body = ctx.request.body as {
       node_id?: unknown;
@@ -474,7 +484,10 @@ orchestrationsRouter.post(
   '/orchestration-runs/:orchestration_run_id/resume',
   async (ctx: Context) => {
     const orchestrationRunId = ctx.params['orchestration_run_id'] as string;
-    const auth = await resolveRunAuth(ctx, 'orchestrations:ResumeRun');
+    const auth = await authorizeRunWrite({
+      ctx,
+      action: 'orchestrations:ResumeRun',
+    });
 
     const result = await resumeOrchestrationRun({
       runPublicId: orchestrationRunId,

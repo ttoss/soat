@@ -66,7 +66,7 @@ type ToolRow = InstanceType<typeof db.Tool> & {
   project: InstanceType<typeof db.Project>;
 };
 
-const tools = makeResourceAccessor<ToolRow>({
+export const tools = makeResourceAccessor<ToolRow>({
   model: () => {
     return db.Tool;
   },

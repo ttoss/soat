@@ -500,6 +500,10 @@ describe('Orchestration versions', () => {
      * A project-scoped API key whose policy excludes `excludedAction`. Unlike
      * `noPermToken` — which resolves to an empty project list — this
      * reaches the route with a resolvable project and exercises the 403 branch.
+     *
+     * The id below has to name a real orchestration: the route resolves it
+     * before authorizing, so a made-up id would answer `404` and never reach
+     * the refusal these tests are about (#1339).
      */
     const createRestrictedApiKey = async (excludedAction: string) => {
       const allowedActions = ORCHESTRATION_VERSION_ACTIONS.filter((action) => {
@@ -525,24 +529,37 @@ describe('Orchestration versions', () => {
       return keyRes.body.key as string;
     };
 
-    test('without ListOrchestrationVersions returns 403', async () => {
+    let restrictedOrchId: string;
+
+    beforeAll(async () => {
+      restrictedOrchId = (
+        await createOrchestration({ name: 'Restricted Key Target' })
+      ).id;
+    });
+
+    // A read the caller may not perform is indistinguishable from absence, now
+    // that the route authorizes against the orchestration's own SRN (#1339);
+    // `restore` below is a write and keeps `403`.
+    test('without ListOrchestrationVersions returns 404', async () => {
       const rawKey = await createRestrictedApiKey(
         'orchestrations:ListOrchestrationVersions'
       );
       const res = await authenticatedTestClient(rawKey).get(
-        '/api/v1/orchestrations/orch_anything/versions'
+        `/api/v1/orchestrations/${restrictedOrchId}/versions`
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('ORCHESTRATION_NOT_FOUND');
     });
 
-    test('without GetOrchestrationVersion returns 403', async () => {
+    test('without GetOrchestrationVersion returns 404', async () => {
       const rawKey = await createRestrictedApiKey(
         'orchestrations:GetOrchestrationVersion'
       );
       const res = await authenticatedTestClient(rawKey).get(
-        '/api/v1/orchestrations/orch_anything/versions/1'
+        `/api/v1/orchestrations/${restrictedOrchId}/versions/1`
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('ORCHESTRATION_NOT_FOUND');
     });
 
     test('without RestoreOrchestrationVersion returns 403', async () => {
@@ -550,7 +567,7 @@ describe('Orchestration versions', () => {
         'orchestrations:RestoreOrchestrationVersion'
       );
       const res = await authenticatedTestClient(rawKey).post(
-        '/api/v1/orchestrations/orch_anything/versions/1/restore'
+        `/api/v1/orchestrations/${restrictedOrchId}/versions/1/restore`
       );
       expect(res.status).toBe(403);
     });

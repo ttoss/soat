@@ -611,6 +611,34 @@ An `approval` node proposes a guarded tool call, files an [ApprovalItem](./appro
 
 **A run stuck non-terminal:** `queued` — no worker claimed its task; confirm one runs (the API process does unless `ORCHESTRATION_WORKER_DISABLED=true`). `sleeping` — a `delay`/`poll` wait or retry backoff (`active_nodes` names the node); resumes on its own. `awaiting_input` — waits for `submit-human-input`, or [`resume-orchestration-run`](#pausing-a-run) when `required_action.type` is `paused`. `running` too long self-heals: the reaper reclaims the run once its lease is older than `ORCHESTRATION_RUN_LEASE_TTL_MS` ([Durable Background Execution](#durable-background-execution)).
 
+### Who may act on an orchestration
+
+Every route that acts on one orchestration — read it, change it, delete it, read
+or restore its [versions](#version-history), or act on one of its **runs** — is
+authorized against **that orchestration's** SRN,
+`srn:<project_id>:orchestration:<orchestration_id>`, not against the project. A
+policy may therefore name the orchestrations it covers:
+
+```json
+{
+  "statement": [
+    {
+      "effect": "Allow",
+      "action": ["orchestrations:GetRun", "orchestrations:CancelRun"],
+      "resource": ["srn:proj_V1StGXR8Z5jdHi6B:orchestration:orch_V1StGXR8Z5jdHi6B"]
+    }
+  ]
+}
+```
+
+A run has no SRN of its own: it authorizes through the orchestration it runs, the
+way a [memory](./memories.md) authorizes through its store. So the statement
+above covers every run of that orchestration and no run of another.
+
+Refusals keep the shapes [IAM](./iam.md#what-a-denial-looks-like) defines: a read the caller may not perform is `404` (`ORCHESTRATION_NOT_FOUND`, or `ORCHESTRATION_RUN_NOT_FOUND` on a run route), a write is `403`, and a credential scoped to another project is `403 API_KEY_PROJECT_SCOPE`.
+
+Listing orchestrations and runs stays project-scoped: [`GET /api/v1/orchestrations`](/docs/api/orchestrations/list-orchestrations) and [`GET /api/v1/orchestration-runs`](/docs/api/orchestrations/list-orchestration-runs) ask whether the caller may list in a project at all, so a policy that names individual orchestrations grants no listing. Starting a run ([`POST /api/v1/orchestration-runs`](/docs/api/orchestrations/start-orchestration-run)) is project-scoped for the same reason — it names its orchestration in the body, not in the path.
+
 ## Configuration
 
 | Environment Variable | Required | Description |
