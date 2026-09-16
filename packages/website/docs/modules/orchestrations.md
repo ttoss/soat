@@ -614,7 +614,7 @@ An `approval` node proposes a guarded tool call, files an [ApprovalItem](./appro
 ### Who may act on an orchestration
 
 Every route that acts on one orchestration — read it, change it, delete it, read
-or restore its [versions](#version-history), or act on one of its **runs** — is
+or restore its [versions](#versioning), or act on one of its **runs** — is
 authorized against **that orchestration's** SRN,
 `srn:<project_id>:orchestration:<orchestration_id>`, not against the project. A
 policy may therefore name the orchestrations it covers:
