@@ -4,11 +4,7 @@ import createDebug from 'debug';
 
 import pkg from '../package.json' with { type: 'json' };
 import { app } from './app';
-import {
-  initializeDatabase,
-  logDatabaseConnectionError,
-  syncSchemaWithAdvisoryLock,
-} from './db';
+import { initializeDatabase, logDatabaseConnectionError } from './db';
 import { startApprovalScheduler } from './lib/approvalScheduler';
 import { startAuditRetentionScheduler } from './lib/auditScheduler';
 import { startContentRetentionScheduler } from './lib/contentRetentionScheduler';
@@ -29,6 +25,7 @@ import { startUsageRequestScheduler } from './lib/usageRequestScheduler';
 import { startUsageStorageScheduler } from './lib/usageStorageScheduler';
 import { createFirstAdminUser } from './lib/users';
 import { startWebhookScheduler } from './lib/webhookDispatcher';
+import { prepareSchemaOrExit } from './schema';
 
 const log = createDebug('soat:server');
 
@@ -68,9 +65,11 @@ const startServer = async () => {
 
   try {
     const database = await initializeDatabase(app);
-    // Serialize boot-time schema DDL across concurrently-starting tasks so
-    // sync({ alter: true }) runs exactly once and the rest see a no-op.
-    await syncSchemaWithAdvisoryLock({ sequelize: database.sequelize });
+    // Schema DDL is a pre-deploy step (#548): boot binds its port in seconds
+    // and only checks that the step has run. DB_SYNC=true opts a deployment
+    // that has no such step — a single container against its own database —
+    // back into preparing the schema here, serialized on the advisory locks.
+    await prepareSchemaOrExit({ sequelize: database.sequelize });
     // One-time data normalization of `knowledge_config` bags stored in
     // camelCase before single-casing. Idempotent and prefiltered in SQL, so a
     // converged database pays a single indexless scan and writes nothing.

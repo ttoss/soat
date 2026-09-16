@@ -3,11 +3,7 @@ import 'dotenv/config';
 import createDebug from 'debug';
 
 import { app } from './app';
-import {
-  initializeDatabase,
-  logDatabaseConnectionError,
-  syncSchemaWithAdvisoryLock,
-} from './db';
+import { initializeDatabase, logDatabaseConnectionError } from './db';
 import {
   EMBEDDING_INPUT_1M_TOKEN_PRICE_ENV,
   embeddingPriceWarning,
@@ -23,6 +19,7 @@ import {
   startOrchestrationWorker,
   stopOrchestrationWorker,
 } from './lib/orchestrationWorker';
+import { prepareSchemaOrExit } from './schema';
 
 const log = createDebug('soat:worker');
 
@@ -84,7 +81,7 @@ const startWorker = async () => {
 
   try {
     const database = await initializeDatabase(app);
-    await syncSchemaWithAdvisoryLock({ sequelize: database.sequelize });
+    await prepareSchemaOrExit({ sequelize: database.sequelize });
     startOrchestrationScheduler();
     startOrchestrationWorker();
     // The same process also drains the eval queue, so a deployment that moves

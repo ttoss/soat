@@ -124,6 +124,19 @@ services:
         - type=gha
       cache_to:
         - type=gha,mode=max
+    # The schema step runs to completion before the server process starts, as a
+    # deploy does it (#548) — `exec` so the server still receives signals. It
+    # cannot be a service of its own here: `--exit-code-from`, which both
+    # stacks use, implies `--abort-on-container-exit`, and Compose tears the
+    # whole stack down when ANY container exits, a completed one-shot task
+    # included. The server itself still boots with the sync gate off, so
+    # `assertSchemaPrepared` is what lets it serve.
+    command:
+      - sh
+      - -c
+      - >-
+        node packages/server/dist/migrate.mjs run && exec node
+        --enable-source-maps packages/server/dist/server.mjs
     depends_on:
       database:
         condition: service_healthy

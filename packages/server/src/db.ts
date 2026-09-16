@@ -13,25 +13,27 @@ export type DB = Awaited<ReturnType<typeof initialize<typeof models>>>;
 export let db: DB;
 
 /**
- * Fixed 64-bit key for the boot-time schema-sync advisory lock.
+ * Fixed 64-bit key for the schema-sync advisory lock.
  *
- * Every task contends on this one constant so exactly one performs the DDL —
- * it must stay identical across releases, otherwise concurrently-booting tasks
- * would take different locks and stop serializing. Arbitrary but stable value
- * standing for "soat schema sync".
+ * Every process that syncs contends on this one constant so exactly one
+ * performs the DDL — it must stay identical across releases, otherwise
+ * concurrent runs would take different locks and stop serializing. Arbitrary
+ * but stable value standing for "soat schema sync".
+ *
+ * Distinct from the migration runner's own lock key, which the two take
+ * sequentially and never nested (`schema.ts`).
  */
 export const SCHEMA_SYNC_LOCK_KEY = 0x50a7_5c_00;
 
 const DEFAULT_SCHEMA_SYNC_LOCK_TIMEOUT_MS = 600_000;
 
 /**
- * Upper bound (ms) on how long boot waits to *acquire* the schema-sync advisory
+ * Upper bound (ms) on how long a schema step waits to *acquire* its advisory
  * lock before failing fast. Overridable via `SCHEMA_SYNC_LOCK_TIMEOUT_MS`.
  *
- * It must stay **larger than a legitimate migration's duration**: a task that is
- * merely waiting for a live peer's `sync` to finish should wait it out, not
- * abort. Keep it aligned with the deployment's health-check grace period (see
- * the infra repo's `HealthCheckGracePeriodSeconds`, INFRASTRUCTURE.md §8).
+ * It must stay **larger than a legitimate migration's duration**: a process
+ * merely waiting for a live peer's schema step to finish should wait it out,
+ * not abort.
  */
 export const getSchemaSyncLockTimeoutMs = (): number => {
   const raw = Number(process.env.SCHEMA_SYNC_LOCK_TIMEOUT_MS);
@@ -41,10 +43,10 @@ export const getSchemaSyncLockTimeoutMs = (): number => {
 };
 
 /**
- * Serializes boot-time `sync({ alter: true })` behind a Postgres advisory lock
- * so concurrent boots don't race the DDL. Bounded by `lockTimeoutMs`: a lock
- * held by a SIGKILLed peer can outlive it by minutes, and an unbounded wait
- * would deadlock the whole deploy instead of failing fast.
+ * Serializes `sync({ alter: true })` behind a Postgres advisory lock so
+ * concurrent runs don't race the DDL. Bounded by `lockTimeoutMs`: a lock held
+ * by a SIGKILLed peer can outlive it by minutes, and an unbounded wait would
+ * deadlock the whole deploy instead of failing fast.
  */
 export const syncSchemaWithAdvisoryLock = async (args: {
   sequelize: Sequelize;

@@ -111,4 +111,12 @@ USER node
 
 EXPOSE 5047
 
+# Schema changes are a discrete step this image also carries, run to completion
+# before the service rolls (#548):
+#
+#   docker run --rm <image> node packages/server/dist/migrate.mjs run
+#
+# Without it the server refuses to serve a database it does not match. A single
+# container against its own database can set DB_SYNC=true instead and let boot
+# prepare the schema.
 CMD ["node", "--enable-source-maps", "packages/server/dist/server.mjs"]

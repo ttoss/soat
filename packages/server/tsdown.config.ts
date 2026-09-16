@@ -43,8 +43,14 @@ export default {
   ...tsdownConfig(),
   // `server.ts` is the API process; `worker.ts` is the standalone orchestration
   // worker (no HTTP listener) and `workerHealthcheck.ts` the liveness probe its
-  // container runs — both are deployed from this same image.
-  entry: ['src/server.ts', 'src/worker.ts', 'src/workerHealthcheck.ts'],
+  // container runs — both are deployed from this same image. `migrate.ts` is
+  // the pre-deploy schema step, which runs from the same image too.
+  entry: [
+    'src/server.ts',
+    'src/worker.ts',
+    'src/workerHealthcheck.ts',
+    'src/migrate.ts',
+  ],
   format: ['esm'],
   sourcemap: true,
   onSuccess: () => {

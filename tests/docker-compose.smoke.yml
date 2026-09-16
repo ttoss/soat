@@ -124,6 +124,19 @@ services:
     # period, so teardown waited the full timeout for it (and for both Ollama
     # services below). This is a throwaway stack — nothing here needs to drain.
     stop_grace_period: 2s
+    # The schema step runs to completion before the server process starts, as a
+    # deploy does it (#548) — `exec` so the server still receives signals. It
+    # cannot be a service of its own here: `--exit-code-from`, which both
+    # stacks use, implies `--abort-on-container-exit`, and Compose tears the
+    # whole stack down when ANY container exits, a completed one-shot task
+    # included. The server itself still boots with the sync gate off, so
+    # `assertSchemaPrepared` is what lets it serve.
+    command:
+      - sh
+      - -c
+      - >-
+        node packages/server/dist/migrate.mjs run && exec node
+        --enable-source-maps packages/server/dist/server.mjs
     volumes:
       - ./mocks/formationResourceTypes.json:/formation-resource-types.json:ro
     depends_on:
@@ -200,6 +213,10 @@ services:
     command: ['node', '--enable-source-maps', 'packages/server/dist/worker.mjs']
     depends_on:
       database:
+        condition: service_healthy
+      # The server owns the schema step, and this process boots with the sync
+      # gate off too — so it waits for the schema rather than racing it.
+      server:
         condition: service_healthy
       ollama:
         condition: service_healthy

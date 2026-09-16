@@ -358,8 +358,8 @@ importers:
   packages/postgresdb:
     dependencies:
       '@ttoss/postgresdb':
-        specifier: ^0.11.2
-        version: 0.11.2(@types/node@26.5.1)(@types/validator@13.15.10)(reflect-metadata@0.2.2)(supports-color@8.1.1)
+        specifier: ^0.12.0
+        version: 0.12.0(@types/node@26.5.1)(@types/validator@13.15.10)(reflect-metadata@0.2.2)(supports-color@8.1.1)
       nanoid:
         specifier: ^6.0.1
         version: 6.0.1
@@ -371,8 +371,8 @@ importers:
         specifier: ^1.38.0
         version: 1.38.0(supports-color@8.1.1)
       '@ttoss/postgresdb-cli':
-        specifier: ^0.2.18
-        version: 0.2.18
+        specifier: ^0.3.0
+        version: 0.3.0(@types/node@26.5.1)(@types/validator@13.15.10)(reflect-metadata@0.2.2)(supports-color@8.1.1)
       '@ttoss/test-utils':
         specifier: ^4.2.19
         version: 4.2.19(@types/jest@30.0.0)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(encoding@0.1.13)(jest@30.5.1(@types/node@26.5.1)(supports-color@8.1.1)(ts-node@10.9.2(@swc/core@1.16.2)(@types/node@26.5.1)(typescript@6.0.3)))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(supports-color@8.1.1)
@@ -470,8 +470,8 @@ importers:
         specifier: ^0.28.2
         version: 0.28.2(hono@4.12.30)(supports-color@8.1.1)
       '@ttoss/postgresdb':
-        specifier: ^0.11.2
-        version: 0.11.2(@types/node@26.5.1)(@types/validator@13.15.10)(reflect-metadata@0.2.2)(supports-color@8.1.1)
+        specifier: ^0.12.0
+        version: 0.12.0(@types/node@26.5.1)(@types/validator@13.15.10)(reflect-metadata@0.2.2)(supports-color@8.1.1)
       ai:
         specifier: ^7.0.99
         version: 7.0.99(zod@4.6.4)
@@ -4459,12 +4459,12 @@ packages:
   '@ttoss/openapi-codegen@0.3.0':
     resolution: {integrity: sha512-r773OJGJIonQUfHAxdnpPr3hZp8lSP2puO9u/oyYIcL7MkLnSR4IA9Lh9t6w8XYmtXjDHTTmpIS9q2sW2/UdUg==}
 
-  '@ttoss/postgresdb-cli@0.2.18':
-    resolution: {integrity: sha512-M6Oa9yF/PdfUDziuLg4M6o+tjEaYLym+wEkb+v3Ti8SpUE+BlwlB9CJaBAPT6/9jutIwQqnwM0uawW9aNXlhTg==}
+  '@ttoss/postgresdb-cli@0.3.0':
+    resolution: {integrity: sha512-89eIZx8WgouNjVRE20tMVEzCpedIHNGt1OApr6BnhrW3/gkdae5hALVW2CG1zqlroE7+9Zhjj2vKlxqS/AksOQ==}
     hasBin: true
 
-  '@ttoss/postgresdb@0.11.2':
-    resolution: {integrity: sha512-ps37B4WwrBLZ60biMOCcNHL7SNO8e3FehvdRD2V01spfJlcqj89nOtAxTTY2D7ofgeuaQVdirkCVZzqsH4Rk4A==}
+  '@ttoss/postgresdb@0.12.0':
+    resolution: {integrity: sha512-fpm/Nonf2rDVzuZCG6nyN7I3XaJdN6hgV/7oNoDjrUBXuWz6bnl3Ev2u91DEYD1il8kA5w0OTI8J1pwHU/frDA==}
 
   '@ttoss/read-config-file@2.3.0':
     resolution: {integrity: sha512-6p6xHUui1uJioMvam08nERLjhEU7jza4h5QW9yn1G5YFH43PY3u13/D4PSwG4YMIHz13HUmI+vsSZ68SBBOtzw==}
@@ -18474,14 +18474,29 @@ snapshots:
     dependencies:
       js-yaml: 4.3.2
 
-  '@ttoss/postgresdb-cli@0.2.18':
+  '@ttoss/postgresdb-cli@0.3.0(@types/node@26.5.1)(@types/validator@13.15.10)(reflect-metadata@0.2.2)(supports-color@8.1.1)':
     dependencies:
+      '@ttoss/postgresdb': 0.12.0(@types/node@26.5.1)(@types/validator@13.15.10)(reflect-metadata@0.2.2)(supports-color@8.1.1)
       commander: 14.0.3
       dotenv: 17.4.2
       esbuild: 0.28.2
       sequelize-erd: 1.3.1
+    transitivePeerDependencies:
+      - '@types/node'
+      - '@types/validator'
+      - ibm_db
+      - mariadb
+      - mysql2
+      - oracledb
+      - pg-hstore
+      - pg-native
+      - reflect-metadata
+      - snowflake-sdk
+      - sqlite3
+      - supports-color
+      - tedious
 
-  '@ttoss/postgresdb@0.11.2(@types/node@26.5.1)(@types/validator@13.15.10)(reflect-metadata@0.2.2)(supports-color@8.1.1)':
+  '@ttoss/postgresdb@0.12.0(@types/node@26.5.1)(@types/validator@13.15.10)(reflect-metadata@0.2.2)(supports-color@8.1.1)':
     dependencies:
       pg: 8.23.0
       pgvector: 0.2.1
