@@ -481,6 +481,44 @@ describe('Knowledge', () => {
       expect(memoryStore.score).not.toBe(memoryStore.similarity_score);
     });
 
+    test('reports which channels ranked each result', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send({
+          project_id: projectId,
+          query: 'anything',
+          memory_store_ids: [memoryStoreId],
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.results.length).toBeGreaterThan(0);
+
+      for (const result of response.body.results) {
+        // Every result of a `query` search was ranked by at least one channel,
+        // or it would not be in the list at all.
+        expect(result.signals).toBeDefined();
+        const ranks = Object.entries(result.signals as Record<string, number>);
+        expect(ranks.length).toBeGreaterThan(0);
+        for (const [channel, rank] of ranks) {
+          expect(['vector', 'lexical']).toContain(channel);
+          expect(Number.isInteger(rank)).toBe(true);
+          expect(rank).toBeGreaterThanOrEqual(1);
+        }
+      }
+    });
+
+    test('omits signals from a search that carries no query', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send({ project_id: projectId, memory_store_ids: [memoryStoreId] });
+
+      expect(response.status).toBe(200);
+      expect(response.body.results.length).toBeGreaterThan(0);
+      for (const result of response.body.results) {
+        expect(result.signals).toBeUndefined();
+      }
+    });
+
     test('results are ordered by descending score', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/knowledge/search')

@@ -103,6 +103,27 @@ export type FusedResult<T> = {
    * into `0..1`, which would lend it a stability the contract refuses.
    */
   score: number;
+  /**
+   * 1-based position in each input list, aligned with `lists`, `undefined`
+   * where that list did not return the result.
+   *
+   * The parts `score` is the sum of. Kept because the sum cannot be taken
+   * apart afterwards: `2/61` and `1/31` are the same number reached two ways,
+   * and only these say which. Indexed rather than named because RRF does not
+   * know what its lists mean — {@link fuseCandidates} supplies the names.
+   */
+  ranks: Array<number | undefined>;
+};
+
+/**
+ * Which retrieval channels ranked a result, and where in each channel's own
+ * pre-fusion ordering it sat. A channel that did not return the result is
+ * absent rather than `null`: returning nothing is not the same as ranking it
+ * last.
+ */
+export type SearchSignals = {
+  vector?: number;
+  lexical?: number;
 };
 
 /**
@@ -127,16 +148,21 @@ export const fuseByReciprocalRank = <T>(args: {
 }): Array<FusedResult<T>> => {
   const fused = new Map<string, FusedResult<T>>();
 
-  for (const list of args.lists) {
+  for (const [listIndex, list] of args.lists.entries()) {
     for (const [index, item] of list.entries()) {
       const key = args.keyOf(item);
       const contribution = 1 / (args.k + index + 1);
       const existing = fused.get(key);
       if (existing) {
         existing.score += contribution;
+        existing.ranks[listIndex] = index + 1;
         continue;
       }
-      fused.set(key, { item, score: contribution });
+      const ranks = new Array<number | undefined>(args.lists.length).fill(
+        undefined
+      );
+      ranks[listIndex] = index + 1;
+      fused.set(key, { item, score: contribution, ranks });
     }
   }
 
@@ -252,7 +278,11 @@ const blendRecency = <T extends { updated_at: Date }>(args: {
           now,
           halfLifeDays: args.halfLifeDays,
         });
-        return { item: result.item, score: result.score * decay };
+        return {
+          item: result.item,
+          score: result.score * decay,
+          ranks: result.ranks,
+        };
       })
       // Stable, so two results the blend leaves at the same score keep the order
       // fusion gave them.
@@ -260,6 +290,20 @@ const blendRecency = <T extends { updated_at: Date }>(args: {
         return b.score - a.score;
       })
   );
+};
+
+/**
+ * Names the two fused lists, in the order {@link fuseCandidates} passes them.
+ *
+ * A key is omitted when that channel did not rank the result, so a caller can
+ * read presence as "this channel found it" without a sentinel.
+ */
+const toSearchSignals = (ranks: Array<number | undefined>): SearchSignals => {
+  const [vector, lexical] = ranks;
+  return {
+    ...(vector === undefined ? {} : { vector }),
+    ...(lexical === undefined ? {} : { lexical }),
+  };
 };
 
 /**
@@ -278,7 +322,7 @@ const blendRecency = <T extends { updated_at: Date }>(args: {
  * order to offset into, which is why knowledge search has no `offset`.
  */
 export const fuseCandidates = <
-  T extends { score?: number; updated_at: Date },
+  T extends { score?: number; signals?: SearchSignals; updated_at: Date },
 >(args: {
   vector: Array<ReadonlyArray<SignalCandidate<T>>>;
   lexical: Array<ReadonlyArray<SignalCandidate<T>>>;
@@ -310,6 +354,10 @@ export const fuseCandidates = <
   })
     .slice(0, args.limit)
     .map((result) => {
-      return { ...result.item, score: result.score };
+      return {
+        ...result.item,
+        score: result.score,
+        signals: toSearchSignals(result.ranks),
+      };
     });
 };

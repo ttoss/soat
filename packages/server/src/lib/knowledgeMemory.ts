@@ -8,7 +8,11 @@ import {
   lexicalRankExpression,
   withLexicalDegrade,
 } from './knowledgeLexical';
-import type { SearchCandidates, SignalCandidate } from './knowledgeRanking';
+import type {
+  SearchCandidates,
+  SearchSignals,
+  SignalCandidate,
+} from './knowledgeRanking';
 import { fuseCandidates } from './knowledgeRanking';
 import { hasPolicyConstraints } from './policyWhere';
 import { clampKnowledgeSearchLimit } from './requestBounds';
@@ -40,6 +44,8 @@ export type MemoryKnowledgeResult = {
    * `similarity_score` stays pinned to raw cosine.
    */
   score?: number;
+  /** Which channels ranked this memory, and where. See {@link SearchSignals}. */
+  signals?: SearchSignals;
   similarity_score?: number;
   created_at: Date;
   updated_at: Date;

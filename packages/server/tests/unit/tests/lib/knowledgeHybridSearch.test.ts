@@ -317,6 +317,110 @@ describe('hybrid knowledge search', () => {
     expect(embed).toHaveBeenCalledTimes(1);
   });
 
+  describe('signal provenance', () => {
+    /**
+     * `score` says where a result landed, never how it got there. These pin the
+     * field that answers "why is this here?": which channels ranked the result,
+     * and at what position in that channel's own pre-fusion ordering.
+     */
+
+    test('reports both channels for a result both of them ranked', async () => {
+      const results = await searchKnowledge({
+        projectIds: [fixtures.projectId],
+        billingProjectId: fixtures.projectId,
+        query: OTHER_TOKEN,
+      });
+
+      const both = results.find((result) => {
+        return (
+          result.source_type === 'document' &&
+          result.document_id === fixtures.bothSignalsDocumentId
+        );
+      });
+
+      expect(both).toBeDefined();
+      // The only fixture carrying this token, so it leads the lexical list; it
+      // is merely second-nearest by cosine, which is what fusion overturns.
+      expect(both!.signals).toEqual({ vector: 2, lexical: 1 });
+    });
+
+    test('omits the channel that did not rank a result', async () => {
+      const results = await searchKnowledge({
+        projectIds: [fixtures.projectId],
+        billingProjectId: fixtures.projectId,
+        query: OTHER_TOKEN,
+      });
+
+      const vectorOnly = results.find((result) => {
+        return (
+          result.source_type === 'document' &&
+          result.document_id === fixtures.vectorOnlyDocumentId
+        );
+      });
+
+      expect(vectorOnly).toBeDefined();
+      expect(vectorOnly!.signals?.vector).toBe(1);
+      // Absent rather than `null`: the channel returned nothing, which is not
+      // the same as ranking it last.
+      expect(vectorOnly!.signals).not.toHaveProperty('lexical');
+    });
+
+    test('ranks within a channel, not within the fused order', async () => {
+      const results = await searchKnowledge({
+        projectIds: [fixtures.projectId],
+        billingProjectId: fixtures.projectId,
+        query: RARE_TOKEN,
+        memoryStoreIds: [fixtures.memoryStoreId],
+      });
+
+      const byVectorRank = results
+        .filter((result) => {
+          return result.signals?.vector !== undefined;
+        })
+        .sort((a, b) => {
+          return a.signals!.vector! - b.signals!.vector!;
+        });
+
+      expect(byVectorRank.length).toBeGreaterThan(1);
+      // The vector channel orders by cosine, so walking its ranks must walk
+      // `similarity_score` downward — across both stores, since the channel is
+      // one ranking over the whole corpus.
+      for (const [index, result] of byVectorRank.entries()) {
+        expect(result.signals!.vector).toBe(index + 1);
+        if (index === 0) continue;
+        expect(result.similarity_score).toBeLessThanOrEqual(
+          byVectorRank[index - 1].similarity_score!
+        );
+      }
+
+      // Same for the lexical channel: the fixtures that literally carry the
+      // token are the only ones it ranks at all.
+      const lexicalRanks = results
+        .filter((result) => {
+          return result.signals?.lexical !== undefined;
+        })
+        .map((result) => {
+          return result.signals!.lexical!;
+        })
+        .sort((a, b) => {
+          return a - b;
+        });
+      expect(lexicalRanks).toEqual([1, 2]);
+    });
+
+    test('is absent from a search that carries no query', async () => {
+      const results = await searchKnowledge({
+        projectIds: [fixtures.projectId],
+        billingProjectId: fixtures.projectId,
+        documentIds: [fixtures.lexicalOnlyDocumentId],
+      });
+
+      expect(results).toHaveLength(1);
+      // No query, no channel ranked anything: the field follows `score`.
+      expect(results[0].signals).toBeUndefined();
+    });
+  });
+
   describe('degrade paths', () => {
     const originalTextSearchConfig = process.env.KNOWLEDGE_TEXT_SEARCH_CONFIG;
 
@@ -352,6 +456,8 @@ describe('hybrid knowledge search', () => {
       // The one case the contract leaves `similarity_score` absent: there is no
       // query vector to measure against.
       expect(hit!.similarity_score).toBeUndefined();
+      // And the provenance says which half of the search survived.
+      expect(hit!.signals).toEqual({ lexical: 1 });
     });
 
     test('surfaces a misconfigured provider instead of degrading', async () => {
@@ -393,6 +499,10 @@ describe('hybrid knowledge search', () => {
       });
       expect(ranked[0]).toBe(fixtures.vectorOnlyDocumentId);
       expect(results[0].similarity_score).toBeGreaterThan(0.9);
+      expect(results[0].signals).toEqual({ vector: 1 });
+      for (const result of results) {
+        expect(result.signals).not.toHaveProperty('lexical');
+      }
     });
   });
 

@@ -7,7 +7,11 @@ import type {
   MemoryStorePolicyWhere,
 } from './knowledgeMemory';
 import { resolveMemoryStoreSearchLists } from './knowledgeMemory';
-import type { SearchCandidates, SignalCandidate } from './knowledgeRanking';
+import type {
+  SearchCandidates,
+  SearchSignals,
+  SignalCandidate,
+} from './knowledgeRanking';
 import { fuseCandidates } from './knowledgeRanking';
 import { clampKnowledgeSearchLimit } from './requestBounds';
 import { hasTagFilter } from './tags';
@@ -40,6 +44,11 @@ export type KnowledgeResult =
        * pinned to raw cosine.
        */
       score?: number;
+      /**
+       * Which channels ranked this result, and where in each channel's own
+       * pre-fusion ordering. `score` is where it landed; this is how.
+       */
+      signals?: SearchSignals;
       similarity_score?: number;
       created_at: Date;
       updated_at: Date;
