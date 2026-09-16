@@ -37,38 +37,54 @@ type ScopeResolver = (args: {
   publicId: string;
 }) => Promise<ResourceScope | null>;
 
+/**
+ * The one place a missing tag bag becomes `null`. Mappers spell "no tags" as
+ * `undefined` and the column as `null`; `buildResourceTagContext` takes either,
+ * and a single conversion keeps every resolver below a plain projection.
+ */
+const toScope = (args: {
+  resourceType: string;
+  resourceId: string;
+  projectPublicId: string;
+  tags?: Record<string, string> | null;
+}): ResourceScope => {
+  return { ...args, tags: args.tags ?? null };
+};
+
 const memoryStoreScope: ScopeResolver = async ({ publicId }) => {
   const store = await getMemoryStore({ id: publicId });
-  if (!store?.project_id) return null;
-  return {
+  if (!store) return null;
+  return toScope({
     resourceType: 'memory_store',
     resourceId: store.id,
-    projectPublicId: store.project_id,
-    tags: store.tags ?? null,
-  };
+    projectPublicId: store.project_id!,
+    tags: store.tags,
+  });
 };
 
 const RESOURCE_SCOPES: Record<string, ScopeResolver> = {
+  // `getActor` and `getMemoryRule` throw on a miss rather than answering null,
+  // which `resolveResourceScope` turns back into "no scope"; the ones that
+  // answer null are guarded here instead.
   actor: async ({ publicId }) => {
     const actor = await getActor({ id: publicId });
-    if (!actor.project_id) return null;
-    return {
+    return toScope({
       resourceType: 'actor',
       resourceId: actor.id,
-      projectPublicId: actor.project_id,
-      tags: actor.tags ?? null,
-    };
+      projectPublicId: actor.project_id!,
+      tags: actor.tags,
+    });
   },
 
   conversation: async ({ publicId }) => {
     const conversation = await getConversation({ id: publicId });
-    if (!conversation?.project_id) return null;
-    return {
+    if (!conversation) return null;
+    return toScope({
       resourceType: 'conversation',
       resourceId: conversation.id,
-      projectPublicId: conversation.project_id,
-      tags: conversation.tags ?? null,
-    };
+      projectPublicId: conversation.project_id!,
+      tags: conversation.tags,
+    });
   },
 
   // A memory authorizes against its store: `rest/v1/memories.ts` resolves the
@@ -76,14 +92,13 @@ const RESOURCE_SCOPES: Record<string, ScopeResolver> = {
   // memory itself would be a grant no policy author writes.
   memory: async ({ publicId }) => {
     const memory = await getMemory({ id: publicId });
-    if (!memory?.memory_store_id) return null;
-    return memoryStoreScope({ publicId: memory.memory_store_id });
+    if (!memory) return null;
+    return memoryStoreScope({ publicId: memory.memory_store_id! });
   },
 
   // A rule authorizes through the store it feeds, as `authorizeRule` does.
   memory_rule: async ({ publicId }) => {
     const rule = await getMemoryRule({ id: publicId });
-    if (!rule.memory_store_id) return null;
     return memoryStoreScope({ publicId: rule.memory_store_id });
   },
 
@@ -92,12 +107,12 @@ const RESOURCE_SCOPES: Record<string, ScopeResolver> = {
   session: async ({ publicId }) => {
     const access = await findSessionAccess({ sessionId: publicId });
     if (!access) return null;
-    return {
+    return toScope({
       resourceType: 'session',
       resourceId: publicId,
       projectPublicId: access.projectPublicId,
       tags: access.tags,
-    };
+    });
   },
 };
 
