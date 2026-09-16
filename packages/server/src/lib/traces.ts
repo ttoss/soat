@@ -42,7 +42,7 @@ type TraceRow = InstanceType<(typeof db)['Trace']> & {
   rootTrace?: InstanceType<(typeof db)['Trace']> | null;
 };
 
-const traceRows = makeResourceAccessor<TraceRow>({
+export const traceRows = makeResourceAccessor<TraceRow>({
   model: () => {
     return db.Trace;
   },

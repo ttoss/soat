@@ -19,7 +19,7 @@ const memoryStoreIncludes = () => {
   return [{ model: db.Project, as: 'project' }];
 };
 
-const memoryStores = makeResourceAccessor<MemoryStoreRow>({
+export const memoryStores = makeResourceAccessor<MemoryStoreRow>({
   model: () => {
     return db.MemoryStore;
   },

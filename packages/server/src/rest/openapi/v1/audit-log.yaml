@@ -200,6 +200,9 @@ paths:
       summary: Get an audit entry
       description: Returns a single audit-log entry, including its `detail` payload
       operationId: getAuditEntry
+      x-soat-resource:
+        kind: audit
+        from: entry_id
       parameters:
         - name: entry_id
           in: path

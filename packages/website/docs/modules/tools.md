@@ -399,6 +399,33 @@ The operator allows internal services in [`TOOL_EGRESS_ALLOWED_HOSTS`](../self-h
 - A 2xx body that is not valid JSON is returned as raw text; an empty result (a `builtin` action answering `204`) is `200` with a JSON `null` body.
 - `tool_context` reaches a tool declaring a [`{{context:<key>}}` token](#context-references-in-headers); with no session on this route, `session_id`, `actor_id` and `actor_external_id` are dropped — [Calling a context-dependent tool directly](../advanced/tool-context.md#calling-a-context-dependent-tool-directly).
 
+### Who may act on a tool
+
+Every route that acts on one tool — read it, change it, delete it, or
+[call it](#calling-a-tool-directly) — is authorized against **that tool's** SRN,
+`srn:<project_id>:tool:<tool_id>`, not against the project. A policy may
+therefore name the tools it covers:
+
+```json
+{
+  "statement": [
+    {
+      "effect": "Allow",
+      "action": ["tools:GetTool", "tools:CallTool"],
+      "resource": ["srn:proj_V1StGXR8Z5jdHi6B:tool:tool_V1StGXR8Z5jdHi6B"]
+    }
+  ]
+}
+```
+
+This is the same check [approvals](./approvals.md) have always made for
+`tools:CallTool`, so a per-tool grant now means the same thing whether the call
+arrives directly or through an approval.
+
+Refusals keep the shapes [IAM](./iam.md#what-a-denial-looks-like) defines: a read the caller may not perform is `404` (a tool it may not see does not announce itself), a write or a call is `403`, and a credential scoped to another project is `403 API_KEY_PROJECT_SCOPE`.
+
+Listing tools stays project-scoped: [`GET /api/v1/tools`](/docs/api/tools/list-tools) asks whether the caller may list tools in a project at all, so a policy that names individual tools grants no listing.
+
 ## Examples
 
 ### Create an HTTP tool

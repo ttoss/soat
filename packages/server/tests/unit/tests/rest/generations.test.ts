@@ -259,11 +259,15 @@ describe('Generations', () => {
       expect(response.status).toBe(401);
     });
 
-    test('returns 403 when user lacks permission', async () => {
+    // A read the caller may not perform is indistinguishable from absence, now
+    // that the route authorizes against the generation's own SRN (#1339); the
+    // listing above keeps `403`, and so do the writes below.
+    test('returns 404 when user lacks permission', async () => {
       const response = await authenticatedTestClient(noPermToken).get(
         `/api/v1/generations/${failedGenerationId}`
       );
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
+      expect(response.body.error.code).toBe('RESOURCE_NOT_FOUND');
     });
 
     test('returns 404 when generation does not exist', async () => {

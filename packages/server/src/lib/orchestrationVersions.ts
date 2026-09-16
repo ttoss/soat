@@ -1,4 +1,3 @@
-import { db } from '../db';
 import { orchestrations } from './orchestrationAccessor';
 import { parseOrchestrationGraph } from './orchestrationGraphWire';
 import {
@@ -30,8 +29,6 @@ import {
  * pure in `releaseAssignment.ts` for when something does.
  */
 
-type OrchestrationInstance = InstanceType<(typeof db)['Orchestration']>;
-
 // ── Mapping ──────────────────────────────────────────────────────────────
 
 const mapOrchestrationVersion = (
@@ -45,23 +42,6 @@ const mapOrchestrationVersion = (
 };
 
 // ── Lookup helpers ───────────────────────────────────────────────────────
-
-// Lean lookup: only the row's own columns are read here. Cross-project access
-// resolves as "not found" rather than a 403, so an orchestration's existence
-// never leaks across a tenant boundary — that decision lives in `scopedWhere`.
-const findOrchestrationInstance = async (args: {
-  projectIds?: number[];
-  id: string;
-}): Promise<OrchestrationInstance> => {
-  const orchestration = await db.Orchestration.findOne({
-    where: orchestrations.scopedWhere({
-      id: args.id,
-      projectIds: args.projectIds,
-    }),
-  });
-  if (!orchestration) throw orchestrations.notFound(args.id);
-  return orchestration as OrchestrationInstance;
-};
 
 /**
  * The orchestration adapter over the shared archive. `applyConfig` routes through
@@ -79,8 +59,20 @@ const findOrchestrationInstance = async (args: {
  */
 const orchestrationVersionArchive = makeVersionArchive({
   store: orchestrationVersionStore,
+  // Through the shared accessor rather than a hand-rolled `findOne` plus its
+  // own `if (!row) throw`: the routes resolve and authorize the orchestration
+  // before calling in, so that guard became a branch no request could reach,
+  // and the accessor's is the one every other module already exercises.
+  // Cross-project access still resolves as "not found" rather than a `403`, so
+  // an orchestration's existence never leaks across a tenant boundary — that
+  // decision lives in `scopedWhere`, which the accessor applies.
   loadResource: async (args) => {
-    return toResourceRef(await findOrchestrationInstance(args));
+    return toResourceRef(
+      await orchestrations.getByPublicId({
+        id: args.id,
+        projectIds: args.projectIds,
+      })
+    );
   },
   mapVersion: mapOrchestrationVersion,
   applyConfig: async (args): Promise<MappedOrchestration> => {

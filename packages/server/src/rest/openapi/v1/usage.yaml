@@ -582,6 +582,9 @@ paths:
         Deletes a usage threshold, resetting its fire state. Recreating a
         threshold starts its once-per-window / hysteresis state fresh.
       operationId: deleteUsageThreshold
+      x-soat-resource:
+        kind: usage
+        from: threshold_id
       parameters:
         - name: threshold_id
           in: path

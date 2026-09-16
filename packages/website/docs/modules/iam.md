@@ -99,15 +99,40 @@ Grant a **user** (JWT) a project with `resource: ["srn:proj_ABC:*:*"]`. API keys
 
 ### Resource Types
 
-| Resource Type  | Public ID Prefix | Module        |
-| -------------- | ---------------- | ------------- |
-| `document`     | `doc_`           | Documents     |
-| `file`         | `file_`          | Files         |
-| `actor`        | `actor_`         | Actors        |
-| `conversation` | `conv_`          | Conversations |
-| `project`      | `proj_`          | Projects      |
-| `policy`       | `pol_`           | Policies      |
-| `api-key`      | `key_`           | API Keys      |
+| Resource Type   | Public ID Prefix | Module          |
+| --------------- | ---------------- | --------------- |
+| `document`      | `doc_`           | Documents       |
+| `file`          | `file_`          | Files           |
+| `actor`         | `actor_`         | Actors          |
+| `conversation`  | `conv_`          | Conversations   |
+| `project`       | `proj_`          | Projects        |
+| `policy`        | `pol_`           | Policies        |
+| `api-key`       | `key_`           | API Keys        |
+| `agent`         | `agent_`         | Agents          |
+| `session`       | `sess_`          | Sessions        |
+| `memory_store`  | `mstore_`        | Memories        |
+| `tool`          | `tool_`          | Tools           |
+| `guardrail`     | `guard_`         | Guardrails      |
+| `orchestration` | `orch_`          | Orchestrations  |
+| `dataset`       | `dset_`          | Evaluations     |
+| `eval`          | `eval_`          | Evaluations     |
+| `generation`    | `gen_`           | Generations     |
+| `trace`         | `trace_`         | Traces          |
+| `chain`         | `chain_`         | Chains          |
+| `quota`         | `quota_`         | Quotas          |
+| `model_route`   | `route_`         | Model Routes    |
+| `ingestionRule` | `igr_`           | Ingestion Rules |
+| `audit`         | `audit_`         | Audit Log       |
+| `usage`         | `uthr_`          | Usage           |
+
+A child resource has no type of its own: it is named through the parent its
+routes authorize against. A **memory** and a **memory rule** are named by their
+`memory_store`; an orchestration **run** by its `orchestration`; a dataset
+**item** by its `dataset`; an eval **run** by its `eval`.
+
+Three types are spelled camelCase — `aiProvider`, `ingestionRule` and `apiKey` —
+where every other type is snake_case. `srn:<project_id>:ingestion_rule:…` matches
+nothing; the spelling in this table is the one that works.
 
 ## Actions
 

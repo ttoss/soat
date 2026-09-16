@@ -168,6 +168,28 @@ Internal completions (chats, memory extraction/consolidation) resolve metering a
 
 `DELETE` returns `409 MODEL_ROUTE_HAS_DEPENDENTS` while an agent references the route or it is a project's `default_model_route_id`; `meta` reports both counts and a sample of referencing IDs.
 
+### Who may act on a model route
+
+Every route that acts on one model route is authorized against **that model route's** SRN,
+`srn:<project_id>:model_route:<route_id>`, not against the project. A policy may therefore name the model routes it
+covers:
+
+```json
+{
+  "statement": [
+    {
+      "effect": "Allow",
+      "action": ["model-routes:GetModelRoute", "model-routes:UpdateModelRoute"],
+      "resource": ["srn:proj_V1StGXR8Z5jdHi6B:model_route:route_V1StGXR8Z5jdHi6B"]
+    }
+  ]
+}
+```
+
+Refusals keep the shapes [IAM](./iam.md#what-a-denial-looks-like) defines: a read the caller may not perform is `404` (a model route it may not see does not announce itself), a write is `403`, and a credential scoped to another project is `403 API_KEY_PROJECT_SCOPE`.
+
+Listing model routes stays project-scoped: [`GET /api/v1/model-routes`](/docs/api/model-routes/list-model-routes) asks whether the caller may list model routes in a project at all, so a policy that names individual model routes grants no listing.
+
 ## Consumers
 
 | Consumer                                            | How it routes |

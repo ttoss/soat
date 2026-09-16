@@ -47,6 +47,35 @@ export const orchestrations = makeResourceAccessor<OrchestrationRow>({
   errorCode: 'ORCHESTRATION_NOT_FOUND',
 });
 
+/**
+ * The orchestration a run belongs to, by public id.
+ *
+ * A run authorizes through it — the SRN every run route has probed is
+ * `srn:<project>:orchestration:…` — so the route preamble and the agent
+ * boundary both resolve the parent here rather than each walking their own way
+ * from a run id to an orchestration id.
+ *
+ * Deliberately not `orchestrationRuns.findScope`: that answers the run's own
+ * project, and the project is only half of what an SRN needs.
+ */
+export const findRunOrchestrationId = async (args: {
+  id: string;
+}): Promise<string | null> => {
+  const row = (await db.OrchestrationRun.findOne({
+    where: { publicId: args.id },
+    include: [
+      {
+        model: db.Orchestration,
+        as: 'orchestration',
+        attributes: ['publicId'],
+      },
+    ],
+  })) as { orchestration?: { publicId?: unknown } | null } | null;
+
+  const publicId = row?.orchestration?.publicId;
+  return typeof publicId === 'string' ? publicId : null;
+};
+
 export const orchestrationRuns = makeResourceAccessor<OrchestrationRunRow>({
   model: () => {
     return db.OrchestrationRun;

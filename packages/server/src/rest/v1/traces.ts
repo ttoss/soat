@@ -2,16 +2,28 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { purgeTraceContent } from 'src/lib/contentPurge';
-import { getTrace, getTraceTree, listTraces } from 'src/lib/traces';
+import { getTrace, getTraceTree, listTraces, traceRows } from 'src/lib/traces';
 
 import {
   requestPrincipalFromCtx,
   requireAuth,
-  requireProjectAccess,
   resolveReadProjectIds,
 } from './helpers';
+import { makeItemRouteAuthorizer } from './resourceAccess';
 
 export const tracesRouter = new Router<Context>();
+
+/**
+ * Every `/traces/:trace_id` route authorizes against the trace's own SRN rather
+ * than the project wildcard a statement naming one trace can never match
+ * (#1339).
+ */
+const traceAccess = makeItemRouteAuthorizer({
+  findScope: traceRows.findScope,
+  resourceType: 'trace',
+  param: 'trace_id',
+  label: 'Trace',
+});
 
 tracesRouter.get('/traces', async (ctx: Context) => {
   requireAuth(ctx);
@@ -32,12 +44,9 @@ tracesRouter.get('/traces', async (ctx: Context) => {
 });
 
 tracesRouter.get('/traces/:trace_id', async (ctx: Context) => {
-  requireAuth(ctx);
-
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await traceAccess.authorizeRead({
     ctx,
     action: 'traces:GetTrace',
-    resourceType: 'trace',
   });
 
   const result = await getTrace({
@@ -49,12 +58,9 @@ tracesRouter.get('/traces/:trace_id', async (ctx: Context) => {
 });
 
 tracesRouter.get('/traces/:trace_id/tree', async (ctx: Context) => {
-  requireAuth(ctx);
-
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await traceAccess.authorizeRead({
     ctx,
     action: 'traces:GetTraceTree',
-    resourceType: 'trace',
   });
 
   const includeParam = ctx.query.include as string | undefined;
@@ -83,15 +89,9 @@ tracesRouter.get('/traces/:trace_id/tree', async (ctx: Context) => {
  * the erasure is provable rather than a 404 that proves nothing. Idempotent.
  */
 tracesRouter.delete('/traces/:trace_id/content', async (ctx: Context) => {
-  requireAuth(ctx);
-
-  // An empty scope means the action is denied everywhere, which must answer 403
-  // rather than the 404 an empty filter would produce — see
-  // `requireProjectAccess`.
-  const projectIds = await requireProjectAccess({
+  const { projectIds } = await traceAccess.authorizeWrite({
     ctx,
     action: 'traces:PurgeTraceContent',
-    resourceType: 'trace',
   });
 
   const purged = await purgeTraceContent({

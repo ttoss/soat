@@ -47,6 +47,7 @@ describe('resolveResourceScope', () => {
     expect(scope).toEqual({
       resourceType: 'memory_store',
       resourceId: taggedStoreId,
+      projectId,
       projectPublicId,
       tags: { env: 'prod' },
     });
@@ -74,6 +75,7 @@ describe('resolveResourceScope', () => {
     expect(scope).toEqual({
       resourceType: 'memory_store',
       resourceId: taggedStoreId,
+      projectId,
       projectPublicId,
       tags: { env: 'prod' },
     });
@@ -96,6 +98,7 @@ describe('resolveResourceScope', () => {
     expect(scope).toEqual({
       resourceType: 'memory_store',
       resourceId: storeId,
+      projectId,
       projectPublicId,
       tags: null,
     });
@@ -122,6 +125,7 @@ describe('resolveResourceScope', () => {
     expect(scope).toEqual({
       resourceType: 'agent',
       resourceId: agent.publicId,
+      projectId,
       projectPublicId,
       // Agents carry no tags column, so a tag condition reads no pairs.
       tags: null,
@@ -139,6 +143,7 @@ describe('resolveResourceScope', () => {
     expect(scope).toEqual({
       resourceType: 'actor',
       resourceId: actor.id,
+      projectId,
       projectPublicId,
       // The column defaults to an empty bag rather than null, so a condition
       // over resource tags reads no pairs — not a missing context.
@@ -157,6 +162,7 @@ describe('resolveResourceScope', () => {
     expect(scope).toEqual({
       resourceType: 'conversation',
       resourceId: conversation.id,
+      projectId,
       projectPublicId,
       tags: {},
     });
@@ -194,8 +200,183 @@ describe('resolveResourceScope', () => {
     expect(scope).toEqual({
       resourceType: 'session',
       resourceId: session.publicId,
+      projectId,
       projectPublicId,
       tags: { env: 'staging' },
+    });
+  });
+
+  /**
+   * The kinds a route's own preamble resolves through the same accessor. Seeded
+   * at the model rather than through REST: the assertion is the *mapping* — one
+   * row, one SRN — not the routes, which their own `*ResourceScope` suites drive
+   * end to end.
+   */
+  describe('the kinds moved off the project-level probe (#1339)', () => {
+    let seeded: Record<string, string>;
+
+    beforeAll(async () => {
+      const aiProvider = await db.AiProvider.create({
+        projectId,
+        name: 'Scopes Kind Provider',
+        provider: 'ollama',
+        defaultModel: 'llama3.2',
+      });
+      const agent = await db.Agent.create({
+        projectId,
+        aiProviderId: aiProvider.id,
+        name: 'Scopes Kind Agent',
+      });
+      const orchestration = await db.Orchestration.create({
+        projectId,
+        name: 'Scopes Kind Orchestration',
+      });
+      const dataset = await db.Dataset.create({
+        projectId,
+        name: 'Scopes Kind Dataset',
+      });
+      const trace = await db.Trace.create({
+        projectId,
+        agentId: agent.id,
+        publicId: 'trace_scopes_kind',
+      });
+
+      const tool = await db.Tool.create({
+        projectId,
+        type: 'client',
+        name: 'scopes-kind-tool',
+      });
+
+      const rows = {
+        tool,
+        guardrail: await db.Guardrail.create({
+          projectId,
+          name: 'scopes-kind-guardrail',
+          document: { class: 'C' },
+        }),
+        orchestration,
+        orchestration_run: await db.OrchestrationRun.create({
+          projectId,
+          orchestrationId: orchestration.id,
+          status: 'queued',
+        }),
+        dataset,
+        eval: await db.Eval.create({
+          projectId,
+          name: 'scopes-kind-eval',
+          agentId: agent.id,
+          datasetId: dataset.id,
+          scorers: [{ type: 'exact_match' }],
+        }),
+        generation: await db.Generation.create({
+          projectId,
+          agentId: agent.id,
+          traceId: trace.id,
+          status: 'completed',
+          startedAt: new Date(),
+        }),
+        trace,
+        chain: await db.GenerationChain.create({
+          projectId,
+          rootGenerationId: 'gen_scopes_kind_root',
+          status: 'active',
+          generationCount: 1,
+        }),
+        quota: await db.Quota.create({
+          projectId,
+          scope: 'project',
+          metric: 'requests',
+          window: 'rolling_1h',
+          limit: '100',
+        }),
+        model_route: await db.ModelRoute.create({
+          projectId,
+          name: 'scopes-kind-route',
+          targets: [{ ai_provider_id: aiProvider.publicId, model: 'llama3.2' }],
+          retryOn: ['timeout'],
+          failureThreshold: 3,
+          cooldownSeconds: 30,
+        }),
+        ingestionRule: await db.IngestionRule.create({
+          projectId,
+          contentTypeGlob: 'image/png',
+          toolId: tool.id,
+        }),
+        audit: await db.AuditEntry.create({
+          projectId,
+          action: 'scopes:Kind',
+          status: 200,
+        }),
+        usage: await db.UsageThreshold.create({
+          projectId,
+          metric: 'cost_usd',
+          window: 'calendar_month',
+          threshold: '100',
+        }),
+      };
+
+      seeded = Object.fromEntries(
+        Object.entries(rows).map(([kind, row]) => {
+          return [kind, row.publicId as string];
+        })
+      );
+    });
+
+    // An orchestration run authorizes through the orchestration it runs, so its
+    // SRN names that — the resource type its routes have always probed.
+    test.each([
+      ['tool', 'tool'],
+      ['guardrail', 'guardrail'],
+      ['orchestration', 'orchestration'],
+      ['orchestration_run', 'orchestration'],
+      ['dataset', 'dataset'],
+      ['eval', 'eval'],
+      ['generation', 'generation'],
+      ['trace', 'trace'],
+      ['chain', 'chain'],
+      ['quota', 'quota'],
+      ['model_route', 'model_route'],
+      ['ingestionRule', 'ingestionRule'],
+      ['audit', 'audit'],
+      ['usage', 'usage'],
+    ])(
+      'a %s resolves to a %s SRN in its project',
+      async (kind, resourceType) => {
+        const scope = await resolveResourceScope({
+          kind,
+          publicId: seeded[kind],
+        });
+
+        expect(scope).toEqual({
+          resourceType,
+          resourceId:
+            kind === 'orchestration_run' ? seeded.orchestration : seeded[kind],
+          projectId,
+          projectPublicId,
+          tags: null,
+        });
+      }
+    );
+
+    test.each([
+      ['tool', 'tool_absent'],
+      ['guardrail', 'guard_absent'],
+      ['orchestration', 'orch_absent'],
+      ['orchestration_run', 'orch_run_absent'],
+      ['dataset', 'dset_absent'],
+      ['eval', 'eval_absent'],
+      ['generation', 'gen_absent'],
+      ['trace', 'trace_absent'],
+      ['chain', 'chain_absent'],
+      ['quota', 'quota_absent'],
+      ['model_route', 'route_absent'],
+      ['ingestionRule', 'igr_absent'],
+      ['audit', 'audit_absent'],
+      ['usage', 'uthr_absent'],
+    ])('an id that names no %s resolves to nothing', async (kind, publicId) => {
+      await expect(
+        resolveResourceScope({ kind, publicId })
+      ).resolves.toBeNull();
     });
   });
 

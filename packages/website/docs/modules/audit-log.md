@@ -109,6 +109,28 @@ soat create-webhook --project-id proj_ABC \
 
 Global entries (`project_id` null, e.g. `users:CreateUser`) emit nothing; platform-originated entries do, with null principal fields.
 
+### Who may act on an audit entry
+
+Every route that acts on one audit entry is authorized against **that audit entry's** SRN,
+`srn:<project_id>:audit:<entry_id>`, not against the project. A policy may therefore name the audit entries it
+covers:
+
+```json
+{
+  "statement": [
+    {
+      "effect": "Allow",
+      "action": ["audit:GetAuditEntry"],
+      "resource": ["srn:proj_V1StGXR8Z5jdHi6B:audit:audit_V1StGXR8Z5jdHi6B"]
+    }
+  ]
+}
+```
+
+Refusals keep the shapes [IAM](./iam.md#what-a-denial-looks-like) defines: a read the caller may not perform is `404` (an audit entry it may not see does not announce itself), a write is `403`, and a credential scoped to another project is `403 API_KEY_PROJECT_SCOPE`.
+
+Listing audit entries stays project-scoped: [`GET /api/v1/audit-log`](/docs/api/audit-log/list-audit-entries) asks whether the caller may list audit entries in a project at all, so a policy that names individual audit entries grants no listing.
+
 ## Configuration
 
 | Environment Variable            | Required | Description                                                                 |

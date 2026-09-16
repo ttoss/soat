@@ -640,12 +640,16 @@ describe('Quotas', () => {
       expect(res.status).toBe(404);
     });
 
-    test('project-scoped API key without GetQuota returns 403', async () => {
+    // A read the caller may not perform is indistinguishable from absence, now
+    // that the route authorizes against the quota's own SRN (#1339); the write
+    // routes keep `403`.
+    test('project-scoped API key without GetQuota returns 404', async () => {
       const key = await createRestrictedApiKey('quotas:GetQuota');
       const res = await authenticatedTestClient(key).get(
         `/api/v1/quotas/${quotaId}`
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('RESOURCE_NOT_FOUND');
     });
   });
 
@@ -833,16 +837,20 @@ describe('Quotas', () => {
       expect(res.status).toBe(403);
     });
 
+    // The id has to name a real quota: the route resolves it before
+    // authorizing, so a missing one would answer `404` and never reach the
+    // refusal this test is about (#1339). Any quota in the project will do —
+    // hence a listing rather than a create, which collides with whichever
+    // metric/window pair another test in this file already holds.
     test('project-scoped API key without DeleteQuota returns 403', async () => {
-      const created = await createQuota(userToken, {
-        scope: 'project',
-        metric: 'tokens',
-        window: 'rolling_24h',
-        limit: 9,
-      });
+      const existing = await authenticatedTestClient(userToken).get(
+        `/api/v1/quotas?project_id=${projectId}`
+      );
+      expect(existing.body.data.length).toBeGreaterThan(0);
+
       const key = await createRestrictedApiKey('quotas:DeleteQuota');
       const res = await authenticatedTestClient(key).delete(
-        `/api/v1/quotas/${created.body.id}`
+        `/api/v1/quotas/${existing.body.data[0].id}`
       );
       expect(res.status).toBe(403);
     });

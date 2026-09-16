@@ -430,10 +430,14 @@ describe('GET /api/v1/generations/:generation_id/transcript', () => {
     expect(res.status).toBe(401);
   });
 
-  test('a user without generations:GetGeneration gets 403', async () => {
+  // The generation half is a read, so a caller who may not perform it sees
+  // absence rather than a refusal (#1339). The trace half below stays `403`:
+  // the generation read has already succeeded there, so the turn's existence is
+  // no longer a secret and a plain refusal is the more useful answer.
+  test('a user without generations:GetGeneration gets 404', async () => {
     const generation = await runGeneration({});
     const res = await transcript(generation.id, noPermToken);
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
   });
 
   test('a user who can read the generation but not the trace gets 403', async () => {
@@ -489,9 +493,12 @@ describe('GET /api/v1/generations/:generation_id/transcript', () => {
     expect(traceRes.body.step_count).toBe(2);
   });
 
+  // `RESOURCE_NOT_FOUND`, the code this module's other routes already answer
+  // for a missing generation — the transcript used to be the one that differed,
+  // and the preamble it now shares with them settles it (#913's shape rule).
   test('an unknown generation returns 404', async () => {
     const res = await transcript('gen_does_not_exist');
     expect(res.status).toBe(404);
-    expect(res.body.error.code).toBe('GENERATION_NOT_FOUND');
+    expect(res.body.error.code).toBe('RESOURCE_NOT_FOUND');
   });
 });

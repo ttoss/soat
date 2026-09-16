@@ -179,6 +179,9 @@ paths:
       summary: Get an orchestration
       description: Returns the orchestration with nodes and edges.
       operationId: getOrchestration
+      x-soat-resource:
+        kind: orchestration
+        from: orchestration_id
       parameters:
         - $ref: '#/components/parameters/orchestration_id'
       responses:
@@ -201,6 +204,9 @@ paths:
       summary: Update an orchestration
       description: Partially updates an orchestration definition.
       operationId: updateOrchestration
+      x-soat-resource:
+        kind: orchestration
+        from: orchestration_id
       parameters:
         - $ref: '#/components/parameters/orchestration_id'
       requestBody:
@@ -231,6 +237,9 @@ paths:
       summary: Delete an orchestration
       description: Deletes an orchestration definition and all its runs.
       operationId: deleteOrchestration
+      x-soat-resource:
+        kind: orchestration
+        from: orchestration_id
       parameters:
         - $ref: '#/components/parameters/orchestration_id'
       responses:
@@ -256,6 +265,9 @@ paths:
         archive a version. See
         [Versioning](/docs/modules/orchestrations#versioning).
       operationId: listOrchestrationVersions
+      x-soat-resource:
+        kind: orchestration
+        from: orchestration_id
       parameters:
         - $ref: '#/components/parameters/orchestration_id'
         - name: limit
@@ -313,6 +325,9 @@ paths:
         for its whole life, so this is how you read the topology a run actually
         took — including a run whose orchestration has been rewired since.
       operationId: getOrchestrationVersion
+      x-soat-resource:
+        kind: orchestration
+        from: orchestration_id
       parameters:
         - $ref: '#/components/parameters/orchestration_id'
         - name: version
@@ -359,6 +374,9 @@ paths:
         already in flight are unaffected either way — a restore is an ordinary
         edit, and pinning is what keeps it from reaching them.
       operationId: restoreOrchestrationVersion
+      x-soat-resource:
+        kind: orchestration
+        from: orchestration_id
       parameters:
         - $ref: '#/components/parameters/orchestration_id'
         - name: version
@@ -556,6 +574,9 @@ paths:
       summary: Cancel an orchestration run
       description: Cancels a run that has not yet reached a terminal state.
       operationId: cancelOrchestrationRun
+      x-soat-resource:
+        kind: orchestration_run
+        from: orchestration_run_id
       parameters:
         - $ref: '#/components/parameters/orchestration_run_id'
       responses:
@@ -602,6 +623,9 @@ paths:
 
         Idempotent: pausing an already-paused run answers with it unchanged.
       operationId: pauseOrchestrationRun
+      x-soat-resource:
+        kind: orchestration_run
+        from: orchestration_run_id
       parameters:
         - $ref: '#/components/parameters/orchestration_run_id'
       requestBody:
@@ -633,6 +657,9 @@ paths:
       summary: Submit human input
       description: Provides human input to a run that is awaiting_input at a human node.
       operationId: submitHumanInput
+      x-soat-resource:
+        kind: orchestration_run
+        from: orchestration_run_id
       parameters:
         - $ref: '#/components/parameters/orchestration_run_id'
       requestBody:
@@ -676,6 +703,9 @@ paths:
         `paused` re-drives the frontier that had not run yet, and one paused
         mid-timer goes back to `sleeping` for the wake it was already due.
       operationId: resumeOrchestrationRun
+      x-soat-resource:
+        kind: orchestration_run
+        from: orchestration_run_id
       parameters:
         - $ref: '#/components/parameters/orchestration_run_id'
       responses:
@@ -701,6 +731,9 @@ paths:
       summary: Get an orchestration run
       description: Returns the status, state, and artifacts of a specific run.
       operationId: getOrchestrationRun
+      x-soat-resource:
+        kind: orchestration_run
+        from: orchestration_run_id
       parameters:
         - $ref: '#/components/parameters/orchestration_run_id'
       responses:

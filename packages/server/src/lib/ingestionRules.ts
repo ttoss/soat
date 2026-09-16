@@ -55,7 +55,7 @@ type IngestionRuleRow = InstanceType<typeof db.IngestionRule> & {
   agent?: InstanceType<typeof db.Agent> | null;
 };
 
-const ingestionRules = makeResourceAccessor<IngestionRuleRow>({
+export const ingestionRules = makeResourceAccessor<IngestionRuleRow>({
   model: () => {
     return db.IngestionRule;
   },

@@ -44,7 +44,7 @@ const buildIncludes = () => {
   return [{ model: db.Project, as: 'project' }];
 };
 
-const chains = makeResourceAccessor<ChainInstance>({
+export const chains = makeResourceAccessor<ChainInstance>({
   model: () => {
     return db.GenerationChain;
   },

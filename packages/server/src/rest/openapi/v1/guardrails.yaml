@@ -163,6 +163,9 @@ paths:
       summary: Get a guardrail
       description: Returns a single guardrail by ID.
       operationId: getGuardrail
+      x-soat-resource:
+        kind: guardrail
+        from: guardrail_id
       parameters:
         - name: guardrail_id
           in: path
@@ -205,6 +208,9 @@ paths:
         re-writing the document the guardrail already holds, leave the version
         untouched.
       operationId: updateGuardrail
+      x-soat-resource:
+        kind: guardrail
+        from: guardrail_id
       parameters:
         - name: guardrail_id
           in: path
@@ -254,6 +260,9 @@ paths:
       summary: Delete a guardrail
       description: Deletes a guardrail and its archived versions by ID.
       operationId: deleteGuardrail
+      x-soat-resource:
+        kind: guardrail
+        from: guardrail_id
       parameters:
         - name: guardrail_id
           in: path
@@ -294,6 +303,9 @@ paths:
         Metadata-only edits (name, description, context binding) do not archive a
         version. See [Versioning](/docs/modules/guardrails#versioning).
       operationId: listGuardrailVersions
+      x-soat-resource:
+        kind: guardrail
+        from: guardrail_id
       parameters:
         - name: guardrail_id
           in: path
@@ -367,6 +379,9 @@ paths:
         exceptions record the version that governed them, so the audit chain
         survives edits.
       operationId: getGuardrailVersion
+      x-soat-resource:
+        kind: guardrail
+        from: guardrail_id
       parameters:
         - name: guardrail_id
           in: path
@@ -427,6 +442,9 @@ paths:
         document is re-validated; restoring the policy the guardrail already
         holds is a no-op and archives nothing.
       operationId: restoreGuardrailVersion
+      x-soat-resource:
+        kind: guardrail
+        from: guardrail_id
       parameters:
         - name: guardrail_id
           in: path
@@ -492,6 +510,9 @@ paths:
         production-shaped calls before attaching it — or before editing a
         widely-attached one. Pass an optional `tool_id` to resolve `runtime.tool.*`.
       operationId: evaluateGuardrail
+      x-soat-resource:
+        kind: guardrail
+        from: guardrail_id
       parameters:
         - name: guardrail_id
           in: path

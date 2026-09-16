@@ -1128,7 +1128,9 @@ describe('IngestionRules', () => {
       const res = await authenticatedTestClient(keyRes.body.key as string).get(
         `/api/v1/ingestion-rules/${ruleId}`
       );
-      expect(res.status).toBe(403);
+      // A read the caller may not perform is indistinguishable from absence,
+      // now that the route authorizes against the rule's own SRN (#1339).
+      expect(res.status).toBe(404);
     });
 
     test('get is 401 unauthenticated and 404 without permission (no accessible projects)', async () => {
@@ -1212,7 +1214,7 @@ describe('IngestionRules', () => {
     });
   });
 
-  describe('cross-project access does not leak resource existence', () => {
+  describe('cross-project access on a rule the caller may not see', () => {
     let otherProjectUserToken: string;
     let ruleInProjectId: string;
 
@@ -1269,18 +1271,25 @@ describe('IngestionRules', () => {
       expect(res.status).toBe(404);
     });
 
-    test('patch on a rule from an inaccessible project returns 404, not 403', async () => {
+    // A **write** the caller may not perform says so, in this project or any
+    // other: the refusal is the same `403` every module answers since routes
+    // began authorizing against the resource's own SRN (#1336, #1339). The read
+    // above still hides the rule, which is what keeps an id-only `GET` from
+    // being an existence oracle.
+    test('patch on a rule from an inaccessible project returns 403', async () => {
       const res = await authenticatedTestClient(otherProjectUserToken)
         .patch(`/api/v1/ingestion-rules/${ruleInProjectId}`)
         .send({ chunk_strategy: 'whole' });
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('FORBIDDEN');
     });
 
-    test('delete on a rule from an inaccessible project returns 404, not 403', async () => {
+    test('delete on a rule from an inaccessible project returns 403', async () => {
       const res = await authenticatedTestClient(otherProjectUserToken).delete(
         `/api/v1/ingestion-rules/${ruleInProjectId}`
       );
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('FORBIDDEN');
     });
   });
 

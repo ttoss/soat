@@ -4,6 +4,7 @@ import {
   createDataset,
   createDatasetItem,
   createDatasetItemFromGeneration,
+  datasets,
   deleteDataset,
   deleteDatasetItem,
   getDataset,
@@ -21,10 +22,12 @@ import { cancelEvalRun, startEvalRun } from 'src/lib/evaluationRuns';
 import {
   createEval,
   deleteEval,
+  evals,
   getEval,
   listEvals,
   updateEval,
 } from 'src/lib/evaluations';
+import { generations } from 'src/lib/generations';
 import { buildSrn } from 'src/lib/iam';
 import { parseMetadataBag } from 'src/lib/metadataBag';
 import { setAuditResourceHint } from 'src/middleware/audit';
@@ -32,12 +35,39 @@ import { setAuditResourceHint } from 'src/middleware/audit';
 import {
   parsePagination,
   parseToolContextBody,
-  requireProjectAccess,
   resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
+import { authorizeResource, makeItemRouteAuthorizer } from './resourceAccess';
 
 const evaluationsRouter = new Router<Context>();
+
+/**
+ * A dataset **item** and an eval **run** carry no project of their own, so they
+ * authorize through the parent the path names — the way a memory authorizes
+ * through its store. That parent is also the resource a policy author names:
+ * `srn:<project>:dataset:<dataset_id>` covers every item in it (#1339).
+ *
+ * Which refusal each route answers is decided by what its action *does*, not by
+ * which helper it happened to reach for: a read hides the resource (`404`), a
+ * write refuses it (`403`). This module reached for `requireProjectAccess`
+ * everywhere, including on its reads — and preserving that literally would have
+ * turned a cross-project read from `404` into `403`, announcing across a tenant
+ * boundary that a dataset exists.
+ */
+const datasetAccess = makeItemRouteAuthorizer({
+  findScope: datasets.findScope,
+  resourceType: 'dataset',
+  param: 'dataset_id',
+  label: 'Dataset',
+});
+
+const evalAccess = makeItemRouteAuthorizer({
+  findScope: evals.findScope,
+  resourceType: 'eval',
+  param: 'eval_id',
+  label: 'Eval',
+});
 
 const parseStringOrUndefined = (value: unknown): string | undefined => {
   return typeof value === 'string' ? value : undefined;
@@ -93,10 +123,9 @@ evaluationsRouter.get('/datasets', async (ctx: Context) => {
  *     $ref: 'openapi/v1/evaluations.yaml#/paths/~1api~1v1~1datasets~1{dataset_id}/get'
  */
 evaluationsRouter.get('/datasets/:dataset_id', async (ctx: Context) => {
-  const projectIds = await requireProjectAccess({
+  const { projectIds } = await datasetAccess.authorizeRead({
     ctx,
     action: 'evaluations:GetDataset',
-    resourceType: 'dataset',
   });
   ctx.body = await getDataset({ projectIds, id: ctx.params.dataset_id });
 });
@@ -108,10 +137,9 @@ evaluationsRouter.get('/datasets/:dataset_id', async (ctx: Context) => {
  *     $ref: 'openapi/v1/evaluations.yaml#/paths/~1api~1v1~1datasets~1{dataset_id}/put'
  */
 evaluationsRouter.put('/datasets/:dataset_id', async (ctx: Context) => {
-  const projectIds = await requireProjectAccess({
+  const { projectIds } = await datasetAccess.authorizeWrite({
     ctx,
     action: 'evaluations:CreateDataset',
-    resourceType: 'dataset',
   });
   const body = ctx.request.body as Record<string, unknown>;
 
@@ -130,10 +158,9 @@ evaluationsRouter.put('/datasets/:dataset_id', async (ctx: Context) => {
  *     $ref: 'openapi/v1/evaluations.yaml#/paths/~1api~1v1~1datasets~1{dataset_id}/delete'
  */
 evaluationsRouter.delete('/datasets/:dataset_id', async (ctx: Context) => {
-  const projectIds = await requireProjectAccess({
+  const { projectIds } = await datasetAccess.authorizeWrite({
     ctx,
     action: 'evaluations:DeleteDataset',
-    resourceType: 'dataset',
   });
 
   // `204 No Content` leaves the audit middleware no body to derive the
@@ -163,10 +190,9 @@ evaluationsRouter.delete('/datasets/:dataset_id', async (ctx: Context) => {
  *     $ref: 'openapi/v1/evaluations.yaml#/paths/~1api~1v1~1datasets~1{dataset_id}~1items/post'
  */
 evaluationsRouter.post('/datasets/:dataset_id/items', async (ctx: Context) => {
-  const projectIds = await requireProjectAccess({
+  const { projectIds } = await datasetAccess.authorizeWrite({
     ctx,
     action: 'evaluations:CreateDataset',
-    resourceType: 'dataset',
   });
   const body = ctx.request.body as Record<string, unknown>;
 
@@ -189,28 +215,51 @@ evaluationsRouter.post('/datasets/:dataset_id/items', async (ctx: Context) => {
 evaluationsRouter.post(
   '/datasets/:dataset_id/items/from-generation',
   async (ctx: Context) => {
-    const projectIds = await requireProjectAccess({
+    const { projectIds } = await datasetAccess.authorizeWrite({
       ctx,
       action: 'evaluations:CreateDataset',
-      resourceType: 'dataset',
-    });
-
-    // Curating copies a generation's content into an item, so without the read
-    // check `evaluations:CreateDataset` alone would be a way to read turns a
-    // principal cannot fetch through `GET /generations/{id}`.
-    await requireProjectAccess({
-      ctx,
-      action: 'generations:GetGeneration',
-      resourceType: 'generation',
     });
 
     const body = ctx.request.body as Record<string, unknown>;
 
+    // Curating copies a generation's content into an item, so without the read
+    // check `evaluations:CreateDataset` alone would be a way to read turns a
+    // principal cannot fetch through `GET /generations/{id}`. It names the
+    // generation's own SRN, as that route does.
+    //
+    // A body carrying no usable id authorizes nothing because it reads nothing:
+    // `createDatasetItemFromGeneration` rejects it before a generation is
+    // loaded.
+    const generationId = body.generation_id;
+    const generationAccess =
+      typeof generationId === 'string' && generationId.trim() !== ''
+        ? await authorizeResource({
+            ctx,
+            scope: await generations.findScope({ id: generationId }),
+            resourceType: 'generation',
+            resourceId: generationId,
+            label: 'Generation',
+            // The generation is a *referenced* entity here, not the route's
+            // subject, so it keeps the module's referenced-entity code rather
+            // than the plain `RESOURCE_NOT_FOUND` its own routes answer.
+            errorCode: 'GENERATION_NOT_FOUND',
+            action: 'generations:GetGeneration',
+            onDenied: 'refuse',
+          })
+        : undefined;
+
     ctx.status = 201;
     ctx.body = await createDatasetItemFromGeneration({
-      projectIds,
+      // Both projects, because the two lookups behind this call are scoped by
+      // one filter: the dataset's and the generation's, each already authorized
+      // above. Narrowing to the dataset's alone would make a generation in
+      // another project read as missing, where the lib has a `400` naming the
+      // mismatch — the far more useful answer for a caller who can see both.
+      projectIds: [
+        ...new Set([...projectIds, ...(generationAccess?.projectIds ?? [])]),
+      ],
       datasetId: ctx.params.dataset_id,
-      generationId: body.generation_id,
+      generationId,
       expectedOutput: body.expected_output,
       metadata: body.metadata,
     });
@@ -224,10 +273,9 @@ evaluationsRouter.post(
  *     $ref: 'openapi/v1/evaluations.yaml#/paths/~1api~1v1~1datasets~1{dataset_id}~1items/get'
  */
 evaluationsRouter.get('/datasets/:dataset_id/items', async (ctx: Context) => {
-  const projectIds = await requireProjectAccess({
+  const { projectIds } = await datasetAccess.authorizeRead({
     ctx,
     action: 'evaluations:ListDatasets',
-    resourceType: 'dataset',
   });
 
   ctx.body = await listDatasetItems({
@@ -246,10 +294,9 @@ evaluationsRouter.get('/datasets/:dataset_id/items', async (ctx: Context) => {
 evaluationsRouter.put(
   '/datasets/:dataset_id/items/:item_id',
   async (ctx: Context) => {
-    const projectIds = await requireProjectAccess({
+    const { projectIds } = await datasetAccess.authorizeWrite({
       ctx,
       action: 'evaluations:CreateDataset',
-      resourceType: 'dataset',
     });
     const body = ctx.request.body as Record<string, unknown>;
 
@@ -273,10 +320,9 @@ evaluationsRouter.put(
 evaluationsRouter.delete(
   '/datasets/:dataset_id/items/:item_id',
   async (ctx: Context) => {
-    const projectIds = await requireProjectAccess({
+    const { projectIds } = await datasetAccess.authorizeWrite({
       ctx,
       action: 'evaluations:CreateDataset',
-      resourceType: 'dataset',
     });
 
     await deleteDatasetItem({
@@ -341,10 +387,9 @@ evaluationsRouter.get('/evals', async (ctx: Context) => {
  *     $ref: 'openapi/v1/evaluations.yaml#/paths/~1api~1v1~1evals~1{eval_id}/get'
  */
 evaluationsRouter.get('/evals/:eval_id', async (ctx: Context) => {
-  const projectIds = await requireProjectAccess({
+  const { projectIds } = await evalAccess.authorizeRead({
     ctx,
     action: 'evaluations:GetEval',
-    resourceType: 'eval',
   });
   ctx.body = await getEval({ projectIds, id: ctx.params.eval_id });
 });
@@ -356,10 +401,9 @@ evaluationsRouter.get('/evals/:eval_id', async (ctx: Context) => {
  *     $ref: 'openapi/v1/evaluations.yaml#/paths/~1api~1v1~1evals~1{eval_id}/put'
  */
 evaluationsRouter.put('/evals/:eval_id', async (ctx: Context) => {
-  const projectIds = await requireProjectAccess({
+  const { projectIds } = await evalAccess.authorizeWrite({
     ctx,
     action: 'evaluations:CreateEval',
-    resourceType: 'eval',
   });
   const body = ctx.request.body as Record<string, unknown>;
 
@@ -381,10 +425,9 @@ evaluationsRouter.put('/evals/:eval_id', async (ctx: Context) => {
  *     $ref: 'openapi/v1/evaluations.yaml#/paths/~1api~1v1~1evals~1{eval_id}/delete'
  */
 evaluationsRouter.delete('/evals/:eval_id', async (ctx: Context) => {
-  const projectIds = await requireProjectAccess({
+  const { projectIds } = await evalAccess.authorizeWrite({
     ctx,
     action: 'evaluations:DeleteEval',
-    resourceType: 'eval',
   });
 
   const evaluation = await getEval({ projectIds, id: ctx.params.eval_id });
@@ -411,10 +454,9 @@ evaluationsRouter.delete('/evals/:eval_id', async (ctx: Context) => {
  *     $ref: 'openapi/v1/evaluations.yaml#/paths/~1api~1v1~1evals~1{eval_id}~1runs/post'
  */
 evaluationsRouter.post('/evals/:eval_id/runs', async (ctx: Context) => {
-  const projectIds = await requireProjectAccess({
+  const { projectIds } = await evalAccess.authorizeWrite({
     ctx,
     action: 'evaluations:RunEval',
-    resourceType: 'eval',
   });
   const body = ctx.request.body as Record<string, unknown>;
 
@@ -439,10 +481,9 @@ evaluationsRouter.post('/evals/:eval_id/runs', async (ctx: Context) => {
  *     $ref: 'openapi/v1/evaluations.yaml#/paths/~1api~1v1~1evals~1{eval_id}~1runs/get'
  */
 evaluationsRouter.get('/evals/:eval_id/runs', async (ctx: Context) => {
-  const projectIds = await requireProjectAccess({
+  const { projectIds } = await evalAccess.authorizeRead({
     ctx,
     action: 'evaluations:ListEvals',
-    resourceType: 'eval',
   });
 
   ctx.body = await listEvalRuns({
@@ -461,10 +502,9 @@ evaluationsRouter.get('/evals/:eval_id/runs', async (ctx: Context) => {
 evaluationsRouter.get(
   '/evals/:eval_id/runs/:eval_run_id',
   async (ctx: Context) => {
-    const projectIds = await requireProjectAccess({
+    const { projectIds } = await evalAccess.authorizeRead({
       ctx,
       action: 'evaluations:GetEval',
-      resourceType: 'eval',
     });
 
     ctx.body = await getEvalRun({
@@ -484,10 +524,9 @@ evaluationsRouter.get(
 evaluationsRouter.get(
   '/evals/:eval_id/runs/:eval_run_id/results',
   async (ctx: Context) => {
-    const projectIds = await requireProjectAccess({
+    const { projectIds } = await evalAccess.authorizeRead({
       ctx,
       action: 'evaluations:ListEvals',
-      resourceType: 'eval',
     });
 
     ctx.body = await listEvalResults({
@@ -508,10 +547,9 @@ evaluationsRouter.get(
 evaluationsRouter.post(
   '/evals/:eval_id/runs/:eval_run_id/cancel',
   async (ctx: Context) => {
-    const projectIds = await requireProjectAccess({
+    const { projectIds } = await evalAccess.authorizeWrite({
       ctx,
       action: 'evaluations:RunEval',
-      resourceType: 'eval',
     });
 
     ctx.body = await cancelEvalRun({

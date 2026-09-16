@@ -288,6 +288,28 @@ Omitting the nullable `scope_ref` means "not supplied", not clearing it; an expl
 
 Quota mutations are ordinary IAM actions. Do **not** grant `quotas:UpdateQuota` / `quotas:DeleteQuota` to an autonomous API-key principal whose spend the quota caps. An admin JWT (never blocked by request quotas) can always raise or remove a quota.
 
+### Who may act on a quota
+
+Every route that acts on one quota is authorized against **that quota's** SRN,
+`srn:<project_id>:quota:<quota_id>`, not against the project. A policy may therefore name the quotas it
+covers:
+
+```json
+{
+  "statement": [
+    {
+      "effect": "Allow",
+      "action": ["quotas:GetQuota", "quotas:UpdateQuota"],
+      "resource": ["srn:proj_V1StGXR8Z5jdHi6B:quota:quota_V1StGXR8Z5jdHi6B"]
+    }
+  ]
+}
+```
+
+Refusals keep the shapes [IAM](./iam.md#what-a-denial-looks-like) defines: a read the caller may not perform is `404` (a quota it may not see does not announce itself), a write is `403`, and a credential scoped to another project is `403 API_KEY_PROJECT_SCOPE`.
+
+Listing quotas stays project-scoped: [`GET /api/v1/quotas`](/docs/api/quotas/list-quotas) asks whether the caller may list quotas in a project at all, so a policy that names individual quotas grants no listing.
+
 ## Examples
 
 ### Create a quota

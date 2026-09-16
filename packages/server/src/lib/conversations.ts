@@ -30,7 +30,7 @@ const conversationIncludes = () => {
   ];
 };
 
-const conversations = makeResourceAccessor<ConversationRow>({
+export const conversations = makeResourceAccessor<ConversationRow>({
   model: () => {
     return db.Conversation;
   },

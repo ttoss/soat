@@ -360,6 +360,29 @@ The webhook payload (`data`) is:
 
 `window_key` is `null` for `rolling_24h`. Subscribe a webhook to `usage.threshold_crossed` (or `usage.*`) to receive it.
 
+### Who may act on a usage threshold
+
+A threshold is this module's only addressable resource, and deleting one is
+authorized against **that threshold's** SRN,
+`srn:<project_id>:usage:<threshold_id>`, not against the project:
+
+```json
+{
+  "statement": [
+    {
+      "effect": "Allow",
+      "action": ["usage:ManageThresholds"],
+      "resource": ["srn:proj_V1StGXR8Z5jdHi6B:usage:uthr_V1StGXR8Z5jdHi6B"]
+    }
+  ]
+}
+```
+
+Everything else here — the aggregates, the event feed, the receipts — is a
+question *about a project*, so it stays project-scoped, as does creating a
+threshold. A refusal on a threshold it may not delete is `403`; a credential
+scoped to another project is `403 API_KEY_PROJECT_SCOPE`.
+
 ## Configuration
 
 | Environment Variable | Required | Description |

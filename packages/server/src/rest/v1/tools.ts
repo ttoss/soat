@@ -9,6 +9,7 @@ import {
   deleteTool,
   getTool,
   listTools,
+  tools,
   updateTool,
 } from 'src/lib/tools';
 import { redactToolSecrets } from 'src/lib/toolSecretRedaction';
@@ -25,8 +26,24 @@ import {
   requireProjectAccess,
   resolveReadProjectIds,
 } from './helpers';
+import { makeItemRouteAuthorizer } from './resourceAccess';
 
 export const toolsRouter = new Router<Context>();
+
+/**
+ * Every `/tools/:tool_id` route authorizes against the tool's own SRN.
+ *
+ * `tools:CallTool` is why this module went first: the route *executes*, and
+ * `approvals.ts` has always checked `CallTool` against the tool's SRN. Until
+ * this, the same per-tool grant was honored on the approval path and ignored on
+ * the direct route (#1339).
+ */
+const toolAccess = makeItemRouteAuthorizer({
+  findScope: tools.findScope,
+  resourceType: 'tool',
+  param: 'tool_id',
+  label: 'Tool',
+});
 
 const parseStringOrUndefined = (v: unknown): string | undefined => {
   return typeof v === 'string' ? v : undefined;
@@ -187,12 +204,9 @@ toolsRouter.get('/tools', async (ctx: Context) => {
  *     $ref: 'openapi/v1/tools.yaml#/paths/~1api~1v1~1tools~1{tool_id}/get'
  */
 toolsRouter.get('/tools/:tool_id', async (ctx: Context) => {
-  requireAuth(ctx);
-
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await toolAccess.authorizeRead({
     ctx,
     action: 'tools:GetTool',
-    resourceType: 'tool',
   });
 
   const result = await getTool({
@@ -210,10 +224,9 @@ toolsRouter.get('/tools/:tool_id', async (ctx: Context) => {
  *     $ref: 'openapi/v1/tools.yaml#/paths/~1api~1v1~1tools~1{tool_id}/patch'
  */
 toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
-  const projectIds = await requireProjectAccess({
+  const { projectIds } = await toolAccess.authorizeWrite({
     ctx,
     action: 'tools:UpdateTool',
-    resourceType: 'tool',
   });
   const body = ctx.request.body as Record<string, unknown>;
   const {
@@ -291,12 +304,9 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
  *     $ref: 'openapi/v1/tools.yaml#/paths/~1api~1v1~1tools~1{tool_id}/delete'
  */
 toolsRouter.delete('/tools/:tool_id', async (ctx: Context) => {
-  requireAuth(ctx);
-
-  const projectIds = await requireProjectAccess({
+  const { projectIds } = await toolAccess.authorizeWrite({
     ctx,
     action: 'tools:DeleteTool',
-    resourceType: 'tool',
   });
 
   // The success response is `204 No Content`, so the audit middleware has no
@@ -351,12 +361,9 @@ const setCallToolResponseBody = (ctx: Context, result: unknown): void => {
  *     $ref: 'openapi/v1/tools.yaml#/paths/~1api~1v1~1tools~1{tool_id}~1call/post'
  */
 toolsRouter.post('/tools/:tool_id/call', async (ctx: Context) => {
-  requireAuth(ctx);
-
-  const projectIds = await requireProjectAccess({
+  const { projectIds } = await toolAccess.authorizeWrite({
     ctx,
     action: 'tools:CallTool',
-    resourceType: 'tool',
   });
 
   const {

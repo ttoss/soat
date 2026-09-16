@@ -502,6 +502,35 @@ window: every item and every frozen result counts toward the project's stored
 gigabytes ([`gb_day`](./usage.md#storage-metering)) until the dataset item or the run is
 deleted.
 
+### Who may act on a dataset or an eval
+
+Every route that acts on one dataset or one eval is authorized against **that
+resource's** SRN — `srn:<project_id>:dataset:<dataset_id>` or
+`srn:<project_id>:eval:<eval_id>` — not against the project. A policy may
+therefore name the datasets and evals it covers:
+
+```json
+{
+  "statement": [
+    {
+      "effect": "Allow",
+      "action": ["evaluations:GetEval", "evaluations:RunEval"],
+      "resource": ["srn:proj_V1StGXR8Z5jdHi6B:eval:eval_V1StGXR8Z5jdHi6B"]
+    }
+  ]
+}
+```
+
+A dataset **item** and an eval **run** have no SRN of their own: they authorize
+through the parent named in the path, so the statement above covers every run of
+that eval, and a dataset grant covers every item in that dataset.
+
+Curating an item from a generation ([`POST /api/v1/datasets/{dataset_id}/items/from-generation`](/docs/api/evaluations/create-dataset-item-from-generation)) checks both halves: `evaluations:CreateDataset` against the dataset, and `generations:GetGeneration` against the generation being copied — so it can never become a way to read a turn the caller could not fetch directly.
+
+Refusals keep the shapes [IAM](./iam.md#what-a-denial-looks-like) defines: a read the caller may not perform is `404` (a dataset or eval it may not see does not announce itself, across projects or within one), a write or a run is `403`, and a credential scoped to another project is `403 API_KEY_PROJECT_SCOPE`.
+
+Listing datasets and evals stays project-scoped: [`GET /api/v1/datasets`](/docs/api/evaluations/list-datasets) and [`GET /api/v1/evals`](/docs/api/evaluations/list-evals) ask whether the caller may list in a project at all, so a policy that names individual datasets or evals grants no listing.
+
 ## Examples
 
 Create a dataset and add a case:

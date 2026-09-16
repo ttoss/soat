@@ -2,6 +2,7 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import {
+  actors,
   createActor,
   deleteActor,
   findOrCreateActor,
@@ -11,17 +12,35 @@ import {
   updateActor,
   validateActorExclusivity,
 } from 'src/lib/actors';
-import { buildSrn } from 'src/lib/iam';
 import { compilePolicy } from 'src/lib/policyCompiler';
-import { buildResourceTagContext, readTagQuery } from 'src/lib/tags';
+import { readTagQuery } from 'src/lib/tags';
 
 import {
   requireAuth,
   resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
+import { makeItemRouteAuthorizer } from './resourceAccess';
 
 const actorsRouter = new Router<Context>();
+
+/**
+ * These routes already named the actor's own SRN and its tags, so what the
+ * shared preamble adds is the half they were missing: a credential pinned to
+ * another project now gets its own `API_KEY_PROJECT_SCOPE`, with the remedy in
+ * the message, instead of an opaque `Forbidden` (the #906 class, #1339).
+ *
+ * `refuse` on the read too, which is what this module already answered. Whether
+ * a denied read should hide the actor instead — as tools, agents and the
+ * modules moved in #1339 do — is a contract change of its own, not a side
+ * effect of sharing a preamble.
+ */
+const actorAccess = makeItemRouteAuthorizer({
+  findScope: actors.findScope,
+  resourceType: 'actor',
+  param: 'actor_id',
+  label: 'Actor',
+});
 
 type CreateActorBody = {
   project_id?: string;
@@ -92,30 +111,13 @@ actorsRouter.get('/actors', async (ctx: Context) => {
 });
 
 actorsRouter.get('/actors/:actor_id', async (ctx: Context) => {
-  requireAuth(ctx);
-
-  const actor = await getActor({ id: ctx.params.actor_id });
-
-  const srnGet = buildSrn({
-    projectPublicId: actor.project_id!,
-    resourceType: 'actor',
-    resourceId: actor.id,
-  });
-  const contextGet = buildResourceTagContext({
-    resourceType: 'actor',
-    tags: actor.tags,
-  });
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: actor.project_id!,
+  await actorAccess.authorize({
+    ctx,
     action: 'actors:GetActor',
-    resource: srnGet,
-    context: contextGet,
+    onDenied: 'refuse',
   });
-  if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
-  }
 
-  ctx.body = actor;
+  ctx.body = await getActor({ id: ctx.params.actor_id });
 });
 
 const performCreateActor = async (args: {
@@ -190,56 +192,14 @@ actorsRouter.post('/actors', async (ctx: Context) => {
 });
 
 actorsRouter.delete('/actors/:actor_id', async (ctx: Context) => {
-  requireAuth(ctx);
-
-  const actor = await getActor({ id: ctx.params.actor_id });
-
-  const srnDel = buildSrn({
-    projectPublicId: actor.project_id!,
-    resourceType: 'actor',
-    resourceId: actor.id,
-  });
-  const contextDel = buildResourceTagContext({
-    resourceType: 'actor',
-    tags: actor.tags,
-  });
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: actor.project_id!,
-    action: 'actors:DeleteActor',
-    resource: srnDel,
-    context: contextDel,
-  });
-  if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
-  }
+  await actorAccess.authorizeWrite({ ctx, action: 'actors:DeleteActor' });
 
   await deleteActor({ id: ctx.params.actor_id });
   ctx.status = 204;
 });
 
 actorsRouter.patch('/actors/:actor_id', async (ctx: Context) => {
-  requireAuth(ctx);
-
-  const actor = await getActor({ id: ctx.params.actor_id });
-
-  const srnUpd = buildSrn({
-    projectPublicId: actor.project_id!,
-    resourceType: 'actor',
-    resourceId: actor.id,
-  });
-  const contextUpd = buildResourceTagContext({
-    resourceType: 'actor',
-    tags: actor.tags,
-  });
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: actor.project_id!,
-    action: 'actors:UpdateActor',
-    resource: srnUpd,
-    context: contextUpd,
-  });
-  if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
-  }
+  await actorAccess.authorizeWrite({ ctx, action: 'actors:UpdateActor' });
 
   const body = ctx.request.body as {
     name?: string;

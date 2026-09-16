@@ -73,6 +73,28 @@ All three are read from *current* configuration at each hop, so lowering one sto
 
 On refusal: the chain moves to `budget_exhausted`, the refused turn is recorded on a [trace](./traces.md) with `stop_reason: "chain_limit"`, and a [`chain_limit` exception](./exceptions.md#producers) is filed against the root, naming which ceiling refused it.
 
+### Who may act on a chain
+
+Every route that acts on one chain is authorized against **that chain's** SRN,
+`srn:<project_id>:chain:<chain_id>`, not against the project. A policy may therefore name the chains it
+covers:
+
+```json
+{
+  "statement": [
+    {
+      "effect": "Allow",
+      "action": ["chains:GetChain"],
+      "resource": ["srn:proj_V1StGXR8Z5jdHi6B:chain:chain_V1StGXR8Z5jdHi6B"]
+    }
+  ]
+}
+```
+
+Refusals keep the shapes [IAM](./iam.md#what-a-denial-looks-like) defines: a read the caller may not perform is `404` (a chain it may not see does not announce itself), a write is `403`, and a credential scoped to another project is `403 API_KEY_PROJECT_SCOPE`.
+
+Listing chains stays project-scoped: [`GET /api/v1/chains`](/docs/api/chains/list-chains) asks whether the caller may list chains in a project at all, so a policy that names individual chains grants no listing.
+
 ## Examples
 
 <Tabs groupId="client">

@@ -148,6 +148,30 @@ Converter-related `failure_reason` values (alongside `FILE_PARSE_FAILED`, `INGES
 | `CONVERTER_OUTPUT_INVALID` | The tool (or callback) returned an unrecognized output shape |
 | `CONVERSION_TIMEOUT` | An async conversion did not call back within `CONVERSION_STALL_TIMEOUT_MS` |
 
+### Who may act on an ingestion rule
+
+Every route that acts on one ingestion rule is authorized against **that ingestion rule's** SRN,
+`srn:<project_id>:ingestionRule:<ingestion_rule_id>`, not against the project. A
+policy may therefore name the ingestion rules it covers:
+
+```json
+{
+  "statement": [
+    {
+      "effect": "Allow",
+      "action": ["ingestion-rules:GetIngestionRule", "ingestion-rules:UpdateIngestionRule"],
+      "resource": ["srn:proj_V1StGXR8Z5jdHi6B:ingestionRule:igr_V1StGXR8Z5jdHi6B"]
+    }
+  ]
+}
+```
+
+The SRN type is spelled `ingestionRule`, in camelCase, where every other type is snake_case. `srn:<project_id>:ingestion_rule:…` matches nothing — renaming it would change a published contract, so it is tracked on its own.
+
+Refusals keep the shapes [IAM](./iam.md#what-a-denial-looks-like) defines: a read the caller may not perform is `404` (an ingestion rule it may not see does not announce itself), a write is `403`, and a credential scoped to another project is `403 API_KEY_PROJECT_SCOPE`.
+
+Listing ingestion rules stays project-scoped: [`GET /api/v1/ingestion-rules`](/docs/api/ingestion-rules/list-ingestion-rules) asks whether the caller may list ingestion rules in a project at all, so a policy that names individual ingestion rules grants no listing.
+
 ## Configuration
 
 | Environment Variable | Required | Description |

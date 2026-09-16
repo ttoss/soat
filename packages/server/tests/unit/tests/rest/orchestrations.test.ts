@@ -542,14 +542,17 @@ describe('Orchestrations', () => {
       expect(response.status).toBe(404);
     });
 
-    test('project-scoped API key without GetOrchestration permission returns 403', async () => {
+    // A read the caller may not perform is indistinguishable from absence, now
+    // that the route authorizes against the orchestration's own SRN (#1339).
+    test('project-scoped API key without GetOrchestration permission returns 404', async () => {
       const rawKey = await createRestrictedApiKey(
         'orchestrations:GetOrchestration'
       );
       const response = await authenticatedTestClient(rawKey).get(
         `/api/v1/orchestrations/${orchestrationId}`
       );
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
+      expect(response.body.error.code).toBe('ORCHESTRATION_NOT_FOUND');
     });
   });
 
@@ -2586,12 +2589,14 @@ describe('Orchestrations', () => {
         expect(response.status).toBe(404);
       });
 
-      test('project-scoped API key without GetRun permission returns 403', async () => {
+      // As above: `GetRun` is a read, so a refusal hides the run (#1339).
+      test('project-scoped API key without GetRun permission returns 404', async () => {
         const rawKey = await createRestrictedApiKey('orchestrations:GetRun');
         const response = await authenticatedTestClient(rawKey).get(
           `/api/v1/orchestration-runs/${orchestrationRunId}`
         );
-        expect(response.status).toBe(403);
+        expect(response.status).toBe(404);
+        expect(response.body.error.code).toBe('ORCHESTRATION_RUN_NOT_FOUND');
       });
 
       test('admin can get a run without project scoping', async () => {
@@ -3074,10 +3079,22 @@ describe('Orchestrations', () => {
       expect(response.status).toBe(401);
     });
 
-    // resolveRunAuth explicitly 403s on an empty projectIds array.
+    // The run has to exist: the route resolves it before authorizing, so a
+    // made-up id answers `404` and never reaches the refusal (#1339).
     test('user without permission returns 403', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          ...simpleOrchestration,
+          name: 'Resume Denied',
+          project_id: projectId,
+        });
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: createRes.body.id, input: {} });
+
       const response = await authenticatedTestClient(noPermToken).post(
-        `/api/v1/orchestration-runs/someid/resume`
+        `/api/v1/orchestration-runs/${runRes.body.id}/resume`
       );
       expect(response.status).toBe(403);
     });
@@ -4421,9 +4438,18 @@ describe('Orchestrations', () => {
       expect(response.status).toBe(401);
     });
 
+    // As for resume: the run has to exist for the refusal to be reached.
     test('user without permission returns 403', async () => {
+      const orchId = await createOrch({
+        ...simpleOrchestration,
+        name: 'Pause Denied',
+      });
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: orchId, input: {} });
+
       const response = await authenticatedTestClient(noPermToken)
-        .post(`/api/v1/orchestration-runs/someid/pause`)
+        .post(`/api/v1/orchestration-runs/${runRes.body.id}/pause`)
         .send({});
       expect(response.status).toBe(403);
     });

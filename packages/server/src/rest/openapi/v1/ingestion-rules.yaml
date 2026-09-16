@@ -170,6 +170,9 @@ paths:
       summary: Get an ingestion rule
       description: Returns a specific ingestion rule
       operationId: getIngestionRule
+      x-soat-resource:
+        kind: ingestionRule
+        from: ingestion_rule_id
       parameters:
         - name: ingestion_rule_id
           in: path
@@ -197,6 +200,9 @@ paths:
       summary: Update an ingestion rule
       description: Updates fields of an ingestion rule
       operationId: updateIngestionRule
+      x-soat-resource:
+        kind: ingestionRule
+        from: ingestion_rule_id
       parameters:
         - name: ingestion_rule_id
           in: path
@@ -274,6 +280,9 @@ paths:
       summary: Delete an ingestion rule
       description: Deletes an ingestion rule
       operationId: deleteIngestionRule
+      x-soat-resource:
+        kind: ingestionRule
+        from: ingestion_rule_id
       parameters:
         - name: ingestion_rule_id
           in: path

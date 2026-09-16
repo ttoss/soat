@@ -271,6 +271,29 @@ Evaluations that changed the call's outcome (`route_to_approval`, `blocked`, `tr
 
 A `guardrail` [formation](./formations.md) resource (`GuardrailResourceProperties`) takes `name`, `description`, `class`, `default_class`, `guard`, `escalate`, `context_tool_id`, `context_mode`: the fields of [Create a guardrail](#create-a-guardrail) with `document` flattened to top-level properties. `context_tool_id` may be a `{ "ref": "ResourceName" }` to a `tool` resource in the same template, and a tool or agent resource can attach it via `guardrail_ids: [{ "ref": "ResourceName" }]`. `class`/`default_class`/`guard`/`escalate` are recombined into one `document` write on every create/update, so an update omitting one drops it (matching [`PATCH /api/v1/guardrails/{guardrail_id}`](/docs/api/guardrails/update-guardrail)'s full-replace semantics for `document`).
 
+### Who may act on a guardrail
+
+Every route that acts on one guardrail — read it, change it, delete it, dry-run
+it, or read and restore its versions — is authorized against **that guardrail's**
+SRN, `srn:<project_id>:guardrail:<guardrail_id>`, not against the project. A
+policy may therefore name the guardrails it covers:
+
+```json
+{
+  "statement": [
+    {
+      "effect": "Allow",
+      "action": ["guardrails:GetGuardrail", "guardrails:EvaluateGuardrail"],
+      "resource": ["srn:proj_V1StGXR8Z5jdHi6B:guardrail:guard_V1StGXR8Z5jdHi6B"]
+    }
+  ]
+}
+```
+
+Refusals keep the shapes [IAM](./iam.md#what-a-denial-looks-like) defines: a read the caller may not perform is `404` (a guardrail it may not see does not announce itself), a write or an evaluation is `403`, and a credential scoped to another project is `403 API_KEY_PROJECT_SCOPE`.
+
+Listing guardrails stays project-scoped: [`GET /api/v1/guardrails`](/docs/api/guardrails/list-guardrails) asks whether the caller may list guardrails in a project at all, so a policy that names individual guardrails grants no listing.
+
 ## Examples
 
 ### Create a guardrail

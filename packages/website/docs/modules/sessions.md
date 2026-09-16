@@ -239,6 +239,28 @@ Dispatched to project webhooks as sessions change state:
 
 All events include `session_id`; generation events also include `generation_id` and `trace_id`. Permissions are namespaced under `agents:` since each session belongs to an agent.
 
+### Who may fork a session
+
+[Forking](#forking) reads a session's full history as well as creating a new
+session, so it checks **both** `agents:GetSession` and `agents:CreateSession` —
+each against the *parent* session's SRN,
+`srn:<project_id>:session:<session_id>`. The fork's own id does not exist yet,
+and the parent is the resource whose history the call reaches, so
+`agents:CreateSession` alone is never a way to read a history
+[`GET /api/v1/sessions/{session_id}`](/docs/api/sessions/get-session) would refuse.
+
+```json
+{
+  "statement": [
+    {
+      "effect": "Allow",
+      "action": ["agents:GetSession", "agents:CreateSession"],
+      "resource": ["srn:proj_V1StGXR8Z5jdHi6B:session:sess_V1StGXR8Z5jdHi6B"]
+    }
+  ]
+}
+```
+
 ## Examples
 
 ### Basic session flow

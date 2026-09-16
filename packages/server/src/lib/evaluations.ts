@@ -57,7 +57,7 @@ const evalIncludes = (): ResourceIncludes => {
   ];
 };
 
-const evals = makeResourceAccessor<EvalRow>({
+export const evals = makeResourceAccessor<EvalRow>({
   model: () => {
     return db.Eval;
   },
