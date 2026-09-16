@@ -9,7 +9,11 @@ import {
   lexicalRankExpression,
   withLexicalDegrade,
 } from './knowledgeLexical';
-import type { SearchCandidates, SignalCandidate } from './knowledgeRanking';
+import type {
+  SearchCandidates,
+  SearchSignals,
+  SignalCandidate,
+} from './knowledgeRanking';
 import { fuseCandidates } from './knowledgeRanking';
 import { hasPolicyConstraints, referencesAssociation } from './policyWhere';
 import { clampKnowledgeSearchLimit } from './requestBounds';
@@ -51,6 +55,8 @@ export type QueryDocumentResult = {
   content: string | null;
   page?: number;
   score?: number;
+  /** Which channels ranked this chunk, and where. See {@link SearchSignals}. */
+  signals?: SearchSignals;
   similarity_score?: number;
   created_at: Date;
   updated_at: Date;

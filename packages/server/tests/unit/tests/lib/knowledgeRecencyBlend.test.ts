@@ -316,6 +316,32 @@ describe('knowledge recency blend', () => {
     ).toEqual([fixtures.freshEntryId, fixtures.staleEntryId]);
   });
 
+  test('reports signal provenance at both single-store entry points', async () => {
+    // Both entry points fuse through `fuseCandidates`, so the field arrives by
+    // the same path the cross-store search uses — pinned here because each
+    // reaches it with its own shard shape.
+    const documents = await resolveDocumentSearch({
+      projectIds: [fixtures.projectId],
+      billingProjectId: fixtures.projectId,
+      config: { search: QUERY },
+    });
+    const memories = await resolveMemoryStoreSearch({
+      projectIds: [fixtures.projectId],
+      billingProjectId: fixtures.projectId,
+      config: {
+        memoryStoreIds: fixtures.memoryStoreIds,
+        search: QUERY,
+        limit: 10,
+      },
+    });
+
+    expect(documents.length).toBeGreaterThan(0);
+    expect(memories.length).toBeGreaterThan(0);
+    for (const result of [...documents, ...memories]) {
+      expect(Object.keys(result.signals ?? {}).length).toBeGreaterThan(0);
+    }
+  });
+
   test('changes nothing with no half-life configured anywhere', async () => {
     const results = await search();
 

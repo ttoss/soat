@@ -94,6 +94,11 @@ paths:
                     deployment-wide decay for this one request. Accepts fractions
                     (`0.5` is twelve hours). How many ranks a given half-life costs
                     depends on `rrf_k`. Only applies when `query` is provided.
+                    **No value is known to be safe in general**: every half-life
+                    measured against the reference corpus that lifted recency-sensitive
+                    queries also cost relevance-sensitive ones, which is why this ships
+                    disabled. Measure against your own corpus before setting it — see
+                    the Retrieval Quality guide.
                   minimum: 0
                   example: 30
                 limit:
@@ -263,6 +268,31 @@ components:
             present when `query` was provided. Use `similarity_score` when you need the
             raw cosine value.
           example: 0.0328
+        signals:
+          type: object
+          description: >-
+            Which retrieval channels ranked this result before fusion, and its
+            1-based position in that channel's own ordering. A channel that did
+            not return the result is absent, so presence reads as "this channel
+            found it". `score` says where the result landed; this says how it
+            got there — `{ "lexical": 1 }` is a pure token hit, `{ "vector": 2,
+            "lexical": 1 }` a result both channels found and fusion promoted.
+            Only present when `query` was provided; a channel that degraded is
+            absent from every result. Diagnostic: nothing filters or sorts on it.
+          properties:
+            vector:
+              type: integer
+              minimum: 1
+              description: Rank in the vector (cosine) channel, best first.
+              example: 2
+            lexical:
+              type: integer
+              minimum: 1
+              description: Rank in the lexical (full-text) channel, best first.
+              example: 1
+          example:
+            vector: 2
+            lexical: 1
         similarity_score:
           type: number
           description: >-
@@ -325,6 +355,31 @@ components:
             present when `query` was provided. Use `similarity_score` when you need the
             raw cosine value.
           example: 0.0161
+        signals:
+          type: object
+          description: >-
+            Which retrieval channels ranked this result before fusion, and its
+            1-based position in that channel's own ordering. A channel that did
+            not return the result is absent, so presence reads as "this channel
+            found it". `score` says where the result landed; this says how it
+            got there — `{ "lexical": 1 }` is a pure token hit, `{ "vector": 2,
+            "lexical": 1 }` a result both channels found and fusion promoted.
+            Only present when `query` was provided; a channel that degraded is
+            absent from every result. Diagnostic: nothing filters or sorts on it.
+          properties:
+            vector:
+              type: integer
+              minimum: 1
+              description: Rank in the vector (cosine) channel, best first.
+              example: 2
+            lexical:
+              type: integer
+              minimum: 1
+              description: Rank in the lexical (full-text) channel, best first.
+              example: 1
+          example:
+            vector: 2
+            lexical: 1
         similarity_score:
           type: number
           description: >-

@@ -40,6 +40,7 @@ A `KnowledgeResult` is a discriminated union on `source_type`; source-specific f
 | `content`     | `string\|null`             | Text content of the result                               |
 | `score`       | `number`                   | Fused relevance ranking; only present when `query` is used — see [Relevance scoring](#relevance-scoring) |
 | `similarity_score` | `number`              | Raw cosine similarity (0–1); present on every `query` result, absent only in the embedding-degrade path — see [Relevance scoring](#relevance-scoring) |
+| `signals`     | `object`                   | Which channels ranked this result and at what position; only present when `query` is used — see [Reading a result](#reading-a-result) |
 | `created_at`  | `string`                   | ISO 8601 creation timestamp                              |
 | `updated_at`  | `string`                   | ISO 8601 last-updated timestamp                          |
 
@@ -124,6 +125,28 @@ Two fields on every `query` result, with different contracts:
 - For a stable number, read `similarity_score`.
 
 Each channel produces **one** ranking over the whole search, not one per store: documents and memories are queried separately because they are separate tables, and each channel's two result sets are merged on that channel's own value before fusion. Fusing them as separate rankings would let each store claim result slots by position — the tenth-best memory scoring the same as the tenth-best chunk, whatever either is worth.
+
+### Reading a result
+
+Three fields, three questions:
+
+| Field | Answers |
+| --- | --- |
+| `score` | **Where** the result landed — the fused order. |
+| `similarity_score` | **How close** it is to the query, as raw cosine. |
+| `signals` | **How it got there** — which channels ranked it, and at what position in each. |
+
+`signals` carries a 1-based rank per channel, and omits a channel that did not return the result at all:
+
+```json
+{ "signals": { "lexical": 1 } }                 // pure token hit; the vector channel missed it
+{ "signals": { "vector": 1 } }                  // nearest by cosine; contains none of the query's terms
+{ "signals": { "vector": 2, "lexical": 1 } }    // both found it — this is what fusion promotes
+```
+
+These are the parts `score` is the sum of, and the sum cannot be taken apart afterwards: `Σ 1/(k + rank)` gives `2/61` for a result both channels put first and `1/31` for one a single channel put thirtieth, and those are the same number. `signals` is what tells them apart.
+
+Use it to answer "why is this here?" without a harness — a result you expected to lead that reads `{ "vector": 8 }` was never found lexically, which is a query-phrasing or text-search-configuration problem, not a ranking one. It is diagnostic only: nothing filters or sorts on it, and a channel that degraded is absent from every result in the response.
 
 ### Relevance knobs
 
