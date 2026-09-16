@@ -15,6 +15,14 @@ Every model has `publicId` (`src/utils/publicId.ts`); it is the only id exposed
 externally. The UUID `id` is for joins only. New model: register a prefix in
 `PUBLIC_ID_PREFIXES` and generate it in `beforeValidate` via `generatePublicId`.
 
+## Migrations
+
+A change `sync` cannot make is a migration in `src/migrations/`, appended to
+`MIGRATIONS` in that folder's `index.ts`. See the README's *Migrations `sync`
+cannot perform*: they run **before** the sync here, every one declares
+`isApplied`, a step that must not half-land is a single `context.run`, and a
+name is permanent once merged.
+
 ## Indexes
 
 - Every index, unique or not, is an entry in `@Table({ indexes })` with an
