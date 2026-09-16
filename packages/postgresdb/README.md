@@ -103,6 +103,22 @@ models' indexes mid-way calls `context.sync()` itself.
 Never import a model into a migration: the models describe the schema the
 migration is in the middle of changing.
 
+#### Two traps all three migrations here hit
+
+**A step that must not half-land goes in one `context.run`.** `run` executes
+through the pool, so two calls can land on different connections and `BEGIN` /
+`COMMIT` across them is not a transaction. One multi-statement string is atomic
+— Postgres wraps a simple query's statements in an implicit transaction — and
+takes no `values`, because bind parameters force the single-statement protocol.
+
+**Every `isApplied` runs before any `up`.** A probe answers for the database as
+it stands now, not as an earlier pending migration will leave it.
+`2026-09-16-memory-assertions-and-shared-content` has to test
+`memory_entries` first for exactly this reason: on a database the rename has
+not reached, `memories` is still the container and has no `content` column,
+which would otherwise read as "already applied" and skip the databases that
+need it.
+
 ## Development
 
 ### Building
