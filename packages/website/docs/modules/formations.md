@@ -9,11 +9,11 @@ import TabItem from '@theme/TabItem';
 
 A CloudFormation-inspired declarative deployment layer that provisions an entire AI agent stack from a single JSON/YAML template.
 
-> **Note:** Creating a formation also creates underlying resources (agents, memories, etc.). The calling identity must also have the relevant `agents:CreateAgent`, `memories:CreateMemory`, etc. permissions.
+> **Note:** Creating a formation also creates underlying resources (agents, memory stores, etc.). The calling identity must also have the relevant `agents:CreateAgent`, `memories:CreateMemoryStore`, etc. permissions.
 
 ## Overview
 
-One template replaces the separate API calls that create an AI provider, memory, agent tool, and agent:
+One template replaces the separate API calls that create an AI provider, memory store, agent tool, and agent:
 
 ```json
 {
@@ -26,8 +26,8 @@ One template replaces the separate API calls that create an AI provider, memory,
         "default_model": "gpt-4o"
       }
     },
-    "MyMemory": {
-      "type": "memory",
+    "MyMemoryStore": {
+      "type": "memory_store",
       "properties": {
         "name": "Product KB"
       }
@@ -38,7 +38,7 @@ One template replaces the separate API calls that create an AI provider, memory,
         "name": "Support Bot",
         "ai_provider_id": { "ref": "MyProvider" },
         "knowledge_config": {
-          "memory_ids": [{ "ref": "MyMemory" }]
+          "memory_store_ids": [{ "ref": "MyMemoryStore" }]
         }
       }
     }
@@ -49,7 +49,7 @@ One template replaces the separate API calls that create an AI provider, memory,
 }
 ```
 
-`MyAgent`'s `ref` expressions make `MyProvider` and `MyMemory` dependencies: they are created first and the agent receives their physical IDs. A 14-resource stack in one call: [Deploy a Multi-Agent App with Agent Formation — Step 6 (Deploy the formation)](/docs/tutorials/formations#step-6--deploy-the-formation).
+`MyAgent`'s `ref` expressions make `MyProvider` and `MyMemoryStore` dependencies: they are created first and the agent receives their physical IDs. A 14-resource stack in one call: [Deploy a Multi-Agent App with Agent Formation — Step 6 (Deploy the formation)](/docs/tutorials/formations#step-6--deploy-the-formation).
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -86,7 +86,7 @@ One template replaces the separate API calls that create an AI provider, memory,
 | ---------------------- | ------ | ------------------------------------------------------------------- |
 | `id`                   | string | Public ID (`form_res_` prefix)                                           |
 | `logical_id`           | string | Logical ID from the template                                        |
-| `resource_type`        | string | Resource type (`agent`, `tool`, `memory`, etc.)                     |
+| `resource_type`        | string | Resource type (`agent`, `tool`, `memory_store`, etc.)                     |
 | `physical_resource_id` | string | Public ID of the physical SOAT resource                             |
 | `status`               | string | `pending` \| `created` \| `updated` \| `deleted` \| `failed`        |
 
@@ -273,7 +273,7 @@ Rules:
 }
 ```
 
-- **`type`** — a built-in type (`ai_provider`, `tool`, `agent`, `actor`, `api_key`, `chat`, `conversation`, `dataset`, `dataset_item`, `document`, `file`, `guardrail`, `ingestion_rule`, `memory`, `memory_entry`, `model_route`, `eval`, `orchestration`, `policy`, `project_price`, `quota`, `secret`, `session`, `webhook`, `trigger`, `workflow`) or a [custom resource type](#custom-resource-types) the deployment registered. Properties reference for the built-in ones: [Formations Types](/docs/formations-types).
+- **`type`** — a built-in type (`ai_provider`, `tool`, `agent`, `actor`, `api_key`, `chat`, `conversation`, `dataset`, `dataset_item`, `document`, `file`, `guardrail`, `ingestion_rule`, `memory_store`, `memory`, `model_route`, `eval`, `orchestration`, `policy`, `project_price`, `quota`, `secret`, `session`, `webhook`, `trigger`, `workflow`) or a [custom resource type](#custom-resource-types) the deployment registered. Properties reference for the built-in ones: [Formations Types](/docs/formations-types).
 - **`properties`** — resource-specific properties (snake_case, matching the REST API body fields)
 - **`depends_on`** — explicit dependencies in addition to implicit `ref` dependencies
 - **`deletion_policy`** — what happens to the physical resource when it is removed from the stack: `delete` (default) deletes it; `retain` keeps it alive and only removes the formation record
@@ -385,13 +385,13 @@ The template's top-level `metadata` block is a substitution site like `outputs`:
 parameters:
   my_version: { type: string, default: unpinned }
 resources:
-  MyMemory: { type: memory, properties: { name: shared } }
+  MyMemoryStore: { type: memory_store, properties: { name: shared } }
 metadata:
   my_version: { sub: '${my_version}' }
-  memory: { ref: MyMemory }
+  memory_store: { ref: MyMemoryStore }
 ```
 
-Deploying with `--parameter my_version=1.2.3` yields `resolved_metadata` of `{ "my_version": "1.2.3", "memory": "mem_01HXYZ" }`, while `template.metadata.my_version` remains `{ "sub": "${my_version}" }`.
+Deploying with `--parameter my_version=1.2.3` yields `resolved_metadata` of `{ "my_version": "1.2.3", "memory_store": "mstore_01HXYZ" }`, while `template.metadata.my_version` remains `{ "sub": "${my_version}" }`.
 
 :::warning[The template `metadata` block is the only metadata substitution site]
 The formation-level `metadata` field supplied alongside `template` on `create-formation` / `update-formation` is a **static** annotation bag, never resolved. `sub`/`param`/`ref` expressions there are rejected with `400 FORMATION_INVALID_METADATA`.

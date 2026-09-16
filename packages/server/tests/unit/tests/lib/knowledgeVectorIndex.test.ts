@@ -1,8 +1,8 @@
 import { db } from 'src/db';
 import * as embeddingModule from 'src/lib/embedding';
 import { resolveDocumentSearch } from 'src/lib/knowledgeDocuments';
-import { resolveMemorySearch } from 'src/lib/knowledgeMemory';
-import { writeMemoryEntry } from 'src/lib/memoryEntries';
+import { resolveMemoryStoreSearch } from 'src/lib/knowledgeMemory';
+import { writeMemory } from 'src/lib/memories';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
@@ -11,7 +11,7 @@ import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
  * pgvector yields those `ef_search` candidates *before* the query's own filters
  * run. All three vector queries filter after the ordering — document chunks
  * through a required join to `files.project_id`, entry search and the dedup
- * check through `memory_id` — so a scope that is selective enough drops every
+ * check through `memory_store_id` — so a scope that is selective enough drops every
  * candidate. Nothing errors: a search returns nothing, and the dedup check
  * reports no match and lets a near-duplicate be written (#1220).
  *
@@ -68,10 +68,10 @@ const projectInternalId = async (publicId: string): Promise<number> => {
 describe('semantic search under an ANN index', () => {
   let adminToken: string;
   let scopedProjectId: number;
-  let scopedMemoryId: string;
+  let scopedMemoryStoreId: string;
   let targetChunkId: string;
   let targetEntryId: string;
-  let dedupMemoryId: number;
+  let dedupMemoryStoreId: number;
   let dedupEntryId: string;
 
   beforeAll(async () => {
@@ -151,56 +151,59 @@ describe('semantic search under an ANN index', () => {
     });
     targetChunkId = targetChunk!.publicId;
 
-    // The same shape for memories: entries are filtered by `memory_id` after
-    // the ordering, so a crowded memory hides the scoped one's entries.
-    const createMemory = async (args: { projectId: string; name: string }) => {
+    // The same shape for memories: entries are filtered by `memory_store_id` after
+    // the ordering, so a crowded memory store hides the scoped one's entries.
+    const createMemoryStore = async (args: {
+      projectId: string;
+      name: string;
+    }) => {
       const res = await authenticatedTestClient(adminToken)
-        .post('/api/v1/memories')
+        .post('/api/v1/memory-stores')
         .send({ project_id: args.projectId, name: args.name });
-      const memory = await db.Memory.findOne({
+      const memoryStore = await db.MemoryStore.findOne({
         where: { publicId: res.body.id },
       });
 
-      if (!memory) {
-        throw new Error(`memory ${res.body.id} was not created`);
+      if (!memoryStore) {
+        throw new Error(`memoryStore ${res.body.id} was not created`);
       }
 
-      return { publicId: res.body.id, id: memory.id };
+      return { publicId: res.body.id, id: memoryStore.id };
     };
 
-    const crowdMemory = await createMemory({
+    const crowdMemoryStore = await createMemoryStore({
       projectId: crowdProjectPublicId,
       name: 'ann-crowd',
     });
-    const scopedMemory = await createMemory({
+    const scopedMemoryStore = await createMemoryStore({
       projectId: scopedProjectPublicId,
       name: 'ann-scoped',
     });
-    scopedMemoryId = scopedMemory.publicId;
+    scopedMemoryStoreId = scopedMemoryStore.publicId;
 
     for (let index = 0; index < CROWD_SIZE; index += 1) {
-      await db.MemoryEntry.create({
-        memoryId: crowdMemory.id,
+      await db.Memory.create({
+        memoryStoreId: crowdMemoryStore.id,
         content: `Crowd fact ${index}.`,
         embedding: nearVector,
       });
     }
-    const targetEntry = await db.MemoryEntry.create({
-      memoryId: scopedMemory.id,
+    const targetEntry = await db.Memory.create({
+      memoryStoreId: scopedMemoryStore.id,
       content: 'The scoped fact.',
       embedding: farVector,
     });
     targetEntryId = targetEntry.publicId;
 
-    // A separate memory for the dedup check, so the entry it must find is not
+    // A separate memory store for the dedup check, so the entry it must find is not
     // one of the rows the search tests rank.
-    const dedupMemory = await createMemory({
+    const dedupMemoryStore = await createMemoryStore({
       projectId: scopedProjectPublicId,
       name: 'ann-dedup',
     });
-    dedupMemoryId = dedupMemory.id;
-    const dedupEntry = await db.MemoryEntry.create({
-      memoryId: dedupMemory.id,
+    dedupMemoryStoreId = dedupMemoryStore.id;
+    const dedupEntry = await db.Memory.create({
+      memoryStoreId: dedupMemoryStore.id,
       content: 'The customer prefers email.',
       embedding: nearDuplicateVector,
     });
@@ -244,13 +247,13 @@ describe('semantic search under an ANN index', () => {
     ).toEqual([targetChunkId]);
   });
 
-  test('a duplicate write finds its own memory’s entry behind a crowded index', async () => {
+  test('a duplicate write finds its own memoryStore’s entry behind a crowded index', async () => {
     // The dedup check is a `findOne` ordered on the same distance operator,
-    // filtered by `memory_id` afterwards. Missing the match here does not fail
+    // filtered by `memory_store_id` afterwards. Missing the match here does not fail
     // loudly: the write falls through and creates a near-duplicate entry, which
     // is what the consolidation band exists to prevent.
-    const result = await writeMemoryEntry({
-      memoryId: dedupMemoryId,
+    const result = await writeMemory({
+      memoryStoreId: dedupMemoryStoreId,
       content: 'The customer prefers email.',
     });
 
@@ -260,16 +263,20 @@ describe('semantic search under an ANN index', () => {
     });
   });
 
-  test('memory search returns the scoped memory’s own entry behind a crowded index', async () => {
-    const results = await resolveMemorySearch({
+  test('memoryStore search returns the scoped memoryStore’s own entry behind a crowded index', async () => {
+    const results = await resolveMemoryStoreSearch({
       projectIds: [scopedProjectId],
       billingProjectId: null,
-      config: { memoryIds: [scopedMemoryId], search: 'scoped fact', limit: 10 },
+      config: {
+        memoryStoreIds: [scopedMemoryStoreId],
+        search: 'scoped fact',
+        limit: 10,
+      },
     });
 
     expect(
       results.map((result) => {
-        return result.entry_id;
+        return result.memory_id;
       })
     ).toEqual([targetEntryId]);
   });

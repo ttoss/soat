@@ -23,7 +23,7 @@ describe('Quotas — the storage_bytes stock cap', () => {
   let userToken: string;
   let projectId: string;
   let projectInternalId: number;
-  let memoryId: string;
+  let memoryStoreId: string;
   let datasetId: string;
 
   beforeAll(async () => {
@@ -40,9 +40,9 @@ describe('Quotas — the storage_bytes stock cap', () => {
         'documents:CreateDocument',
         'documents:GetDocument',
         'documents:IngestDocument',
+        'memories:CreateMemoryStore',
         'memories:CreateMemory',
-        'memories:CreateMemoryEntry',
-        'memories:GetMemory',
+        'memories:GetMemoryStore',
         'conversations:CreateConversation',
         'conversations:UpdateConversation',
         'conversations:GetConversation',
@@ -60,10 +60,10 @@ describe('Quotas — the storage_bytes stock cap', () => {
     });
     projectInternalId = project!.id as number;
 
-    const memoryRes = await authenticatedTestClient(userToken)
-      .post('/api/v1/memories')
-      .send({ project_id: projectId, name: 'storage cap memory' });
-    memoryId = memoryRes.body.id;
+    const memoryStoreRes = await authenticatedTestClient(userToken)
+      .post('/api/v1/memory-stores')
+      .send({ project_id: projectId, name: 'storage cap memoryStore' });
+    memoryStoreId = memoryStoreRes.body.id;
 
     const datasetRes = await authenticatedTestClient(userToken)
       .post('/api/v1/datasets')
@@ -252,12 +252,12 @@ describe('Quotas — the storage_bytes stock cap', () => {
       expect(response.body.error.code).toBe('QUOTA_STORAGE_EXCEEDED');
     });
 
-    test('a memory-entry create over the cap is refused', async () => {
+    test('a memory create over the cap is refused', async () => {
       await enforceOverCap();
 
       const response = await authenticatedTestClient(userToken)
-        .post('/api/v1/memory-entries')
-        .send({ memory_id: memoryId, content: 'over the cap' });
+        .post('/api/v1/memories')
+        .send({ memory_store_id: memoryStoreId, content: 'over the cap' });
 
       expect(response.status).toBe(409);
       expect(response.body.error.code).toBe('QUOTA_STORAGE_EXCEEDED');

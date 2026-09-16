@@ -1791,25 +1791,27 @@ describe('Agents', () => {
       expect([200, 502]).toContain(genRes.status);
     });
 
-    test('agent with write_memory_id in knowledge_config includes write_memory tool', async () => {
-      // Create a memory to write to
+    test('agent with write_memory_store_id in knowledge_config includes write_memory tool', async () => {
+      // Create a memory store to write to
       const memRes = await authenticatedTestClient(adminToken)
-        .post('/api/v1/memories')
-        .send({ project_id: projectId, name: 'Agent Write Memory Test' });
+        .post('/api/v1/memory-stores')
+        .send({ project_id: projectId, name: 'Agent Write MemoryStore Test' });
       expect(memRes.status).toBe(201);
-      const memoryId = memRes.body.id;
+      const memoryStoreId = memRes.body.id;
 
-      // Create agent with write_memory_id in knowledge_config
+      // Create agent with write_memory_store_id in knowledge_config
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/agents')
         .send({
           ai_provider_id: aiProviderId,
           project_id: projectId,
-          name: 'Write Memory Agent',
-          knowledge_config: { write_memory_id: memoryId },
+          name: 'Write MemoryStore Agent',
+          knowledge_config: { write_memory_store_id: memoryStoreId },
         });
       expect(createRes.status).toBe(201);
-      expect(createRes.body.knowledge_config.write_memory_id).toBe(memoryId);
+      expect(createRes.body.knowledge_config.write_memory_store_id).toBe(
+        memoryStoreId
+      );
       const writeMemAgentId = createRes.body.id;
 
       // No live Ollama server in this suite — see the toolContext test above.
@@ -1821,7 +1823,7 @@ describe('Agents', () => {
       expect([200, 502]).toContain(genRes.status);
     });
 
-    test('per-generation knowledge_config memory_ids is unioned with the agent stored config', async () => {
+    test('per-generation knowledge_config memory_store_ids is unioned with the agent stored config', async () => {
       const mockSearchKnowledge = jest.spyOn(
         knowledgeModule,
         'searchKnowledge'
@@ -1834,7 +1836,7 @@ describe('Agents', () => {
           ai_provider_id: aiProviderId,
           project_id: projectId,
           name: 'Per-Generation Knowledge Agent',
-          knowledge_config: { memory_ids: ['mem_agent_config'] },
+          knowledge_config: { memory_store_ids: ['mstore_agent_config'] },
         });
       expect(createRes.status).toBe(201);
       const knowledgeAgentId = createRes.body.id;
@@ -1843,21 +1845,21 @@ describe('Agents', () => {
         .post(`/api/v1/agents/${knowledgeAgentId}/generate?wait=true`)
         .send({
           messages: [{ role: 'user', content: 'Tell me something' }],
-          knowledge_config: { memory_ids: ['mem_per_generation'] },
+          knowledge_config: { memory_store_ids: ['mstore_per_generation'] },
         });
 
       // No live Ollama server in this suite — see the toolContext test above.
       expect([200, 502]).toContain(genRes.status);
       expect(mockSearchKnowledge).toHaveBeenCalledWith(
         expect.objectContaining({
-          memoryIds: expect.arrayContaining([
-            'mem_agent_config',
-            'mem_per_generation',
+          memoryStoreIds: expect.arrayContaining([
+            'mstore_agent_config',
+            'mstore_per_generation',
           ]),
         })
       );
       const callArgs = mockSearchKnowledge.mock.calls[0][0];
-      expect(callArgs.memoryIds).toHaveLength(2);
+      expect(callArgs.memoryStoreIds).toHaveLength(2);
 
       mockSearchKnowledge.mockRestore();
     });

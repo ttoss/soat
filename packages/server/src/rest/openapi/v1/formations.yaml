@@ -742,14 +742,14 @@ components:
         knowledge_config:
           type: object
           nullable: true
-          description: Knowledge retrieval configuration. When set, relevant documents and memory entries are injected into every generation.
+          description: Knowledge retrieval configuration. When set, relevant documents and memories are injected into every generation.
           properties:
-            memory_ids:
-              x-soat-ref: memories
+            memory_store_ids:
+              x-soat-ref: memory-stores
               type: array
               items:
                 type: string
-              description: Public IDs of memories to retrieve from
+              description: Public IDs of memory stores to retrieve from
             document_ids:
               x-soat-ref: documents
               type: array
@@ -763,7 +763,7 @@ components:
               description: Retrieve from all documents matching these path prefixes
             tags:
               description: >-
-                Retrieve from documents and memory entries whose tags contain
+                Retrieve from documents and memories whose tags contain
                 all these key-value pairs.
               allOf:
                 - $ref: './tags.yaml#/components/schemas/TagBag'
@@ -773,13 +773,13 @@ components:
             limit:
               type: integer
               description: Maximum number of chunks to inject
-            write_memory_id:
-              x-soat-ref: memories
+            write_memory_store_id:
+              x-soat-ref: memory-stores
               type: string
               nullable: true
-              description: Public ID of the memory the agent can write to. When set, a `write_memory` tool is automatically available to the agent.
+              description: Public ID of the memory store the agent can write to. When set, a `write_memory` tool is automatically available to the agent.
             extraction:
-              description: Automatic fact extraction from completed generation turns (requires write_memory_id). Pass `true` to enable with defaults, or an object to customize the provider, model, and prompt used for the extraction completion.
+              description: Automatic fact extraction from completed generation turns (requires write_memory_store_id). Pass `true` to enable with defaults, or an object to customize the provider, model, and prompt used for the extraction completion.
               oneOf:
                 - type: boolean
                 - type: object
@@ -1158,7 +1158,7 @@ components:
           type: integer
           description: Overlap in characters between consecutive windows when `chunk_strategy=size`. Defaults to 200.
 
-    MemoryResourceProperties:
+    MemoryStoreResourceProperties:
       description: >-
         Creates a named memory store that actors can read from and write to
         across conversations.
@@ -1169,35 +1169,43 @@ components:
       properties:
         name:
           type: string
-          description: Memory display name
+          description: Memory store display name
         description:
           type: string
           nullable: true
-          description: What this memory stores
+          description: What this memory store stores
         tags:
           $ref: './tags.yaml#/components/schemas/NullableTagBag'
-    MemoryEntryResourceProperties:
-      description: Adds a single text entry to a memory store.
+    MemoryResourceProperties:
+      description: Adds a single memory to a memory store.
       type: object
       additionalProperties: false
       required:
-        - memory_id
+        - memory_store_id
         - content
       properties:
-        memory_id:
-          x-soat-ref: memories
+        memory_store_id:
+          x-soat-ref: memory-stores
           type: string
-          description: Public ID of the parent memory (or ref expression)
+          description: Public ID of the parent memory store (or ref expression)
         content:
           type: string
-          description: Text content of the memory entry
+          description: Text content of the memory
         source_type:
           type: string
-          enum: [manual, agent, extraction, orchestration]
-          description: How this entry was created (defaults to manual)
+          enum: [manual, conversation]
+          description: >-
+            Whether there is a source to point at (defaults to manual).
+            `conversation` requires `source_id`.
+        source_id:
+          type: string
+          nullable: true
+          description: >-
+            The conversation this fact was learned in, when `source_type` is
+            `conversation`; null when it is `manual`.
         tags:
           description: >-
-            Per-entry key-value tags for entry-granularity filtering in
+            Per-memory key-value tags for memory-granularity filtering in
             knowledge search.
           allOf:
             - $ref: './tags.yaml#/components/schemas/NullableTagBag'
@@ -1205,7 +1213,7 @@ components:
           type: object
           nullable: true
           additionalProperties: true
-          description: Arbitrary structured metadata attached to the entry
+          description: Arbitrary structured metadata attached to the memory
 
     ModelRouteResourceProperties:
       description: >-
@@ -1274,7 +1282,7 @@ components:
           type: array
           items:
             type: string
-          description: Event types to subscribe to (e.g. memory.updated)
+          description: Event types to subscribe to (e.g. memory store.updated)
 
     TriggerResourceProperties:
       description: >-
@@ -1417,7 +1425,6 @@ components:
           type: string
           nullable: true
           description: Public ID of an actor to associate with this conversation
-
 
     FileResourceProperties:
       description: >-
@@ -1623,7 +1630,7 @@ components:
       description: >-
         Creates a DAG orchestration that wires agents, tools, and knowledge
         lookups into a repeatable pipeline within the formation's project. Node
-        resource references (`agent_id`, `tool_id`, `memory_id`,
+        resource references (`agent_id`, `tool_id`, `memory_store_id`,
         `orchestration_id`) accept `{ "ref": "LogicalId" }` expressions to point
         at other resources declared in the same template — the basis for
         deploying an agent "squad" (a team of agents plus the flow that
@@ -1646,7 +1653,7 @@ components:
           type: array
           description: >-
             Ordered list of node definitions. A node's resource references
-            (`agent_id`, `tool_id`, `memory_id`, `orchestration_id`) may use
+            (`agent_id`, `tool_id`, `memory_store_id`, `orchestration_id`) may use
             `{ "ref": "LogicalId" }` to bind to other resources in the template.
           items:
             type: object
@@ -1751,8 +1758,7 @@ components:
           description: The metric being capped
         window:
           type: string
-          enum:
-            [rolling_1m, rolling_1h, rolling_24h, calendar_month, current]
+          enum: [rolling_1m, rolling_1h, rolling_24h, calendar_month, current]
           description: >-
             The window over which the metric is aggregated. storage_bytes caps
             a stored total rather than a windowed one, so it takes current and
@@ -1854,7 +1860,7 @@ components:
             Resource type. The built-in types are `ai_provider`, `tool`,
             `agent`, `actor`, `api_key`, `chat`, `conversation`, `dataset`,
             `dataset_item`, `document`, `file`, `guardrail`, `ingestion_rule`,
-            `memory`, `memory_entry`, `model_route`, `eval`, `orchestration`,
+            `memory store`, `memory`, `model_route`, `eval`, `orchestration`,
             `policy`, `project_price`, `quota`, `secret`, `session`, `webhook`,
             `trigger` and `workflow`.
 
@@ -1914,7 +1920,7 @@ components:
           description: Logical identifier from the template
         resource_type:
           type: string
-          description: Resource type (e.g. agent, memory)
+          description: Resource type (e.g. agent, memory store)
         physical_resource_id:
           type: string
           nullable: true

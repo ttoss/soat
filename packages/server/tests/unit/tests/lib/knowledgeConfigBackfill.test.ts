@@ -12,7 +12,7 @@ import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
  * every key camelCased, including inside `extraction`.
  */
 const PRE_SINGLE_CASING_CONFIG = {
-  memoryIds: ['mem_seed'],
+  memoryStoreIds: ['mstore_seed'],
   // `tags` has no camelCase spelling to rewrite, so it must survive the pass
   // untouched — the case a rename map gets wrong by over-reaching.
   tags: { team: 'finance' },
@@ -20,7 +20,7 @@ const PRE_SINGLE_CASING_CONFIG = {
   documentPaths: ['/docs/'],
   minScore: 0.4,
   limit: 7,
-  writeMemoryId: 'mem_write',
+  writeMemoryStoreId: 'mstore_write',
   extraction: {
     enabled: true,
     aiProviderId: 'aip_1',
@@ -30,13 +30,13 @@ const PRE_SINGLE_CASING_CONFIG = {
 };
 
 const WIRE_CONFIG = {
-  memory_ids: ['mem_seed'],
+  memory_store_ids: ['mstore_seed'],
   tags: { team: 'finance' },
   document_ids: ['doc_1'],
   document_paths: ['/docs/'],
   min_score: 0.4,
   limit: 7,
-  write_memory_id: 'mem_write',
+  write_memory_store_id: 'mstore_write',
   extraction: {
     enabled: true,
     ai_provider_id: 'aip_1',
@@ -63,8 +63,11 @@ describe('toWireKnowledgeConfig', () => {
 
   test('keeps the wire value when a bag somehow carries both spellings', () => {
     expect(
-      toWireKnowledgeConfig({ writeMemoryId: 'old', write_memory_id: 'new' })
-    ).toEqual({ write_memory_id: 'new' });
+      toWireKnowledgeConfig({
+        writeMemoryStoreId: 'old',
+        write_memory_store_id: 'new',
+      })
+    ).toEqual({ write_memory_store_id: 'new' });
   });
 
   test('leaves keys it does not own alone', () => {
@@ -73,11 +76,15 @@ describe('toWireKnowledgeConfig', () => {
     expect(
       toWireKnowledgeConfig({
         minScore: 0.1,
-        extraction: { prompt: 'keep camelCase words like writeMemoryId here' },
+        extraction: {
+          prompt: 'keep camelCase words like writeMemoryStoreId here',
+        },
       })
     ).toEqual({
       min_score: 0.1,
-      extraction: { prompt: 'keep camelCase words like writeMemoryId here' },
+      extraction: {
+        prompt: 'keep camelCase words like writeMemoryStoreId here',
+      },
     });
   });
 });
@@ -137,8 +144,8 @@ describe('backfillKnowledgeConfigCasing', () => {
     // resolves to nothing and its feature is silently off. `limit` and the
     // `extraction.*` keys are casing-neutral and prove nothing.
     const stale = readKnowledgeConfig(await reloadAgentConfig());
-    expect(stale?.writeMemoryId).toBeUndefined();
-    expect(stale?.memoryIds).toBeUndefined();
+    expect(stale?.writeMemoryStoreId).toBeUndefined();
+    expect(stale?.memoryStoreIds).toBeUndefined();
     expect(stale?.extraction).toEqual({
       enabled: true,
       model: 'llama3.2:1b',
@@ -148,8 +155,8 @@ describe('backfillKnowledgeConfigCasing', () => {
     await backfillKnowledgeConfigCasing();
 
     const migrated = readKnowledgeConfig(await reloadAgentConfig());
-    expect(migrated?.writeMemoryId).toBe('mem_write');
-    expect(migrated?.memoryIds).toEqual(['mem_seed']);
+    expect(migrated?.writeMemoryStoreId).toBe('mstore_write');
+    expect(migrated?.memoryStoreIds).toEqual(['mstore_seed']);
     expect(migrated?.extraction).toEqual({
       enabled: true,
       aiProviderId: 'aip_1',

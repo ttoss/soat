@@ -15,7 +15,7 @@ const secretTemplate: FormationTemplate = {
       properties: { name: 'api-key', value: 'sk-live-123' },
     },
     Mem: {
-      type: 'memory',
+      type: 'memory_store',
       properties: { name: 'notes' },
     },
   },
@@ -160,11 +160,11 @@ describe('sensitiveOutputNames', () => {
         type: 'webhook',
         properties: { name: 'h', url: 'https://e.example', events: ['*'] },
       },
-      Mem: { type: 'memory', properties: { name: 'notes' } },
+      Mem: { type: 'memory_store', properties: { name: 'notes' } },
     },
     outputs: {
       hookSecret: { ref_attr: 'Hook.secret' },
-      memoryId: { ref: 'Mem' },
+      memoryStoreId: { ref: 'Mem' },
       literal: 'plain',
     },
   };
@@ -200,9 +200,9 @@ describe('sensitiveOutputNames', () => {
     expect(
       redactSensitiveOutputs({
         template,
-        outputs: { hookSecret: 'whsec_live', memoryId: 'mem_1' },
+        outputs: { hookSecret: 'whsec_live', memoryStoreId: 'mstore_1' },
       })
-    ).toEqual({ memoryId: 'mem_1' });
+    ).toEqual({ memoryStoreId: 'mstore_1' });
   });
 
   test('redactSensitiveOutputs returns null outputs unchanged', () => {

@@ -1,7 +1,7 @@
 import { db } from 'src/db';
 import { createDocument } from 'src/lib/documents';
-import { createMemory } from 'src/lib/memories';
-import { writeMemoryEntry } from 'src/lib/memoryEntries';
+import { writeMemory } from 'src/lib/memories';
+import { createMemoryStore } from 'src/lib/memoryStores';
 import { createProject } from 'src/lib/projects';
 
 import type { GoldenSet } from './goldenSet';
@@ -10,8 +10,8 @@ import { resolveDocumentContent } from './goldenSet';
 /**
  * The tag every corpus fixture carries and every golden query filters on.
  *
- * It is not decoration. `searchKnowledge` turns memory search on only for a
- * query that names `memory_ids` or a tag filter, so without it the eval would
+ * It is not decoration. `searchKnowledge` turns memory store search on only for a
+ * query that names `memory_store_ids` or a tag filter, so without it the eval would
  * rank documents alone and every `entity` query would score zero for a reason
  * that has nothing to do with ranking.
  */
@@ -19,8 +19,8 @@ export const CORPUS_TAGS: Record<string, string> = {
   corpus: 'knowledge-golden',
 };
 
-/** The container every fixture that names no `memory` of its own is written to. */
-const MEMORY_NAME = 'Knowledge golden corpus';
+/** The container every fixture that names no `memoryStore` of its own is written to. */
+const MEMORY_STORE_NAME = 'Knowledge golden corpus';
 
 const MS_PER_DAY = 86400000;
 
@@ -28,8 +28,8 @@ export type SeededCorpus = {
   projectId: number;
   /** Document public id → golden key. Every chunk of a document shares one. */
   documentKeys: Map<string, string>;
-  /** Memory entry public id → golden key. */
-  memoryEntryKeys: Map<string, string>;
+  /** MemoryStore entry public id → golden key. */
+  memoryKeys: Map<string, string>;
 };
 
 const resolveProjectId = async (args: {
@@ -44,20 +44,24 @@ const resolveProjectId = async (args: {
   return project.id as number;
 };
 
-const resolveMemoryId = async (args: { publicId: string }): Promise<number> => {
-  const memory = await db.Memory.findOne({
+const resolveMemoryStoreId = async (args: {
+  publicId: string;
+}): Promise<number> => {
+  const memoryStore = await db.MemoryStore.findOne({
     where: { publicId: args.publicId },
   });
-  if (!memory) {
-    throw new Error(`seed: memory '${args.publicId}' vanished after creation`);
+  if (!memoryStore) {
+    throw new Error(
+      `seed: memoryStore '${args.publicId}' vanished after creation`
+    );
   }
-  return memory.id as number;
+  return memoryStore.id as number;
 };
 
 /**
  * Backdates an entry's `updated_at` by the fixture's `age_days`.
  *
- * Raw SQL because there is no model-level way in: `writeMemoryEntry` takes no
+ * Raw SQL because there is no model-level way in: `writeMemory` takes no
  * timestamp, and the column is managed, so Sequelize stamps the current time
  * over an explicit `updatedAt` on every write path — `silent`, `fields` and a
  * forced `changed()` on the instance included (all three were measured).
@@ -71,7 +75,7 @@ const backdateEntry = async (args: {
   seededAt: number;
 }) => {
   await db.sequelize.query(
-    'UPDATE memory_entries SET updated_at = :updatedAt WHERE public_id = :publicId',
+    'UPDATE memories SET updated_at = :updatedAt WHERE public_id = :publicId',
     {
       replacements: {
         updatedAt: new Date(args.seededAt - args.ageDays * MS_PER_DAY),
@@ -113,31 +117,37 @@ export const seedGoldenCorpus = async (args: {
   // One clock read for the whole corpus: two fixtures with the same `age_days`
   // must land on the same timestamp however long seeding takes.
   const seededAt = Date.now();
-  const memoryIds = new Map<string, number>();
+  const memoryStoreIds = new Map<string, number>();
 
   const resolveContainer = async (name: string): Promise<number> => {
-    const existing = memoryIds.get(name);
+    const existing = memoryStoreIds.get(name);
     if (existing !== undefined) return existing;
-    const created = await createMemory({ projectId, name, tags: CORPUS_TAGS });
-    const id = await resolveMemoryId({ publicId: created.id });
-    memoryIds.set(name, id);
+    const created = await createMemoryStore({
+      projectId,
+      name,
+      tags: CORPUS_TAGS,
+    });
+    const id = await resolveMemoryStoreId({ publicId: created.id });
+    memoryStoreIds.set(name, id);
     return id;
   };
 
-  const memoryEntryKeys = new Map<string, string>();
+  const memoryKeys = new Map<string, string>();
 
   for (const fixture of args.golden.corpus.memories) {
-    const written = await writeMemoryEntry({
-      memoryId: await resolveContainer(fixture.memory ?? MEMORY_NAME),
+    const written = await writeMemory({
+      memoryStoreId: await resolveContainer(
+        fixture.memory_store ?? MEMORY_STORE_NAME
+      ),
       content: fixture.content,
       tags: fixture.tags ?? null,
     });
-    // `writeMemoryEntry` deduplicates against the most similar existing entry
+    // `writeMemory` deduplicates against the most similar existing entry
     // at 0.95. A fixture that merges into another is silently absent from the
     // corpus, and every query expecting it scores zero.
     if (written.action !== 'created') {
       throw new Error(
-        `seed: memory fixture '${fixture.key}' was ${written.action} instead of created — it is too similar to an entry already seeded`
+        `seed: memoryStore fixture '${fixture.key}' was ${written.action} instead of created — it is too similar to an entry already seeded`
       );
     }
     if (fixture.age_days !== undefined) {
@@ -147,8 +157,8 @@ export const seedGoldenCorpus = async (args: {
         seededAt,
       });
     }
-    memoryEntryKeys.set(written.entry.id, fixture.key);
+    memoryKeys.set(written.entry.id, fixture.key);
   }
 
-  return { projectId, documentKeys, memoryEntryKeys };
+  return { projectId, documentKeys, memoryKeys };
 };

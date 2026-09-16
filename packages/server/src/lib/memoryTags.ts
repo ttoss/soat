@@ -1,22 +1,22 @@
 import { db } from 'src/db';
 import { mergeTags } from 'src/lib/tags';
 
-// Only ever called by the memory-entry tag routes, which resolve the entry and
-// its memory's project through `resolveEntryForAction` first.
+// Only ever called by the memory tag routes, which resolve the entry and
+// its memory store's project through `resolveEntryForAction` first.
 
-export const getMemoryEntryTags = async (args: { id: string }) => {
-  const entry = (await db.MemoryEntry.findOne({
+export const getMemoryTags = async (args: { id: string }) => {
+  const entry = (await db.Memory.findOne({
     where: { publicId: args.id },
   }))!;
   return entry.tags ?? {};
 };
 
-export const updateMemoryEntryTags = async (args: {
+export const updateMemoryTags = async (args: {
   id: string;
   tags: Record<string, string>;
   merge?: boolean;
 }) => {
-  const entry = (await db.MemoryEntry.findOne({
+  const entry = (await db.Memory.findOne({
     where: { publicId: args.id },
   }))!;
 

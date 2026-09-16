@@ -224,8 +224,8 @@ describe('parseModules', () => {
         '/api/v1/api-keys': {
           get: { operationId: 'listApiKeys', tags: ['API Keys'] },
         },
-        '/api/v1/memory-entries': {
-          get: { operationId: 'listMemoryEntries', tags: ['MemoryEntries'] },
+        '/api/v1/memory-stores': {
+          get: { operationId: 'listMemoryStores', tags: ['MemoryStores'] },
         },
       },
     } as OpenApiSpec;
@@ -235,7 +235,7 @@ describe('parseModules', () => {
     };
     expect(label('AI Providers')).toBe('AI Providers');
     expect(label('API Keys')).toBe('API Keys');
-    expect(label('MemoryEntries')).toBe('Memory Entries');
+    expect(label('MemoryStores')).toBe('Memory Stores');
   });
 
   test('falls back to the "Other" tag when none is given', () => {

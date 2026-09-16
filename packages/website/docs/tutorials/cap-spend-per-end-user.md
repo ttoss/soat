@@ -935,6 +935,6 @@ curl -s "$SOAT_BASE_URL/api/v1/audit-log?project_id=$PROJECT_ID&action=quotas:Mo
 ## Next Steps
 
 - [Meter and Budget Your Project's Spend](/docs/tutorials/metering-and-budgets) — price usage so `cost_usd` caps bite; webhook before a budget is hit.
-- Per-user memory via `knowledge_config.memory_ids` — [Give Your Agent Long-Term Memory](/docs/tutorials/memories-agent), [Actors — Per-Actor Memory](/docs/modules/actors#per-actor-memory).
+- Per-user memory via `knowledge_config.memory_store_ids` — [Give Your Agent Long-Term Memory](/docs/tutorials/memories-agent), [Actors — Per-Actor Memory](/docs/modules/actors#per-actor-memory).
 - [Gate a Dangerous Tool with Guardrails](/docs/tutorials/gate-a-tool-with-guardrails) — cap an individual tool call.
 - [Exceptions](/docs/modules/exceptions) — triage what a breached cap filed.

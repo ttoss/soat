@@ -220,7 +220,7 @@ Otherwise [`FORCED_TOOL_CHOICE_CANNOT_STOP`](../error-codes.md#forced_tool_choic
 
 **Every turn of a chain uses the agent's `tool_choice`**, continuations included; a turn ending on the step budget reports `stop_reason: "max_steps"`.
 
-**A resumption is part of the turn.** After `submit-tool-outputs` a [client-tool](./tools.md#client) pause resumes under the agent's `tool_choice` and the same `max_steps`, steps spent counted; an agent forcing its client tool by name proposes it again after every submit until `stop_reason: "max_steps"`. `step_rules` numbering spans the pause (`{ "step": 1, … }` forces only the pausing call). The resumed turn gets the full tool surface (bound tools narrowed by `active_tool_ids`, plus `write_memory` from `knowledge_config.write_memory_id`), even after a server restart.
+**A resumption is part of the turn.** After `submit-tool-outputs` a [client-tool](./tools.md#client) pause resumes under the agent's `tool_choice` and the same `max_steps`, steps spent counted; an agent forcing its client tool by name proposes it again after every submit until `stop_reason: "max_steps"`. `step_rules` numbering spans the pause (`{ "step": 1, … }` forces only the pausing call). The resumed turn gets the full tool surface (bound tools narrowed by `active_tool_ids`, plus `write_memory` from `knowledge_config.write_memory_store_id`), even after a server restart.
 
 ### Step Rules
 
@@ -418,29 +418,29 @@ The text inside the <knowledge> tags below is reference material retrieved to he
 [Document: /reports/q1.pdf (page 4)]
 Q1 revenue was $4.2M across all regions.
 
-[Memory: Customer Preferences (mem_entry_V1StGXR8Z5jdHi6B)]
+[Memory store: Customer Preferences (mem_V1StGXR8Z5jdHi6B)]
 Customer prefers email over phone calls.
 </knowledge>
 ```
 
-Each tag names its source row: a memory result carries its entry id, resolvable via [`GET /api/v1/memory-entries/{entry_id}`](/docs/api/memory-entries/get-memory-entry) even once [superseded](./memories.md#temporal-invalidation); a document chunk carries its page when it has one (else `[Document: /reports/q1.txt]`).
+Each tag names its source row: a memory result carries its memory id, resolvable via [`GET /api/v1/memories/{memory_id}`](/docs/api/memories/get-memory) even once [superseded](./memories.md#temporal-invalidation); a document chunk carries its page when it has one (else `[Document: /reports/q1.txt]`).
 
 | Field             | Type                  | Description                                                                                                                                                                                                                       |
 | ----------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `memory_ids`      | `string[]`            | Search entries within these specific memories (`mem_` prefix)                                                                                                                                                                     |
+| `memory_store_ids` | `string[]`            | Search memories within these specific memory stores (`mstore_` prefix)                                                                                                                                                                     |
 | `document_ids`    | `string[]`            | Scope document results to these specific document IDs                                                                                                                                                                             |
 | `document_paths`  | `string[]`            | Scope document results to files under these path prefixes                                                                                                                                                                         |
-| `tags`            | `object`              | Scope **both** documents and memory entries to results whose `tags` contain all these key-value pairs (exact)                                                                                                                     |
+| `tags`            | `object`              | Scope **both** documents and memories to results whose `tags` contain all these key-value pairs (exact)                                                                                                                     |
 | `min_score`       | `number`              | Minimum raw cosine similarity (0–1) a vector candidate must reach to be ranked (default: 0.5). The same floor the search endpoint now spells `min_similarity` — see [Knowledge — Relevance knobs](./knowledge.md#relevance-knobs) |
 | `limit`           | `number`              | Maximum number of results to inject (default: 5)                                                                                                                                                                                  |
-| `write_memory_id` | `string`              | When set, automatically injects a `write_memory` tool that writes facts to this memory                                                                                                                                            |
-| `extraction`      | `boolean` \| `object` | Automatic fact extraction from completed turns (requires `write_memory_id`). `true` enables defaults; the object form customizes provider, model, and prompt — see [Automatic Extraction](./memories.md#automatic-extraction)     |
+| `write_memory_store_id` | `string`              | When set, automatically injects a `write_memory` tool that writes facts to this memory store                                                                                                                                            |
+| `extraction`      | `boolean` \| `object` | Automatic fact extraction from completed turns (requires `write_memory_store_id`). `true` enables defaults; the object form customizes provider, model, and prompt — see [Automatic Extraction](./memories.md#automatic-extraction)     |
 
-`knowledge_config` in the [`POST /agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation) body overrides the stored config for one call: `memory_ids`, `document_ids` and `document_paths` are unioned with the stored arrays; `tags` pairs are merged, the override winning per key; `min_score` and `limit` take the per-generation value. `write_memory_id` and `extraction` are agent-level only; `write_memory` tool: [Memories](./memories.md#agent-integration).
+`knowledge_config` in the [`POST /agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation) body overrides the stored config for one call: `memory_store_ids`, `document_ids` and `document_paths` are unioned with the stored arrays; `tags` pairs are merged, the override winning per key; `min_score` and `limit` take the per-generation value. `write_memory_store_id` and `extraction` are agent-level only; `write_memory` tool: [Memories](./memories.md#agent-integration).
 
-The generate body's top-level `extract` gates extraction per turn: omitted follows the stored `extraction`; `extract: false` suppresses it; `extract: true` forces it, given a `write_memory_id`. Streaming and `requires_action` turns never extract. See [Automatic Extraction](./memories.md#automatic-extraction).
+The generate body's top-level `extract` gates extraction per turn: omitted follows the stored `extraction`; `extract: false` suppresses it; `extract: true` forces it, given a `write_memory_store_id`. Streaming and `requires_action` turns never extract. See [Automatic Extraction](./memories.md#automatic-extraction).
 
-Only `memory_ids` set → memory-only search. Document search runs when `document_ids`/`document_paths` are set or no scoping filter is set. `tags` scopes both stores, so it counts on both sides ([Knowledge](./knowledge.md#search-modes)).
+Only `memory_store_ids` set → memory-only search. Document search runs when `document_ids`/`document_paths` are set or no scoping filter is set. `tags` scopes both stores, so it counts on both sides ([Knowledge](./knowledge.md#search-modes)).
 
 ### Orchestrated thinking
 
@@ -491,7 +491,7 @@ A `builtin` action must be allowed by both the **caller policy** (the user or AP
 
 A `boundary_policy` that is not a valid policy document allows nothing — it fails closed, so a malformed boundary denies every action rather than widening one. Its `condition` keys are held to the same rule as a stored policy's ([IAM — Condition Keys](./iam.md#condition-keys)): a key the platform does not supply invalidates the document.
 
-The boundary also gates the native **`write_memory`** tool (`knowledge_config.write_memory_id`): denying `memories:CreateMemoryEntry` / `memories:UpdateMemoryEntry` (or `Deny action:["*"]`) blocks it fail-closed.
+The boundary also gates the native **`write_memory`** tool (`knowledge_config.write_memory_store_id`): denying `memories:CreateMemory` / `memories:UpdateMemory` (or `Deny action:["*"]`) blocks it fail-closed.
 
 Action strings are validated on write (`validate-formation`, `create-policy`, agent create/update); an unknown or mis-named action is rejected, so a typo'd `Deny` cannot no-op. `module:Operation` names: [Permissions Reference](../permissions.md). Only `builtin` actions are governed; `http`, `client` and `mcp` tools run outside the permission model.
 

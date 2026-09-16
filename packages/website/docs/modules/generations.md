@@ -130,7 +130,7 @@ Internal recovery state (used to resume a `requires_action` generation after a s
 
 #### `extraction` — memory-extraction summary
 
-When an agent is configured with `knowledge_config.extraction` and `write_memory_id`, a completed generation writes an `extraction` summary — `{ "candidates": 3, "created": 2, "updated": 1, "skipped": 0 }` — describing what the auto-extraction pass did with the turn. See [Memories — Automatic Extraction](./memories.md#automatic-extraction).
+When an agent is configured with `knowledge_config.extraction` and `write_memory_store_id`, a completed generation writes an `extraction` summary — `{ "candidates": 3, "created": 2, "updated": 1, "skipped": 0 }` — describing what the auto-extraction pass did with the turn. See [Memories — Automatic Extraction](./memories.md#automatic-extraction).
 
 ### Recorded input
 

@@ -296,8 +296,8 @@ export const executeKnowledgeNode = async (args: {
     projectIds,
     billingProjectId: args.billingProjectId,
     query: typeof inputs['query'] === 'string' ? inputs['query'] : undefined,
-    memoryIds: Array.isArray(inputs['memoryIds'])
-      ? (inputs['memoryIds'] as string[])
+    memoryStoreIds: Array.isArray(inputs['memoryStoreIds'])
+      ? (inputs['memoryStoreIds'] as string[])
       : undefined,
     tags: isStringRecord(inputs['tags']) ? inputs['tags'] : undefined,
   });

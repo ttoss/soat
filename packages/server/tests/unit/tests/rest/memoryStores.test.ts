@@ -3,7 +3,7 @@ import { db } from 'src/db';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
-describe('Memories', () => {
+describe('MemoryStores', () => {
   let adminToken: string;
   let userToken: string;
   let projectId: string;
@@ -12,18 +12,18 @@ describe('Memories', () => {
 
   beforeAll(async () => {
     const setup = await setupProjectWithUsers({
-      prefix: 'memories',
+      prefix: 'memory_stores',
       policyActions: [
+        'memories:ListMemoryStores',
+        'memories:CreateMemoryStore',
+        'memories:GetMemoryStore',
+        'memories:UpdateMemoryStore',
+        'memories:DeleteMemoryStore',
         'memories:ListMemories',
         'memories:CreateMemory',
         'memories:GetMemory',
         'memories:UpdateMemory',
         'memories:DeleteMemory',
-        'memories:ListMemoryEntries',
-        'memories:CreateMemoryEntry',
-        'memories:GetMemoryEntry',
-        'memories:UpdateMemoryEntry',
-        'memories:DeleteMemoryEntry',
       ],
       createOtherProject: true,
     });
@@ -35,32 +35,32 @@ describe('Memories', () => {
     noPermToken = setup.noPermToken as string;
   });
 
-  describe('POST /api/v1/memories', () => {
-    test('authenticated user with permission can create a memory', async () => {
+  describe('POST /api/v1/memory-stores', () => {
+    test('authenticated user with permission can create a memoryStore', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post('/api/v1/memories')
+        .post('/api/v1/memory-stores')
         .send({
           project_id: projectId,
-          name: 'Test Memory',
-          description: 'A test memory',
+          name: 'Test MemoryStore',
+          description: 'A test memoryStore',
         });
 
       expect(response.status).toBe(201);
       expect(response.body.id).toBeDefined();
-      expect(response.body.id).toMatch(/^mem_/);
-      expect(response.body.name).toBe('Test Memory');
-      expect(response.body.description).toBe('A test memory');
+      expect(response.body.id).toMatch(/^mstore_/);
+      expect(response.body.name).toBe('Test MemoryStore');
+      expect(response.body.description).toBe('A test memoryStore');
       expect(response.body.project_id).toBe(projectId);
       expect(response.body.created_at).toBeDefined();
       expect(response.body.updated_at).toBeDefined();
     });
 
-    test('can create a memory with tags', async () => {
+    test('can create a memoryStore with tags', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post('/api/v1/memories')
+        .post('/api/v1/memory-stores')
         .send({
           project_id: projectId,
-          name: 'Tagged Memory',
+          name: 'Tagged MemoryStore',
           tags: { project: 'A', team: 'customer-support' },
         });
 
@@ -73,7 +73,7 @@ describe('Memories', () => {
 
     test('create without name returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post('/api/v1/memories')
+        .post('/api/v1/memory-stores')
         .send({
           project_id: projectId,
         });
@@ -82,9 +82,9 @@ describe('Memories', () => {
     });
 
     test('unauthenticated request returns 401', async () => {
-      const response = await testClient.post('/api/v1/memories').send({
+      const response = await testClient.post('/api/v1/memory-stores').send({
         project_id: projectId,
-        name: 'Test Memory',
+        name: 'Test MemoryStore',
       });
 
       expect(response.status).toBe(401);
@@ -92,20 +92,20 @@ describe('Memories', () => {
 
     test('user without permission returns 403', async () => {
       const response = await authenticatedTestClient(noPermToken)
-        .post('/api/v1/memories')
+        .post('/api/v1/memory-stores')
         .send({
           project_id: projectId,
-          name: 'Test Memory',
+          name: 'Test MemoryStore',
         });
 
       expect(response.status).toBe(403);
     });
   });
 
-  describe('GET /api/v1/memories', () => {
-    test('authenticated user can list memories', async () => {
+  describe('GET /api/v1/memory-stores', () => {
+    test('authenticated user can list memoryStores', async () => {
       const response = await authenticatedTestClient(userToken)
-        .get('/api/v1/memories')
+        .get('/api/v1/memory-stores')
         .query({ project_id: projectId });
 
       expect(response.status).toBe(200);
@@ -113,109 +113,112 @@ describe('Memories', () => {
     });
 
     test('unauthenticated request returns 401', async () => {
-      const response = await testClient.get('/api/v1/memories');
+      const response = await testClient.get('/api/v1/memory-stores');
       expect(response.status).toBe(401);
     });
 
     test('user without access to project returns 403', async () => {
       const response = await authenticatedTestClient(noPermToken)
-        .get('/api/v1/memories')
+        .get('/api/v1/memory-stores')
         .query({ project_id: otherProjectId });
 
       expect(response.status).toBe(403);
     });
 
     test('admin without project scoping gets an empty list', async () => {
-      const response =
-        await authenticatedTestClient(adminToken).get('/api/v1/memories');
+      const response = await authenticatedTestClient(adminToken).get(
+        '/api/v1/memory-stores'
+      );
 
       expect(response.status).toBe(200);
       expect(response.body.data).toEqual([]);
     });
   });
 
-  describe('GET /api/v1/memories/:memory_id', () => {
-    let memoryId: string;
+  describe('GET /api/v1/memory-stores/:memory_store_id', () => {
+    let memoryStoreId: string;
 
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
-        .post('/api/v1/memories')
+        .post('/api/v1/memory-stores')
         .send({
           project_id: projectId,
-          name: 'Get Test Memory',
+          name: 'Get Test MemoryStore',
         });
-      memoryId = res.body.id;
+      memoryStoreId = res.body.id;
     });
 
-    test('authenticated user can get a memory', async () => {
+    test('authenticated user can get a memoryStore', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        `/api/v1/memories/${memoryId}`
+        `/api/v1/memory-stores/${memoryStoreId}`
       );
 
       expect(response.status).toBe(200);
-      expect(response.body.id).toBe(memoryId);
-      expect(response.body.name).toBe('Get Test Memory');
+      expect(response.body.id).toBe(memoryStoreId);
+      expect(response.body.name).toBe('Get Test MemoryStore');
     });
 
-    test('returns 404 for non-existent memory', async () => {
+    test('returns 404 for non-existent memoryStore', async () => {
       const response = await authenticatedTestClient(userToken).get(
-        '/api/v1/memories/mem_nonexistent0000'
+        '/api/v1/memory-stores/mstore_nonexistent0000'
       );
 
       expect(response.status).toBe(404);
     });
 
     test('unauthenticated request returns 401', async () => {
-      const response = await testClient.get(`/api/v1/memories/${memoryId}`);
+      const response = await testClient.get(
+        `/api/v1/memory-stores/${memoryStoreId}`
+      );
       expect(response.status).toBe(401);
     });
 
     test('user without permission returns 403', async () => {
       const response = await authenticatedTestClient(noPermToken).get(
-        `/api/v1/memories/${memoryId}`
+        `/api/v1/memory-stores/${memoryStoreId}`
       );
 
       expect(response.status).toBe(403);
     });
   });
 
-  describe('PUT /api/v1/memories/:memory_id', () => {
-    let memoryId: string;
+  describe('PUT /api/v1/memory-stores/:memory_store_id', () => {
+    let memoryStoreId: string;
 
     beforeAll(async () => {
       const res = await authenticatedTestClient(userToken)
-        .post('/api/v1/memories')
+        .post('/api/v1/memory-stores')
         .send({
           project_id: projectId,
-          name: 'Update Test Memory',
+          name: 'Update Test MemoryStore',
         });
-      memoryId = res.body.id;
+      memoryStoreId = res.body.id;
     });
 
     test('updates description only', async () => {
       const response = await authenticatedTestClient(userToken)
-        .put(`/api/v1/memories/${memoryId}`)
+        .put(`/api/v1/memory-stores/${memoryStoreId}`)
         .send({ description: 'Updated description' });
 
       expect(response.status).toBe(200);
       expect(response.body.description).toBe('Updated description');
     });
 
-    test('authenticated user can update a memory name', async () => {
+    test('authenticated user can update a memoryStore name', async () => {
       const response = await authenticatedTestClient(userToken)
-        .put(`/api/v1/memories/${memoryId}`)
+        .put(`/api/v1/memory-stores/${memoryStoreId}`)
         .send({
-          name: 'Updated Memory Name',
+          name: 'Updated MemoryStore Name',
         });
 
       expect(response.status).toBe(200);
-      expect(response.body.id).toBe(memoryId);
-      expect(response.body.name).toBe('Updated Memory Name');
+      expect(response.body.id).toBe(memoryStoreId);
+      expect(response.body.name).toBe('Updated MemoryStore Name');
     });
 
-    test('returns 404 for non-existent memory', async () => {
+    test('returns 404 for non-existent memoryStore', async () => {
       const response = await authenticatedTestClient(userToken)
-        .put('/api/v1/memories/mem_nonexistent0000')
+        .put('/api/v1/memory-stores/mstore_nonexistent0000')
         .send({ name: 'New Name' });
 
       expect(response.status).toBe(404);
@@ -223,7 +226,7 @@ describe('Memories', () => {
 
     test('unauthenticated request returns 401', async () => {
       const response = await testClient
-        .put(`/api/v1/memories/${memoryId}`)
+        .put(`/api/v1/memory-stores/${memoryStoreId}`)
         .send({ name: 'New Name' });
 
       expect(response.status).toBe(401);
@@ -231,38 +234,38 @@ describe('Memories', () => {
 
     test('user without permission returns 403', async () => {
       const response = await authenticatedTestClient(noPermToken)
-        .put(`/api/v1/memories/${memoryId}`)
+        .put(`/api/v1/memory-stores/${memoryStoreId}`)
         .send({ name: 'New Name' });
 
       expect(response.status).toBe(403);
     });
   });
 
-  describe('DELETE /api/v1/memories/:memory_id', () => {
-    test('authenticated user can delete a memory', async () => {
+  describe('DELETE /api/v1/memory-stores/:memory_store_id', () => {
+    test('authenticated user can delete a memoryStore', async () => {
       const createRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/memories')
+        .post('/api/v1/memory-stores')
         .send({
           project_id: projectId,
-          name: 'Delete Test Memory',
+          name: 'Delete Test MemoryStore',
         });
       const deleteMemId = createRes.body.id;
 
       const response = await authenticatedTestClient(userToken).delete(
-        `/api/v1/memories/${deleteMemId}`
+        `/api/v1/memory-stores/${deleteMemId}`
       );
 
       expect(response.status).toBe(204);
 
       const getRes = await authenticatedTestClient(userToken).get(
-        `/api/v1/memories/${deleteMemId}`
+        `/api/v1/memory-stores/${deleteMemId}`
       );
       expect(getRes.status).toBe(404);
     });
 
-    test('returns 404 for non-existent memory', async () => {
+    test('returns 404 for non-existent memoryStore', async () => {
       const response = await authenticatedTestClient(userToken).delete(
-        '/api/v1/memories/mem_nonexistent0000'
+        '/api/v1/memory-stores/mstore_nonexistent0000'
       );
 
       expect(response.status).toBe(404);
@@ -270,21 +273,23 @@ describe('Memories', () => {
 
     test('unauthenticated request returns 401', async () => {
       const createRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/memories')
+        .post('/api/v1/memory-stores')
         .send({
           project_id: projectId,
           name: 'Auth Delete Test',
         });
       const tempMemId = createRes.body.id;
 
-      const response = await testClient.delete(`/api/v1/memories/${tempMemId}`);
+      const response = await testClient.delete(
+        `/api/v1/memory-stores/${tempMemId}`
+      );
 
       expect(response.status).toBe(401);
     });
 
     test('user without permission returns 403', async () => {
       const createRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/memories')
+        .post('/api/v1/memory-stores')
         .send({
           project_id: projectId,
           name: 'Perm Delete Test',
@@ -292,148 +297,185 @@ describe('Memories', () => {
       const tempMemId = createRes.body.id;
 
       const response = await authenticatedTestClient(noPermToken).delete(
-        `/api/v1/memories/${tempMemId}`
+        `/api/v1/memory-stores/${tempMemId}`
       );
 
       expect(response.status).toBe(403);
     });
   });
 
-  describe('Memory Entries', () => {
-    let memoryId: string;
+  describe('Memories', () => {
+    let memoryStoreId: string;
 
-    const createTestMemory = async () => {
+    const createTestMemoryStore = async () => {
       const res = await authenticatedTestClient(userToken)
-        .post('/api/v1/memories')
-        .send({ project_id: projectId, name: `Test Memory ${Date.now()}` });
+        .post('/api/v1/memory-stores')
+        .send({
+          project_id: projectId,
+          name: `Test MemoryStore ${Date.now()}`,
+        });
       return res.body.id as string;
     };
 
     beforeAll(async () => {
-      memoryId = await createTestMemory();
+      memoryStoreId = await createTestMemoryStore();
     });
 
-    describe('POST /api/v1/memory-entries', () => {
-      test('authenticated user can create a memory entry', async () => {
-        const freshMemoryId = await createTestMemory();
+    describe('POST /api/v1/memories', () => {
+      test('authenticated user can create a memory', async () => {
+        const freshMemoryStoreId = await createTestMemoryStore();
         const response = await authenticatedTestClient(userToken)
-          .post('/api/v1/memory-entries')
+          .post('/api/v1/memories')
           .send({
-            memory_id: freshMemoryId,
+            memory_store_id: freshMemoryStoreId,
             content: 'Customer prefers email over phone',
           });
 
         expect(response.status).toBe(201);
         expect(response.body.id).toBeDefined();
-        expect(response.body.id).toMatch(/^mem_entry_/);
+        expect(response.body.id).toMatch(/^mem_/);
         expect(response.body.content).toBe('Customer prefers email over phone');
         expect(response.body.source_type).toBe('manual');
-        expect(response.body.memory_id).toBe(freshMemoryId);
+        expect(response.body.memory_store_id).toBe(freshMemoryStoreId);
         expect(response.body.created_at).toBeDefined();
         expect(response.body.action).toBe('created');
       });
 
-      test('can create entry with explicit source_type', async () => {
-        const freshMemoryId = await createTestMemory();
+      test('can create a memory sourced from a conversation', async () => {
+        const freshMemoryStoreId = await createTestMemoryStore();
         const response = await authenticatedTestClient(userToken)
-          .post('/api/v1/memory-entries')
+          .post('/api/v1/memories')
           .send({
-            memory_id: freshMemoryId,
-            content: 'Agent created note',
-            source_type: 'agent',
+            memory_store_id: freshMemoryStoreId,
+            content: 'Learned in a conversation',
+            source_type: 'conversation',
+            source_id: 'conv_source_01',
           });
 
         expect(response.status).toBe(201);
-        expect(response.body.source_type).toBe('agent');
+        expect(response.body.source_type).toBe('conversation');
+        expect(response.body.source_id).toBe('conv_source_01');
         expect(response.body.action).toBe('created');
+      });
+
+      test('returns 400 when source_type is conversation without source_id', async () => {
+        const freshMemoryStoreId = await createTestMemoryStore();
+        const response = await authenticatedTestClient(userToken)
+          .post('/api/v1/memories')
+          .send({
+            memory_store_id: freshMemoryStoreId,
+            content: 'Missing its source',
+            source_type: 'conversation',
+          });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      });
+
+      test('returns 400 when source_id is given without a conversation source_type', async () => {
+        const freshMemoryStoreId = await createTestMemoryStore();
+        const response = await authenticatedTestClient(userToken)
+          .post('/api/v1/memories')
+          .send({
+            memory_store_id: freshMemoryStoreId,
+            content: 'Points nowhere',
+            source_id: 'conv_source_01',
+          });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error.code).toBe('VALIDATION_FAILED');
       });
 
       test('returns 400 when content is missing', async () => {
         const response = await authenticatedTestClient(userToken)
-          .post('/api/v1/memory-entries')
-          .send({ memory_id: memoryId });
+          .post('/api/v1/memories')
+          .send({ memory_store_id: memoryStoreId });
 
         expect(response.status).toBe(400);
       });
 
-      test('returns 404 for non-existent memory', async () => {
+      test('returns 404 for non-existent memoryStore', async () => {
         const response = await authenticatedTestClient(userToken)
-          .post('/api/v1/memory-entries')
-          .send({ memory_id: 'mem_nonexistent0000', content: 'test' });
+          .post('/api/v1/memories')
+          .send({ memory_store_id: 'mstore_nonexistent0000', content: 'test' });
 
         expect(response.status).toBe(404);
       });
 
       test('unauthenticated request returns 401', async () => {
         const response = await testClient
-          .post('/api/v1/memory-entries')
-          .send({ memory_id: memoryId, content: 'test' });
+          .post('/api/v1/memories')
+          .send({ memory_store_id: memoryStoreId, content: 'test' });
 
         expect(response.status).toBe(401);
       });
 
       test('user without permission returns 403', async () => {
         const response = await authenticatedTestClient(noPermToken)
-          .post('/api/v1/memory-entries')
-          .send({ memory_id: memoryId, content: 'test' });
+          .post('/api/v1/memories')
+          .send({ memory_store_id: memoryStoreId, content: 'test' });
 
         expect(response.status).toBe(403);
       });
 
-      test('second write to same memory is skipped (duplicate)', async () => {
-        const freshMemoryId = await createTestMemory();
-        await authenticatedTestClient(userToken)
-          .post('/api/v1/memory-entries')
-          .send({ memory_id: freshMemoryId, content: 'First entry' });
+      test('second write to same memoryStore is skipped (duplicate)', async () => {
+        const freshMemoryStoreId = await createTestMemoryStore();
+        await authenticatedTestClient(userToken).post('/api/v1/memories').send({
+          memory_store_id: freshMemoryStoreId,
+          content: 'First entry',
+        });
 
         const response = await authenticatedTestClient(userToken)
-          .post('/api/v1/memory-entries')
+          .post('/api/v1/memories')
           .send({
-            memory_id: freshMemoryId,
-            content: 'Second entry same memory',
+            memory_store_id: freshMemoryStoreId,
+            content: 'Second entry same memoryStore',
           });
 
         expect(response.status).toBe(200);
         expect(response.body.action).toBe('skipped');
-        expect(response.body.id).toMatch(/^mem_entry_/);
+        expect(response.body.id).toMatch(/^mem_/);
       });
 
       // #1062: the manual path has no agent context, so a merge-band write
       // creates a second entry rather than concatenating onto the first.
       // `duplicate_threshold > 1` keeps this out of the skip branch.
       test('a merge-band manual write creates instead of merging', async () => {
-        const freshMemoryId = await createTestMemory();
+        const freshMemoryStoreId = await createTestMemoryStore();
         const first = await authenticatedTestClient(userToken)
-          .post('/api/v1/memory-entries')
-          .send({ memory_id: freshMemoryId, content: 'First entry for merge' });
+          .post('/api/v1/memories')
+          .send({
+            memory_store_id: freshMemoryStoreId,
+            content: 'First entry for merge',
+          });
 
         const response = await authenticatedTestClient(userToken)
-          .post('/api/v1/memory-entries')
+          .post('/api/v1/memories')
           .send({
-            memory_id: freshMemoryId,
+            memory_store_id: freshMemoryStoreId,
             content: 'Second entry for merge',
             duplicate_threshold: 1.1,
           });
 
         expect(response.status).toBe(201);
         expect(response.body.action).toBe('created');
-        expect(response.body.id).toMatch(/^mem_entry_/);
+        expect(response.body.id).toMatch(/^mem_/);
         expect(response.body.id).not.toBe(first.body.id);
         expect(response.body.content).toBe('Second entry for merge');
 
         // The pre-existing entry is untouched — nothing was appended to it.
         const existing = await authenticatedTestClient(userToken).get(
-          `/api/v1/memory-entries/${first.body.id}`
+          `/api/v1/memories/${first.body.id}`
         );
         expect(existing.body.content).toBe('First entry for merge');
       });
 
       test('update_threshold is rejected as an unknown field', async () => {
-        const freshMemoryId = await createTestMemory();
+        const freshMemoryStoreId = await createTestMemoryStore();
         const response = await authenticatedTestClient(userToken)
-          .post('/api/v1/memory-entries')
+          .post('/api/v1/memories')
           .send({
-            memory_id: freshMemoryId,
+            memory_store_id: freshMemoryStoreId,
             content: 'Threshold entry',
             update_threshold: 0.5,
           });
@@ -443,11 +485,11 @@ describe('Memories', () => {
       });
 
       test('can create an entry with tags and metadata', async () => {
-        const freshMemoryId = await createTestMemory();
+        const freshMemoryStoreId = await createTestMemoryStore();
         const response = await authenticatedTestClient(userToken)
-          .post('/api/v1/memory-entries')
+          .post('/api/v1/memories')
           .send({
-            memory_id: freshMemoryId,
+            memory_store_id: freshMemoryStoreId,
             content: 'Approve refunds under $50 automatically',
             tags: { role: 'traffic-manager', source: 'rejected_approval' },
             metadata: { action_id: 'act_01', evidence: 'high' },
@@ -466,34 +508,27 @@ describe('Memories', () => {
       });
 
       test('entry created without tags/metadata returns null for both', async () => {
-        const freshMemoryId = await createTestMemory();
+        const freshMemoryStoreId = await createTestMemoryStore();
         const response = await authenticatedTestClient(userToken)
-          .post('/api/v1/memory-entries')
-          .send({ memory_id: freshMemoryId, content: 'Untagged entry' });
+          .post('/api/v1/memories')
+          .send({
+            memory_store_id: freshMemoryStoreId,
+            content: 'Untagged entry',
+          });
 
         expect(response.status).toBe(201);
         expect(response.body.tags).toBeNull();
         expect(response.body.metadata).toBeNull();
       });
 
-      test('honors source_type orchestration', async () => {
-        const freshMemoryId = await createTestMemory();
-        const response = await authenticatedTestClient(userToken)
-          .post('/api/v1/memory-entries')
-          .send({
-            memory_id: freshMemoryId,
-            content: 'Written by an orchestration node',
-            source_type: 'orchestration',
-          });
-
-        expect(response.status).toBe(201);
-        expect(response.body.source_type).toBe('orchestration');
-      });
-
       test('returns 400 when tags is not an object of strings', async () => {
         const response = await authenticatedTestClient(userToken)
-          .post('/api/v1/memory-entries')
-          .send({ memory_id: memoryId, content: 'x', tags: ['a', 'b'] });
+          .post('/api/v1/memories')
+          .send({
+            memory_store_id: memoryStoreId,
+            content: 'x',
+            tags: ['a', 'b'],
+          });
 
         expect(response.status).toBe(400);
         expect(response.body.error.message).toMatch(/tags/);
@@ -501,18 +536,22 @@ describe('Memories', () => {
 
       test('returns 400 when metadata is not an object', async () => {
         const response = await authenticatedTestClient(userToken)
-          .post('/api/v1/memory-entries')
-          .send({ memory_id: memoryId, content: 'x', metadata: 'nope' });
+          .post('/api/v1/memories')
+          .send({
+            memory_store_id: memoryStoreId,
+            content: 'x',
+            metadata: 'nope',
+          });
 
         expect(response.status).toBe(400);
         expect(response.body.error.message).toMatch(/metadata/);
       });
     });
 
-    describe('GET /api/v1/memory-entries', () => {
+    describe('GET /api/v1/memories', () => {
       test('authenticated user can list entries', async () => {
         const response = await authenticatedTestClient(userToken).get(
-          `/api/v1/memory-entries?memory_id=${memoryId}`
+          `/api/v1/memories?memory_store_id=${memoryStoreId}`
         );
 
         expect(response.status).toBe(200);
@@ -521,7 +560,7 @@ describe('Memories', () => {
 
       test('unauthenticated request returns 401', async () => {
         const response = await testClient.get(
-          `/api/v1/memory-entries?memory_id=${memoryId}`
+          `/api/v1/memories?memory_store_id=${memoryStoreId}`
         );
 
         expect(response.status).toBe(401);
@@ -529,28 +568,31 @@ describe('Memories', () => {
 
       test('user without permission returns 403', async () => {
         const response = await authenticatedTestClient(noPermToken).get(
-          `/api/v1/memory-entries?memory_id=${memoryId}`
+          `/api/v1/memories?memory_store_id=${memoryStoreId}`
         );
 
         expect(response.status).toBe(403);
       });
     });
 
-    describe('GET /api/v1/memory-entries/:entry_id', () => {
+    describe('GET /api/v1/memories/:memory_id', () => {
       let entryId: string;
-      let getEntryMemoryId: string;
+      let getEntryMemoryStoreId: string;
 
       beforeAll(async () => {
-        getEntryMemoryId = await createTestMemory();
+        getEntryMemoryStoreId = await createTestMemoryStore();
         const res = await authenticatedTestClient(userToken)
-          .post('/api/v1/memory-entries')
-          .send({ memory_id: getEntryMemoryId, content: 'Entry to get' });
+          .post('/api/v1/memories')
+          .send({
+            memory_store_id: getEntryMemoryStoreId,
+            content: 'Entry to get',
+          });
         entryId = res.body.id;
       });
 
       test('authenticated user can get an entry', async () => {
         const response = await authenticatedTestClient(userToken).get(
-          `/api/v1/memory-entries/${entryId}`
+          `/api/v1/memories/${entryId}`
         );
 
         expect(response.status).toBe(200);
@@ -560,44 +602,45 @@ describe('Memories', () => {
 
       test('returns 404 for non-existent entry', async () => {
         const response = await authenticatedTestClient(userToken).get(
-          `/api/v1/memory-entries/me_nonexistent00000`
+          `/api/v1/memories/me_nonexistent00000`
         );
 
         expect(response.status).toBe(404);
       });
 
       test('unauthenticated request returns 401', async () => {
-        const response = await testClient.get(
-          `/api/v1/memory-entries/${entryId}`
-        );
+        const response = await testClient.get(`/api/v1/memories/${entryId}`);
 
         expect(response.status).toBe(401);
       });
 
       test('user without permission returns 403', async () => {
         const response = await authenticatedTestClient(noPermToken).get(
-          `/api/v1/memory-entries/${entryId}`
+          `/api/v1/memories/${entryId}`
         );
 
         expect(response.status).toBe(403);
       });
     });
 
-    describe('PUT /api/v1/memory-entries/:entry_id', () => {
+    describe('PUT /api/v1/memories/:memory_id', () => {
       let entryId: string;
-      let putEntryMemoryId: string;
+      let putEntryMemoryStoreId: string;
 
       beforeAll(async () => {
-        putEntryMemoryId = await createTestMemory();
+        putEntryMemoryStoreId = await createTestMemoryStore();
         const res = await authenticatedTestClient(userToken)
-          .post('/api/v1/memory-entries')
-          .send({ memory_id: putEntryMemoryId, content: 'Entry to update' });
+          .post('/api/v1/memories')
+          .send({
+            memory_store_id: putEntryMemoryStoreId,
+            content: 'Entry to update',
+          });
         entryId = res.body.id;
       });
 
       test('authenticated user can update an entry', async () => {
         const response = await authenticatedTestClient(userToken)
-          .put(`/api/v1/memory-entries/${entryId}`)
+          .put(`/api/v1/memories/${entryId}`)
           .send({ content: 'Updated content' });
 
         expect(response.status).toBe(200);
@@ -606,7 +649,7 @@ describe('Memories', () => {
 
       test('returns 404 for non-existent entry', async () => {
         const response = await authenticatedTestClient(userToken)
-          .put(`/api/v1/memory-entries/me_nonexistent00000`)
+          .put(`/api/v1/memories/me_nonexistent00000`)
           .send({ content: 'x' });
 
         expect(response.status).toBe(404);
@@ -614,7 +657,7 @@ describe('Memories', () => {
 
       test('unauthenticated request returns 401', async () => {
         const response = await testClient
-          .put(`/api/v1/memory-entries/${entryId}`)
+          .put(`/api/v1/memories/${entryId}`)
           .send({ content: 'x' });
 
         expect(response.status).toBe(401);
@@ -622,28 +665,28 @@ describe('Memories', () => {
 
       test('user without permission returns 403', async () => {
         const response = await authenticatedTestClient(noPermToken)
-          .put(`/api/v1/memory-entries/${entryId}`)
+          .put(`/api/v1/memories/${entryId}`)
           .send({ content: 'x' });
 
         expect(response.status).toBe(403);
       });
 
       test('can set and then clear tags/metadata', async () => {
-        const memId = await createTestMemory();
+        const memId = await createTestMemoryStore();
         const created = await authenticatedTestClient(userToken)
-          .post('/api/v1/memory-entries')
-          .send({ memory_id: memId, content: 'Taggable entry' });
+          .post('/api/v1/memories')
+          .send({ memory_store_id: memId, content: 'Taggable entry' });
         const id = created.body.id;
 
         const set = await authenticatedTestClient(userToken)
-          .put(`/api/v1/memory-entries/${id}`)
+          .put(`/api/v1/memories/${id}`)
           .send({ tags: { role: 'pilot' }, metadata: { k: 'v' } });
         expect(set.status).toBe(200);
         expect(set.body.tags).toEqual({ role: 'pilot' });
         expect(set.body.metadata).toEqual({ k: 'v' });
 
         const cleared = await authenticatedTestClient(userToken)
-          .put(`/api/v1/memory-entries/${id}`)
+          .put(`/api/v1/memories/${id}`)
           .send({ tags: null, metadata: null });
         expect(cleared.status).toBe(200);
         expect(cleared.body.tags).toBeNull();
@@ -652,7 +695,7 @@ describe('Memories', () => {
 
       test('returns 400 when tags is invalid', async () => {
         const response = await authenticatedTestClient(userToken)
-          .put(`/api/v1/memory-entries/${entryId}`)
+          .put(`/api/v1/memories/${entryId}`)
           .send({ tags: { role: 1 } });
 
         expect(response.status).toBe(400);
@@ -660,63 +703,64 @@ describe('Memories', () => {
       });
     });
 
-    describe('DELETE /api/v1/memory-entries/:entry_id', () => {
+    describe('DELETE /api/v1/memories/:memory_id', () => {
       test('authenticated user can delete an entry', async () => {
-        const deleteMemoryId = await createTestMemory();
+        const deleteMemoryStoreId = await createTestMemoryStore();
         const createRes = await authenticatedTestClient(userToken)
-          .post('/api/v1/memory-entries')
-          .send({ memory_id: deleteMemoryId, content: 'Entry to delete' });
+          .post('/api/v1/memories')
+          .send({
+            memory_store_id: deleteMemoryStoreId,
+            content: 'Entry to delete',
+          });
         const entryId = createRes.body.id;
 
         const response = await authenticatedTestClient(userToken).delete(
-          `/api/v1/memory-entries/${entryId}`
+          `/api/v1/memories/${entryId}`
         );
 
         expect(response.status).toBe(204);
 
         const getRes = await authenticatedTestClient(userToken).get(
-          `/api/v1/memory-entries/${entryId}`
+          `/api/v1/memories/${entryId}`
         );
         expect(getRes.status).toBe(404);
       });
 
       test('returns 404 for non-existent entry', async () => {
         const response = await authenticatedTestClient(userToken).delete(
-          `/api/v1/memory-entries/me_nonexistent00000`
+          `/api/v1/memories/me_nonexistent00000`
         );
 
         expect(response.status).toBe(404);
       });
 
       test('unauthenticated request returns 401', async () => {
-        const deleteMemoryId = await createTestMemory();
+        const deleteMemoryStoreId = await createTestMemoryStore();
         const createRes = await authenticatedTestClient(userToken)
-          .post('/api/v1/memory-entries')
+          .post('/api/v1/memories')
           .send({
-            memory_id: deleteMemoryId,
+            memory_store_id: deleteMemoryStoreId,
             content: 'Auth Delete Test Entry',
           });
         const entryId = createRes.body.id;
 
-        const response = await testClient.delete(
-          `/api/v1/memory-entries/${entryId}`
-        );
+        const response = await testClient.delete(`/api/v1/memories/${entryId}`);
 
         expect(response.status).toBe(401);
       });
 
       test('user without permission returns 403', async () => {
-        const deleteMemoryId = await createTestMemory();
+        const deleteMemoryStoreId = await createTestMemoryStore();
         const createRes = await authenticatedTestClient(userToken)
-          .post('/api/v1/memory-entries')
+          .post('/api/v1/memories')
           .send({
-            memory_id: deleteMemoryId,
+            memory_store_id: deleteMemoryStoreId,
             content: 'Perm Delete Test Entry',
           });
         const entryId = createRes.body.id;
 
         const response = await authenticatedTestClient(noPermToken).delete(
-          `/api/v1/memory-entries/${entryId}`
+          `/api/v1/memories/${entryId}`
         );
 
         expect(response.status).toBe(403);
@@ -726,17 +770,17 @@ describe('Memories', () => {
     describe('provenance and temporal invalidation', () => {
       // Test embeddings are constant, so a second write scores 1.0 and is
       // skipped as a duplicate. A threshold above 1 is the only way to land two
-      // independent entries in one memory here.
+      // independent entries in one memory store here.
       const createEntry = async (args: {
-        memoryId: string;
+        memoryStoreId: string;
         content: string;
         sourceType?: string;
         forceCreate?: boolean;
       }) => {
         return authenticatedTestClient(userToken)
-          .post('/api/v1/memory-entries')
+          .post('/api/v1/memories')
           .send({
-            memory_id: args.memoryId,
+            memory_store_id: args.memoryStoreId,
             content: args.content,
             source_type: args.sourceType,
             ...(args.forceCreate ? { duplicate_threshold: 1.1 } : {}),
@@ -749,67 +793,53 @@ describe('Memories', () => {
         entryId: string;
         supersededBy?: string;
       }) => {
-        const entry = await db.MemoryEntry.findOne({
+        const entry = await db.Memory.findOne({
           where: { publicId: args.entryId },
         });
         entry!.invalidatedAt = new Date();
         if (args.supersededBy) {
-          const replacement = await db.MemoryEntry.findOne({
+          const replacement = await db.Memory.findOne({
             where: { publicId: args.supersededBy },
           });
-          entry!.supersededByEntryId = replacement!.id as number;
+          entry!.supersededByMemoryId = replacement!.id as number;
         }
         await entry!.save();
       };
 
       test('a manual REST write records no provenance', async () => {
-        const freshMemoryId = await createTestMemory();
+        const freshMemoryStoreId = await createTestMemoryStore();
         const response = await createEntry({
-          memoryId: freshMemoryId,
+          memoryStoreId: freshMemoryStoreId,
           content: 'Manually written fact',
         });
 
         expect(response.status).toBe(201);
-        expect(response.body.source_generation_id).toBeNull();
-        expect(response.body.source_conversation_id).toBeNull();
-      });
-
-      test('an orchestration-sourced write records no provenance', async () => {
-        const freshMemoryId = await createTestMemory();
-        const response = await createEntry({
-          memoryId: freshMemoryId,
-          content: 'Written by an orchestration node',
-          sourceType: 'orchestration',
-        });
-
-        expect(response.status).toBe(201);
-        expect(response.body.source_type).toBe('orchestration');
-        expect(response.body.source_generation_id).toBeNull();
-        expect(response.body.source_conversation_id).toBeNull();
+        expect(response.body.source_type).toBe('manual');
+        expect(response.body.source_id).toBeNull();
       });
 
       test('a newly created entry is valid', async () => {
-        const freshMemoryId = await createTestMemory();
+        const freshMemoryStoreId = await createTestMemoryStore();
         const response = await createEntry({
-          memoryId: freshMemoryId,
+          memoryStoreId: freshMemoryStoreId,
           content: 'A currently valid fact',
         });
 
         expect(response.status).toBe(201);
         expect(response.body.invalidated_at).toBeNull();
-        expect(response.body.superseded_by_entry_id).toBeNull();
+        expect(response.body.superseded_by_memory_id).toBeNull();
       });
 
       test('listing excludes invalidated entries by default', async () => {
-        const freshMemoryId = await createTestMemory();
+        const freshMemoryStoreId = await createTestMemoryStore();
         const retired = await createEntry({
-          memoryId: freshMemoryId,
+          memoryStoreId: freshMemoryStoreId,
           content: 'Fact that gets retired',
         });
         await invalidateEntry({ entryId: retired.body.id });
 
         const response = await authenticatedTestClient(userToken).get(
-          `/api/v1/memory-entries?memory_id=${freshMemoryId}`
+          `/api/v1/memories?memory_store_id=${freshMemoryStoreId}`
         );
 
         expect(response.status).toBe(200);
@@ -818,13 +848,13 @@ describe('Memories', () => {
       });
 
       test('include_invalidated returns invalidated entries with their supersede link', async () => {
-        const freshMemoryId = await createTestMemory();
+        const freshMemoryStoreId = await createTestMemoryStore();
         const oldEntry = await createEntry({
-          memoryId: freshMemoryId,
+          memoryStoreId: freshMemoryStoreId,
           content: 'Pedro works at Company X',
         });
         const replacement = await createEntry({
-          memoryId: freshMemoryId,
+          memoryStoreId: freshMemoryStoreId,
           content: 'Pedro left Company X',
           forceCreate: true,
         });
@@ -836,7 +866,7 @@ describe('Memories', () => {
         });
 
         const response = await authenticatedTestClient(userToken).get(
-          `/api/v1/memory-entries?memory_id=${freshMemoryId}&include_invalidated=true`
+          `/api/v1/memories?memory_store_id=${freshMemoryStoreId}&include_invalidated=true`
         );
 
         expect(response.status).toBe(200);
@@ -846,19 +876,19 @@ describe('Memories', () => {
         });
         expect(retired.invalidated_at).toBeDefined();
         expect(retired.invalidated_at).not.toBeNull();
-        expect(retired.superseded_by_entry_id).toBe(replacement.body.id);
+        expect(retired.superseded_by_memory_id).toBe(replacement.body.id);
       });
 
       test('an invalidated entry is still readable by id for audit', async () => {
-        const freshMemoryId = await createTestMemory();
+        const freshMemoryStoreId = await createTestMemoryStore();
         const retired = await createEntry({
-          memoryId: freshMemoryId,
+          memoryStoreId: freshMemoryStoreId,
           content: 'Retired but auditable',
         });
         await invalidateEntry({ entryId: retired.body.id });
 
         const response = await authenticatedTestClient(userToken).get(
-          `/api/v1/memory-entries/${retired.body.id}`
+          `/api/v1/memories/${retired.body.id}`
         );
 
         expect(response.status).toBe(200);
@@ -867,9 +897,9 @@ describe('Memories', () => {
       });
 
       test('an invalidated entry is not a dedup candidate', async () => {
-        const freshMemoryId = await createTestMemory();
+        const freshMemoryStoreId = await createTestMemoryStore();
         const original = await createEntry({
-          memoryId: freshMemoryId,
+          memoryStoreId: freshMemoryStoreId,
           content: 'Original fact',
         });
         expect(original.body.action).toBe('created');
@@ -877,7 +907,7 @@ describe('Memories', () => {
         // Baseline: while the entry is valid, the next write dedups against it
         // (constant test embeddings score 1.0).
         const beforeInvalidation = await createEntry({
-          memoryId: freshMemoryId,
+          memoryStoreId: freshMemoryStoreId,
           content: 'Second fact',
         });
         expect(beforeInvalidation.body.action).toBe('skipped');
@@ -885,7 +915,7 @@ describe('Memories', () => {
         await invalidateEntry({ entryId: original.body.id });
 
         const afterInvalidation = await createEntry({
-          memoryId: freshMemoryId,
+          memoryStoreId: freshMemoryStoreId,
           content: 'Third fact, written after invalidation',
         });
 
@@ -895,70 +925,70 @@ describe('Memories', () => {
     });
   });
 
-  describe('GET /api/v1/memories with tag filter', () => {
-    let taggedMemoryId: string;
-    let prefixedMemoryId: string;
-    let untaggedMemoryId: string;
+  describe('GET /api/v1/memory-stores with tag filter', () => {
+    let taggedMemoryStoreId: string;
+    let prefixedMemoryStoreId: string;
+    let untaggedMemoryStoreId: string;
 
     beforeAll(async () => {
       const taggedRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/memories')
+        .post('/api/v1/memory-stores')
         .send({
           project_id: projectId,
-          name: 'Tagged Memory Alpha',
+          name: 'Tagged MemoryStore Alpha',
           tags: { team: 'customer-support', system: 'crm' },
         });
-      taggedMemoryId = taggedRes.body.id;
+      taggedMemoryStoreId = taggedRes.body.id;
 
       const prefixedRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/memories')
+        .post('/api/v1/memory-stores')
         .send({
           project_id: projectId,
-          name: 'Tagged Memory Beta',
+          name: 'Tagged MemoryStore Beta',
           tags: { team: 'customer-support', system: 'prefs' },
         });
-      prefixedMemoryId = prefixedRes.body.id;
+      prefixedMemoryStoreId = prefixedRes.body.id;
 
       const untaggedRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/memories')
+        .post('/api/v1/memory-stores')
         .send({
           project_id: projectId,
-          name: 'Untagged Memory',
+          name: 'Untagged MemoryStore',
         });
-      untaggedMemoryId = untaggedRes.body.id;
+      untaggedMemoryStoreId = untaggedRes.body.id;
     });
 
-    test('a single key:value pair returns only memories carrying it', async () => {
+    test('a single key:value pair returns only memoryStores carrying it', async () => {
       const response = await authenticatedTestClient(userToken)
-        .get('/api/v1/memories')
+        .get('/api/v1/memory-stores')
         .query({ project_id: projectId, tags: 'system:crm' });
 
       expect(response.status).toBe(200);
       const ids = response.body.data.map((m: { id: string }) => {
         return m.id;
       });
-      expect(ids).toContain(taggedMemoryId);
-      expect(ids).not.toContain(prefixedMemoryId);
-      expect(ids).not.toContain(untaggedMemoryId);
+      expect(ids).toContain(taggedMemoryStoreId);
+      expect(ids).not.toContain(prefixedMemoryStoreId);
+      expect(ids).not.toContain(untaggedMemoryStoreId);
     });
 
-    test('a shared pair matches every memory carrying it', async () => {
+    test('a shared pair matches every memoryStore carrying it', async () => {
       const response = await authenticatedTestClient(userToken)
-        .get('/api/v1/memories')
+        .get('/api/v1/memory-stores')
         .query({ project_id: projectId, tags: 'team:customer-support' });
 
       expect(response.status).toBe(200);
       const ids = response.body.data.map((m: { id: string }) => {
         return m.id;
       });
-      expect(ids).toContain(taggedMemoryId);
-      expect(ids).toContain(prefixedMemoryId);
-      expect(ids).not.toContain(untaggedMemoryId);
+      expect(ids).toContain(taggedMemoryStoreId);
+      expect(ids).toContain(prefixedMemoryStoreId);
+      expect(ids).not.toContain(untaggedMemoryStoreId);
     });
 
     test('multiple pairs are ANDed', async () => {
       const response = await authenticatedTestClient(userToken)
-        .get('/api/v1/memories')
+        .get('/api/v1/memory-stores')
         .query({
           project_id: projectId,
           tags: ['team:customer-support', 'system:crm'],
@@ -968,14 +998,14 @@ describe('Memories', () => {
       const ids = response.body.data.map((m: { id: string }) => {
         return m.id;
       });
-      expect(ids).toContain(taggedMemoryId);
-      expect(ids).not.toContain(prefixedMemoryId);
-      expect(ids).not.toContain(untaggedMemoryId);
+      expect(ids).toContain(taggedMemoryStoreId);
+      expect(ids).not.toContain(prefixedMemoryStoreId);
+      expect(ids).not.toContain(untaggedMemoryStoreId);
     });
 
     test('matches values exactly and case-sensitively', async () => {
       const response = await authenticatedTestClient(userToken)
-        .get('/api/v1/memories')
+        .get('/api/v1/memory-stores')
         .query({ project_id: projectId, tags: 'system:CRM' });
 
       expect(response.status).toBe(200);
@@ -983,12 +1013,12 @@ describe('Memories', () => {
         response.body.data.map((m: { id: string }) => {
           return m.id;
         })
-      ).not.toContain(taggedMemoryId);
+      ).not.toContain(taggedMemoryStoreId);
     });
 
     test('returns 400 for a pair missing its colon', async () => {
       const response = await authenticatedTestClient(userToken)
-        .get('/api/v1/memories')
+        .get('/api/v1/memory-stores')
         .query({ project_id: projectId, tags: 'crm' });
 
       expect(response.status).toBe(400);
@@ -997,15 +1027,15 @@ describe('Memories', () => {
 
     test('keeps colons inside a tag value', async () => {
       const created = await authenticatedTestClient(userToken)
-        .post('/api/v1/memories')
+        .post('/api/v1/memory-stores')
         .send({
           project_id: projectId,
-          name: 'Colon Value Memory',
+          name: 'Colon Value MemoryStore',
           tags: { url: 'https://example.com/a' },
         });
 
       const response = await authenticatedTestClient(userToken)
-        .get('/api/v1/memories')
+        .get('/api/v1/memory-stores')
         .query({ project_id: projectId, tags: 'url:https://example.com/a' });
 
       expect(response.status).toBe(200);
@@ -1018,7 +1048,7 @@ describe('Memories', () => {
 
     test('a pair with no match returns an empty array', async () => {
       const response = await authenticatedTestClient(userToken)
-        .get('/api/v1/memories')
+        .get('/api/v1/memory-stores')
         .query({ project_id: projectId, tags: 'system:nonexistent-xyz' });
 
       expect(response.status).toBe(200);
@@ -1026,23 +1056,23 @@ describe('Memories', () => {
       const ids = response.body.data.map((m: { id: string }) => {
         return m.id;
       });
-      expect(ids).not.toContain(taggedMemoryId);
-      expect(ids).not.toContain(prefixedMemoryId);
-      expect(ids).not.toContain(untaggedMemoryId);
+      expect(ids).not.toContain(taggedMemoryStoreId);
+      expect(ids).not.toContain(prefixedMemoryStoreId);
+      expect(ids).not.toContain(untaggedMemoryStoreId);
     });
 
-    test('no tags filter returns all memories', async () => {
+    test('no tags filter returns all memoryStores', async () => {
       const response = await authenticatedTestClient(userToken)
-        .get('/api/v1/memories')
+        .get('/api/v1/memory-stores')
         .query({ project_id: projectId });
 
       expect(response.status).toBe(200);
       const ids = response.body.data.map((m: { id: string }) => {
         return m.id;
       });
-      expect(ids).toContain(taggedMemoryId);
-      expect(ids).toContain(prefixedMemoryId);
-      expect(ids).toContain(untaggedMemoryId);
+      expect(ids).toContain(taggedMemoryStoreId);
+      expect(ids).toContain(prefixedMemoryStoreId);
+      expect(ids).toContain(untaggedMemoryStoreId);
     });
   });
 });

@@ -12,7 +12,7 @@ describe('Knowledge', () => {
   let projectId: string;
   let policyId: string;
   let noPermToken: string;
-  let memoryId: string;
+  let memoryStoreId: string;
 
   beforeAll(async () => {
     await testClient
@@ -64,21 +64,19 @@ describe('Knowledge', () => {
       path: '/docs/sample.txt',
     });
 
-    // Create a memory with an entry for memory search tests (admin has full permissions)
-    const memoryRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/memories')
+    // Create a memory store with an entry for memory store search tests (admin has full permissions)
+    const memoryStoreRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/memory-stores')
       .send({
         project_id: projectId,
-        name: 'Knowledge Test Memory',
+        name: 'Knowledge Test MemoryStore',
         tags: { scope: 'knowledge-test' },
       });
-    memoryId = memoryRes.body.id;
-    await authenticatedTestClient(adminToken)
-      .post('/api/v1/memory-entries')
-      .send({
-        memory_id: memoryId,
-        content: 'The sky is blue on a clear day.',
-      });
+    memoryStoreId = memoryStoreRes.body.id;
+    await authenticatedTestClient(adminToken).post('/api/v1/memories').send({
+      memory_store_id: memoryStoreId,
+      content: 'The sky is blue on a clear day.',
+    });
   });
 
   afterAll(() => {
@@ -347,20 +345,20 @@ describe('Knowledge', () => {
         ]);
       });
 
-      test('one tags filter matches documents and memory entries together', async () => {
+      test('one tags filter matches documents and memories together', async () => {
         // The point of unifying the filter: a single `tags` bag reaches both
         // stores in one search, which no pre-unification filter could do.
-        const memoryRes = await authenticatedTestClient(adminToken)
-          .post('/api/v1/memories')
+        const memoryStoreRes = await authenticatedTestClient(adminToken)
+          .post('/api/v1/memory-stores')
           .send({
             project_id: projectId,
-            name: 'Cross-source Tag Memory',
+            name: 'Cross-source Tag MemoryStore',
             tags: { team: 'finance', env: 'prod' },
           });
         await authenticatedTestClient(adminToken)
-          .post('/api/v1/memory-entries')
+          .post('/api/v1/memories')
           .send({
-            memory_id: memoryRes.body.id,
+            memory_store_id: memoryStoreRes.body.id,
             content: 'Finance closes the books on the third business day.',
           });
 
@@ -431,12 +429,12 @@ describe('Knowledge', () => {
       expect(Array.isArray(response.body.results)).toBe(true);
     });
 
-    test('returns memory entries when searching by memory_ids', async () => {
+    test('returns memories when searching by memory_store_ids', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/knowledge/search')
         .send({
           project_id: projectId,
-          memory_ids: [memoryId],
+          memory_store_ids: [memoryStoreId],
         });
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body.results)).toBe(true);
@@ -446,9 +444,9 @@ describe('Knowledge', () => {
         }
       );
       expect(memResult).toBeDefined();
-      expect(memResult.entry_id).toBeDefined();
-      expect(memResult.memory_id).toBe(memoryId);
-      expect(memResult.memory_name).toBe('Knowledge Test Memory');
+      expect(memResult.memory_id).toBeDefined();
+      expect(memResult.memory_store_id).toBe(memoryStoreId);
+      expect(memResult.memory_store_name).toBe('Knowledge Test MemoryStore');
       expect(memResult.content).toBe('The sky is blue on a clear day.');
     });
 
@@ -458,14 +456,14 @@ describe('Knowledge', () => {
         .send({
           project_id: projectId,
           query: 'anything',
-          memory_ids: [memoryId],
+          memory_store_ids: [memoryStoreId],
         });
 
       expect(response.status).toBe(200);
       const doc = response.body.results.find((r: { source_type: string }) => {
         return r.source_type === 'document';
       });
-      const memory = response.body.results.find(
+      const memoryStore = response.body.results.find(
         (r: { source_type: string }) => {
           return r.source_type === 'memory';
         }
@@ -478,9 +476,9 @@ describe('Knowledge', () => {
       expect(doc.score).toBeDefined();
       expect(doc.similarity_score).toBeDefined();
       expect(doc.score).not.toBe(doc.similarity_score);
-      expect(memory.score).toBeDefined();
-      expect(memory.similarity_score).toBeDefined();
-      expect(memory.score).not.toBe(memory.similarity_score);
+      expect(memoryStore.score).toBeDefined();
+      expect(memoryStore.similarity_score).toBeDefined();
+      expect(memoryStore.score).not.toBe(memoryStore.similarity_score);
     });
 
     test('results are ordered by descending score', async () => {
@@ -506,7 +504,7 @@ describe('Knowledge', () => {
     test('omits score when no query is provided', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/knowledge/search')
-        .send({ project_id: projectId, memory_ids: [memoryId] });
+        .send({ project_id: projectId, memory_store_ids: [memoryStoreId] });
 
       expect(response.status).toBe(200);
       expect(response.body.results.length).toBeGreaterThan(0);
@@ -537,7 +535,7 @@ describe('Knowledge', () => {
       const body = {
         project_id: projectId,
         query: 'anything',
-        memory_ids: [memoryId],
+        memory_store_ids: [memoryStoreId],
       };
 
       const deprecated = await authenticatedTestClient(userToken)
@@ -572,18 +570,18 @@ describe('Knowledge', () => {
       }
     });
 
-    test('recency_half_life_days decays a memory result, never a document', async () => {
+    test('recency_half_life_days decays a memoryStore result, never a document', async () => {
       const entry = await authenticatedTestClient(adminToken)
-        .post('/api/v1/memory-entries')
+        .post('/api/v1/memories')
         .send({
-          memory_id: memoryId,
+          memory_store_id: memoryStoreId,
           content: 'The harbour crane is serviced every second Tuesday.',
         });
       // No product path sets `updated_at` — the column is Sequelize-managed and
       // every model-level write stamps the current time over an explicit value
       // — so the one way to give a fixture an age is raw SQL.
       await db.sequelize.query(
-        'UPDATE memory_entries SET updated_at = :updatedAt WHERE public_id = :publicId',
+        'UPDATE memories SET updated_at = :updatedAt WHERE public_id = :publicId',
         {
           replacements: {
             updatedAt: new Date(Date.now() - 60 * 86400000),
@@ -595,18 +593,18 @@ describe('Knowledge', () => {
       const body = {
         project_id: projectId,
         query: 'anything',
-        memory_ids: [memoryId],
+        memory_store_ids: [memoryStoreId],
       };
       type Result = {
         source_type: string;
-        entry_id?: string;
+        memory_id?: string;
         chunk_id?: string;
         score: number;
       };
       const scores = (results: Result[]) => {
         return new Map(
           results.map((result) => {
-            return [result.entry_id ?? result.chunk_id, result.score];
+            return [result.memory_id ?? result.chunk_id, result.score];
           })
         );
       };
@@ -639,7 +637,7 @@ describe('Knowledge', () => {
       const body = {
         project_id: projectId,
         query: 'anything',
-        memory_ids: [memoryId],
+        memory_store_ids: [memoryStoreId],
       };
 
       const omitted = await authenticatedTestClient(userToken)
@@ -657,7 +655,7 @@ describe('Knowledge', () => {
       const body = {
         project_id: projectId,
         query: 'anything',
-        memory_ids: [memoryId],
+        memory_store_ids: [memoryStoreId],
       };
 
       const tight = await authenticatedTestClient(userToken)
@@ -683,23 +681,26 @@ describe('Knowledge', () => {
       );
     });
 
-    test('excludes invalidated memory entries', async () => {
-      // A memory of its own, so invalidating an entry cannot affect any other
+    test('excludes invalidated memories', async () => {
+      // A memory store of its own, so invalidating an entry cannot affect any other
       // test in this file.
       const memRes = await authenticatedTestClient(adminToken)
-        .post('/api/v1/memories')
-        .send({ project_id: projectId, name: 'Invalidation Search Memory' });
-      const isolatedMemoryId = memRes.body.id;
+        .post('/api/v1/memory-stores')
+        .send({
+          project_id: projectId,
+          name: 'Invalidation Search MemoryStore',
+        });
+      const isolatedMemoryStoreId = memRes.body.id;
 
       const entryRes = await authenticatedTestClient(adminToken)
-        .post('/api/v1/memory-entries')
+        .post('/api/v1/memories')
         .send({
-          memory_id: isolatedMemoryId,
+          memory_store_id: isolatedMemoryStoreId,
           content: 'This fact was later retired.',
         });
       expect(entryRes.status).toBe(201);
 
-      const memoryResults = (body: {
+      const memoryStoreResults = (body: {
         results: Array<{ source_type: string }>;
       }) => {
         return body.results.filter((r) => {
@@ -709,13 +710,16 @@ describe('Knowledge', () => {
 
       const before = await authenticatedTestClient(userToken)
         .post('/api/v1/knowledge/search')
-        .send({ project_id: projectId, memory_ids: [isolatedMemoryId] });
+        .send({
+          project_id: projectId,
+          memory_store_ids: [isolatedMemoryStoreId],
+        });
       expect(before.status).toBe(200);
-      expect(memoryResults(before.body)).toHaveLength(1);
+      expect(memoryStoreResults(before.body)).toHaveLength(1);
 
       // Seeded directly: no public API sets `invalidated_at` until Memories 5a
       // ships the LLM arbitration that produces it (roadmap RC-2).
-      const entry = await db.MemoryEntry.findOne({
+      const entry = await db.Memory.findOne({
         where: { publicId: entryRes.body.id },
       });
       entry!.invalidatedAt = new Date();
@@ -723,27 +727,33 @@ describe('Knowledge', () => {
 
       const after = await authenticatedTestClient(userToken)
         .post('/api/v1/knowledge/search')
-        .send({ project_id: projectId, memory_ids: [isolatedMemoryId] });
+        .send({
+          project_id: projectId,
+          memory_store_ids: [isolatedMemoryStoreId],
+        });
 
       expect(after.status).toBe(200);
-      expect(memoryResults(after.body)).toHaveLength(0);
+      expect(memoryStoreResults(after.body)).toHaveLength(0);
     });
 
-    test('excludes invalidated memory entries from a semantic query', async () => {
+    test('excludes invalidated memories from a semantic query', async () => {
       const memRes = await authenticatedTestClient(adminToken)
-        .post('/api/v1/memories')
-        .send({ project_id: projectId, name: 'Invalidation Query Memory' });
-      const isolatedMemoryId = memRes.body.id;
+        .post('/api/v1/memory-stores')
+        .send({
+          project_id: projectId,
+          name: 'Invalidation Query MemoryStore',
+        });
+      const isolatedMemoryStoreId = memRes.body.id;
 
       const entryRes = await authenticatedTestClient(adminToken)
-        .post('/api/v1/memory-entries')
+        .post('/api/v1/memories')
         .send({
-          memory_id: isolatedMemoryId,
+          memory_store_id: isolatedMemoryStoreId,
           content: 'A retired fact about billing.',
         });
       expect(entryRes.status).toBe(201);
 
-      const entry = await db.MemoryEntry.findOne({
+      const entry = await db.Memory.findOne({
         where: { publicId: entryRes.body.id },
       });
       entry!.invalidatedAt = new Date();
@@ -753,22 +763,22 @@ describe('Knowledge', () => {
         .post('/api/v1/knowledge/search')
         .send({
           project_id: projectId,
-          memory_ids: [isolatedMemoryId],
+          memory_store_ids: [isolatedMemoryStoreId],
           query: 'billing',
         });
 
-      // A query also ranks documents project-wide, so assert on the memory
+      // A query also ranks documents project-wide, so assert on the memory store
       // side specifically rather than on an empty result set.
       expect(response.status).toBe(200);
-      const memoryHits = response.body.results.filter(
+      const memoryStoreHits = response.body.results.filter(
         (r: { source_type: string }) => {
           return r.source_type === 'memory';
         }
       );
-      expect(memoryHits).toHaveLength(0);
+      expect(memoryStoreHits).toHaveLength(0);
     });
 
-    test('returns memory entries when searching by tags', async () => {
+    test('returns memories when searching by tags', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/knowledge/search')
         .send({
@@ -786,7 +796,7 @@ describe('Knowledge', () => {
       expect(memResult.source_type).toBe('memory');
     });
 
-    test('returns memory entries when searching by tags without a project_id (admin, cross-project)', async () => {
+    test('returns memories when searching by tags without a project_id (admin, cross-project)', async () => {
       // An admin JWT with no project_id resolves to `undefined`, exercising the
       // unscoped branch — every other test here passes an explicit project_id.
       const response = await authenticatedTestClient(adminToken)
@@ -802,27 +812,27 @@ describe('Knowledge', () => {
         }
       );
       expect(memResult).toBeDefined();
-      expect(memResult.memory_id).toBe(memoryId);
+      expect(memResult.memory_store_id).toBe(memoryStoreId);
     });
 
     test('tags filter at entry granularity via per-entry tags', async () => {
-      // A memory container whose OWN tags do NOT match the searched tag, but
+      // A memory store container whose OWN tags do NOT match the searched tag, but
       // holding one entry tagged with it. Entry-granularity filtering must
       // return only that entry, proving the tag match happens per entry rather
       // than only at the container level.
       const containerRes = await authenticatedTestClient(adminToken)
-        .post('/api/v1/memories')
+        .post('/api/v1/memory-stores')
         .send({
           project_id: projectId,
-          name: 'Entry-tag Memory',
+          name: 'Entry-tag MemoryStore',
           tags: { container: 'unrelated' },
         });
       const containerId = containerRes.body.id;
 
       await authenticatedTestClient(adminToken)
-        .post('/api/v1/memory-entries')
+        .post('/api/v1/memories')
         .send({
-          memory_id: containerId,
+          memory_store_id: containerId,
           content: 'Reject refunds above $500 for the traffic-manager role',
           tags: { role: 'traffic-manager' },
         });
@@ -842,17 +852,17 @@ describe('Knowledge', () => {
       );
       expect(match).toBeDefined();
       expect(match.source_type).toBe('memory');
-      expect(match.memory_id).toBe(containerId);
+      expect(match.memory_store_id).toBe(containerId);
     });
 
-    test('returns mixed results when searching with query, document_filters, and memory_ids', async () => {
+    test('returns mixed results when searching with query, document_filters, and memory_store_ids', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/knowledge/search')
         .send({
           project_id: projectId,
           query: 'sky',
           document_paths: ['/docs/'],
-          memory_ids: [memoryId],
+          memory_store_ids: [memoryStoreId],
         });
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body.results)).toBe(true);
@@ -917,13 +927,13 @@ describe('Knowledge', () => {
       expect(Array.isArray(response.body.results)).toBe(true);
     });
 
-    test('applies min_score to a semantic memory search', async () => {
+    test('applies min_score to a semantic memoryStore search', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/knowledge/search')
         .send({
           project_id: projectId,
           query: 'sky',
-          memory_ids: [memoryId],
+          memory_store_ids: [memoryStoreId],
           min_score: -1,
         });
       expect(response.status).toBe(200);
@@ -936,12 +946,12 @@ describe('Knowledge', () => {
       expect(memResult).toBeDefined();
     });
 
-    test('returns empty array when memory_ids has no matching entries', async () => {
+    test('returns empty array when memory_store_ids has no matching entries', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/knowledge/search')
         .send({
           project_id: projectId,
-          memory_ids: ['mem_doesnotexist000'],
+          memory_store_ids: ['mstore_doesnotexist000'],
         });
       expect(response.status).toBe(200);
       expect(response.body.results).toEqual([]);

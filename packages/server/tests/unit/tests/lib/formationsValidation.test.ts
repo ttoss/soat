@@ -18,10 +18,10 @@ describe('getMissingParams', () => {
         type: 'secret',
         properties: { name: 'test', value: { param: 'ApiKey' } },
       },
-      ParamMemory: {
-        type: 'memory',
+      ParamMemoryStore: {
+        type: 'memory_store',
         properties: {
-          name: { sub: '${ToolUrl}-memory' },
+          name: { sub: '${ToolUrl}-memoryStore' },
         },
       },
     },
@@ -62,11 +62,11 @@ describe('getMissingParams', () => {
   test('returns empty array when param has a default and no override provided', () => {
     const templateWithDefault = {
       parameters: {
-        MemName: { type: 'string', default: 'default-memory' },
+        MemName: { type: 'string', default: 'default-memoryStore' },
       },
       resources: {
         Mem: {
-          type: 'memory',
+          type: 'memory_store',
           properties: { name: { param: 'MemName' } },
         },
       },
@@ -82,7 +82,7 @@ describe('getMissingParams', () => {
       },
       resources: {
         Mem: {
-          type: 'memory',
+          type: 'memory_store',
           properties: { name: { param: 'OptionalParam' } },
         },
       },
@@ -116,8 +116,8 @@ describe('parseFormationTemplateInput', () => {
   test('parses a valid YAML string into an object', () => {
     const yaml = [
       'resources:',
-      '  MyMemory:',
-      '    type: memory',
+      '  MyMemoryStore:',
+      '    type: memory_store',
       '    properties:',
       '      name: Test',
     ].join('\n');
@@ -125,17 +125,19 @@ describe('parseFormationTemplateInput', () => {
     const result = parseFormationTemplateInput(yaml);
     expect(result).toEqual({
       resources: {
-        MyMemory: { type: 'memory', properties: { name: 'Test' } },
+        MyMemoryStore: { type: 'memory_store', properties: { name: 'Test' } },
       },
     });
   });
 
   test('parses a valid JSON string into an object', () => {
     const json = JSON.stringify({
-      resources: { R: { type: 'memory', properties: { name: 'json-test' } } },
+      resources: {
+        R: { type: 'memory_store', properties: { name: 'json-test' } },
+      },
     });
     const result = parseFormationTemplateInput(json) as any;
-    expect(result.resources.R.type).toBe('memory');
+    expect(result.resources.R.type).toBe('memory_store');
   });
 
   test('returns raw string when YAML parse fails', () => {
@@ -261,7 +263,7 @@ describe('validateFormationTemplate', () => {
 
   test('returns invalid when properties is missing', () => {
     const result = validateFormationTemplate({
-      resources: { MyResource: { type: 'memory' } },
+      resources: { MyResource: { type: 'memory_store' } },
     });
     expect(result.valid).toBe(false);
     expect(
@@ -273,7 +275,7 @@ describe('validateFormationTemplate', () => {
 
   test('returns invalid when properties is null', () => {
     const result = validateFormationTemplate({
-      resources: { MyResource: { type: 'memory', properties: null } },
+      resources: { MyResource: { type: 'memory_store', properties: null } },
     });
     expect(result.valid).toBe(false);
     expect(
@@ -285,7 +287,7 @@ describe('validateFormationTemplate', () => {
 
   test('returns invalid when properties is an array', () => {
     const result = validateFormationTemplate({
-      resources: { MyResource: { type: 'memory', properties: [] } },
+      resources: { MyResource: { type: 'memory_store', properties: [] } },
     });
     expect(result.valid).toBe(false);
     expect(
@@ -365,7 +367,7 @@ describe('validateFormationTemplate', () => {
     const result = validateFormationTemplate({
       resources: {
         MyResource: {
-          type: 'memory',
+          type: 'memory_store',
           properties: { name: 'test' },
           depends_on: 'not-an-array',
         },
@@ -383,7 +385,7 @@ describe('validateFormationTemplate', () => {
     const result = validateFormationTemplate({
       resources: {
         MyResource: {
-          type: 'memory',
+          type: 'memory_store',
           properties: { name: 'test' },
           depends_on: [42],
         },
@@ -401,7 +403,7 @@ describe('validateFormationTemplate', () => {
     const result = validateFormationTemplate({
       resources: {
         MyResource: {
-          type: 'memory',
+          type: 'memory_store',
           properties: { name: 'test' },
           depends_on: ['NonExistent'],
         },
@@ -537,8 +539,8 @@ describe('validateFormationTemplate', () => {
   test('returns invalid when deletion_policy is an unsupported value', () => {
     const result = validateFormationTemplate({
       resources: {
-        MyMemory: {
-          type: 'memory',
+        MyMemoryStore: {
+          type: 'memory_store',
           properties: { name: 'test' },
           deletion_policy: 'snapshot',
         },
@@ -555,8 +557,8 @@ describe('validateFormationTemplate', () => {
   test('accepts deletion_policy: delete', () => {
     const result = validateFormationTemplate({
       resources: {
-        MyMemory: {
-          type: 'memory',
+        MyMemoryStore: {
+          type: 'memory_store',
           properties: { name: 'test' },
           deletion_policy: 'delete',
         },
@@ -569,8 +571,8 @@ describe('validateFormationTemplate', () => {
   test('accepts deletion_policy: retain', () => {
     const result = validateFormationTemplate({
       resources: {
-        MyMemory: {
-          type: 'memory',
+        MyMemoryStore: {
+          type: 'memory_store',
           properties: { name: 'test' },
           deletion_policy: 'retain',
         },
@@ -585,7 +587,7 @@ describe('validateFormationTemplate', () => {
   test('returns invalid when outputs reference an unknown resource', () => {
     const result = validateFormationTemplate({
       resources: {
-        MyMemory: { type: 'memory', properties: { name: 'test' } },
+        MyMemoryStore: { type: 'memory_store', properties: { name: 'test' } },
       },
       outputs: { badRef: { ref: 'NonExistent' } },
     });
@@ -692,7 +694,7 @@ describe('validateFormationTemplate', () => {
     // outputs as array → getOutputsObject returns null → no output errors
     const result = validateFormationTemplate({
       resources: {
-        MyMemory: { type: 'memory', properties: { name: 'test' } },
+        MyMemoryStore: { type: 'memory_store', properties: { name: 'test' } },
       },
       outputs: ['bad'],
     });
@@ -704,7 +706,7 @@ describe('validateFormationTemplate', () => {
   test('returns invalid when top-level metadata references an unknown resource', () => {
     const result = validateFormationTemplate({
       resources: {
-        MyMemory: { type: 'memory', properties: { name: 'test' } },
+        MyMemoryStore: { type: 'memory_store', properties: { name: 'test' } },
       },
       metadata: { ref: { ref: 'NonExistent' } },
     });
@@ -719,7 +721,7 @@ describe('validateFormationTemplate', () => {
   test('returns invalid when metadata sub references an undeclared parameter', () => {
     const result = validateFormationTemplate({
       resources: {
-        MyMemory: { type: 'memory', properties: { name: 'test' } },
+        MyMemoryStore: { type: 'memory_store', properties: { name: 'test' } },
       },
       metadata: { version: { sub: '${undeclared}' } },
     });
@@ -734,12 +736,12 @@ describe('validateFormationTemplate', () => {
   test('returns valid when metadata substitutes a declared param and a known resource', () => {
     const result = validateFormationTemplate({
       resources: {
-        MyMemory: { type: 'memory', properties: { name: 'test' } },
+        MyMemoryStore: { type: 'memory_store', properties: { name: 'test' } },
       },
       parameters: { version: { default: 'v1' } },
       metadata: {
         version: { sub: '${version}' },
-        memory: { ref: 'MyMemory' },
+        memoryStore: { ref: 'MyMemoryStore' },
       },
     });
     expect(result.valid).toBe(true);
@@ -749,7 +751,7 @@ describe('validateFormationTemplate', () => {
   test('skips metadata validation when metadata is not a plain object', () => {
     const result = validateFormationTemplate({
       resources: {
-        MyMemory: { type: 'memory', properties: { name: 'test' } },
+        MyMemoryStore: { type: 'memory_store', properties: { name: 'test' } },
       },
       metadata: ['bad'],
     });
@@ -761,8 +763,8 @@ describe('validateFormationTemplate', () => {
   test('returns invalid when resources have a circular dependency', () => {
     const result = validateFormationTemplate({
       resources: {
-        A: { type: 'memory', properties: {}, depends_on: ['B'] },
-        B: { type: 'memory', properties: {}, depends_on: ['A'] },
+        A: { type: 'memory_store', properties: {}, depends_on: ['B'] },
+        B: { type: 'memory_store', properties: {}, depends_on: ['A'] },
       },
     });
     expect(result.valid).toBe(false);
@@ -786,9 +788,9 @@ describe('validateFormationTemplate', () => {
             default_model: 'gpt-4o',
           },
         },
-        MyMemory: {
-          type: 'memory',
-          properties: { name: 'context-memory' },
+        MyMemoryStore: {
+          type: 'memory_store',
+          properties: { name: 'context-memoryStore' },
         },
         MyAgent: {
           type: 'agent',
@@ -801,7 +803,7 @@ describe('validateFormationTemplate', () => {
       },
       outputs: {
         providerId: { ref: 'MyProvider' },
-        memoryId: { ref: 'MyMemory' },
+        memoryStoreId: { ref: 'MyMemoryStore' },
       },
     });
     expect(result.valid).toBe(true);
@@ -811,7 +813,10 @@ describe('validateFormationTemplate', () => {
   test('returns valid for a minimal template with no outputs', () => {
     const result = validateFormationTemplate({
       resources: {
-        MyMemory: { type: 'memory', properties: { name: 'minimal' } },
+        MyMemoryStore: {
+          type: 'memory_store',
+          properties: { name: 'minimal' },
+        },
       },
     });
     expect(result.valid).toBe(true);
@@ -824,7 +829,7 @@ describe('validateFormationTemplate', () => {
     const result = validateFormationTemplate({
       parameters: 'not-an-object',
       resources: {
-        MyMemory: { type: 'memory', properties: { name: 'test' } },
+        MyMemoryStore: { type: 'memory_store', properties: { name: 'test' } },
       },
     });
     expect(result.valid).toBe(false);
@@ -839,7 +844,7 @@ describe('validateFormationTemplate', () => {
     const result = validateFormationTemplate({
       parameters: { MyParam: 'not-an-object' },
       resources: {
-        MyMemory: { type: 'memory', properties: { name: 'test' } },
+        MyMemoryStore: { type: 'memory_store', properties: { name: 'test' } },
       },
     });
     expect(result.valid).toBe(false);
@@ -854,7 +859,7 @@ describe('validateFormationTemplate', () => {
     const result = validateFormationTemplate({
       parameters: { MyParam: { type: 42 } },
       resources: {
-        MyMemory: { type: 'memory', properties: { name: 'test' } },
+        MyMemoryStore: { type: 'memory_store', properties: { name: 'test' } },
       },
     });
     expect(result.valid).toBe(false);
@@ -869,8 +874,8 @@ describe('validateFormationTemplate', () => {
     const result = validateFormationTemplate({
       parameters: { AppUrl: { type: 'string' } },
       resources: {
-        MyMemory: {
-          type: 'memory',
+        MyMemoryStore: {
+          type: 'memory_store',
           properties: {
             name: 'test',
             config: { param: 'UndeclaredParam' },
@@ -890,8 +895,8 @@ describe('validateFormationTemplate', () => {
     const result = validateFormationTemplate({
       parameters: { AppUrl: { type: 'string' } },
       resources: {
-        MyMemory: {
-          type: 'memory',
+        MyMemoryStore: {
+          type: 'memory_store',
           properties: {
             name: { sub: 'Bearer ${MissingKey}' },
           },
@@ -910,7 +915,7 @@ describe('validateFormationTemplate', () => {
     const result = validateFormationTemplate({
       parameters: {},
       resources: {
-        MyMemory: { type: 'memory', properties: { name: 'test' } },
+        MyMemoryStore: { type: 'memory_store', properties: { name: 'test' } },
       },
       outputs: {
         myOutput: { param: 'UndeclaredParam' },
@@ -934,7 +939,7 @@ describe('validateFormationTemplate', () => {
         OptionalParam: { type: 'string', default: 'default-value' },
       },
       resources: {
-        MyMemory: { type: 'memory', properties: { name: 'test' } },
+        MyMemoryStore: { type: 'memory_store', properties: { name: 'test' } },
       },
     });
     expect(result.valid).toBe(true);

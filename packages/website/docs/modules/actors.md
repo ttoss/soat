@@ -66,22 +66,22 @@ An Actor links to an Agent or a Chat, not both; the link selects the AI backend 
 
 ### Per-Actor Memory
 
-An actor has no memory field; retrieval scope comes from the agent's `knowledge_config` only. Keep the actor→memory mapping in your application and pass it per call.
+An actor has no memory field; retrieval scope comes from the agent's `knowledge_config` only. Keep the actor→store mapping in your application and pass it per call.
 
-Create one [Memory](./memories.md) per end user (keyed by `external_id`, for instance) and name it in the generate body:
+Create one [memory store](./memories.md) per end user (keyed by `external_id`, for instance) and name it in the generate body:
 
 ```json
 {
   "knowledge_config": {
-    "memory_ids": ["mem_V1StGXR8Z5jdHi6B"],
-    "write_memory_id": "mem_V1StGXR8Z5jdHi6B"
+    "memory_store_ids": ["mstore_V1StGXR8Z5jdHi6B"],
+    "write_memory_store_id": "mstore_V1StGXR8Z5jdHi6B"
   }
 }
 ```
 
-`memory_ids` is **unioned** with the agent's stored config and `tags` pairs are merged, so a per-actor memory extends the shared scope. Without a mapping table, tag the memory (`tags`, e.g. `{ "actor": "<external_id>" }`) or name it after the `external_id` and look it up with [`GET /memories`](/docs/api/memories/list-memories).
+`memory_store_ids` is **unioned** with the agent's stored config and `tags` pairs are merged, so a per-actor store extends the shared scope. Without a mapping table, tag the store (`tags`, e.g. `{ "actor": "<external_id>" }`) or name it after the `external_id` and look it up with [`GET /memory-stores`](/docs/api/memory-stores/list-memory-stores).
 
-Deleting an actor deletes nothing in any memory.
+Deleting an actor deletes nothing in any memory store.
 
 ### Instructions
 

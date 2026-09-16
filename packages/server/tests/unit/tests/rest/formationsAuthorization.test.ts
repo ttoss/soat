@@ -73,15 +73,15 @@ describe('Formation resource authorization', () => {
       .send({ name: 'Formation Authorization Other Project' });
     otherProjectId = otherProjectRes.body.id;
 
-    // Everything a memory needs, and deliberately nothing a guardrail does.
+    // Everything a memory store needs, and deliberately nothing a guardrail does.
     const deploy = await grant({
       username: 'fradeploy',
       password: 'deploypass',
       actions: [
         ...FORMATION_ACTIONS,
-        'memories:CreateMemory',
-        'memories:UpdateMemory',
-        'memories:DeleteMemory',
+        'memories:CreateMemoryStore',
+        'memories:UpdateMemoryStore',
+        'memories:DeleteMemoryStore',
         // Granted to prove `policy` is refused on the role gate, not on this.
         'policies:CreatePolicy',
         'api-keys:CreateApiKey',
@@ -108,7 +108,10 @@ describe('Formation resource authorization', () => {
           name: 'authorized-memory-stack',
           template: {
             resources: {
-              MyMemory: { type: 'memory', properties: { name: 'fra-allowed' } },
+              MyMemoryStore: {
+                type: 'memory_store',
+                properties: { name: 'fra-allowed' },
+              },
             },
           },
         });
@@ -125,7 +128,10 @@ describe('Formation resource authorization', () => {
           name: 'guardrail-stack',
           template: {
             resources: {
-              MyMemory: { type: 'memory', properties: { name: 'fra-mem' } },
+              MyMemoryStore: {
+                type: 'memory_store',
+                properties: { name: 'fra-mem' },
+              },
               MyGuardrail: {
                 type: 'guardrail',
                 properties: { name: 'fra-guardrail', class: 'A' },
@@ -145,7 +151,7 @@ describe('Formation resource authorization', () => {
       ]);
 
       // The refusal happens before anything is created: no formation row, and
-      // the memory ordered ahead of the guardrail was never applied.
+      // the memory store ordered ahead of the guardrail was never applied.
       const formations = await authenticatedTestClient(adminToken).get(
         `/api/v1/formations?project_id=${projectId}`
       );
@@ -155,12 +161,12 @@ describe('Formation resource authorization', () => {
         })
       ).toBe(false);
 
-      const memories = await authenticatedTestClient(adminToken).get(
-        `/api/v1/memories?project_id=${projectId}`
+      const memoryStores = await authenticatedTestClient(adminToken).get(
+        `/api/v1/memory-stores?project_id=${projectId}`
       );
       expect(
-        memories.body.data.some((memory: { name: string }) => {
-          return memory.name === 'fra-mem';
+        memoryStores.body.data.some((memoryStore: { name: string }) => {
+          return memoryStore.name === 'fra-mem';
         })
       ).toBe(false);
     });
@@ -280,7 +286,10 @@ describe('Formation resource authorization', () => {
           project_id: projectId,
           template: {
             resources: {
-              MyMemory: { type: 'memory', properties: { name: 'fra-planned' } },
+              MyMemoryStore: {
+                type: 'memory_store',
+                properties: { name: 'fra-planned' },
+              },
               MyGuardrail: {
                 type: 'guardrail',
                 properties: { name: 'fra-planned-guardrail', class: 'A' },
@@ -307,7 +316,10 @@ describe('Formation resource authorization', () => {
           project_id: projectId,
           template: {
             resources: {
-              MyMemory: { type: 'memory', properties: { name: 'fra-planned' } },
+              MyMemoryStore: {
+                type: 'memory_store',
+                properties: { name: 'fra-planned' },
+              },
             },
           },
         });
@@ -326,7 +338,10 @@ describe('Formation resource authorization', () => {
           name: 'update-stack',
           template: {
             resources: {
-              MyMemory: { type: 'memory', properties: { name: 'fra-update' } },
+              MyMemoryStore: {
+                type: 'memory_store',
+                properties: { name: 'fra-update' },
+              },
             },
           },
         });
@@ -337,7 +352,10 @@ describe('Formation resource authorization', () => {
         .send({
           template: {
             resources: {
-              MyMemory: { type: 'memory', properties: { name: 'fra-update' } },
+              MyMemoryStore: {
+                type: 'memory_store',
+                properties: { name: 'fra-update' },
+              },
               Added: {
                 type: 'guardrail',
                 properties: { name: 'fra-added-guardrail', class: 'A' },
@@ -360,7 +378,7 @@ describe('Formation resource authorization', () => {
       );
       expect(unchanged.body.status).toBe('active');
       expect(Object.keys(unchanged.body.template.resources)).toEqual([
-        'MyMemory',
+        'MyMemoryStore',
       ]);
     });
   });
@@ -434,7 +452,7 @@ describe('Formation resource authorization', () => {
       const { token: noDeleteToken } = await grant({
         username: 'franodelete',
         password: 'nodeletepass',
-        actions: [...FORMATION_ACTIONS, 'memories:CreateMemory'],
+        actions: [...FORMATION_ACTIONS, 'memories:CreateMemoryStore'],
       });
 
       const created = await authenticatedTestClient(noDeleteToken)
@@ -444,8 +462,8 @@ describe('Formation resource authorization', () => {
           name: 'teardown-stack',
           template: {
             resources: {
-              MyMemory: {
-                type: 'memory',
+              MyMemoryStore: {
+                type: 'memory_store',
                 properties: { name: 'fra-teardown' },
               },
             },
@@ -460,9 +478,9 @@ describe('Formation resource authorization', () => {
       expect(res.status).toBe(403);
       expect(res.body.error.meta.denied_actions).toEqual([
         {
-          logical_id: 'MyMemory',
-          resource_type: 'memory',
-          action: 'memories:DeleteMemory',
+          logical_id: 'MyMemoryStore',
+          resource_type: 'memory_store',
+          action: 'memories:DeleteMemoryStore',
         },
       ]);
 

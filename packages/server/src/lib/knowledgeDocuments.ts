@@ -518,7 +518,7 @@ export const resolveDocumentSearch = async (args: {
       return result.chunk_id;
     },
     rrfK: args.config.rrfK,
-    // No result of this entry point is a memory entry, so the recency blend
+    // No result of this entry point is a memory, so the recency blend
     // never applies and the store needs no knob for it.
     isMemory: () => {
       return false;

@@ -24,7 +24,7 @@ paths:
       tags:
         - Knowledge
       summary: Search knowledge
-      description: Searches across documents and memory entries using hybrid retrieval — a vector query and a full-text query per source, fused by reciprocal rank — or by file paths, document IDs, memory IDs, or tags. At least one of `query`, `tags`, `document_paths`, `document_ids`, or `memory_ids` must be provided.
+      description: Searches across documents and memories using hybrid retrieval — a vector query and a full-text query per source, fused by reciprocal rank — or by file paths, document IDs, memory store IDs, or tags. At least one of `query`, `tags`, `document_paths`, `document_ids`, or `memory_store_ids` must be provided.
       operationId: searchKnowledge
       x-iam-action: knowledge:SearchKnowledge
       requestBody:
@@ -84,7 +84,7 @@ paths:
                 recency_half_life_days:
                   type: number
                   description: >-
-                    Half-life, in days, of a recency decay applied to **memory** results
+                    Half-life, in days, of a recency decay applied to **memory store** results
                     after fusion: a result's `score` is multiplied by
                     `2 ^ (-age_in_days / recency_half_life_days)`, where age is measured
                     from its `updated_at`. Document results are never decayed. `0` — the
@@ -106,13 +106,13 @@ paths:
                     refused.
                   minimum: 1
                   example: 10
-                memory_ids:
-                  x-soat-ref: memories
+                memory_store_ids:
+                  x-soat-ref: memory-stores
                   type: array
-                  description: Search entries within these specific memories
+                  description: Search memories within these specific memory stores
                   items:
                     type: string
-                  example: ['mem_V1StGXR8Z5jdHi6B']
+                  example: ['mstore_V1StGXR8Z5jdHi6B']
                 document_paths:
                   type: array
                   description: Filter results to documents whose file path starts with one of these prefixes
@@ -128,12 +128,12 @@ paths:
                   example: ['doc_V1StGXR8Z5jdHi6B']
                 tags:
                   description: >-
-                    Filter results to documents and memory entries whose `tags`
+                    Filter results to documents and memories whose `tags`
                     contain every one of these key-value pairs (exact,
                     case-sensitive match). The only filter that scopes both
-                    stores, so passing it alone searches both. For memory it
-                    matches at entry granularity: an entry is returned when its
-                    parent memory's tags match or its own do.
+                    stores, so passing it alone searches both. For memories it
+                    matches at memory granularity: a memory is returned when
+                    its parent memory store's tags match or its own do.
                   allOf:
                     - $ref: './tags.yaml#/components/schemas/TagBag'
       responses:
@@ -286,9 +286,9 @@ components:
       type: object
       required:
         - source_type
-        - entry_id
         - memory_id
-        - memory_name
+        - memory_store_id
+        - memory_store_name
         - content
         - created_at
         - updated_at
@@ -299,22 +299,22 @@ components:
             - memory
           description: The type of knowledge source this result comes from
           example: memory
-        entry_id:
-          type: string
-          description: Public ID of the memory entry
-          example: 'mem_entry_V1StGXR8Z5jdHi6B'
         memory_id:
-          x-soat-ref: memories
           type: string
-          description: Public ID of the parent memory
+          description: Public ID of the memory
           example: 'mem_V1StGXR8Z5jdHi6B'
-        memory_name:
+        memory_store_id:
+          x-soat-ref: memory-stores
           type: string
-          description: Human-readable name of the parent memory
+          description: Public ID of the parent memory store
+          example: 'mstore_V1StGXR8Z5jdHi6B'
+        memory_store_name:
+          type: string
+          description: Human-readable name of the parent memory store
           example: 'Customer Preferences'
         content:
           type: string
-          description: Text content of the memory entry
+          description: Text content of the memory
         score:
           type: number
           description: >-

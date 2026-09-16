@@ -117,7 +117,7 @@ const toTitleCase = (kebab: string): string => {
  * a sub-resource whose documentation lives inside a parent module's page.
  */
 const DOC_OVERRIDES: Record<string, string> = {
-  'memory-entries': 'memories',
+  'memory-stores': 'memories',
   tasks: 'workflows',
 };
 

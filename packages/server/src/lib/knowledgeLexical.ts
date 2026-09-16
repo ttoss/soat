@@ -101,7 +101,7 @@ export const lexicalRankExpression = (args: {
  * — costs exact-token recall rather than the whole search.
  */
 export const withLexicalDegrade = async <T>(args: {
-  source: 'documents' | 'memoryEntries';
+  source: 'documents' | 'memories';
   run: () => Promise<T[]>;
 }): Promise<T[]> => {
   try {

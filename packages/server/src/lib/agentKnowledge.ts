@@ -7,7 +7,7 @@ import type { TypedAgent } from './agentGenerationTypes';
 import { isSoatActionAllowedByBoundary } from './agentToolResolver';
 import type { EmbeddingBillingProjectId } from './embedding';
 import { searchKnowledge } from './knowledge';
-import { writeMemoryEntry } from './memoryEntries';
+import { writeMemory } from './memories';
 import { isPlainObject } from './plainObject';
 
 const log = createDebug('soat:knowledge');
@@ -24,19 +24,19 @@ export type ExtractionConfig = {
 };
 
 export type KnowledgeConfig = {
-  memoryIds?: string[];
+  memoryStoreIds?: string[];
   documentIds?: string[];
   documentPaths?: string[];
   /**
    * Key-value pairs a result's own `tags` must all contain (exact match).
-   * Scopes documents and memory entries alike.
+   * Scopes documents and memories alike.
    */
   tags?: Record<string, string>;
   minScore?: number;
   limit?: number;
-  writeMemoryId?: string;
+  writeMemoryStoreId?: string;
   /**
-   * Automatic fact extraction from completed turns (requires writeMemoryId).
+   * Automatic fact extraction from completed turns (requires writeMemoryStoreId).
    * `true` enables it with defaults; the object form customizes provider,
    * model, and prompt.
    */
@@ -127,13 +127,13 @@ export const readKnowledgeConfig = (
     if (read !== undefined) config[key] = read;
   };
 
-  set('memoryIds', readStringArray(value.memory_ids));
+  set('memoryStoreIds', readStringArray(value.memory_store_ids));
   set('documentIds', readStringArray(value.document_ids));
   set('documentPaths', readStringArray(value.document_paths));
   set('tags', readStringRecord(value.tags));
   set('minScore', readNumber(value.min_score));
   set('limit', readNumber(value.limit));
-  set('writeMemoryId', readString(value.write_memory_id));
+  set('writeMemoryStoreId', readString(value.write_memory_store_id));
   set('extraction', readExtraction(value.extraction));
 
   return config;
@@ -165,7 +165,7 @@ const unionArrays = (
 
 /**
  * Merges a per-generation `knowledge_config` override into the agent's
- * stored config. Array filters (memoryIds, documentIds,
+ * stored config. Array filters (memoryStoreIds, documentIds,
  * documentPaths) are unioned so a single call can extend, not replace, the
  * agent's retrieval scope; `tags` pairs are merged with the override winning
  * per key; scalar fields use the override value when present.
@@ -181,7 +181,7 @@ export const mergeKnowledgeConfig = (args: {
   return {
     ...base,
     ...override,
-    memoryIds: unionArrays(base.memoryIds, override.memoryIds),
+    memoryStoreIds: unionArrays(base.memoryStoreIds, override.memoryStoreIds),
     documentIds: unionArrays(base.documentIds, override.documentIds),
     documentPaths: unionArrays(base.documentPaths, override.documentPaths),
     tags: mergeRecords(base.tags, override.tags),
@@ -190,7 +190,7 @@ export const mergeKnowledgeConfig = (args: {
 
 const hasKnowledgeFilters = (config: KnowledgeConfig): boolean => {
   return (
-    anyLength(config.memoryIds) ||
+    anyLength(config.memoryStoreIds) ||
     anyLength(config.documentPaths) ||
     anyLength(config.documentIds) ||
     anyKeys(config.tags)
@@ -199,8 +199,8 @@ const hasKnowledgeFilters = (config: KnowledgeConfig): boolean => {
 
 // `tags` scopes both stores, so it counts on both sides: a tags-only config is
 // a scoped document search, not the unscoped widening `includeDocuments` guards.
-const hasMemoryFilters = (config: KnowledgeConfig): boolean => {
-  return anyLength(config.memoryIds) || anyKeys(config.tags);
+const hasMemoryStoreFilters = (config: KnowledgeConfig): boolean => {
+  return anyLength(config.memoryStoreIds) || anyKeys(config.tags);
 };
 
 const hasDocumentFilters = (config: KnowledgeConfig): boolean => {
@@ -215,7 +215,7 @@ const hasDocumentFilters = (config: KnowledgeConfig): boolean => {
  * Renders the source tag that precedes each injected result.
  *
  * The tag carries enough provenance to trace an injected claim back to the
- * exact row it came from — the memory entry id, and the page for a paged
+ * exact row it came from — the memory id, and the page for a paged
  * document — not just the container it lives in. A chunk with no page (plain
  * text, markdown) keeps the bare form.
  *
@@ -229,7 +229,7 @@ const formatResult = (
     const page = r.page === undefined ? '' : ` (page ${r.page})`;
     return `[Document: ${r.path ?? r.filename}${page}]\n${r.content}`;
   }
-  return `[Memory: ${r.memory_name} (${r.entry_id})]\n${r.content}`;
+  return `[Memory store: ${r.memory_store_name} (${r.memory_id})]\n${r.content}`;
 };
 
 // Retrieved knowledge is partly user-derived, so it must never be injected with
@@ -268,9 +268,9 @@ export const buildKnowledgeMessages = async (args: {
       : undefined;
 
   log(
-    'buildKnowledgeMessages: query=%s memoryIds=%o documentPaths=%o',
+    'buildKnowledgeMessages: query=%s memoryStoreIds=%o documentPaths=%o',
     query,
-    config.memoryIds,
+    config.memoryStoreIds,
     config.documentPaths
   );
 
@@ -280,15 +280,15 @@ export const buildKnowledgeMessages = async (args: {
   // but here `query` is auto-derived from the chat message every turn — letting
   // it drive documents would silently widen a memory-only config into an
   // all-project document search. Only the document branch is suppressed;
-  // `query` still ranks memory relevance.
+  // `query` still ranks memory store relevance.
   const includeDocuments =
-    hasDocumentFilters(config) || !hasMemoryFilters(config);
+    hasDocumentFilters(config) || !hasMemoryStoreFilters(config);
 
   const results = await searchKnowledge({
     projectIds: args.projectIds,
     billingProjectId: args.billingProjectId,
     query,
-    memoryIds: config.memoryIds,
+    memoryStoreIds: config.memoryStoreIds,
     paths: config.documentPaths,
     documentIds: config.documentIds,
     tags: config.tags,
@@ -311,7 +311,7 @@ export const buildKnowledgeMessages = async (args: {
 };
 
 /**
- * The `write_memory` tool consolidates a fact — it may create a new entry or
+ * The `write_memory` tool consolidates a fact — it may create a new memory or
  * merge into (update) an existing one. It is a SOAT-native action, so the
  * agent's `boundary_policy` must gate it the same way `buildSoatActionTool`
  * gates REST-backed native tools. Because the write can either create or
@@ -320,8 +320,8 @@ export const buildKnowledgeMessages = async (args: {
  * fail-closed.
  */
 const MEMORY_WRITE_ACTIONS = [
-  'memories:CreateMemoryEntry',
-  'memories:UpdateMemoryEntry',
+  'memories:CreateMemory',
+  'memories:UpdateMemory',
 ] as const;
 
 const findBoundaryDeniedMemoryWriteAction = (
@@ -336,16 +336,14 @@ const findBoundaryDeniedMemoryWriteAction = (
 };
 
 export const buildWriteMemoryTool = (args: {
-  writeMemoryId: string;
+  writeMemoryStoreId: string;
   agentId: string;
   projectIds?: number[];
   boundaryPolicy?: unknown;
-  /** Provenance: the generation whose turn asserted the fact. */
-  generationId?: string;
 }): Tool => {
   return tool({
     description:
-      'Write a fact to memory. The system automatically deduplicates: creates new entries, merges with similar existing ones, or skips duplicates.',
+      'Write a fact to memory. The system automatically deduplicates: creates new memories, merges with similar existing ones, or skips duplicates.',
     inputSchema: jsonSchema<{ content: string }>({
       type: 'object',
       properties: {
@@ -364,23 +362,25 @@ export const buildWriteMemoryTool = (args: {
         log('write_memory: boundary policy denies %s', deniedAction);
         return { error: `Forbidden: boundary policy denies ${deniedAction}` };
       }
-      const memory = await db.Memory.findOne({
-        where: { publicId: args.writeMemoryId },
+      const memoryStore = await db.MemoryStore.findOne({
+        where: { publicId: args.writeMemoryStoreId },
       });
-      if (!memory) {
-        return { error: `Memory ${args.writeMemoryId} not found` };
+      if (!memoryStore) {
+        return { error: `Memory store ${args.writeMemoryStoreId} not found` };
       }
-      const result = await writeMemoryEntry({
-        memoryId: memory.id as number,
+      const result = await writeMemory({
+        memoryStoreId: memoryStore.id as number,
         content,
-        sourceType: 'agent',
         // Agent context is available here, so a merge-band write can be
         // consolidated by the LLM into a single atomic fact. Without it the
-        // write would create a second entry instead.
+        // write would create a second memory instead.
+        //
+        // No `sourceConversationPublicId`: this tool runs inside a generation,
+        // which may or may not belong to a conversation and never carries a
+        // link to one, so the write is `manual` — there is no source to name.
         consolidation: { agentId: args.agentId, projectIds: args.projectIds },
-        sourceGenerationPublicId: args.generationId,
       });
-      return { action: result.action, entryId: result.entry.id };
+      return { action: result.action, memoryId: result.entry.id };
     },
   });
 };
@@ -395,16 +395,14 @@ export const buildKnowledgeTools = (args: {
   projectIds?: number[];
   typedAgent: TypedAgent;
   resolvedTools: Record<string, unknown>;
-  generationId?: string;
 }): void => {
   const knowledgeConfig = readKnowledgeConfig(args.typedAgent.knowledgeConfig);
-  if (knowledgeConfig?.writeMemoryId) {
+  if (knowledgeConfig?.writeMemoryStoreId) {
     args.resolvedTools['write_memory'] = buildWriteMemoryTool({
-      writeMemoryId: knowledgeConfig.writeMemoryId,
+      writeMemoryStoreId: knowledgeConfig.writeMemoryStoreId,
       agentId: args.agentId,
       projectIds: args.projectIds,
       boundaryPolicy: args.typedAgent.boundaryPolicy,
-      generationId: args.generationId,
     });
   }
 };

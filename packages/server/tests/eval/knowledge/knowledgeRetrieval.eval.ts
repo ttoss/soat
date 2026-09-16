@@ -36,7 +36,7 @@ const resolveKey = (args: {
   const key =
     args.result.source_type === 'document'
       ? args.corpus.documentKeys.get(args.result.document_id)
-      : args.corpus.memoryEntryKeys.get(args.result.entry_id);
+      : args.corpus.memoryKeys.get(args.result.memory_id);
 
   if (key === undefined) {
     // Every row the search can reach was seeded by this run, so an unknown one

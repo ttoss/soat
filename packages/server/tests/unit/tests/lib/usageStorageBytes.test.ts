@@ -131,22 +131,22 @@ describe('Usage — what the storage snapshot counts', () => {
       embedding: null,
     });
 
-    const memory = await db.Memory.create({
-      publicId: generatePublicId(PUBLIC_ID_PREFIXES.memory),
+    const memoryStore = await db.MemoryStore.create({
+      publicId: generatePublicId(PUBLIC_ID_PREFIXES.memoryStore),
       projectId: projectInternalId,
-      name: 'seed-memory',
+      name: 'seed-memoryStore',
     });
 
-    await db.MemoryEntry.create({
-      publicId: generatePublicId(PUBLIC_ID_PREFIXES.memoryEntry),
-      memoryId: memory.id,
+    await db.Memory.create({
+      publicId: generatePublicId(PUBLIC_ID_PREFIXES.memory),
+      memoryStoreId: memoryStore.id,
       content: text(EMBEDDED_ENTRY_CHARS),
       embedding: vector(),
     });
 
-    await db.MemoryEntry.create({
-      publicId: generatePublicId(PUBLIC_ID_PREFIXES.memoryEntry),
-      memoryId: memory.id,
+    await db.Memory.create({
+      publicId: generatePublicId(PUBLIC_ID_PREFIXES.memory),
+      memoryStoreId: memoryStore.id,
       content: text(UNEMBEDDED_ENTRY_CHARS),
       embedding: null,
     });
@@ -325,7 +325,7 @@ describe('Usage — what the storage snapshot counts', () => {
     expect(itemInput).toBeLessThan(ITEM_INPUT_CHARS + 128);
   });
 
-  test('counts files, chunks, memories and the evaluations corpus', async () => {
+  test('counts files, chunks, memoryStores and the evaluations corpus', async () => {
     const vectorBytes = await storedVectorBytes();
     const jsonbBytes = await seededJsonbBytes();
 
@@ -352,7 +352,7 @@ describe('Usage — what the storage snapshot counts', () => {
    * tuple and still joins the HNSW graph the moment it is embedded, and the
    * whole point of the component is that it does not move with chunk size.
    */
-  test('counts document chunks and memory entries as one chunk_count', async () => {
+  test('counts document chunks and memories as one chunk_count', async () => {
     const components = await meteredComponents(
       new Date('2026-08-12T00:00:00.000Z')
     );

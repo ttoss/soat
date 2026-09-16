@@ -83,7 +83,7 @@ Actions live in `packages/server/src/permissions/<module>.json`. Regenerate
 - `tests/unit/tests/lib/openapiExamplePrefixes.test.ts`: every id example in
   the specs uses a `PUBLIC_ID_PREFIXES` prefix
   (`packages/postgresdb/src/utils/publicId.ts`); so must docs (`agent_`,
-  `actor_`, `trace_`, `mem_entry_`).
+  `actor_`, `trace_`, `mem_`).
 
 Never document an action, endpoint, field or behavior that does not exist in a
 router, spec or permissions JSON. Keep the Docusaurus build clean.

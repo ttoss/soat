@@ -105,7 +105,7 @@ A record holds external I/O only (resolved input, returned artifact) and no gene
 | `agent`        | Invokes a SOAT [Agent](./agents.md) with a prompt. Uses `agent_id` and `prompt`.                                                    |
 | `tool`         | Calls a SOAT [Tool](./tools.md). Uses `tool_id` and `input_mapping`. Its artifact is the tool's own result object — see [Node artifacts](#node-artifacts). Gated by [Guardrails](./guardrails.md) at dispatch — see [Guardrail interception](#guardrail-interception-on-tool-nodes).                     |
 | `transform`    | Evaluates a [JSON Logic](https://jsonlogic.com) rule against the current state. Uses `expression`.                                  |
-| `knowledge`    | Searches a knowledge source via the [Knowledge](./knowledge.md) module. Uses `input_mapping` with `query` and optional `memory_ids`. |
+| `knowledge`    | Searches a knowledge source via the [Knowledge](./knowledge.md) module. Uses `input_mapping` with `query` and optional `memoryStoreIds`. |
 | `condition`    | Evaluates a JSON Logic rule and emits a string label. Downstream edges use `condition: "<label>"` to select the active branch.      |
 | `human`        | Pauses the run and waits for external input. The run enters `awaiting_input` status with `required_action`.                         |
 | `approval`     | Proposes a guarded tool call and pauses for a human decision via the [Approvals](./approvals.md) queue. Uses `tool_id`, `arguments`, and `expires_in`. See [Approval Nodes](#approval-nodes).                         |

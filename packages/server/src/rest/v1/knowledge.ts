@@ -21,7 +21,7 @@ type KnowledgeSearchBody = {
   limit?: number;
   // Array-typed filters. Typed loosely to tolerate non-conforming clients that
   // send a single value as a bare scalar; `toStringArray` normalizes them.
-  memory_ids?: string[] | string;
+  memory_store_ids?: string[] | string;
   document_paths?: string[] | string;
   document_ids?: string[] | string;
   tags?: unknown;
@@ -62,12 +62,12 @@ const hasSearchFilters = (
   const hasDocumentFilters =
     (body.document_paths !== undefined && body.document_paths.length > 0) ||
     (body.document_ids !== undefined && body.document_ids.length > 0);
-  const hasMemoryFilters =
-    body.memory_ids !== undefined && body.memory_ids.length > 0;
+  const hasMemoryStoreFilters =
+    body.memory_store_ids !== undefined && body.memory_store_ids.length > 0;
   return (
     Boolean(body.query) ||
     hasDocumentFilters ||
-    hasMemoryFilters ||
+    hasMemoryStoreFilters ||
     hasTagFilter(tags)
   );
 };
@@ -101,17 +101,17 @@ const resolvePolicyWhere = async (
   });
   if (!document.hasAccess) return { forbidden: true };
 
-  // The memory half roots at `MemoryEntry` with `memory` joined, and each
+  // The memory store half roots at `Memory` with `memory store` joined, and each
   // clause is applied to the model whose columns it names — no root rewrite.
+  const memoryStore = compileFor({ resourceType: 'memory_store' });
   const memory = compileFor({ resourceType: 'memory' });
-  const memoryEntry = compileFor({ resourceType: 'memoryEntry' });
 
   return {
     forbidden: false,
     policyWhere: {
       document: document.where,
+      memoryStore: memoryStore.where,
       memory: memory.where,
-      memoryEntry: memoryEntry.where,
     },
   };
 };
@@ -125,7 +125,7 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
   if (!hasSearchFilters(body, tags)) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      'At least one of query, tags, memory_ids, document_paths, or document_ids is required'
+      'At least one of query, tags, memory_store_ids, document_paths, or document_ids is required'
     );
   }
 
@@ -156,7 +156,7 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
     limit: body.limit,
     paths: toStringArray(body.document_paths),
     documentIds: toStringArray(body.document_ids),
-    memoryIds: toStringArray(body.memory_ids),
+    memoryStoreIds: toStringArray(body.memory_store_ids),
     tags,
   });
   ctx.body = { results };

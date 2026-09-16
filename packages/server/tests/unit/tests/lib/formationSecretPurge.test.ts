@@ -22,11 +22,11 @@ describe('purgeFormationSecretOutputs', () => {
           events: ['*'],
         },
       },
-      Mem: { type: 'memory', properties: { name: 'purge-mem' } },
+      Mem: { type: 'memory_store', properties: { name: 'purge-mem' } },
     },
     outputs: {
       hookSecret: { ref_attr: 'Hook.secret' },
-      memoryId: { ref: 'Mem' },
+      memoryStoreId: { ref: 'Mem' },
     },
   };
 
@@ -60,14 +60,14 @@ describe('purgeFormationSecretOutputs', () => {
     const formation = await seedFormation({
       name: 'fsp-leaky',
       template: templateWithSecretOutput,
-      outputs: { hookSecret: 'whsec_leaked', memoryId: 'mem_1' },
+      outputs: { hookSecret: 'whsec_leaked', memoryStoreId: 'mstore_1' },
     });
 
     const result = await purgeFormationSecretOutputs();
     expect(result.cleared).toBeGreaterThanOrEqual(1);
 
     await formation.reload();
-    expect(formation.outputs).toEqual({ memoryId: 'mem_1' });
+    expect(formation.outputs).toEqual({ memoryStoreId: 'mstore_1' });
   });
 
   test('a second run finds nothing left to clear', async () => {
@@ -79,23 +79,23 @@ describe('purgeFormationSecretOutputs', () => {
     const formation = await seedFormation({
       name: 'fsp-clean',
       template: {
-        resources: { Mem: { type: 'memory', properties: { name: 'm' } } },
-        outputs: { memoryId: { ref: 'Mem' } },
+        resources: { Mem: { type: 'memory_store', properties: { name: 'm' } } },
+        outputs: { memoryStoreId: { ref: 'Mem' } },
       },
-      outputs: { memoryId: 'mem_2' },
+      outputs: { memoryStoreId: 'mstore_2' },
     });
 
     await purgeFormationSecretOutputs();
 
     await formation.reload();
-    expect(formation.outputs).toEqual({ memoryId: 'mem_2' });
+    expect(formation.outputs).toEqual({ memoryStoreId: 'mstore_2' });
   });
 
   test('dryRun reports what it would clear without writing', async () => {
     const formation = await seedFormation({
       name: 'fsp-dry',
       template: templateWithSecretOutput,
-      outputs: { hookSecret: 'whsec_dry', memoryId: 'mem_3' },
+      outputs: { hookSecret: 'whsec_dry', memoryStoreId: 'mstore_3' },
     });
 
     const result = await purgeFormationSecretOutputs({ dryRun: true });
@@ -104,7 +104,7 @@ describe('purgeFormationSecretOutputs', () => {
     await formation.reload();
     expect(formation.outputs).toEqual({
       hookSecret: 'whsec_dry',
-      memoryId: 'mem_3',
+      memoryStoreId: 'mstore_3',
     });
 
     // Left clean for whatever runs next.

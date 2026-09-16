@@ -160,19 +160,24 @@ const config: Config = {
             from: '/docs/getting-started/choosing-an-automation-model',
             to: '/docs/advanced/choosing-an-automation-model',
           },
-          // The reference route is the spec's filename, so renaming
-          // `memoryEntries.yaml` moved five live operation pages.
-          ...[
-            'list-memory-entries',
-            'create-memory-entry',
-            'get-memory-entry',
-            'update-memory-entry',
-            'delete-memory-entry',
-          ].map((operation) => {
-            return {
-              from: `/docs/api/memoryEntries/${operation}`,
-              to: `/docs/api/memory-entries/${operation}`,
-            };
+          // The reference route is the spec's filename and the page slug is
+          // the operationId, so renaming the entry spec to `memories.yaml`
+          // (#1318) moved five live operation pages a second time. Both the
+          // original `memoryEntries` route and the `memory-entries` one it
+          // was redirected to point at the final page.
+          ...Object.entries({
+            'list-memory-entries': 'list-memories',
+            'create-memory-entry': 'create-memory',
+            'get-memory-entry': 'get-memory',
+            'update-memory-entry': 'update-memory',
+            'delete-memory-entry': 'delete-memory',
+          }).flatMap(([operation, renamed]) => {
+            return ['memoryEntries', 'memory-entries'].map((spec) => {
+              return {
+                from: `/docs/api/${spec}/${operation}`,
+                to: `/docs/api/memories/${renamed}`,
+              };
+            });
           }),
         ],
       },

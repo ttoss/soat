@@ -1,0 +1,365 @@
+openapi: 3.0.3
+info:
+  title: SOAT Memory Stores API
+  version: 1.0.0
+  description: API for managing memory store configurations for RAG (Retrieval-Augmented Generation)
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+servers:
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
+    variables:
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
+tags:
+  - name: MemoryStores
+    description: Manage memory store configurations for document retrieval
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/memory-stores:
+    get:
+      tags:
+        - MemoryStores
+      summary: List memory stores
+      description: Returns a list of memory store configurations for a project
+      operationId: listMemoryStores
+      parameters:
+        - name: project_id
+          in: query
+          description: Project ID (required if not using project key auth)
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
+        - $ref: './tags.yaml#/components/parameters/TagsQuery'
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          description: Number of results to skip
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of memory stores
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - total
+                  - limit
+                  - offset
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MemoryStore'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal server error
+    post:
+      tags:
+        - MemoryStores
+      summary: Create a memory store
+      description: Creates a new memory store configuration in a project
+      operationId: createMemoryStore
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                project_id:
+                  x-soat-ref: projects
+                  type: string
+                  description: Project ID (required if not using project key auth)
+                  example: proj_V1StGXR8Z5jdHi6B
+                name:
+                  type: string
+                  description: Memory store name
+                  example: Product Documentation
+                description:
+                  type: string
+                  description: Optional description
+                  example: Retrieves product docs for support queries
+                tags:
+                  description: >-
+                    Optional key-value tags. Scopes the memory store in knowledge
+                    search, where every requested pair must match exactly.
+                  allOf:
+                    - $ref: './tags.yaml#/components/schemas/TagBag'
+      responses:
+        '201':
+          description: Memory store created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryStore'
+        '400':
+          description: Bad request (missing required fields or invalid config)
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal server error
+  /api/v1/memory-stores/{memory_store_id}:
+    get:
+      tags:
+        - MemoryStores
+      summary: Get a memory store
+      description: Returns a single memory store configuration by ID
+      operationId: getMemoryStore
+      parameters:
+        - name: memory_store_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: mstore_V1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: Memory store found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryStore'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Memory store not found
+        '500':
+          description: Internal server error
+    put:
+      tags:
+        - MemoryStores
+      summary: Update a memory store
+      description: Updates an existing memory store configuration
+      operationId: updateMemoryStore
+      parameters:
+        - name: memory_store_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: mstore_V1StGXR8Z5jdHi6B
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Memory store name
+                description:
+                  type: string
+                  nullable: true
+                  description: Optional description
+                tags:
+                  description: >-
+                    Optional key-value tags. Replaces the stored bag; `null`
+                    clears it.
+                  allOf:
+                    - $ref: './tags.yaml#/components/schemas/NullableTagBag'
+      responses:
+        '200':
+          description: Memory store updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryStore'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Memory store not found
+        '500':
+          description: Internal server error
+    delete:
+      tags:
+        - MemoryStores
+      summary: Delete a memory store
+      description: Deletes a memory store configuration
+      operationId: deleteMemoryStore
+      parameters:
+        - name: memory_store_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: mstore_V1StGXR8Z5jdHi6B
+      responses:
+        '204':
+          description: Memory store deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Memory store not found
+        '500':
+          description: Internal server error
+  /api/v1/memory-stores/{memory_store_id}/tags:
+    get:
+      tags:
+        - MemoryStores
+      summary: Get memory store tags
+      description: Returns all tags attached to the memory store
+      operationId: getMemoryStoreTags
+      x-iam-action: memories:GetMemoryStore
+      parameters:
+        - name: memory_store_id
+          in: path
+          required: true
+          description: Memory store ID
+          schema:
+            type: string
+            example: mstore_V1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: Memory store tags
+          content:
+            application/json:
+              schema:
+                $ref: './tags.yaml#/components/schemas/TagBag'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Memory store not found
+    put:
+      tags:
+        - MemoryStores
+      summary: Replace memory store tags
+      description: Replaces all tags on the memory store with the provided tags (not merged)
+      operationId: replaceMemoryStoreTags
+      x-iam-action: memories:UpdateMemoryStore
+      parameters:
+        - name: memory_store_id
+          in: path
+          required: true
+          description: Memory store ID
+          schema:
+            type: string
+            example: mstore_V1StGXR8Z5jdHi6B
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: './tags.yaml#/components/schemas/TagBag'
+      responses:
+        '200':
+          description: Tags replaced
+          content:
+            application/json:
+              schema:
+                $ref: './tags.yaml#/components/schemas/TagBag'
+        '400':
+          description: Body is not an object of string values
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Memory store not found
+    patch:
+      tags:
+        - MemoryStores
+      summary: Merge memory store tags
+      description: Merges provided tags into the memory store's existing tags (existing tags are preserved unless overridden)
+      operationId: mergeMemoryStoreTags
+      x-iam-action: memories:UpdateMemoryStore
+      parameters:
+        - name: memory_store_id
+          in: path
+          required: true
+          description: Memory store ID
+          schema:
+            type: string
+            example: mstore_V1StGXR8Z5jdHi6B
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: './tags.yaml#/components/schemas/TagBag'
+      responses:
+        '200':
+          description: Tags merged
+          content:
+            application/json:
+              schema:
+                $ref: './tags.yaml#/components/schemas/TagBag'
+        '400':
+          description: Body is not an object of string values
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Memory store not found
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    MemoryStore:
+      type: object
+      properties:
+        id:
+          type: string
+          example: mstore_V1StGXR8Z5jdHi6B
+        project_id:
+          x-soat-ref: projects
+          type: string
+          example: proj_V1StGXR8Z5jdHi6B
+        name:
+          type: string
+          example: Product Documentation
+        description:
+          type: string
+          nullable: true
+          example: Retrieves product docs for support queries
+        tags:
+          description: >-
+            Key-value tags for filtering in knowledge search.
+          allOf:
+            - $ref: './tags.yaml#/components/schemas/NullableTagBag'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time

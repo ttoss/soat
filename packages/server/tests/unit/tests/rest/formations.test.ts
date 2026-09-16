@@ -13,15 +13,15 @@ describe('Formations', () => {
 
   const simpleTemplate = {
     resources: {
-      MyMemory: {
-        type: 'memory',
+      MyMemoryStore: {
+        type: 'memory_store',
         properties: {
-          name: 'Formation Test Memory',
+          name: 'Formation Test MemoryStore',
         },
       },
     },
     outputs: {
-      memoryId: { ref: 'MyMemory' },
+      memoryStoreId: { ref: 'MyMemoryStore' },
     },
   };
 
@@ -71,11 +71,11 @@ describe('Formations', () => {
                 'formations:UpdateFormation',
                 'formations:DeleteFormation',
                 'formations:ListFormationEvents',
+                'memories:CreateMemoryStore',
+                'memories:DeleteMemoryStore',
                 'memories:CreateMemory',
+                'memories:UpdateMemory',
                 'memories:DeleteMemory',
-                'memories:CreateMemoryEntry',
-                'memories:UpdateMemoryEntry',
-                'memories:DeleteMemoryEntry',
                 'documents:DeleteDocument',
                 'quotas:CreateQuota',
                 'quotas:GetQuota',
@@ -93,7 +93,7 @@ describe('Formations', () => {
                 'agents:CreateAgent',
                 'agents:GetAgent',
                 'agents:DeleteAgent',
-                'memories:GetMemory',
+                'memories:GetMemoryStore',
                 // Per-resource actions: a formation may only do what the caller
                 // could do directly (#1181), so deploying these types needs the
                 // same actions a direct call would. `policy` is deliberately
@@ -113,7 +113,7 @@ describe('Formations', () => {
                 'guardrails:CreateGuardrail',
                 'guardrails:UpdateGuardrail',
                 'guardrails:DeleteGuardrail',
-                'memories:UpdateMemory',
+                'memories:UpdateMemoryStore',
                 'model-routes:CreateModelRoute',
                 'model-routes:UpdateModelRoute',
                 'model-routes:DeleteModelRoute',
@@ -167,13 +167,13 @@ describe('Formations', () => {
     test('valid YAML string template returns valid=true', async () => {
       const yamlTemplate = `
 resources:
-  MyMemory:
-    type: memory
+  MyMemoryStore:
+    type: memory_store
     properties:
-      name: Formation YAML Test Memory
+      name: Formation YAML Test MemoryStore
 outputs:
-  memoryId:
-    ref: MyMemory
+  memoryStoreId:
+    ref: MyMemoryStore
 `.trim();
 
       const res = await authenticatedTestClient(userToken)
@@ -314,7 +314,7 @@ outputs:
                     statement: [
                       {
                         effect: 'Deny',
-                        action: ['memories:CreateMemoryEntry'],
+                        action: ['memories:CreateMemory'],
                         resource: ['*'],
                       },
                     ],
@@ -377,7 +377,7 @@ outputs:
                     statement: [
                       {
                         effect: 'Deny',
-                        action: ['memories:CreateMemoryEntry'],
+                        action: ['memories:CreateMemory'],
                         resource: ['*'],
                       },
                     ],
@@ -409,16 +409,16 @@ outputs:
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body.changes)).toBe(true);
       expect(res.body.changes[0].action).toBe('create');
-      expect(res.body.changes[0].logical_id).toBe('MyMemory');
+      expect(res.body.changes[0].logical_id).toBe('MyMemoryStore');
     });
 
     test('accepts YAML string template', async () => {
       const yamlTemplate = `
 resources:
-  MyMemory:
-    type: memory
+  MyMemoryStore:
+    type: memory_store
     properties:
-      name: Plan YAML Test Memory
+      name: Plan YAML Test MemoryStore
 `.trim();
 
       const res = await authenticatedTestClient(userToken)
@@ -489,7 +489,7 @@ resources:
       expect(res.body.project_id).toBe(projectId);
       expect(Array.isArray(res.body.resources)).toBe(true);
       expect(res.body.resources).toHaveLength(1);
-      expect(res.body.resources[0].logical_id).toBe('MyMemory');
+      expect(res.body.resources[0].logical_id).toBe('MyMemoryStore');
       expect(res.body.resources[0].status).toBe('created');
       expect(res.body.resources[0].physical_resource_id).toBeDefined();
       expect(res.body.outputs).toBeDefined();
@@ -686,12 +686,12 @@ resources:
     });
 
     test('rolls back resources created earlier in the same failed apply', async () => {
-      const memoryName = `rollback-mem-${Date.now()}`;
+      const memoryStoreName = `rollback-mem-${Date.now()}`;
       const partiallyFailingTemplate = {
         resources: {
-          RollbackMemory: {
-            type: 'memory',
-            properties: { name: memoryName },
+          RollbackMemoryStore: {
+            type: 'memory_store',
+            properties: { name: memoryStoreName },
           },
           RollbackProvider: {
             type: 'ai_provider',
@@ -701,7 +701,7 @@ resources:
               default_model: 'gpt-4o',
               secret_id: 'sec_nonexistent',
             },
-            depends_on: ['RollbackMemory'],
+            depends_on: ['RollbackMemoryStore'],
           },
         },
       };
@@ -717,19 +717,19 @@ resources:
       expect(res.status).toBe(201);
       expect(res.body.status).toBe('failed');
 
-      const memoryResource = res.body.resources.find(
+      const memoryStoreResource = res.body.resources.find(
         (resource: { logical_id: string }) => {
-          return resource.logical_id === 'RollbackMemory';
+          return resource.logical_id === 'RollbackMemoryStore';
         }
       );
-      // The memory was created before the provider failed, so the apply must
+      // The memory store was created before the provider failed, so the apply must
       // walk it back rather than leave it live and unmanaged.
-      expect(memoryResource.status).toBe('deleted');
-      expect(memoryResource.physical_resource_id).toMatch(/^mem_/);
-      const memory = await db.Memory.findOne({
-        where: { publicId: memoryResource.physical_resource_id },
+      expect(memoryStoreResource.status).toBe('deleted');
+      expect(memoryStoreResource.physical_resource_id).toMatch(/^mstore_/);
+      const memoryStore = await db.MemoryStore.findOne({
+        where: { publicId: memoryStoreResource.physical_resource_id },
       });
-      expect(memory).toBeNull();
+      expect(memoryStore).toBeNull();
 
       const eventsRes = await authenticatedTestClient(userToken).get(
         `/api/v1/formations/${res.body.id}/events`
@@ -744,22 +744,22 @@ resources:
       );
       // The original failure stays ahead of the unwind it triggered.
       expect(actions).toEqual([
-        ['RollbackMemory', 'create', 'succeeded'],
+        ['RollbackMemoryStore', 'create', 'succeeded'],
         ['RollbackProvider', 'create', 'failed'],
-        ['RollbackMemory', 'rollback', 'succeeded'],
+        ['RollbackMemoryStore', 'rollback', 'succeeded'],
       ]);
     });
 
     test('a rolled-back resource is re-created by a corrected re-apply', async () => {
       const name = `rollback-retry-formation-${Date.now()}`;
-      const memoryName = `rollback-retry-mem-${Date.now()}`;
+      const memoryStoreName = `rollback-retry-mem-${Date.now()}`;
       const providerName = `rollback-retry-provider-${Date.now()}`;
       const template = (secretId: string | null) => {
         return {
           resources: {
-            RetryMemory: {
-              type: 'memory',
-              properties: { name: memoryName },
+            RetryMemoryStore: {
+              type: 'memory_store',
+              properties: { name: memoryStoreName },
             },
             RetryProvider: {
               type: 'ai_provider',
@@ -769,7 +769,7 @@ resources:
                 default_model: 'gpt-4o',
                 secret_id: secretId,
               },
-              depends_on: ['RetryMemory'],
+              depends_on: ['RetryMemoryStore'],
             },
           },
         };
@@ -791,25 +791,25 @@ resources:
 
       expect(fixed.status).toBe(200);
       expect(fixed.body.status).toBe('active');
-      const retriedMemory = fixed.body.resources.find(
+      const retriedMemoryStore = fixed.body.resources.find(
         (resource: { logical_id: string }) => {
-          return resource.logical_id === 'RetryMemory';
+          return resource.logical_id === 'RetryMemoryStore';
         }
       );
-      expect(retriedMemory.status).toBe('created');
-      const memory = await db.Memory.findOne({
-        where: { publicId: retriedMemory.physical_resource_id },
+      expect(retriedMemoryStore.status).toBe('created');
+      const memoryStore = await db.MemoryStore.findOne({
+        where: { publicId: retriedMemoryStore.physical_resource_id },
       });
-      expect(memory).not.toBeNull();
+      expect(memoryStore).not.toBeNull();
     });
 
     test('a retained resource survives the rollback and stays managed', async () => {
-      const memoryName = `rollback-retain-mem-${Date.now()}`;
+      const memoryStoreName = `rollback-retain-mem-${Date.now()}`;
       const retainTemplate = {
         resources: {
-          RetainedMemory: {
-            type: 'memory',
-            properties: { name: memoryName },
+          RetainedMemoryStore: {
+            type: 'memory_store',
+            properties: { name: memoryStoreName },
             deletion_policy: 'retain',
           },
           RetainProvider: {
@@ -820,7 +820,7 @@ resources:
               default_model: 'gpt-4o',
               secret_id: 'sec_nonexistent',
             },
-            depends_on: ['RetainedMemory'],
+            depends_on: ['RetainedMemoryStore'],
           },
         },
       };
@@ -838,16 +838,16 @@ resources:
 
       const retained = res.body.resources.find(
         (resource: { logical_id: string }) => {
-          return resource.logical_id === 'RetainedMemory';
+          return resource.logical_id === 'RetainedMemoryStore';
         }
       );
       // `retain` outranks the unwind: the resource stays alive, and its row
       // keeps pointing at it so a corrected re-apply adopts it.
       expect(retained.status).toBe('created');
-      const memory = await db.Memory.findOne({
+      const memoryStore = await db.MemoryStore.findOne({
         where: { publicId: retained.physical_resource_id },
       });
-      expect(memory).not.toBeNull();
+      expect(memoryStore).not.toBeNull();
 
       const eventsRes = await authenticatedTestClient(userToken).get(
         `/api/v1/formations/${res.body.id}/events`
@@ -857,7 +857,7 @@ resources:
           return event.action === 'rollback-skipped';
         }
       );
-      expect(skipped.logical_id).toBe('RetainedMemory');
+      expect(skipped.logical_id).toBe('RetainedMemoryStore');
       expect(skipped.status).toBe('succeeded');
     });
 
@@ -882,14 +882,14 @@ resources:
           db_password: { type: 'string', default: 'hunter2', no_echo: true },
         },
         resources: {
-          MyMemory: {
-            type: 'memory',
-            properties: { name: 'F16 Memory' },
+          MyMemoryStore: {
+            type: 'memory_store',
+            properties: { name: 'F16 MemoryStore' },
           },
         },
         metadata: {
           my_version: { sub: '${my_version}' },
-          memory_ref: { ref: 'MyMemory' },
+          memory_store_ref: { ref: 'MyMemoryStore' },
           static: 'kept',
         },
       };
@@ -914,7 +914,7 @@ resources:
       // resource ref resolved to a physical id, static values preserved.
       expect(res.body.resolved_metadata.my_version).toBe('1.2.3');
       expect(res.body.resolved_metadata.static).toBe('kept');
-      expect(res.body.resolved_metadata.memory_ref).toBe(
+      expect(res.body.resolved_metadata.memory_store_ref).toBe(
         res.body.resources[0].physical_resource_id
       );
 
@@ -933,7 +933,10 @@ resources:
           template: {
             parameters: { my_version: { type: 'string', default: 'x' } },
             resources: {
-              MyMemory: { type: 'memory', properties: { name: 'F16 static' } },
+              MyMemoryStore: {
+                type: 'memory_store',
+                properties: { name: 'F16 static' },
+              },
             },
           },
           parameters: { my_version: '1.2.3' },
@@ -960,7 +963,7 @@ resources:
           project_id: projectId,
           name: `f16-static-metadata-ref-${Date.now()}`,
           template: simpleTemplate,
-          metadata: { audit: { source: { ref: 'MyMemory' } } },
+          metadata: { audit: { source: { ref: 'MyMemoryStore' } } },
         });
 
       expect(res.status).toBe(400);
@@ -1107,16 +1110,16 @@ resources:
     test('updates a formation', async () => {
       const updatedTemplate = {
         resources: {
-          MyMemory: {
-            type: 'memory',
+          MyMemoryStore: {
+            type: 'memory_store',
             properties: {
-              name: 'Updated Memory Name',
+              name: 'Updated MemoryStore Name',
             },
           },
-          MyMemory2: {
-            type: 'memory',
+          MyMemoryStore2: {
+            type: 'memory_store',
             properties: {
-              name: 'Second Memory',
+              name: 'Second MemoryStore',
             },
           },
         },
@@ -1195,9 +1198,9 @@ resources:
         .send({
           template: {
             resources: {
-              MyMemory: {
-                type: 'memory',
-                properties: { name: 'Metadata Formation Memory Renamed' },
+              MyMemoryStore: {
+                type: 'memory_store',
+                properties: { name: 'Metadata Formation MemoryStore Renamed' },
               },
             },
           },
@@ -1414,7 +1417,7 @@ resources:
         });
       expect(aiProvRes.status).toBe(201);
 
-      const memoryName = `preflight-mem-${Date.now()}`;
+      const memoryStoreName = `preflight-mem-${Date.now()}`;
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/formations')
         .send({
@@ -1432,15 +1435,15 @@ resources:
               // Depends on the agent, so teardown removes this one *first* and
               // the agent last — the ordering that made the old failure
               // unrecoverable.
-              CompanionMemory: {
-                type: 'memory',
-                properties: { name: memoryName },
+              CompanionMemoryStore: {
+                type: 'memory_store',
+                properties: { name: memoryStoreName },
                 depends_on: ['HistoricAgent'],
               },
             },
             outputs: {
               agentId: { ref: 'HistoricAgent' },
-              memoryId: { ref: 'CompanionMemory' },
+              memoryStoreId: { ref: 'CompanionMemoryStore' },
             },
           },
         });
@@ -1449,7 +1452,7 @@ resources:
 
       const preflightFormationId = createRes.body.id as string;
       const agentId = createRes.body.outputs.agentId as string;
-      const memoryId = createRes.body.outputs.memoryId as string;
+      const memoryStoreId = createRes.body.outputs.memoryStoreId as string;
 
       const project = await db.Project.findOne({
         where: { publicId: projectId },
@@ -1488,11 +1491,11 @@ resources:
       expect(getRes.status).toBe(200);
       expect(getRes.body.status).toBe('active');
 
-      const memoryRes = await authenticatedTestClient(userToken).get(
-        `/api/v1/memories/${memoryId}`
+      const memoryStoreRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/memory-stores/${memoryStoreId}`
       );
-      expect(memoryRes.status).toBe(200);
-      expect(memoryRes.body.name).toBe(memoryName);
+      expect(memoryStoreRes.status).toBe(200);
+      expect(memoryStoreRes.body.name).toBe(memoryStoreName);
 
       const agentRes = await authenticatedTestClient(userToken).get(
         `/api/v1/agents/${agentId}`
@@ -1582,11 +1585,11 @@ resources:
 
     const templateWithOptionalProps = {
       resources: {
-        MemoryWithDescription: {
-          type: 'memory',
+        MemoryStoreWithDescription: {
+          type: 'memory_store',
           properties: {
-            name: 'Memory With Metadata',
-            description: 'This is a memory with description',
+            name: 'MemoryStore With Metadata',
+            description: 'This is a memoryStore with description',
             tags: { priority: 'important', scope: 'core' },
           },
         },
@@ -1608,7 +1611,7 @@ resources:
           properties: {
             name: 'Webhook With Events',
             url: 'https://example.com/webhook',
-            events: ['memory.created', 'memory.updated'],
+            events: ['memoryStore.created', 'memoryStore.updated'],
             description: 'Webhook with description and events',
           },
         },
@@ -1738,7 +1741,9 @@ resources:
       expect(res.status).toBe(201);
       expect(res.body.status).toBe('active');
       expect(res.body.resources).toHaveLength(3);
-      expect(res.body.resources[0].logical_id).toBe('MemoryWithDescription');
+      expect(res.body.resources[0].logical_id).toBe(
+        'MemoryStoreWithDescription'
+      );
       expect(res.body.resources[1].logical_id).toBe('ToolWithOptions');
       expect(res.body.resources[2].logical_id).toBe('WebhookWithEvents');
       optionalPropsFormationId = res.body.id;
@@ -1754,14 +1759,14 @@ resources:
       expect(Object.keys(res.body.template.resources)).toHaveLength(3);
     });
 
-    test('updates memory resource with modified optional properties', async () => {
+    test('updates memoryStore resource with modified optional properties', async () => {
       const updateTemplate = {
         resources: {
-          MemoryWithDescription: {
-            type: 'memory',
+          MemoryStoreWithDescription: {
+            type: 'memory_store',
             properties: {
-              name: 'Memory Updated',
-              description: 'Updated description for memory',
+              name: 'MemoryStore Updated',
+              description: 'Updated description for memoryStore',
               tags: { state: 'updated', change: 'modified' },
             },
           },
@@ -1777,13 +1782,13 @@ resources:
 
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('active');
-      const memoryResource = res.body.resources.find(
+      const memoryStoreResource = res.body.resources.find(
         (r: { logical_id: string }) => {
-          return r.logical_id === 'MemoryWithDescription';
+          return r.logical_id === 'MemoryStoreWithDescription';
         }
       );
-      expect(memoryResource).toBeDefined();
-      expect(memoryResource.status).toBe('updated');
+      expect(memoryStoreResource).toBeDefined();
+      expect(memoryStoreResource.status).toBe('updated');
     });
 
     test('deletes formation with optional properties', async () => {
@@ -1803,16 +1808,16 @@ resources:
     // round-trip exactly as written, whatever their casing.
     const camelCaseTemplate = {
       parameters: {
-        memoryDisplayName: {
+        memoryStoreDisplayName: {
           type: 'string',
-          default: 'Round Trip Memory',
+          default: 'Round Trip MemoryStore',
         },
       },
       resources: {
-        DefaultMemory: {
-          type: 'memory',
+        DefaultMemoryStore: {
+          type: 'memory_store',
           properties: {
-            name: { param: 'memoryDisplayName' },
+            name: { param: 'memoryStoreDisplayName' },
           },
         },
       },
@@ -1847,22 +1852,22 @@ resources:
       expect(res.status).toBe(200);
 
       // The resource map key (logical ID) must not be rewritten to
-      // `_default_memory`.
+      // `_default_memory_store`.
       expect(Object.keys(res.body.template.resources)).toEqual([
-        'DefaultMemory',
+        'DefaultMemoryStore',
       ]);
-      // The parameter name must not be rewritten to `memory_display_name`,
-      // otherwise a later `--parameter memoryDisplayName=…` override would not
+      // The parameter name must not be rewritten to `memory_store_display_name`,
+      // otherwise a later `--parameter memoryStoreDisplayName=…` override would not
       // match the stored key.
       expect(Object.keys(res.body.template.parameters)).toEqual([
-        'memoryDisplayName',
+        'memoryStoreDisplayName',
       ]);
       // The param expression key inside properties is likewise preserved.
-      expect(res.body.template.resources.DefaultMemory.properties.name).toEqual(
-        {
-          param: 'memoryDisplayName',
-        }
-      );
+      expect(
+        res.body.template.resources.DefaultMemoryStore.properties.name
+      ).toEqual({
+        param: 'memoryStoreDisplayName',
+      });
     });
 
     test('deletes the camelCase formation', async () => {
@@ -1950,10 +1955,10 @@ resources:
 
     const templateWithParams = {
       parameters: {
-        MemoryName: {
+        MemoryStoreName: {
           type: 'string',
-          default: 'Default Memory Name',
-          description: 'Name for the memory resource',
+          default: 'Default MemoryStore Name',
+          description: 'Name for the memoryStore resource',
         },
         ToolUrl: {
           type: 'string',
@@ -1966,10 +1971,10 @@ resources:
         },
       },
       resources: {
-        ParamMemory: {
-          type: 'memory',
+        ParamMemoryStore: {
+          type: 'memory_store',
           properties: {
-            name: { param: 'MemoryName' },
+            name: { param: 'MemoryStoreName' },
           },
         },
         ParamTool: {
@@ -1984,7 +1989,7 @@ resources:
         },
       },
       outputs: {
-        memoryId: { ref: 'ParamMemory' },
+        memoryStoreId: { ref: 'ParamMemoryStore' },
       },
     };
 
@@ -2004,8 +2009,8 @@ resources:
         const badTemplate = {
           parameters: { KnownParam: { type: 'string' } },
           resources: {
-            MyMemory: {
-              type: 'memory',
+            MyMemoryStore: {
+              type: 'memory_store',
               properties: { name: { param: 'UnknownParam' } },
             },
           },
@@ -2130,13 +2135,13 @@ resources:
         expect(res.body.resources).toHaveLength(2);
         paramFormationId = res.body.id;
 
-        const memoryResource = res.body.resources.find(
+        const memoryStoreResource = res.body.resources.find(
           (r: { logical_id: string }) => {
-            return r.logical_id === 'ParamMemory';
+            return r.logical_id === 'ParamMemoryStore';
           }
         );
-        expect(memoryResource).toBeDefined();
-        expect(memoryResource.status).toBe('created');
+        expect(memoryStoreResource).toBeDefined();
+        expect(memoryStoreResource.status).toBe('created');
       });
 
       test('returns 400 when required parameter without default is missing', async () => {
@@ -2202,15 +2207,15 @@ resources:
       test('uses parameter default when no override provided', async () => {
         const templateWithDefault = {
           parameters: {
-            MemName: { type: 'string', default: 'Default Param Memory' },
+            MemName: { type: 'string', default: 'Default Param MemoryStore' },
           },
           resources: {
             DefaultMem: {
-              type: 'memory',
+              type: 'memory_store',
               properties: { name: { param: 'MemName' } },
             },
           },
-          outputs: { memoryId: { ref: 'DefaultMem' } },
+          outputs: { memoryStoreId: { ref: 'DefaultMem' } },
         };
 
         const res = await authenticatedTestClient(userToken)
@@ -2276,9 +2281,9 @@ resources:
         const updatedTemplate = {
           ...templateWithParams,
           resources: {
-            ParamMemory: {
-              type: 'memory',
-              properties: { name: { param: 'MemoryName' } },
+            ParamMemoryStore: {
+              type: 'memory_store',
+              properties: { name: { param: 'MemoryStoreName' } },
             },
           },
         };
@@ -2288,7 +2293,7 @@ resources:
           .send({
             template: updatedTemplate,
             parameters: {
-              MemoryName: 'Updated Memory Name',
+              MemoryStoreName: 'Updated MemoryStore Name',
               ToolUrl: 'https://api2.example.com',
               ApiKey: 'new-secret-key',
             },
@@ -2363,8 +2368,8 @@ resources:
             value: { param: 'XaiApiKey' },
           },
         },
-        KeepMemory: {
-          type: 'memory',
+        KeepMemoryStore: {
+          type: 'memory_store',
           properties: { name: 'keep-mem-original' },
         },
       },
@@ -2426,8 +2431,8 @@ resources:
         ...secretTemplate,
         resources: {
           ...secretTemplate.resources,
-          KeepMemory: {
-            type: 'memory',
+          KeepMemoryStore: {
+            type: 'memory_store',
             properties: { name: 'keep-mem-updated' },
           },
         },
@@ -2444,7 +2449,7 @@ resources:
       expect(res.body.status).toBe('active');
 
       // The secret resource must be a no-op (its value was not re-applied),
-      // while the memory resource is updated.
+      // while the memory store resource is updated.
       const eventsRes = await authenticatedTestClient(userToken).get(
         `/api/v1/formations/${secretFormationId}/events`
       );
@@ -2459,10 +2464,12 @@ resources:
         return e.logical_id === 'XaiKey';
       });
       expect(secretEvent.action).toBe('no-op');
-      const memoryEvent = updateOp.events.find((e: { logical_id: string }) => {
-        return e.logical_id === 'KeepMemory';
-      });
-      expect(memoryEvent.action).toBe('update');
+      const memoryStoreEvent = updateOp.events.find(
+        (e: { logical_id: string }) => {
+          return e.logical_id === 'KeepMemoryStore';
+        }
+      );
+      expect(memoryStoreEvent.action).toBe('update');
     });
 
     test('supplying a value still overrides use_previous_value (rotates the secret)', async () => {
@@ -3328,31 +3335,31 @@ resources:
     });
   });
 
-  // ── memory_entry resource type ────────────────────────────────────────────
+  // ── memory resource type ────────────────────────────────────────────
 
-  describe('Formation with memory_entry resources', () => {
-    let memoryEntryFormationId: string;
-    let standaloneMemoryId: string;
+  describe('Formation with memory resources', () => {
+    let memoryFormationId: string;
+    let standaloneMemoryStoreId: string;
 
     beforeAll(async () => {
-      // Create a standalone memory to use as the container for memory entries
+      // Create a standalone memory store to use as the container for memories
       const memRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/memories')
+        .post('/api/v1/memory-stores')
         .send({
           project_id: projectId,
           name: `formation-me-container-${Date.now()}`,
         });
       expect(memRes.status).toBe(201);
-      standaloneMemoryId = memRes.body.id;
+      standaloneMemoryStoreId = memRes.body.id;
     });
 
-    test('creates a formation with a memory_entry resource', async () => {
+    test('creates a formation with a memory resource', async () => {
       const template = {
         resources: {
           MyEntry: {
-            type: 'memory_entry',
+            type: 'memory',
             properties: {
-              memory_id: standaloneMemoryId,
+              memory_store_id: standaloneMemoryStoreId,
               content: 'Initial entry content from formation',
             },
           },
@@ -3363,7 +3370,7 @@ resources:
         .post('/api/v1/formations')
         .send({
           project_id: projectId,
-          name: `memory-entry-formation-${Date.now()}`,
+          name: `memory-formation-${Date.now()}`,
           template,
         });
 
@@ -3373,18 +3380,21 @@ resources:
       expect(res.body.resources[0].logical_id).toBe('MyEntry');
       expect(res.body.resources[0].status).toBe('created');
       expect(res.body.resources[0].physical_resource_id).toBeDefined();
-      expect(res.body.resources[0].physical_resource_id).toMatch(/^mem_entry_/);
+      expect(res.body.resources[0].physical_resource_id).toMatch(/^mem_/);
 
-      memoryEntryFormationId = res.body.id;
+      memoryFormationId = res.body.id;
     });
 
-    test('creates, updates, and clears memory_entry tags/metadata via formation', async () => {
+    test('creates, updates, and clears memory tags/metadata via formation', async () => {
       const makeTemplate = (props: Record<string, unknown>) => {
         return {
           resources: {
             TaggedEntry: {
-              type: 'memory_entry',
-              properties: { memory_id: standaloneMemoryId, ...props },
+              type: 'memory',
+              properties: {
+                memory_store_id: standaloneMemoryStoreId,
+                ...props,
+              },
             },
           },
         };
@@ -3395,7 +3405,7 @@ resources:
         .post('/api/v1/formations')
         .send({
           project_id: projectId,
-          name: `memory-entry-tags-formation-${Date.now()}`,
+          name: `memory-tags-formation-${Date.now()}`,
           template: makeTemplate({
             content: 'Tagged entry from formation',
             tags: { role: 'pilot', source: 'formation' },
@@ -3407,7 +3417,7 @@ resources:
       const formationId = createRes.body.id;
       const physicalId = createRes.body.resources[0].physical_resource_id;
 
-      const created = await db.MemoryEntry.findOne({
+      const created = await db.Memory.findOne({
         where: { publicId: physicalId },
       });
       expect(created!.tags).toEqual({ role: 'pilot', source: 'formation' });
@@ -3444,13 +3454,13 @@ resources:
       expect(created!.metadata).toBeNull();
     });
 
-    test('plan reports no-op for an unchanged memory_entry resource', async () => {
+    test('plan reports no-op for an unchanged memory resource', async () => {
       const template = {
         resources: {
           MyEntry: {
-            type: 'memory_entry',
+            type: 'memory',
             properties: {
-              memory_id: standaloneMemoryId,
+              memory_store_id: standaloneMemoryStoreId,
               content: 'Initial entry content from formation',
             },
           },
@@ -3461,7 +3471,7 @@ resources:
         .post('/api/v1/formations/plan')
         .send({
           project_id: projectId,
-          formation_id: memoryEntryFormationId,
+          formation_id: memoryFormationId,
           template,
         });
 
@@ -3473,13 +3483,13 @@ resources:
       expect(entryChange.action).toBe('no-op');
     });
 
-    test('updates the memory_entry content in the formation', async () => {
+    test('updates the memory content in the formation', async () => {
       const updatedTemplate = {
         resources: {
           MyEntry: {
-            type: 'memory_entry',
+            type: 'memory',
             properties: {
-              memory_id: standaloneMemoryId,
+              memory_store_id: standaloneMemoryStoreId,
               content: 'Updated entry content from formation',
             },
           },
@@ -3487,7 +3497,7 @@ resources:
       };
 
       const res = await authenticatedTestClient(userToken)
-        .put(`/api/v1/formations/${memoryEntryFormationId}`)
+        .put(`/api/v1/formations/${memoryFormationId}`)
         .send({ template: updatedTemplate });
 
       expect(res.status).toBe(200);
@@ -3501,9 +3511,9 @@ resources:
       expect(entryResource.status).toBe('updated');
     });
 
-    test('plan reports update when the underlying memory_entry was deleted externally', async () => {
+    test('plan reports update when the underlying memory was deleted externally', async () => {
       const getRes = await authenticatedTestClient(userToken).get(
-        `/api/v1/formations/${memoryEntryFormationId}`
+        `/api/v1/formations/${memoryFormationId}`
       );
       const physicalEntryId = getRes.body.resources.find(
         (r: { logical_id: string }) => {
@@ -3512,7 +3522,7 @@ resources:
       ).physical_resource_id;
 
       const deleteRes = await authenticatedTestClient(userToken).delete(
-        `/api/v1/memory-entries/${physicalEntryId}`
+        `/api/v1/memories/${physicalEntryId}`
       );
       expect(deleteRes.status).toBe(204);
 
@@ -3520,13 +3530,13 @@ resources:
         .post('/api/v1/formations/plan')
         .send({
           project_id: projectId,
-          formation_id: memoryEntryFormationId,
+          formation_id: memoryFormationId,
           template: {
             resources: {
               MyEntry: {
-                type: 'memory_entry',
+                type: 'memory',
                 properties: {
-                  memory_id: standaloneMemoryId,
+                  memory_store_id: standaloneMemoryStoreId,
                   content: 'Updated entry content from formation',
                 },
               },
@@ -3542,13 +3552,13 @@ resources:
       expect(entryChange.action).toBe('update');
     });
 
-    test('validates template with memory_entry missing required fields', async () => {
+    test('validates template with memory missing required fields', async () => {
       const invalidTemplate = {
         resources: {
           BadEntry: {
-            type: 'memory_entry',
+            type: 'memory',
             properties: {
-              // missing memory_id and content
+              // missing memory_store_id and content
             },
           },
         },
@@ -3563,16 +3573,16 @@ resources:
       expect(res.body.errors.length).toBeGreaterThan(0);
     });
 
-    test('deletes formation and cleans up memory_entry resource', async () => {
+    test('deletes formation and cleans up memory resource', async () => {
       const res = await authenticatedTestClient(userToken).delete(
-        `/api/v1/formations/${memoryEntryFormationId}`
+        `/api/v1/formations/${memoryFormationId}`
       );
       expect(res.status).toBe(200);
     });
 
-    test('deleted memory_entry formation no longer found', async () => {
+    test('deleted memory formation no longer found', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/formations/${memoryEntryFormationId}`
+        `/api/v1/formations/${memoryFormationId}`
       );
       expect(res.status).toBe(404);
     });
@@ -4025,7 +4035,7 @@ resources:
     let extractionFormationId: string;
     let extractionAgentId: string;
     let aiProviderId: string;
-    let memoryId: string;
+    let memoryStoreId: string;
 
     beforeAll(async () => {
       const aiProvRes = await authenticatedTestClient(adminToken)
@@ -4039,9 +4049,12 @@ resources:
       aiProviderId = aiProvRes.body.id;
 
       const memRes = await authenticatedTestClient(adminToken)
-        .post('/api/v1/memories')
-        .send({ project_id: projectId, name: 'Formation Extraction Memory' });
-      memoryId = memRes.body.id;
+        .post('/api/v1/memory-stores')
+        .send({
+          project_id: projectId,
+          name: 'Formation Extraction MemoryStore',
+        });
+      memoryStoreId = memRes.body.id;
     });
 
     test('validate accepts knowledge_config with the extraction object form', async () => {
@@ -4056,7 +4069,7 @@ resources:
                   ai_provider_id: aiProviderId,
                   name: 'extraction-agent',
                   knowledge_config: {
-                    write_memory_id: memoryId,
+                    write_memory_store_id: memoryStoreId,
                     extraction: {
                       model: 'cheap-model',
                       prompt: 'Extract decisions only.',
@@ -4086,7 +4099,7 @@ resources:
                   ai_provider_id: aiProviderId,
                   name: 'extraction-agent',
                   knowledge_config: {
-                    write_memory_id: memoryId,
+                    write_memory_store_id: memoryStoreId,
                     extraction: {
                       model: 'cheap-model',
                       prompt: 'Extract decisions only.',
@@ -4108,7 +4121,9 @@ resources:
         `/api/v1/agents/${extractionAgentId}`
       );
       expect(agentRes.status).toBe(200);
-      expect(agentRes.body.knowledge_config.write_memory_id).toBe(memoryId);
+      expect(agentRes.body.knowledge_config.write_memory_store_id).toBe(
+        memoryStoreId
+      );
       expect(agentRes.body.knowledge_config.extraction.model).toBe(
         'cheap-model'
       );
@@ -4129,7 +4144,7 @@ resources:
                   ai_provider_id: aiProviderId,
                   name: 'extraction-agent',
                   knowledge_config: {
-                    write_memory_id: memoryId,
+                    write_memory_store_id: memoryStoreId,
                     extraction: true,
                   },
                 },
@@ -4320,16 +4335,22 @@ resources:
 
     const twoResourceTemplate = {
       resources: {
-        KeepMemory: { type: 'memory', properties: { name: 'ledger-keep' } },
-        RemoveMemory: {
-          type: 'memory',
+        KeepMemoryStore: {
+          type: 'memory_store',
+          properties: { name: 'ledger-keep' },
+        },
+        RemoveMemoryStore: {
+          type: 'memory_store',
           properties: { name: 'ledger-remove' },
         },
       },
     };
     const reducedTemplate = {
       resources: {
-        KeepMemory: { type: 'memory', properties: { name: 'ledger-keep' } },
+        KeepMemoryStore: {
+          type: 'memory_store',
+          properties: { name: 'ledger-keep' },
+        },
       },
     };
 
@@ -4365,7 +4386,7 @@ resources:
         });
 
       expect(res.status).toBe(200);
-      const removeChange = findChange(res.body, 'RemoveMemory');
+      const removeChange = findChange(res.body, 'RemoveMemoryStore');
       expect(removeChange).toBeDefined();
       expect(removeChange?.action).toBe('delete');
     });
@@ -4382,7 +4403,7 @@ resources:
       );
       const updateOp = eventsRes.body.data[eventsRes.body.data.length - 1];
       const removeEvent = updateOp.events.find((e: { logical_id: string }) => {
-        return e.logical_id === 'RemoveMemory';
+        return e.logical_id === 'RemoveMemoryStore';
       });
       expect(removeEvent).toBeDefined();
       expect(removeEvent.action).toBe('delete');
@@ -4399,8 +4420,8 @@ resources:
         });
 
       expect(res.status).toBe(200);
-      expect(findChange(res.body, 'RemoveMemory')).toBeUndefined();
-      const keepChange = findChange(res.body, 'KeepMemory');
+      expect(findChange(res.body, 'RemoveMemoryStore')).toBeUndefined();
+      const keepChange = findChange(res.body, 'KeepMemoryStore');
       expect(keepChange).toBeDefined();
       expect(keepChange?.action).toBe('no-op');
     });
@@ -4419,7 +4440,7 @@ resources:
         eventsRes.body.data[eventsRes.body.data.length - 1];
       const removeEvent = latestUpdateOp.events.find(
         (e: { logical_id: string }) => {
-          return e.logical_id === 'RemoveMemory';
+          return e.logical_id === 'RemoveMemoryStore';
         }
       );
       expect(removeEvent).toBeUndefined();

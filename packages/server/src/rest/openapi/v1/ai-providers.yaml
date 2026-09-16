@@ -69,7 +69,20 @@ paths:
                           type: string
                         provider:
                           type: string
-                          enum: [openai, anthropic, google, xai, groq, ollama, azure, bedrock, vertex, gateway, custom]
+                          enum:
+                            [
+                              openai,
+                              anthropic,
+                              google,
+                              xai,
+                              groq,
+                              ollama,
+                              azure,
+                              bedrock,
+                              vertex,
+                              gateway,
+                              custom,
+                            ]
                         default_model:
                           type: string
                         secret_id:
@@ -139,7 +152,20 @@ paths:
                   example: OpenAI Production
                 provider:
                   type: string
-                  enum: [openai, anthropic, google, xai, groq, ollama, azure, bedrock, vertex, gateway, custom]
+                  enum:
+                    [
+                      openai,
+                      anthropic,
+                      google,
+                      xai,
+                      groq,
+                      ollama,
+                      azure,
+                      bedrock,
+                      vertex,
+                      gateway,
+                      custom,
+                    ]
                   description: LLM provider
                   example: openai
                 default_model:
@@ -268,7 +294,20 @@ paths:
                   type: string
                 provider:
                   type: string
-                  enum: [openai, anthropic, google, xai, groq, ollama, azure, bedrock, vertex, gateway, custom]
+                  enum:
+                    [
+                      openai,
+                      anthropic,
+                      google,
+                      xai,
+                      groq,
+                      ollama,
+                      azure,
+                      bedrock,
+                      vertex,
+                      gateway,
+                      custom,
+                    ]
                   description: LLM provider
                   example: openai
                 default_model:

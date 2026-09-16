@@ -43,8 +43,8 @@ describe('camelToSnakeKey / snakeToCamelKey', () => {
   });
 
   test('the two are inverse for a snake_case key', () => {
-    expect(camelToSnakeKey(snakeToCamelKey('write_memory_id'))).toBe(
-      'write_memory_id'
+    expect(camelToSnakeKey(snakeToCamelKey('write_memory_store_id'))).toBe(
+      'write_memory_store_id'
     );
   });
 });

@@ -23,7 +23,7 @@ describe('executeNodeById', () => {
   >;
 
   test('the table covers every node type that requires a field', () => {
-    expect(entries.length).toBe(11);
+    expect(entries.length).toBe(10);
   });
 
   test.each(entries)(

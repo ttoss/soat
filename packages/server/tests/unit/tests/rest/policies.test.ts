@@ -208,7 +208,7 @@ describe('Policies', () => {
             statement: [
               {
                 effect: 'Deny',
-                action: ['memories:CreateMemoryEntryy'],
+                action: ['memories:CreateMemoryy'],
                 resource: ['*'],
               },
             ],
@@ -220,7 +220,7 @@ describe('Policies', () => {
       expect(response.body.error.message).toBe('Invalid policy document');
       expect(
         response.body.error.meta.details.some((d: string) => {
-          return d.includes('memories:CreateMemoryEntryy');
+          return d.includes('memories:CreateMemoryy');
         })
       ).toBe(true);
     });
@@ -244,15 +244,12 @@ describe('Policies', () => {
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/policies')
         .send({
-          name: 'Valid Memory Policy',
+          name: 'Valid MemoryStore Policy',
           document: {
             statement: [
               {
                 effect: 'Deny',
-                action: [
-                  'memories:CreateMemoryEntry',
-                  'memories:UpdateMemoryEntry',
-                ],
+                action: ['memories:CreateMemory', 'memories:UpdateMemory'],
                 resource: ['*'],
               },
               { effect: 'Allow', action: ['memories:*'] },

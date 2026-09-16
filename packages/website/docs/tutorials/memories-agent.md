@@ -15,9 +15,9 @@ import TabItem from '@theme/TabItem';
 # Agent with Persistent Memory
 
 Give an agent memory that persists across sessions: create a
-[Memory](/docs/modules/memories#key-concepts), write entries and observe deduplication,
-combine memory with a [Document](/docs/modules/documents#examples) via `knowledge_config`,
-let the agent write back with `write_memory_id`, enable automatic extraction, and query
+[memory store](/docs/modules/memories#key-concepts), write memories and observe deduplication,
+combine memories with a [Document](/docs/modules/documents#examples) via `knowledge_config`,
+let the agent write back with `write_memory_store_id`, enable automatic extraction, and query
 the knowledge layer directly.
 
 ## Prerequisites
@@ -36,15 +36,15 @@ export SOAT_BASE_URL=http://localhost:5047
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
-SDK snippets use the `SoatClient` from Step 1; memory and knowledge operations use the static classes `Memories` and `MemoryEntries` from `@soat/sdk`.
+SDK snippets use the `SoatClient` from Step 1; memory and knowledge operations use the static classes `MemoryStores` and `Memories` from `@soat/sdk`.
 
 ```ts
 import {
   SoatClient,
   createClient,
   createConfig,
+  MemoryStores,
   Memories,
-  MemoryEntries,
 } from '@soat/sdk';
 ```
 
@@ -90,7 +90,7 @@ const adminSoat = new SoatClient({
   token: ADMIN_TOKEN,
 });
 
-// Memories and MemoryEntries use static SDK classes with an explicit client
+// MemoryStores and Memories use static SDK classes with an explicit client
 const authClient = createClient(
   createConfig({
     baseUrl: 'http://localhost:5047',
@@ -115,7 +115,7 @@ ADMIN_TOKEN=$(curl -s -X POST "$SOAT_URL/api/v1/users/login" \
 
 ## Step 2 — Create a project
 
-A [project](/docs/modules/projects#examples) holds the memory and agent.
+A [project](/docs/modules/projects#examples) holds the memory store and agent.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -199,27 +199,27 @@ echo "AI_PROVIDER_ID: $AI_PROVIDER_ID"
 
 ---
 
-## Step 4 — Create a memory
+## Step 4 — Create a memory store
 
-A [Memory](/docs/modules/memories#key-concepts) is a named container of text entries; key-value `tags` let an agent search a subset of a project's memories.
+A [memory store](/docs/modules/memories#key-concepts) is a named container of memories; key-value `tags` let an agent search a subset of a project's stores.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-MEMORY_ID=$(soat create-memory \
+MEMORY_STORE_ID=$(soat create-memory-store \
   --project-id "$PROJECT_ID" \
   --name "Alice Profile" \
   --description "Facts about customer Alice gathered during support interactions" \
   --tags '{"customer":"alice","kind":"profile"}' | jq -r '.id')
-echo "MEMORY_ID: $MEMORY_ID"
+echo "MEMORY_STORE_ID: $MEMORY_STORE_ID"
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: memory } = await Memories.createMemory({
+const { data: memoryStore } = await MemoryStores.createMemoryStore({
   client: authClient,
   body: {
     project_id: PROJECT_ID,
@@ -229,19 +229,19 @@ const { data: memory } = await Memories.createMemory({
     tags: { customer: 'alice', kind: 'profile' },
   },
 });
-const MEMORY_ID = memory.id;
+const MEMORY_STORE_ID = memoryStore.id;
 ```
 
 </TabItem>
 <TabItem value="curl" label="curl">
 
 ```bash
-MEMORY_ID=$(curl -s -X POST "$SOAT_URL/api/v1/memories" \
+MEMORY_STORE_ID=$(curl -s -X POST "$SOAT_URL/api/v1/memory-stores" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"Alice Profile\",\"description\":\"Facts about customer Alice gathered during support interactions\",\"tags\":{\"customer\":\"alice\",\"kind\":\"profile\"}}" \
   | jq -r '.id')
-echo "MEMORY_ID: $MEMORY_ID"
+echo "MEMORY_STORE_ID: $MEMORY_STORE_ID"
 ```
 
 </TabItem>
@@ -249,25 +249,25 @@ echo "MEMORY_ID: $MEMORY_ID"
 
 ---
 
-## Step 5 — Write memory entries
+## Step 5 — Write memories
 
 Every write goes through semantic deduplication
 ([Memories — Write Algorithm](/docs/modules/memories#write-algorithm)). A manual write
-has no agent context, so it yields **`created`** (201, stored as its own entry) or
-**`skipped`** (200, a near-identical entry exists). The third outcome, **`updated`**
-(an existing entry rewritten to absorb the fact), needs a model and is reached only by
+has no agent context, so it yields **`created`** (201, stored as its own memory) or
+**`skipped`** (200, a near-identical memory exists). The third outcome, **`updated`**
+(an existing memory rewritten to absorb the fact), needs a model and is reached only by
 agent write paths ([Step 10](#step-10--observe-the-agent-writing-to-memory)).
 
-### 5a — First entry (action: created)
+### 5a — First memory (action: created)
 
-No similar entry exists, so it is stored.
+No similar memory exists, so it is stored.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat create-memory-entry \
-  --memory-id "$MEMORY_ID" \
+soat create-memory \
+  --memory-store-id "$MEMORY_STORE_ID" \
   --content "Alice prefers email over phone calls for all support communication"
 # → { "action": "created", ... }
 ```
@@ -276,10 +276,10 @@ soat create-memory-entry \
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: e1 } = await MemoryEntries.createMemoryEntry({
+const { data: e1 } = await Memories.createMemory({
   client: authClient,
   body: {
-    memory_id: MEMORY_ID,
+    memory_store_id: MEMORY_STORE_ID,
     content:
       'Alice prefers email over phone calls for all support communication',
   },
@@ -291,10 +291,10 @@ console.log(e1.action); // "created"
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s -X POST "$SOAT_URL/api/v1/memory-entries" \
+curl -s -X POST "$SOAT_URL/api/v1/memories" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"memory_id":"'"$MEMORY_ID"'","content":"Alice prefers email over phone calls for all support communication"}' | jq .
+  -d '{"memory_store_id":"'"$MEMORY_STORE_ID"'","content":"Alice prefers email over phone calls for all support communication"}' | jq .
 # → { "action": "created", ... }
 ```
 
@@ -309,8 +309,8 @@ Near-identical to 5a; ignored.
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat create-memory-entry \
-  --memory-id "$MEMORY_ID" \
+soat create-memory \
+  --memory-store-id "$MEMORY_STORE_ID" \
   --content "Alice prefers email over phone calls"
 # → { "action": "skipped", ... }
 ```
@@ -319,10 +319,10 @@ soat create-memory-entry \
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: e2 } = await MemoryEntries.createMemoryEntry({
+const { data: e2 } = await Memories.createMemory({
   client: authClient,
   body: {
-    memory_id: MEMORY_ID,
+    memory_store_id: MEMORY_STORE_ID,
     content: 'Alice prefers email over phone calls',
   },
 });
@@ -333,10 +333,10 @@ console.log(e2.action); // "skipped"
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s -X POST "$SOAT_URL/api/v1/memory-entries" \
+curl -s -X POST "$SOAT_URL/api/v1/memories" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"memory_id":"'"$MEMORY_ID"'","content":"Alice prefers email over phone calls"}' | jq .
+  -d '{"memory_store_id":"'"$MEMORY_STORE_ID"'","content":"Alice prefers email over phone calls"}' | jq .
 # → { "action": "skipped", ... }
 ```
 
@@ -346,14 +346,14 @@ curl -s -X POST "$SOAT_URL/api/v1/memory-entries" \
 ### 5c — Related content (action: created)
 
 Overlaps 5a with new detail. No model on this path folds the two, so the richer statement
-is stored as its own atomic entry.
+is stored as its own atomic memory.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat create-memory-entry \
-  --memory-id "$MEMORY_ID" \
+soat create-memory \
+  --memory-store-id "$MEMORY_STORE_ID" \
   --content "Alice prefers email, especially for billing inquiries; she checks it twice a day"
 # → { "action": "created", ... }
 ```
@@ -362,10 +362,10 @@ soat create-memory-entry \
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: e3 } = await MemoryEntries.createMemoryEntry({
+const { data: e3 } = await Memories.createMemory({
   client: authClient,
   body: {
-    memory_id: MEMORY_ID,
+    memory_store_id: MEMORY_STORE_ID,
     content:
       'Alice prefers email, especially for billing inquiries; she checks it twice a day',
   },
@@ -377,10 +377,10 @@ console.log(e3.action); // "created"
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s -X POST "$SOAT_URL/api/v1/memory-entries" \
+curl -s -X POST "$SOAT_URL/api/v1/memories" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"memory_id":"'"$MEMORY_ID"'","content":"Alice prefers email, especially for billing inquiries; she checks it twice a day"}' | jq .
+  -d '{"memory_store_id":"'"$MEMORY_STORE_ID"'","content":"Alice prefers email, especially for billing inquiries; she checks it twice a day"}' | jq .
 # → { "action": "created", ... }
 ```
 
@@ -389,14 +389,14 @@ curl -s -X POST "$SOAT_URL/api/v1/memory-entries" \
 
 ### 5d — Second distinct fact (action: created)
 
-Unrelated; stored as a new entry.
+Unrelated; stored as a new memory.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat create-memory-entry \
-  --memory-id "$MEMORY_ID" \
+soat create-memory \
+  --memory-store-id "$MEMORY_STORE_ID" \
   --content "The Alice Corp fiscal year ends in March; she starts renewal discussions in January"
 # → { "action": "created", ... }
 ```
@@ -405,10 +405,10 @@ soat create-memory-entry \
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: e4 } = await MemoryEntries.createMemoryEntry({
+const { data: e4 } = await Memories.createMemory({
   client: authClient,
   body: {
-    memory_id: MEMORY_ID,
+    memory_store_id: MEMORY_STORE_ID,
     content:
       'The Alice Corp fiscal year ends in March; she starts renewal discussions in January',
   },
@@ -420,10 +420,10 @@ console.log(e4.action); // "created"
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s -X POST "$SOAT_URL/api/v1/memory-entries" \
+curl -s -X POST "$SOAT_URL/api/v1/memories" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"memory_id":"'"$MEMORY_ID"'","content":"The Alice Corp fiscal year ends in March; she starts renewal discussions in January"}' | jq .
+  -d '{"memory_store_id":"'"$MEMORY_STORE_ID"'","content":"The Alice Corp fiscal year ends in March; she starts renewal discussions in January"}' | jq .
 # → { "action": "created", ... }
 ```
 
@@ -432,15 +432,15 @@ curl -s -X POST "$SOAT_URL/api/v1/memory-entries" \
 
 ---
 
-## Step 6 — List entries to verify
+## Step 6 — List memories to verify
 
-Three entries remain; only 5b was discarded ([Memories examples](/docs/modules/memories#examples)).
+Three memories remain; only 5b was discarded ([Memories examples](/docs/modules/memories#examples)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat list-memory-entries --memory-id "$MEMORY_ID" | jq '[.data[] | .content]'
+soat list-memories --memory-store-id "$MEMORY_STORE_ID" | jq '[.data[] | .content]'
 # [
 #   "Alice prefers email over phone calls for all support communication",
 #   "Alice prefers email, especially for billing inquiries; she checks it twice a day",
@@ -452,9 +452,9 @@ soat list-memory-entries --memory-id "$MEMORY_ID" | jq '[.data[] | .content]'
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: page } = await MemoryEntries.listMemoryEntries({
+const { data: page } = await Memories.listMemories({
   client: authClient,
-  query: { memory_id: MEMORY_ID },
+  query: { memory_store_id: MEMORY_STORE_ID },
 });
 console.log(page.data.map((e) => e.content));
 ```
@@ -463,7 +463,7 @@ console.log(page.data.map((e) => e.content));
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s "$SOAT_URL/api/v1/memory-entries?memory_id=$MEMORY_ID" \
+curl -s "$SOAT_URL/api/v1/memories?memory_store_id=$MEMORY_STORE_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq '[.data[] | .content]'
 ```
 
@@ -523,7 +523,7 @@ echo "DOC_ID: $DOC_ID"
 
 ## Step 8 — Create an agent with `knowledge_config`
 
-`knowledge_config` on an [agent](/docs/modules/agents#examples) names the memories and documents searched before every generation, with the query derived from the last user message. Here it combines the memory from Step 4 with the document from Step 7; `write_memory_id` gives the agent a `write_memory` tool.
+`knowledge_config` on an [agent](/docs/modules/agents#examples) names the memory stores and documents searched before every generation, with the query derived from the last user message. Here it combines the memory store from Step 4 with the document from Step 7; `write_memory_store_id` gives the agent a `write_memory` tool.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -534,7 +534,7 @@ AGENT_ID=$(soat create-agent \
   --ai-provider-id "$AI_PROVIDER_ID" \
   --name "Support Agent" \
   --instructions "You are a helpful customer support assistant. Use the provided knowledge context to answer questions accurately and concisely. When you learn new facts about a customer, use the write_memory tool to persist them." \
-  --knowledge-config '{"memory_ids":["'"$MEMORY_ID"'"],"document_paths":["/alice/"],"limit":5,"write_memory_id":"'"$MEMORY_ID"'"}' \
+  --knowledge-config '{"memory_store_ids":["'"$MEMORY_STORE_ID"'"],"document_paths":["/alice/"],"limit":5,"write_memory_store_id":"'"$MEMORY_STORE_ID"'"}' \
   | jq -r '.id')
 echo "AGENT_ID: $AGENT_ID"
 ```
@@ -551,10 +551,10 @@ const { data: agent } = await adminSoat.agents.createAgent({
     instructions:
       'You are a helpful customer support assistant. Use the provided knowledge context to answer questions accurately and concisely.',
     knowledge_config: {
-      memory_ids: [MEMORY_ID],
+      memory_store_ids: [MEMORY_STORE_ID],
       document_paths: ['/alice/'],
       limit: 5,
-      write_memory_id: MEMORY_ID,
+      write_memory_store_id: MEMORY_STORE_ID,
     },
   },
 });
@@ -568,7 +568,7 @@ const AGENT_ID = agent.id;
 AGENT_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agents" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Support Agent\",\"instructions\":\"You are a helpful customer support assistant. Use the provided knowledge context to answer questions accurately and concisely. When you learn new facts about a customer, use the write_memory tool to persist them.\",\"knowledge_config\":{\"memory_ids\":[\"$MEMORY_ID\"],\"document_paths\":[\"/alice/\"],\"limit\":5,\"write_memory_id\":\"$MEMORY_ID\"}}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Support Agent\",\"instructions\":\"You are a helpful customer support assistant. Use the provided knowledge context to answer questions accurately and concisely. When you learn new facts about a customer, use the write_memory tool to persist them.\",\"knowledge_config\":{\"memory_store_ids\":[\"$MEMORY_STORE_ID\"],\"document_paths\":[\"/alice/\"],\"limit\":5,\"write_memory_store_id\":\"$MEMORY_STORE_ID\"}}" \
   | jq -r '.id')
 echo "AGENT_ID: $AGENT_ID"
 ```
@@ -690,49 +690,46 @@ curl -s -X POST "$SOAT_URL/api/v1/agents/$AGENT_ID/generate?wait=true" \
 </TabItem>
 </Tabs>
 
-List entries with `source_type == "agent"`. Entries written during a generation carry [provenance](/docs/modules/memories#provenance), the id of the turn that produced them:
+List the store's memories and look for the timezone fact. A `write_memory` call happens inside a generation that may belong to no conversation, so what it writes carries `source_type: "manual"` — there is no source to name ([Provenance](/docs/modules/memories#provenance)):
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat list-memory-entries --memory-id "$MEMORY_ID" \
-  | jq '[.data[] | select(.source_type == "agent")
-         | {content, source_type, source_generation_id}]'
+soat list-memories --memory-store-id "$MEMORY_STORE_ID" \
+  | jq '[.data[] | {content, source_type, source_id}]'
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: page } = await MemoryEntries.listMemoryEntries({
+const { data: page } = await Memories.listMemories({
   client: authClient,
-  query: { memory_id: MEMORY_ID },
+  query: { memory_store_id: MEMORY_STORE_ID },
 });
-const agentEntries = page.data.filter((e) => e.source_type === 'agent');
-console.log(agentEntries.map((e) => [e.content, e.source_generation_id]));
+console.log(page.data.map((e) => [e.content, e.source_type, e.source_id]));
 ```
 
 </TabItem>
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s "$SOAT_URL/api/v1/memory-entries?memory_id=$MEMORY_ID" \
+curl -s "$SOAT_URL/api/v1/memories?memory_store_id=$MEMORY_STORE_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
-  | jq '[.data[] | select(.source_type == "agent")
-         | {content, source_type, source_generation_id}]'
+  | jq '[.data[] | {content, source_type, source_id}]'
 ```
 
 </TabItem>
 </Tabs>
 
-If the model called `write_memory`, an entry with `"source_type": "agent"` holds the timezone fact and `source_generation_id` points at the generation. An empty list means the model did not call the tool; Step 11 removes that dependency.
+If the model called `write_memory`, one memory holds the timezone fact, reading `"source_type": "manual"` with a null `source_id`. If no such memory appears, the model did not call the tool; Step 11 removes that dependency.
 
 ---
 
 ## Step 11 — Enable automatic extraction
 
-[Automatic extraction](/docs/modules/memories#automatic-extraction) extracts atomic facts from the transcript after every completed turn and writes them with `source: "extraction"`. Add `extraction` to the agent's `knowledge_config`:
+[Automatic extraction](/docs/modules/memories#automatic-extraction) extracts atomic facts from the transcript after every completed turn and writes them through the standard write algorithm. Add `extraction` to the agent's `knowledge_config`:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -740,7 +737,7 @@ If the model called `write_memory`, an entry with `"source_type": "agent"` holds
 ```bash
 soat update-agent \
   --agent-id "$AGENT_ID" \
-  --knowledge-config '{"memory_ids":["'"$MEMORY_ID"'"],"document_paths":["/alice/"],"limit":5,"write_memory_id":"'"$MEMORY_ID"'","extraction":true}'
+  --knowledge-config '{"memory_store_ids":["'"$MEMORY_STORE_ID"'"],"document_paths":["/alice/"],"limit":5,"write_memory_store_id":"'"$MEMORY_STORE_ID"'","extraction":true}'
 ```
 
 </TabItem>
@@ -751,10 +748,10 @@ await adminSoat.agents.updateAgent({
   path: { agent_id: AGENT_ID },
   body: {
     knowledge_config: {
-      memory_ids: [MEMORY_ID],
+      memory_store_ids: [MEMORY_STORE_ID],
       document_paths: ['/alice/'],
       limit: 5,
-      write_memory_id: MEMORY_ID,
+      write_memory_store_id: MEMORY_STORE_ID,
       extraction: true,
     },
   },
@@ -768,7 +765,7 @@ await adminSoat.agents.updateAgent({
 curl -s -X PUT "$SOAT_URL/api/v1/agents/$AGENT_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"knowledge_config\":{\"memory_ids\":[\"$MEMORY_ID\"],\"document_paths\":[\"/alice/\"],\"limit\":5,\"write_memory_id\":\"$MEMORY_ID\",\"extraction\":true}}" \
+  -d "{\"knowledge_config\":{\"memory_store_ids\":[\"$MEMORY_STORE_ID\"],\"document_paths\":[\"/alice/\"],\"limit\":5,\"write_memory_store_id\":\"$MEMORY_STORE_ID\",\"extraction\":true}}" \
   | jq '.knowledge_config'
 ```
 
@@ -793,9 +790,8 @@ Extraction runs asynchronously after the response returns; wait a few seconds, t
 
 ```bash
 sleep 5
-soat list-memory-entries --memory-id "$MEMORY_ID" \
-  | jq '[.data[] | select(.source_type == "extraction")
-         | {content, source_type, source_generation_id}]'
+soat list-memories --memory-store-id "$MEMORY_STORE_ID" \
+  | jq '[.data[] | {content, source_type, source_id}]'
 ```
 
 </TabItem>
@@ -819,12 +815,11 @@ await adminSoat.agents.createAgentGeneration({
 // Extraction runs asynchronously after the generation response returns.
 await new Promise((resolve) => setTimeout(resolve, 5000));
 
-const { data: page } = await MemoryEntries.listMemoryEntries({
+const { data: page } = await Memories.listMemories({
   client: authClient,
-  query: { memory_id: MEMORY_ID },
+  query: { memory_store_id: MEMORY_STORE_ID },
 });
-const extracted = page.data.filter((e) => e.source_type === 'extraction');
-console.log(extracted.map((e) => e.content));
+console.log(page.data.map((e) => [e.content, e.source_type, e.source_id]));
 ```
 
 </TabItem>
@@ -838,22 +833,21 @@ curl -s -X POST "$SOAT_URL/api/v1/agents/$AGENT_ID/generate?wait=true" \
   | jq '{status: .status}'
 
 sleep 5
-curl -s "$SOAT_URL/api/v1/memory-entries?memory_id=$MEMORY_ID" \
+curl -s "$SOAT_URL/api/v1/memories?memory_store_id=$MEMORY_STORE_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
-  | jq '[.data[] | select(.source_type == "extraction")
-         | {content, source_type, source_generation_id}]'
+  | jq '[.data[] | {content, source_type, source_id}]'
 ```
 
 </TabItem>
 </Tabs>
 
-Expect an entry like `"Alice signed a 2-year contract renewal"` with `"source_type": "extraction"`. The summary is recorded on the generation's `extraction` field ([Generations](/docs/modules/generations)).
+Expect a memory like `"Alice signed a 2-year contract renewal"`. This turn is a direct generation with no conversation behind it, so it reads `"source_type": "manual"`; the same turn inside a [conversation](/docs/modules/conversations) would read `"conversation"` and name it in `source_id`. The summary is recorded on the generation's `extraction` field ([Generations](/docs/modules/generations)).
 
 ---
 
 ## Step 12 — Query the knowledge layer directly
 
-The [Knowledge](/docs/modules/knowledge#examples) endpoint is the search layer the agent uses. Pass `memory_ids` and `document_paths` to see which chunks would be injected for a question.
+The [Knowledge](/docs/modules/knowledge#examples) endpoint is the search layer the agent uses. Pass `memory_store_ids` and `document_paths` to see which chunks would be injected for a question.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -862,7 +856,7 @@ The [Knowledge](/docs/modules/knowledge#examples) endpoint is the search layer t
 soat search-knowledge \
   --project-id "$PROJECT_ID" \
   --query "P1 outage response and how to reach Alice" \
-  --memory-ids '["'"$MEMORY_ID"'"]' \
+  --memory-store-ids '["'"$MEMORY_STORE_ID"'"]' \
   --document-paths '["/alice/"]' \
   | jq '.results[] | {score, similarity_score, source_type, content}'
 ```
@@ -895,7 +889,7 @@ const res = await fetch('http://localhost:5047/api/v1/knowledge/search', {
   body: JSON.stringify({
     project_id: PROJECT_ID,
     query: 'P1 outage response and how to reach Alice',
-    memory_ids: [MEMORY_ID],
+    memory_store_ids: [MEMORY_STORE_ID],
     document_paths: ['/alice/'],
   }),
 });
@@ -913,7 +907,7 @@ results.forEach((r) =>
 curl -s -X POST "$SOAT_URL/api/v1/knowledge/search" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"query\":\"P1 outage response and how to reach Alice\",\"memory_ids\":[\"$MEMORY_ID\"],\"document_paths\":[\"/alice/\"]}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"query\":\"P1 outage response and how to reach Alice\",\"memory_store_ids\":[\"$MEMORY_STORE_ID\"],\"document_paths\":[\"/alice/\"]}" \
   | jq '.results[] | {score, similarity_score, source_type, content}'
 ```
 
@@ -922,76 +916,84 @@ curl -s -X POST "$SOAT_URL/api/v1/knowledge/search" \
 
 ---
 
-## Step 13 — Trace a fact back to the turn that produced it
+## Step 13 — Trace a fact back to the conversation it came from
 
-Every entry written during a generation records [provenance](/docs/modules/memories#provenance): the generation, and the conversation when the turn came from one. Manual writes carry `null`; `write_memory` and extraction entries carry an id:
+A memory records **whether there is a source to point at**
+([provenance](/docs/modules/memories#provenance)). Every write so far has been a direct
+generation with no conversation behind it, so all of them read `manual` with a null
+`source_id`. Write one that names a [conversation](/docs/modules/conversations) and the
+pair becomes traceable.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat list-memory-entries --memory-id "$MEMORY_ID" \
-  | jq '[.data[] | {source_type, source_generation_id, source_conversation_id}]'
+CONVERSATION_ID=$(soat create-conversation \
+  --project_id "$PROJECT_ID" --name alice-renewal-call | jq -r '.id')
+
+soat create-memory \
+  --memory-store-id "$MEMORY_STORE_ID" \
+  --content "Alice's account manager is Priya" \
+  --source_type conversation \
+  --source_id "$CONVERSATION_ID" \
+  | jq '{content, source_type, source_id}'
 ```
 
 ```json
-[
-  {
-    "source_type": "manual",
-    "source_generation_id": null,
-    "source_conversation_id": null
-  },
-  {
-    "source_type": "manual",
-    "source_generation_id": null,
-    "source_conversation_id": null
-  },
-  {
-    "source_type": "manual",
-    "source_generation_id": null,
-    "source_conversation_id": null
-  },
-  {
-    "source_type": "extraction",
-    "source_generation_id": "gen_0dR2mJk8xQ1vTbLp",
-    "source_conversation_id": null
-  }
-]
+{
+  "content": "Alice's account manager is Priya",
+  "source_type": "conversation",
+  "source_id": "conv_0dR2mJk8xQ1vTbLp"
+}
 ```
 
-`source_conversation_id` is `null` because `create-agent-generation` has no conversation; through [Conversations](/docs/modules/conversations) both are recorded.
-
-Follow a provenance id to the generation:
+Read the whole store to see the two shapes side by side, then follow the id back:
 
 ```bash
-GEN_ID=$(soat list-memory-entries --memory-id "$MEMORY_ID" \
-  | jq -r '[.data[] | select(.source_generation_id != null)][0].source_generation_id // empty')
+soat list-memories --memory-store-id "$MEMORY_STORE_ID" \
+  | jq '[.data[] | {source_type, source_id}]'
 
-# → ignore
-soat get-generation --generation-id "$GEN_ID" | jq '{id, status, extraction}'
+SRC_ID=$(soat list-memories --memory-store-id "$MEMORY_STORE_ID" \
+  | jq -r '[.data[] | select(.source_type == "conversation")][0].source_id')
+
+soat get-conversation --conversation-id "$SRC_ID" | jq '{id, name}'
 ```
 
-The second command is annotated `ignore` because it has an id only if the model wrote to memory on this run. See [Generations](/docs/modules/generations) for the full record, including the `extraction` summary.
+[Automatic extraction](/docs/modules/memories#automatic-extraction) fills the same pair on
+its own: a turn inside a conversation writes `conversation` plus that conversation's id,
+and a direct generation writes `manual`, because there is nothing to name.
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: page } = await MemoryEntries.listMemoryEntries({
-  client: authClient,
-  query: { memory_id: MEMORY_ID },
+const { data: conversation } = await adminSoat.conversations.createConversation({
+  body: { project_id: PROJECT_ID, name: 'alice-renewal-call' },
 });
 
-page.data.forEach((e) =>
-  console.log(e.source_type, e.source_generation_id, e.source_conversation_id)
-);
+const { data: sourced } = await Memories.createMemory({
+  client: authClient,
+  body: {
+    memory_store_id: MEMORY_STORE_ID,
+    content: "Alice's account manager is Priya",
+    source_type: 'conversation',
+    source_id: conversation.id,
+  },
+});
+console.log(sourced.source_type, sourced.source_id);
 
-const traced = page.data.find((e) => e.source_generation_id);
-if (traced) {
-  const { data: generation } = await adminSoat.generations.getGeneration({
-    path: { generation_id: traced.source_generation_id },
+const { data: page } = await Memories.listMemories({
+  client: authClient,
+  query: { memory_store_id: MEMORY_STORE_ID },
+});
+page.data.forEach((e) => console.log(e.source_type, e.source_id));
+
+const traced = page.data.find((e) => e.source_type === 'conversation');
+if (traced?.source_id) {
+  const { data: source } = await adminSoat.conversations.getConversation({
+    path: { conversation_id: traced.source_id },
   });
-  console.log(generation.id, generation.status);
+  console.log(source.id, source.name);
 }
 ```
 
@@ -999,27 +1001,39 @@ if (traced) {
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s "$SOAT_URL/api/v1/memory-entries?memory_id=$MEMORY_ID" \
+CONVERSATION_ID=$(curl -s -X POST "$SOAT_URL/api/v1/conversations" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
-  | jq '[.data[] | {source_type, source_generation_id, source_conversation_id}]'
+  -H "Content-Type: application/json" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"alice-renewal-call\"}" \
+  | jq -r '.id')
 
-GEN_ID=$(curl -s "$SOAT_URL/api/v1/memory-entries?memory_id=$MEMORY_ID" \
+curl -s -X POST "$SOAT_URL/api/v1/memories" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
-  | jq -r '[.data[] | select(.source_generation_id != null)][0].source_generation_id // empty')
+  -H "Content-Type: application/json" \
+  -d "{\"memory_store_id\":\"$MEMORY_STORE_ID\",\"content\":\"Alice's account manager is Priya\",\"source_type\":\"conversation\",\"source_id\":\"$CONVERSATION_ID\"}" \
+  | jq '{content, source_type, source_id}'
 
-curl -s "$SOAT_URL/api/v1/generations/$GEN_ID" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{id, status, extraction}'
+curl -s "$SOAT_URL/api/v1/memories?memory_store_id=$MEMORY_STORE_ID" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  | jq '[.data[] | {source_type, source_id}]'
+
+SRC_ID=$(curl -s "$SOAT_URL/api/v1/memories?memory_store_id=$MEMORY_STORE_ID" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  | jq -r '[.data[] | select(.source_type == "conversation")][0].source_id')
+
+curl -s "$SOAT_URL/api/v1/conversations/$SRC_ID" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{id, name}'
 ```
 
 </TabItem>
 </Tabs>
 
-Provenance is set at creation and never rewritten by a later merge. A contradicted fact is retired, not edited; `--include-invalidated true` on `list-memory-entries` shows retired entries ([Temporal invalidation](/docs/modules/memories#temporal-invalidation)).
+Provenance is set at creation and never rewritten by a later merge. `source_id` is a loose pointer: deleting the conversation leaves the id in place, because the fact was still learned there. A contradicted fact is retired, not edited; `--include-invalidated true` on `list-memories` shows retired memories ([Temporal invalidation](/docs/modules/memories#temporal-invalidation)).
 
 ---
 
 ## What's next
 
-- **Tag-based filtering** — one memory per customer, `tags` on the agent.
+- **Tag-based filtering** — one memory store per customer, `tags` on the agent.
 - **Dedup threshold** — `duplicate_threshold` sets how close a fact must be to be skipped ([Memories](/docs/modules/memories#write-algorithm)).
-- **Audit what an agent was told** — pair provenance ids with the injected `<knowledge>` block ([Agents — Knowledge Config](/docs/modules/agents#knowledge-config)), whose source tags name the entry and document page behind each line.
+- **Audit what an agent was told** — pair provenance ids with the injected `<knowledge>` block ([Agents — Knowledge Config](/docs/modules/agents#knowledge-config)), whose source tags name the memory and document page behind each line.

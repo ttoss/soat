@@ -1,5 +1,5 @@
 ---
-description: "Unified hybrid search across a project's documents and memory entries: a vector and a full-text query per store, fused by reciprocal rank and tagged by source."
+description: "Unified hybrid search across a project's documents and memories: a vector and a full-text query per store, fused by reciprocal rank and tagged by source."
 ---
 
 import Tabs from '@theme/Tabs';
@@ -9,7 +9,7 @@ import TabItem from '@theme/TabItem';
 
 ## Overview
 
-Unified search across a project's documents and memory entries: one endpoint, ranked by [hybrid retrieval](#hybrid-retrieval) — a vector query and a full-text query over each store, fused by reciprocal rank — and tagged by source.
+Unified search across a project's documents and memories: one endpoint, ranked by [hybrid retrieval](#hybrid-retrieval) — a vector query and a full-text query over each store, fused by reciprocal rank — and tagged by source.
 
 Each result carries `source_type` (`"document"` or `"memory"`). Agents use the same layer for retrieval: [Agent with Persistent Memory — Step 8 (Create an agent with knowledge_config)](/docs/tutorials/memories-agent#step-8--create-an-agent-with-knowledge_config) and the [Memory & Knowledge Engine](../advanced/memory-and-knowledge-engine.md) deep dive.
 
@@ -61,9 +61,9 @@ A `KnowledgeResult` is a discriminated union on `source_type`; source-specific f
 
 | Field         | Type     | Description                                    |
 | ------------- | -------- | ---------------------------------------------- |
-| `entry_id`    | `string` | Public memory entry ID (`mem_entry_` prefix)   |
-| `memory_id`   | `string` | Public ID of the parent memory (`mem_` prefix) |
-| `memory_name` | `string` | Human-readable name of the parent memory       |
+| `memory_id`         | `string` | Public memory ID (`mem_` prefix)                            |
+| `memory_store_id`   | `string` | Public ID of the parent memory store (`mstore_` prefix)     |
+| `memory_store_name` | `string` | Human-readable name of the parent memory store              |
 
 ## Key Concepts
 
@@ -74,14 +74,14 @@ The [`POST /knowledge/search`](/docs/api/knowledge/search-knowledge) filters (at
 | Parameter        | Type       | Description                                                                                |
 | ---------------- | ---------- | ------------------------------------------------------------------------------------------ |
 | `query`          | `string`   | Search query — ranks results by [hybrid retrieval](#hybrid-retrieval)                      |
-| `memory_ids`     | `string[]` | Search entries within these specific memories                                              |
+| `memory_store_ids` | `string[]` | Search memories within these specific memory stores                                        |
 | `document_paths` | `string[]` | Filter document results to paths starting with these prefixes                              |
 | `document_ids`   | `string[]` | Filter document results to specific document IDs                                           |
-| `tags`           | `object`   | Filter **both** stores to results whose `tags` contain every one of these key-value pairs (exact, case-sensitive). The only filter that scopes documents and memory entries at once |
+| `tags`           | `object`   | Filter **both** stores to results whose `tags` contain every one of these key-value pairs (exact, case-sensitive). The only filter that scopes documents and memories at once |
 
 With `query`, results carry `score` and `similarity_score`, ordered by descending `score`; `min_similarity`, `rrf_k` and `limit` apply. Walkthrough: [Agent with Persistent Memory — Step 12 (Query the knowledge layer directly)](/docs/tutorials/memories-agent#step-12--query-the-knowledge-layer-directly).
 
-Sources follow from the filters: documents when `query`, `document_paths`, or `document_ids` is passed; memory entries when `memory_ids` is. `tags` turns on **both**. A `query` plus a memory filter searches both, ranked together before `limit`.
+Sources follow from the filters: documents when `query`, `document_paths`, or `document_ids` is passed; memories when `memory_store_ids` is. `tags` turns on **both**. A `query` plus a memory-store filter searches both, ranked together before `limit`.
 
 `tags` is a key-value object, the same shape every tagged resource stores and the same one the IAM `soat:ResourceTag/<key>` condition reads. All pairs must match (JSONB containment), exact and case-sensitive:
 
@@ -89,7 +89,7 @@ Sources follow from the filters: documents when `query`, `document_paths`, or `d
 { "query": "quarterly revenue", "tags": { "team": "finance", "env": "prod" } }
 ```
 
-Against memory it matches at **entry granularity**: an entry is returned when its parent memory's tags contain the pairs (container-level, every entry returned) or when the entry's own `tags` do (that entry only) — see [Memories — Entry-Level Tag Filtering](./memories.md#entry-level-tag-filtering).
+Against memories it matches at **memory granularity**: a memory is returned when its parent store's tags contain the pairs (store-level, every memory returned) or when the memory's own `tags` do (that memory only) — see [Memories — Memory-Level Tag Filtering](./memories.md#memory-level-tag-filtering).
 
 ### Hybrid retrieval
 
@@ -123,7 +123,7 @@ Two fields on every `query` result, with different contracts:
 - `similarity_score` is populated on every result of a `query` search, a lexical-only hit included. It is absent only when the embedding provider was unreachable and the search answered from the lexical channel alone.
 - For a stable number, read `similarity_score`.
 
-Each channel produces **one** ranking over the whole search, not one per store: documents and memory entries are queried separately because they are separate tables, and each channel's two result sets are merged on that channel's own value before fusion. Fusing them as separate rankings would let each store claim result slots by position — the tenth-best memory entry scoring the same as the tenth-best chunk, whatever either is worth.
+Each channel produces **one** ranking over the whole search, not one per store: documents and memories are queried separately because they are separate tables, and each channel's two result sets are merged on that channel's own value before fusion. Fusing them as separate rankings would let each store claim result slots by position — the tenth-best memory scoring the same as the tenth-best chunk, whatever either is worth.
 
 ### Relevance knobs
 
@@ -144,7 +144,7 @@ Each channel produces **one** ranking over the whole search, not one per store: 
 
 #### Recency blend
 
-A memory fact decays in usefulness; a paragraph of a manual does not. With a half-life set, each **memory** result's fused `score` is multiplied after fusion by
+A memory decays in usefulness; a paragraph of a manual does not. With a half-life set, each **memory** result's fused `score` is multiplied after fusion by
 
 ```txt
 2 ^ (-age_in_days / recency_half_life_days)
@@ -154,10 +154,10 @@ so at equal relevance a fresh fact outranks a stale one. Document results are ne
 
 - **`0` disables the blend, at either level.** Zero days is not a meaningful half-life, so the value is a switch rather than a lower bound. It is also the default at both levels, so an upgrade reorders nothing until someone turns it on. A request `recency_half_life_days: 0` turns off a deployment-wide decay for that one query — the archival search on a deployment that otherwise wants freshness.
 - **Days, as a float.** `0.5` is twelve hours; `30` stays readable.
-- **Age is read from `updated_at`, not `created_at`**, so a [consolidation merge](./memories.md#write-algorithm) that re-asserts a fact refreshes it instead of ageing out knowledge the system keeps re-confirming. Every write to the entry counts as a re-assertion — a `PATCH` of its content and a tag edit included. A tag-only edit therefore resets a fact's age to zero.
+- **Age is read from `updated_at`, not `created_at`**, so a [consolidation merge](./memories.md#write-algorithm) that re-asserts a fact refreshes it instead of ageing out knowledge the system keeps re-confirming. Every write to the memory counts as a re-assertion — a `PATCH` of its content and a tag edit included. A tag-only edit therefore resets a fact's age to zero.
 - **An invalid value falls back rather than failing.** A negative or non-finite `recency_half_life_days` resolves to the deployment value, then to `0`, the same way `rrf_k` does.
 - **The clock is read once per response**, so two results in one answer are always ordered against the same instant.
-- **Retrieval only.** The memory write algorithm's duplicate shortlist reads raw cosine and is unaffected: an entry old enough for the blend to bury is still the duplicate a restatement of it merges into.
+- **Retrieval only.** The memory write algorithm's duplicate shortlist reads raw cosine and is unaffected: a memory old enough for the blend to bury is still the duplicate a restatement of it merges into.
 
 How many ranks a half-life costs depends on `rrf_k`, and on a corpus mixing documents and memories it is never free. Figures and the method for choosing a value: [Retrieval Quality](../advanced/retrieval-quality.md).
 
@@ -173,12 +173,12 @@ The last guarantee needs **pgvector 0.8 or newer** (`hnsw.iterative_scan`). On a
 
 ### Injected knowledge is untrusted input
 
-Retrieved knowledge is partly **user-derived** (an entry written by [automatic extraction](./memories.md#automatic-extraction) contains what the user said). It is treated as data, never instruction:
+Retrieved knowledge is partly **user-derived** (a memory written by [automatic extraction](./memories.md#automatic-extraction) contains what the user said). It is treated as data, never instruction:
 
 - **Never injected with the `system` role.** [Agent knowledge injection](./agents.md#knowledge-config) delivers results as a `user` message inside a fenced `<knowledge>` block with a preamble framing it as reference material; the agent's `instructions` remain the only system input. Otherwise a phrase a user said once could become a persistent system-level instruction.
-- **Extraction runs tool-less**: a plain completion with no tools and no injection, so quoted text cannot trigger a side effect while becoming memory entries.
+- **Extraction runs tool-less**: a plain completion with no tools and no injection, so quoted text cannot trigger a side effect while becoming memories.
 
-This does not make retrieved content safe to act on: a tool call made after reading it is still authorized only by the agent's [boundary policy](./agents.md) and [guardrails](./guardrails.md). Scope the boundary policy assuming anything in reachable memories and documents may influence the agent.
+This does not make retrieved content safe to act on: a tool call made after reading it is still authorized only by the agent's [boundary policy](./agents.md) and [guardrails](./guardrails.md). Scope the boundary policy assuming anything in reachable memory stores and documents may influence the agent.
 
 ### Project Scoping
 
@@ -228,7 +228,7 @@ Metric definitions, the baseline table, its caveats and the per-deployment metho
 soat search-knowledge \
   --project-id proj_ABC \
   --query "quarterly revenue" \
-  --memory-ids mem_xyz \
+  --memory-store-ids mstore_xyz \
   --limit 5
 ```
 
@@ -246,7 +246,7 @@ const { data, error } = await soat.knowledge.searchKnowledge({
   body: {
     project_id: 'proj_ABC',
     query: 'quarterly revenue',
-    memory_ids: ['mem_xyz'],
+    memory_store_ids: ['mstore_xyz'],
     limit: 5,
   },
 });
@@ -264,7 +264,7 @@ curl -X POST https://api.example.com/api/v1/knowledge/search \
   -d '{
     "project_id": "proj_ABC",
     "query": "quarterly revenue",
-    "memory_ids": ["mem_xyz"],
+    "memory_store_ids": ["mstore_xyz"],
     "limit": 5
   }'
 ```

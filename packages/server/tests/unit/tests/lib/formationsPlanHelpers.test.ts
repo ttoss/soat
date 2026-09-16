@@ -1,10 +1,10 @@
 import { db } from 'src/db';
-import * as memoriesFormationModule from 'src/lib/formation-modules/memoriesFormationModule';
+import * as memoryStoresFormationModule from 'src/lib/formation-modules/memoryStoresFormationModule';
 import {
   computeOrphanedPlanChanges,
   planResourceChange,
 } from 'src/lib/formationsPlanHelpers';
-import { createMemory } from 'src/lib/memories';
+import { createMemoryStore } from 'src/lib/memoryStores';
 import { createSecret } from 'src/lib/secrets';
 
 // Every resourceType's `read` swallows its own errors and returns null, so
@@ -12,11 +12,11 @@ import { createSecret } from 'src/lib/secrets';
 // point — one `jest.spyOn` forces it, the sanctioned force-failure pattern.
 
 let projectId: number;
-let memoryCounter = 0;
+let memoryStoreCounter = 0;
 
 const uniqueName = (prefix: string) => {
-  memoryCounter += 1;
-  return `${prefix}-${memoryCounter}`;
+  memoryStoreCounter += 1;
+  return `${prefix}-${memoryStoreCounter}`;
 };
 
 describe('formationsPlanHelpers', () => {
@@ -31,17 +31,17 @@ describe('formationsPlanHelpers', () => {
     test('reports create when there is no physical resource yet', async () => {
       const change = await planResourceChange({
         projectId,
-        logicalId: 'MyMemory',
-        decl: { type: 'memory', properties: { name: 'unprovisioned' } },
+        logicalId: 'MyMemoryStore',
+        decl: { type: 'memory_store', properties: { name: 'unprovisioned' } },
         physicalResourceId: undefined,
         resolvedParams: new Map(),
         existingMap: new Map(),
-        templateResourceKeys: new Set(['MyMemory']),
+        templateResourceKeys: new Set(['MyMemoryStore']),
       });
 
       expect(change).toEqual({
-        logicalId: 'MyMemory',
-        resourceType: 'memory',
+        logicalId: 'MyMemoryStore',
+        resourceType: 'memory_store',
         action: 'create',
         diff: { desired: { name: 'unprovisioned' }, current: null },
       });
@@ -62,54 +62,57 @@ describe('formationsPlanHelpers', () => {
     });
 
     test('reports no-op when the live properties match the resolved template', async () => {
-      const memory = await createMemory({
+      const memoryStore = await createMemoryStore({
         projectId,
         name: uniqueName('plan-helpers-mem'),
       });
 
       const change = await planResourceChange({
         projectId,
-        logicalId: 'MyMemory',
-        decl: { type: 'memory', properties: { name: memory.name } },
-        physicalResourceId: memory.id,
+        logicalId: 'MyMemoryStore',
+        decl: { type: 'memory_store', properties: { name: memoryStore.name } },
+        physicalResourceId: memoryStore.id,
         resolvedParams: new Map(),
         existingMap: new Map(),
-        templateResourceKeys: new Set(['MyMemory']),
+        templateResourceKeys: new Set(['MyMemoryStore']),
       });
 
       expect(change).toEqual({
-        logicalId: 'MyMemory',
-        resourceType: 'memory',
-        physicalResourceId: memory.id,
+        logicalId: 'MyMemoryStore',
+        resourceType: 'memory_store',
+        physicalResourceId: memoryStore.id,
         action: 'no-op',
         diff: {
-          desired: { name: memory.name },
-          current: expect.objectContaining({ name: memory.name }),
+          desired: { name: memoryStore.name },
+          current: expect.objectContaining({ name: memoryStore.name }),
         },
       });
     });
 
     test('reports update when a resolved property differs from the live value', async () => {
-      const memory = await createMemory({
+      const memoryStore = await createMemoryStore({
         projectId,
         name: uniqueName('plan-helpers-mem'),
       });
 
       const change = await planResourceChange({
         projectId,
-        logicalId: 'MyMemory',
-        decl: { type: 'memory', properties: { name: 'a different name' } },
-        physicalResourceId: memory.id,
+        logicalId: 'MyMemoryStore',
+        decl: {
+          type: 'memory_store',
+          properties: { name: 'a different name' },
+        },
+        physicalResourceId: memoryStore.id,
         resolvedParams: new Map(),
         existingMap: new Map(),
-        templateResourceKeys: new Set(['MyMemory']),
+        templateResourceKeys: new Set(['MyMemoryStore']),
       });
 
       expect(change.action).toBe('update');
     });
 
     test('reports update when a property ref cannot yet be resolved against existingMap', async () => {
-      const memory = await createMemory({
+      const memoryStore = await createMemoryStore({
         projectId,
         name: uniqueName('plan-helpers-mem'),
       });
@@ -119,15 +122,15 @@ describe('formationsPlanHelpers', () => {
       // live string value, so the conservative 'update' is reported.
       const change = await planResourceChange({
         projectId,
-        logicalId: 'MyMemory',
+        logicalId: 'MyMemoryStore',
         decl: {
-          type: 'memory',
+          type: 'memory_store',
           properties: { name: { ref: 'NotYetCreated' } },
         },
-        physicalResourceId: memory.id,
+        physicalResourceId: memoryStore.id,
         resolvedParams: new Map(),
         existingMap: new Map(),
-        templateResourceKeys: new Set(['MyMemory']),
+        templateResourceKeys: new Set(['MyMemoryStore']),
       });
 
       expect(change.action).toBe('update');
@@ -136,35 +139,38 @@ describe('formationsPlanHelpers', () => {
     test('reports update when the underlying resource was deleted externally (read returns null)', async () => {
       const change = await planResourceChange({
         projectId,
-        logicalId: 'MyMemory',
-        decl: { type: 'memory', properties: { name: 'anything' } },
-        physicalResourceId: 'mem_does_not_exist',
+        logicalId: 'MyMemoryStore',
+        decl: { type: 'memory_store', properties: { name: 'anything' } },
+        physicalResourceId: 'mstore_does_not_exist',
         resolvedParams: new Map(),
         existingMap: new Map(),
-        templateResourceKeys: new Set(['MyMemory']),
+        templateResourceKeys: new Set(['MyMemoryStore']),
       });
 
       expect(change.action).toBe('update');
     });
 
     test('falls back to update when the module read throws', async () => {
-      const memory = await createMemory({
+      const memoryStore = await createMemoryStore({
         projectId,
         name: uniqueName('plan-helpers-mem'),
       });
       const readSpy = jest
-        .spyOn(memoriesFormationModule.memoriesFormationModule, 'read')
+        .spyOn(memoryStoresFormationModule.memoryStoresFormationModule, 'read')
         .mockRejectedValueOnce(new Error('unexpected read failure'));
 
       try {
         const change = await planResourceChange({
           projectId,
-          logicalId: 'MyMemory',
-          decl: { type: 'memory', properties: { name: memory.name } },
-          physicalResourceId: memory.id,
+          logicalId: 'MyMemoryStore',
+          decl: {
+            type: 'memory_store',
+            properties: { name: memoryStore.name },
+          },
+          physicalResourceId: memoryStore.id,
           resolvedParams: new Map(),
           existingMap: new Map(),
-          templateResourceKeys: new Set(['MyMemory']),
+          templateResourceKeys: new Set(['MyMemoryStore']),
         });
 
         expect(change.action).toBe('update');
@@ -265,8 +271,8 @@ describe('formationsPlanHelpers', () => {
     test('reports a delete change for a resource the template no longer declares', () => {
       const removed = buildResource({
         logicalId: 'RemoveMe',
-        resourceType: 'memory',
-        physicalResourceId: 'mem_1',
+        resourceType: 'memory_store',
+        physicalResourceId: 'mstore_1',
         status: 'created',
       });
 
@@ -278,8 +284,8 @@ describe('formationsPlanHelpers', () => {
       expect(changes).toEqual([
         {
           logicalId: 'RemoveMe',
-          resourceType: 'memory',
-          physicalResourceId: 'mem_1',
+          resourceType: 'memory_store',
+          physicalResourceId: 'mstore_1',
           action: 'delete',
         },
       ]);
@@ -288,8 +294,8 @@ describe('formationsPlanHelpers', () => {
     test('excludes a resource the template still declares', () => {
       const kept = buildResource({
         logicalId: 'KeepMe',
-        resourceType: 'memory',
-        physicalResourceId: 'mem_2',
+        resourceType: 'memory_store',
+        physicalResourceId: 'mstore_2',
         status: 'created',
       });
 
@@ -304,7 +310,7 @@ describe('formationsPlanHelpers', () => {
     test('excludes a row with no physical resource id yet', () => {
       const pending = buildResource({
         logicalId: 'Pending',
-        resourceType: 'memory',
+        resourceType: 'memory_store',
         physicalResourceId: null,
         status: 'pending',
       });
@@ -320,8 +326,8 @@ describe('formationsPlanHelpers', () => {
     test('excludes a resource already tombstoned from a prior deploy', () => {
       const tombstoned = buildResource({
         logicalId: 'AlreadyGone',
-        resourceType: 'memory',
-        physicalResourceId: 'mem_3',
+        resourceType: 'memory_store',
+        physicalResourceId: 'mstore_3',
         status: 'deleted',
       });
 

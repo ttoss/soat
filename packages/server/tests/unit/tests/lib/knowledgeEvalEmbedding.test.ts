@@ -72,7 +72,7 @@ describe('featureHashEmbedding', () => {
   });
 
   test('scores a text against itself at 1', () => {
-    const vector = embed('memory entries are deduplicated');
+    const vector = embed('memories are deduplicated');
     expect(cosine(vector, vector)).toBeCloseTo(1, 10);
   });
 

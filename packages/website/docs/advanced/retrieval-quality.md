@@ -56,7 +56,7 @@ The decay applies to memory results and not to the document chunks they share a 
 | `1825` | 1.0000 | 1.0000 | 0.7736 | 0.8082 |
 | `7300` | 1.0000 | 1.0000 | 0.9167 | 0.8394 |
 
-Pick a half-life from a run against your own corpus, start long, and prefer scoping the search to `memory_ids` where freshness is what is actually being ranked.
+Pick a half-life from a run against your own corpus, start long, and prefer scoping the search to `memory_store_ids` where freshness is what is actually being ranked.
 
 ## Retrieval baseline
 

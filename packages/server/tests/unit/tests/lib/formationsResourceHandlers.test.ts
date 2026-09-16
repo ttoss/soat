@@ -26,7 +26,7 @@ describe('formationsResourceHandlers', () => {
 
   // Prerequisite resources created once, referenced by the per-resource tests.
   let secretId: string;
-  let memoryId: string;
+  let memoryStoreId: string;
   let aiProviderId: string;
   let agentId: string;
 
@@ -70,10 +70,10 @@ describe('formationsResourceHandlers', () => {
       .send({ project_id: projectId, name: 'frh-secret', value: 'sk-secret' });
     secretId = secretRes.body.id;
 
-    const memoryRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/memories')
-      .send({ project_id: projectId, name: 'frh-prereq-memory' });
-    memoryId = memoryRes.body.id;
+    const memoryStoreRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/memory-stores')
+      .send({ project_id: projectId, name: 'frh-prereq-memoryStore' });
+    memoryStoreId = memoryStoreRes.body.id;
 
     const aiProviderRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/ai-providers')
@@ -227,43 +227,43 @@ describe('formationsResourceHandlers', () => {
       });
     });
 
-    test('creates memory', async () => {
+    test('creates memoryStore', async () => {
+      const id = await applyCreateResource({
+        actingUserId,
+        resourceType: 'memory_store',
+        projectId: projectDbId,
+        resolvedProperties: {
+          name: 'frh-create-memoryStore',
+          description: 'Important facts',
+          tags: { scope: 'core', visibility: 'shared' },
+        },
+      });
+
+      expect(id).toMatch(/^mstore_/);
+      const read = await readResource('memory_store', id);
+      expect(read).toMatchObject({
+        name: 'frh-create-memoryStore',
+        description: 'Important facts',
+        tags: { scope: 'core', visibility: 'shared' },
+      });
+    });
+
+    test('creates memory with resolved memoryStore internal id', async () => {
       const id = await applyCreateResource({
         actingUserId,
         resourceType: 'memory',
         projectId: projectDbId,
         resolvedProperties: {
-          name: 'frh-create-memory',
-          description: 'Important facts',
-          tags: { scope: 'core', visibility: 'shared' },
+          memory_store_id: memoryStoreId,
+          content: 'Remember this',
+          source_type: 'manual',
         },
       });
 
       expect(id).toMatch(/^mem_/);
       const read = await readResource('memory', id);
       expect(read).toMatchObject({
-        name: 'frh-create-memory',
-        description: 'Important facts',
-        tags: { scope: 'core', visibility: 'shared' },
-      });
-    });
-
-    test('creates memory_entry with resolved memory internal id', async () => {
-      const id = await applyCreateResource({
-        actingUserId,
-        resourceType: 'memory_entry',
-        projectId: projectDbId,
-        resolvedProperties: {
-          memory_id: memoryId,
-          content: 'Remember this',
-          source_type: 'manual',
-        },
-      });
-
-      expect(id).toMatch(/^mem_entry_/);
-      const read = await readResource('memory_entry', id);
-      expect(read).toMatchObject({
-        memory_id: memoryId,
+        memory_store_id: memoryStoreId,
         content: 'Remember this',
         source_type: 'manual',
       });
@@ -278,7 +278,7 @@ describe('formationsResourceHandlers', () => {
           name: 'frh-create-webhook',
           description: 'Webhook description',
           url: 'https://example.com/webhook',
-          events: ['memory.created'],
+          events: ['memoryStore.created'],
         },
       });
 
@@ -288,7 +288,7 @@ describe('formationsResourceHandlers', () => {
         name: 'frh-create-webhook',
         description: 'Webhook description',
         url: 'https://example.com/webhook',
-        events: ['memory.created'],
+        events: ['memoryStore.created'],
       });
     });
 
@@ -483,13 +483,13 @@ describe('formationsResourceHandlers', () => {
       });
     });
 
-    test('updates memory', async () => {
+    test('updates memoryStore', async () => {
       const id = await applyCreateResource({
         actingUserId,
-        resourceType: 'memory',
+        resourceType: 'memory_store',
         projectId: projectDbId,
         resolvedProperties: {
-          name: 'frh-update-memory',
+          name: 'frh-update-memoryStore',
           description: 'original',
         },
       });
@@ -498,7 +498,7 @@ describe('formationsResourceHandlers', () => {
         applyUpdateResource({
           actingUserId,
           projectId: projectDbId,
-          resourceType: 'memory',
+          resourceType: 'memory_store',
           physicalResourceId: id,
           resolvedProperties: {
             name: 'frh-update-memory-v2',
@@ -508,17 +508,17 @@ describe('formationsResourceHandlers', () => {
         })
       ).resolves.toBeUndefined();
 
-      const read = await readResource('memory', id);
+      const read = await readResource('memory_store', id);
       expect(read).toMatchObject({ name: 'frh-update-memory-v2' });
     });
 
-    test('updates memory_entry', async () => {
+    test('updates memory', async () => {
       const id = await applyCreateResource({
         actingUserId,
-        resourceType: 'memory_entry',
+        resourceType: 'memory',
         projectId: projectDbId,
         resolvedProperties: {
-          memory_id: memoryId,
+          memory_store_id: memoryStoreId,
           content: 'old content',
           source_type: 'manual',
         },
@@ -528,13 +528,13 @@ describe('formationsResourceHandlers', () => {
         applyUpdateResource({
           actingUserId,
           projectId: projectDbId,
-          resourceType: 'memory_entry',
+          resourceType: 'memory',
           physicalResourceId: id,
           resolvedProperties: { content: 'new content' },
         })
       ).resolves.toBeUndefined();
 
-      const read = await readResource('memory_entry', id);
+      const read = await readResource('memory', id);
       expect(read).toMatchObject({ content: 'new content' });
     });
 
@@ -546,7 +546,7 @@ describe('formationsResourceHandlers', () => {
         resolvedProperties: {
           name: 'frh-update-webhook',
           url: 'https://example.com/webhook',
-          events: ['memory.created'],
+          events: ['memoryStore.created'],
         },
       });
 
@@ -560,7 +560,7 @@ describe('formationsResourceHandlers', () => {
             name: 'frh-update-webhook-v2',
             description: 'Updated description',
             url: 'https://example.com/hook',
-            events: ['memory.updated'],
+            events: ['memoryStore.updated'],
           },
         })
       ).resolves.toBeUndefined();
@@ -570,7 +570,7 @@ describe('formationsResourceHandlers', () => {
         name: 'frh-update-webhook-v2',
         description: 'Updated description',
         url: 'https://example.com/hook',
-        events: ['memory.updated'],
+        events: ['memoryStore.updated'],
       });
     });
 
@@ -611,16 +611,16 @@ describe('formationsResourceHandlers', () => {
       ).rejects.toThrow(/not found/i);
     });
 
-    test('throws when memory_entry to update is missing', async () => {
+    test('throws when memory to update is missing', async () => {
       await expect(
         applyUpdateResource({
           actingUserId,
           projectId: projectDbId,
-          resourceType: 'memory_entry',
+          resourceType: 'memory',
           physicalResourceId: 'men_missing',
           resolvedProperties: { content: 'x' },
         })
-      ).rejects.toThrow('MemoryEntry not found: men_missing');
+      ).rejects.toThrow('Memory not found: men_missing');
     });
 
     test('throws for unsupported update resource type', async () => {
@@ -756,12 +756,32 @@ describe('formationsResourceHandlers', () => {
       expect(await readResource('document', id)).toBeNull();
     });
 
+    test('deletes memoryStore', async () => {
+      const id = await applyCreateResource({
+        actingUserId,
+        resourceType: 'memory_store',
+        projectId: projectDbId,
+        resolvedProperties: { name: 'frh-delete-memoryStore' },
+      });
+
+      await applyDeleteResource({
+        actingUserId,
+        projectId: projectDbId,
+        resourceType: 'memory_store',
+        physicalResourceId: id,
+      });
+      expect(await readResource('memory_store', id)).toBeNull();
+    });
+
     test('deletes memory', async () => {
       const id = await applyCreateResource({
         actingUserId,
         resourceType: 'memory',
         projectId: projectDbId,
-        resolvedProperties: { name: 'frh-delete-memory' },
+        resolvedProperties: {
+          memory_store_id: memoryStoreId,
+          content: 'delete me',
+        },
       });
 
       await applyDeleteResource({
@@ -773,23 +793,6 @@ describe('formationsResourceHandlers', () => {
       expect(await readResource('memory', id)).toBeNull();
     });
 
-    test('deletes memory_entry', async () => {
-      const id = await applyCreateResource({
-        actingUserId,
-        resourceType: 'memory_entry',
-        projectId: projectDbId,
-        resolvedProperties: { memory_id: memoryId, content: 'delete me' },
-      });
-
-      await applyDeleteResource({
-        actingUserId,
-        projectId: projectDbId,
-        resourceType: 'memory_entry',
-        physicalResourceId: id,
-      });
-      expect(await readResource('memory_entry', id)).toBeNull();
-    });
-
     test('deletes webhook', async () => {
       const id = await applyCreateResource({
         actingUserId,
@@ -798,7 +801,7 @@ describe('formationsResourceHandlers', () => {
         resolvedProperties: {
           name: 'frh-delete-webhook',
           url: 'https://example.com/webhook',
-          events: ['memory.created'],
+          events: ['memoryStore.created'],
         },
       });
 

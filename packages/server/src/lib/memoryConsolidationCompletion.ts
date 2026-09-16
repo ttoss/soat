@@ -8,7 +8,7 @@ import { meterCompletion, routedMaxRetries } from './modelRoutes';
 const log = createDebug('soat:memory-consolidation');
 
 /**
- * Runs the merge-consolidation completion — given an existing memory entry and
+ * Runs the merge-consolidation completion — given an existing memory and
  * an incoming fact, returns a single consolidated atomic fact. A plain text
  * completion (no tools, no knowledge injection), so it cannot trigger agent
  * side effects.
@@ -18,7 +18,7 @@ const log = createDebug('soat:memory-consolidation');
  * which has no agent context — does not use this and keeps concatenation.
  *
  * Kept in its own module so tests can replace the LLM boundary with
- * `jest.spyOn` while `writeMemoryEntry` runs for real.
+ * `jest.spyOn` while `writeMemory` runs for real.
  */
 export const runConsolidationCompletion = async (args: {
   agentId: string;

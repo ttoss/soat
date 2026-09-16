@@ -6,7 +6,7 @@
  * and `resolveRecoveryTools` (`agentGenerationRecovery`), running the same
  * six-step sequence down to a verbatim-copied comment. They had already
  * diverged: the recovery copy never built the knowledge-derived tools, so an
- * agent with a `knowledge_config.write_memory_id` kept `write_memory` when its
+ * agent with a `knowledge_config.write_memory_store_id` kept `write_memory` when its
  * paused generation resumed from the in-memory map and silently lost it when
  * the same generation resumed from the DB after a restart. Resolving the
  * surface in one place is what makes that difference unrepresentable.
@@ -99,7 +99,6 @@ export const resolveAgentToolSurface = async (args: {
     projectIds: args.projectIds,
     typedAgent: args.typedAgent,
     resolvedTools,
-    generationId: args.generationId,
   });
 
   return resolvedTools;

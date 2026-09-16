@@ -1231,11 +1231,11 @@ describe('Group 12: Admin API key with full-access policy is not 403', () => {
   });
 });
 
-// The same project-scoped SRN pattern that works for files 403'd on memories,
-// ai-providers and memory-entries by-id routes, whose handlers called
+// The same project-scoped SRN pattern that works for files 403'd on memory stores,
+// ai-providers and memories by-id routes, whose handlers called
 // `isAllowed` with no `resource` field (#355).
 
-describe('Group 13: API key with project-scoped SRN policy — memories, ai-providers, memory-entries', () => {
+describe('Group 13: API key with project-scoped SRN policy — memoryStores, ai-providers, memories', () => {
   let adminToken: string;
   let projectId: string;
   let apiKey: string;
@@ -1249,7 +1249,7 @@ describe('Group 13: API key with project-scoped SRN policy — memories, ai-prov
 
     const projectRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/projects')
-      .send({ name: 'SRN Scoped Memories Project' });
+      .send({ name: 'SRN Scoped MemoryStores Project' });
     projectId = projectRes.body.id;
 
     const userRes = await authenticatedTestClient(adminToken)
@@ -1297,54 +1297,54 @@ describe('Group 13: API key with project-scoped SRN policy — memories, ai-prov
     apiKey = apiKeyRes.body.key;
   });
 
-  let memoryId: string;
-  let createMemoryRes: { status: number; body: { id: string } };
+  let memoryStoreId: string;
+  let createMemoryStoreRes: { status: number; body: { id: string } };
 
   beforeAll(async () => {
-    createMemoryRes = await testClient
-      .post('/api/v1/memories')
+    createMemoryStoreRes = await testClient
+      .post('/api/v1/memory-stores')
       .set('Authorization', `Bearer ${apiKey}`)
-      .send({ project_id: projectId, name: 'SRN Memory' });
-    memoryId = createMemoryRes.body.id;
+      .send({ project_id: projectId, name: 'SRN MemoryStore' });
+    memoryStoreId = createMemoryStoreRes.body.id;
   });
 
-  test('API key can create a memory when the key policy SRN matches the project', () => {
-    expect(createMemoryRes.status).toBe(201);
+  test('API key can create a memoryStore when the key policy SRN matches the project', () => {
+    expect(createMemoryStoreRes.status).toBe(201);
   });
 
-  test('API key can get a memory when the key policy SRN matches the project', async () => {
+  test('API key can get a memoryStore when the key policy SRN matches the project', async () => {
     const getRes = await testClient
-      .get(`/api/v1/memories/${memoryId}`)
+      .get(`/api/v1/memory-stores/${memoryStoreId}`)
       .set('Authorization', `Bearer ${apiKey}`);
     expect(getRes.status).toBe(200);
-    expect(getRes.body.id).toBe(memoryId);
+    expect(getRes.body.id).toBe(memoryStoreId);
   });
 
-  test('API key can update a memory when the key policy SRN matches the project', async () => {
+  test('API key can update a memoryStore when the key policy SRN matches the project', async () => {
     const updateRes = await testClient
-      .put(`/api/v1/memories/${memoryId}`)
+      .put(`/api/v1/memory-stores/${memoryStoreId}`)
       .set('Authorization', `Bearer ${apiKey}`)
-      .send({ name: 'Updated SRN Memory' });
+      .send({ name: 'Updated SRN MemoryStore' });
     expect(updateRes.status).toBe(200);
   });
 
-  test('API key can create and get a memory entry when the key policy SRN matches the project', async () => {
+  test('API key can create and get a memory when the key policy SRN matches the project', async () => {
     const entryCreateRes = await testClient
-      .post('/api/v1/memory-entries')
+      .post('/api/v1/memories')
       .set('Authorization', `Bearer ${apiKey}`)
-      .send({ memory_id: memoryId, content: 'SRN entry content' });
+      .send({ memory_store_id: memoryStoreId, content: 'SRN entry content' });
     expect(entryCreateRes.status).toBe(201);
     const entryId = entryCreateRes.body.id;
 
     const entryGetRes = await testClient
-      .get(`/api/v1/memory-entries/${entryId}`)
+      .get(`/api/v1/memories/${entryId}`)
       .set('Authorization', `Bearer ${apiKey}`);
     expect(entryGetRes.status).toBe(200);
   });
 
-  test('API key can delete a memory when the key policy SRN matches the project', async () => {
+  test('API key can delete a memoryStore when the key policy SRN matches the project', async () => {
     const deleteRes = await testClient
-      .delete(`/api/v1/memories/${memoryId}`)
+      .delete(`/api/v1/memory-stores/${memoryStoreId}`)
       .set('Authorization', `Bearer ${apiKey}`);
     expect(deleteRes.status).toBe(204);
   });
@@ -1385,9 +1385,9 @@ describe('Group 14: API key with project-scoped SRN policy — formations', () =
 
   const simpleTemplate = {
     resources: {
-      SrnMemory: {
-        type: 'memory',
-        properties: { name: 'SRN Formation Memory' },
+      SrnMemoryStore: {
+        type: 'memory_store',
+        properties: { name: 'SRN Formation MemoryStore' },
       },
     },
   };
@@ -1423,7 +1423,7 @@ describe('Group 14: API key with project-scoped SRN policy — formations', () =
     const userToken = await loginAs('olga', 'olgapass');
 
     // Key policy targets the project via an explicit resource SRN, like
-    // Group 13 does for memories/ai-providers — the pattern that already
+    // Group 13 does for memory stores/ai-providers — the pattern that already
     // works there but not (yet) for formations.
     const keyPolicyRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/policies')
@@ -1484,9 +1484,9 @@ describe('Group 14: API key with project-scoped SRN policy — formations', () =
       .send({
         template: {
           resources: {
-            SrnMemory: {
-              type: 'memory',
-              properties: { name: 'SRN Formation Memory Updated' },
+            SrnMemoryStore: {
+              type: 'memory_store',
+              properties: { name: 'SRN Formation MemoryStore Updated' },
             },
           },
         },

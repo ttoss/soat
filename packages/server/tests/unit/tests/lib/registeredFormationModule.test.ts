@@ -767,7 +767,7 @@ describe('a registered type inside a real formation deploy', () => {
 
   test('a template of built-in types alone makes no handler call', async () => {
     const result = await validateFormationTemplateAsync({
-      resources: { Mem: { type: 'memory', properties: { name: 'M' } } },
+      resources: { Mem: { type: 'memory_store', properties: { name: 'M' } } },
     });
 
     expect(result.valid).toBe(true);
@@ -997,10 +997,12 @@ describe('resolveFormationOutputs against a registered type', () => {
     await expect(
       resolveFormationOutputs(
         {
-          resources: { Mem: { type: 'memory', properties: { name: 'notes' } } },
+          resources: {
+            Mem: { type: 'memory_store', properties: { name: 'notes' } },
+          },
           outputs: { value: { ref_attr: 'Mem.anything' } },
         },
-        new Map([['Mem', 'mem_1']]),
+        new Map([['Mem', 'mstore_1']]),
         projectId
       )
     ).resolves.toEqual({});

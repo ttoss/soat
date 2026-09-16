@@ -82,7 +82,7 @@ export const validateQuotaLimit = (args: {
  *   agent, and end-user (actor) attribution — but no API-key attribution, so
  *   `api_key` is excluded.
  * - `storage_bytes` reads the storage snapshot, which measures files, document
- *   chunks and memory entries per **project** and nothing narrower: a stored
+ *   chunks and memories per **project** and nothing narrower: a stored
  *   byte carries no agent, actor or api-key attribution, so `project` is the
  *   only scope it can be aggregated by.
  *

@@ -364,7 +364,7 @@ describe('vector columns carry an ANN index', () => {
           return `${table}.${column}`;
         })
         .sort()
-    ).toEqual(['document_chunks.embedding', 'memory_entries.embedding']);
+    ).toEqual(['document_chunks.embedding', 'memories.embedding']);
   });
 
   test('every vector column is indexed `USING hnsw` with the cosine operator', () => {
