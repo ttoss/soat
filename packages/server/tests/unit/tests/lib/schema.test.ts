@@ -3,6 +3,7 @@ import {
   assertSchemaPrepared,
   isBootSchemaSyncEnabled,
   pendingMigrationNames,
+  prepareOrAssertSchema,
 } from 'src/schema';
 
 import { sequelize } from '../../setupTestsAfterEnv';
@@ -126,5 +127,44 @@ describe('assertSchemaPrepared', () => {
     await expect(assertSchemaPrepared({ sequelize })).rejects.toThrow(
       new RegExp(ALL_NAMES[0])
     );
+  });
+});
+
+describe('prepareOrAssertSchema', () => {
+  const saved = process.env.DB_SYNC;
+
+  afterEach(() => {
+    if (saved === undefined) {
+      delete process.env.DB_SYNC;
+    } else {
+      process.env.DB_SYNC = saved;
+    }
+  });
+
+  test('with the gate off, refuses a database the migrate step has not run against', async () => {
+    delete process.env.DB_SYNC;
+    await dropLedger();
+
+    await expect(prepareOrAssertSchema({ sequelize })).rejects.toThrow(
+      /migrate\.mjs run/
+    );
+  });
+
+  test('with the gate off, serves a prepared database without touching the schema', async () => {
+    delete process.env.DB_SYNC;
+    await recordEvery();
+
+    await expect(prepareOrAssertSchema({ sequelize })).resolves.toBeUndefined();
+  });
+
+  test('with the gate on, prepares the schema and records what it did', async () => {
+    // The single-container path: nowhere to put a pre-deploy step, so boot
+    // does the work and the ledger ends up populated either way.
+    process.env.DB_SYNC = 'true';
+    await dropLedger();
+
+    await prepareOrAssertSchema({ sequelize });
+
+    expect(await pendingMigrationNames({ sequelize })).toEqual([]);
   });
 });

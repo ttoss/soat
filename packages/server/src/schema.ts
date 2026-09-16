@@ -164,3 +164,43 @@ export const prepareSchema = async (args: {
 
   await syncSchemaWithAdvisoryLock({ sequelize: args.sequelize });
 };
+
+/**
+ * What boot calls: prepare the schema, or refuse to serve a database that is
+ * behind. Lives here rather than as an `if` in each entrypoint so the API tier
+ * and the worker fleet can never disagree about what a boot is allowed to do.
+ */
+export const prepareOrAssertSchema = async (args: {
+  sequelize: Sequelize;
+}): Promise<void> => {
+  if (isBootSchemaSyncEnabled()) {
+    await prepareSchema(args);
+
+    return;
+  }
+
+  await assertSchemaPrepared(args);
+};
+
+/**
+ * The boot step itself: prepare or refuse, and end the process on refusal.
+ *
+ * Both entrypoints call this one statement rather than branching inline —
+ * `startServer` is already at the complexity ceiling, and a schema gate that
+ * differed between the API tier and the worker fleet would be a bug nothing
+ * else would catch.
+ */
+export const prepareSchemaOrExit = async (args: {
+  sequelize: Sequelize;
+}): Promise<void> => {
+  try {
+    await prepareOrAssertSchema(args);
+  } catch (error) {
+    // A schema that is behind is not a connection failure, and reporting it as
+    // one sends an operator to the wrong place entirely. Unconditional stderr
+    // rather than the opt-in `debug` logger: this terminates the process.
+    // eslint-disable-next-line no-console
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
+};

@@ -25,11 +25,7 @@ import { startUsageRequestScheduler } from './lib/usageRequestScheduler';
 import { startUsageStorageScheduler } from './lib/usageStorageScheduler';
 import { createFirstAdminUser } from './lib/users';
 import { startWebhookScheduler } from './lib/webhookDispatcher';
-import {
-  assertSchemaPrepared,
-  isBootSchemaSyncEnabled,
-  prepareSchema,
-} from './schema';
+import { prepareSchemaOrExit } from './schema';
 
 const log = createDebug('soat:server');
 
@@ -73,11 +69,7 @@ const startServer = async () => {
     // and only checks that the step has run. DB_SYNC=true opts a deployment
     // that has no such step — a single container against its own database —
     // back into preparing the schema here, serialized on the advisory locks.
-    if (isBootSchemaSyncEnabled()) {
-      await prepareSchema({ sequelize: database.sequelize });
-    } else {
-      await assertSchemaPrepared({ sequelize: database.sequelize });
-    }
+    await prepareSchemaOrExit({ sequelize: database.sequelize });
     // One-time data normalization of `knowledge_config` bags stored in
     // camelCase before single-casing. Idempotent and prefiltered in SQL, so a
     // converged database pays a single indexless scan and writes nothing.

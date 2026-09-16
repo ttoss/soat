@@ -19,11 +19,7 @@ import {
   startOrchestrationWorker,
   stopOrchestrationWorker,
 } from './lib/orchestrationWorker';
-import {
-  assertSchemaPrepared,
-  isBootSchemaSyncEnabled,
-  prepareSchema,
-} from './schema';
+import { prepareSchemaOrExit } from './schema';
 
 const log = createDebug('soat:worker');
 
@@ -85,11 +81,7 @@ const startWorker = async () => {
 
   try {
     const database = await initializeDatabase(app);
-    if (isBootSchemaSyncEnabled()) {
-      await prepareSchema({ sequelize: database.sequelize });
-    } else {
-      await assertSchemaPrepared({ sequelize: database.sequelize });
-    }
+    await prepareSchemaOrExit({ sequelize: database.sequelize });
     startOrchestrationScheduler();
     startOrchestrationWorker();
     // The same process also drains the eval queue, so a deployment that moves
