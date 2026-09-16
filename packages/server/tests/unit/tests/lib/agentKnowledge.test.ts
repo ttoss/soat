@@ -688,12 +688,6 @@ describe('readKnowledgeConfig', () => {
       min_score: 0.5,
       limit: 50,
       write_memory_store_id: 'mstore_1',
-      extraction: {
-        enabled: true,
-        ai_provider_id: 'aip_1',
-        model: 'llama3.2:1b',
-        prompt: 'extract facts',
-      },
     });
     expect(result).toEqual({
       memoryStoreIds: ['mstore_1'],
@@ -703,12 +697,6 @@ describe('readKnowledgeConfig', () => {
       minScore: 0.5,
       limit: 50,
       writeMemoryStoreId: 'mstore_1',
-      extraction: {
-        enabled: true,
-        aiProviderId: 'aip_1',
-        model: 'llama3.2:1b',
-        prompt: 'extract facts',
-      },
     });
   });
 
@@ -718,11 +706,6 @@ describe('readKnowledgeConfig', () => {
     // the agent's stored value on every per-generation override.
     const result = readKnowledgeConfig({ limit: 5 });
     expect(Object.keys(result!)).toEqual(['limit']);
-  });
-
-  test('passes a boolean extraction value through as-is', () => {
-    expect(readKnowledgeConfig({ extraction: true })?.extraction).toBe(true);
-    expect(readKnowledgeConfig({ extraction: false })?.extraction).toBe(false);
   });
 
   test('ignores a camelCase key — storage is the wire casing after the backfill', () => {
@@ -753,7 +736,7 @@ describe('toStoredKnowledgeConfig', () => {
   test('stores the bag verbatim — a write performs no key transform', () => {
     const input = {
       write_memory_store_id: 'mstore_1',
-      extraction: { ai_provider_id: 'aip_1' },
+      memory_store_ids: ['mstore_2'],
     };
     const stored = toStoredKnowledgeConfig(input);
     expect(stored).toBe(input);

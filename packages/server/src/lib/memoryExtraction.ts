@@ -1,42 +1,10 @@
 import createDebug from 'debug';
 
-import { db } from '../db';
-import type { ExtractionConfig, KnowledgeConfig } from './agentKnowledge';
-import { readKnowledgeConfig } from './agentKnowledge';
-import { updateGenerationRecord } from './generations';
-import { writeMemory } from './memories';
 import * as extractionCompletion from './memoryExtractionCompletion';
-import { scopedWhere } from './resourceAccessor';
 
 const log = createDebug('soat:memory-extraction');
 
 const MAX_EXTRACTION_CANDIDATES = 20;
-
-/**
- * Normalizes the `extraction` knowledge-config field: `true` means "enabled
- * with defaults", the object form is enabled unless `enabled: false`.
- * Returns null when extraction is disabled or not configured.
- */
-export const resolveExtractionConfig = (
-  extraction: KnowledgeConfig['extraction']
-): ExtractionConfig | null => {
-  if (extraction === true) return {};
-  if (
-    extraction &&
-    typeof extraction === 'object' &&
-    extraction.enabled !== false
-  ) {
-    return extraction;
-  }
-  return null;
-};
-
-export type ExtractionSummary = {
-  candidates: number;
-  created: number;
-  superseded: number;
-  skipped: number;
-};
 
 export type ExtractionMessage = { role: string; content: unknown };
 
@@ -48,7 +16,7 @@ const DEFAULT_EXTRACTION_INSTRUCTIONS = [
 
 const buildExtractionPrompt = (args: {
   transcript: string;
-  instructions?: string;
+  instructions?: string | null;
 }): string => {
   // A custom prompt replaces only the task instructions: the parser accepts
   // nothing but a JSON array, so letting a prompt change the output format
@@ -98,7 +66,7 @@ export const parseFactCandidates = (text: string): string[] => {
     .slice(0, MAX_EXTRACTION_CANDIDATES);
 };
 
-const buildTranscript = (args: {
+export const buildTranscript = (args: {
   messages: ExtractionMessage[];
   assistantContent: string;
 }): string => {
@@ -121,278 +89,48 @@ const buildTranscript = (args: {
   return lines.join('\n');
 };
 
-const recordExtractionSummary = async (args: {
-  generationId: string;
-  summary: ExtractionSummary;
-}): Promise<void> => {
-  // Writes the summary's own column, so there is no read-modify-write and
-  // nothing else on the generation can be clobbered. A missing record is
-  // tolerated — extraction must never fail because observability is missing.
-  const updated = await updateGenerationRecord({
-    publicId: args.generationId,
-    extraction: { ...args.summary },
-  });
-
-  if (!updated) {
-    log(
-      'recordExtractionSummary: generation not found generationId=%s',
-      args.generationId
-    );
-  }
-};
-
-type ExtractionTarget = {
-  memoryStore: InstanceType<(typeof db)['MemoryStore']>;
-  extraction: ExtractionConfig;
-};
-
 /**
- * Resolves the extraction target memory store and normalized extraction config.
- * Returns null (with a log line) unless the agent exists, its knowledge
- * config has extraction enabled and a `write_memory_store_id`, and the target
- * memory store exists.
- */
-// Lean lookup: only the agent's own `knowledgeConfig` column is read here.
-const findExtractionAgent = (args: {
-  agentId: string;
-  projectIds?: number[];
-}): Promise<InstanceType<(typeof db)['Agent']> | null> => {
-  return db.Agent.findOne({
-    where: scopedWhere({
-      id: args.agentId,
-      projectIds: args.projectIds,
-    }),
-  });
-};
-
-/**
- * Resolves the effective extraction config for a turn, applying the per-turn
- * `override`. A forced-on override (`true`) runs extraction with the stored
- * options (or defaults) even when the agent didn't enable it by default;
- * `undefined` follows the stored config.
- */
-const resolveEffectiveExtraction = (
-  config: KnowledgeConfig | null | undefined,
-  override?: boolean
-): ExtractionConfig | null => {
-  const configured = resolveExtractionConfig(config?.extraction);
-  return override === true ? (configured ?? {}) : configured;
-};
-
-const resolveExtractionTarget = async (args: {
-  agentId: string;
-  projectIds?: number[];
-  /**
-   * Per-turn override of the agent's extraction default. `false` suppresses
-   * extraction for this turn even when the agent enables it (e.g. operational
-   * or tool-listing turns that would only add noise); `true` forces it on when
-   * the agent has a write memory store but did not enable extraction by default;
-   * `undefined` follows the agent's stored config.
-   */
-  override?: boolean;
-}): Promise<ExtractionTarget | null> => {
-  if (args.override === false) {
-    log(
-      'resolveExtractionTarget: extraction suppressed for this turn agentId=%s',
-      args.agentId
-    );
-    return null;
-  }
-
-  const agent = await findExtractionAgent(args);
-  if (!agent) {
-    log('resolveExtractionTarget: agent not found agentId=%s', args.agentId);
-    return null;
-  }
-
-  // The stored bag is snake_case (the wire casing); read it into the internal
-  // camelCase shape before consulting `extraction` / `write_memory_store_id`.
-  const config = readKnowledgeConfig(agent.knowledgeConfig) as
-    KnowledgeConfig | null | undefined;
-  const extraction = resolveEffectiveExtraction(config, args.override);
-  const writeMemoryStoreId = config?.writeMemoryStoreId;
-  if (!extraction || !writeMemoryStoreId) {
-    log(
-      'resolveExtractionTarget: extraction not enabled agentId=%s writeMemoryStoreId=%s override=%s',
-      args.agentId,
-      writeMemoryStoreId,
-      args.override
-    );
-    return null;
-  }
-
-  const memoryStore = await db.MemoryStore.findOne({
-    where: { publicId: writeMemoryStoreId },
-  });
-  if (!memoryStore) {
-    log(
-      'resolveExtractionTarget: write memoryStore not found agentId=%s writeMemoryStoreId=%s',
-      args.agentId,
-      writeMemoryStoreId
-    );
-    return null;
-  }
-  return { memoryStore, extraction };
-};
-
-const writeCandidates = async (args: {
-  agentId: string;
-  memoryStoreId: number;
-  candidates: string[];
-  generationId?: string;
-  conversationId?: string;
-}): Promise<ExtractionSummary> => {
-  const summary: ExtractionSummary = {
-    candidates: args.candidates.length,
-    created: 0,
-    superseded: 0,
-    skipped: 0,
-  };
-
-  for (const content of args.candidates) {
-    try {
-      const result = await writeMemory({
-        memoryStoreId: args.memoryStoreId,
-        content,
-        sourceConversationPublicId: args.conversationId,
-        // `rule`, not `extraction`: this pass is the built-in extractor today
-        // and a `memory_rules` row with a pluggable handler after #1324, at
-        // which point only `ruleId` starts being set. Naming the value after
-        // the current implementation would schedule its own rename.
-        //
-        // No thresholds: the rule door uses the store's effective pair, like
-        // the tool door.
-        assertion: {
-          mechanism: 'rule',
-          // Null is the built-in extractor driven by
-          // `knowledge_config.extraction` — it has no rule row yet.
-          ruleId: null,
-          // The extractor is a tool-less completion that creates no generation
-          // of its own, so the turn's generation is the origin.
-          generationId: args.generationId,
-          principalType: 'agent',
-          principalId: args.agentId,
-        },
-      });
-      summary[result.action] += 1;
-    } catch (error) {
-      log(
-        'writeCandidates: write failed agentId=%s error=%s',
-        args.agentId,
-        error instanceof Error ? error.message : String(error)
-      );
-    }
-  }
-
-  return summary;
-};
-
-/**
- * Extracts atomic facts from a completed conversation turn and writes them to
- * the agent's `knowledge_config.write_memory_store_id` memory store through the
- * standard create/supersede/skip write algorithm.
+ * The handler a `memory_rules` row with neither an `agent_id` nor a `tool_id`
+ * runs: a tool-less completion over one turn's transcript that proposes atomic
+ * facts. The rule's `prompt` / `ai_provider_id` / `model` are its only knobs.
  *
- * Runs only when the agent's knowledge config has `extraction: true` and a
- * `write_memory_store_id`. Returns the summary, or null when extraction did not run.
+ * It proposes and never writes, exactly like a custom handler — the dispatcher
+ * puts every candidate through `writeMemory`. A failed completion yields no
+ * candidates rather than throwing: a rule must never be able to fail the turn
+ * it read.
  */
-export const runMemoryExtraction = async (args: {
+export const runBuiltInExtractor = async (args: {
+  /** The *source* agent, whose provider and model the completion resolves from. */
   agentId: string;
   projectIds?: number[];
-  generationId?: string;
-  /**
-   * Provenance for the entries this run writes. Present only on the
-   * conversation path; a direct agent generation has no conversation.
-   */
-  conversationId?: string;
-  messages: ExtractionMessage[];
-  assistantContent: string;
-  /** Per-turn override of the agent's extraction default; see resolveExtractionTarget. */
-  extract?: boolean;
-}): Promise<ExtractionSummary | null> => {
-  const target = await resolveExtractionTarget({
-    agentId: args.agentId,
-    projectIds: args.projectIds,
-    override: args.extract,
-  });
-  if (!target) return null;
-  const { memoryStore, extraction } = target;
-
-  const transcript = buildTranscript({
-    messages: args.messages,
-    assistantContent: args.assistantContent,
-  });
-  if (transcript.length === 0) {
-    log('runMemoryExtraction: empty transcript agentId=%s', args.agentId);
-    return null;
+  transcript: string;
+  prompt?: string | null;
+  aiProviderId?: string;
+  model?: string;
+}): Promise<string[]> => {
+  if (args.transcript.trim().length === 0) {
+    log('runBuiltInExtractor: empty transcript agentId=%s', args.agentId);
+    return [];
   }
 
-  let completionText: string;
   try {
-    completionText = await extractionCompletion.runExtractionCompletion({
+    const text = await extractionCompletion.runExtractionCompletion({
       agentId: args.agentId,
       projectIds: args.projectIds,
       prompt: buildExtractionPrompt({
-        transcript,
-        instructions: extraction.prompt,
+        transcript: args.transcript,
+        instructions: args.prompt,
       }),
-      aiProviderId: extraction.aiProviderId,
-      model: extraction.model,
+      aiProviderId: args.aiProviderId,
+      model: args.model,
     });
+    return parseFactCandidates(text);
   } catch (error) {
     log(
-      'runMemoryExtraction: completion failed agentId=%s error=%s',
+      'runBuiltInExtractor: completion failed agentId=%s error=%s',
       args.agentId,
       error instanceof Error ? error.message : String(error)
     );
-    return null;
+    return [];
   }
-
-  const summary = await writeCandidates({
-    agentId: args.agentId,
-    memoryStoreId: memoryStore.id as number,
-    candidates: parseFactCandidates(completionText),
-    generationId: args.generationId,
-    conversationId: args.conversationId,
-  });
-
-  log(
-    'runMemoryExtraction: done agentId=%s candidates=%d created=%d superseded=%d skipped=%d',
-    args.agentId,
-    summary.candidates,
-    summary.created,
-    summary.superseded,
-    summary.skipped
-  );
-
-  if (args.generationId) {
-    await recordExtractionSummary({
-      generationId: args.generationId,
-      summary,
-    });
-  }
-
-  return summary;
-};
-
-/**
- * Fire-and-forget wrapper for post-generation call sites. Never throws and
- * never blocks the response.
- */
-export const fireMemoryExtraction = (args: {
-  agentId: string;
-  projectIds?: number[];
-  generationId?: string;
-  conversationId?: string;
-  messages: ExtractionMessage[];
-  assistantContent: string;
-  /** Per-turn override of the agent's extraction default; see resolveExtractionTarget. */
-  extract?: boolean;
-}): void => {
-  void runMemoryExtraction(args).catch((error) => {
-    log(
-      'fireMemoryExtraction: failed agentId=%s error=%s',
-      args.agentId,
-      error instanceof Error ? error.message : String(error)
-    );
-  });
 };

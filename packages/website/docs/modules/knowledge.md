@@ -173,7 +173,7 @@ The last guarantee needs **pgvector 0.8 or newer** (`hnsw.iterative_scan`). On a
 
 ### Injected knowledge is untrusted input
 
-Retrieved knowledge is partly **user-derived** (a memory written by [automatic extraction](./memories.md#automatic-extraction) contains what the user said). It is treated as data, never instruction:
+Retrieved knowledge is partly **user-derived** (a memory a [memory rule](./memories.md#memory-rules) wrote contains what the user said). It is treated as data, never instruction:
 
 - **Never injected with the `system` role.** [Agent knowledge injection](./agents.md#knowledge-config) delivers results as a `user` message inside a fenced `<knowledge>` block with a preamble framing it as reference material; the agent's `instructions` remain the only system input. Otherwise a phrase a user said once could become a persistent system-level instruction.
 - **Extraction runs tool-less**: a plain completion with no tools and no injection, so quoted text cannot trigger a side effect while becoming memories.

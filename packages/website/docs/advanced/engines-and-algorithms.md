@@ -38,7 +38,7 @@ matter what runs on top. It is not replaceable and holds no opinion about your a
 
 Algorithms decide: what "good output" means (a
 [scorer](/docs/modules/evaluations#scorers)), what is worth remembering (the
-[extraction algorithm](/docs/modules/memories#automatic-extraction)), whether two facts
+[a memory rule's handler](/docs/modules/memories#handlers)), whether two facts
 are the same fact (the [write algorithm](/docs/modules/memories#write-algorithm)), where
 a document splits
 ([chunking](/docs/advanced/memory-and-knowledge-engine#chunking-algorithms)), which
@@ -70,7 +70,7 @@ Tools are the seam because they already carry what a production algorithm needs:
 | Module | The engine (mechanics) | Built-in algorithms | Bring your own |
 | --- | --- | --- | --- |
 | [Evaluations](/docs/modules/evaluations) | Datasets, runs, frozen inputs, version pinning, aggregation, baselines, queueing, lifecycle webhooks | The [scorers](/docs/modules/evaluations#scorers): `exact_match`, `contains`, `json_logic`, `output_schema`, `llm_judge` | A [custom scorer](/docs/modules/evaluations#custom-scorers-tool) — a `tool` scorer graded by your own algorithm |
-| [Memories](/docs/modules/memories) (write side) | One write funnel, embedding, provenance, temporal invalidation | The [write (dedup/merge) algorithm](/docs/modules/memories#write-algorithm) and [fact extraction](/docs/modules/memories#automatic-extraction) | A custom extraction `prompt`/model; per-write `duplicate_threshold` tuning — see the [engine deep dive](/docs/advanced/memory-and-knowledge-engine#extending-the-engine-today) |
+| [Memories](/docs/modules/memories) (write side) | One write funnel, embedding, provenance, temporal invalidation | The [write (dedup/merge) algorithm](/docs/modules/memories#write-algorithm) and a [memory rule's handler](/docs/modules/memories#handlers) | A rule's custom `prompt`/model, or an agent or tool handler of your own; per-write `duplicate_threshold` tuning — see the [engine deep dive](/docs/advanced/memory-and-knowledge-engine#extending-the-engine-today) |
 | [Knowledge](/docs/modules/knowledge) (read side) | Two stores, one search function, injection into generations | [Chunking strategies](/docs/advanced/memory-and-knowledge-engine#chunking-algorithms), [retrieval ranking](/docs/advanced/memory-and-knowledge-engine#the-retrieval-algorithm) | A [converter tool](/docs/modules/ingestion-rules#converter-tool-contract) via ingestion rules — your OCR, transcription, or parser; pre-chunking and re-ranking [composition](/docs/advanced/memory-and-knowledge-engine#extending-the-engine-today) |
 
 Each module page separates engine behavior from algorithm behavior, and every

@@ -31,6 +31,7 @@ export { IngestionRule } from './IngestionRule';
 export { Memory } from './Memory';
 export { MemoryAssertion } from './MemoryAssertion';
 export { MemoryContent } from './MemoryContent';
+export { MemoryRule } from './MemoryRule';
 export { MemoryStore } from './MemoryStore';
 export { ModelRoute } from './ModelRoute';
 export { OauthAuthCode } from './OauthAuthCode';

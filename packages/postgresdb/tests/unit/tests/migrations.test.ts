@@ -471,6 +471,158 @@ describe('2026-09-16-memory-assertions-and-shared-content', () => {
   });
 });
 
+describe('2026-09-16-memory-rules-from-agent-extraction', () => {
+  let client: Sequelize;
+
+  beforeAll(async () => {
+    ({ client } = await freshDatabase());
+
+    await createLegacySchema({ client, tagsType: 'jsonb' });
+
+    await client.query(`
+      INSERT INTO projects (public_id) VALUES ('proj_1');
+      INSERT INTO ai_providers (public_id) VALUES ('aip_cheap');
+
+      INSERT INTO memories (public_id, project_id, name) VALUES
+        ('mstore_support', 1, 'support facts'),
+        ('mstore_billing', 1, 'billing facts');
+
+      INSERT INTO agents (public_id, knowledge_config) VALUES
+        ('agent_plain', '{"write_memory_store_id": "mstore_support", "extraction": true}'),
+        ('agent_tuned', '{"write_memory_store_id": "mstore_billing", "extraction": {"prompt": "Only billing facts", "model": "cheap-model", "ai_provider_id": "aip_cheap"}}'),
+        ('agent_off', '{"write_memory_store_id": "mstore_support", "extraction": {"enabled": false}}'),
+        ('agent_no_store', '{"extraction": true}'),
+        ('agent_reader', '{"memory_store_ids": ["mstore_support"]}');
+
+      INSERT INTO agent_versions (agent_id, config) VALUES
+        (1, '{"model": "a-model", "knowledge_config": {"write_memory_store_id": "mstore_support", "extraction": true}}');
+    `);
+
+    await runnerFor({ client }).run();
+  });
+
+  afterAll(async () => {
+    await client.close();
+  });
+
+  test('each enabled extraction config becomes one rule on its write store', async () => {
+    const rows = await selectRows<{
+      store: string;
+      on: string;
+      source_agent_ids: unknown;
+      agent_id: number | null;
+      tool_id: number | null;
+      enabled: boolean;
+    }>({
+      client,
+      sql: `SELECT ms.public_id AS store, mr."on", mr.source_agent_ids,
+                   mr.agent_id, mr.tool_id, mr.enabled
+              FROM memory_rules mr
+              JOIN memory_stores ms ON ms.id = mr.memory_store_id
+             ORDER BY ms.public_id`,
+    });
+
+    expect(rows).toEqual([
+      {
+        store: 'mstore_billing',
+        on: 'agents.generation.completed',
+        source_agent_ids: ['agent_tuned'],
+        // No handler: the built-in extractor, relocated.
+        agent_id: null,
+        tool_id: null,
+        enabled: true,
+      },
+      {
+        store: 'mstore_support',
+        on: 'agents.generation.completed',
+        source_agent_ids: ['agent_plain'],
+        agent_id: null,
+        tool_id: null,
+        enabled: true,
+      },
+    ]);
+  });
+
+  test("the object form's overrides move across field for field", async () => {
+    const [row] = await selectRows<{
+      prompt: string | null;
+      model: string | null;
+      provider: string | null;
+    }>({
+      client,
+      sql: `SELECT mr.prompt, mr.model, aip.public_id AS provider
+              FROM memory_rules mr
+              LEFT JOIN ai_providers aip ON aip.id = mr.ai_provider_id
+             WHERE mr.source_agent_ids = '["agent_tuned"]'::jsonb`,
+    });
+
+    expect(row).toEqual({
+      prompt: 'Only billing facts',
+      model: 'cheap-model',
+      provider: 'aip_cheap',
+    });
+  });
+
+  test('every public id is a well-formed mrule_ id', async () => {
+    const rows = await selectRows<{ public_id: string }>({
+      client,
+      sql: 'SELECT public_id FROM memory_rules',
+    });
+
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(row.public_id).toMatch(/^mrule_[A-Za-z0-9]{16}$/);
+    }
+  });
+
+  test('the field is stripped from every agent and every version', async () => {
+    expect(
+      await countRows({
+        client,
+        sql: `SELECT count(*) FROM agents WHERE knowledge_config ? 'extraction'`,
+      })
+    ).toBe(0);
+    expect(
+      await countRows({
+        client,
+        sql: `SELECT count(*) FROM agent_versions
+               WHERE config -> 'knowledge_config' ? 'extraction'`,
+      })
+    ).toBe(0);
+  });
+
+  test('the rest of the knowledge config is left alone', async () => {
+    const [row] = await selectRows<{ knowledge_config: unknown }>({
+      client,
+      sql: `SELECT knowledge_config FROM agents WHERE public_id = 'agent_plain'`,
+    });
+
+    expect(row.knowledge_config).toEqual({
+      write_memory_store_id: 'mstore_support',
+    });
+  });
+
+  test('the assertion ledger gains its foreign key', async () => {
+    const [row] = await selectRows<{ delete_rule: string }>({
+      client,
+      sql: `SELECT confdeltype AS delete_rule FROM pg_constraint
+             WHERE conname = 'memory_assertions_rule_id_fkey'`,
+    });
+
+    // 'n' is ON DELETE SET NULL: deleting a rule must not erase its writes.
+    expect(row?.delete_rule).toBe('n');
+  });
+
+  test('a second run inserts no duplicate rules', async () => {
+    await client.query('DELETE FROM schema_migrations');
+    await runnerFor({ client }).run();
+
+    expect(
+      await countRows({ client, sql: 'SELECT count(*) FROM memory_rules' })
+    ).toBe(2);
+  });
+});
+
 describe('a database that already carries every change', () => {
   let client: Sequelize;
 

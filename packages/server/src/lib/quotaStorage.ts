@@ -14,12 +14,13 @@
  * sits on the caller-facing corpus writes — file upload and create, document
  * create, document ingest and re-ingest, memory create — and on nothing
  * that a generation drives from the inside. Every conversation message is a
- * `Document` with its own chunks and embeddings, and both the `write_memory`
- * tool and automatic extraction write memories mid-turn: a refusal there would
- * leave a turn half persisted, which is the
- * one thing the enforcement points above are chosen to avoid. So the cap bounds
- * the ingest surface a tenant drives deliberately, and `monitor`-mode data is
- * what should settle whether that is enough.
+ * `Document` with its own chunks and embeddings, and the `write_memory` tool
+ * writes memories mid-turn: a refusal there would leave a turn half persisted,
+ * which is the one thing the enforcement points above are chosen to avoid. A
+ * memory rule's firing *is* checked, because it runs after the turn has
+ * completed and has nothing in flight to leave half done. So the cap bounds the
+ * ingest surface a tenant drives deliberately, and `monitor`-mode data is what
+ * should settle whether that is enough.
  */
 
 import createDebug from 'debug';

@@ -812,6 +812,75 @@ describe('MCP tools - happy path', () => {
     );
   });
 
+  test('the memory-rule tools drive a store\u2019s ingestion policy', async () => {
+    const store = parseResult(
+      await mcpCall('create-memory-store', {
+        project_id: projectId,
+        name: 'MCP Memory Rule Store',
+      })
+    );
+
+    const rule = parseResult(
+      await mcpCall('create-memory-rule', {
+        memory_store_id: store.id,
+        on: 'agents.generation.completed',
+        prompt: 'Only deployment facts',
+      })
+    );
+    expect(rule.id).toMatch(/^mrule_/);
+    expect(rule.memory_store_id).toBe(store.id);
+    // No handler: the built-in extractor, which is the relocated default.
+    expect(rule.agent_id).toBeNull();
+    expect(rule.tool_id).toBeNull();
+    expect(rule.enabled).toBe(true);
+
+    const listed = parseResult(
+      await mcpCall('list-memory-rules', { memory_store_id: store.id })
+    );
+    expect(
+      listed.data.map((r: { id: string }) => {
+        return r.id;
+      })
+    ).toEqual([rule.id]);
+
+    const fetched = parseResult(
+      await mcpCall('get-memory-rule', { memory_rule_id: rule.id })
+    );
+    expect(fetched.prompt).toBe('Only deployment facts');
+
+    const updated = parseResult(
+      await mcpCall('update-memory-rule', {
+        memory_rule_id: rule.id,
+        enabled: false,
+      })
+    );
+    expect(updated.enabled).toBe(false);
+
+    await mcpCall('delete-memory-rule', { memory_rule_id: rule.id });
+    const afterDelete = parseResult(
+      await mcpCall('list-memory-rules', { memory_store_id: store.id })
+    );
+    expect(afterDelete.total).toBe(0);
+  });
+
+  test('create-memory-rule refuses the built-in extractor on the message event', async () => {
+    const store = parseResult(
+      await mcpCall('create-memory-store', {
+        project_id: projectId,
+        name: 'MCP Memory Rule Validation Store',
+      })
+    );
+
+    const res = await mcpCall('create-memory-rule', {
+      memory_store_id: store.id,
+      on: 'conversations.message.generated',
+    });
+    expect(res.body.result.isError).toBe(true);
+    expect(res.body.result.content[0].text).toContain(
+      "the built-in extractor only runs on 'agents.generation.completed'"
+    );
+  });
+
   // ── Documents ────────────────────────────────────────────────────────────
 
   describe('Documents tools', () => {

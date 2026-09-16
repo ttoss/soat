@@ -8,8 +8,8 @@ import {
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
- * The bag exactly as request middleware used to store it, before single-casing:
- * every key camelCased, including inside `extraction`.
+ * The bag exactly as request middleware used to store it, before
+ * single-casing: every key camelCased.
  */
 const PRE_SINGLE_CASING_CONFIG = {
   memoryStoreIds: ['mstore_seed'],
@@ -21,12 +21,6 @@ const PRE_SINGLE_CASING_CONFIG = {
   minScore: 0.4,
   limit: 7,
   writeMemoryStoreId: 'mstore_write',
-  extraction: {
-    enabled: true,
-    aiProviderId: 'aip_1',
-    model: 'llama3.2:1b',
-    prompt: 'extract facts',
-  },
 };
 
 const WIRE_CONFIG = {
@@ -37,12 +31,6 @@ const WIRE_CONFIG = {
   min_score: 0.4,
   limit: 7,
   write_memory_store_id: 'mstore_write',
-  extraction: {
-    enabled: true,
-    ai_provider_id: 'aip_1',
-    model: 'llama3.2:1b',
-    prompt: 'extract facts',
-  },
 };
 
 describe('toWireKnowledgeConfig', () => {
@@ -71,20 +59,18 @@ describe('toWireKnowledgeConfig', () => {
   });
 
   test('leaves keys it does not own alone', () => {
-    // `extraction.prompt` is free text and `limit` is already snake-neutral;
-    // neither is a rename target, and nothing walks into arbitrary values.
+    // A tag bag is opaque and `limit` is already snake-neutral; neither is a
+    // rename target, and nothing walks into arbitrary values.
     expect(
       toWireKnowledgeConfig({
         minScore: 0.1,
-        extraction: {
-          prompt: 'keep camelCase words like writeMemoryStoreId here',
-        },
+        limit: 7,
+        tags: { writeMemoryStoreId: 'a tag key is never rewritten' },
       })
     ).toEqual({
       min_score: 0.1,
-      extraction: {
-        prompt: 'keep camelCase words like writeMemoryStoreId here',
-      },
+      limit: 7,
+      tags: { writeMemoryStoreId: 'a tag key is never rewritten' },
     });
   });
 });
@@ -141,28 +127,17 @@ describe('backfillKnowledgeConfigCasing', () => {
     await seedPreSingleCasingAgent();
 
     // The read path maps casing field by field, so a key whose spellings differ
-    // resolves to nothing and its feature is silently off. `limit` and the
-    // `extraction.*` keys are casing-neutral and prove nothing.
+    // resolves to nothing and its feature is silently off. `limit` is
+    // casing-neutral and proves nothing.
     const stale = readKnowledgeConfig(await reloadAgentConfig());
     expect(stale?.writeMemoryStoreId).toBeUndefined();
     expect(stale?.memoryStoreIds).toBeUndefined();
-    expect(stale?.extraction).toEqual({
-      enabled: true,
-      model: 'llama3.2:1b',
-      prompt: 'extract facts',
-    });
 
     await backfillKnowledgeConfigCasing();
 
     const migrated = readKnowledgeConfig(await reloadAgentConfig());
     expect(migrated?.writeMemoryStoreId).toBe('mstore_write');
     expect(migrated?.memoryStoreIds).toEqual(['mstore_seed']);
-    expect(migrated?.extraction).toEqual({
-      enabled: true,
-      aiProviderId: 'aip_1',
-      model: 'llama3.2:1b',
-      prompt: 'extract facts',
-    });
   });
 
   test('the migrated agent reads back over REST in the wire casing', async () => {

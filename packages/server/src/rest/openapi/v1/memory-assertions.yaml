@@ -63,12 +63,15 @@ components:
             *who* — the principal fields answer that.
           example: tool
         rule_id:
-          type: integer
+          x-soat-ref: memory-rules
+          type: string
           nullable: true
           description: >-
-            Set only when `mechanism` is `rule`. Null means the built-in
-            extractor driven by the agent's `knowledge_config.extraction`.
-          example: null
+            The memory rule whose firing wrote this, set only when `mechanism`
+            is `rule` — the built-in extractor included, since that is a rule
+            with no handler. Null once the rule has been deleted, and on
+            assertions written before memory rules shipped.
+          example: mrule_V1StGXR8Z5jdHi6B
         generation_id:
           x-soat-ref: generations
           type: string

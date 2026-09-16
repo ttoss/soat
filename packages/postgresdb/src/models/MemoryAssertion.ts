@@ -11,6 +11,7 @@ import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { Generation } from './Generation';
 import { Memory } from './Memory';
 import { MemoryContent } from './MemoryContent';
+import { MemoryRule } from './MemoryRule';
 import { MemoryStore } from './MemoryStore';
 
 /**
@@ -69,6 +70,11 @@ export type MemoryAssertionOutcome = (typeof MEMORY_ASSERTION_OUTCOMES)[number];
     {
       name: 'memory_assertions_generation_id_idx',
       fields: ['generation_id'],
+    },
+    {
+      // Backs "what has this rule written?", the question a rule's own page asks.
+      name: 'memory_assertions_rule_id_idx',
+      fields: ['rule_id'],
     },
   ],
   hooks: {
@@ -161,14 +167,25 @@ export class MemoryAssertion extends Model {
   declare mechanism: MemoryAssertionMechanism;
 
   /**
-   * Set only when `mechanism` is `rule`. **Null means the built-in extractor**
-   * driven by `knowledge_config.extraction`, until #1324 gives it a row in a
-   * `memory_rules` table that does not exist yet — which is why this is a plain
-   * nullable integer rather than a foreign key. #1324 adds the constraint and
-   * starts populating the column; it renames nothing here.
+   * The rule whose firing wrote this, set only when `mechanism` is `rule`.
+   * Every firing populates it, the relocated built-in extractor included — it
+   * is a rule row with no handler. `SET NULL` so deleting a rule never erases
+   * the writes it made; **null therefore reads as "written between the ledger
+   * shipping and the rule it named being deleted"**, and nothing else.
    */
+  @ForeignKey(() => {
+    return MemoryRule;
+  })
   @Column({ type: DataType.INTEGER, allowNull: true })
   declare ruleId: number | null;
+
+  @BelongsTo(
+    () => {
+      return MemoryRule;
+    },
+    { onDelete: 'SET NULL' }
+  )
+  declare rule: MemoryRule | null;
 
   /** The `Generation.startedByPrincipalType` vocabulary, plus `agent`. */
   @Column({ type: DataType.STRING, allowNull: false })

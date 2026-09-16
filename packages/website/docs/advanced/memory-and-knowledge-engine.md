@@ -58,8 +58,8 @@ Every memory write runs the same deduplication algorithm; the paths differ only 
 | --- | --- | --- | --- | --- |
 | [`POST /api/v1/memories`](/docs/api/memories/create-memory) (manual) | `api` | `manual`, or `conversation` when the caller names one | Yes, per request | none |
 | `write_memory` agent tool | `tool` | `manual` | No — the store's pair | the turn it was called in |
-| [Automatic extraction](../modules/memories.md#automatic-extraction) on a conversation turn | `rule` | `conversation` | No — the store's pair | the turn extracted from |
-| [Automatic extraction](../modules/memories.md#automatic-extraction) on a direct generation | `rule` | `manual` | No — the store's pair | the turn extracted from |
+| [Memory rule](../modules/memories.md#memory-rules) firing on a conversation turn | `rule` | `conversation` | No — the store's pair | the turn it read |
+| [Memory rule](../modules/memories.md#memory-rules) firing on a bare generation | `rule` | `manual` | No — the store's pair | the turn it read |
 | Formation `memory` resource | `formation` | declared | n/a — declarative create, bypasses dedup | none |
 
 The formation path bypasses dedup because a formation declares exact desired state. It still
@@ -90,31 +90,29 @@ One row per distinct text per store means a fact asserted twice is embedded once
 
 Every write appends one `MemoryAssertion`, including the ones that changed nothing. Caller-facing contract: [Memories — Assertions](../modules/memories.md#assertions).
 
-A memory row answers *what is known*. The ledger answers *who claimed it, through which door, in which turn, and what the write did* — including the skips, which produce no memory at all. `mechanism` is `rule`, not `extraction`, from the start: the post-turn pass becomes a `memory_rules` row with a pluggable handler, at which point only `rule_id` starts being populated.
+A memory row answers *what is known*. The ledger answers *who claimed it, through which door, in which turn, and what the write did* — including the skips, which produce no memory at all. `mechanism` is `rule`, not `extraction`: the post-turn pass is a `memory_rules` row with a pluggable handler, and `rule_id` names it.
 
-### The extraction algorithm
+### Memory rules — the ingestion policy
 
-Extraction mines atomic facts out of finished turns without the agent calling any tool. Opt-in per agent via `knowledge_config.extraction` + `write_memory_store_id`, overridable per turn with the `extract` boolean ([Memories — Automatic Extraction](../modules/memories.md#automatic-extraction)).
+A completed turn does not decide for itself what a store keeps. The **store** does, through its [memory rules](../modules/memories.md#memory-rules): a selector (which agents, which event) and a pluggable **handler** that proposes facts. Structurally this is [`IngestionRule`](../modules/ingestion-rules.md) applied to turns instead of files, with the destination as the owning scope because — unlike a document — the destination is a first-class entity.
 
-Each run:
+The handler is the algorithm seam. It returns candidates and never writes:
 
-1. Fires **after** the turn completes, fire-and-forget; it never blocks or fails the generation response.
-2. Builds a transcript from the turn's `user`/`assistant` string messages and sends a tool-less, temperature-0 completion. A custom `extraction.prompt` replaces only the task instructions; the engine always appends the JSON-array response contract and the transcript.
-3. Parses the response leniently (the text between the first `[` and last `]`), accepts strings or `{"content": "..."}` objects, and caps candidates at **20 per turn**.
-4. Writes each candidate through the standard write algorithm, on the store's effective thresholds, recording a `rule` assertion against the turn's generation.
-5. Records `{ candidates, created, superseded, skipped }` on the originating generation's `extraction` field ([Generations](../modules/generations.md) API), which also carries the `memory_assertions` rows behind those counts.
+```json
+{ "facts": [{ "content": "Customer prefers email", "tags": { "kind": "preference" } }] }
+```
 
-**Coverage matrix** — which turn types extract today:
+Each firing:
 
-| Turn type | Extracts? |
-| --- | --- |
-| Conversation / session turn (any `wait` mode) | ✅ — fired after the assistant message persists |
-| Direct [`POST /api/v1/agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation), blocking (`wait=true`) | ✅ |
-| Direct generation, background (`wait` omitted) | ❌ |
-| Streaming generation | ❌ |
-| `requires_action` (client-tool) turn | ❌ |
+1. Runs **after** the turn's generation record completes, off the event bus, fire-and-forget: it never blocks or fails the turn, and a handler that throws or answers with nonsense contributes nothing.
+2. Builds a transcript from the turn's recorded input messages and the assistant's reply.
+3. Runs the rule's handler — the built-in extractor (a tool-less, temperature-0 completion whose response is parsed leniently between the first `[` and last `]`, capped at **20 candidates**), a handler agent, or a handler tool. Since the write algorithm has no model call in it, an agent handler and a tool handler behave identically once they return.
+4. Writes each candidate through the standard write algorithm, on the store's effective thresholds and against the project's storage quota, recording a `rule` assertion that names both the rule and the turn's generation.
+5. Records per-rule counts on the originating generation's `extraction` field ([Generations](../modules/generations.md) API), which also carries the `memory_assertions` rows behind them.
 
-Until the gaps close ([Design headroom](#design-headroom--where-the-engine-is-going)), capture facts from streaming traffic with the `write_memory` tool, which works on every transport.
+Because a rule subscribes to `agents.generation.completed`, it covers every transport the old agent-side extractor could not: a background generation, a streamed one, and a turn that resumed from `requires_action` all emit that event when the record completes.
+
+A handler agent's own turn emits the same event, so the dispatcher skips a generation it started itself and any generation by an agent that handles a rule in the project; a handler generation also declares the source turn as its initiator, inheriting its trace lineage and continuation budget.
 
 ### Actor-scoped memory
 
@@ -204,13 +202,14 @@ Orchestrations read knowledge mid-flow with the `knowledge` node. There is no de
 | `query`, `min_similarity`, `rrf_k`, `recency_half_life_days`, `limit`, `memory_store_ids`, `document_ids`, `document_paths`, `tags` | [`POST /api/v1/knowledge/search`](/docs/api/knowledge/search-knowledge) body | `limit: 10`, `rrf_k: 60`, `recency_half_life_days: 0` | retrieval |
 | `KNOWLEDGE_TEXT_SEARCH_CONFIG`, `KNOWLEDGE_RRF_K`, `KNOWLEDGE_RECENCY_HALF_LIFE_DAYS` | server environment | `simple`, `60`, `0` | the lexical channel, the fusion constant and the memory recency decay |
 | `knowledge_config.{memory_store_ids, document_ids, document_paths, tags, min_score, limit}` | agent record; per-generation override (arrays unioned, `tags` merged per key, scalars overridden) | `limit: 5` injected | push retrieval |
-| `knowledge_config.write_memory_store_id` | agent record | — | injects the `write_memory` tool; extraction target |
-| `knowledge_config.extraction` (`enabled`, `ai_provider_id`, `model`, `prompt`) | agent record | off | the extraction algorithm |
-| `extract` | [`POST /api/v1/agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation) body | follow agent config | per-turn extraction gate |
+| `knowledge_config.write_memory_store_id` | agent record | — | injects the `write_memory` tool |
+| `on`, `source_agent_ids`, `enabled` | [memory rule](../modules/memories.md#memory-rules) | — | which turns a store ingests |
+| `agent_id` / `tool_id` (+ `action`, `preset_parameters`) | memory rule | built-in extractor | the handler that proposes facts |
+| `prompt`, `ai_provider_id`, `model` | memory rule | built-in instructions, the source agent's provider/model | the built-in extractor's completion |
 | `include_invalidated` | [`GET /api/v1/memories`](/docs/api/memories/list-memories) query | `false` | whether superseded memories appear in listings |
 | `EMBEDDING_*` env vars | server environment | — | the shared vector space |
 
-Fixed today (no knob): the cosine distance metric, the content hash's normalization, the fusion formula itself and the relative weight of the two channels, the decay curve behind `recency_half_life_days` (a plain exponential, with no floor damping it), the injection preamble and source-tag format, the extraction candidate cap (20), and the per-source embedding concurrency during ingestion.
+Fixed today (no knob): the cosine distance metric, the content hash's normalization, the fusion formula itself and the relative weight of the two channels, the decay curve behind `recency_half_life_days` (a plain exponential, with no floor damping it), the injection preamble and source-tag format, the built-in extractor's candidate cap (20), and the per-source embedding concurrency during ingestion.
 
 ## Extending the engine today
 
@@ -218,7 +217,7 @@ The same seam shape the evaluations engine exposes as [custom scorers](../module
 
 - **Custom content extraction — first-class.** An [ingestion rule](../modules/ingestion-rules.md) pointing at your own tool: OCR, audio transcription, layout-aware PDF parsing, table extraction — anything answering with pages of text, synchronously or via the deferred callback.
 - **Custom chunking — via pre-chunking.** Run your own splitter and create one document per chunk with `chunk_strategy: whole`, encoding structure in `path`, `title`, `tags`, and `metadata`. Retrieval treats your chunks like engine-made ones.
-- **Custom extraction behavior.** `extraction.prompt` changes *what* the fact miner looks for; `extraction.ai_provider_id`/`model` route it to another model.
+- **Custom post-turn ingestion — first-class.** A [memory rule](../modules/memories.md#memory-rules) `prompt`/`ai_provider_id`/`model` retunes the built-in fact miner; an `agent_id` or `tool_id` handler replaces the algorithm outright, returning candidates the engine still puts through its own write funnel.
 - **Custom write policy.** A corpus's dedup policy is tuned once as the store's `duplicate_threshold` / `supersede_threshold`; a curation pipeline writing through [`POST /api/v1/memories`](/docs/api/memories/create-memory) may also override either per write. Lower `duplicate_threshold` to skip more aggressively, raise it toward `1.0` to keep near-duplicates distinct; raise `supersede_threshold` to retire fewer facts.
 - **Custom retrieval composition.** Exact-term matching no longer needs an index of your own — the lexical channel is built in, and a recency decay on memory results is one knob (`recency_half_life_days`). For reranking, or fusion with a signal the engine does not have, call [`POST /api/v1/knowledge/search`](/docs/api/knowledge/search-knowledge) with a generous `limit`, re-rank on your side using `similarity_score` plus your own features, and pass the survivors as input messages.
 
@@ -227,9 +226,7 @@ The same seam shape the evaluations engine exposes as [custom scorers](../module
 None of the following has shipped; what has shipped is the room for it:
 
 - **A same-fact judge for the band below `supersede_threshold`.** One boolean call in front of the supersede branch, never writing prose, would let the floor drop toward `0.75` without risking a wrongly retired fact. It is gated on what the [assertion ledger](#the-assertion-ledger) shows about outcomes in that band.
-- **`memory_rules` rows behind `mechanism: "rule"`.** `rule_id` is already on every assertion, null for today's built-in extractor; a pluggable post-turn handler populates it without changing the vocabulary.
 - **`score` is implementation-defined while `similarity_score` is pinned**, so hybrid retrieval (lexical search alongside vectors, rank fusion, an optional rerank stage, recency weighting for memories) can refill `score` as an internal upgrade.
-- **Extraction coverage for streaming and client-tool turns** closes the coverage matrix above without any API change.
 - **A retrieval evaluation harness** (golden query sets, recall@k / MRR) is sequenced before ranking changes.
 - **An entity graph over memories** (structured subject–predicate–object queries) is designed but demand-gated.
 
@@ -239,10 +236,10 @@ Design records: [`docs/prd-memories.md`](https://github.com/ttoss/soat/blob/main
 
 Whatever algorithm runs at each stage:
 
-- **Writes are never lost to an LLM failure.** The write algorithm calls no model at all; extraction failures are logged and skipped.
+- **Writes are never lost to an LLM failure.** The write algorithm calls no model at all; a handler failure is logged and skipped.
 - **Every write leaves a record.** One assertion per attempt, including the skips, whichever door it came through.
 - **Invalidated memories never reach a generation.** Superseded facts are excluded from search, injection, and dedup, but stay readable by ID ([`GET /api/v1/memories/{memory_id}`](/docs/api/memories/get-memory)) for audit.
-- **Retrieved knowledge never gains `system` authority.** Injection is fenced, framed as reference material, and delivered as a `user` message; extraction runs tool-less.
+- **Retrieved knowledge never gains `system` authority.** Injection is fenced, framed as reference material, and delivered as a `user` message; the built-in extractor runs tool-less.
 - **Every injected claim is traceable.** Source tags carry the memory ID or document path and page; a memory's assertions link back to the principal, the door and the turn that produced the fact.
-- **Slow stages never sit on the request path.** Extraction is fire-and-forget; ingestion is background by default; write latency stays embedding-bound.
+- **Slow stages never sit on the request path.** A rule firing is fire-and-forget off the event bus; ingestion is background by default; write latency stays embedding-bound.
 - **One write funnel, one search function.** Every write path shares the dedup algorithm and the ledger; every retrieval surface shares the ranking.

@@ -7,6 +7,7 @@ import { addHealthCheck, App, bodyParser, cors } from '@ttoss/http-server';
 import type { Context } from './Context';
 import { initializeActivityListener } from './lib/activity';
 import { initializeExceptionsListener } from './lib/exceptionAutoFile';
+import { initializeMemoryRuleListener } from './lib/memoryRuleDispatch';
 import { initializeTriggerEventListener } from './lib/triggerEventDispatch';
 import { initializeDispatcher } from './lib/webhookDispatcher';
 import { setupMcpMiddleware } from './mcp/server';
@@ -28,6 +29,7 @@ initializeDispatcher();
 initializeExceptionsListener();
 initializeActivityListener();
 initializeTriggerEventListener();
+initializeMemoryRuleListener();
 
 app.use(errorLoggerMiddleware);
 app.use(cors());

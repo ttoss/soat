@@ -77,6 +77,7 @@ export interface OpenApiSpec {
  * a sub-resource whose documentation lives inside a parent module's page.
  */
 const DOC_OVERRIDES: Record<string, string> = {
+  'memory-rules': 'memories',
   'memory-stores': 'memories',
   tasks: 'workflows',
 };

@@ -5,7 +5,6 @@ import type { GenerationResult } from './agentGenerationTypes';
 import { addConversationMessage } from './conversationMessages';
 import { emitResourceEvent } from './eventBus';
 import { readFileBuffer } from './fileStorage';
-import { fireMemoryExtraction } from './memoryExtraction';
 
 type ConversationMessage = InstanceType<(typeof db)['ConversationMessage']> & {
   document?: InstanceType<(typeof db)['Document']> & {
@@ -253,6 +252,14 @@ const buildPersonaSystem = (agent: {
   return lines.join('\n\n');
 };
 
+/**
+ * The turn is finished and persisted; everything after it happens on the bus.
+ *
+ * Extraction used to be called from here as a second fire-and-forget branch.
+ * It is a `memory_rules` subscriber now, so a conversation turn feeds a store
+ * through the same path a bare generation does — and through the store's
+ * policy, not this agent's (#1324).
+ */
 const firePostTurnSideEffects = (args: {
   conversationId: string;
   agentId: string;
@@ -260,18 +267,7 @@ const firePostTurnSideEffects = (args: {
   generationId: string;
   traceId: string;
   documentId: string;
-  messagesForModel: Array<{ role: string; content: unknown }>;
-  assistantContent: string;
 }): void => {
-  fireMemoryExtraction({
-    agentId: args.agentId,
-    projectIds: [args.projectId],
-    generationId: args.generationId,
-    conversationId: args.conversationId,
-    messages: args.messagesForModel,
-    assistantContent: args.assistantContent,
-  });
-
   emitResourceEvent({
     type: 'conversations.message.generated',
     projectId: args.projectId,
@@ -382,8 +378,6 @@ export const generateConversationMessage = async (args: {
     generationId,
     traceId,
     documentId: persisted.document_id,
-    messagesForModel,
-    assistantContent,
   });
 
   return {

@@ -9,7 +9,6 @@ import {
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
-import { buildSrn } from 'src/lib/iam';
 import {
   findThresholdOrderError,
   resolveMemoryThresholds,
@@ -19,19 +18,13 @@ import {
   createMemoryStore,
   deleteMemoryStore,
   findMemoryStoreDedupPolicy,
-  getMemoryStore,
   getMemoryStoreTags,
   listMemoryStores,
   updateMemoryStore,
   updateMemoryStoreTags,
 } from 'src/lib/memoryStores';
 import { compilePolicy } from 'src/lib/policyCompiler';
-import {
-  buildResourceTagContext,
-  readNullableTagBag,
-  readTagBag,
-  readTagQuery,
-} from 'src/lib/tags';
+import { readNullableTagBag, readTagBag, readTagQuery } from 'src/lib/tags';
 
 import {
   type AuthenticatedContext,
@@ -40,6 +33,7 @@ import {
   resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
+import { requireMemoryStore } from './memoryStoreAccess';
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
 
 const memoryStoresRouter = new Router<Context>();
@@ -120,47 +114,6 @@ const readEnum = <T extends string>(args: {
     );
   }
   return args.value as T;
-};
-
-type LoadedMemoryStore = NonNullable<
-  Awaited<ReturnType<typeof getMemoryStore>>
->;
-
-/**
- * Loads the memory store a request targets and authorizes `action` against it, with
- * the memory store's own tags as the condition context. Shared so a route cannot
- * authorize a memory store without supplying that context — a missing context makes
- * every `soat:ResourceTag/<key>` condition evaluate against nothing, which
- * silently drops a `Deny`.
- */
-const requireMemoryStore = async (args: {
-  ctx: Context;
-  memoryStorePublicId: string;
-  action: string;
-}): Promise<LoadedMemoryStore> => {
-  const memoryStore = await getMemoryStore({ id: args.memoryStorePublicId });
-  if (!memoryStore) {
-    throw new DomainError('RESOURCE_NOT_FOUND', 'Memory store not found');
-  }
-
-  const allowed = await args.ctx.authUser!.isAllowed({
-    projectPublicId: memoryStore.project_id!,
-    action: args.action,
-    resource: buildSrn({
-      projectPublicId: memoryStore.project_id!,
-      resourceType: 'memory_store',
-      resourceId: memoryStore.id,
-    }),
-    context: buildResourceTagContext({
-      resourceType: 'memory_store',
-      tags: memoryStore.tags,
-    }),
-  });
-  if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
-  }
-
-  return memoryStore;
 };
 
 memoryStoresRouter.get('/memory-stores', async (ctx: Context) => {

@@ -4,7 +4,7 @@ keywords:
   - AI agent memory
   - long-term memory
   - persistent memory
-  - memory extraction
+  - memory rules
   - conversational memory
 sidebar_position: 5
 ---
@@ -17,8 +17,8 @@ import TabItem from '@theme/TabItem';
 Give an agent memory that persists across sessions: create a
 [memory store](/docs/modules/memories#key-concepts), write memories and observe deduplication,
 combine memories with a [Document](/docs/modules/documents#examples) via `knowledge_config`,
-let the agent write back with `write_memory_store_id`, enable automatic extraction, and query
-the knowledge layer directly.
+let the agent write back with `write_memory_store_id`, give the store a memory rule that
+ingests finished turns, and query the knowledge layer directly.
 
 ## Prerequisites
 
@@ -809,52 +809,59 @@ An empty list means the model did not call the tool; Step 11 removes that depend
 
 ---
 
-## Step 11 — Enable automatic extraction
+## Step 11 — Add a memory rule
 
-[Automatic extraction](/docs/modules/memories#automatic-extraction) extracts atomic facts from the transcript after every completed turn and writes them through the standard write algorithm. Add `extraction` to the agent's `knowledge_config`:
+The `write_memory` tool is a *capability grant*: the agent may write, if it decides to. What the
+store **accepts** from a finished turn is the store's own policy — a
+[memory rule](/docs/modules/memories#memory-rules). Create one on the store, selecting this
+agent's turns, with no handler so the built-in extractor runs:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat update-agent \
-  --agent-id "$AGENT_ID" \
-  --knowledge-config '{"memory_store_ids":["'"$MEMORY_STORE_ID"'"],"document_paths":["/alice/"],"limit":5,"write_memory_store_id":"'"$MEMORY_STORE_ID"'","extraction":true}'
+MEMORY_RULE_ID=$(soat create-memory-rule \
+  --memory-store-id "$MEMORY_STORE_ID" \
+  --on agents.generation.completed \
+  --source-agent-ids '["'"$AGENT_ID"'"]' \
+  | jq -r '.id')
+echo "$MEMORY_RULE_ID"
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-await adminSoat.agents.updateAgent({
-  path: { agent_id: AGENT_ID },
+const { data: rule } = await adminSoat.memoryRules.createMemoryRule({
   body: {
-    knowledge_config: {
-      memory_store_ids: [MEMORY_STORE_ID],
-      document_paths: ['/alice/'],
-      limit: 5,
-      write_memory_store_id: MEMORY_STORE_ID,
-      extraction: true,
-    },
+    memory_store_id: MEMORY_STORE_ID,
+    on: 'agents.generation.completed',
+    source_agent_ids: [AGENT_ID],
   },
 });
+const MEMORY_RULE_ID = rule.id;
 ```
 
 </TabItem>
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s -X PUT "$SOAT_URL/api/v1/agents/$AGENT_ID" \
+MEMORY_RULE_ID=$(curl -s -X POST "$SOAT_URL/api/v1/memory-rules" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"knowledge_config\":{\"memory_store_ids\":[\"$MEMORY_STORE_ID\"],\"document_paths\":[\"/alice/\"],\"limit\":5,\"write_memory_store_id\":\"$MEMORY_STORE_ID\",\"extraction\":true}}" \
-  | jq '.knowledge_config'
+  -d "{\"memory_store_id\":\"$MEMORY_STORE_ID\",\"on\":\"agents.generation.completed\",\"source_agent_ids\":[\"$AGENT_ID\"]}" \
+  | jq -r '.id')
+echo "$MEMORY_RULE_ID"
 ```
 
 </TabItem>
 </Tabs>
 
-`extraction: true` uses the agent's provider and model with a built-in prompt; the [object form](/docs/modules/memories#automatic-extraction) sets provider, model, and prompt (e.g. a cheaper model).
+With no `agent_id` or `tool_id`, the rule runs the built-in extractor on the source agent's
+provider and model, with a built-in prompt; `prompt`, `ai_provider_id` and `model` retune it
+(e.g. a cheaper model), and an `agent_id` or `tool_id` [handler](/docs/modules/memories#handlers)
+replaces the algorithm outright. Leaving `source_agent_ids` out would read **every** agent in
+the project.
 
 Send a message revealing a new fact without asking the agent to remember it:
 
@@ -868,7 +875,7 @@ soat create-agent-generation --wait true \
   | jq '{status: .status}'
 ```
 
-Extraction runs asynchronously after the response returns; wait a few seconds, then list:
+The rule fires asynchronously after the turn completes; wait a few seconds, then list:
 
 ```bash
 sleep 5
@@ -894,7 +901,7 @@ await adminSoat.agents.createAgentGeneration({
   },
 });
 
-// Extraction runs asynchronously after the generation response returns.
+// The rule fires asynchronously after the turn completes.
 await new Promise((resolve) => setTimeout(resolve, 5000));
 
 const { data: page } = await Memories.listMemories({
@@ -923,7 +930,7 @@ curl -s "$SOAT_URL/api/v1/memories?memory_store_id=$MEMORY_STORE_ID" \
 </TabItem>
 </Tabs>
 
-Expect a memory like `"Alice signed a 2-year contract renewal"`. This turn is a direct generation with no conversation behind it, so it reads `"source_type": "manual"`; the same turn inside a [conversation](/docs/modules/conversations) would read `"conversation"` and name it in `source_id`. The summary is recorded on the generation's `extraction` field ([Generations](/docs/modules/generations)).
+Expect a memory like `"Alice signed a 2-year contract renewal"`. This turn is a direct generation with no conversation behind it, so it reads `"source_type": "manual"`; the same turn inside a [conversation](/docs/modules/conversations) would read `"conversation"` and name it in `source_id`. What the rule wrote is recorded on the generation's `extraction` field, keyed by the rule's id ([Generations](/docs/modules/generations)), and each write appends an [assertion](/docs/modules/memories#assertions) naming `rule_id`.
 
 ---
 
@@ -1041,9 +1048,9 @@ SRC_ID=$(soat list-memories --memory-store-id "$MEMORY_STORE_ID" \
 soat get-conversation --conversation-id "$SRC_ID" | jq '{id, name}'
 ```
 
-[Automatic extraction](/docs/modules/memories#automatic-extraction) fills the same pair on
-its own: a turn inside a conversation writes `conversation` plus that conversation's id,
-and a direct generation writes `manual`, because there is nothing to name.
+A [memory rule](/docs/modules/memories#memory-rules) fills the same pair on its own: a turn
+inside a conversation writes `conversation` plus that conversation's id, and a bare generation
+writes `manual`, because there is nothing to name.
 
 </TabItem>
 <TabItem value="sdk" label="SDK">

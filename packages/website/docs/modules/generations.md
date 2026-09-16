@@ -52,7 +52,7 @@ List with [`GET /generations`](/docs/api/generations/list-generations) (filter b
 | `agent_version`             | number \| null | Agent config version that served the generation                                                      |
 | `source`                    | string \| null | `eval` when an [eval run](./evaluations.md) produced this generation; `null` for ordinary traffic     |
 | `routing`                   | object \| null | What the [model route](./model-routes.md) did for this generation                                     |
-| `extraction`                | object \| null | Memory-extraction summary for this turn (see [`extraction`](#extraction--memory-extraction-summary))  |
+| `extraction`                | object \| null | What each [memory rule](./memories.md#memory-rules) wrote for this turn, keyed by rule id (see [`extraction`](#extraction--memory-rule-summary))  |
 | `content_redacted_at`       | string \| null | When the generation's content was purged; `null` while content is intact                             |
 | `content_redacted_by_principal_type` | string \| null | Principal kind that purged the content (`user` or `api_key`)                                |
 | `content_redacted_by_principal_id` | string \| null | Public ID of that principal — the key's own id for API-key auth                               |
@@ -128,9 +128,15 @@ PATCH requires `generations:UpdateGeneration`; the create path requires `agents:
 
 Internal recovery state (used to resume a `requires_action` generation after a server restart) is stored in its own column and is never exposed through the API.
 
-#### `extraction` — memory-extraction summary
+#### `extraction` — memory-rule summary
 
-When an agent is configured with `knowledge_config.extraction` and `write_memory_store_id`, a completed generation writes an `extraction` summary — `{ "candidates": 3, "created": 2, "updated": 1, "skipped": 0 }` — describing what the auto-extraction pass did with the turn. See [Memories — Automatic Extraction](./memories.md#automatic-extraction).
+Every [memory rule](./memories.md#memory-rules) bound to `agents.generation.completed` that fired for this turn records what it wrote, keyed by the rule's id:
+
+```json
+{ "mrule_V1StGXR8Z5jdHi6B": { "candidates": 3, "created": 2, "superseded": 1, "skipped": 0 } }
+```
+
+A store can have several rules, so one flat pair of counts could not say which produced them. Absent when no rule fired. Rules bound to `conversations.message.generated` are visible in `memory_assertions` only; the rows behind every count are there either way.
 
 ### Recorded input
 

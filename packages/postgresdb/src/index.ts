@@ -12,5 +12,7 @@ export {
   MEMORY_ASSERTION_MECHANISMS,
   MEMORY_ASSERTION_OUTCOMES,
 } from './models/MemoryAssertion';
+export type { MemoryRuleEvent } from './models/MemoryRule';
+export { MEMORY_RULE_EVENTS } from './models/MemoryRule';
 export * from './utils/embedding';
 export * from './utils/publicId';

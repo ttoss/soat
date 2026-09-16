@@ -24,6 +24,7 @@ import {
   IngestionRules as IngestionRulesSdk,
   Knowledge as KnowledgeSdk,
   Memories as MemoriesSdk,
+  MemoryRules as MemoryRulesSdk,
   MemoryStores as MemoryStoresSdk,
   ModelRoutes as ModelRoutesSdk,
   Orchestrations as OrchestrationsSdk,
@@ -133,6 +134,7 @@ export class SoatClient {
   readonly ingestionRules: typeof IngestionRulesSdk;
   readonly knowledge: typeof KnowledgeSdk;
   readonly memories: typeof MemoriesSdk;
+  readonly memoryRules: typeof MemoryRulesSdk;
   readonly memoryStores: typeof MemoryStoresSdk;
   readonly modelRoutes: typeof ModelRoutesSdk;
   readonly orchestrations: typeof OrchestrationsSdk;
@@ -184,6 +186,7 @@ export class SoatClient {
     this.ingestionRules = bindResource(IngestionRulesSdk, httpClient);
     this.knowledge = bindResource(KnowledgeSdk, httpClient);
     this.memories = bindResource(MemoriesSdk, httpClient);
+    this.memoryRules = bindResource(MemoryRulesSdk, httpClient);
     this.memoryStores = bindResource(MemoryStoresSdk, httpClient);
     this.modelRoutes = bindResource(ModelRoutesSdk, httpClient);
     this.orchestrations = bindResource(OrchestrationsSdk, httpClient);

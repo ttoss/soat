@@ -90,6 +90,31 @@
       "operationId": "listMemoryStoreAssertions",
       "action": "memories:ListMemoryAssertions",
       "description": "List the write assertions recorded against a memory store"
+    },
+    {
+      "operationId": "listMemoryRules",
+      "action": "memories:ListMemoryRules",
+      "description": "List the ingestion rules of a memory store"
+    },
+    {
+      "operationId": "createMemoryRule",
+      "action": "memories:CreateMemoryRule",
+      "description": "Create a memory rule on a memory store"
+    },
+    {
+      "operationId": "getMemoryRule",
+      "action": "memories:GetMemoryRule",
+      "description": "Get a memory rule by ID"
+    },
+    {
+      "operationId": "updateMemoryRule",
+      "action": "memories:UpdateMemoryRule",
+      "description": "Update a memory rule"
+    },
+    {
+      "operationId": "deleteMemoryRule",
+      "action": "memories:DeleteMemoryRule",
+      "description": "Delete a memory rule"
     }
   ]
 }

@@ -1681,6 +1681,61 @@ fi
 echo "Knowledge search returned $KS_COUNT result(s)."
 echo "Memories + knowledge search coverage: OK"
 
+echo "=== Memory rules ==="
+
+echo "--- Creating a memory rule (built-in extractor) ---"
+# No selector: this runs before any agent exists, and the store is deleted
+# again below, so the rule never sees a turn. What a firing does is covered by
+# the unit suite — it is asynchronous and LLM-dependent.
+MRULE_RESP=$($SOAT_CLI create-memory-rule \
+  --memory-store-id "$MEM_ID" \
+  --on agents.generation.completed \
+  --prompt "Extract decisions only.")
+MRULE_ID=$(printf '%s\n' "$MRULE_RESP" | jq -r '.id')
+if [ -z "$MRULE_ID" ] || [ "$MRULE_ID" = "null" ]; then
+  echo "ERROR: create-memory-rule did not return an id" >&2
+  echo "$MRULE_RESP" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$MRULE_RESP" | jq -e '.agent_id == null and .tool_id == null and .source_agent_ids == null and .enabled == true' >/dev/null 2>&1; then
+  echo "ERROR: a rule with no handler should read as the built-in extractor" >&2
+  echo "$MRULE_RESP" >&2
+  exit 1
+fi
+
+echo "--- Listing a store's memory rules ---"
+MRULE_LIST=$($SOAT_CLI list-memory-rules --memory-store-id "$MEM_ID")
+if ! printf '%s\n' "$MRULE_LIST" | jq -e --arg id "$MRULE_ID" 'any(.data[]; .id == $id)' >/dev/null 2>&1; then
+  echo "ERROR: list-memory-rules did not return the created rule" >&2
+  echo "$MRULE_LIST" >&2
+  exit 1
+fi
+
+echo "--- Getting and disabling a memory rule ---"
+MRULE_GET=$($SOAT_CLI get-memory-rule --memory-rule-id "$MRULE_ID")
+if ! printf '%s\n' "$MRULE_GET" | jq -e '.prompt == "Extract decisions only."' >/dev/null 2>&1; then
+  echo "ERROR: get-memory-rule did not return the stored prompt" >&2
+  echo "$MRULE_GET" >&2
+  exit 1
+fi
+MRULE_PATCH=$($SOAT_CLI update-memory-rule --memory-rule-id "$MRULE_ID" --enabled false)
+if ! printf '%s\n' "$MRULE_PATCH" | jq -e '.enabled == false and .prompt == "Extract decisions only."' >/dev/null 2>&1; then
+  echo "ERROR: update-memory-rule did not disable the rule in place" >&2
+  echo "$MRULE_PATCH" >&2
+  exit 1
+fi
+
+echo "--- The built-in extractor cannot bind to the message event ---"
+MRULE_BAD_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$SERVER_URL/api/v1/memory-rules" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"memory_store_id\":\"$MEM_ID\",\"on\":\"conversations.message.generated\"}")
+if [ "$MRULE_BAD_STATUS" != "400" ]; then
+  echo "ERROR: handlerless rule on the message event expected 400, got $MRULE_BAD_STATUS" >&2
+  exit 1
+fi
+echo "Memory rules coverage: OK"
+
 # Delete memory store
 echo "--- Deleting memory store ---"
 $SOAT_CLI delete-memory-store --memory-store-id "$MEM_ID"
@@ -1690,6 +1745,11 @@ echo "Memory store deleted."
 echo "--- Verifying memory store deletion ---"
 expect_cli_error_status 404 get-memory-store --memory-store-id "$MEM_ID"
 echo "Memory store correctly returns 404 after deletion."
+
+# The store owns its rules: deleting it takes them with it.
+echo "--- Verifying the store's rules went with it ---"
+expect_cli_error_status 404 get-memory-rule --memory-rule-id "$MRULE_ID"
+echo "Memory rule correctly returns 404 after its store was deleted."
 
 echo "Memory stores coverage: OK"
 
@@ -3056,34 +3116,27 @@ if ! printf '%s\n' "$AGENT_STREAM_RESP" | grep -q "data: \[DONE\]"; then
 fi
 echo "Agent SSE stream OK."
 
-# 22b2. Knowledge config: automatic extraction flag round-trip
-echo "--- Setting knowledge_config with extraction flag ---"
+# 22b2. Knowledge config: the write grant round-trips, and the retired
+# `extraction` field is rejected rather than accepted and ignored. What a store
+# ingests from a finished turn is a memory rule now, covered above.
+echo "--- Setting knowledge_config with the write-memory grant ---"
 KC_UPDATE_RESP=$($SOAT_CLI update-agent --agent-id "$AGENT_ID" \
-  --knowledge_config "{\"write_memory_store_id\":\"$MEM_ID\",\"extraction\":true}")
-if ! printf '%s\n' "$KC_UPDATE_RESP" | jq -e '.knowledge_config.extraction == true' >/dev/null 2>&1; then
-  echo "ERROR: update-agent did not round-trip knowledge_config.extraction" >&2
+  --knowledge_config "{\"write_memory_store_id\":\"$MEM_ID\"}")
+if ! printf '%s\n' "$KC_UPDATE_RESP" | jq -e --arg mem "$MEM_ID" '.knowledge_config.write_memory_store_id == $mem' >/dev/null 2>&1; then
+  echo "ERROR: update-agent did not round-trip knowledge_config.write_memory_store_id" >&2
   echo "$KC_UPDATE_RESP" >&2
   exit 1
 fi
-KC_GET_RESP=$($SOAT_CLI get-agent --agent-id "$AGENT_ID")
-if ! printf '%s\n' "$KC_GET_RESP" | jq -e --arg mem "$MEM_ID" '.knowledge_config.write_memory_store_id == $mem and .knowledge_config.extraction == true' >/dev/null 2>&1; then
-  echo "ERROR: get-agent did not return knowledge_config extraction settings" >&2
-  echo "$KC_GET_RESP" >&2
+KC_EXTRACTION_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X PUT "$SERVER_URL/api/v1/agents/$AGENT_ID" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"knowledge_config\":{\"write_memory_store_id\":\"$MEM_ID\",\"extraction\":true}}")
+if [ "$KC_EXTRACTION_STATUS" != "400" ]; then
+  echo "ERROR: knowledge_config.extraction expected 400, got $KC_EXTRACTION_STATUS" >&2
   exit 1
 fi
-# Object form: provider/model/prompt overrides must round-trip too.
-KC_OBJ_RESP=$($SOAT_CLI update-agent --agent-id "$AGENT_ID" \
-  --knowledge_config "{\"write_memory_store_id\":\"$MEM_ID\",\"extraction\":{\"model\":\"smoke-extraction-model\",\"prompt\":\"Extract decisions only.\"}}")
-if ! printf '%s\n' "$KC_OBJ_RESP" | jq -e '.knowledge_config.extraction.model == "smoke-extraction-model" and .knowledge_config.extraction.prompt == "Extract decisions only."' >/dev/null 2>&1; then
-  echo "ERROR: update-agent did not round-trip the extraction object form" >&2
-  echo "$KC_OBJ_RESP" >&2
-  exit 1
-fi
-# Disable extraction again so later generations in this script do not
-# trigger extra extraction LLM calls (extraction itself is asynchronous and
-# LLM-dependent, so its behavior is covered by unit tests, not smoke).
 $SOAT_CLI update-agent --agent-id "$AGENT_ID" --knowledge_config '{}' >/dev/null
-echo "knowledge_config extraction round-trip: OK"
+echo "knowledge_config write grant round-trip: OK"
 
 # 22b3. `reasoning` is not an agent field — it is rejected (as an unknown
 # field) with a 400.

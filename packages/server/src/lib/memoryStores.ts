@@ -120,6 +120,25 @@ export const findMemoryStoreDedupPolicy = async (args: {
   };
 };
 
+/**
+ * A store's internal id and owning project — what a write to one of its
+ * sub-resources needs once the store itself has authorized the request.
+ *
+ * Its own reader rather than a second field on the dedup-policy one: the two
+ * answer different questions, and widening that one would make every threshold
+ * read carry a column it has no use for.
+ */
+export const findMemoryStoreScope = async (args: {
+  id: string;
+}): Promise<{ id: number; projectId: number } | null> => {
+  const store = await db.MemoryStore.findOne({
+    where: { publicId: args.id },
+    attributes: ['id', 'projectId'],
+  });
+  if (!store) return null;
+  return { id: store.id as number, projectId: store.projectId };
+};
+
 export const getMemoryStore = async (args: { id: string }) => {
   const memoryStore = await memoryStores.findByPublicId({ id: args.id });
   if (!memoryStore) return null;
