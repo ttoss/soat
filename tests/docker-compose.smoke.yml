@@ -107,6 +107,32 @@ services:
       timeout: 5s
       retries: 10
 
+  # The schema step a deploy runs before the service rolls (#548). Same image as
+  # `server`, started at the `migrate.mjs` entrypoint; it applies the pending
+  # migrations, syncs, and exits. `server` and `worker` wait for it to exit 0,
+  # so neither boots against a schema it does not match — which is what lets
+  # them run with the boot-time sync off, exactly as a deployment does.
+  migrate:
+    image: soat-smoke-server
+    # The tag is local-only, produced by `server`'s build. Without this Compose
+    # would try the registry when it is missing and fail with a misleading
+    # "pull access denied" instead of naming the real problem.
+    pull_policy: never
+    command: ['node', 'packages/server/dist/migrate.mjs', 'run']
+    restart: 'no'
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      DATABASE_HOST: database
+      DATABASE_PORT: '5432'
+      DATABASE_NAME: soat_test
+      DATABASE_USER: soat_user
+      DATABASE_PASSWORD: soat_password
+      # `DocumentChunk` sizes its vector column from this at module load, so the
+      # migrate process needs it as much as the server does.
+      EMBEDDING_DIMENSIONS: '1024'
+
   server:
     # Named so `worker` can reuse this exact image instead of declaring its own
     # identical `build:`. Two build blocks with the same context and target
@@ -129,6 +155,8 @@ services:
     depends_on:
       database:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       ollama:
         condition: service_healthy
       ollama-tool-choice:
@@ -201,6 +229,8 @@ services:
     depends_on:
       database:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       ollama:
         condition: service_healthy
       ollama-tool-choice:

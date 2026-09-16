@@ -58,9 +58,9 @@ and recorded in a `schema_migrations` table it maintains itself.
 The flow they follow is
 [PostgreSQL Migrations](https://ttoss.dev/docs/engineering/guidelines/postgres-migrations).
 
-| Migration | Change |
-| --- | --- |
-| `memory-tags-to-jsonb` | `memories.tags` and `memory_entries.tags` from `text[]` to key-value `jsonb` |
+| Migration                        | Change                                                                                                                                       |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `memory-tags-to-jsonb`           | `memories.tags` and `memory_entries.tags` from `text[]` to key-value `jsonb`                                                                 |
 | `memories-rename-and-provenance` | `memories` -> `memory_stores` and `memory_entries` -> `memories`, `source_conversation_id`/`source_generation_id` collapsed into `source_id` |
 
 Run them from the server package, which owns the entrypoint:
@@ -91,7 +91,7 @@ models' indexes mid-way calls `context.sync()` itself.
    or one migrated before the ledger existed — records it instead of replaying
    it. `tests/unit/tests/migrations.test.ts` fails on a migration without one,
    which is what keeps a new install from ever needing an operator `baseline`.
-4. Make it idempotent. The ledger records what *finished*: a migration that
+4. Make it idempotent. The ledger records what _finished_: a migration that
    throws leaves no row and is retried from the top.
 5. There is no `down`. Roll forward with a new migration.
 

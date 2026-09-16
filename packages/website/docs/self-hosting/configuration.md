@@ -9,13 +9,13 @@ sidebar_label: Configuration
 
 ### Database
 
-| Variable            | Default         | Description       |
-| ------------------- | --------------- | ----------------- |
-| `DATABASE_HOST`     | `localhost`     | PostgreSQL host   |
-| `DATABASE_PORT`     | `5432`          | PostgreSQL port   |
-| `DATABASE_NAME`     | `soat_dev`      | Database name     |
-| `DATABASE_USER`     | `soat_user`     | Database user     |
-| `DATABASE_PASSWORD` | `soat_password` | Database password |
+| Variable            | Default         | Description                                   |
+| ------------------- | --------------- | --------------------------------------------- |
+| `DATABASE_HOST`     | `localhost`     | PostgreSQL host                               |
+| `DATABASE_PORT`     | `5432`          | PostgreSQL port                               |
+| `DATABASE_NAME`     | `soat_dev`      | Database name                                 |
+| `DATABASE_USER`     | `soat_user`     | Database user                                 |
+| `DATABASE_PASSWORD` | `soat_password` | Database password                             |
 | `DATABASE_POOL_MAX` | `10`            | Maximum pooled connections per server process |
 
 `DATABASE_POOL_MAX` is sized for two concurrent hybrid knowledge searches with headroom: one such search holds four connections at once — a vector and a lexical query over each store, two of them inside their own transaction. Raise it for a hotter deployment, keeping `DATABASE_POOL_MAX × <number of tasks>` below the database's `max_connections`.
@@ -57,27 +57,68 @@ Aurora PostgreSQL 18.3 crashes on the ORM's multi-statement session-setup query 
 
 :::
 
-### Schema Sync
+### Schema Management
 
-On boot, SOAT runs `sync({ alter: true })` behind a **session-level Postgres advisory lock**: concurrently starting tasks (rolling deploy, scale-out, instance refresh) serialize; one runs the schema changes, the rest see a no-op.
+Schema changes are a **discrete step that runs to completion before the service
+rolls**, not something every boot performs. The same image carries it:
 
-The wait is **bounded**: a task SIGKILLed mid-sync (grace-period expiry, OOM) can leave its backend and the lock lingering for minutes behind a pooler or a managed engine like Aurora. On timeout the boot fails fast (`canceling statement due to lock timeout`) with a non-zero exit, so the orchestrator restarts the task.
+```bash
+docker run --rm <image> node packages/server/dist/migrate.mjs run
+```
 
-| Variable                      | Default          | Description                                                                                                     |
-| ----------------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------- |
-| `SCHEMA_SYNC_LOCK_TIMEOUT_MS` | `600000` (10min) | Upper bound in milliseconds on how long boot waits to acquire the schema-sync advisory lock before failing fast |
+It applies the versioned migrations the ORM's sync cannot perform, records each
+one in a `schema_migrations` ledger table it maintains itself, and then syncs
+the schema the models describe. Already-applied migrations are skipped, so this
+is safe on **every** release rather than something to remember.
 
-Any non-positive-integer value (non-numeric, `0`, negative, fractional, empty) falls back to the default.
+| Command                     | Does                                       |
+| --------------------------- | ------------------------------------------ |
+| `migrate.mjs status`        | Every migration, and when each was applied |
+| `migrate.mjs run --dry-run` | What a real run would do; writes nothing   |
+| `migrate.mjs run`           | Applies what is pending, then syncs        |
 
-:::warning
-Keep this **larger than a legitimate migration's duration** and aligned with the health-check grace period. Lower it only when migrations are known to be fast.
+A **new database needs no special handling**. Every migration can recognise its
+own change in the schema, so one the sync has just built records them without
+running them, and so does a database migrated before the ledger existed. There
+is no baseline step to remember.
+
+An ordinary boot performs no DDL: it reads the ledger and refuses to start if
+the database is behind the code, naming the migrations that are missing. That
+keeps `/health` honest — a task binds its port in seconds, so an orchestrator
+that health-gates a rollout is never waiting on a migration.
+
+| Variable                      | Default          | Description                                                                                                  |
+| ----------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------ |
+| `DB_SYNC`                     | `false`          | When `true`, the process prepares the schema itself at boot instead of requiring the step above              |
+| `SCHEMA_SYNC_LOCK_TIMEOUT_MS` | `600000` (10min) | Upper bound in milliseconds on how long a schema step waits to acquire its advisory lock before failing fast |
+
+`DB_SYNC=true` is for a deployment with nowhere to put a pre-deploy step — a
+single container against its own database. Set it and `docker compose up` works
+with no extra step, at the cost of a boot that blocks on the schema.
+
+:::warning[Upgrading from a release that synced at boot]
+
+Deployments that relied on the boot-time `sync({ alter: true })` must add the
+migrate step to their rollout, or set `DB_SYNC=true`. Without either, the new
+image refuses to start and says so.
+
 :::
+
+Any non-positive-integer `SCHEMA_SYNC_LOCK_TIMEOUT_MS` (non-numeric, `0`,
+negative, fractional, empty) falls back to the default. Keep it larger than a
+legitimate migration's duration: it bounds a process **waiting** for a peer's
+lock, and a waiter should wait a live migration out rather than abort.
 
 :::note[Indexes are never dropped by the sync]
 
-`sync({ alter: true })` creates the indexes the current schema declares and never drops earlier ones. A renamed index leaves its predecessor in place; a widened unique index leaves the narrower one enforcing the old constraint, which can reject writes the current schema permits.
+The sync creates the indexes the current schema declares and never drops
+earlier ones. A renamed index leaves its predecessor in place; a widened unique
+index leaves the narrower one enforcing the old constraint, which can reject
+writes the current schema permits.
 
-Release notes call out indexes to drop: `DROP INDEX CONCURRENTLY IF EXISTS <name>`, or `ALTER TABLE <table> DROP CONSTRAINT IF EXISTS <name>` when a UNIQUE constraint owns the index.
+Release notes call out indexes to drop: `DROP INDEX CONCURRENTLY IF EXISTS <name>`,
+or `ALTER TABLE <table> DROP CONSTRAINT IF EXISTS <name>` when a UNIQUE
+constraint owns the index.
 
 :::
 
@@ -153,9 +194,9 @@ openssl rand -hex 32
 
 ### Outbound Egress
 
-| Variable                    | Default        | Description                                                                       |
-| --------------------------- | -------------- | --------------------------------------------------------------------------------- |
-| `TOOL_EGRESS_ALLOWED_HOSTS` | _(unset)_      | Comma-separated non-public destinations the server may request on a tenant's behalf |
+| Variable                    | Default   | Description                                                                         |
+| --------------------------- | --------- | ----------------------------------------------------------------------------------- |
+| `TOOL_EGRESS_ALLOWED_HOSTS` | _(unset)_ | Comma-separated non-public destinations the server may request on a tenant's behalf |
 
 An [`http` or `mcp` tool](../modules/tools.md) target must be publicly routable
 by default. Loopback, RFC1918 (`10/8`, `172.16/12`, `192.168/16`), link-local
@@ -163,12 +204,12 @@ by default. Loopback, RFC1918 (`10/8`, `172.16/12`, `192.168/16`), link-local
 `403 TOOL_EGRESS_BLOCKED` unless listed here. The same rule covers every
 tenant-chosen destination:
 
-| Destination                                                       | Refused how |
-| ----------------------------------------------------------------- | ----------- |
-| An `http`/`mcp` [tool](../modules/tools.md) target                 | `403 TOOL_EGRESS_BLOCKED` on the call |
-| A [webhook](../modules/webhooks.md)'s `url`                        | the delivery is closed as `failed`, with the reason on the row |
-| An [AI provider](../modules/ai-providers.md)'s `base_url`          | the generation or model listing fails |
-| A GCP service-account key file's `token_uri`, on an `http` tool    | `403 TOOL_EGRESS_BLOCKED` on the call |
+| Destination                                                     | Refused how                                                    |
+| --------------------------------------------------------------- | -------------------------------------------------------------- |
+| An `http`/`mcp` [tool](../modules/tools.md) target              | `403 TOOL_EGRESS_BLOCKED` on the call                          |
+| A [webhook](../modules/webhooks.md)'s `url`                     | the delivery is closed as `failed`, with the reason on the row |
+| An [AI provider](../modules/ai-providers.md)'s `base_url`       | the generation or model listing fails                          |
+| A GCP service-account key file's `token_uri`, on an `http` tool | `403 TOOL_EGRESS_BLOCKED` on the call                          |
 
 Operator-chosen destinations (`OLLAMA_BASE_URL`, `EMBEDDING_BASE_URL`, the
 embedding stack) are not covered and keep working on localhost. Unset, the
@@ -180,13 +221,13 @@ environment:
   TOOL_EGRESS_ALLOWED_HOSTS: 'billing.svc.cluster.local,*.internal.acme.com,10.42.0.0/16'
 ```
 
-| Entry form                  | Matches                                                              |
-| --------------------------- | -------------------------------------------------------------------- |
-| `billing.svc.cluster.local` | that hostname, on any port, whatever it resolves to                  |
+| Entry form                  | Matches                                                                  |
+| --------------------------- | ------------------------------------------------------------------------ |
+| `billing.svc.cluster.local` | that hostname, on any port, whatever it resolves to                      |
 | `server:5047`               | that hostname, only on port 5047 (the URL's implicit scheme port counts) |
-| `*.internal.acme.com`       | any subdomain of that suffix                                         |
-| `10.42.0.0/16`              | any hostname whose **resolved** address falls in the range           |
-| `[::1]:8080`                | an IPv6 literal with a port                                          |
+| `*.internal.acme.com`       | any subdomain of that suffix                                             |
+| `10.42.0.0/16`              | any hostname whose **resolved** address falls in the range               |
+| `[::1]:8080`                | an IPv6 literal with a port                                              |
 
 A malformed entry fails loudly rather than being dropped. The **resolved**
 address is checked (a public-looking hostname whose A record points at
@@ -201,9 +242,9 @@ base URL: it dispatches in-process under the caller's permissions.
 
 ### Provider Credentials
 
-| Variable                                 | Default | Description                                                                                    |
-| ---------------------------------------- | ------- | ---------------------------------------------------------------------------------------------- |
-| `AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS`  | `false` | Whether an AI provider record that links no credential may sign with the deployment's own       |
+| Variable                                | Default | Description                                                                               |
+| --------------------------------------- | ------- | ----------------------------------------------------------------------------------------- |
+| `AI_PROVIDER_ALLOW_AMBIENT_CREDENTIALS` | `false` | Whether an AI provider record that links no credential may sign with the deployment's own |
 
 `bedrock` and `vertex` [AI provider](../modules/ai-providers.md) SDKs fall back
 to the **deployment's** credentials: Bedrock walks the AWS default credential
@@ -237,7 +278,7 @@ Mount a persistent volume here in Docker.
 | Variable                     | Default           | Description                                                                                     |
 | ---------------------------- | ----------------- | ----------------------------------------------------------------------------------------------- |
 | `SOAT_TOOL_CALL_TIMEOUT_MS`  | `300000`          | Maximum time in milliseconds to wait for a single external tool call (MCP, SOAT, or HTTP tools) |
-| `TOOL_CONTEXT_HEADER_PREFIX` | `X-Soat-Context-` | Prefix prepended to every `tool_context` key to form the outbound request header name            |
+| `TOOL_CONTEXT_HEADER_PREFIX` | `X-Soat-Context-` | Prefix prepended to every `tool_context` key to form the outbound request header name           |
 
 A tool server that does not respond within `SOAT_TOOL_CALL_TIMEOUT_MS` (default 5 minutes) aborts the call and fails the generation.
 
@@ -247,11 +288,11 @@ A tool server that does not respond within `SOAT_TOOL_CALL_TIMEOUT_MS` (default 
 
 Retrieval defaults for [knowledge search](../modules/knowledge.md). Every one of them is also a per-request field, and the request wins; an invalid value falls back to the variable, then to the default, rather than failing the search.
 
-| Variable                             | Default  | Description                                                                                                       |
-| ------------------------------------ | -------- | ----------------------------------------------------------------------------------------------------------------- |
-| `KNOWLEDGE_RRF_K`                    | `60`     | The `k` in the reciprocal rank fusion term `1 / (k + rank)`; smaller weights the top of each ranked list more heavily |
-| `KNOWLEDGE_RECENCY_HALF_LIFE_DAYS`   | `0`      | Half-life in days of a recency decay applied to **memory** results after fusion. `0` disables the blend            |
-| `KNOWLEDGE_TEXT_SEARCH_CONFIG`       | `simple` | PostgreSQL text search configuration backing the lexical channel (e.g. `english`, `portuguese`)                    |
+| Variable                           | Default  | Description                                                                                                           |
+| ---------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------- |
+| `KNOWLEDGE_RRF_K`                  | `60`     | The `k` in the reciprocal rank fusion term `1 / (k + rank)`; smaller weights the top of each ranked list more heavily |
+| `KNOWLEDGE_RECENCY_HALF_LIFE_DAYS` | `0`      | Half-life in days of a recency decay applied to **memory** results after fusion. `0` disables the blend               |
+| `KNOWLEDGE_TEXT_SEARCH_CONFIG`     | `simple` | PostgreSQL text search configuration backing the lexical channel (e.g. `english`, `portuguese`)                       |
 
 `KNOWLEDGE_RECENCY_HALF_LIFE_DAYS` ships at `0`, so nothing decays until it is set and an upgrade reorders nothing. It accepts fractions (`0.5` is twelve hours), reads age from an entry's `updated_at`, and never touches document results. How many ranks a given half-life costs depends on `KNOWLEDGE_RRF_K`, and on a corpus mixing documents and memories it can cost more than it looks — measure it against your own data before enabling it. See [Recency blend](../modules/knowledge.md#recency-blend).
 
@@ -259,16 +300,16 @@ Retrieval defaults for [knowledge search](../modules/knowledge.md). Every one of
 
 [Ollama](https://ollama.com) by default; [OpenAI](https://platform.openai.com/docs/guides/embeddings) and [Amazon Bedrock](https://docs.aws.amazon.com/bedrock/latest/userguide/titan-embedding-models.html) are supported.
 
-| Variable               | Default                  | Description                                                                                |
-| ---------------------- | ------------------------ | ------------------------------------------------------------------------------------------ |
-| `EMBEDDING_PROVIDER`   | `ollama`                 | Embedding provider: `ollama`, `openai`, or `bedrock`                                       |
-| `EMBEDDING_MODEL`      | `qwen3-embedding:0.6b`   | Model name for the selected provider                                                       |
-| `EMBEDDING_DIMENSIONS` | `1024`                   | Embedding vector dimensions (must match the model; at most `2000`)                         |
-| `OLLAMA_BASE_URL`      | `http://localhost:11434` | Base URL of the Ollama instance (`ollama` only)                                            |
-| `EMBEDDING_API_KEY`    | —                        | OpenAI API key, or a Bedrock `ABSK…` bearer token. `openai` falls back to `OPENAI_API_KEY` |
-| `EMBEDDING_BASE_URL`   | —                        | Override base URL for an OpenAI-compatible endpoint (`openai` only)                        |
-| `EMBEDDING_REGION`     | `us-east-1`              | AWS region for Bedrock (`bedrock` only); falls back to `AWS_REGION`                        |
-| `EMBEDDING_INPUT_1M_TOKEN_PRICE_USD` | _(unset)_ | USD per **million** input tokens. Unset meters embeddings at `0`; the price book does not price them |
+| Variable                             | Default                  | Description                                                                                          |
+| ------------------------------------ | ------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `EMBEDDING_PROVIDER`                 | `ollama`                 | Embedding provider: `ollama`, `openai`, or `bedrock`                                                 |
+| `EMBEDDING_MODEL`                    | `qwen3-embedding:0.6b`   | Model name for the selected provider                                                                 |
+| `EMBEDDING_DIMENSIONS`               | `1024`                   | Embedding vector dimensions (must match the model; at most `2000`)                                   |
+| `OLLAMA_BASE_URL`                    | `http://localhost:11434` | Base URL of the Ollama instance (`ollama` only)                                                      |
+| `EMBEDDING_API_KEY`                  | —                        | OpenAI API key, or a Bedrock `ABSK…` bearer token. `openai` falls back to `OPENAI_API_KEY`           |
+| `EMBEDDING_BASE_URL`                 | —                        | Override base URL for an OpenAI-compatible endpoint (`openai` only)                                  |
+| `EMBEDDING_REGION`                   | `us-east-1`              | AWS region for Bedrock (`bedrock` only); falls back to `AWS_REGION`                                  |
+| `EMBEDDING_INPUT_1M_TOKEN_PRICE_USD` | _(unset)_                | USD per **million** input tokens. Unset meters embeddings at `0`; the price book does not price them |
 
 Embedding spend is priced from `EMBEDDING_INPUT_1M_TOKEN_PRICE_USD`, not the price book (no AI provider record configures the embedding stack). Unset meters every embedding at `0` (correct for a local model, silently free on a vendor-billed one) and logs a startup warning. See [Pricing embeddings](/docs/modules/embeddings#pricing-embeddings).
 
