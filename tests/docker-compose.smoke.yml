@@ -107,32 +107,6 @@ services:
       timeout: 5s
       retries: 10
 
-  # The schema step a deploy runs before the service rolls (#548). Same image as
-  # `server`, started at the `migrate.mjs` entrypoint; it applies the pending
-  # migrations, syncs, and exits. `server` and `worker` wait for it to exit 0,
-  # so neither boots against a schema it does not match — which is what lets
-  # them run with the boot-time sync off, exactly as a deployment does.
-  migrate:
-    image: soat-smoke-server
-    # The tag is local-only, produced by `server`'s build. Without this Compose
-    # would try the registry when it is missing and fail with a misleading
-    # "pull access denied" instead of naming the real problem.
-    pull_policy: never
-    command: ['node', 'packages/server/dist/migrate.mjs', 'run']
-    restart: 'no'
-    depends_on:
-      database:
-        condition: service_healthy
-    environment:
-      DATABASE_HOST: database
-      DATABASE_PORT: '5432'
-      DATABASE_NAME: soat_test
-      DATABASE_USER: soat_user
-      DATABASE_PASSWORD: soat_password
-      # `DocumentChunk` sizes its vector column from this at module load, so the
-      # migrate process needs it as much as the server does.
-      EMBEDDING_DIMENSIONS: '1024'
-
   server:
     # Named so `worker` can reuse this exact image instead of declaring its own
     # identical `build:`. Two build blocks with the same context and target
@@ -150,13 +124,24 @@ services:
     # period, so teardown waited the full timeout for it (and for both Ollama
     # services below). This is a throwaway stack — nothing here needs to drain.
     stop_grace_period: 2s
+    # The schema step runs to completion before the server process starts, as a
+    # deploy does it (#548) — `exec` so the server still receives signals. It
+    # cannot be a service of its own here: `--exit-code-from`, which both
+    # stacks use, implies `--abort-on-container-exit`, and Compose tears the
+    # whole stack down when ANY container exits, a completed one-shot task
+    # included. The server itself still boots with the sync gate off, so
+    # `assertSchemaPrepared` is what lets it serve.
+    command:
+      - sh
+      - -c
+      - >-
+        node packages/server/dist/migrate.mjs run && exec node
+        --enable-source-maps packages/server/dist/server.mjs
     volumes:
       - ./mocks/formationResourceTypes.json:/formation-resource-types.json:ro
     depends_on:
       database:
         condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
       ollama:
         condition: service_healthy
       ollama-tool-choice:
@@ -229,8 +214,10 @@ services:
     depends_on:
       database:
         condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
+      # The server owns the schema step, and this process boots with the sync
+      # gate off too — so it waits for the schema rather than racing it.
+      server:
+        condition: service_healthy
       ollama:
         condition: service_healthy
       ollama-tool-choice:
