@@ -59,6 +59,32 @@ export const mapMessage = async (message: ConversationMessageRow) => {
 };
 
 /**
+ * The text of one generated assistant message, addressed by the document id the
+ * `conversations.message.generated` event names.
+ *
+ * Here rather than in the subscriber because the bytes are behind a file the
+ * storage backend owns, and `readStoredFileContent` is that reader — a second
+ * copy beside the event dispatcher would be a second thing to keep true.
+ */
+export const readGeneratedMessageContent = async (args: {
+  documentPublicId: string;
+}): Promise<string | null> => {
+  const message = (await db.ConversationMessage.findOne({
+    include: [
+      {
+        model: db.Document,
+        as: 'document',
+        required: true,
+        where: { publicId: args.documentPublicId },
+        include: [{ model: db.File, as: 'file' }],
+      },
+    ],
+  })) as ConversationMessageRow | null;
+
+  return readStoredFileContent(message?.document?.file);
+};
+
+/**
  * A message's participants come from the conversation's own project, the same
  * scope its `document_id` is already held to. Unscoped, a message could name an
  * actor or agent from another project — and the listing that filters

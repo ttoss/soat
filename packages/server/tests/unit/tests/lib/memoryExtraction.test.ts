@@ -1,12 +1,11 @@
 import {
-  fireMemoryExtraction,
   parseFactCandidates,
-  runMemoryExtraction,
+  runBuiltInExtractor,
 } from 'src/lib/memoryExtraction';
 import * as extractionCompletionModule from 'src/lib/memoryExtractionCompletion';
 
-import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
-
+// Shared spy created once at module load (the `mockCreateGeneration` pattern):
+// `afterEach` uses `clearAllMocks`, never `restoreAllMocks`.
 const mockRunExtractionCompletion = jest.spyOn(
   extractionCompletionModule,
   'runExtractionCompletion'
@@ -56,84 +55,48 @@ describe('memoryExtraction lib', () => {
     });
   });
 
-  describe('runMemoryExtraction', () => {
-    let adminToken: string;
-    let projectId: string;
-    let aiProviderId: string;
+  describe('runBuiltInExtractor', () => {
+    test('sends the rule prompt, the provider and the model it was given', async () => {
+      mockRunExtractionCompletion.mockResolvedValueOnce('["a fact"]');
 
-    beforeAll(async () => {
-      await testClient
-        .post('/api/v1/users/bootstrap')
-        .send({ username: 'extractionlibadmin', password: 'supersecret' });
+      const candidates = await runBuiltInExtractor({
+        agentId: 'agent_source',
+        transcript: 'user: hi\nassistant: hello',
+        prompt: 'Only billing facts',
+        aiProviderId: 'aip_cheap',
+        model: 'cheap-model',
+      });
 
-      adminToken = await loginAs('extractionlibadmin', 'supersecret');
-
-      const projectRes = await authenticatedTestClient(adminToken)
-        .post('/api/v1/projects')
-        .send({ name: 'Extraction Lib Project' });
-      projectId = projectRes.body.id;
-
-      const aiProvRes = await authenticatedTestClient(adminToken)
-        .post('/api/v1/ai-providers')
-        .send({
-          project_id: projectId,
-          name: 'ExtractionLibProvider',
-          provider: 'ollama',
-          default_model: 'llama3.2',
-        });
-      aiProviderId = aiProvRes.body.id;
+      expect(candidates).toEqual(['a fact']);
+      const call = mockRunExtractionCompletion.mock.calls[0][0];
+      expect(call.agentId).toBe('agent_source');
+      expect(call.aiProviderId).toBe('aip_cheap');
+      expect(call.model).toBe('cheap-model');
+      // A custom prompt replaces the task instructions only: the response
+      // contract and the transcript are always appended.
+      expect(call.prompt).toContain('Only billing facts');
+      expect(call.prompt).toContain('Respond with a JSON array');
+      expect(call.prompt).toContain('assistant: hello');
     });
 
-    test('survives a failing extraction completion without throwing', async () => {
-      const memoryStoreRes = await authenticatedTestClient(adminToken)
-        .post('/api/v1/memory-stores')
-        .send({ project_id: projectId, name: 'Lib Failing MemoryStore' });
+    test('proposes nothing for an empty transcript, without calling the model', async () => {
+      expect(
+        await runBuiltInExtractor({ agentId: 'agent_source', transcript: '  ' })
+      ).toEqual([]);
+      expect(mockRunExtractionCompletion).not.toHaveBeenCalled();
+    });
 
-      const agentRes = await authenticatedTestClient(adminToken)
-        .post('/api/v1/agents')
-        .send({
-          project_id: projectId,
-          ai_provider_id: aiProviderId,
-          name: 'LibFailingAgent',
-          knowledge_config: {
-            write_memory_store_id: memoryStoreRes.body.id,
-            extraction: true,
-          },
-        });
-
+    test('proposes nothing when the completion fails, rather than throwing', async () => {
       mockRunExtractionCompletion.mockRejectedValueOnce(
         new Error('provider unavailable')
       );
 
-      const summary = await runMemoryExtraction({
-        agentId: agentRes.body.id,
-        messages: [{ role: 'user', content: 'hi' }],
-        assistantContent: 'hello',
-      });
-
-      expect(summary).toBeNull();
-    });
-  });
-
-  describe('fireMemoryExtraction', () => {
-    test('does not throw when runMemoryExtraction rejects', async () => {
-      expect(() => {
-        return fireMemoryExtraction({
-          agentId: 'agt_fire_test',
-          // An invalid projectIds value makes the underlying Agent lookup
-          // reject (invalid input syntax for integer), forcing
-          // runMemoryExtraction's promise to reject so the fire-and-forget
-          // `.catch` handler runs.
-          projectIds: ['not-a-number'] as unknown as number[],
-          messages: [{ role: 'user', content: 'hi' }],
-          assistantContent: 'hello',
-        });
-      }).not.toThrow();
-
-      // Flush the microtask queue so the fire-and-forget `.catch` runs.
-      await new Promise((resolve) => {
-        setImmediate(resolve);
-      });
+      await expect(
+        runBuiltInExtractor({
+          agentId: 'agent_source',
+          transcript: 'user: hi',
+        })
+      ).resolves.toEqual([]);
     });
   });
 });

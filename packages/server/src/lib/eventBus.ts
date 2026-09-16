@@ -39,7 +39,8 @@ export type EventDropStage =
   | 'delivery_write'
   | 'activity_write'
   | 'trigger_lookup'
-  | 'exception_file';
+  | 'exception_file'
+  | 'memory_rule_dispatch';
 
 const droppedEvents = new Map<EventDropStage, number>();
 

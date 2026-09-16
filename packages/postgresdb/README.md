@@ -63,6 +63,7 @@ The flow they follow is
 | `2026-09-11-memory-tags-to-jsonb`           | `memories.tags` and `memory_entries.tags` from `text[]` to key-value `jsonb`                                                                 |
 | `2026-09-16-memories-rename-and-provenance` | `memories` -> `memory_stores` and `memory_entries` -> `memories`, `source_conversation_id`/`source_generation_id` collapsed into `source_id` |
 | `2026-09-16-memory-assertions-and-shared-content` | `memories.content`/`embedding` moved to a shared `memory_contents` row, `memory_assertions` added, `generations.conversation_id` and the `memory_stores` threshold pair added |
+| `2026-09-16-memory-rules-from-agent-extraction` | `memory_rules` added, `memory_assertions.rule_id` made a foreign key into it, and each agent's `knowledge_config.extraction` moved to a rule on its write store |
 
 Run them from the server package, which owns the entrypoint:
 

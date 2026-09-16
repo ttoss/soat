@@ -325,7 +325,16 @@ describe('Generations', () => {
         pendingState: {
           messages: [{ role: 'user', content: 'secret internal message' }],
         },
-        extraction: { candidates: 2, created: 1, superseded: 0, skipped: 1 },
+        // Keyed by memory rule: a store can have several, so one flat pair of
+        // counts could not say which produced them (#1324).
+        extraction: {
+          mrule_V1StGXR8Z5jdHi6B: {
+            candidates: 2,
+            created: 1,
+            superseded: 0,
+            skipped: 1,
+          },
+        },
       });
 
       const response = await authenticatedTestClient(userToken).get(
@@ -334,10 +343,12 @@ describe('Generations', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.extraction).toEqual({
-        candidates: 2,
-        created: 1,
-        superseded: 0,
-        skipped: 1,
+        mrule_V1StGXR8Z5jdHi6B: {
+          candidates: 2,
+          created: 1,
+          superseded: 0,
+          skipped: 1,
+        },
       });
       // `pendingState` has no mapper entry at all, so it cannot leak under its
       // own name, inside the caller bag, or via any serialization of the row.
@@ -521,7 +532,14 @@ describe('Generations', () => {
       await updateGenerationRecord({
         publicId: failedGenerationId,
         metadata: { ticket_id: 'OPS-4821' },
-        extraction: { candidates: 2, created: 1, updated: 0, skipped: 1 },
+        extraction: {
+          mrule_V1StGXR8Z5jdHi6B: {
+            candidates: 2,
+            created: 1,
+            superseded: 0,
+            skipped: 1,
+          },
+        },
         pendingState: { messages: [] },
       });
 
@@ -537,10 +555,12 @@ describe('Generations', () => {
       // Server state sits in its own columns, so a metadata merge cannot touch
       // it — and the bag holds nothing but the caller's two keys.
       expect(patchResponse.body.extraction).toEqual({
-        candidates: 2,
-        created: 1,
-        updated: 0,
-        skipped: 1,
+        mrule_V1StGXR8Z5jdHi6B: {
+          candidates: 2,
+          created: 1,
+          superseded: 0,
+          skipped: 1,
+        },
       });
       expect(patchResponse.body.metadata).toEqual({
         ticket_id: 'OPS-4821',
@@ -563,7 +583,14 @@ describe('Generations', () => {
       const id = genResponse.body.error.meta.generation_id;
       await updateGenerationRecord({
         publicId: id,
-        extraction: { candidates: 1, created: 1, updated: 0, skipped: 0 },
+        extraction: {
+          mrule_V1StGXR8Z5jdHi6B: {
+            candidates: 1,
+            created: 1,
+            superseded: 0,
+            skipped: 0,
+          },
+        },
         pendingState: { messages: [{ role: 'user', content: 'secret' }] },
       });
       return id;

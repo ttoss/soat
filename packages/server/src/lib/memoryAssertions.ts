@@ -18,8 +18,10 @@ const log = createDebug('soat:memories');
 export type MemoryAssertionSource = {
   mechanism: MemoryAssertionMechanism;
   /**
-   * Only meaningful for `rule`. Null (or absent) is the built-in extractor
-   * driven by `knowledge_config.extraction`, until #1324 gives it a row.
+   * The `memory_rules` row whose firing this is — set on every `rule` write,
+   * the built-in extractor included (it is a rule with no handler). The
+   * internal id, because the caller is the dispatcher holding the row; the
+   * ledger's own reads answer with the rule's public id.
    */
   ruleId?: number | null;
   /** The generation's **public** id; resolved to the row here. */
@@ -33,6 +35,7 @@ type AssertionRow = InstanceType<(typeof db)['MemoryAssertion']> & {
   content?: InstanceType<(typeof db)['MemoryContent']>;
   memory?: InstanceType<(typeof db)['Memory']> | null;
   generation?: InstanceType<(typeof db)['Generation']> | null;
+  rule?: InstanceType<(typeof db)['MemoryRule']> | null;
 };
 
 const assertionIncludes = () => {
@@ -41,6 +44,7 @@ const assertionIncludes = () => {
     { model: db.MemoryContent, as: 'content' },
     { model: db.Memory, as: 'memory' },
     { model: db.Generation, as: 'generation' },
+    { model: db.MemoryRule, as: 'rule' },
   ];
 };
 
@@ -104,7 +108,7 @@ const mapAssertion = (
     superseded_memory_id: retiredMemoryId(instance, supersededIds),
     content: instance.content?.content,
     mechanism: instance.mechanism,
-    rule_id: instance.ruleId ?? null,
+    rule_id: linkedPublicId(instance.rule),
     generation_id: linkedPublicId(instance.generation),
     principal_type: instance.principalType,
     principal_id: instance.principalId,

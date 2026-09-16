@@ -15,6 +15,8 @@ Native [file ingestion](./documents.md#file-ingestion-and-chunking) extracts tex
 
 Rules are per-project. SOAT performs no OCR or transcription itself. In the [engine & algorithms pattern](../advanced/engines-and-algorithms.md), the [converter contract](#converter-tool-contract) is the knowledge engine's bring-your-own-algorithm seam.
 
+The same shape applied to turns instead of files is a [memory rule](./memories.md#memory-rules): a selector and a pluggable handler, owned by the memory store the facts land in.
+
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
 ## Related Tutorials

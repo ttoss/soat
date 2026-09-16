@@ -15,10 +15,6 @@ import {
 } from 'src/lib/agentGeneration';
 import { mapGenerationResult } from 'src/lib/agentGenerationHelpers';
 import type { GenerationInputMessage } from 'src/lib/generationInputMessages';
-import {
-  type ExtractionMessage,
-  fireMemoryExtraction,
-} from 'src/lib/memoryExtraction';
 import { validateMetadataBag } from 'src/lib/metadataBag';
 
 import { requireAuth, requireProjectAccess } from './helpers';
@@ -80,29 +76,6 @@ const handleGenerationResult = async (
   ctx.body = mapGenerationResult(result as GenerationResult);
 };
 
-const fireExtractionForCompletedResult = (args: {
-  agentId: string;
-  projectIds?: number[];
-  result: GenerationResult | ReadableStream;
-  messages: ExtractionMessage[];
-  extract?: boolean;
-}): void => {
-  if (
-    args.result instanceof ReadableStream ||
-    args.result.status !== 'completed'
-  ) {
-    return;
-  }
-  fireMemoryExtraction({
-    agentId: args.agentId,
-    projectIds: args.projectIds,
-    generationId: args.result.id,
-    messages: args.messages,
-    assistantContent: args.result.output?.content ?? '',
-    extract: args.extract,
-  });
-};
-
 const toObjectOrUndefined = (value: unknown): object | undefined => {
   return value && typeof value === 'object' ? value : undefined;
 };
@@ -147,7 +120,6 @@ type GenerateRequestBody = {
   tool_context?: Record<string, string>;
   knowledge_config?: object;
   action_id?: string;
-  extract?: boolean;
   metadata?: unknown;
   guardrail_context?: unknown;
 };
@@ -241,14 +213,6 @@ agentGenerationRouter.post(
     const result = await createGeneration({
       ...generationArgs,
       stream: body.stream === true,
-    });
-
-    fireExtractionForCompletedResult({
-      agentId: ctx.params.agent_id,
-      projectIds,
-      result,
-      messages: body.messages as ExtractionMessage[],
-      extract: typeof body.extract === 'boolean' ? body.extract : undefined,
     });
 
     await handleGenerationResult(ctx, result, body.stream);

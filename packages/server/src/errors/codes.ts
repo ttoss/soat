@@ -384,6 +384,11 @@ export const ERROR_CODES = {
     description:
       'The ingestion rule configuration is invalid (e.g. tool_id and agent_id are both set or both missing, the converter tool is a client tool, a soat/mcp converter tool is missing an action, content_type_glob is not a valid MIME type glob, or preset_parameters contains the reserved key "file" or "callback").',
   },
+  MEMORY_RULE_VALIDATION_FAILED: {
+    httpStatus: 400,
+    description:
+      'The memory rule configuration is invalid (e.g. agent_id and tool_id are both set, `on` is not a supported event, the built-in extractor is bound to conversations.message.generated, an extractor override is combined with a handler, or source_agent_ids is not an array of agent ids).',
+  },
   INGESTION_RULE_GLOB_CONFLICT: {
     httpStatus: 409,
     description:

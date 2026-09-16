@@ -145,6 +145,28 @@ export const createLegacySchema = async (args: {
       public_id varchar(32) NOT NULL
     );
 
+    CREATE TABLE ai_providers (
+      id serial PRIMARY KEY,
+      public_id varchar(32) NOT NULL
+    );
+
+    CREATE TABLE tools (
+      id serial PRIMARY KEY,
+      public_id varchar(32) NOT NULL
+    );
+
+    CREATE TABLE agents (
+      id serial PRIMARY KEY,
+      public_id varchar(32) NOT NULL,
+      knowledge_config jsonb
+    );
+
+    CREATE TABLE agent_versions (
+      id serial PRIMARY KEY,
+      agent_id integer NOT NULL REFERENCES agents (id),
+      config jsonb
+    );
+
     CREATE TABLE memories (
       id serial PRIMARY KEY,
       public_id varchar(32) NOT NULL,

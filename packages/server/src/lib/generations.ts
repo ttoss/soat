@@ -463,9 +463,9 @@ export const getGeneration = async (args: {
       to: null,
       generationId: gen.id,
     }),
-    // Alongside the `extraction` counts, so the summary and the rows it
-    // summarizes can be reconciled. It also covers the writes the summary never
-    // saw: a `write_memory` call mid-turn is not extraction.
+    // Alongside the per-rule `extraction` counts, so the summary and the rows
+    // it summarizes can be reconciled. It also covers the writes the summary
+    // never saw: a `write_memory` call mid-turn is not a rule firing.
     listGenerationMemoryAssertions({ generationDbId: gen.id as number }),
   ]);
 

@@ -551,30 +551,36 @@ components:
           type: object
           nullable: true
           description: >
-            Memory-extraction summary recorded for this generation. Set when the
-            agent's `knowledge_config.extraction` produced one for this turn.
-            The rows behind these counts are in `memory_assertions`, so the
-            summary and what it summarizes can be reconciled.
-          properties:
-            candidates:
-              type: integer
-              description: Number of extraction candidates considered
-            created:
-              type: integer
-              description: Number of new memories created
-            superseded:
-              type: integer
-              description: >
-                Number of candidates that restated a known fact that had
-                changed, retiring the memory holding it
-            skipped:
-              type: integer
-              description: Number of candidates skipped (e.g. duplicates)
+            What each [memory rule](/docs/modules/memories#memory-rules) bound
+            to `agents.generation.completed` wrote for this turn, keyed by the
+            rule's id — a store may have several rules, and one flat pair of
+            counts could not say which produced them. Absent when no rule fired.
+            Rules bound to `conversations.message.generated` are recorded in
+            `memory_assertions` only. The rows behind every count are in
+            `memory_assertions`, so the summary and what it summarizes can be
+            reconciled.
+          additionalProperties:
+            type: object
+            properties:
+              candidates:
+                type: integer
+                description: Number of candidates the rule's handler proposed
+              created:
+                type: integer
+                description: Number of new memories created
+              superseded:
+                type: integer
+                description: >
+                  Number of candidates that restated a known fact that had
+                  changed, retiring the memory holding it
+              skipped:
+                type: integer
+                description: Number of candidates skipped (e.g. duplicates)
         memory_assertions:
           type: array
           description: >
-            Every memory write this turn made, oldest first — the post-turn
-            extractor's and the agent's own `write_memory` calls alike, which
+            Every memory write this turn made, oldest first — each memory
+            rule's firings and the agent's own `write_memory` calls alike, which
             the `extraction` counts never covered. Present on the single read
             only; a listing would make it one extra query per generation.
           items:

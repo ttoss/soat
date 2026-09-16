@@ -13,7 +13,7 @@ A **memory** is one fact an agent knows. A **memory store** is the named contain
 
 A memory store is a namespace for text content that agents read and write during generation. Each store holds many **memories**, embedded for semantic search via the [Knowledge](./knowledge.md) module.
 
-Agents retrieve relevant memories via `knowledge_config` and write new facts with the built-in `write_memory` tool; see [Agent Integration](#agent-integration) and the [Memory & Knowledge Engine](../advanced/memory-and-knowledge-engine.md) deep dive. In the [engine & algorithms pattern](../advanced/engines-and-algorithms.md), the write funnel, embedding, the [assertion ledger](#assertions) and invalidation are the **engine**; the [write algorithm](#write-algorithm) and [extraction](#automatic-extraction) are the **algorithms**, with customization seams in the [deep dive](../advanced/memory-and-knowledge-engine.md#extending-the-engine-today).
+Agents retrieve relevant memories via `knowledge_config` and write new facts with the built-in `write_memory` tool; a store also decides for itself what completed turns may contribute to it, through its [memory rules](#memory-rules). See [Agent Integration](#agent-integration) and the [Memory & Knowledge Engine](../advanced/memory-and-knowledge-engine.md) deep dive. In the [engine & algorithms pattern](../advanced/engines-and-algorithms.md), the write funnel, embedding, the [assertion ledger](#assertions) and invalidation are the **engine**; the [write algorithm](#write-algorithm) and a rule's [handler](#handlers) are the **algorithms**, with customization seams in the [deep dive](../advanced/memory-and-knowledge-engine.md#extending-the-engine-today).
 
 A memory is **state**. Every write that produced or changed it is an **assertion**: some principal, through some mechanism, claimed a fact. The two are separate records, which is what lets a write that changed nothing still leave a trace.
 
@@ -24,7 +24,7 @@ A memory is **state**. Every write that produced or changed it is an **assertion
 - [Agent with Persistent Memory - Step 4 (Create a memory store)](/docs/tutorials/memories-agent#step-4--create-a-memory-store)
 - [Agent with Persistent Memory - Step 5 (Write memories)](/docs/tutorials/memories-agent#step-5--write-memories)
 - [Agent with Persistent Memory - Step 10 (Observe the agent writing to memory)](/docs/tutorials/memories-agent#step-10--observe-the-agent-writing-to-memory)
-- [Agent with Persistent Memory - Step 11 (Enable automatic extraction)](/docs/tutorials/memories-agent#step-11--enable-automatic-extraction)
+- [Agent with Persistent Memory - Step 11 (Add a memory rule)](/docs/tutorials/memories-agent#step-11--add-a-memory-rule)
 - [Agent with Persistent Memory - Step 13 (Trace a fact back to the conversation it came from)](/docs/tutorials/memories-agent#step-13--trace-a-fact-back-to-the-conversation-it-came-from)
 
 ## Data Model
@@ -73,7 +73,7 @@ One row per write attempt, append-only, whatever the write resolved to.
 | `superseded_memory_id` | `string \| null` | The memory this assertion retired, on a `superseded` outcome |
 | `content`    | `string` | The text **as asserted**, which is not always the memory's text — a `skipped` assertion records what was claimed |
 | `mechanism`  | `string` | Which door the write came through: `tool`, `rule`, `api` or `formation` — see [Mechanism](#mechanism) |
-| `rule_id`    | `integer \| null` | Set only for `rule`; `null` is the built-in extractor |
+| `rule_id`    | `string \| null` | The [memory rule](#memory-rules) whose firing wrote this (`mrule_` prefix); set only for `rule`. `null` once that rule is deleted |
 | `generation_id` | `string \| null` | The turn that asserted the fact; `null` on the `api` and `formation` doors |
 | `principal_type` | `string` | Who claimed it, in the vocabulary a [generation](./generations.md) records its starter with, plus `agent` |
 | `principal_id` | `string` | The principal's public ID                             |
@@ -138,7 +138,7 @@ Three layers, resolved request → store → constant, each value independently;
 | Store default | `duplicate_threshold` / `supersede_threshold` on the memory store, settable on create, update and as a formation resource property | the corpus's dedup policy |
 | Algorithm constant | built in | `0.95` / `0.90` |
 
-Only the `api` door takes per-request values. The [`write_memory` tool](#write_memory-tool) and the post-turn [rule](#automatic-extraction) always use the store's effective pair: a writer that could loosen the corpus's dedup policy from the side would make the store-level default meaningless. A formation sets store defaults through the store resource, never per memory.
+Only the `api` door takes per-request values. The [`write_memory` tool](#write_memory-tool) and a [memory rule](#memory-rules) always use the store's effective pair: a writer that could loosen the corpus's dedup policy from the side would make the store-level default meaningless. A formation sets store defaults through the store resource, never per memory.
 
 **Invariant:** the *effective* pair must satisfy `supersede_threshold < duplicate_threshold`. Equal makes `superseded` unreachable; inverted swallows `skipped`. Both are rejected with `400 VALIDATION_FAILED`, on the store write and on the request — and on the request the check runs against the effective pair, so a body overriding only one value cannot invert it against the store's other one. Each value is bounded to `[0, 1]`.
 
@@ -165,17 +165,17 @@ An assertion names the content as asserted (not always the memory's text), the o
 | `mechanism` | The write |
 | --- | --- |
 | `tool` | the agent's [`write_memory`](#write_memory-tool) call, mid-turn |
-| `rule` | a post-turn pass over the finished turn — today the built-in [extractor](#automatic-extraction), with `rule_id` null |
+| `rule` | a [memory rule](#memory-rules) firing on a finished turn, named by `rule_id` |
 | `api` | [`POST /api/v1/memories`](/docs/api/memories/create-memory) |
 | `formation` | a `memory` resource in an applied [formation](./formations.md) |
 
-The *who* is `principal_type` / `principal_id`. On both agent doors the principal is the **agent**: the extractor runs under the agent's identity, and the generation's own `started_by` names whoever asked for the turn, which is a different question.
+The *who* is `principal_type` / `principal_id`. On both agent doors the principal is the **agent whose turn it was**: a rule decides what the corpus accepts, but the agent is who said the thing. The generation's own `started_by` names whoever asked for the turn, which is a different question again.
 
 #### Reading the ledger
 
 - [`GET /api/v1/memories/{memory_id}/assertions`](/docs/api/memories/list-memory-assertions) — one memory's full history, oldest first, skips included. A `superseded` assertion also names the memory it retired, so the chain reads in both directions. A retired memory keeps its own assertions.
 - [`GET /api/v1/memory-stores/{memory_store_id}/assertions`](/docs/api/memory-stores/list-memory-store-assertions) — the store's ledger, newest first, filterable by `mechanism`, `outcome`, `generation_id` and `since`. This is the volume question as a query.
-- [`GET /api/v1/generations/{generation_id}`](/docs/api/generations/get-generation) carries `memory_assertions` alongside the [extraction](#automatic-extraction) counts, so the summary and the rows it summarizes reconcile — and it covers the `write_memory` calls the summary never saw.
+- [`GET /api/v1/generations/{generation_id}`](/docs/api/generations/get-generation) carries `memory_assertions` alongside the per-rule [`extraction` counts](#what-a-firing-records), so the summary and the rows it summarizes reconcile — and it covers the `write_memory` calls the summary never saw.
 
 Both listings are gated on `memories:ListMemoryAssertions`, against the store's SRN like every other item read.
 
@@ -187,8 +187,8 @@ Validity — `invalidated_at` and `superseded_by_memory_id` — is on the memory
 
 | `source_type`  | `source_id`                        | Written by |
 | -------------- | ---------------------------------- | ---------- |
-| `conversation` | the conversation's public ID       | [Automatic extraction](#automatic-extraction) on a conversation turn |
-| `manual`       | `null`                             | [`POST /api/v1/memories`](/docs/api/memories/create-memory), the [`write_memory` tool](#write_memory-tool), and extraction on a direct agent generation |
+| `conversation` | the conversation's public ID       | a [memory rule](#memory-rules) firing on a conversation turn |
+| `manual`       | `null`                             | [`POST /api/v1/memories`](/docs/api/memories/create-memory), the [`write_memory` tool](#write_memory-tool), and a rule firing on a bare agent generation |
 
 It deliberately does **not** describe the write *mechanism*. A fact the `write_memory`
 tool wrote during a generation that belongs to no conversation reads `manual`, because
@@ -296,55 +296,120 @@ Memories written by the tool carry `source_type: "manual"`: `source_id` is a poi
 }
 ```
 
-#### Automatic Extraction
+### Memory Rules
 
-Set `extraction` alongside `write_memory_store_id` to have the server extract facts from completed generation turns without an explicit `write_memory` call. Pass `true` for the defaults, or an object to customize the provider, model, and prompt:
+A **memory rule** is a store's **ingestion policy**: what a completed agent turn is allowed to contribute to *this* corpus, and who decides. It lives on the destination, because the question it answers — "what feeds this store?" — is a property of the store, not of any one agent.
+
+That makes it the opposite half of the [`write_memory` tool](#write_memory-tool), which is a *capability grant* on an agent and stays where it is:
+
+| | `write_memory` tool | memory rule |
+| --- | --- | --- |
+| **Who decides** | the agent, mid-turn, at its discretion | the platform, after every completed turn |
+| **What it is** | a capability grant — this agent may write there | an ingestion policy — this is what the corpus accepts |
+| **Reads** | the agent's whole context | exactly one turn's transcript |
+| **Lives on** | the agent | the memory store |
+
+Because a rule belongs to its store, one store can have several (a cheap general one, a strict one for billing turns), one agent can feed two stores under different rules, and "what feeds this store?" is one listing instead of a sweep over every agent in the project.
+
+#### The rule
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `id` | `string` | Public ID (`mrule_` prefix) |
+| `memory_store_id` | `string` | The destination store, and the rule's owning scope. Deleting the store deletes its rules |
+| `project_id` | `string` | The store's project |
+| `on` | `string` | The [event](#events) the rule reads |
+| `source_agent_ids` | `array \| null` | Agents whose turns it reads; `null` is every agent in the project |
+| `agent_id` | `string \| null` | Handler agent — mutually exclusive with `tool_id` |
+| `tool_id` | `string \| null` | Handler tool — mutually exclusive with `agent_id` |
+| `action` | `string \| null` | Operation id, for a tool handler |
+| `preset_parameters` | `object \| null` | Merged into a tool handler's input; the turn's own fields are reserved and win |
+| `prompt` | `string \| null` | Replaces the built-in extractor's task instructions |
+| `ai_provider_id` | `string \| null` | Provider override for the built-in extractor |
+| `model` | `string \| null` | Model override for the built-in extractor |
+| `enabled` | `boolean` | A disabled rule is kept and never fires |
+| `created_at` | `string` | ISO 8601 creation timestamp |
+| `updated_at` | `string` | ISO 8601 last-updated timestamp |
+
+Manage them with [`POST /api/v1/memory-rules`](/docs/api/memory-rules/create-memory-rule), [`GET /api/v1/memory-rules`](/docs/api/memory-rules/list-memory-rules) (pass `memory_store_id` to read one store's policy), [`GET /api/v1/memory-rules/{memory_rule_id}`](/docs/api/memory-rules/get-memory-rule), [`PATCH /api/v1/memory-rules/{memory_rule_id}`](/docs/api/memory-rules/update-memory-rule) and [`DELETE /api/v1/memory-rules/{memory_rule_id}`](/docs/api/memory-rules/delete-memory-rule). Every one is authorized against the **store's** SRN, with `memories:{Create,Get,List,Update,Delete}MemoryRule`.
+
+#### Events
+
+| `on` | Fires | Fit |
+| --- | --- | --- |
+| `agents.generation.completed` | once per completed turn — conversation or bare, streaming or not | turn-level extraction, and the **only** event the built-in extractor may bind to |
+| `conversations.message.generated` | once per persisted assistant reply | conversation-backed only; fine for a custom handler |
+
+`conversations.message.created` is deliberately not offered: it fires per message, including the user's and before the reply, so a rule bound there would read half a turn.
+
+#### Handlers
+
+A rule's handler decides *what* is worth remembering. It **proposes candidates and never writes**:
+
+```json
+{ "facts": [{ "content": "Customer prefers email", "tags": { "kind": "preference" } }] }
+```
+
+| Handler | Set | Behaviour |
+| --- | --- | --- |
+| built-in extractor | neither `agent_id` nor `tool_id` | A tool-less completion over the turn's transcript asking for a JSON array of atomic facts. `prompt`, `ai_provider_id` and `model` tune it |
+| agent | `agent_id` | The agent is generated against the transcript and its reply is parsed as the contract above |
+| tool | `tool_id` (+ `action`) | The tool is called with `{ event, rule_id, agent_id, generation_id, conversation_id, transcript }` plus `preset_parameters`, and its output is parsed as the contract above |
+
+Because the write algorithm has [no model call in it](#write-algorithm), an agent handler and a tool handler behave identically once they return — a tool handler is not a degraded path.
+
+The server then runs each candidate through the standard [write algorithm](#write-algorithm) on the store's effective thresholds, against the project's `storage_bytes` quota, and appends one [assertion](#assertions). **A handler can propose garbage and cannot corrupt the store.** Anyone who wants to bypass the algorithm still has [`POST /api/v1/memories`](/docs/api/memories/create-memory).
+
+The three fields that configure the built-in extractor cannot be combined with a handler: a handler makes its own model call, or none, so they would be accepted and ignored.
+
+Provider resolution for the built-in extractor: `ai_provider_id` → the source agent's pinned provider → the agent's [`model_route_id`](./model-routes.md) → the project's [`default_model_route_id`](./model-routes.md#project-default-route). Model resolution for the provider cases: the rule's `model` → the override provider's `default_model` (when `ai_provider_id` is set) → the agent's `model` → the agent provider's `default_model`. A provider override falls back to *that* provider's default because the agent's model name is usually meaningless on a different provider. When resolution lands on a route, each target names its own model (so `model` does not apply), the call gets ordered provider failover, and it is metered against the target that served.
+
+The custom `prompt` controls *what* to extract, not the response format; the server always appends the JSON-array contract line and the transcript.
+
+#### What a firing records
+
+- Each write appends an [assertion](#assertions) with `mechanism: "rule"`, the rule's `rule_id`, and the turn's `generation_id`. The principal is the **source agent**.
+- Memories from a conversation turn carry `source_type: "conversation"` and its id in `source_id`; a bare agent generation has no conversation, so those read `manual`.
+- Rules bound to `agents.generation.completed` record a summary on the originating generation's `extraction` field ([Generations](./generations.md) API), keyed by rule id: `{ "mrule_…": { candidates, created, superseded, skipped } }`. A store can have several rules, so one flat pair of counts could not say which produced them. Firings on `conversations.message.generated` are visible in the assertion ledger, like every other write.
+- A rule never blocks or fails the turn it reads: a handler that throws, times out, or answers with nonsense contributes nothing.
+
+#### Loop guard
+
+A handler agent's own generation completes and emits `agents.generation.completed` like any other, so the dispatcher skips two kinds of turn: one it started itself (the generation is stamped `source: "memory_rule"`), and one by an agent that handles any rule in the project — which is what keeps "test the handler by hand" from becoming an infinite mill. A handler generation also declares the source turn as its initiator, so it inherits that turn's trace lineage and continuation budget.
+
+#### Example
+
+Two rules on one store, different handlers, different selectors — unexpressible when extraction lived on the agent:
 
 ```json
 {
-  "knowledge_config": {
-    "write_memory_store_id": "mstore_alice",
-    "extraction": true
+  "resources": {
+    "SupportFacts": { "type": "memory_store", "properties": { "name": "Support facts" } },
+
+    "GeneralExtraction": {
+      "type": "memory_rule",
+      "properties": {
+        "memory_store_id": { "ref": "SupportFacts" },
+        "on": "agents.generation.completed",
+        "source_agent_ids": [{ "ref": "SupportAgent" }],
+        "model": "<cheap-model>"
+      }
+    },
+
+    "BillingExtraction": {
+      "type": "memory_rule",
+      "properties": {
+        "memory_store_id": { "ref": "SupportFacts" },
+        "on": "agents.generation.completed",
+        "source_agent_ids": [{ "ref": "BillingAgent" }],
+        "agent_id": { "ref": "StrictBillingExtractor" }
+      }
+    }
   }
 }
 ```
 
-- After a conversation, session, or direct agent generation completes, the server runs a fire-and-forget extraction step that never blocks or fails the generation response.
-- The step sends the turn's transcript as a plain completion (no tools, no knowledge injection) and asks for a JSON array of atomic facts. Transient content such as greetings is skipped.
-- Each candidate fact (at most 20 per turn) goes through the standard [write algorithm](#write-algorithm), on the store's effective thresholds. Memories from a conversation turn carry `source_type: "conversation"` and its id in `source_id`; a direct agent generation has no conversation, so those read `manual`.
-- Each write records an [assertion](#assertions) with `mechanism: "rule"`, `rule_id: null` and the turn's `generation_id`.
-- A summary (`{ candidates, created, superseded, skipped }`) is recorded on the originating generation's `extraction` field ([Generations](./generations.md) API), alongside the `memory_assertions` rows behind it.
-
-Object form fields (all optional):
-
-| Field            | Default                  | Description                                                                                              |
-| ---------------- | ------------------------ | --------------------------------------------------------------------------------------------------------- |
-| `enabled`        | `true`                   | Set `false` to keep the configuration but disable extraction                                              |
-| `ai_provider_id` | agent's provider         | Provider override for extraction calls — must belong to the agent's project                               |
-| `model`          | see below                | Model override for extraction calls                                                                       |
-| `prompt`         | built-in instructions    | Replaces the default task instructions; the JSON response contract and the transcript are always appended |
-
-Provider resolution order: `extraction.ai_provider_id` → the agent's pinned provider → the agent's [`model_route_id`](./model-routes.md) → the project's [`default_model_route_id`](./model-routes.md#project-default-route). Model resolution for the provider cases: `extraction.model` → the override provider's `default_model` (when `ai_provider_id` is set) → the agent's `model` → the agent provider's `default_model`. A provider override falls back to *that* provider's default because the agent's model name is usually meaningless on a different provider.
-
-When resolution lands on a route, each target names its own model (so `extraction.model` does not apply), the extraction call gets ordered provider failover, and it is metered against the target that served.
-
-The custom `prompt` controls *what* to extract, not the response format; the server always appends the JSON-array contract line and the transcript.
-
-Extraction requires both fields: `extraction` without `write_memory_store_id` does nothing. Streaming generations and `requires_action` (client-tool) turns do not trigger extraction; the turn must complete in the same request.
-
-##### Gating extraction per turn
-
-A single [`POST /agents/:id/generate`](/docs/api/agents/create-agent-generation) call can override the agent-level `extraction` default with a top-level `extract` boolean (not inside `knowledge_config`):
-
-- `extract` omitted — follow the agent's stored `extraction` default.
-- `extract: false` — suppress extraction for this turn (e.g. operational or tool-listing turns whose facts would add noise).
-- `extract: true` — force extraction for this turn, provided the agent has a `write_memory_store_id`.
-
-The `extract` flag has no effect on streaming or `requires_action` turns, and `extract: true` is a no-op when the agent has no `write_memory_store_id`.
-
-Extraction reads the agent's stored `knowledge_config` at generation time and normalizes its casing on read, so an agent deployed by a Formation (whose stored config may be snake_case) extracts correctly without being re-saved.
-
-See [Agent with Persistent Memory - Step 11 (Enable automatic extraction)](/docs/tutorials/memories-agent#step-11--enable-automatic-extraction).
+See [Agent with Persistent Memory - Step 11 (Add a memory rule)](/docs/tutorials/memories-agent#step-11--add-a-memory-rule).
 
 ## Examples
 

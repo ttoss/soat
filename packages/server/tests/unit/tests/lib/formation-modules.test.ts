@@ -145,6 +145,7 @@ const NON_OBJECT: Array<[string, string]> = [
   ['secret', 'Secret `properties` must be an object'],
   ['session', 'Session `properties` must be an object'],
   ['ingestion_rule', 'Ingestion rule `properties` must be an object'],
+  ['memory_rule', 'Memory rule `properties` must be an object'],
   ['agent', 'Agent `properties` must be an object'],
   ['memory_store', 'Memory store `properties` must be an object'],
   ['orchestration', 'Orchestration `properties` must be an object'],
@@ -436,6 +437,30 @@ const CASES: RoundTripCase[] = [
         },
         update: { chunk_strategy: 'whole' },
         expectAfterUpdate: { chunk_strategy: 'whole' },
+      };
+    },
+  },
+  {
+    resourceType: 'memory_rule',
+    build: () => {
+      return {
+        create: {
+          memory_store_id: memoryStoreId,
+          on: 'agents.generation.completed',
+          source_agent_ids: [agentId],
+          prompt: 'Only deployment facts',
+        },
+        expectRead: {
+          memory_store_id: memoryStoreId,
+          on: 'agents.generation.completed',
+          source_agent_ids: [agentId],
+          prompt: 'Only deployment facts',
+          // No handler: the built-in extractor, relocated onto the store.
+          agent_id: null,
+          tool_id: null,
+        },
+        update: { enabled: false },
+        expectAfterUpdate: { enabled: false, prompt: 'Only deployment facts' },
       };
     },
   },

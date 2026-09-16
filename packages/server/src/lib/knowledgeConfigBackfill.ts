@@ -10,8 +10,8 @@ const log = createDebug('soat:knowledge');
  *
  * Rows persisted before single-casing hold the bag in camelCase, and the read
  * path that un-camelCased it is gone, so those rows would resolve
- * `write_memory_store_id`, `memory_store_ids` and `extraction` as `undefined` — silently
- * disabling memory-scoped injection, the `write_memory` tool and extraction.
+ * `write_memory_store_id` and `memory_store_ids` as `undefined` — silently
+ * disabling memory-scoped injection and the `write_memory` tool.
  *
  * Idempotent and bounded (a SQL prefilter means a converged database reads no
  * rows), so it is safe to leave wired into every boot.
@@ -28,11 +28,6 @@ const KNOWLEDGE_CONFIG_KEYS: Record<string, string> = {
   documentPaths: 'document_paths',
   minScore: 'min_score',
   writeMemoryStoreId: 'write_memory_store_id',
-};
-
-/** The `extraction` object's own camelCase spelling. */
-const EXTRACTION_KEYS: Record<string, string> = {
-  aiProviderId: 'ai_provider_id',
 };
 
 const renameKeys = (args: {
@@ -65,18 +60,8 @@ export const toWireKnowledgeConfig = (
   if (!isPlainObject(value)) return null;
 
   const top = renameKeys({ value, keys: KNOWLEDGE_CONFIG_KEYS });
-  let changed = top.changed;
 
-  const extraction = top.value.extraction;
-  if (isPlainObject(extraction)) {
-    const nested = renameKeys({ value: extraction, keys: EXTRACTION_KEYS });
-    if (nested.changed) {
-      top.value.extraction = nested.value;
-      changed = true;
-    }
-  }
-
-  return changed ? top.value : null;
+  return top.changed ? top.value : null;
 };
 
 /**

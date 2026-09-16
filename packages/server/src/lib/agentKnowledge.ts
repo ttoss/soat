@@ -12,17 +12,6 @@ import { isPlainObject } from './plainObject';
 
 const log = createDebug('soat:knowledge');
 
-export type ExtractionConfig = {
-  /** Defaults to true when the object form is used; set false to keep the config but disable extraction. */
-  enabled?: boolean;
-  /** AI provider override for extraction calls. Must belong to the agent's project. */
-  aiProviderId?: string;
-  /** Model override for extraction calls. */
-  model?: string;
-  /** Replaces the default task instructions. The JSON response contract and transcript are always appended. */
-  prompt?: string;
-};
-
 export type KnowledgeConfig = {
   memoryStoreIds?: string[];
   documentIds?: string[];
@@ -34,13 +23,13 @@ export type KnowledgeConfig = {
   tags?: Record<string, string>;
   minScore?: number;
   limit?: number;
-  writeMemoryStoreId?: string;
   /**
-   * Automatic fact extraction from completed turns (requires writeMemoryStoreId).
-   * `true` enables it with defaults; the object form customizes provider,
-   * model, and prompt.
+   * The store the `write_memory` tool may write to — a capability grant on the
+   * agent, and all that is left here of memory writing. What a store *accepts*
+   * from a finished turn is its own ingestion policy, a `memory_rules` row
+   * (#1324), so `extraction` is gone rather than accepted and ignored.
    */
-  extraction?: boolean | ExtractionConfig;
+  writeMemoryStoreId?: string;
 };
 
 /**
@@ -87,22 +76,6 @@ const readNumber = (value: unknown): number | undefined => {
   return typeof value === 'number' ? value : undefined;
 };
 
-const readExtraction = (
-  value: unknown
-): boolean | ExtractionConfig | undefined => {
-  if (typeof value === 'boolean') return value;
-  if (!isPlainObject(value)) return undefined;
-  const extraction: ExtractionConfig = {};
-  if (typeof value.enabled === 'boolean') extraction.enabled = value.enabled;
-  const aiProviderId = readString(value.ai_provider_id);
-  if (aiProviderId !== undefined) extraction.aiProviderId = aiProviderId;
-  const model = readString(value.model);
-  if (model !== undefined) extraction.model = model;
-  const prompt = readString(value.prompt);
-  if (prompt !== undefined) extraction.prompt = prompt;
-  return extraction;
-};
-
 /**
  * Reads a stored (or per-generation) `knowledge_config` bag — snake_case, the
  * wire casing — into the internal camelCase `KnowledgeConfig`, the inbound half
@@ -134,7 +107,6 @@ export const readKnowledgeConfig = (
   set('minScore', readNumber(value.min_score));
   set('limit', readNumber(value.limit));
   set('writeMemoryStoreId', readString(value.write_memory_store_id));
-  set('extraction', readExtraction(value.extraction));
 
   return config;
 };
