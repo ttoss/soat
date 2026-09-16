@@ -22,16 +22,12 @@ const SPEC_DIR = path.resolve(__dirname, '../../../../src/rest/openapi/v1');
  * Modules whose operations are still evaluated against `*`. The list only
  * shrinks: each entry is a module whose route authorization has to be read
  * before its operations can be annotated, because the annotation must mirror
- * the `isAllowed` call the route already makes.
- *
- * `agents.yaml` is here for a different reason and does not shrink the same
- * way: `GET /agents/{agent_id}` narrows by `resolveProjectIds` and checks no
- * SRN, so scoping the boundary there would promise a granularity the caller
- * path does not enforce. That is a route change first.
+ * the `isAllowed` call the route already makes. Where the route authorizes at
+ * project level, that is a route change first — as `agents.yaml` needed, and
+ * got in `rest/v1/agentAccess.ts`.
  */
 const UNSCOPED_SPECS = [
   'activity.yaml',
-  'agents.yaml',
   'ai-providers.yaml',
   'api-keys.yaml',
   'approvals.yaml',

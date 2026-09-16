@@ -101,6 +101,33 @@ describe('resolveResourceScope', () => {
     });
   });
 
+  test('an agent resolves to its own SRN parts', async () => {
+    const provider = await db.AiProvider.create({
+      projectId,
+      name: 'Scopes Agent Provider',
+      provider: 'ollama',
+      defaultModel: 'llama3.2',
+    });
+    const agent = await db.Agent.create({
+      projectId,
+      aiProviderId: provider.id,
+      name: 'Scopes Standalone Agent',
+    });
+
+    const scope = await resolveResourceScope({
+      kind: 'agent',
+      publicId: agent.publicId,
+    });
+
+    expect(scope).toEqual({
+      resourceType: 'agent',
+      resourceId: agent.publicId,
+      projectPublicId,
+      // Agents carry no tags column, so a tag condition reads no pairs.
+      tags: null,
+    });
+  });
+
   test('an actor resolves to its own SRN parts', async () => {
     const actor = await createActor({ projectId, name: 'Scopes Actor' });
 
@@ -187,6 +214,7 @@ describe('resolveResourceScope', () => {
   // read the same way here, because "no scope" is what leaves the check on the
   // resource-less `*`.
   test.each([
+    ['agent', 'agent_absent'],
     ['memory_store', 'mstore_absent'],
     ['memory', 'mem_absent'],
     ['memory_rule', 'mrule_absent'],

@@ -10,11 +10,8 @@ import {
   setAgentRelease,
 } from 'src/lib/agentVersions';
 
-import {
-  parsePagination,
-  requireProjectAccess,
-  resolveReadProjectIds,
-} from './helpers';
+import { authorizeAgentRead, authorizeAgentWrite } from './agentAccess';
+import { parsePagination } from './helpers';
 
 /**
  * Agent version history and staged rollout (the agents module doc — Versioning and Staged Rollout).
@@ -45,10 +42,9 @@ const parseVersionParam = (raw: string): number => {
  *     $ref: 'openapi/v1/agents.yaml#/paths/~1api~1v1~1agents~1{agent_id}~1versions/get'
  */
 agentVersionsRouter.get('/agents/:agent_id/versions', async (ctx: Context) => {
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await authorizeAgentRead({
     ctx,
     action: 'agents:ListAgentVersions',
-    resourceType: 'agent',
   });
   ctx.body = await listAgentVersions({
     projectIds,
@@ -66,10 +62,9 @@ agentVersionsRouter.get('/agents/:agent_id/versions', async (ctx: Context) => {
 agentVersionsRouter.get(
   '/agents/:agent_id/versions/:version',
   async (ctx: Context) => {
-    const projectIds = await resolveReadProjectIds({
+    const { projectIds } = await authorizeAgentRead({
       ctx,
       action: 'agents:GetAgentVersion',
-      resourceType: 'agent',
     });
     ctx.body = await getAgentVersion({
       projectIds,
@@ -88,10 +83,9 @@ agentVersionsRouter.get(
 agentVersionsRouter.post(
   '/agents/:agent_id/versions/:version/restore',
   async (ctx: Context) => {
-    const projectIds = await requireProjectAccess({
+    const { projectIds } = await authorizeAgentWrite({
       ctx,
       action: 'agents:RestoreAgentVersion',
-      resourceType: 'agent',
     });
     const body = ctx.request.body as { label?: unknown };
 
@@ -112,10 +106,9 @@ agentVersionsRouter.post(
  *     $ref: 'openapi/v1/agents.yaml#/paths/~1api~1v1~1agents~1{agent_id}~1release/put'
  */
 agentVersionsRouter.put('/agents/:agent_id/release', async (ctx: Context) => {
-  const projectIds = await requireProjectAccess({
+  const { projectIds } = await authorizeAgentWrite({
     ctx,
     action: 'agents:SetAgentRelease',
-    resourceType: 'agent',
   });
   const body = ctx.request.body as {
     stable_version?: unknown;
@@ -145,10 +138,9 @@ agentVersionsRouter.put('/agents/:agent_id/release', async (ctx: Context) => {
 agentVersionsRouter.post(
   '/agents/:agent_id/release/promote',
   async (ctx: Context) => {
-    const projectIds = await requireProjectAccess({
+    const { projectIds } = await authorizeAgentWrite({
       ctx,
       action: 'agents:SetAgentRelease',
-      resourceType: 'agent',
     });
     ctx.body = await promoteAgentRelease({
       projectIds,
@@ -167,10 +159,9 @@ agentVersionsRouter.post(
 agentVersionsRouter.post(
   '/agents/:agent_id/release/abort',
   async (ctx: Context) => {
-    const projectIds = await requireProjectAccess({
+    const { projectIds } = await authorizeAgentWrite({
       ctx,
       action: 'agents:SetAgentRelease',
-      resourceType: 'agent',
     });
     ctx.body = await abortAgentRelease({
       projectIds,

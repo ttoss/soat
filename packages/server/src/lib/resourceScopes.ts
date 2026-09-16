@@ -12,12 +12,12 @@
  * Every resolver mirrors the `isAllowed` call its module's routes already
  * make; the two must agree, or the agent boundary and the caller policy would
  * answer different questions about the same call. A module whose item routes
- * authorize at project level — agents, whose `GET /agents/{agent_id}` narrows
- * by `resolveProjectIds` and no SRN — has no entry: a boundary scoped there
- * would enforce a granularity the caller path does not have, and the place to
- * fix that is the route.
+ * authorize at project level has no entry here: a boundary scoped there would
+ * enforce a granularity the caller path does not have, and the place to fix
+ * that is the route, as `rest/v1/agentAccess.ts` did for agents.
  */
 import { getActor } from './actors';
+import { findAgentScope } from './agents';
 import { getConversation } from './conversations';
 import { getMemory } from './memories';
 import { getMemoryRule } from './memoryRules';
@@ -73,6 +73,18 @@ const RESOURCE_SCOPES: Record<string, ScopeResolver> = {
       resourceId: actor.id,
       projectPublicId: actor.project_id!,
       tags: actor.tags,
+    });
+  },
+
+  // Agents carry no `tags` column, so a condition over resource tags reads no
+  // pairs — the same as on the REST path, which checks the SRN alone.
+  agent: async ({ publicId }) => {
+    const scope = await findAgentScope({ id: publicId });
+    if (!scope) return null;
+    return toScope({
+      resourceType: 'agent',
+      resourceId: publicId,
+      projectPublicId: scope.projectPublicId,
     });
   },
 
