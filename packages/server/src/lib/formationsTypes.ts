@@ -133,8 +133,8 @@ export type FormationModuleAuthorization =
        * segment the REST routes pass as `resourceType`, verbatim, so a
        * resource-scoped policy statement grants a formation exactly what it
        * grants a direct call. Deliberately not derived from `resourceType`:
-       * the two differ (`ai_provider` → `aiProvider`, `memory_entry` →
-       * `memory`) and a derivation would silently probe the wrong SRN.
+       * the two differ (`ai_provider` → `aiProvider`, `memory` →
+       * `memory_store`) and a derivation would silently probe the wrong SRN.
        */
       srnResourceType: string;
       create: string;

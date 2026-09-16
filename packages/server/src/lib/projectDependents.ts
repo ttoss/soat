@@ -89,8 +89,8 @@ export const PROJECT_CASCADE_ORDER = [
   'AiProvider',
   'Tool',
 
-  // MemoryEntry cascades at the DB level.
-  'Memory',
+  // Memory cascades at the DB level.
+  'MemoryStore',
 
   'Secret',
   'File',
@@ -142,7 +142,7 @@ export const PROJECT_COUNTED_MODELS = [
   'Guardrail',
   'GuardrailEvaluation',
   'IngestionRule',
-  'Memory',
+  'MemoryStore',
   'ModelRoute',
   'Orchestration',
   'OrchestrationRun',

@@ -12,41 +12,41 @@ import type {
   FormationEvent,
   FormationTemplate,
 } from 'src/lib/formationsTypes';
-import { createMemory } from 'src/lib/memories';
+import { createMemoryStore } from 'src/lib/memoryStores';
 import { createWebhook } from 'src/lib/webhooks';
 
 // Every branch is reached by choosing inputs that trigger it for real — a live
-// Memory, a nonexistent agent id, an unsupported resource type — rather than by
+// memory store, a nonexistent agent id, an unsupported resource type — rather than by
 // stubbing.
 
 let projectId: number;
 let actingUserId: number;
 let formationId: number;
-let memoryCounter = 0;
+let memoryStoreCounter = 0;
 
 const uniqueName = (prefix: string) => {
-  memoryCounter += 1;
-  return `${prefix}-${memoryCounter}`;
+  memoryStoreCounter += 1;
+  return `${prefix}-${memoryStoreCounter}`;
 };
 
-const createMemoryResource = async (deletionPolicy = 'delete') => {
-  const memory = await createMemory({
+const createMemoryStoreResource = async (deletionPolicy = 'delete') => {
+  const memoryStore = await createMemoryStore({
     projectId,
     name: uniqueName('formations-apply-mem'),
   });
   const row = await db.FormationResource.create({
     formationId,
     logicalId: uniqueName('mem-logical'),
-    resourceType: 'memory',
-    physicalResourceId: memory.id,
+    resourceType: 'memory_store',
+    physicalResourceId: memoryStore.id,
     status: 'active',
     deletionPolicy,
   });
-  return { memory, row };
+  return { memoryStore, row };
 };
 
-const memoryExists = async (id: string): Promise<boolean> => {
-  const found = await db.Memory.findOne({ where: { publicId: id } });
+const memoryStoreExists = async (id: string): Promise<boolean> => {
+  const found = await db.MemoryStore.findOne({ where: { publicId: id } });
   return found !== null;
 };
 
@@ -221,8 +221,8 @@ describe('formationsApply', () => {
     });
     const orphan = buildResource({
       logicalId: 'orphan',
-      resourceType: 'memory',
-      physicalResourceId: 'mem_1',
+      resourceType: 'memory_store',
+      physicalResourceId: 'mstore_1',
     });
 
     const order = buildDeleteOrder(template, [provider, agent, orphan]);
@@ -243,7 +243,7 @@ describe('formationsApply', () => {
       status: 'active',
       deletionPolicy: 'delete',
     });
-    const { memory, row: success } = await createMemoryResource();
+    const { memoryStore, row: success } = await createMemoryStoreResource();
     // An unsupported resource type makes `applyDeleteResource` throw a plain
     // Error (not a RESOURCE_NOT_FOUND DomainError), driving the failure branch.
     const failure = await db.FormationResource.create({
@@ -268,8 +268,8 @@ describe('formationsApply', () => {
     ).toEqual(['succeeded', 'failed']);
     expect(result.hasError).toBe(true);
 
-    // The successful delete really removed the memory and marked its row deleted.
-    expect(await memoryExists(memory.id)).toBe(false);
+    // The successful delete really removed the memory store and marked its row deleted.
+    expect(await memoryStoreExists(memoryStore.id)).toBe(false);
     await success.reload();
     expect(success.status).toBe('deleted');
     // The failed delete did not mark its row deleted.
@@ -278,7 +278,8 @@ describe('formationsApply', () => {
   });
 
   test('performResourceDeletions skips physical deletion for retain resources', async () => {
-    const { memory, row: retained } = await createMemoryResource('retain');
+    const { memoryStore, row: retained } =
+      await createMemoryStoreResource('retain');
 
     const result = await performResourceDeletions({
       actingUserId,
@@ -286,14 +287,14 @@ describe('formationsApply', () => {
       projectId,
     });
 
-    // The physical memory is preserved, but the tracking row is marked deleted.
-    expect(await memoryExists(memory.id)).toBe(true);
+    // The physical memory store is preserved, but the tracking row is marked deleted.
+    expect(await memoryStoreExists(memoryStore.id)).toBe(true);
     await retained.reload();
     expect(retained.status).toBe('deleted');
     expect(result.hasError).toBe(false);
     expect(result.events).toHaveLength(1);
     expect(result.events[0].status).toBe('succeeded');
-    expect(result.events[0].physicalResourceId).toBe(memory.id);
+    expect(result.events[0].physicalResourceId).toBe(memoryStore.id);
   });
 
   test('performResourceDeletions treats an already-gone resource as deleted', async () => {
@@ -358,7 +359,7 @@ describe('formationsApply', () => {
       status: 'active',
       deletionPolicy: 'delete',
     });
-    const { memory, row: deleted } = await createMemoryResource();
+    const { memoryStore, row: deleted } = await createMemoryStoreResource();
     const failed = await db.FormationResource.create({
       formationId,
       logicalId: uniqueName('remove-fail'),
@@ -383,7 +384,7 @@ describe('formationsApply', () => {
       events,
     });
 
-    expect(await memoryExists(memory.id)).toBe(false);
+    expect(await memoryStoreExists(memoryStore.id)).toBe(false);
     await deleted.reload();
     expect(deleted.status).toBe('deleted');
     await retained.reload();
@@ -396,8 +397,8 @@ describe('formationsApply', () => {
   });
 
   test('handleOrphanedDeletes skips physical deletion for retain resources', async () => {
-    const { memory, row: retainedOrphan } =
-      await createMemoryResource('retain');
+    const { memoryStore, row: retainedOrphan } =
+      await createMemoryStoreResource('retain');
     const events: FormationEvent[] = [];
 
     await handleOrphanedDeletes({
@@ -408,12 +409,12 @@ describe('formationsApply', () => {
       events,
     });
 
-    expect(await memoryExists(memory.id)).toBe(true);
+    expect(await memoryStoreExists(memoryStore.id)).toBe(true);
     await retainedOrphan.reload();
     expect(retainedOrphan.status).toBe('deleted');
     expect(events).toHaveLength(1);
     expect(events[0].status).toBe('succeeded');
-    expect(events[0].physicalResourceId).toBe(memory.id);
+    expect(events[0].physicalResourceId).toBe(memoryStore.id);
   });
 
   test('handleOrphanedDeletes treats an already-gone orphan as deleted', async () => {
@@ -470,14 +471,14 @@ describe('formationsApply', () => {
   test('processResourceChange marks resource as failed when create handler throws', async () => {
     const logicalId = uniqueName('CreateFails');
 
-    // A memory declaration with no `name` fails validation inside the real
-    // memories formation module, so `applyCreateResource` throws.
+    // A memory store declaration with no `name` fails validation inside the real
+    // memory stores formation module, so `applyCreateResource` throws.
     await expect(
       processResourceChange({
         actingUserId,
         logicalId,
         decl: {
-          type: 'memory',
+          type: 'memory_store',
           properties: {},
         },
         existing: undefined,
@@ -503,9 +504,9 @@ describe('formationsApply', () => {
     const existing = await db.FormationResource.create({
       formationId,
       logicalId,
-      resourceType: 'memory',
+      resourceType: 'memory_store',
       status: 'deleted',
-      physicalResourceId: 'mem_stale',
+      physicalResourceId: 'mstore_stale',
       deletionPolicy: 'delete',
     });
 
@@ -515,7 +516,7 @@ describe('formationsApply', () => {
       actingUserId,
       logicalId,
       decl: {
-        type: 'memory',
+        type: 'memory_store',
         properties: { name: uniqueName('theme') },
       },
       existing,
@@ -527,9 +528,9 @@ describe('formationsApply', () => {
     });
 
     expect(events[0].action).toBe('create');
-    // A brand-new memory was created, replacing the stale physical id.
-    expect(existing.physicalResourceId).not.toBe('mem_stale');
-    expect(existing.physicalResourceId).toMatch(/^mem_/);
-    expect(await memoryExists(existing.physicalResourceId!)).toBe(true);
+    // A brand-new memory store was created, replacing the stale physical id.
+    expect(existing.physicalResourceId).not.toBe('mstore_stale');
+    expect(existing.physicalResourceId).toMatch(/^mstore_/);
+    expect(await memoryStoreExists(existing.physicalResourceId!)).toBe(true);
   });
 });

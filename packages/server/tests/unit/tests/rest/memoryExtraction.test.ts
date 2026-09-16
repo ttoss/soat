@@ -17,14 +17,14 @@ const sleep = (ms: number) => {
   });
 };
 
-describe('Memory Extraction', () => {
+describe('MemoryStore Extraction', () => {
   let adminToken: string;
   let projectId: string;
   let aiProviderId: string;
 
-  const createMemory = async (name: string): Promise<string> => {
+  const createMemoryStore = async (name: string): Promise<string> => {
     const res = await authenticatedTestClient(adminToken)
-      .post('/api/v1/memories')
+      .post('/api/v1/memory-stores')
       .send({ project_id: projectId, name });
     expect(res.status).toBe(201);
     return res.body.id;
@@ -62,9 +62,9 @@ describe('Memory Extraction', () => {
     return convRes.body.id;
   };
 
-  const listEntries = async (memoryId: string) => {
+  const listEntries = async (memoryStoreId: string) => {
     const res = await authenticatedTestClient(adminToken).get(
-      `/api/v1/memory-entries?memory_id=${memoryId}`
+      `/api/v1/memories?memory_store_id=${memoryStoreId}`
     );
     expect(res.status).toBe(200);
     return res.body.data as Array<{
@@ -75,15 +75,15 @@ describe('Memory Extraction', () => {
   };
 
   const waitForEntries = async (
-    memoryId: string,
+    memoryStoreId: string,
     minCount: number,
     timeoutMs = 8000
   ) => {
     const startedAt = Date.now();
-    let entries = await listEntries(memoryId);
+    let entries = await listEntries(memoryStoreId);
     while (entries.length < minCount && Date.now() - startedAt < timeoutMs) {
       await sleep(100);
-      entries = await listEntries(memoryId);
+      entries = await listEntries(memoryStoreId);
     }
     return entries;
   };
@@ -191,7 +191,7 @@ describe('Memory Extraction', () => {
 
   describe('knowledge_config.extraction contract', () => {
     test('agent create round-trips extraction flag in knowledge_config', async () => {
-      const memoryId = await createMemory('Contract Memory');
+      const memoryStoreId = await createMemoryStore('Contract MemoryStore');
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/agents')
         .send({
@@ -199,23 +199,30 @@ describe('Memory Extraction', () => {
           ai_provider_id: aiProviderId,
           name: 'ContractAgent',
           knowledge_config: {
-            write_memory_id: memoryId,
+            write_memory_store_id: memoryStoreId,
             extraction: true,
           },
         });
 
       expect(res.status).toBe(201);
       expect(res.body.knowledge_config.extraction).toBe(true);
-      expect(res.body.knowledge_config.write_memory_id).toBe(memoryId);
+      expect(res.body.knowledge_config.write_memory_store_id).toBe(
+        memoryStoreId
+      );
     });
   });
 
   describe('conversation generation trigger', () => {
-    test('extracts facts into the write memory after a completed generation', async () => {
-      const memoryId = await createMemory('Conv Extraction Memory');
+    test('extracts facts into the write memoryStore after a completed generation', async () => {
+      const memoryStoreId = await createMemoryStore(
+        'Conv Extraction MemoryStore'
+      );
       const agentId = await createAgent({
         name: 'ConvExtractionAgent',
-        knowledgeConfig: { write_memory_id: memoryId, extraction: true },
+        knowledgeConfig: {
+          write_memory_store_id: memoryStoreId,
+          extraction: true,
+        },
       });
       const convId = await createConversationWithMessage(
         'I prefer to be contacted by email.'
@@ -233,10 +240,10 @@ describe('Memory Extraction', () => {
         .send({ agent_id: agentId });
       expect(res.status).toBe(200);
 
-      const entries = await waitForEntries(memoryId, 1);
+      const entries = await waitForEntries(memoryStoreId, 1);
       expect(entries).toHaveLength(1);
       expect(entries[0].content).toBe('User prefers to be contacted by email');
-      expect(entries[0].source_type).toBe('extraction');
+      expect(entries[0].source_type).toBe('conversation');
 
       // The extraction prompt must include both sides of the turn.
       expect(mockRunExtractionCompletion).toHaveBeenCalledTimes(1);
@@ -246,11 +253,16 @@ describe('Memory Extraction', () => {
       expect(callArgs.prompt).toContain('Noted, I will use email.');
     });
 
-    test('records the generation and conversation that produced the fact', async () => {
-      const memoryId = await createMemory('Provenance Extraction Memory');
+    test('records the conversation that produced the fact', async () => {
+      const memoryStoreId = await createMemoryStore(
+        'Provenance Extraction MemoryStore'
+      );
       const agentId = await createAgent({
         name: 'ProvenanceExtractionAgent',
-        knowledgeConfig: { write_memory_id: memoryId, extraction: true },
+        knowledgeConfig: {
+          write_memory_store_id: memoryStoreId,
+          extraction: true,
+        },
       });
       const convId = await createConversationWithMessage(
         'My favourite colour is green.'
@@ -269,22 +281,27 @@ describe('Memory Extraction', () => {
         .send({ agent_id: agentId });
       expect(res.status).toBe(200);
 
-      const entries = await waitForEntries(memoryId, 1);
+      const entries = await waitForEntries(memoryStoreId, 1);
       expect(entries).toHaveLength(1);
 
       const detail = await authenticatedTestClient(adminToken).get(
-        `/api/v1/memory-entries/${entries[0].id}`
+        `/api/v1/memories/${entries[0].id}`
       );
       expect(detail.status).toBe(200);
-      expect(detail.body.source_generation_id).toBe('gen_prov_1');
-      expect(detail.body.source_conversation_id).toBe(convId);
+      expect(detail.body.source_type).toBe('conversation');
+      expect(detail.body.source_id).toBe(convId);
     });
 
     test('deduplicates extracted facts through the standard write algorithm', async () => {
-      const memoryId = await createMemory('Dedup Extraction Memory');
+      const memoryStoreId = await createMemoryStore(
+        'Dedup Extraction MemoryStore'
+      );
       const agentId = await createAgent({
         name: 'DedupExtractionAgent',
-        knowledgeConfig: { write_memory_id: memoryId, extraction: true },
+        knowledgeConfig: {
+          write_memory_store_id: memoryStoreId,
+          extraction: true,
+        },
       });
       const convId = await createConversationWithMessage('My timezone is EST.');
 
@@ -305,16 +322,16 @@ describe('Memory Extraction', () => {
       // Wait for the whole candidate batch (including the skipped duplicate)
       // to finish processing before asserting.
       await waitForExtractionSummary(res.body.generation_id);
-      const settled = await listEntries(memoryId);
+      const settled = await listEntries(memoryStoreId);
       expect(settled).toHaveLength(1);
       expect(settled[0].content).toBe('User timezone is EST');
     });
 
     test('does not run extraction when the extraction flag is not set', async () => {
-      const memoryId = await createMemory('No Flag Memory');
+      const memoryStoreId = await createMemoryStore('No Flag MemoryStore');
       const agentId = await createAgent({
         name: 'NoFlagAgent',
-        knowledgeConfig: { write_memory_id: memoryId },
+        knowledgeConfig: { write_memory_store_id: memoryStoreId },
       });
       const convId = await createConversationWithMessage('Hello there.');
 
@@ -329,14 +346,17 @@ describe('Memory Extraction', () => {
 
       await waitForNoExtractionAttempt();
       expect(mockRunExtractionCompletion).not.toHaveBeenCalled();
-      expect(await listEntries(memoryId)).toHaveLength(0);
+      expect(await listEntries(memoryStoreId)).toHaveLength(0);
     });
 
-    test('does not run extraction when write_memory_id is missing', async () => {
-      const memoryId = await createMemory('No Target Memory');
+    test('does not run extraction when write_memory_store_id is missing', async () => {
+      const memoryStoreId = await createMemoryStore('No Target MemoryStore');
       const agentId = await createAgent({
         name: 'NoTargetAgent',
-        knowledgeConfig: { memory_ids: [memoryId], extraction: true },
+        knowledgeConfig: {
+          memory_store_ids: [memoryStoreId],
+          extraction: true,
+        },
       });
       const convId = await createConversationWithMessage('Hello again.');
 
@@ -354,10 +374,13 @@ describe('Memory Extraction', () => {
     });
 
     test('ignores malformed extraction output without failing the turn', async () => {
-      const memoryId = await createMemory('Malformed Memory');
+      const memoryStoreId = await createMemoryStore('Malformed MemoryStore');
       const agentId = await createAgent({
         name: 'MalformedAgent',
-        knowledgeConfig: { write_memory_id: memoryId, extraction: true },
+        knowledgeConfig: {
+          write_memory_store_id: memoryStoreId,
+          extraction: true,
+        },
       });
       const convId = await createConversationWithMessage('Some message.');
 
@@ -376,13 +399,13 @@ describe('Memory Extraction', () => {
       // Extraction still runs (and produces a zero-candidate summary) even
       // though parsing yields nothing — wait for that summary to settle.
       await waitForExtractionSummary(res.body.generation_id);
-      expect(await listEntries(memoryId)).toHaveLength(0);
+      expect(await listEntries(memoryStoreId)).toHaveLength(0);
     });
   });
 
   describe('extraction object form (overrides)', () => {
     test('passes provider, model, and prompt overrides to the completion call', async () => {
-      const memoryId = await createMemory('Override Memory');
+      const memoryStoreId = await createMemoryStore('Override MemoryStore');
 
       const otherProvRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/ai-providers')
@@ -397,7 +420,7 @@ describe('Memory Extraction', () => {
       const agentId = await createAgent({
         name: 'OverrideExtractionAgent',
         knowledgeConfig: {
-          write_memory_id: memoryId,
+          write_memory_store_id: memoryStoreId,
           extraction: {
             ai_provider_id: otherProviderId,
             model: 'cheap-model-2',
@@ -417,7 +440,7 @@ describe('Memory Extraction', () => {
         .send({ agent_id: agentId });
       expect(res.status).toBe(200);
 
-      const entries = await waitForEntries(memoryId, 1);
+      const entries = await waitForEntries(memoryStoreId, 1);
       expect(entries).toHaveLength(1);
 
       expect(mockRunExtractionCompletion).toHaveBeenCalledTimes(1);
@@ -433,10 +456,15 @@ describe('Memory Extraction', () => {
     });
 
     test('extraction object without overrides uses agent defaults', async () => {
-      const memoryId = await createMemory('Object Defaults Memory');
+      const memoryStoreId = await createMemoryStore(
+        'Object Defaults MemoryStore'
+      );
       const agentId = await createAgent({
         name: 'ObjectDefaultsAgent',
-        knowledgeConfig: { write_memory_id: memoryId, extraction: {} },
+        knowledgeConfig: {
+          write_memory_store_id: memoryStoreId,
+          extraction: {},
+        },
       });
       const convId = await createConversationWithMessage('I use vim.');
 
@@ -450,7 +478,7 @@ describe('Memory Extraction', () => {
         .send({ agent_id: agentId });
       expect(res.status).toBe(200);
 
-      const entries = await waitForEntries(memoryId, 1);
+      const entries = await waitForEntries(memoryStoreId, 1);
       expect(entries).toHaveLength(1);
 
       const callArgs = mockRunExtractionCompletion.mock.calls[0][0];
@@ -460,11 +488,13 @@ describe('Memory Extraction', () => {
     });
 
     test('extraction object with enabled false does not trigger', async () => {
-      const memoryId = await createMemory('Disabled Object Memory');
+      const memoryStoreId = await createMemoryStore(
+        'Disabled Object MemoryStore'
+      );
       const agentId = await createAgent({
         name: 'DisabledObjectAgent',
         knowledgeConfig: {
-          write_memory_id: memoryId,
+          write_memory_store_id: memoryStoreId,
           extraction: { enabled: false, model: 'kept-but-off' },
         },
       });
@@ -481,11 +511,13 @@ describe('Memory Extraction', () => {
 
       await waitForNoExtractionAttempt();
       expect(mockRunExtractionCompletion).not.toHaveBeenCalled();
-      expect(await listEntries(memoryId)).toHaveLength(0);
+      expect(await listEntries(memoryStoreId)).toHaveLength(0);
     });
 
     test('agent create round-trips the extraction object fields', async () => {
-      const memoryId = await createMemory('Override Contract Memory');
+      const memoryStoreId = await createMemoryStore(
+        'Override Contract MemoryStore'
+      );
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/agents')
         .send({
@@ -493,7 +525,7 @@ describe('Memory Extraction', () => {
           ai_provider_id: aiProviderId,
           name: 'OverrideContractAgent',
           knowledge_config: {
-            write_memory_id: memoryId,
+            write_memory_store_id: memoryStoreId,
             extraction: {
               ai_provider_id: aiProviderId,
               model: 'small-model',
@@ -512,10 +544,15 @@ describe('Memory Extraction', () => {
 
   describe('direct agent generation trigger', () => {
     test('extracts facts after POST /agents/:id/generate completes', async () => {
-      const memoryId = await createMemory('Direct Extraction Memory');
+      const memoryStoreId = await createMemoryStore(
+        'Direct Extraction MemoryStore'
+      );
       const agentId = await createAgent({
         name: 'DirectExtractionAgent',
-        knowledgeConfig: { write_memory_id: memoryId, extraction: true },
+        knowledgeConfig: {
+          write_memory_store_id: memoryStoreId,
+          extraction: true,
+        },
       });
 
       mockCreateGeneration.mockResolvedValueOnce(
@@ -532,19 +569,22 @@ describe('Memory Extraction', () => {
         });
       expect(res.status).toBe(200);
 
-      const entries = await waitForEntries(memoryId, 1);
+      const entries = await waitForEntries(memoryStoreId, 1);
       expect(entries).toHaveLength(1);
       expect(entries[0].content).toBe('Project deadline is Friday');
-      expect(entries[0].source_type).toBe('extraction');
+      expect(entries[0].source_type).toBe('manual');
     });
   });
 
   describe('per-turn extraction override (extract flag)', () => {
     test('extract: false suppresses extraction even when the agent enables it', async () => {
-      const memoryId = await createMemory('Suppress Memory');
+      const memoryStoreId = await createMemoryStore('Suppress MemoryStore');
       const agentId = await createAgent({
         name: 'SuppressExtractionAgent',
-        knowledgeConfig: { write_memory_id: memoryId, extraction: true },
+        knowledgeConfig: {
+          write_memory_store_id: memoryStoreId,
+          extraction: true,
+        },
       });
 
       mockCreateGeneration.mockResolvedValueOnce(
@@ -561,15 +601,15 @@ describe('Memory Extraction', () => {
 
       await waitForNoExtractionAttempt();
       expect(mockRunExtractionCompletion).not.toHaveBeenCalled();
-      expect(await listEntries(memoryId)).toHaveLength(0);
+      expect(await listEntries(memoryStoreId)).toHaveLength(0);
     });
 
-    test('extract: true forces extraction when the agent has a write memory but did not enable it', async () => {
-      const memoryId = await createMemory('Force Memory');
+    test('extract: true forces extraction when the agent has a write memoryStore but did not enable it', async () => {
+      const memoryStoreId = await createMemoryStore('Force MemoryStore');
       const agentId = await createAgent({
         name: 'ForceExtractionAgent',
-        // write_memory_id present, but extraction not enabled by default
-        knowledgeConfig: { write_memory_id: memoryId },
+        // write_memory_store_id present, but extraction not enabled by default
+        knowledgeConfig: { write_memory_store_id: memoryStoreId },
       });
 
       mockCreateGeneration.mockResolvedValueOnce(
@@ -587,10 +627,10 @@ describe('Memory Extraction', () => {
         });
       expect(res.status).toBe(200);
 
-      const entries = await waitForEntries(memoryId, 1);
+      const entries = await waitForEntries(memoryStoreId, 1);
       expect(entries).toHaveLength(1);
       expect(entries[0].content).toBe('User onboarded on a Monday');
-      expect(entries[0].source_type).toBe('extraction');
+      expect(entries[0].source_type).toBe('manual');
     });
   });
 
@@ -599,13 +639,13 @@ describe('Memory Extraction', () => {
       // An agent persisted before write-time normalization holds a raw
       // snake_case blob, which runtime code reading camelCase would find empty
       // — extraction silently no-ops. No current API path produces this shape.
-      const memoryId = await createMemory('Stale Config Memory');
+      const memoryStoreId = await createMemoryStore('Stale Config MemoryStore');
       const agentId = await createAgent({ name: 'StaleConfigAgent' });
 
       await db.Agent.update(
         {
           knowledgeConfig: {
-            write_memory_id: memoryId,
+            write_memory_store_id: memoryStoreId,
             extraction: true,
           },
         },
@@ -626,10 +666,10 @@ describe('Memory Extraction', () => {
         });
       expect(res.status).toBe(200);
 
-      const entries = await waitForEntries(memoryId, 1);
+      const entries = await waitForEntries(memoryStoreId, 1);
       expect(entries).toHaveLength(1);
       expect(entries[0].content).toBe('User prefers dark mode');
-      expect(entries[0].source_type).toBe('extraction');
+      expect(entries[0].source_type).toBe('manual');
     });
   });
 });

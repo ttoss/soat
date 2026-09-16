@@ -11,7 +11,7 @@
  * one thing the systems report on a common scale.
  *
  * One signal RRF cannot read is time, because time is not a ranking over the
- * corpus: a memory fact is worth less than an equally relevant fresher one,
+ * corpus: a memory store fact is worth less than an equally relevant fresher one,
  * while a document chunk is worth exactly the same however old it is. That is
  * applied to the fused score, per result, after fusion — see
  * {@link resolveRecencyHalfLifeDays}.
@@ -59,10 +59,10 @@ export type SignalCandidate<T> = {
  * One signal's ranking over the whole knowledge corpus, assembled from the
  * per-store queries that computed it.
  *
- * Documents and memory entries are queried separately because they are separate
+ * Documents and memories are queried separately because they are separate
  * tables — not because they are separate rankings. Fusing the shards as if they
  * were four independent rankings is what breaks: RRF reads position, so the
- * tenth-best memory entry and the tenth-best chunk would score identically and
+ * tenth-best memory and the tenth-best chunk would score identically and
  * each store would claim half the result slots whatever its rows are worth. The
  * shards are merged on the signal's own value first, which is comparable across
  * stores — both embed through one provider into one vector space, and
@@ -151,7 +151,7 @@ export const fuseByReciprocalRank = <T>(args: {
  * The half-life in days when neither the request nor the deployment names one.
  *
  * Zero, which disables the blend: turning it on would silently reorder every
- * existing deployment's memory results on upgrade, by a half-life nobody has
+ * existing deployment's memory store results on upgrade, by a half-life nobody has
  * measured against their corpus. The knobs are the feature; the recommended
  * value is documented, not baked in.
  */
@@ -166,7 +166,7 @@ const readDeploymentRecencyHalfLifeDays = (): number | undefined => {
 };
 
 /**
- * The half-life one search decays memory results by: the request's value, else
+ * The half-life one search decays memory store results by: the request's value, else
  * the deployment's `KNOWLEDGE_RECENCY_HALF_LIFE_DAYS`, else
  * {@link DEFAULT_RECENCY_HALF_LIFE_DAYS}.
  *
@@ -221,7 +221,7 @@ export const recencyDecayFactor = (args: {
 };
 
 /**
- * Multiplies each memory result's fused score by its decay and re-sorts.
+ * Multiplies each memory store result's fused score by its decay and re-sorts.
  *
  * Applied per result **after** fusion, never as a third ranked list: a
  * per-store list is the defect #1272 measured, where each store claims result
@@ -264,7 +264,7 @@ const blendRecency = <T extends { updated_at: Date }>(args: {
 
 /**
  * The whole ranking step of a search: merge each signal's per-store shards,
- * fuse the two resulting rankings, decay the memory results by their age, take
+ * fuse the two resulting rankings, decay the memory store results by their age, take
  * the top `limit`, and stamp the resulting score onto each result.
  *
  * The blend runs before the `slice`, so a fact its age demotes gives up its

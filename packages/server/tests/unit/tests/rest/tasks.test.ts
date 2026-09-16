@@ -2174,7 +2174,7 @@ describe('Tasks', () => {
     });
 
     test('a failed orchestration dispatch sets automation_status and follows on_failure, not on_complete', async () => {
-      // memory_write against a nonexistent memory_id deterministically fails the
+      // An agent node with a nonexistent agent_id deterministically fails the
       // run without any external HTTP dependency (see orchestrations.test.ts).
       const orchestrationId = (
         await authenticatedTestClient(userToken)
@@ -2185,9 +2185,9 @@ describe('Tasks', () => {
             nodes: [
               {
                 id: 'write',
-                type: 'memory_write',
-                memory_id: 'mem_nonexistent12345',
-                input_mapping: { content: { var: 'topic' } },
+                type: 'agent',
+                agent_id: 'agt_nonexistent12345',
+                input_mapping: { prompt: { var: 'topic' } },
               },
             ],
             edges: [],
@@ -2251,9 +2251,9 @@ describe('Tasks', () => {
             nodes: [
               {
                 id: 'write',
-                type: 'memory_write',
-                memory_id: 'mem_nonexistent12345',
-                input_mapping: { content: { var: 'topic' } },
+                type: 'agent',
+                agent_id: 'agt_nonexistent12345',
+                input_mapping: { prompt: { var: 'topic' } },
               },
             ],
             edges: [],
@@ -2603,9 +2603,9 @@ describe('Tasks', () => {
             nodes: [
               {
                 id: 'write',
-                type: 'memory_write',
-                memory_id: 'mem_nonexistent12345',
-                input_mapping: { content: { var: 'topic' } },
+                type: 'agent',
+                agent_id: 'agt_nonexistent12345',
+                input_mapping: { prompt: { var: 'topic' } },
               },
             ],
             edges: [],

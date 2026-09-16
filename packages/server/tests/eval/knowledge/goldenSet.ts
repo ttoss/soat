@@ -7,7 +7,7 @@ import path from 'node:path';
  *
  * Expected results are **stable keys**, never ids: every seed regenerates the
  * public ids, so a labeled id would be stale before the first run finishes. A
- * key names a whole document or memory entry, so a hit is any chunk of the
+ * key names a whole document or memory, so a hit is any chunk of the
  * expected document — chunk-level labels would be invalidated by any change to
  * `DEFAULT_CHUNK_SIZE` or `DEFAULT_CHUNK_OVERLAP`, neither of which is a
  * ranking change.
@@ -58,15 +58,15 @@ export type GoldenMemory = {
    */
   age_days?: number;
   /**
-   * The memory container to write this entry to, defaulting to the corpus's
+   * The memory store container to write this entry to, defaulting to the corpus's
    * single one.
    *
-   * `writeMemoryEntry` dedups against the most similar entry **of the same
-   * memory** at 0.95, so a near-twin — which is the only fixture a freshness
+   * `writeMemory` dedups against the most similar entry **of the same
+   * memory store** at 0.95, so a near-twin — which is the only fixture a freshness
    * query can be scored against — has to live somewhere else or it merges
    * into its own twin and never reaches the corpus.
    */
-  memory?: string;
+  memory_store?: string;
 };
 
 export type GoldenExpectation = {
@@ -205,9 +205,9 @@ const readMemory = (args: { value: unknown; field: string }): GoldenMemory => {
       value: args.value.age_days,
       field: `${args.field}.age_days`,
     }),
-    memory: readOptionalString({
-      value: args.value.memory,
-      field: `${args.field}.memory`,
+    memory_store: readOptionalString({
+      value: args.value.memory_store,
+      field: `${args.field}.memory_store`,
     }),
   };
 };

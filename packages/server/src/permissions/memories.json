@@ -2,29 +2,69 @@
   "module": "memories",
   "operations": [
     {
+      "operationId": "listMemoryStores",
+      "action": "memories:ListMemoryStores",
+      "description": "List memory stores in a project"
+    },
+    {
+      "operationId": "createMemoryStore",
+      "action": "memories:CreateMemoryStore",
+      "description": "Create a new memory store"
+    },
+    {
+      "operationId": "getMemoryStore",
+      "action": "memories:GetMemoryStore",
+      "description": "Get a memory store by ID"
+    },
+    {
+      "operationId": "updateMemoryStore",
+      "action": "memories:UpdateMemoryStore",
+      "description": "Update a memory store"
+    },
+    {
+      "operationId": "deleteMemoryStore",
+      "action": "memories:DeleteMemoryStore",
+      "description": "Delete a memory store"
+    },
+    {
+      "operationId": "getMemoryStoreTags",
+      "action": "memories:GetMemoryStore",
+      "description": "Get a memory store's tags"
+    },
+    {
+      "operationId": "replaceMemoryStoreTags",
+      "action": "memories:UpdateMemoryStore",
+      "description": "Replace a memory store's tags"
+    },
+    {
+      "operationId": "mergeMemoryStoreTags",
+      "action": "memories:UpdateMemoryStore",
+      "description": "Merge a memory store's tags"
+    },
+    {
       "operationId": "listMemories",
       "action": "memories:ListMemories",
-      "description": "List memory configurations in a project"
+      "description": "List memories in a memory store"
     },
     {
       "operationId": "createMemory",
       "action": "memories:CreateMemory",
-      "description": "Create a new memory configuration"
+      "description": "Create a new memory"
     },
     {
       "operationId": "getMemory",
       "action": "memories:GetMemory",
-      "description": "Get a memory configuration by ID"
+      "description": "Get a memory by ID"
     },
     {
       "operationId": "updateMemory",
       "action": "memories:UpdateMemory",
-      "description": "Update a memory configuration"
+      "description": "Update a memory"
     },
     {
       "operationId": "deleteMemory",
       "action": "memories:DeleteMemory",
-      "description": "Delete a memory configuration"
+      "description": "Delete a memory"
     },
     {
       "operationId": "getMemoryTags",
@@ -40,46 +80,6 @@
       "operationId": "mergeMemoryTags",
       "action": "memories:UpdateMemory",
       "description": "Merge a memory's tags"
-    },
-    {
-      "operationId": "listMemoryEntries",
-      "action": "memories:ListMemoryEntries",
-      "description": "List entries in a memory"
-    },
-    {
-      "operationId": "createMemoryEntry",
-      "action": "memories:CreateMemoryEntry",
-      "description": "Create a new memory entry"
-    },
-    {
-      "operationId": "getMemoryEntry",
-      "action": "memories:GetMemoryEntry",
-      "description": "Get a memory entry by ID"
-    },
-    {
-      "operationId": "updateMemoryEntry",
-      "action": "memories:UpdateMemoryEntry",
-      "description": "Update a memory entry"
-    },
-    {
-      "operationId": "deleteMemoryEntry",
-      "action": "memories:DeleteMemoryEntry",
-      "description": "Delete a memory entry"
-    },
-    {
-      "operationId": "getMemoryEntryTags",
-      "action": "memories:GetMemoryEntry",
-      "description": "Get a memory entry's tags"
-    },
-    {
-      "operationId": "replaceMemoryEntryTags",
-      "action": "memories:UpdateMemoryEntry",
-      "description": "Replace a memory entry's tags"
-    },
-    {
-      "operationId": "mergeMemoryEntryTags",
-      "action": "memories:UpdateMemoryEntry",
-      "description": "Merge a memory entry's tags"
     }
   ]
 }

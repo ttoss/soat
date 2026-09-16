@@ -57,10 +57,10 @@ describe('FK onDelete rules', () => {
                 'agents:CreateAgent',
                 'agents:DeleteAgent',
                 'agents:CreateSession',
+                'memories:CreateMemoryStore',
+                'memories:DeleteMemoryStore',
                 'memories:CreateMemory',
-                'memories:DeleteMemory',
-                'memories:CreateMemoryEntry',
-                'memories:GetMemoryEntry',
+                'memories:GetMemory',
                 'formations:CreateFormation',
                 'formations:DeleteFormation',
               ],
@@ -99,39 +99,39 @@ describe('FK onDelete rules', () => {
     return res.body.id as string;
   };
 
-  const createMemory = async () => {
+  const createMemoryStore = async () => {
     const res = await authenticatedTestClient(userToken)
-      .post('/api/v1/memories')
+      .post('/api/v1/memory-stores')
       .send({ project_id: projectId, name: `fkod-mem-${Date.now()}` });
     return res.body.id as string;
   };
 
-  // ── CASCADE: Memory → MemoryEntry ─────────────────────────────────────────
+  // ── CASCADE: MemoryStore → Memory ─────────────────────────────────────────
 
-  describe('Memory deleted → MemoryEntries are CASCADE-deleted', () => {
-    test('entry is gone after parent memory is deleted', async () => {
-      const memId = await createMemory();
+  describe('MemoryStore deleted → Memories are CASCADE-deleted', () => {
+    test('entry is gone after parent memoryStore is deleted', async () => {
+      const memId = await createMemoryStore();
 
       const entryRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/memory-entries')
-        .send({ memory_id: memId, content: 'test entry for cascade' });
+        .post('/api/v1/memories')
+        .send({ memory_store_id: memId, content: 'test entry for cascade' });
       expect(entryRes.status).toBe(201);
       const entryId = entryRes.body.id;
 
       // Confirm entry exists
       const beforeGet = await authenticatedTestClient(userToken).get(
-        `/api/v1/memory-entries/${entryId}`
+        `/api/v1/memories/${entryId}`
       );
       expect(beforeGet.status).toBe(200);
 
-      // Delete parent memory
+      // Delete parent memory store
       const delRes = await authenticatedTestClient(userToken).delete(
-        `/api/v1/memories/${memId}`
+        `/api/v1/memory-stores/${memId}`
       );
       expect(delRes.status).toBe(204);
 
       // Entry must be gone from the DB
-      const entry = await db.MemoryEntry.findOne({
+      const entry = await db.Memory.findOne({
         where: { publicId: entryId },
       });
       expect(entry).toBeNull();
@@ -193,8 +193,8 @@ describe('FK onDelete rules', () => {
           name: `fkod-formation-${Date.now()}`,
           template: {
             resources: {
-              TestMemory: {
-                type: 'memory',
+              TestMemoryStore: {
+                type: 'memory_store',
                 properties: { name: `fkod-form-mem-${Date.now()}` },
               },
             },

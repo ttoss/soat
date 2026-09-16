@@ -4,9 +4,9 @@ import { resolveDocumentSearchLists } from './knowledgeDocuments';
 import { embedQueryOrDegrade } from './knowledgeEmbedding';
 import type {
   MemoryKnowledgeResult,
-  MemoryPolicyWhere,
+  MemoryStorePolicyWhere,
 } from './knowledgeMemory';
-import { resolveMemorySearchLists } from './knowledgeMemory';
+import { resolveMemoryStoreSearchLists } from './knowledgeMemory';
 import type { SearchCandidates, SignalCandidate } from './knowledgeRanking';
 import { fuseCandidates } from './knowledgeRanking';
 import { clampKnowledgeSearchLimit } from './requestBounds';
@@ -59,7 +59,7 @@ type SearchKnowledgeArgs = {
   /** The `k` in `1 / (k + rank)`. See {@link resolveRrfK}. */
   rrfK?: number;
   /**
-   * Half-life in days of the recency decay applied to **memory** results after
+   * Half-life in days of the recency decay applied to **memory store** results after
    * fusion. `0` — the default — disables it. See
    * {@link resolveRecencyHalfLifeDays}.
    */
@@ -67,10 +67,10 @@ type SearchKnowledgeArgs = {
   limit?: number;
   paths?: string[];
   documentIds?: string[];
-  memoryIds?: string[];
+  memoryStoreIds?: string[];
   /**
    * Key-value pairs a result's own `tags` must all contain. One filter for
-   * both stores: it narrows documents and memory entries alike, and is the
+   * both stores: it narrows documents and memories alike, and is the
    * only filter that turns on a source on both sides at once.
    */
   tags?: Record<string, string>;
@@ -80,7 +80,7 @@ type SearchKnowledgeArgs = {
    * `query` from context rather than an explicit caller request — e.g. agent
    * generation injection deriving it from the chat message — use this to keep
    * a memory-scoped config from silently widening into an all-project
-   * document search, while still passing `query` through for memory ranking.
+   * document search, while still passing `query` through for memory store ranking.
    */
   includeDocuments?: boolean;
   policyWhere?: KnowledgePolicyWhere;
@@ -91,24 +91,24 @@ type SearchKnowledgeArgs = {
  * by resource type because each clause names columns of a different model, and
  * a clause applied to the wrong one either throws or filters nothing.
  */
-export type KnowledgePolicyWhere = MemoryPolicyWhere & {
+export type KnowledgePolicyWhere = MemoryStorePolicyWhere & {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   document?: Record<string, any>;
 };
 
 const getSearchFlags = (
   args: SearchKnowledgeArgs
-): { hasDocumentSearch: boolean; hasMemorySearch: boolean } => {
+): { hasDocumentSearch: boolean; hasMemoryStoreSearch: boolean } => {
   const hasDocumentSearch =
     args.includeDocuments !== false &&
     (args.query !== undefined ||
       (args.paths !== undefined && args.paths.length > 0) ||
       (args.documentIds !== undefined && args.documentIds.length > 0) ||
       hasTagFilter(args.tags));
-  const hasMemorySearch =
-    (args.memoryIds !== undefined && args.memoryIds.length > 0) ||
+  const hasMemoryStoreSearch =
+    (args.memoryStoreIds !== undefined && args.memoryStoreIds.length > 0) ||
     hasTagFilter(args.tags);
-  return { hasDocumentSearch, hasMemorySearch };
+  return { hasDocumentSearch, hasMemoryStoreSearch };
 };
 
 const toDocumentResult = (doc: QueryDocumentResult): KnowledgeResult => {
@@ -180,13 +180,13 @@ const isMemoryResult = (result: KnowledgeResult): boolean => {
 const knowledgeKey = (result: KnowledgeResult): string => {
   return result.source_type === 'document'
     ? `document:${result.chunk_id}`
-    : `memory:${result.entry_id}`;
+    : `memory:${result.memory_id}`;
 };
 
 export const searchKnowledge = async (
   args: SearchKnowledgeArgs
 ): Promise<KnowledgeResult[]> => {
-  const { hasDocumentSearch, hasMemorySearch } = getSearchFlags(args);
+  const { hasDocumentSearch, hasMemoryStoreSearch } = getSearchFlags(args);
   // Clamped here rather than at the route: every caller — the search route,
   // agent knowledge injection and the orchestration node — reaches the vector
   // scan through this one function.
@@ -194,7 +194,7 @@ export const searchKnowledge = async (
 
   // Once, for both stores. Embedding per store would bill the same text twice
   // and let the halves disagree: one call failing would leave documents with a
-  // `similarity_score` and memories without, which the contract reserves for a
+  // `similarity_score` and memory stores without, which the contract reserves for a
   // search that answered from the lexical channel alone.
   const embedding = args.query
     ? await embedQueryOrDegrade({
@@ -203,8 +203,8 @@ export const searchKnowledge = async (
       })
     : undefined;
 
-  const [documents, memories] = await Promise.all([
-    !hasMemorySearch || hasDocumentSearch
+  const [documents, memoryStores] = await Promise.all([
+    !hasMemoryStoreSearch || hasDocumentSearch
       ? resolveDocumentSearchLists({
           projectIds: args.projectIds,
           embedding,
@@ -219,13 +219,13 @@ export const searchKnowledge = async (
           },
         })
       : Promise.resolve(emptyCandidates<QueryDocumentResult>(args.query)),
-    hasMemorySearch
-      ? resolveMemorySearchLists({
+    hasMemoryStoreSearch
+      ? resolveMemoryStoreSearchLists({
           projectIds: args.projectIds,
           embedding,
           policyWhere: args.policyWhere,
           config: {
-            memoryIds: args.memoryIds,
+            memoryStoreIds: args.memoryStoreIds,
             tags: args.tags,
             search: args.query,
             minSimilarity: args.minSimilarity,
@@ -240,12 +240,12 @@ export const searchKnowledge = async (
     // read — chunk order, then oldest-first entries.
     return [
       ...orderedResultsOf(documents).map(toDocumentResult),
-      ...orderedResultsOf(memories),
+      ...orderedResultsOf(memoryStores),
     ].slice(0, limit);
   }
 
   const documentShards = signalShardsOf(documents);
-  const memoryShards = signalShardsOf(memories);
+  const memoryStoreShards = signalShardsOf(memoryStores);
 
   // Two rankings, not four: each signal's per-store shards are merged on that
   // signal's own comparable value first, so a store cannot claim result slots
@@ -253,11 +253,11 @@ export const searchKnowledge = async (
   return fuseCandidates<KnowledgeResult>({
     vector: [
       documentShards.vector.map(toDocumentCandidate),
-      memoryShards.vector,
+      memoryStoreShards.vector,
     ],
     lexical: [
       documentShards.lexical.map(toDocumentCandidate),
-      memoryShards.lexical,
+      memoryStoreShards.lexical,
     ],
     keyOf: knowledgeKey,
     rrfK: args.rrfK,

@@ -119,7 +119,7 @@ export const priceTokenComponents = (args: {
   });
 };
 
-// All nullable but the project: a chat or memory completion has no Generation
+// All nullable but the project: a chat or memory store completion has no Generation
 // row behind it and still meters identically. `actorId`/`sessionId` are set
 // only where an end user is behind the call, frozen at write time like `cost_usd`.
 export type TokenEventAttribution = {

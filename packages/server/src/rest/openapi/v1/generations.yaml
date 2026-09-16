@@ -542,7 +542,7 @@ components:
           type: object
           nullable: true
           description: >
-            Memory-extraction summary recorded for this generation. Set when the
+            Memory store-extraction summary recorded for this generation. Set when the
             agent's `knowledge_config.extraction` produced one for this turn.
           properties:
             candidates:
@@ -550,10 +550,10 @@ components:
               description: Number of extraction candidates considered
             created:
               type: integer
-              description: Number of new memory entries created
+              description: Number of new memories created
             updated:
               type: integer
-              description: Number of existing memory entries updated
+              description: Number of existing memories updated
             skipped:
               type: integer
               description: Number of candidates skipped (e.g. duplicates)

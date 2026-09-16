@@ -45,10 +45,10 @@
         "section": "Provenance"
       },
       {
-        "key": "doc:memories#entry-level-tag-filtering",
-        "path": "/modules/memories/entry-level-tag-filtering.md",
+        "key": "doc:memories#memory-level-tag-filtering",
+        "path": "/modules/memories/memory-level-tag-filtering.md",
         "source": "packages/website/docs/modules/memories.md",
-        "section": "Entry-Level Tag Filtering"
+        "section": "Memory-Level Tag Filtering"
       },
       {
         "key": "doc:documents#file-ingestion-and-chunking",
@@ -296,7 +296,7 @@
           "account": "pinnacle"
         },
         "age_days": 240,
-        "memory": "Knowledge golden corpus (prior quarter)"
+        "memory_store": "Knowledge golden corpus (prior quarter)"
       },
       {
         "key": "mem:cascade-contact",
@@ -312,7 +312,7 @@
           "account": "cascade"
         },
         "age_days": 300,
-        "memory": "Knowledge golden corpus (prior quarter)"
+        "memory_store": "Knowledge golden corpus (prior quarter)"
       },
       {
         "key": "mem:meridian-window",
@@ -328,7 +328,7 @@
           "account": "meridian"
         },
         "age_days": 420,
-        "memory": "Knowledge golden corpus (prior quarter)"
+        "memory_store": "Knowledge golden corpus (prior quarter)"
       },
       {
         "key": "mem:aurora-discount",
@@ -345,7 +345,7 @@
           "account": "aurora"
         },
         "age_days": 400,
-        "memory": "Knowledge golden corpus (prior quarter)"
+        "memory_store": "Knowledge golden corpus (prior quarter)"
       },
       {
         "key": "mem:borealis-portal",
@@ -362,7 +362,7 @@
           "account": "borealis"
         },
         "age_days": 120,
-        "memory": "Knowledge golden corpus (prior quarter)"
+        "memory_store": "Knowledge golden corpus (prior quarter)"
       },
       {
         "key": "mem:calder-incoterms",
@@ -379,7 +379,7 @@
           "account": "calder"
         },
         "age_days": 45,
-        "memory": "Knowledge golden corpus (prior quarter)"
+        "memory_store": "Knowledge golden corpus (prior quarter)"
       }
     ]
   },
@@ -556,7 +556,7 @@
       "expected": [
         {
           "source_type": "document",
-          "key": "doc:memories#entry-level-tag-filtering"
+          "key": "doc:memories#memory-level-tag-filtering"
         }
       ]
     },

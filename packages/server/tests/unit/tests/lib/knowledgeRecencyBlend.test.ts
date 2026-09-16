@@ -3,13 +3,13 @@ import { createDocument } from 'src/lib/documents';
 import * as embeddingModule from 'src/lib/embedding';
 import { searchKnowledge } from 'src/lib/knowledge';
 import { resolveDocumentSearch } from 'src/lib/knowledgeDocuments';
-import { resolveMemorySearch } from 'src/lib/knowledgeMemory';
-import { createMemory } from 'src/lib/memories';
-import { writeMemoryEntry } from 'src/lib/memoryEntries';
+import { resolveMemoryStoreSearch } from 'src/lib/knowledgeMemory';
+import { writeMemory } from 'src/lib/memories';
+import { createMemoryStore } from 'src/lib/memoryStores';
 import { createProject } from 'src/lib/projects';
 
 /**
- * The recency blend: after fusion, a **memory** result's `score` is multiplied
+ * The recency blend: after fusion, a **memory store** result's `score` is multiplied
  * by `2 ^ (−age_days / half_life_days)`, read from `updated_at`. Document
  * chunks are untouched — a fact goes stale, a paragraph of a manual does not.
  *
@@ -39,8 +39,8 @@ const THIRD = vector({ a: 0.96, b: 0.28 });
 
 /**
  * Two restatements of one fact, one superseded. They are near-identical on
- * purpose and therefore live in different memories: `writeMemoryEntry` dedups
- * at cosine 0.95 within a memory, so same-container twins are impossible.
+ * purpose and therefore live in different memories: `writeMemory` dedups
+ * at cosine 0.95 within a memory store, so same-container twins are impossible.
  *
  * Neither shares a token with {@link QUERY}, so the lexical channel stays empty
  * and fusion runs over the vector ranking alone — one list, so a result's fused
@@ -77,7 +77,7 @@ const MS_PER_DAY = 86400000;
  * cannot place it proves nothing.
  */
 const backdate = async (args: {
-  table: 'memory_entries' | 'document_chunks';
+  table: 'memories' | 'document_chunks';
   publicId: string;
   days: number;
 }) => {
@@ -94,7 +94,7 @@ const backdate = async (args: {
 
 type Fixtures = {
   projectId: number;
-  memoryIds: string[];
+  memoryStoreIds: string[];
   staleEntryId: string;
   freshEntryId: string;
   documentId: string;
@@ -130,30 +130,33 @@ const seed = async (): Promise<Fixtures> => {
     days: 365,
   });
 
-  const current = await createMemory({ projectId, name: 'Yard — current' });
-  const prior = await createMemory({ projectId, name: 'Yard — prior' });
-  const memoryRow = async (publicId: string) => {
-    const row = await db.Memory.findOne({ where: { publicId } });
+  const current = await createMemoryStore({
+    projectId,
+    name: 'Yard — current',
+  });
+  const prior = await createMemoryStore({ projectId, name: 'Yard — prior' });
+  const memoryStoreRow = async (publicId: string) => {
+    const row = await db.MemoryStore.findOne({ where: { publicId } });
     return row!.id as number;
   };
 
-  const fresh = await writeMemoryEntry({
-    memoryId: await memoryRow(current.id),
+  const fresh = await writeMemory({
+    memoryStoreId: await memoryStoreRow(current.id),
     content: CONTENT.freshEntry,
   });
-  const stale = await writeMemoryEntry({
-    memoryId: await memoryRow(prior.id),
+  const stale = await writeMemory({
+    memoryStoreId: await memoryStoreRow(prior.id),
     content: CONTENT.staleEntry,
   });
   await backdate({
-    table: 'memory_entries',
+    table: 'memories',
     publicId: stale.entry.id,
     days: 60,
   });
 
   return {
     projectId,
-    memoryIds: [current.id, prior.id],
+    memoryStoreIds: [current.id, prior.id],
     staleEntryId: stale.entry.id,
     freshEntryId: fresh.entry.id,
     documentId: document.id,
@@ -190,7 +193,7 @@ describe('knowledge recency blend', () => {
       projectIds: [fixtures.projectId],
       billingProjectId: fixtures.projectId,
       query: QUERY,
-      memoryIds: fixtures.memoryIds,
+      memoryStoreIds: fixtures.memoryStoreIds,
       recencyHalfLifeDays: args?.recencyHalfLifeDays,
     });
   };
@@ -202,7 +205,7 @@ describe('knowledge recency blend', () => {
         id:
           result.source_type === 'document'
             ? result.document_id
-            : result.entry_id,
+            : result.memory_id,
         score: result.score,
       };
     });
@@ -231,7 +234,7 @@ describe('knowledge recency blend', () => {
     const stale = results.find((result) => {
       return (
         result.source_type === 'memory' &&
-        result.entry_id === fixtures.staleEntryId
+        result.memory_id === fixtures.staleEntryId
       );
     });
 
@@ -288,14 +291,14 @@ describe('knowledge recency blend', () => {
   });
 
   test('decays the same way at the memory-only entry point', async () => {
-    // `resolveMemorySearch` fuses one store's two shards rather than four, so
+    // `resolveMemoryStoreSearch` fuses one store's two shards rather than four, so
     // it reaches the blend by its own path — and every result it can return is
     // a fact, which is what its `isMemory` answers.
-    const results = await resolveMemorySearch({
+    const results = await resolveMemoryStoreSearch({
       projectIds: [fixtures.projectId],
       billingProjectId: fixtures.projectId,
       config: {
-        memoryIds: fixtures.memoryIds,
+        memoryStoreIds: fixtures.memoryStoreIds,
         search: QUERY,
         recencyHalfLifeDays: 30,
         limit: 10,
@@ -304,7 +307,7 @@ describe('knowledge recency blend', () => {
 
     expect(
       results.map((result) => {
-        return result.entry_id;
+        return result.memory_id;
       })
     ).toEqual([fixtures.freshEntryId, fixtures.staleEntryId]);
   });
@@ -350,12 +353,12 @@ describe('knowledge recency blend', () => {
     // distance directly, so an entry old enough for the blend to bury is still
     // the duplicate a restatement of it merges into.
     process.env.KNOWLEDGE_RECENCY_HALF_LIFE_DAYS = '1';
-    const priorId = await db.Memory.findOne({
-      where: { publicId: fixtures.memoryIds[1] },
+    const priorId = await db.MemoryStore.findOne({
+      where: { publicId: fixtures.memoryStoreIds[1] },
     });
 
-    const written = await writeMemoryEntry({
-      memoryId: priorId!.id as number,
+    const written = await writeMemory({
+      memoryStoreId: priorId!.id as number,
       content: CONTENT.staleEntry,
     });
 

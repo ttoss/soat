@@ -10,7 +10,7 @@ const log = createDebug('soat:knowledge');
  *
  * Rows persisted before single-casing hold the bag in camelCase, and the read
  * path that un-camelCased it is gone, so those rows would resolve
- * `write_memory_id`, `memory_ids` and `extraction` as `undefined` — silently
+ * `write_memory_store_id`, `memory_store_ids` and `extraction` as `undefined` — silently
  * disabling memory-scoped injection, the `write_memory` tool and extraction.
  *
  * Idempotent and bounded (a SQL prefilter means a converged database reads no
@@ -23,11 +23,11 @@ const log = createDebug('soat:knowledge');
  * must only ever touch names the platform owns.
  */
 const KNOWLEDGE_CONFIG_KEYS: Record<string, string> = {
-  memoryIds: 'memory_ids',
+  memoryStoreIds: 'memory_store_ids',
   documentIds: 'document_ids',
   documentPaths: 'document_paths',
   minScore: 'min_score',
-  writeMemoryId: 'write_memory_id',
+  writeMemoryStoreId: 'write_memory_store_id',
 };
 
 /** The `extraction` object's own camelCase spelling. */

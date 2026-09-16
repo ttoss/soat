@@ -332,7 +332,7 @@ describe('Implicit projectId via project-scoped API key', () => {
       '/api/v1/exceptions',
       '/api/v1/formations',
       '/api/v1/guardrails',
-      '/api/v1/memories',
+      '/api/v1/memory-stores',
       '/api/v1/model-routes',
       '/api/v1/orchestrations',
       '/api/v1/quotas',

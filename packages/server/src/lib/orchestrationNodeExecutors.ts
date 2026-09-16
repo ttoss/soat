@@ -1,15 +1,12 @@
 import createDebug from 'debug';
 
-import { db } from '../db';
 import { DomainError } from '../errors';
 import { emitActivityEntry } from './activity';
 import { createGeneration } from './agentGeneration';
 import type { EmbeddingBillingProjectId } from './embedding';
 import { applyInputMapping, evaluateLogic } from './jsonLogicMapping';
 import { searchKnowledge } from './knowledge';
-import { writeMemoryEntry } from './memoryEntries';
 import { parseDuration } from './orchestrationDuration';
-import { parseMemoryWriteInputs } from './orchestrationMemoryWrite';
 import { requireNodeField } from './orchestrationNodeFields';
 import type { NodeExecutionResult } from './orchestrationNodeTypes';
 import type { OrchestrationNode } from './orchestrations';
@@ -299,38 +296,13 @@ export const executeKnowledgeNode = async (args: {
     projectIds,
     billingProjectId: args.billingProjectId,
     query: typeof inputs['query'] === 'string' ? inputs['query'] : undefined,
-    memoryIds: Array.isArray(inputs['memoryIds'])
-      ? (inputs['memoryIds'] as string[])
+    memoryStoreIds: Array.isArray(inputs['memoryStoreIds'])
+      ? (inputs['memoryStoreIds'] as string[])
       : undefined,
     tags: isStringRecord(inputs['tags']) ? inputs['tags'] : undefined,
   });
 
   return { kind: 'artifact', artifact: { results } };
-};
-
-export const executeMemoryWriteNode = async (args: {
-  node: OrchestrationNode;
-  state: Record<string, unknown>;
-}): Promise<NodeExecutionResult> => {
-  const { node, state } = args;
-  const memoryId = requireNodeField(node, 'memoryId');
-
-  const inputs = applyInputMapping(node.inputMapping, state);
-  const memory = await db.Memory.findOne({
-    where: { publicId: memoryId },
-  });
-  if (!memory)
-    throw new DomainError(
-      'ORCHESTRATION_NODE_FAILED',
-      `Memory '${memoryId}' not found.`
-    );
-
-  const writeResult = await writeMemoryEntry({
-    memoryId: memory.id as number,
-    ...parseMemoryWriteInputs(inputs),
-  });
-
-  return { kind: 'artifact', artifact: { action: writeResult.action } };
 };
 
 export const executeConditionNode = (args: {

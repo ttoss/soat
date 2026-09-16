@@ -8,9 +8,9 @@ import {
 
 const golden = loadGoldenSet();
 
-const memoriesByKey = new Map(
-  golden.corpus.memories.map((memory) => {
-    return [memory.key, memory];
+const memoryStoresByKey = new Map(
+  golden.corpus.memories.map((memoryStore) => {
+    return [memoryStore.key, memoryStore];
   })
 );
 
@@ -20,8 +20,8 @@ const freshnessTwins = golden.queries
     return query.kind === 'freshness';
   })
   .map((query) => {
-    const fresh = memoriesByKey.get(query.expected[0].key)!;
-    const superseded = memoriesByKey.get(`${fresh.key}-superseded`);
+    const fresh = memoryStoresByKey.get(query.expected[0].key)!;
+    const superseded = memoryStoresByKey.get(`${fresh.key}-superseded`);
     return {
       id: query.id,
       expected: query.expected.length,
@@ -69,8 +69,8 @@ describe('knowledge eval golden set', () => {
       ...golden.corpus.documents.map((document) => {
         return resolveDocumentContent({ document });
       }),
-      ...golden.corpus.memories.map((memory) => {
-        return memory.content;
+      ...golden.corpus.memories.map((memoryStore) => {
+        return memoryStore.content;
       }),
     ];
 
@@ -146,7 +146,7 @@ describe('knowledge eval golden set', () => {
     }).toThrow(/not both and not neither/);
   });
 
-  test('reads a memory fixture age and the container it belongs to', () => {
+  test('reads a memoryStore fixture age and the container it belongs to', () => {
     const golden = parseGoldenSet({
       raw: {
         version: 1,
@@ -158,7 +158,7 @@ describe('knowledge eval golden set', () => {
               key: 'mem:b',
               content: 'b',
               age_days: 180.5,
-              memory: 'Prior quarter',
+              memory_store: 'Prior quarter',
             },
           ],
         },
@@ -172,19 +172,19 @@ describe('knowledge eval golden set', () => {
         content: 'a',
         tags: undefined,
         age_days: undefined,
-        memory: undefined,
+        memory_store: undefined,
       },
       {
         key: 'mem:b',
         content: 'b',
         tags: undefined,
         age_days: 180.5,
-        memory: 'Prior quarter',
+        memory_store: 'Prior quarter',
       },
     ]);
   });
 
-  test('rejects a negative or non-finite memory age', () => {
+  test('rejects a negative or non-finite memoryStore age', () => {
     const withAge = (age_days: unknown) => {
       return () => {
         return parseGoldenSet({
@@ -207,7 +207,7 @@ describe('knowledge eval golden set', () => {
   test('pairs every freshness query with an older twin in another container', () => {
     // The blend only ever demotes, so a freshness query measures nothing
     // without an aged near-twin for the decay to overtake — and it has to sit
-    // in another container, since `writeMemoryEntry` dedups twins sharing one
+    // in another container, since `writeMemory` dedups twins sharing one
     // at 0.95 and the seeder refuses anything but a `created` write.
     //
     // The twin is the answer's key suffixed `-superseded`: pairing them by name
@@ -221,7 +221,7 @@ describe('knowledge eval golden set', () => {
         // More than one expected key and the query stops measuring the twin.
         expected: twin.expected,
         superseded: twin.superseded !== undefined,
-        elsewhere: twin.superseded?.memory !== twin.fresh.memory,
+        elsewhere: twin.superseded?.memory_store !== twin.fresh.memory_store,
         older: twin.gapDays > 0,
       }).toEqual({
         id: twin.id,

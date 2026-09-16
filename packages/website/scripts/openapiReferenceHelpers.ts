@@ -77,12 +77,12 @@ export interface OpenApiSpec {
  * a sub-resource whose documentation lives inside a parent module's page.
  */
 const DOC_OVERRIDES: Record<string, string> = {
-  'memory-entries': 'memories',
+  'memory-stores': 'memories',
   tasks: 'workflows',
 };
 
 export interface ModuleConfig {
-  /** Spec filename without extension, e.g. `ai-providers` or `memory-entries`. */
+  /** Spec filename without extension, e.g. `ai-providers` or `memory-stores`. */
   file: string;
   /** Human tag label, e.g. `AI Providers`. */
   label: string;

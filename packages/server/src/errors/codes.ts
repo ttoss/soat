@@ -625,7 +625,7 @@ export const ERROR_CODES = {
   QUOTA_STORAGE_EXCEEDED: {
     httpStatus: 409,
     description:
-      "An enforced `storage_bytes` quota is exceeded: the project's stored footprint — files, document chunks (text and vector) and memory entries — is already over the byte limit, and the write would have added to it. No `Retry-After` is sent, and the refusal is a 409 rather than a 429, because a stock is not a rate: no window reset clears it and waiting changes nothing. The error meta carries `current_bytes` (the last daily snapshot plus the request's own delta) beside `limit`, so the caller knows how much to delete. Raised at the corpus write paths — file upload/create, document create, document ingest and re-ingest, memory-entry create.",
+      "An enforced `storage_bytes` quota is exceeded: the project's stored footprint — files, document chunks (text and vector) and memories — is already over the byte limit, and the write would have added to it. No `Retry-After` is sent, and the refusal is a 409 rather than a 429, because a stock is not a rate: no window reset clears it and waiting changes nothing. The error meta carries `current_bytes` (the last daily snapshot plus the request's own delta) beside `limit`, so the caller knows how much to delete. Raised at the corpus write paths — file upload/create, document create, document ingest and re-ingest, memory create.",
   },
   QUOTA_CONFLICT: {
     httpStatus: 409,

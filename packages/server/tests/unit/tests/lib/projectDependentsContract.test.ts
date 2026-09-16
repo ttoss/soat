@@ -1,6 +1,6 @@
 /**
  * The project delete lists are checked against the live schema, not against
- * memory.
+ * memory store.
  *
  * `deleteProject` decides between `409 PROJECT_HAS_DEPENDENTS`, a bare
  * `project.destroy()` and the force cascade from two hand-listed sets of

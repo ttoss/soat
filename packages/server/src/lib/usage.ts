@@ -72,7 +72,7 @@ export type PersistedUsageEvent = {
   trigger_id: string | null;
   action_id: string | null;
   meter_type: string;
-  // The workload behind the spend (`eval`, `eval_judge`, `chat`, a memory pass);
+  // The workload behind the spend (`eval`, `eval_judge`, `chat`, a memory store pass);
   // null for ordinary agent traffic. This is what makes verification spend
   // separable from the traffic serving real users.
   source: string | null;

@@ -355,7 +355,7 @@ paths:
           # channel to poll a background generation later, so it must block —
           # the mirror image of `stream`, which a tool call cannot receive.
           x-soat-tool-forced: 'true'
-          description: "When omitted or `false` (default), the generation runs in the background and `202 Accepted` is returned immediately with a `generation_id` to poll. Pass `true` to block until the generation settles and receive the result. Mutually exclusive with `stream: true`. A `builtin` tool call always waits."
+          description: 'When omitted or `false` (default), the generation runs in the background and `202 Accepted` is returned immediately with a `generation_id` to poll. Pass `true` to block until the generation settles and receive the result. Mutually exclusive with `stream: true`. A `builtin` tool call always waits.'
           schema:
             type: boolean
             default: false
@@ -392,7 +392,7 @@ paths:
                   stream: true
       responses:
         '200':
-          description: "Generation result or SSE stream (only when `?wait=true` or `stream: true`)"
+          description: 'Generation result or SSE stream (only when `?wait=true` or `stream: true`)'
           content:
             application/json:
               schema:
@@ -1011,8 +1011,8 @@ components:
           nullable: true
           description: Knowledge retrieval config injected before every generation
           properties:
-            memory_ids:
-              x-soat-ref: memories
+            memory_store_ids:
+              x-soat-ref: memory-stores
               type: array
               items:
                 type: string
@@ -1028,20 +1028,20 @@ components:
             tags:
               description: >-
                 Key-value pairs a result's own `tags` must all contain (exact
-                match). Scopes documents and memory entries alike.
+                match). Scopes documents and memories alike.
               allOf:
                 - $ref: './tags.yaml#/components/schemas/TagBag'
             min_score:
               type: number
             limit:
               type: integer
-            write_memory_id:
-              x-soat-ref: memories
+            write_memory_store_id:
+              x-soat-ref: memory-stores
               type: string
               nullable: true
-              description: Public ID of the memory the agent can write to during generation. When set, a write_memory tool is automatically available to the agent.
+              description: Public ID of the memory store the agent can write to during generation. When set, a write_memory tool is automatically available to the agent.
             extraction:
-              description: Automatic fact extraction from completed generation turns (requires write_memory_id). Pass `true` to enable with defaults, or an object to customize the provider, model, and prompt used for the extraction completion. Extracted facts are written to the write memory through the standard dedup/merge/skip algorithm.
+              description: Automatic fact extraction from completed generation turns (requires write_memory_store_id). Pass `true` to enable with defaults, or an object to customize the provider, model, and prompt used for the extraction completion. Extracted facts are written to the write memory store through the standard dedup/merge/skip algorithm.
               oneOf:
                 - type: boolean
                 - type: object
@@ -1210,7 +1210,7 @@ components:
             time**, so it may carry fields the current schema no longer defines,
             or lack ones it has since gained. Knowledge retrieval is not part of
             the snapshot — a version records which `knowledge_config` applied,
-            while the documents and memories it resolves keep their own
+            while the documents and memory stores it resolves keep their own
             histories and are pinned at generation time.
         label:
           type: string
@@ -1396,8 +1396,8 @@ components:
         knowledge_config:
           type: object
           properties:
-            memory_ids:
-              x-soat-ref: memories
+            memory_store_ids:
+              x-soat-ref: memory-stores
               type: array
               items:
                 type: string
@@ -1413,20 +1413,20 @@ components:
             tags:
               description: >-
                 Key-value pairs a result's own `tags` must all contain (exact
-                match). Scopes documents and memory entries alike.
+                match). Scopes documents and memories alike.
               allOf:
                 - $ref: './tags.yaml#/components/schemas/TagBag'
             min_score:
               type: number
             limit:
               type: integer
-            write_memory_id:
-              x-soat-ref: memories
+            write_memory_store_id:
+              x-soat-ref: memory-stores
               type: string
               nullable: true
-              description: Public ID of the memory the agent can write to during generation. When set, a write_memory tool is automatically available to the agent.
+              description: Public ID of the memory store the agent can write to during generation. When set, a write_memory tool is automatically available to the agent.
             extraction:
-              description: Automatic fact extraction from completed generation turns (requires write_memory_id). Pass `true` to enable with defaults, or an object to customize the provider, model, and prompt used for the extraction completion. Extracted facts are written to the write memory through the standard dedup/merge/skip algorithm.
+              description: Automatic fact extraction from completed generation turns (requires write_memory_store_id). Pass `true` to enable with defaults, or an object to customize the provider, model, and prompt used for the extraction completion. Extracted facts are written to the write memory store through the standard dedup/merge/skip algorithm.
               oneOf:
                 - type: boolean
                 - type: object
@@ -1603,8 +1603,8 @@ components:
           type: object
           nullable: true
           properties:
-            memory_ids:
-              x-soat-ref: memories
+            memory_store_ids:
+              x-soat-ref: memory-stores
               type: array
               items:
                 type: string
@@ -1620,20 +1620,20 @@ components:
             tags:
               description: >-
                 Key-value pairs a result's own `tags` must all contain (exact
-                match). Scopes documents and memory entries alike.
+                match). Scopes documents and memories alike.
               allOf:
                 - $ref: './tags.yaml#/components/schemas/TagBag'
             min_score:
               type: number
             limit:
               type: integer
-            write_memory_id:
-              x-soat-ref: memories
+            write_memory_store_id:
+              x-soat-ref: memory-stores
               type: string
               nullable: true
-              description: Public ID of the memory the agent can write to during generation. When set, a write_memory tool is automatically available to the agent.
+              description: Public ID of the memory store the agent can write to during generation. When set, a write_memory tool is automatically available to the agent.
             extraction:
-              description: Automatic fact extraction from completed generation turns (requires write_memory_id). Pass `true` to enable with defaults, or an object to customize the provider, model, and prompt used for the extraction completion. Extracted facts are written to the write memory through the standard dedup/merge/skip algorithm.
+              description: Automatic fact extraction from completed generation turns (requires write_memory_store_id). Pass `true` to enable with defaults, or an object to customize the provider, model, and prompt used for the extraction completion. Extracted facts are written to the write memory store through the standard dedup/merge/skip algorithm.
               oneOf:
                 - type: boolean
                 - type: object
@@ -1826,19 +1826,19 @@ components:
           description: >-
             Per-turn override of the agent's `knowledge_config.extraction`
             default. Omit to follow the agent's stored config. Set `false` to
-            suppress automatic memory extraction for this turn (e.g. an
+            suppress automatic memory store extraction for this turn (e.g. an
             operational or tool-listing turn that would only add noise to a
-            curated memory). Set `true` to force extraction on for this turn
+            curated memory store). Set `true` to force extraction on for this turn
             even when the agent does not enable it by default, provided the
-            agent has a `write_memory_id`. Has no effect on streaming or
+            agent has a `write_memory_store_id`. Has no effect on streaming or
             `requires_action` turns, which never extract.
         knowledge_config:
           type: object
           nullable: true
-          description: Per-generation knowledge retrieval override. Array filters (memory_ids, document_ids, document_paths) are unioned with the agent's stored knowledge_config; `tags` pairs are merged with the override winning per key; scalar fields (min_score, limit) use the per-generation value when present.
+          description: Per-generation knowledge retrieval override. Array filters (memory_store_ids, document_ids, document_paths) are unioned with the agent's stored knowledge_config; `tags` pairs are merged with the override winning per key; scalar fields (min_score, limit) use the per-generation value when present.
           properties:
-            memory_ids:
-              x-soat-ref: memories
+            memory_store_ids:
+              x-soat-ref: memory-stores
               type: array
               items:
                 type: string
@@ -1854,7 +1854,7 @@ components:
             tags:
               description: >-
                 Key-value pairs a result's own `tags` must all contain (exact
-                match). Scopes documents and memory entries alike.
+                match). Scopes documents and memories alike.
               allOf:
                 - $ref: './tags.yaml#/components/schemas/TagBag'
             min_score:

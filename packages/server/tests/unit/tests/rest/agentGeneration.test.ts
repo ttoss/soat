@@ -741,7 +741,7 @@ describe('Agent Generation Routes', () => {
      * closures carry the victim's own auth header, so answering one hands the
      * model a result under their credentials.
      */
-    test('tool-outputs refuses an in-memory pending generation from another project', async () => {
+    test('tool-outputs refuses an in-memoryStore pending generation from another project', async () => {
       const otherProjectRes = await authenticatedTestClient(stubAdminToken)
         .post('/api/v1/projects')
         .send({ name: 'AgentGeneration Foreign Project' });
@@ -802,7 +802,7 @@ describe('Agent Generation Routes', () => {
       pendingGenerations.delete('gen_foreign_pending');
     });
 
-    test('tool-outputs recovers a pending generation from the DB when not in memory', async () => {
+    test('tool-outputs recovers a pending generation from the DB when not in memoryStore', async () => {
       // Simulates a restart: with no pending-map entry, `submitToolOutputs`
       // must fall back to rebuilding from the `pendingState` column.
       await createGenerationRecord({

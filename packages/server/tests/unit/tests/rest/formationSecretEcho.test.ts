@@ -172,7 +172,7 @@ describe('a formation never echoes secret material', () => {
           template: {
             resources: {
               EchoAgent: {
-                type: 'memory',
+                type: 'memory_store',
                 properties: { name: 'fse-mem' },
               },
               EchoTrigger: {

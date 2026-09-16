@@ -3,7 +3,7 @@ import { authenticatedTestClient, testClient } from '../../testClient';
 
 // Every embedding the server makes reaches the provider through one function, so
 // these assertions drive the entry points that reach it and read the meter back:
-// the stateless endpoint, document ingestion, a memory write, and a knowledge
+// the stateless endpoint, document ingestion, a memory store write, and a knowledge
 // search (#1208). The stub embedding provider reports one token per word, and
 // the rate comes from `EMBEDDING_INPUT_1M_TOKEN_PRICE_USD` rather than the price
 // book (#1213).
@@ -76,8 +76,8 @@ describe('Usage — embedding metering', () => {
         'documents:CreateDocument',
         'embeddings:CreateEmbeddings',
         'knowledge:SearchKnowledge',
+        'memories:CreateMemoryStore',
         'memories:CreateMemory',
-        'memories:CreateMemoryEntry',
         'usage:ListEvents',
       ],
     });
@@ -197,18 +197,18 @@ describe('Usage — embedding metering', () => {
     }
   });
 
-  test('a memory entry write meters its embedding', async () => {
-    const memoryRes = await authenticatedTestClient(userToken)
-      .post('/api/v1/memories')
-      .send({ project_id: projectId, name: 'usage-embeddings-memory' });
-    expect(memoryRes.status).toBe(201);
+  test('a memory write meters its embedding', async () => {
+    const memoryStoreRes = await authenticatedTestClient(userToken)
+      .post('/api/v1/memory-stores')
+      .send({ project_id: projectId, name: 'usage-embeddings-memoryStore' });
+    expect(memoryStoreRes.status).toBe(201);
 
     const before = await readEmbeddingMeters();
 
     const entryRes = await authenticatedTestClient(userToken)
-      .post('/api/v1/memory-entries')
+      .post('/api/v1/memories')
       .send({
-        memory_id: memoryRes.body.id,
+        memory_store_id: memoryStoreRes.body.id,
         content: 'the customer prefers email',
       });
     expect(entryRes.status).toBe(201);

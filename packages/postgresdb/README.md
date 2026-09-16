@@ -57,6 +57,7 @@ models:
 | File | Change |
 | --- | --- |
 | `2026-09-11-memory-tags-to-jsonb.sql` | `memories.tags` and `memory_entries.tags` from `text[]` to key-value `jsonb` |
+| `2026-09-16-memories-rename-and-provenance.sql` | `memories` -> `memory_stores` and `memory_entries` -> `memories`, `source_conversation_id`/`source_generation_id` collapsed into `source_id` |
 
 ## Development
 

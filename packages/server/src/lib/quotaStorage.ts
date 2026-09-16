@@ -12,11 +12,11 @@
  *
  * **Where the cap acts, and what it deliberately does not reach.** The guard
  * sits on the caller-facing corpus writes — file upload and create, document
- * create, document ingest and re-ingest, memory-entry create — and on nothing
+ * create, document ingest and re-ingest, memory create — and on nothing
  * that a generation drives from the inside. Every conversation message is a
- * `Document` with its own chunks and embeddings, and the `write_memory` tool,
- * memory extraction and an orchestration's memory node all write entries
- * mid-turn: a refusal there would leave a turn half persisted, which is the
+ * `Document` with its own chunks and embeddings, and both the `write_memory`
+ * tool and automatic extraction write memories mid-turn: a refusal there would
+ * leave a turn half persisted, which is the
  * one thing the enforcement points above are chosen to avoid. So the cap bounds
  * the ingest surface a tenant drives deliberately, and `monitor`-mode data is
  * what should settle whether that is enough.

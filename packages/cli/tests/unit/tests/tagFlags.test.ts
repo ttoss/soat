@@ -25,8 +25,8 @@ describe('tag flags survive the shared spec components', () => {
     'list-conversations',
     'list-documents',
     'list-files',
+    'list-memory-stores',
     'list-memories',
-    'list-memory-entries',
     'list-sessions',
   ])('%s declares --tags as a repeatable query flag', (command) => {
     const flag = flagOf(command, 'tags');
@@ -39,10 +39,10 @@ describe('tag flags survive the shared spec components', () => {
     'ingest-document',
     'update-document',
     'update-actor',
+    'create-memory-store',
+    'update-memory-store',
     'create-memory',
     'update-memory',
-    'create-memory-entry',
-    'update-memory-entry',
     'fork-session',
   ])('%s declares --tags as an object body flag', (command) => {
     const flag = flagOf(command, 'tags');

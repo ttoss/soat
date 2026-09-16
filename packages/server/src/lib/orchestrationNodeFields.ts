@@ -17,7 +17,6 @@ export const REQUIRED_NODE_FIELDS: Partial<
   transform: 'expression',
   condition: 'expression',
   approval: 'toolId',
-  memory_write: 'memoryId',
   delay: 'duration',
   loop: 'orchestrationId',
   poll: 'toolId',

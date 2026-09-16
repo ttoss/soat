@@ -7,8 +7,8 @@ import type { Transaction } from './dbTransaction';
  * An HNSW index answers `ORDER BY embedding <=> $query LIMIT n` from its graph,
  * and yields those `ef_search` candidates *before* the query's own filters run.
  * Every semantic search here filters after the ordering — document chunks
- * through a required join to `files.project_id`, memory entries through
- * `memory_id` and `invalidated_at` — so a selective scope can discard the whole
+ * through a required join to `files.project_id`, memories through
+ * `memory_store_id` and `invalidated_at` — so a selective scope can discard the whole
  * candidate list and return short, or empty, while matching rows sit further
  * down the graph. Nothing errors; recall just collapses (#1220). An iterative
  * scan keeps widening the search until the limit is satisfied after filtering.

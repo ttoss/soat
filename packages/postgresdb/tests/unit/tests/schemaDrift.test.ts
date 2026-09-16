@@ -257,7 +257,7 @@ describe('schema drift after sync({ alter: true })', () => {
         opclass: 'vector_cosine_ops',
       },
       {
-        table: 'memory_entries',
+        table: 'memories',
         column: 'embedding',
         method: 'hnsw',
         opclass: 'vector_cosine_ops',

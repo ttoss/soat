@@ -17,7 +17,7 @@ describe('recoverPendingFromDb (real DB)', () => {
   let projectDbId: number;
   let agentWithToolsId: string;
   let agentNoToolsId: string;
-  let agentWithMemoryId: string;
+  let agentWithMemoryStoreId: string;
 
   const buildPendingState = () => {
     return {
@@ -87,19 +87,19 @@ describe('recoverPendingFromDb (real DB)', () => {
       });
     agentNoToolsId = agentNoToolsRes.body.id;
 
-    const memoryRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/memories')
-      .send({ project_id: projectPublicId, name: 'Recovery Memory' });
+    const memoryStoreRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/memory-stores')
+      .send({ project_id: projectPublicId, name: 'Recovery MemoryStore' });
 
-    const agentWithMemoryRes = await authenticatedTestClient(adminToken)
+    const agentWithMemoryStoreRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/agents')
       .send({
         project_id: projectPublicId,
         ai_provider_id: aiProvRes.body.id,
-        name: 'Recovery Agent With Memory',
-        knowledge_config: { write_memory_id: memoryRes.body.id },
+        name: 'Recovery Agent With MemoryStore',
+        knowledge_config: { write_memory_store_id: memoryStoreRes.body.id },
       });
-    agentWithMemoryId = agentWithMemoryRes.body.id;
+    agentWithMemoryStoreId = agentWithMemoryStoreRes.body.id;
   });
 
   const seedGeneration = async (args: {
@@ -177,14 +177,14 @@ describe('recoverPendingFromDb (real DB)', () => {
   test('rebuilds the knowledge-derived tools, not only the bound ones', async () => {
     await seedGeneration({
       publicId: 'gen_recover_memory',
-      agentId: agentWithMemoryId,
+      agentId: agentWithMemoryStoreId,
       traceId: 'trc_recover_memory',
       withPendingState: true,
     });
 
     const result = await recoverPendingFromDb({
       generationId: 'gen_recover_memory',
-      agentId: agentWithMemoryId,
+      agentId: agentWithMemoryStoreId,
     });
 
     expect(result).toBeDefined();

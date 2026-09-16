@@ -89,7 +89,7 @@ Each metric is scoped by what measures it: the request middleware sees API key a
 
 ### Storage enforcement
 
-`storage_bytes` caps what a project **holds**: [files](./files.md), document chunks (text *and* vector), memory entries and the [evaluations](./evaluations.md) corpus, all [metered](./usage.md#storage-metering). No other metric bounds them.
+`storage_bytes` caps what a project **holds**: [files](./files.md), document chunks (text *and* vector), memories and the [evaluations](./evaluations.md) corpus, all [metered](./usage.md#storage-metering). No other metric bounds them.
 
 | | Flow metrics | `storage_bytes` |
 | --- | --- | --- |
@@ -127,12 +127,12 @@ Enforced on the caller-facing corpus writes, all creates, so a refusal leaves no
 | [`POST /api/v1/files`](/docs/api/files/create-file) | the declared `size` — metadata-only, but it is what the meter sums for the row |
 | [`POST /api/v1/documents`](/docs/api/documents/create-document) | the `content` bytes |
 | [`POST /api/v1/documents/ingest`](/docs/api/documents/ingest-document), [`POST /api/v1/documents/{document_id}/ingest`](/docs/api/documents/reingest-document) | none — the source file is already stored and measured; what ingestion adds is chunk text and vectors, produced after the response |
-| [`POST /api/v1/memory-entries`](/docs/api/memory-entries/create-memory-entry) | the `content` bytes |
+| [`POST /api/v1/memories`](/docs/api/memories/create-memory) | the `content` bytes |
 | [`POST /api/v1/datasets/{dataset_id}/items`](/docs/api/evaluations/create-dataset-item), [`/items/from-generation`](/docs/api/evaluations/create-dataset-item-from-generation) | the serialized `input`, `expected_output` and `metadata` |
 
-The `file`, `document`, `memory_entry` and `dataset_item` [formation](./formations.md) resources are held to the same cap.
+The `file`, `document`, `memory` and `dataset_item` [formation](./formations.md) resources are held to the same cap.
 
-**Writes driven from inside a generation or run are exempt**, since a refusal would leave the turn or run half persisted: [conversation](./conversations.md) messages (each a `Document` with chunks and embeddings), memory entries from the `write_memory` tool, [automatic extraction](./memories.md) or an [orchestration](./orchestrations.md) `memory_write` node, and [`eval_results`](./evaluations.md) rows. The cap bounds deliberate ingest; `monitor`-mode data says whether that is enough.
+**Writes driven from inside a generation or run are exempt**, since a refusal would leave the turn or run half persisted: [conversation](./conversations.md) messages (each a `Document` with chunks and embeddings), memories from the `write_memory` tool or [automatic extraction](./memories.md), and [`eval_results`](./evaluations.md) rows. The cap bounds deliberate ingest; `monitor`-mode data says whether that is enough.
 
 #### Measured against the last snapshot
 
@@ -145,7 +145,7 @@ The footprint is the newest [`storage` event](./usage.md#storage-metering) plus 
 
 #### Recovering
 
-Delete content ([files](./files.md), [documents](./documents.md), [memory entries](./memories.md), [dataset items](./evaluations.md)); deletes are never refused and the next snapshot clears the breach. Raising the cap with [`PATCH /api/v1/quotas/{quota_id}`](/docs/api/quotas/update-quota) or switching to `monitor` clears it immediately. A **re-ingest is refused too**: it can grow the corpus.
+Delete content ([files](./files.md), [documents](./documents.md), [memories](./memories.md), [dataset items](./evaluations.md)); deletes are never refused and the next snapshot clears the breach. Raising the cap with [`PATCH /api/v1/quotas/{quota_id}`](/docs/api/quotas/update-quota) or switching to `monitor` clears it immediately. A **re-ingest is refused too**: it can grow the corpus.
 
 ### Unpriced usage
 

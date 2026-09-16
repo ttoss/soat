@@ -251,7 +251,7 @@ export const findDatasetItemById = async (args: {
  * The bytes a fixture adds to the project's footprint, in the three columns the
  * storage snapshot sums for a `dataset_items` row (#1250).
  *
- * A dataset item is a corpus write like a document or a memory entry, so the
+ * A dataset item is a corpus write like a document or a memory, so the
  * project's `storage_bytes` cap bounds it (#1249). An `eval_results` row is
  * not: those are written while a run executes, where a refusal would abandon a
  * run already under way — the same reason a conversation message and a

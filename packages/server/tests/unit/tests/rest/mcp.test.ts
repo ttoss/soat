@@ -701,6 +701,74 @@ describe('MCP tools - happy path', () => {
     });
   });
 
+  // ── Memories ─────────────────────────────────────────────────────────────
+
+  test('create-memory-store and create-memory carry the renamed tool surface', async () => {
+    const store = parseResult(
+      await mcpCall('create-memory-store', {
+        project_id: projectId,
+        name: 'MCP Memory Store',
+        tags: { domain: 'mcp' },
+      })
+    );
+    expect(store.id).toMatch(/^mstore_/);
+    expect(store.name).toBe('MCP Memory Store');
+
+    const written = parseResult(
+      await mcpCall('create-memory', {
+        memory_store_id: store.id,
+        content: 'The MCP smoke contact is Priya.',
+      })
+    );
+    expect(written.id).toMatch(/^mem_/);
+    expect(written.action).toBe('created');
+    // A write with nothing to point at is `manual`, not a mechanism name.
+    expect(written.source_type).toBe('manual');
+    expect(written.source_id).toBeNull();
+
+    const listed = parseResult(
+      await mcpCall('list-memories', { memory_store_id: store.id })
+    );
+    expect(
+      listed.data.map((m: { id: string }) => {
+        return m.id;
+      })
+    ).toEqual([written.id]);
+
+    const fetched = parseResult(
+      await mcpCall('get-memory', { memory_id: written.id })
+    );
+    expect(fetched.memory_store_id).toBe(store.id);
+
+    const stores = parseResult(
+      await mcpCall('list-memory-stores', { project_id: projectId })
+    );
+    expect(
+      stores.data.some((m: { id: string }) => {
+        return m.id === store.id;
+      })
+    ).toBe(true);
+  });
+
+  test('create-memory rejects a source_type and source_id that disagree', async () => {
+    const store = parseResult(
+      await mcpCall('create-memory-store', {
+        project_id: projectId,
+        name: 'MCP Memory Source Pair',
+      })
+    );
+
+    const res = await mcpCall('create-memory', {
+      memory_store_id: store.id,
+      content: 'Missing its source.',
+      source_type: 'conversation',
+    });
+    expect(res.body.result.isError).toBe(true);
+    expect(res.body.result.content[0].text).toBe(
+      "source_id is required when source_type is 'conversation'"
+    );
+  });
+
   // ── Documents ────────────────────────────────────────────────────────────
 
   describe('Documents tools', () => {

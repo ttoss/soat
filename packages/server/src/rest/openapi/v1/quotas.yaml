@@ -96,7 +96,7 @@ paths:
         `storage_bytes` caps a stored total rather than a windowed one, so it
         takes `window: current` and every other metric refuses that value (400
         either way). It is enforced at the corpus write paths — file upload and
-        create, document create, document ingest and re-ingest, memory-entry
+        create, document create, document ingest and re-ingest, memory
         create — with `409 QUOTA_STORAGE_EXCEEDED` and no `Retry-After`, since
         no window reset clears a footprint.
       operationId: createQuota
@@ -347,8 +347,7 @@ components:
           enum: [requests, tokens, cost_usd, storage_bytes]
         window:
           type: string
-          enum:
-            [rolling_1m, rolling_1h, rolling_24h, calendar_month, current]
+          enum: [rolling_1m, rolling_1h, rolling_24h, calendar_month, current]
           description: >-
             The window the metric is aggregated over; `current` on
             storage_bytes, which caps a stored total and never resets.

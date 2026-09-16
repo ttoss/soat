@@ -85,9 +85,9 @@ describe('memoryExtraction lib', () => {
     });
 
     test('survives a failing extraction completion without throwing', async () => {
-      const memoryRes = await authenticatedTestClient(adminToken)
-        .post('/api/v1/memories')
-        .send({ project_id: projectId, name: 'Lib Failing Memory' });
+      const memoryStoreRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/memory-stores')
+        .send({ project_id: projectId, name: 'Lib Failing MemoryStore' });
 
       const agentRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/agents')
@@ -96,7 +96,7 @@ describe('memoryExtraction lib', () => {
           ai_provider_id: aiProviderId,
           name: 'LibFailingAgent',
           knowledge_config: {
-            write_memory_id: memoryRes.body.id,
+            write_memory_store_id: memoryStoreRes.body.id,
             extraction: true,
           },
         });

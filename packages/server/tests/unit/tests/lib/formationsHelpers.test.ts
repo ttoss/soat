@@ -545,7 +545,7 @@ describe('formationsHelpers', () => {
     test('reports a param used only in top-level metadata (F-16)', () => {
       const template: FormationTemplate = {
         resources: {
-          A: { type: 'memory', properties: { name: 'm' } },
+          A: { type: 'memory_store', properties: { name: 'm' } },
         },
         parameters: { version: {} },
         metadata: { version: { sub: '${version}' } },
@@ -598,7 +598,7 @@ describe('formationsHelpers', () => {
   describe('resolveWorkingTemplate', () => {
     test('returns the template unchanged when it declares no parameters', () => {
       const template: FormationTemplate = {
-        resources: { M: { type: 'memory', properties: { name: 'lit' } } },
+        resources: { M: { type: 'memory_store', properties: { name: 'lit' } } },
       };
       expect(resolveWorkingTemplate({ template })).toBe(template);
     });
@@ -607,7 +607,7 @@ describe('formationsHelpers', () => {
       const template: FormationTemplate = {
         parameters: { Name: {} },
         resources: {
-          M: { type: 'memory', properties: { name: { param: 'Name' } } },
+          M: { type: 'memory_store', properties: { name: { param: 'Name' } } },
         },
       };
       const result = resolveWorkingTemplate({

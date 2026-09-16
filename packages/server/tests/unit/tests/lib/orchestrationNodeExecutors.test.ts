@@ -15,7 +15,6 @@ import {
   executeConditionNode,
   executeDelayNode,
   executeHumanNode,
-  executeMemoryWriteNode,
   executeToolNode,
   executeTransformNode,
 } from 'src/lib/orchestrationNodeExecutors';
@@ -499,19 +498,6 @@ describe('executeAgentNode', () => {
       traceId: 'trc_6',
     });
     spy.mockRestore();
-  });
-});
-
-// ── executeMemoryWriteNode ─────────────────────────────────────────────────
-
-describe('executeMemoryWriteNode', () => {
-  test('throws DomainError when memoryId is missing', async () => {
-    await expect(
-      executeMemoryWriteNode({
-        node: makeNode({ type: 'memory_write' }),
-        state: {},
-      })
-    ).rejects.toThrow(DomainError);
   });
 });
 

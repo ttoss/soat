@@ -3,8 +3,8 @@ import { DomainError } from 'src/errors';
 import { createDocument } from 'src/lib/documents';
 import * as embeddingModule from 'src/lib/embedding';
 import { searchKnowledge } from 'src/lib/knowledge';
-import { createMemory } from 'src/lib/memories';
-import { writeMemoryEntry } from 'src/lib/memoryEntries';
+import { writeMemory } from 'src/lib/memories';
+import { createMemoryStore } from 'src/lib/memoryStores';
 import { createProject } from 'src/lib/projects';
 
 /**
@@ -70,7 +70,7 @@ const mockEmbedding = () => {
 
 type Fixtures = {
   projectId: number;
-  memoryId: string;
+  memoryStoreId: string;
   lexicalOnlyDocumentId: string;
   vectorOnlyDocumentId: string;
   lexicalOnlyEntryId: string;
@@ -101,22 +101,25 @@ const seed = async (): Promise<Fixtures> => {
     path: '/parts/both-signals.txt',
   });
 
-  const memory = await createMemory({ projectId, name: 'Parts desk' });
-  const memoryRow = await db.Memory.findOne({
-    where: { publicId: memory.id },
+  const memoryStore = await createMemoryStore({
+    projectId,
+    name: 'Parts desk',
   });
-  const lexicalEntry = await writeMemoryEntry({
-    memoryId: memoryRow!.id as number,
+  const memoryStoreRow = await db.MemoryStore.findOne({
+    where: { publicId: memoryStore.id },
+  });
+  const lexicalEntry = await writeMemory({
+    memoryStoreId: memoryStoreRow!.id as number,
     content: CONTENT.lexicalOnlyEntry,
   });
-  const vectorEntry = await writeMemoryEntry({
-    memoryId: memoryRow!.id as number,
+  const vectorEntry = await writeMemory({
+    memoryStoreId: memoryStoreRow!.id as number,
     content: CONTENT.vectorOnlyEntry,
   });
 
   return {
     projectId,
-    memoryId: memory.id,
+    memoryStoreId: memoryStore.id,
     lexicalOnlyDocumentId: lexicalOnly.id,
     vectorOnlyDocumentId: vectorOnly.id,
     bothSignalsDocumentId: bothSignals.id,
@@ -163,12 +166,12 @@ describe('hybrid knowledge search', () => {
       expect(hit!.similarity_score).toBeLessThan(0.5);
     });
 
-    test('returns a memory entry containing the exact token', async () => {
+    test('returns a memory containing the exact token', async () => {
       const results = await searchKnowledge({
         projectIds: [fixtures.projectId],
         billingProjectId: fixtures.projectId,
         query: RARE_TOKEN,
-        memoryIds: [fixtures.memoryId],
+        memoryStoreIds: [fixtures.memoryStoreId],
         includeDocuments: false,
         minSimilarity: 0.5,
       });
@@ -176,7 +179,7 @@ describe('hybrid knowledge search', () => {
       const hit = results.find((result) => {
         return (
           result.source_type === 'memory' &&
-          result.entry_id === fixtures.lexicalOnlyEntryId
+          result.memory_id === fixtures.lexicalOnlyEntryId
         );
       });
       expect(hit).toBeDefined();
@@ -206,7 +209,7 @@ describe('hybrid knowledge search', () => {
       projectIds: [fixtures.projectId],
       billingProjectId: fixtures.projectId,
       query: RARE_TOKEN,
-      memoryIds: [fixtures.memoryId],
+      memoryStoreIds: [fixtures.memoryStoreId],
     });
 
     const documentIds = results
@@ -221,7 +224,7 @@ describe('hybrid knowledge search', () => {
         return result.source_type === 'memory';
       })
       .map((result) => {
-        return result.source_type === 'memory' ? result.entry_id : '';
+        return result.source_type === 'memory' ? result.memory_id : '';
       });
 
     // One contribution from each of the four ranked lists: a document and an
@@ -253,7 +256,7 @@ describe('hybrid knowledge search', () => {
       projectIds: [fixtures.projectId],
       billingProjectId: fixtures.projectId,
       query: RARE_TOKEN,
-      memoryIds: [fixtures.memoryId],
+      memoryStoreIds: [fixtures.memoryStoreId],
     });
 
     expect(results.length).toBeGreaterThan(0);
@@ -300,12 +303,12 @@ describe('hybrid knowledge search', () => {
       projectIds: [fixtures.projectId],
       billingProjectId: fixtures.projectId,
       query: RARE_TOKEN,
-      memoryIds: [fixtures.memoryId],
+      memoryStoreIds: [fixtures.memoryStoreId],
     });
 
     // One text, one vector, one billed call. Embedding per store also let the
     // two halves disagree: if only one call failed, documents would carry
-    // `similarity_score` and memories would not, which the contract says
+    // `similarity_score` and memory stores would not, which the contract says
     // happens only when the whole search answered from the lexical channel.
     expect(embed).toHaveBeenCalledTimes(1);
   });
@@ -404,13 +407,13 @@ describe('hybrid knowledge search', () => {
 
 /**
  * Fusion reads rank position, so a per-store ranked list would let each store
- * claim result slots by position rather than by relevance: the best memory
+ * claim result slots by position rather than by relevance: the best memory store
  * entry and the best chunk would score identically however little the entry is
  * worth. Here ten entries sit below every document on cosine, and the document
  * they would otherwise displace is the one this asserts on.
  */
 describe('ranking does not allocate result slots by store', () => {
-  const MEMORY_ENTRY_COUNT = 10;
+  const MEMORY_COUNT = 10;
   const DOCUMENT_COSINES = [1, 0.98, 0.96, 0.94, 0.92, 0.9];
   const ENTRY_COSINE = 0.5;
   /**
@@ -423,7 +426,7 @@ describe('ranking does not allocate result slots by store', () => {
   /**
    * A unit vector at the given cosine to {@link QUERY_VECTOR}, with its
    * remainder on `axis`. Two fixtures on different axes are `cosine²` similar
-   * to each other, which keeps the entries below `writeMemoryEntry`'s 0.95
+   * to each other, which keeps the entries below `writeMemory`'s 0.95
    * dedup threshold while they all sit at one cosine to the query.
    */
   const atCosine = (args: { cosine: number; axis: number }): number[] => {
@@ -444,7 +447,7 @@ describe('ranking does not allocate result slots by store', () => {
   for (const [index, cosine] of DOCUMENT_COSINES.entries()) {
     placed.set(documentContent(index), atCosine({ cosine, axis: 1 }));
   }
-  for (let index = 0; index < MEMORY_ENTRY_COUNT; index += 1) {
+  for (let index = 0; index < MEMORY_COUNT; index += 1) {
     placed.set(
       entryContent(index),
       atCosine({ cosine: ENTRY_COSINE, axis: index + 2 })
@@ -452,7 +455,7 @@ describe('ranking does not allocate result slots by store', () => {
   }
 
   let projectId: number;
-  let memoryId: string;
+  let memoryStoreId: string;
   let lastDocumentId: string;
 
   beforeAll(async () => {
@@ -477,14 +480,17 @@ describe('ranking does not allocate result slots by store', () => {
       lastDocumentId = created.id;
     }
 
-    const memory = await createMemory({ projectId, name: 'Courier notes' });
-    const memoryRow = await db.Memory.findOne({
-      where: { publicId: memory.id },
+    const memoryStore = await createMemoryStore({
+      projectId,
+      name: 'Courier notes',
     });
-    memoryId = memory.id;
-    for (let index = 0; index < MEMORY_ENTRY_COUNT; index += 1) {
-      const written = await writeMemoryEntry({
-        memoryId: memoryRow!.id as number,
+    const memoryStoreRow = await db.MemoryStore.findOne({
+      where: { publicId: memoryStore.id },
+    });
+    memoryStoreId = memoryStore.id;
+    for (let index = 0; index < MEMORY_COUNT; index += 1) {
+      const written = await writeMemory({
+        memoryStoreId: memoryStoreRow!.id as number,
         content: entryContent(index),
       });
       expect(written.action).toBe('created');
@@ -493,7 +499,7 @@ describe('ranking does not allocate result slots by store', () => {
     jest.restoreAllMocks();
   });
 
-  test('keeps a document that every memory entry is less similar than', async () => {
+  test('keeps a document that every memory is less similar than', async () => {
     jest
       .spyOn(embeddingModule, 'getEmbedding')
       .mockImplementation(async (args: { text: string }) => {
@@ -504,7 +510,7 @@ describe('ranking does not allocate result slots by store', () => {
       projectIds: [projectId],
       billingProjectId: projectId,
       query: QUERY,
-      memoryIds: [memoryId],
+      memoryStoreIds: [memoryStoreId],
       limit: 10,
     });
 
@@ -512,7 +518,7 @@ describe('ranking does not allocate result slots by store', () => {
       return result.source_type === 'document' ? result.document_id : '';
     });
     // Sixth on cosine across the whole corpus, and last among the documents:
-    // per-store ranks would put five memory entries ahead of it and push it out
+    // per-store ranks would put five memories ahead of it and push it out
     // of the ten slots entirely.
     expect(documentIds).toContain(lastDocumentId);
     expect(

@@ -85,8 +85,8 @@ A workflow state's `on_enter` dispatches **at most one** thing — one agent gen
 one orchestration run. Everything below lives on the orchestration side, and a workflow
 reaches it by dispatching a run:
 
-- **Every node type** — `agent`, `tool`, `transform`, `knowledge`, `memory_write`,
-  `condition`, `human`, `approval`, `loop`, `poll`, `delay`, `emit_event`, `webhook`,
+- **Every node type** — `agent`, `tool`, `transform`, `knowledge`, `condition`,
+  `human`, `approval`, `loop`, `poll`, `delay`, `emit_event`, `webhook`,
   `sub_orchestration` — plus parallel execution rounds, `activation_group` fan-in, branch
   labels, and nested sub-graphs.
 - **Durable background execution** — a queue with leases and a reaper, `postgres` and

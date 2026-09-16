@@ -880,7 +880,7 @@ components:
             so verification spend is `source` in (`eval`, `eval_judge`) and the
             two are distinct so running a suite can be priced apart from grading
             it. `embedding` is any embedding call — the endpoint, document
-            ingestion, a memory write, or a search's query vector. Null for
+            ingestion, a memory store write, or a search's query vector. Null for
             ordinary agent traffic.
           example: eval
         provider:

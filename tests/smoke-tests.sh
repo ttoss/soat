@@ -1335,81 +1335,81 @@ $SOAT_CLI delete-document --document-id "$PDF_DOC_ID"
 $SOAT_CLI delete-document --document-id "$MD_DOC_ID"
 echo "Documents deleted."
 
-# 13b. Memories — CRUD + search
-echo "=== Memories ==="
+# 13b. Memory stores — CRUD + search
+echo "=== Memory Stores ==="
 
-# Create memory
-echo "--- Creating memory ---"
-MEM_RESP=$($SOAT_CLI create-memory \
+# Create memory store
+echo "--- Creating memory store ---"
+MEM_RESP=$($SOAT_CLI create-memory-store \
   --project_id "$PROJECT_PUBLIC_ID" \
-  --name "Smoke Test Memory" \
-  --description "A memory for smoke testing")
+  --name "Smoke Test Memory Store" \
+  --description "A memory store for smoke testing")
 MEM_ID=$(printf '%s\n' "$MEM_RESP" | jq -r '.id')
-if ! printf '%s\n' "$MEM_ID" | grep -q '^mem_'; then
-  echo "ERROR: memory id expected to start with 'mem_', got '$MEM_ID'" >&2
+if ! printf '%s\n' "$MEM_ID" | grep -q '^mstore_'; then
+  echo "ERROR: memory store id expected to start with 'mstore_', got '$MEM_ID'" >&2
   exit 1
 fi
-echo "Memory id: $MEM_ID"
+echo "Memory store id: $MEM_ID"
 
-# Get memory
-echo "--- Getting memory ---"
-MEM_GET_RESP=$($SOAT_CLI get-memory --memory-id "$MEM_ID")
+# Get memory store
+echo "--- Getting memory store ---"
+MEM_GET_RESP=$($SOAT_CLI get-memory-store --memory-store-id "$MEM_ID")
 if ! printf '%s\n' "$MEM_GET_RESP" | jq -e --arg id "$MEM_ID" '.id == $id' >/dev/null 2>&1; then
-  echo "ERROR: GET memory returned unexpected payload" >&2
+  echo "ERROR: GET memory store returned unexpected payload" >&2
   echo "$MEM_GET_RESP" >&2
   exit 1
 fi
-echo "Memory retrieved."
+echo "Memory store retrieved."
 
-# List memories
-echo "--- Listing memories ---"
-MEM_LIST_RESP=$($SOAT_CLI list-memories --project_id "$PROJECT_PUBLIC_ID")
+# List memory stores
+echo "--- Listing memory stores ---"
+MEM_LIST_RESP=$($SOAT_CLI list-memory-stores --project_id "$PROJECT_PUBLIC_ID")
 if ! printf '%s\n' "$MEM_LIST_RESP" | jq -e '.data | type == "array"' >/dev/null 2>&1; then
-  echo "ERROR: LIST memories did not return an array" >&2
+  echo "ERROR: LIST memory stores did not return an array" >&2
   echo "$MEM_LIST_RESP" >&2
   exit 1
 fi
-echo "Memories listed."
+echo "Memory stores listed."
 
-# Update memory
-echo "--- Updating memory ---"
-MEM_UPDATE_RESP=$($SOAT_CLI update-memory --memory-id "$MEM_ID" \
-  --name "Updated Smoke Memory")
-if ! printf '%s\n' "$MEM_UPDATE_RESP" | jq -e '.name == "Updated Smoke Memory"' >/dev/null 2>&1; then
-  echo "ERROR: UPDATE memory did not return updated name" >&2
+# Update memory store
+echo "--- Updating memory store ---"
+MEM_UPDATE_RESP=$($SOAT_CLI update-memory-store --memory-store-id "$MEM_ID" \
+  --name "Updated Smoke Memory Store")
+if ! printf '%s\n' "$MEM_UPDATE_RESP" | jq -e '.name == "Updated Smoke Memory Store"' >/dev/null 2>&1; then
+  echo "ERROR: UPDATE memory store did not return updated name" >&2
   echo "$MEM_UPDATE_RESP" >&2
   exit 1
 fi
-echo "Memory updated."
+echo "Memory store updated."
 
-# Memory tags sub-resource — the same three routes every tagged resource has.
-echo "--- Memory tags sub-resource ---"
-MEM_TAGS_RESP=$(curl -s -X PATCH "$SERVER_URL/api/v1/memories/$MEM_ID/tags" \
+# Memory store tags sub-resource — the same three routes every tagged resource has.
+echo "--- Memory store tags sub-resource ---"
+MEM_TAGS_RESP=$(curl -s -X PATCH "$SERVER_URL/api/v1/memory-stores/$MEM_ID/tags" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"domain":"smoke"}')
 if ! printf '%s\n' "$MEM_TAGS_RESP" | jq -e '.domain == "smoke"' >/dev/null 2>&1; then
-  echo "ERROR: PATCH memory tags did not return the merged tag map" >&2
+  echo "ERROR: PATCH memory store tags did not return the merged tag map" >&2
   echo "$MEM_TAGS_RESP" >&2
   exit 1
 fi
-MEM_TAGS_GET=$($SOAT_CLI get-memory-tags --memory-id "$MEM_ID")
+MEM_TAGS_GET=$($SOAT_CLI get-memory-store-tags --memory-store-id "$MEM_ID")
 if ! printf '%s\n' "$MEM_TAGS_GET" | jq -e '.domain == "smoke"' >/dev/null 2>&1; then
-  echo "ERROR: get-memory-tags did not return the stored tags" >&2
+  echo "ERROR: get-memory-store-tags did not return the stored tags" >&2
   echo "$MEM_TAGS_GET" >&2
   exit 1
 fi
-MEM_TAG_LIST=$($SOAT_CLI list-memories --project_id "$PROJECT_PUBLIC_ID" --tags domain:smoke)
+MEM_TAG_LIST=$($SOAT_CLI list-memory-stores --project_id "$PROJECT_PUBLIC_ID" --tags domain:smoke)
 if ! printf '%s\n' "$MEM_TAG_LIST" | jq -e --arg id "$MEM_ID" '[.data[].id] | index($id) != null' >/dev/null 2>&1; then
-  echo "ERROR: list-memories --tags did not return the tagged memory" >&2
+  echo "ERROR: list-memory-stores --tags did not return the tagged memory store" >&2
   echo "$MEM_TAG_LIST" >&2
   exit 1
 fi
-echo "Memory tags: OK"
+echo "Memory store tags: OK"
 
-# ── Memory entries — dedup write algorithm ────────────────────────────────────
-echo "--- Memory entries: first write (created) ---"
-ME1_RESP=$($SOAT_CLI create-memory-entry \
-  --memory-id "$MEM_ID" \
+# ── Memories — dedup write algorithm ────────────────────────────────────
+echo "--- Memories: first write (created) ---"
+ME1_RESP=$($SOAT_CLI create-memory \
+  --memory-store-id "$MEM_ID" \
   --content "Smoke test customer prefers email over phone calls")
 ME1_ACTION=$(printf '%s\n' "$ME1_RESP" | jq -r '.action')
 ME1_ID=$(printf '%s\n' "$ME1_RESP" | jq -r '.id')
@@ -1418,11 +1418,11 @@ if [ "$ME1_ACTION" != "created" ]; then
   echo "$ME1_RESP" >&2
   exit 1
 fi
-echo "Memory entry created: $ME1_ID"
+echo "Memory created: $ME1_ID"
 
-echo "--- Memory entries: duplicate write (skipped) ---"
-ME_SKIP_RESP=$($SOAT_CLI create-memory-entry \
-  --memory-id "$MEM_ID" \
+echo "--- Memories: duplicate write (skipped) ---"
+ME_SKIP_RESP=$($SOAT_CLI create-memory \
+  --memory-store-id "$MEM_ID" \
   --content "Smoke test customer prefers email over phone calls")
 ME_SKIP_ACTION=$(printf '%s\n' "$ME_SKIP_RESP" | jq -r '.action')
 if [ "$ME_SKIP_ACTION" != "skipped" ]; then
@@ -1432,12 +1432,12 @@ if [ "$ME_SKIP_ACTION" != "skipped" ]; then
 fi
 echo "Duplicate correctly skipped."
 
-echo "--- Memory entries: similar write (created, no agent context to merge with) ---"
+echo "--- Memories: similar write (created, no agent context to merge with) ---"
 # A manual write has no agent context, so an overlapping fact is stored as its
 # own entry rather than being merged into the existing one. `updated` is
 # reachable only from the agent write paths, which consolidate via the LLM.
-ME_UPD_RESP=$($SOAT_CLI create-memory-entry \
-  --memory-id "$MEM_ID" \
+ME_UPD_RESP=$($SOAT_CLI create-memory \
+  --memory-store-id "$MEM_ID" \
   --content "Smoke test customer prefers email, especially for billing inquiries")
 ME_UPD_ACTION=$(printf '%s\n' "$ME_UPD_RESP" | jq -r '.action')
 if [ "$ME_UPD_ACTION" != "created" ]; then
@@ -1446,16 +1446,16 @@ if [ "$ME_UPD_ACTION" != "created" ]; then
   exit 1
 fi
 # The pre-existing entry must be untouched — nothing is ever appended to it.
-ME1_AFTER=$($SOAT_CLI get-memory-entry --entry-id "$ME1_ID" | jq -r '.content')
+ME1_AFTER=$($SOAT_CLI get-memory --memory-id "$ME1_ID" | jq -r '.content')
 if [ "$ME1_AFTER" != "Smoke test customer prefers email over phone calls" ]; then
-  echo "ERROR: the existing entry was mutated by a merge-band write: $ME1_AFTER" >&2
+  echo "ERROR: the existing memory was mutated by a merge-band write: $ME1_AFTER" >&2
   exit 1
 fi
 echo "Similar entry stored as its own entry; existing entry untouched."
 
-echo "--- Memory entries: unrelated write (created) ---"
-ME2_RESP=$($SOAT_CLI create-memory-entry \
-  --memory-id "$MEM_ID" \
+echo "--- Memories: unrelated write (created) ---"
+ME2_RESP=$($SOAT_CLI create-memory \
+  --memory-store-id "$MEM_ID" \
   --content "Smoke test customer fiscal year ends in December")
 ME2_ACTION=$(printf '%s\n' "$ME2_RESP" | jq -r '.action')
 if [ "$ME2_ACTION" != "created" ]; then
@@ -1465,9 +1465,9 @@ if [ "$ME2_ACTION" != "created" ]; then
 fi
 echo "Unrelated entry created."
 
-echo "--- Memory entries: write with tags and metadata ---"
-ME_TAG_RESP=$($SOAT_CLI create-memory-entry \
-  --memory-id "$MEM_ID" \
+echo "--- Memories: write with tags and metadata ---"
+ME_TAG_RESP=$($SOAT_CLI create-memory \
+  --memory-store-id "$MEM_ID" \
   --content "Smoke test reject refunds above 500 for the traffic-manager role" \
   --tags '{"role":"smoke-traffic-manager","source":"rejected_approval","env":"smoke"}' \
   --metadata '{"evidence": "high"}')
@@ -1475,73 +1475,101 @@ ME_TAG_ACTION=$(printf '%s\n' "$ME_TAG_RESP" | jq -r '.action')
 ME_TAG_ROLE=$(printf '%s\n' "$ME_TAG_RESP" | jq -r '.tags.role')
 ME_TAG_META=$(printf '%s\n' "$ME_TAG_RESP" | jq -r '.metadata.evidence')
 if [ "$ME_TAG_ACTION" != "created" ]; then
-  echo "ERROR: Expected action=created for tagged entry, got $ME_TAG_ACTION" >&2
+  echo "ERROR: Expected action=created for a tagged memory, got $ME_TAG_ACTION" >&2
   echo "$ME_TAG_RESP" >&2
   exit 1
 fi
 if [ "$ME_TAG_ROLE" != "smoke-traffic-manager" ] || [ "$ME_TAG_META" != "high" ]; then
-  echo "ERROR: tagged entry did not persist tags/metadata" >&2
+  echo "ERROR: tagged memory did not persist tags/metadata" >&2
   echo "$ME_TAG_RESP" >&2
   exit 1
 fi
-echo "Tagged entry created with tags/metadata."
+echo "Tagged memory created with tags/metadata."
 
-echo "--- List memory entries ---"
-ME_LIST_RESP=$($SOAT_CLI list-memory-entries --memory-id "$MEM_ID")
+echo "--- List memories ---"
+ME_LIST_RESP=$($SOAT_CLI list-memories --memory-store-id "$MEM_ID")
 ME_LIST_COUNT=$(printf '%s\n' "$ME_LIST_RESP" | jq '.data | length')
 if [ "$ME_LIST_COUNT" -ne 4 ]; then
-  echo "ERROR: Expected 4 entries after dedup writes, got $ME_LIST_COUNT" >&2
+  echo "ERROR: Expected 4 memories after dedup writes, got $ME_LIST_COUNT" >&2
   echo "$ME_LIST_RESP" >&2
   exit 1
 fi
-echo "Memory entries listed: $ME_LIST_COUNT entries."
+echo "Memories listed: $ME_LIST_COUNT memories."
 
-echo "--- Memory entries: provenance and validity on a manual write ---"
-# A manual REST/CLI write has no generation behind it, so both provenance
-# fields are null, and a fresh entry is valid (never superseded).
-ME_PROV_GEN=$(printf '%s\n' "$ME2_RESP" | jq -r '.source_generation_id')
-ME_PROV_CONV=$(printf '%s\n' "$ME2_RESP" | jq -r '.source_conversation_id')
+echo "--- Memories: provenance and validity on a manual write ---"
+# A manual REST/CLI write has no conversation behind it, so there is no source
+# to name, and a fresh memory is valid (never superseded).
+ME_PROV_TYPE=$(printf '%s\n' "$ME2_RESP" | jq -r '.source_type')
+ME_PROV_SRC=$(printf '%s\n' "$ME2_RESP" | jq -r '.source_id')
 ME_PROV_INVAL=$(printf '%s\n' "$ME2_RESP" | jq -r '.invalidated_at')
-if [ "$ME_PROV_GEN" != "null" ] || [ "$ME_PROV_CONV" != "null" ]; then
-  echo "ERROR: manual write should carry no provenance, got gen=$ME_PROV_GEN conv=$ME_PROV_CONV" >&2
+if [ "$ME_PROV_TYPE" != "manual" ] || [ "$ME_PROV_SRC" != "null" ]; then
+  echo "ERROR: manual write should carry no source, got type=$ME_PROV_TYPE id=$ME_PROV_SRC" >&2
   echo "$ME2_RESP" >&2
   exit 1
 fi
 if [ "$ME_PROV_INVAL" != "null" ]; then
-  echo "ERROR: a new entry must be valid, got invalidated_at=$ME_PROV_INVAL" >&2
+  echo "ERROR: a new memory must be valid, got invalidated_at=$ME_PROV_INVAL" >&2
   echo "$ME2_RESP" >&2
   exit 1
 fi
-echo "Manual write reports null provenance and is valid."
+echo "Manual write reports no source and is valid."
 
-echo "--- List memory entries including invalidated ---"
+echo "--- List memories including invalidated ---"
 # Nothing is invalidated yet (the arbitration that supersedes entries ships
 # later), so this asserts the flag is wired end-to-end and does not change the
 # result set on its own.
-ME_INVAL_RESP=$($SOAT_CLI list-memory-entries --memory-id "$MEM_ID" --include-invalidated true)
+ME_INVAL_RESP=$($SOAT_CLI list-memories --memory-store-id "$MEM_ID" --include-invalidated true)
 ME_INVAL_COUNT=$(printf '%s\n' "$ME_INVAL_RESP" | jq '.data | length')
 if [ "$ME_INVAL_COUNT" -ne "$ME_LIST_COUNT" ]; then
-  echo "ERROR: Expected $ME_LIST_COUNT entries with include_invalidated, got $ME_INVAL_COUNT" >&2
+  echo "ERROR: Expected $ME_LIST_COUNT memories with include_invalidated, got $ME_INVAL_COUNT" >&2
   echo "$ME_INVAL_RESP" >&2
   exit 1
 fi
-echo "include_invalidated listing returned $ME_INVAL_COUNT entries."
+echo "include_invalidated listing returned $ME_INVAL_COUNT memories."
 
-echo "--- Knowledge search via per-entry tags (entry granularity) ---"
+# A conversation-sourced write names the conversation it was learned in, and
+# the pair is validated: `conversation` without an id, or an id without it, is
+# a 400.
+echo "--- Memories: conversation-sourced write ---"
+ME_SRC_CONV_RESP=$($SOAT_CLI create-conversation --project_id "$PROJECT_PUBLIC_ID" --name smoke-memory-source)
+ME_SRC_CONV_ID=$(printf '%s\n' "$ME_SRC_CONV_RESP" | jq -r '.id')
+ME_SRC_RESP=$($SOAT_CLI create-memory \
+  --memory-store-id "$MEM_ID" \
+  --content "The smoke customer escalation contact is Priya." \
+  --source_type conversation \
+  --source_id "$ME_SRC_CONV_ID")
+ME_SRC_TYPE=$(printf '%s\n' "$ME_SRC_RESP" | jq -r '.source_type')
+ME_SRC_ID=$(printf '%s\n' "$ME_SRC_RESP" | jq -r '.source_id')
+if [ "$ME_SRC_TYPE" != "conversation" ] || [ "$ME_SRC_ID" != "$ME_SRC_CONV_ID" ]; then
+  echo "ERROR: conversation write should name its source, got type=$ME_SRC_TYPE id=$ME_SRC_ID" >&2
+  echo "$ME_SRC_RESP" >&2
+  exit 1
+fi
+ME_SRC_BAD_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$SERVER_URL/api/v1/memories" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"memory_store_id\":\"$MEM_ID\",\"content\":\"missing its source\",\"source_type\":\"conversation\"}")
+if [ "$ME_SRC_BAD_STATUS" != "400" ]; then
+  echo "ERROR: source_type=conversation without source_id expected 400, got $ME_SRC_BAD_STATUS" >&2
+  exit 1
+fi
+echo "Conversation-sourced write names its source; the unpaired form is rejected."
+
+echo "--- Knowledge search via per-memory tags (memory granularity) ---"
 KS_TAG_RESP=$($SOAT_CLI search-knowledge \
   --project-id "$PROJECT_PUBLIC_ID" \
   --tags '{"role":"smoke-traffic-manager"}')
 KS_TAG_MATCH=$(printf '%s\n' "$KS_TAG_RESP" | jq -r '[.results[] | select(.source_type == "memory")] | length')
 if [ "$KS_TAG_MATCH" -lt 1 ]; then
-  echo "ERROR: entry-tag knowledge search returned 0 memory results" >&2
+  echo "ERROR: memory-tag knowledge search returned 0 memory results" >&2
   echo "$KS_TAG_RESP" >&2
   exit 1
 fi
-echo "Entry-granularity tag search returned $KS_TAG_MATCH memory result(s)."
+echo "Memory-granularity tag search returned $KS_TAG_MATCH memory result(s)."
 
 # One `tags` bag reaches both stores — the point of unifying the filter. The
 # section-11 documents are already deleted by here, so this makes its own.
-echo "--- Knowledge search: one tags bag spans documents and memory ---"
+echo "--- Knowledge search: one tags bag spans documents and memories ---"
 XSRC_DOC_RESP=$($SOAT_CLI create-document \
   --project-id "$PROJECT_PUBLIC_ID" \
   --content "Cross-source tag probe document." \
@@ -1562,11 +1590,11 @@ fi
 $SOAT_CLI delete-document --document-id "$XSRC_DOC_ID" >/dev/null
 echo "One tags bag returned both document and memory results: OK"
 
-echo "--- Knowledge search via memory_ids ---"
+echo "--- Knowledge search via memory_store_ids ---"
 KS_RESP=$($SOAT_CLI search-knowledge \
   --project-id "$PROJECT_PUBLIC_ID" \
   --query "smoke test customer communication" \
-  --memory-ids "[\"$MEM_ID\"]")
+  --memory-store-ids "[\"$MEM_ID\"]")
 KS_COUNT=$(printf '%s\n' "$KS_RESP" | jq '.results | length')
 if [ "$KS_COUNT" -lt 1 ]; then
   echo "ERROR: Knowledge search returned 0 results" >&2
@@ -1574,19 +1602,19 @@ if [ "$KS_COUNT" -lt 1 ]; then
   exit 1
 fi
 echo "Knowledge search returned $KS_COUNT result(s)."
-echo "Memory entries + knowledge search coverage: OK"
+echo "Memories + knowledge search coverage: OK"
 
-# Delete memory
-echo "--- Deleting memory ---"
-$SOAT_CLI delete-memory --memory-id "$MEM_ID"
-echo "Memory deleted."
+# Delete memory store
+echo "--- Deleting memory store ---"
+$SOAT_CLI delete-memory-store --memory-store-id "$MEM_ID"
+echo "Memory store deleted."
 
-# Verify memory is gone (404)
-echo "--- Verifying memory deletion ---"
-expect_cli_error_status 404 get-memory --memory-id "$MEM_ID"
-echo "Memory correctly returns 404 after deletion."
+# Verify memory store is gone (404)
+echo "--- Verifying memory store deletion ---"
+expect_cli_error_status 404 get-memory-store --memory-store-id "$MEM_ID"
+echo "Memory store correctly returns 404 after deletion."
 
-echo "Memories coverage: OK"
+echo "Memory stores coverage: OK"
 
 # 13c. Orchestrations — CRUD + runs + human input
 echo "=== Orchestrations ==="
@@ -2954,21 +2982,21 @@ echo "Agent SSE stream OK."
 # 22b2. Knowledge config: automatic extraction flag round-trip
 echo "--- Setting knowledge_config with extraction flag ---"
 KC_UPDATE_RESP=$($SOAT_CLI update-agent --agent-id "$AGENT_ID" \
-  --knowledge_config "{\"write_memory_id\":\"$MEM_ID\",\"extraction\":true}")
+  --knowledge_config "{\"write_memory_store_id\":\"$MEM_ID\",\"extraction\":true}")
 if ! printf '%s\n' "$KC_UPDATE_RESP" | jq -e '.knowledge_config.extraction == true' >/dev/null 2>&1; then
   echo "ERROR: update-agent did not round-trip knowledge_config.extraction" >&2
   echo "$KC_UPDATE_RESP" >&2
   exit 1
 fi
 KC_GET_RESP=$($SOAT_CLI get-agent --agent-id "$AGENT_ID")
-if ! printf '%s\n' "$KC_GET_RESP" | jq -e --arg mem "$MEM_ID" '.knowledge_config.write_memory_id == $mem and .knowledge_config.extraction == true' >/dev/null 2>&1; then
+if ! printf '%s\n' "$KC_GET_RESP" | jq -e --arg mem "$MEM_ID" '.knowledge_config.write_memory_store_id == $mem and .knowledge_config.extraction == true' >/dev/null 2>&1; then
   echo "ERROR: get-agent did not return knowledge_config extraction settings" >&2
   echo "$KC_GET_RESP" >&2
   exit 1
 fi
 # Object form: provider/model/prompt overrides must round-trip too.
 KC_OBJ_RESP=$($SOAT_CLI update-agent --agent-id "$AGENT_ID" \
-  --knowledge_config "{\"write_memory_id\":\"$MEM_ID\",\"extraction\":{\"model\":\"smoke-extraction-model\",\"prompt\":\"Extract decisions only.\"}}")
+  --knowledge_config "{\"write_memory_store_id\":\"$MEM_ID\",\"extraction\":{\"model\":\"smoke-extraction-model\",\"prompt\":\"Extract decisions only.\"}}")
 if ! printf '%s\n' "$KC_OBJ_RESP" | jq -e '.knowledge_config.extraction.model == "smoke-extraction-model" and .knowledge_config.extraction.prompt == "Extract decisions only."' >/dev/null 2>&1; then
   echo "ERROR: update-agent did not round-trip the extraction object form" >&2
   echo "$KC_OBJ_RESP" >&2
@@ -5283,7 +5311,7 @@ echo "=== Agent Formations ==="
 # Validate template
 echo "--- Validating formation template ---"
 VALIDATE_RESP=$($SOAT_CLI validate-formation \
-  --template '{"resources":{"myMemory":{"type":"memory","properties":{"name":"Smoke Test Memory"}}},"outputs":{"memoryId":{"ref":"myMemory"}}}')
+  --template '{"resources":{"myMemoryStore":{"type":"memory_store","properties":{"name":"Smoke Test Memory Store"}}},"outputs":{"memoryStoreId":{"ref":"myMemoryStore"}}}')
 if ! printf '%s\n' "$VALIDATE_RESP" | jq -e '.valid == true' >/dev/null 2>&1; then
   echo "ERROR: validate-formation did not return valid=true" >&2
   echo "$VALIDATE_RESP" >&2
@@ -5294,8 +5322,8 @@ echo "Formation template validated."
 # Validate template with a --parameter override (regression: issue #319)
 echo "--- Validating formation template with a --parameter override ---"
 VALIDATE_PARAM_RESP=$($SOAT_CLI validate-formation \
-  --template '{"parameters":{"MemoryName":{"type":"string"}},"resources":{"myMemory":{"type":"memory","properties":{"name":{"param":"MemoryName"}}}}}' \
-  --parameter MemoryName=SmokeParamMemory)
+  --template '{"parameters":{"MemoryStoreName":{"type":"string"}},"resources":{"myMemoryStore":{"type":"memory_store","properties":{"name":{"param":"MemoryStoreName"}}}}}' \
+  --parameter MemoryStoreName=SmokeParamMemoryStore)
 if ! printf '%s\n' "$VALIDATE_PARAM_RESP" | jq -e '.valid == true' >/dev/null 2>&1; then
   echo "ERROR: validate-formation with --parameter did not return valid=true" >&2
   echo "$VALIDATE_PARAM_RESP" >&2
@@ -5307,7 +5335,7 @@ echo "Formation template with parameter validated."
 echo "--- Planning formation ---"
 PLAN_RESP=$($SOAT_CLI plan-formation \
   --project_id "$PROJECT_PUBLIC_ID" \
-  --template '{"resources":{"myMemory":{"type":"memory","properties":{"name":"Smoke Test Memory"}}},"outputs":{"memoryId":{"ref":"myMemory"}}}')
+  --template '{"resources":{"myMemoryStore":{"type":"memory_store","properties":{"name":"Smoke Test Memory Store"}}},"outputs":{"memoryStoreId":{"ref":"myMemoryStore"}}}')
 if ! printf '%s\n' "$PLAN_RESP" | jq -e '((.changes // .actions) | type == "array")' >/dev/null 2>&1; then
   echo "ERROR: plan-formation did not return changes/actions array" >&2
   echo "$PLAN_RESP" >&2
@@ -5320,7 +5348,7 @@ echo "--- Creating formation ---"
 FORMATION_RESP=$($SOAT_CLI create-formation \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-formation" \
-  --template '{"resources":{"myMemory":{"type":"memory","properties":{"name":"Smoke Formation Memory"}}},"outputs":{"memoryId":{"ref":"myMemory"}}}')
+  --template '{"resources":{"myMemoryStore":{"type":"memory_store","properties":{"name":"Smoke Formation Memory Store"}}},"outputs":{"memoryStoreId":{"ref":"myMemoryStore"}}}')
 FORMATION_ID=$(printf '%s\n' "$FORMATION_RESP" | jq -r '.id')
 if [ -z "$FORMATION_ID" ] || [ "$FORMATION_ID" = "null" ]; then
   echo "ERROR: create-formation did not return an id" >&2
@@ -5337,7 +5365,7 @@ echo "Formation created: $FORMATION_ID"
 # without a second user.
 echo "--- Formation per-resource authorization ---"
 FORMATION_SCOPED_POLICY_ID=$($SOAT_CLI create-policy \
-  --document '{"statement":[{"effect":"Allow","action":["formations:PlanFormation","formations:CreateFormation","memories:CreateMemory"]}]}' \
+  --document '{"statement":[{"effect":"Allow","action":["formations:PlanFormation","formations:CreateFormation","memories:CreateMemoryStore"]}]}' \
   | jq -r '.id')
 FORMATION_SCOPED_KEY_RAW=$($SOAT_CLI create-api-key \
   --name smoke-formation-scoped-key \
@@ -5345,7 +5373,7 @@ FORMATION_SCOPED_KEY_RAW=$($SOAT_CLI create-api-key \
   --policy_ids "[\"$FORMATION_SCOPED_POLICY_ID\"]" \
   | jq -r '.key')
 
-FORMATION_DENIED_TEMPLATE='{"resources":{"myMemory":{"type":"memory","properties":{"name":"Smoke Authorized Memory"}},"myGuardrail":{"type":"guardrail","properties":{"name":"smoke-denied-guardrail","class":"A"}}}}'
+FORMATION_DENIED_TEMPLATE='{"resources":{"myMemoryStore":{"type":"memory_store","properties":{"name":"Smoke Authorized MemoryStore"}},"myGuardrail":{"type":"guardrail","properties":{"name":"smoke-denied-guardrail","class":"A"}}}}'
 
 PLAN_DENIED_RESP=$(SOAT_TOKEN="$FORMATION_SCOPED_KEY_RAW" $SOAT_CLI plan-formation \
   --project_id "$PROJECT_PUBLIC_ID" \
@@ -5399,12 +5427,12 @@ echo "--- Creating formation with metadata substitution ---"
 META_FORMATION_RESP=$($SOAT_CLI create-formation \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-metadata-formation" \
-  --template '{"parameters":{"my_version":{"type":"string","default":"unpinned"}},"resources":{"myMemory":{"type":"memory","properties":{"name":"Smoke Metadata Memory"}}},"metadata":{"my_version":{"sub":"${my_version}"},"memory_ref":{"ref":"myMemory"}}}' \
+  --template '{"parameters":{"my_version":{"type":"string","default":"unpinned"}},"resources":{"myMemoryStore":{"type":"memory_store","properties":{"name":"Smoke Metadata MemoryStore"}}},"metadata":{"my_version":{"sub":"${my_version}"},"memory_store_ref":{"ref":"myMemoryStore"}}}' \
   --parameter my_version=1.2.3)
 META_RESOLVED_VERSION=$(printf '%s\n' "$META_FORMATION_RESP" | jq -r '.resolved_metadata.my_version')
 META_RESOLVED_PARAM=$(printf '%s\n' "$META_FORMATION_RESP" | jq -r '.resolved_parameters.my_version')
 META_MEMORY_PHYS=$(printf '%s\n' "$META_FORMATION_RESP" | jq -r '.resources[0].physical_resource_id')
-META_RESOLVED_MEMORY=$(printf '%s\n' "$META_FORMATION_RESP" | jq -r '.resolved_metadata.memory_ref')
+META_RESOLVED_MEMORY=$(printf '%s\n' "$META_FORMATION_RESP" | jq -r '.resolved_metadata.memory_store_ref')
 if [ "$META_RESOLVED_VERSION" != "1.2.3" ] || [ "$META_RESOLVED_PARAM" != "1.2.3" ]; then
   echo "ERROR: formation did not resolve metadata/parameter substitution" >&2
   echo "$META_FORMATION_RESP" >&2
@@ -5642,7 +5670,7 @@ echo "Formation guardrail resource verified."
 echo "--- Updating formation ---"
 FORMATION_UPDATE_RESP=$($SOAT_CLI update-formation \
   --formation_id "$FORMATION_ID" \
-  --template '{"resources":{"myMemory":{"type":"memory","properties":{"name":"Smoke Formation Memory Updated"}}},"outputs":{"memoryId":{"ref":"myMemory"}}}')
+  --template '{"resources":{"myMemoryStore":{"type":"memory_store","properties":{"name":"Smoke Formation Memory Store Updated"}}},"outputs":{"memoryStoreId":{"ref":"myMemoryStore"}}}')
 if ! printf '%s\n' "$FORMATION_UPDATE_RESP" | jq -e --arg id "$FORMATION_ID" '.id == $id' >/dev/null 2>&1; then
   echo "ERROR: update-formation returned unexpected payload" >&2
   echo "$FORMATION_UPDATE_RESP" >&2
@@ -5678,7 +5706,7 @@ if ! $SOAT_CLI get-formation --formation_id "$FORMATION_ID" \
 fi
 # A corrected re-apply recovers the stack and clears the error.
 if ! $SOAT_CLI update-formation --formation_id "$FORMATION_ID" \
-  --template '{"resources":{"myMemory":{"type":"memory","properties":{"name":"Smoke Formation Memory Updated"}}},"outputs":{"memoryId":{"ref":"myMemory"}}}' \
+  --template '{"resources":{"myMemoryStore":{"type":"memory_store","properties":{"name":"Smoke Formation Memory Store Updated"}}},"outputs":{"memoryStoreId":{"ref":"myMemoryStore"}}}' \
   | jq -e '.status == "active" and .error == null' >/dev/null 2>&1; then
   echo "ERROR: the corrected re-apply did not clear the failure" >&2
   exit 1
@@ -5687,7 +5715,7 @@ echo "Failed deploy reporting verified (non-zero exit, error on the body)."
 
 # Update reusing a secret parameter's previous value (use_previous_value)
 echo "--- Creating formation with a use_previous_value secret parameter ---"
-KEEP_TEMPLATE='{"parameters":{"XaiApiKey":{"type":"string","no_echo":true,"use_previous_value":true}},"resources":{"keepSecret":{"type":"secret","properties":{"name":"smoke-keep-secret","value":{"param":"XaiApiKey"}}},"keepMemory":{"type":"memory","properties":{"name":"keep-mem-original"}}}}'
+KEEP_TEMPLATE='{"parameters":{"XaiApiKey":{"type":"string","no_echo":true,"use_previous_value":true}},"resources":{"keepSecret":{"type":"secret","properties":{"name":"smoke-keep-secret","value":{"param":"XaiApiKey"}}},"keepMemoryStore":{"type":"memory_store","properties":{"name":"keep-mem-original"}}}}'
 KEEP_FORMATION_RESP=$($SOAT_CLI create-formation \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-keep-formation" \
@@ -5702,7 +5730,7 @@ fi
 echo "Keep formation created: $KEEP_FORMATION_ID"
 
 echo "--- Updating formation while reusing the stored secret value ---"
-KEEP_UPDATE_TEMPLATE='{"parameters":{"XaiApiKey":{"type":"string","no_echo":true,"use_previous_value":true}},"resources":{"keepSecret":{"type":"secret","properties":{"name":"smoke-keep-secret","value":{"param":"XaiApiKey"}}},"keepMemory":{"type":"memory","properties":{"name":"keep-mem-updated"}}}}'
+KEEP_UPDATE_TEMPLATE='{"parameters":{"XaiApiKey":{"type":"string","no_echo":true,"use_previous_value":true}},"resources":{"keepSecret":{"type":"secret","properties":{"name":"smoke-keep-secret","value":{"param":"XaiApiKey"}}},"keepMemoryStore":{"type":"memory_store","properties":{"name":"keep-mem-updated"}}}}'
 # XaiApiKey is intentionally NOT passed — use_previous_value reuses the stored value.
 KEEP_UPDATE_RESP=$($SOAT_CLI update-formation \
   --formation_id "$KEEP_FORMATION_ID" \

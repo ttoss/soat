@@ -828,10 +828,10 @@ describe('Projects', () => {
         });
       expect(toolRes.status).toBe(201);
 
-      const memoryRes = await authenticatedTestClient(adminToken)
-        .post('/api/v1/memories')
-        .send({ project_id: forceProjectId, name: 'Force Delete Memory' });
-      expect(memoryRes.status).toBe(201);
+      const memoryStoreRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/memory-stores')
+        .send({ project_id: forceProjectId, name: 'Force Delete MemoryStore' });
+      expect(memoryStoreRes.status).toBe(201);
 
       const fileRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/files')
@@ -870,7 +870,9 @@ describe('Projects', () => {
         await db.Tool.findOne({ where: { publicId: toolRes.body.id } })
       ).toBeNull();
       expect(
-        await db.Memory.findOne({ where: { publicId: memoryRes.body.id } })
+        await db.MemoryStore.findOne({
+          where: { publicId: memoryStoreRes.body.id },
+        })
       ).toBeNull();
       expect(
         await db.Secret.findOne({ where: { publicId: secretRes.body.id } })

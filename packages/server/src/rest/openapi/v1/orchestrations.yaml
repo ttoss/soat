@@ -825,8 +825,8 @@ components:
           type: string
           description: >-
             Node execution type. Known types: agent, tool, transform,
-            knowledge, memory_write, condition, human, approval, loop, poll,
-            delay, webhook, emit_event, sub_orchestration. Open set — new types
+            knowledge, condition, human, approval, loop, poll, delay, webhook,
+            emit_event, sub_orchestration. Open set — new types
             may be added in minor releases, and an unrecognized type is
             accepted at create time (the run fails when the node dispatches),
             so clients must tolerate unknown values.
@@ -861,10 +861,6 @@ components:
           items:
             type: string
           description: For human nodes — constrained choices.
-        memory_id:
-          x-soat-ref: memories
-          type: string
-          description: For memory_write nodes — public ID of the target memory.
         arguments:
           type: object
           additionalProperties: true

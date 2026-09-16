@@ -203,25 +203,25 @@ curl -s "$SOAT_BASE_URL/api/v1/documents/$DOC_ONCALL/status" \
 
 ---
 
-## Step 3 — Seed a memory
+## Step 3 — Seed a memory store
 
-A [memory](/docs/modules/memories) with five entries. Memory results share the result list with document chunks, so a golden set that has only document queries cannot see a change that only moves memory entries; the recency blend in [Step 7](#step-7--read-a-knob-off-the-table) is exactly such a change.
+A [memory store](/docs/modules/memories) with five memories. Memory results share the result list with document chunks, so a golden set that has only document queries cannot see a change that only moves memories; the recency blend in [Step 7](#step-7--read-a-knob-off-the-table) is exactly such a change.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-MEMORY_ID=$(soat create-memory --project-id "$PROJECT_ID" --name "Team Facts" \
+MEMORY_ID=$(soat create-memory-store --project-id "$PROJECT_ID" --name "Team Facts" \
   --description "Facts about teams, owners and dates" | jq -r '.id')
-ENTRY_PAYMENTS=$(soat create-memory-entry --memory-id "$MEMORY_ID" \
+ENTRY_PAYMENTS=$(soat create-memory --memory-store-id "$MEMORY_ID" \
   --content "The payments service is owned by the Orion team; their on-call lead is Priya." | jq -r '.id')
-ENTRY_CREDS=$(soat create-memory-entry --memory-id "$MEMORY_ID" \
+ENTRY_CREDS=$(soat create-memory --memory-store-id "$MEMORY_ID" \
   --content "Staging database credentials rotate on the first Monday of each month." | jq -r '.id')
-ENTRY_OFFSITE=$(soat create-memory-entry --memory-id "$MEMORY_ID" \
+ENTRY_OFFSITE=$(soat create-memory --memory-store-id "$MEMORY_ID" \
   --content "The Q3 planning offsite is in Lisbon during the second week of October." | jq -r '.id')
-ENTRY_ACME=$(soat create-memory-entry --memory-id "$MEMORY_ID" \
+ENTRY_ACME=$(soat create-memory --memory-store-id "$MEMORY_ID" \
   --content "Customer Acme requires a four-hour response SLA on SEV1 incidents." | jq -r '.id')
-ENTRY_SEARCH=$(soat create-memory-entry --memory-id "$MEMORY_ID" \
+ENTRY_SEARCH=$(soat create-memory --memory-store-id "$MEMORY_ID" \
   --content "The search index is rebuilt every Sunday night by the Data Platform team." | jq -r '.id')
 echo "MEMORY_ID: $MEMORY_ID"
 ```
@@ -230,14 +230,14 @@ echo "MEMORY_ID: $MEMORY_ID"
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: memory } = await adminSoat.memories.createMemory({
+const { data: memoryStore } = await adminSoat.memoryStores.createMemoryStore({
   body: {
     project_id: PROJECT_ID,
     name: 'Team Facts',
     description: 'Facts about teams, owners and dates',
   },
 });
-const MEMORY_ID = memory.id;
+const MEMORY_ID = memoryStore.id;
 
 const facts = {
   ENTRY_PAYMENTS: 'The payments service is owned by the Orion team; their on-call lead is Priya.',
@@ -249,8 +249,8 @@ const facts = {
 
 const entryIds: Record<string, string> = {};
 for (const [key, content] of Object.entries(facts)) {
-  const { data: entry } = await adminSoat.memoryEntries.createMemoryEntry({
-    body: { memory_id: MEMORY_ID, content },
+  const { data: entry } = await adminSoat.memories.createMemory({
+    body: { memory_store_id: MEMORY_ID, content },
   });
   entryIds[key] = entry.id;
 }
@@ -260,15 +260,15 @@ for (const [key, content] of Object.entries(facts)) {
 <TabItem value="curl" label="curl">
 
 ```bash
-MEMORY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/memories" \
+MEMORY_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/memory-stores" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"Team Facts\",\"description\":\"Facts about teams, owners and dates\"}" | jq -r '.id')
 create_fact() {
-  curl -s -X POST "$SOAT_BASE_URL/api/v1/memory-entries" \
+  curl -s -X POST "$SOAT_BASE_URL/api/v1/memories" \
     -H "Authorization: Bearer $ADMIN_TOKEN" \
     -H "Content-Type: application/json" \
-    -d "{\"memory_id\":\"$MEMORY_ID\",\"content\":\"$1\"}" | jq -r '.id'
+    -d "{\"memory_store_id\":\"$MEMORY_ID\",\"content\":\"$1\"}" | jq -r '.id'
 }
 ENTRY_PAYMENTS=$(create_fact "The payments service is owned by the Orion team; their on-call lead is Priya.")
 ENTRY_CREDS=$(create_fact "Staging database credentials rotate on the first Monday of each month.")
@@ -285,7 +285,7 @@ echo "MEMORY_ID: $MEMORY_ID"
 
 ## Step 4 — Write the golden set
 
-A golden set is a list of `{slice, query, expected}` rows. `expected` is the id the top of the ranking should hold, a `document_id` or an `entry_id`. `slice` groups rows whose failure would mean different things; here it separates document questions from memory questions, the split that matters for [Step 7](#step-7--read-a-knob-off-the-table).
+A golden set is a list of `{slice, query, expected}` rows. `expected` is the id the top of the ranking should hold, a `document_id` or a `memory_id`. `slice` groups rows whose failure would mean different things; here it separates document questions from memory questions, the split that matters for [Step 7](#step-7--read-a-knob-off-the-table).
 
 Write queries as a user would ask them, not as the page is worded. A query that repeats the page's own sentence saturates the lexical channel of [hybrid retrieval](/docs/modules/knowledge#hybrid-retrieval) and measures nothing.
 
@@ -368,7 +368,7 @@ One search per row at `limit: 10`, keeping only the ranked list of ids. Position
 RESULTS=$(echo "$GOLDEN" | jq -c '.[]' | while read -r item; do \
   soat search-knowledge --project-id "$PROJECT_ID" --limit 10 \
     --query "$(echo "$item" | jq -r '.query')" \
-    | jq -c --argjson item "$item" '$item + {ranked: [.results[] | (.document_id // .entry_id)]}'; \
+    | jq -c --argjson item "$item" '$item + {ranked: [.results[] | (.document_id // .memory_id)]}'; \
 done | jq -s '.')
 echo "$RESULTS" | jq -e 'all(.[]; (.ranked | length) > 0)' > /dev/null && echo "every query returned results"
 echo "$RESULTS" | jq -e 'any(.[]; .expected as $e | .ranked[:10] | any(. == $e))' > /dev/null && echo "an expected key is in the top 10"
@@ -392,7 +392,7 @@ for (const item of golden) {
   });
   results.push({
     ...item,
-    ranked: data.results.map((r) => ('document_id' in r ? r.document_id : r.entry_id)),
+    ranked: data.results.map((r) => ('document_id' in r ? r.document_id : r.memory_id)),
   });
 }
 console.log(results.every((r) => r.ranked.length > 0)); // true
@@ -407,7 +407,7 @@ RESULTS=$(echo "$GOLDEN" | jq -c '.[]' | while read -r item; do \
     -H "Authorization: Bearer $ADMIN_TOKEN" \
     -H "Content-Type: application/json" \
     -d "$(echo "$item" | jq -c --arg p "$PROJECT_ID" '{project_id: $p, query: .query, limit: 10}')" \
-    | jq -c --argjson item "$item" '$item + {ranked: [.results[] | (.document_id // .entry_id)]}'; \
+    | jq -c --argjson item "$item" '$item + {ranked: [.results[] | (.document_id // .memory_id)]}'; \
 done | jq -s '.')
 echo "$RESULTS" | jq -e 'all(.[]; (.ranked | length) > 0)' > /dev/null && echo "every query returned results"
 ```
@@ -594,7 +594,7 @@ done
 </TabItem>
 </Tabs>
 
-The recency blend is measured the same way, with one constraint this corpus cannot meet: every entry above was written seconds ago, so `2^(-age/half_life)` is `1.0` for all of them and `recency_half_life_days` reorders nothing here. On a memory with real ages, run Step 5 with `--recency-half-life-days 30`, compute Step 6 again, and read the `memory` row against the run without it ([the blend is never free](/docs/advanced/retrieval-quality#the-recency-blend-is-never-free)).
+The recency blend is measured the same way, with one constraint this corpus cannot meet: every memory above was written seconds ago, so `2^(-age/half_life)` is `1.0` for all of them and `recency_half_life_days` reorders nothing here. On a store with real ages, run Step 5 with `--recency-half-life-days 30`, compute Step 6 again, and read the `memory` row against the run without it ([the blend is never free](/docs/advanced/retrieval-quality#the-recency-blend-is-never-free)).
 
 ---
 
@@ -602,5 +602,5 @@ The recency blend is measured the same way, with one constraint this corpus cann
 
 - **Score other knobs** — `min_similarity` drops vector candidates below a cosine floor; a value that lifts MRR on one slice can zero recall on another ([Relevance knobs](/docs/modules/knowledge#relevance-knobs)).
 - **Grow the golden set** — add a row every time a user reports a miss, with the id they should have seen; a slice per question type keeps the table legible.
-- **Scope what you rank** — `memory_ids` and `document_paths` narrow the candidate set before fusion ([Agent with Persistent Memory — Step 12](/docs/tutorials/memories-agent#step-12--query-the-knowledge-layer-directly)).
+- **Scope what you rank** — `memory_store_ids` and `document_paths` narrow the candidate set before fusion ([Agent with Persistent Memory — Step 12](/docs/tutorials/memories-agent#step-12--query-the-knowledge-layer-directly)).
 - **Feed an agent** — [knowledge injection](/docs/modules/agents#knowledge-config) uses the same ranking; the table above is what the agent sees before it answers.

@@ -7,9 +7,9 @@ import {
 import { applyUpdateChange } from 'src/lib/formationsApplyUpdate';
 import { planResourceChange } from 'src/lib/formationsPlanHelpers';
 import type { FormationEvent } from 'src/lib/formationsTypes';
-import { createMemory, getMemory } from 'src/lib/memories';
+import { createMemoryStore, getMemoryStore } from 'src/lib/memoryStores';
 
-// `memory` carries these because its create/update surface is minimal, letting
+// `memory store` carries these because its create/update surface is minimal, letting
 // the merge/no-op decision be asserted through real resource state.
 
 type ResourceRowWithId = InstanceType<(typeof db)['FormationResource']> & {
@@ -26,8 +26,8 @@ const uniqueName = (prefix: string) => {
   return `${prefix}-${counter}`;
 };
 
-const memoryExists = async (id: string): Promise<boolean> => {
-  const found = await db.Memory.findOne({ where: { publicId: id } });
+const memoryStoreExists = async (id: string): Promise<boolean> => {
+  const found = await db.MemoryStore.findOne({ where: { publicId: id } });
   return found !== null;
 };
 
@@ -56,22 +56,22 @@ describe('formationsApplyHelpers', () => {
     const resourceRow = await db.FormationResource.create({
       formationId,
       logicalId: uniqueName('create-logical'),
-      resourceType: 'memory',
+      resourceType: 'memory_store',
       status: 'pending',
       physicalResourceId: null,
       lastAppliedProperties: null,
       deletionPolicy: 'delete',
     });
 
-    const memoryName = uniqueName('created-mem');
+    const memoryStoreName = uniqueName('created-mem');
     const resolvedIds = new Map<string, string>();
     const events: FormationEvent[] = [];
 
     await applyCreateChange({
       actingUserId,
       resourceRow,
-      resourceType: 'memory',
-      resolvedProperties: { name: memoryName },
+      resourceType: 'memory_store',
+      resolvedProperties: { name: memoryStoreName },
       projectId,
       logicalId: 'provider',
       resolvedIds,
@@ -79,18 +79,20 @@ describe('formationsApplyHelpers', () => {
     });
 
     const physicalId = resolvedIds.get('provider');
-    expect(physicalId).toMatch(/^mem_/);
-    expect(await memoryExists(physicalId as string)).toBe(true);
+    expect(physicalId).toMatch(/^mstore_/);
+    expect(await memoryStoreExists(physicalId as string)).toBe(true);
 
     await resourceRow.reload();
     expect(resourceRow.physicalResourceId).toBe(physicalId);
     expect(resourceRow.status).toBe('created');
-    expect(resourceRow.lastAppliedProperties).toEqual({ name: memoryName });
+    expect(resourceRow.lastAppliedProperties).toEqual({
+      name: memoryStoreName,
+    });
 
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({
       logicalId: 'provider',
-      resourceType: 'memory',
+      resourceType: 'memory_store',
       action: 'create',
       status: 'succeeded',
       physicalResourceId: physicalId,
@@ -98,13 +100,16 @@ describe('formationsApplyHelpers', () => {
   });
 
   test('applyUpdateChange updates the real resource when properties changed', async () => {
-    const memory = await createMemory({ projectId, name: 'Old Name' });
+    const memoryStore = await createMemoryStore({
+      projectId,
+      name: 'Old Name',
+    });
     const resourceRow = await db.FormationResource.create({
       formationId,
       logicalId: uniqueName('update-logical'),
-      resourceType: 'memory',
+      resourceType: 'memory_store',
       status: 'active',
-      physicalResourceId: memory.id,
+      physicalResourceId: memoryStore.id,
       lastAppliedProperties: { name: 'Old Name' },
       deletionPolicy: 'delete',
     });
@@ -117,16 +122,16 @@ describe('formationsApplyHelpers', () => {
       projectId,
       resourceRow,
       existing: resourceRow as ResourceRowWithId,
-      resourceType: 'memory',
+      resourceType: 'memory_store',
       resolvedProperties: { name: 'New Name' },
-      logicalId: 'memory',
+      logicalId: 'memory_store',
       resolvedIds,
       events,
       pendingCleanups: [],
     });
 
-    expect(resolvedIds.get('memory')).toBe(memory.id);
-    const updated = await getMemory({ id: memory.id });
+    expect(resolvedIds.get('memory_store')).toBe(memoryStore.id);
+    const updated = await getMemoryStore({ id: memoryStore.id });
     expect(updated?.name).toBe('New Name');
 
     await resourceRow.reload();
@@ -137,20 +142,23 @@ describe('formationsApplyHelpers', () => {
     expect(events[0]).toMatchObject({
       action: 'update',
       status: 'succeeded',
-      physicalResourceId: memory.id,
+      physicalResourceId: memoryStore.id,
     });
   });
 
   test('applyUpdateChange records a no-op when properties did not change', async () => {
-    const memory = await createMemory({ projectId, name: 'No-op Mem' });
+    const memoryStore = await createMemoryStore({
+      projectId,
+      name: 'No-op Mem',
+    });
     // An unsaved instance is enough: the no-op branch never persists the row.
     const resourceRow = db.FormationResource.build({
       publicId: 'fmr_noop',
       formationId,
       logicalId: 'noop',
-      resourceType: 'memory',
+      resourceType: 'memory_store',
       status: 'active',
-      physicalResourceId: memory.id,
+      physicalResourceId: memoryStore.id,
       lastAppliedProperties: { name: 'No-op Mem' },
     });
 
@@ -162,7 +170,7 @@ describe('formationsApplyHelpers', () => {
       projectId,
       resourceRow,
       existing: resourceRow as ResourceRowWithId,
-      resourceType: 'memory',
+      resourceType: 'memory_store',
       resolvedProperties: { name: 'No-op Mem' },
       logicalId: 'noop',
       resolvedIds,
@@ -170,15 +178,17 @@ describe('formationsApplyHelpers', () => {
       pendingCleanups: [],
     });
 
-    expect(resolvedIds.get('noop')).toBe(memory.id);
+    expect(resolvedIds.get('noop')).toBe(memoryStore.id);
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({
       action: 'no-op',
       status: 'succeeded',
-      physicalResourceId: memory.id,
+      physicalResourceId: memoryStore.id,
     });
     // The resource is untouched by a no-op.
-    expect((await getMemory({ id: memory.id }))?.name).toBe('No-op Mem');
+    expect((await getMemoryStore({ id: memoryStore.id }))?.name).toBe(
+      'No-op Mem'
+    );
   });
 
   // #902: `plan-formation` previews `update-formation`, so the two must reach
@@ -192,19 +202,22 @@ describe('formationsApplyHelpers', () => {
     ['a different key order', { description: null, name: 'Agreed Mem' }],
   ])('plan and apply agree on %s', (_label, lastApplied) => {
     test('both report no change', async () => {
-      const memory = await createMemory({ projectId, name: 'Agreed Mem' });
+      const memoryStore = await createMemoryStore({
+        projectId,
+        name: 'Agreed Mem',
+      });
       const resourceRow = db.FormationResource.build({
         publicId: uniqueName('fmr_agree'),
         formationId,
         logicalId: 'agree',
-        resourceType: 'memory',
+        resourceType: 'memory_store',
         status: 'active',
-        physicalResourceId: memory.id,
+        physicalResourceId: memoryStore.id,
         lastAppliedProperties: lastApplied,
       });
 
       const decl = {
-        type: 'memory',
+        type: 'memory_store',
         properties: { name: 'Agreed Mem' },
       } as const;
 
@@ -212,7 +225,7 @@ describe('formationsApplyHelpers', () => {
         projectId,
         logicalId: 'agree',
         decl,
-        physicalResourceId: memory.id,
+        physicalResourceId: memoryStore.id,
         resolvedParams: new Map(),
         existingMap: new Map(),
         templateResourceKeys: new Set(['agree']),
@@ -225,7 +238,7 @@ describe('formationsApplyHelpers', () => {
         projectId,
         resourceRow,
         existing: resourceRow as ResourceRowWithId,
-        resourceType: 'memory',
+        resourceType: 'memory_store',
         resolvedProperties: { name: 'Agreed Mem' },
         logicalId: 'agree',
         resolvedIds: new Map<string, string>(),
@@ -245,9 +258,9 @@ describe('formationsApplyHelpers', () => {
       publicId: 'fmr_dropped',
       formationId,
       logicalId: 'dropped',
-      resourceType: 'memory',
+      resourceType: 'memory_store',
       status: 'active',
-      physicalResourceId: 'mem_dropped',
+      physicalResourceId: 'mstore_dropped',
       lastAppliedProperties: { name: 'kept' },
     });
 
@@ -257,7 +270,7 @@ describe('formationsApplyHelpers', () => {
       projectId,
       resourceRow,
       existing: resourceRow as ResourceRowWithId,
-      resourceType: 'memory',
+      resourceType: 'memory_store',
       resolvedProperties: { name: 'kept', description: undefined },
       logicalId: 'dropped',
       resolvedIds: new Map<string, string>(),
@@ -269,7 +282,7 @@ describe('formationsApplyHelpers', () => {
   });
 
   test('applyUpdateChange reuses the last-applied value for a kept field when another field changes', async () => {
-    const memory = await createMemory({
+    const memoryStore = await createMemoryStore({
       projectId,
       name: 'old-name',
       description: 'kept-desc',
@@ -277,9 +290,9 @@ describe('formationsApplyHelpers', () => {
     const resourceRow = await db.FormationResource.create({
       formationId,
       logicalId: uniqueName('merge-logical'),
-      resourceType: 'memory',
+      resourceType: 'memory_store',
       status: 'active',
-      physicalResourceId: memory.id,
+      physicalResourceId: memoryStore.id,
       lastAppliedProperties: { name: 'old-name', description: 'kept-desc' },
       deletionPolicy: 'delete',
     });
@@ -290,7 +303,7 @@ describe('formationsApplyHelpers', () => {
       projectId,
       resourceRow,
       existing: resourceRow as ResourceRowWithId,
-      resourceType: 'memory',
+      resourceType: 'memory_store',
       // name changed; description's param was kept (resolves to undefined) and
       // must be reused from lastApplied rather than dropped.
       resolvedProperties: { name: 'new-name', description: undefined },
@@ -300,7 +313,7 @@ describe('formationsApplyHelpers', () => {
       pendingCleanups: [],
     });
 
-    const updated = await getMemory({ id: memory.id });
+    const updated = await getMemoryStore({ id: memoryStore.id });
     expect(updated?.name).toBe('new-name');
     expect(updated?.description).toBe('kept-desc');
 
@@ -317,16 +330,16 @@ describe('formationsApplyHelpers', () => {
   // can be of an unsupported type, and a physical resource cannot vanish
   // mid-apply. Both are driven here directly against the real handlers.
   test('rollbackCreatedResources reports an unwind failure instead of throwing over the original error', async () => {
-    const memory = await createMemory({
+    const memoryStore = await createMemoryStore({
       projectId,
       name: uniqueName('rollback-mem'),
     });
     const deletable = await db.FormationResource.create({
       formationId,
       logicalId: uniqueName('rollback-deletable'),
-      resourceType: 'memory',
+      resourceType: 'memory_store',
       status: 'created',
-      physicalResourceId: memory.id,
+      physicalResourceId: memoryStore.id,
       deletionPolicy: 'delete',
     });
     const blocked = await db.FormationResource.create({
@@ -355,7 +368,7 @@ describe('formationsApplyHelpers', () => {
       [deletable.logicalId, 'rollback', 'succeeded'],
     ]);
     expect(events[0].error).toMatch(/unsupported_type/i);
-    expect(await memoryExists(memory.id)).toBe(false);
+    expect(await memoryStoreExists(memoryStore.id)).toBe(false);
     await deletable.reload();
     expect(deletable.status).toBe('deleted');
     await blocked.reload();
@@ -377,7 +390,7 @@ describe('formationsApplyHelpers', () => {
     const noPhysicalId = await db.FormationResource.create({
       formationId,
       logicalId: uniqueName('rollback-no-id'),
-      resourceType: 'memory',
+      resourceType: 'memory_store',
       status: 'failed',
       physicalResourceId: null,
       deletionPolicy: 'delete',
@@ -420,7 +433,7 @@ describe('formationsApplyHelpers', () => {
       formation,
       events,
       logicalId: 'provider',
-      resourceType: 'memory',
+      resourceType: 'memory_store',
       action: 'create',
       errorMessage: 'creation failed',
       errorCode: 'VALIDATION_FAILED',
@@ -429,7 +442,7 @@ describe('formationsApplyHelpers', () => {
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({
       logicalId: 'provider',
-      resourceType: 'memory',
+      resourceType: 'memory_store',
       action: 'create',
       status: 'failed',
       error: 'creation failed',
@@ -441,7 +454,7 @@ describe('formationsApplyHelpers', () => {
     const error = {
       code: 'VALIDATION_FAILED',
       message: 'creation failed',
-      meta: { logical_id: 'provider', resource_type: 'memory' },
+      meta: { logical_id: 'provider', resource_type: 'memory_store' },
     };
     expect(operation.error).toEqual(error);
     expect(operation.events).toEqual(events);

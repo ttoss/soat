@@ -21,7 +21,7 @@ let aiProviderId: string;
 let secretId: string;
 let agentId: string;
 let converterToolId: string;
-let memoryId: string;
+let memoryStoreId: string;
 let actorId: string;
 
 beforeAll(async () => {
@@ -71,10 +71,10 @@ beforeAll(async () => {
   });
   converterToolId = toolRes.body.id;
 
-  const memoryRes = await admin
-    .post('/api/v1/memories')
-    .send({ project_id: projectId, name: 'FM Memory' });
-  memoryId = memoryRes.body.id;
+  const memoryStoreRes = await admin
+    .post('/api/v1/memory-stores')
+    .send({ project_id: projectId, name: 'FM MemoryStore' });
+  memoryStoreId = memoryStoreRes.body.id;
 
   const actorRes = await admin
     .post('/api/v1/actors')
@@ -135,7 +135,7 @@ const NON_OBJECT: Array<[string, string]> = [
   ['api_key', 'API key `properties` must be an object'],
   ['webhook', 'Webhook `properties` must be an object'],
   ['trigger', 'Trigger `properties` must be an object'],
-  ['memory_entry', 'MemoryEntry `properties` must be an object'],
+  ['memory', 'Memory `properties` must be an object'],
   ['chat', 'Chat `properties` must be an object'],
   ['conversation', 'Conversation `properties` must be an object'],
   ['file', 'File `properties` must be an object'],
@@ -146,7 +146,7 @@ const NON_OBJECT: Array<[string, string]> = [
   ['session', 'Session `properties` must be an object'],
   ['ingestion_rule', 'Ingestion rule `properties` must be an object'],
   ['agent', 'Agent `properties` must be an object'],
-  ['memory', 'Memory `properties` must be an object'],
+  ['memory_store', 'Memory store `properties` must be an object'],
   ['orchestration', 'Orchestration `properties` must be an object'],
   ['ai_provider', 'AI provider `properties` must be an object'],
   ['actor', 'Actor `properties` must be an object'],
@@ -264,17 +264,17 @@ const CASES: RoundTripCase[] = [
     },
   },
   {
-    resourceType: 'memory',
+    resourceType: 'memory_store',
     build: () => {
       return {
         create: {
           name: 'Mem A',
-          description: 'a memory',
+          description: 'a memoryStore',
           tags: { tier: 't1' },
         },
         expectRead: {
           name: 'Mem A',
-          description: 'a memory',
+          description: 'a memoryStore',
           tags: { tier: 't1' },
         },
         update: { name: 'Mem B' },
@@ -298,12 +298,12 @@ const CASES: RoundTripCase[] = [
     },
   },
   {
-    resourceType: 'memory_entry',
+    resourceType: 'memory',
     build: () => {
       return {
-        create: { memory_id: memoryId, content: 'a fact' },
+        create: { memory_store_id: memoryStoreId, content: 'a fact' },
         expectRead: { content: 'a fact' },
-        camel: { memoryId, content: 'camel fact' },
+        camel: { memoryStoreId, content: 'camel fact' },
         camelExpectRead: { content: 'camel fact' },
       };
     },
@@ -372,8 +372,8 @@ const CASES: RoundTripCase[] = [
           // skip-key), so this exercises the create-side normalization to
           // camelCase directly — not just via the REST middleware.
           knowledge_config: {
-            memory_ids: [memoryId],
-            write_memory_id: memoryId,
+            memory_store_ids: [memoryStoreId],
+            write_memory_store_id: memoryStoreId,
             limit: 25,
             extraction: { enabled: true, model: 'llama3.2:1b' },
           },
@@ -389,8 +389,8 @@ const CASES: RoundTripCase[] = [
             properties: { summary: { type: 'string' } },
           },
           knowledge_config: {
-            memory_ids: [memoryId],
-            write_memory_id: memoryId,
+            memory_store_ids: [memoryStoreId],
+            write_memory_store_id: memoryStoreId,
             limit: 25,
             extraction: { enabled: true, model: 'llama3.2:1b' },
           },
@@ -1760,12 +1760,12 @@ describe('sessionsFormationModule', () => {
   });
 });
 
-// ── memory / document unknown camelCase keys ────────────────────────────────
+// ── memory store / document unknown camelCase keys ────────────────────────────────
 
 describe('camelCase unknown-key normalization', () => {
   test.each([
     [
-      'memory',
+      'memory_store',
       () => {
         return { name: 'Mem', someUnknownKey: 'y' };
       },

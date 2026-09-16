@@ -436,10 +436,14 @@ export const lookupSecretInternalId = (
   return lookupInternalId({ model: db.Secret, label: 'Secret', ...args });
 };
 
-export const lookupMemoryInternalId = (
+export const lookupMemoryStoreInternalId = (
   args: ScopedLookupArgs
 ): Promise<number> => {
-  return lookupInternalId({ model: db.Memory, label: 'Memory', ...args });
+  return lookupInternalId({
+    model: db.MemoryStore,
+    label: 'Memory store',
+    ...args,
+  });
 };
 
 export const lookupActorInternalId = (

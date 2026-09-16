@@ -26,7 +26,7 @@ export const PUBLIC_ID_PREFIXES = {
   webhookDelivery: 'wh_deliv_',
   session: 'sess_',
   memory: 'mem_',
-  memoryEntry: 'mem_entry_',
+  memoryStore: 'mstore_',
   modelRoute: 'route_',
   orchestration: 'orch_',
   orchestrationVersion: 'orch_ver_',

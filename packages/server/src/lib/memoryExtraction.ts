@@ -4,7 +4,7 @@ import { db } from '../db';
 import type { ExtractionConfig, KnowledgeConfig } from './agentKnowledge';
 import { readKnowledgeConfig } from './agentKnowledge';
 import { updateGenerationRecord } from './generations';
-import { writeMemoryEntry } from './memoryEntries';
+import { writeMemory } from './memories';
 import * as extractionCompletion from './memoryExtractionCompletion';
 import { scopedWhere } from './resourceAccessor';
 
@@ -142,15 +142,15 @@ const recordExtractionSummary = async (args: {
 };
 
 type ExtractionTarget = {
-  memory: InstanceType<(typeof db)['Memory']>;
+  memoryStore: InstanceType<(typeof db)['MemoryStore']>;
   extraction: ExtractionConfig;
 };
 
 /**
- * Resolves the extraction target memory and normalized extraction config.
+ * Resolves the extraction target memory store and normalized extraction config.
  * Returns null (with a log line) unless the agent exists, its knowledge
- * config has extraction enabled and a `write_memory_id`, and the target
- * memory exists.
+ * config has extraction enabled and a `write_memory_store_id`, and the target
+ * memory store exists.
  */
 // Lean lookup: only the agent's own `knowledgeConfig` column is read here.
 const findExtractionAgent = (args: {
@@ -186,7 +186,7 @@ const resolveExtractionTarget = async (args: {
    * Per-turn override of the agent's extraction default. `false` suppresses
    * extraction for this turn even when the agent enables it (e.g. operational
    * or tool-listing turns that would only add noise); `true` forces it on when
-   * the agent has a write memory but did not enable extraction by default;
+   * the agent has a write memory store but did not enable extraction by default;
    * `undefined` follows the agent's stored config.
    */
   override?: boolean;
@@ -206,39 +206,39 @@ const resolveExtractionTarget = async (args: {
   }
 
   // The stored bag is snake_case (the wire casing); read it into the internal
-  // camelCase shape before consulting `extraction` / `write_memory_id`.
+  // camelCase shape before consulting `extraction` / `write_memory_store_id`.
   const config = readKnowledgeConfig(agent.knowledgeConfig) as
     KnowledgeConfig | null | undefined;
   const extraction = resolveEffectiveExtraction(config, args.override);
-  const writeMemoryId = config?.writeMemoryId;
-  if (!extraction || !writeMemoryId) {
+  const writeMemoryStoreId = config?.writeMemoryStoreId;
+  if (!extraction || !writeMemoryStoreId) {
     log(
-      'resolveExtractionTarget: extraction not enabled agentId=%s writeMemoryId=%s override=%s',
+      'resolveExtractionTarget: extraction not enabled agentId=%s writeMemoryStoreId=%s override=%s',
       args.agentId,
-      writeMemoryId,
+      writeMemoryStoreId,
       args.override
     );
     return null;
   }
 
-  const memory = await db.Memory.findOne({
-    where: { publicId: writeMemoryId },
+  const memoryStore = await db.MemoryStore.findOne({
+    where: { publicId: writeMemoryStoreId },
   });
-  if (!memory) {
+  if (!memoryStore) {
     log(
-      'resolveExtractionTarget: write memory not found agentId=%s writeMemoryId=%s',
+      'resolveExtractionTarget: write memoryStore not found agentId=%s writeMemoryStoreId=%s',
       args.agentId,
-      writeMemoryId
+      writeMemoryStoreId
     );
     return null;
   }
-  return { memory, extraction };
+  return { memoryStore, extraction };
 };
 
 const writeCandidates = async (args: {
   agentId: string;
   projectIds?: number[];
-  memoryId: number;
+  memoryStoreId: number;
   candidates: string[];
   aiProviderId?: string;
   model?: string;
@@ -254,10 +254,9 @@ const writeCandidates = async (args: {
 
   for (const content of args.candidates) {
     try {
-      const result = await writeMemoryEntry({
-        memoryId: args.memoryId,
+      const result = await writeMemory({
+        memoryStoreId: args.memoryStoreId,
         content,
-        sourceType: 'extraction',
         // Extraction has an agent context, so merges consolidate via the LLM
         // (reusing any extraction provider/model override).
         consolidation: {
@@ -266,7 +265,6 @@ const writeCandidates = async (args: {
           aiProviderId: args.aiProviderId,
           model: args.model,
         },
-        sourceGenerationPublicId: args.generationId,
         sourceConversationPublicId: args.conversationId,
       });
       summary[result.action] += 1;
@@ -284,11 +282,11 @@ const writeCandidates = async (args: {
 
 /**
  * Extracts atomic facts from a completed conversation turn and writes them to
- * the agent's `knowledge_config.write_memory_id` memory through the standard
+ * the agent's `knowledge_config.write_memory_store_id` memory store through the standard
  * dedup/merge/skip write algorithm.
  *
  * Runs only when the agent's knowledge config has `extraction: true` and a
- * `write_memory_id`. Returns the summary, or null when extraction did not run.
+ * `write_memory_store_id`. Returns the summary, or null when extraction did not run.
  */
 export const runMemoryExtraction = async (args: {
   agentId: string;
@@ -310,7 +308,7 @@ export const runMemoryExtraction = async (args: {
     override: args.extract,
   });
   if (!target) return null;
-  const { memory, extraction } = target;
+  const { memoryStore, extraction } = target;
 
   const transcript = buildTranscript({
     messages: args.messages,
@@ -345,7 +343,7 @@ export const runMemoryExtraction = async (args: {
   const summary = await writeCandidates({
     agentId: args.agentId,
     projectIds: args.projectIds,
-    memoryId: memory.id as number,
+    memoryStoreId: memoryStore.id as number,
     candidates: parseFactCandidates(completionText),
     aiProviderId: extraction.aiProviderId,
     model: extraction.model,

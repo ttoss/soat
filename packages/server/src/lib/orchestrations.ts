@@ -38,7 +38,6 @@ export type OrchestratorNodeType =
   | 'tool'
   | 'transform'
   | 'knowledge'
-  | 'memory_write'
   | 'condition'
   | 'human'
   | 'approval'
@@ -88,8 +87,6 @@ export type OrchestrationNode = {
   reasoning?: unknown;
   evidence?: unknown;
   predictedImpact?: unknown;
-  // memory_write node
-  memoryId?: string;
   // loop node — runs the orchestration named by `orchestrationId` (shared with
   // the sub_orchestration node) once per item in `collection`.
   collection?: string;

@@ -418,11 +418,11 @@ describe('Actors', () => {
     });
   });
 
-  // #1062 removed the actor↔memory link. `memory_id` / `auto_create_memory`
+  // #1062 removed the actor↔memory store link. `memory_store_id` / `auto_create_memory`
   // were a platform promise nothing in the generation pipeline read — retrieval
   // scope comes exclusively from the agent's `knowledge_config`. Both fields are
   // gone from the spec, so `strictFields` now rejects them outright.
-  describe('the removed memory link', () => {
+  describe('the removed memoryStore link', () => {
     let actorId: string;
 
     beforeAll(async () => {
@@ -432,22 +432,22 @@ describe('Actors', () => {
       actorId = actorRes.body.id;
     });
 
-    test('an actor response carries no memory_id', async () => {
+    test('an actor response carries no memory_store_id', async () => {
       const res = await authenticatedTestClient(userToken).get(
         `/api/v1/actors/${actorId}`
       );
 
       expect(res.status).toBe(200);
-      expect(res.body).not.toHaveProperty('memory_id');
+      expect(res.body).not.toHaveProperty('memory_store_id');
     });
 
-    test('POST /actors with memory_id is rejected as an unknown field', async () => {
+    test('POST /actors with memory_store_id is rejected as an unknown field', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/actors')
         .send({
           project_id: projectId,
           name: 'MemIdActor',
-          memory_id: 'mem_V1StGXR8Z5jdHi6B',
+          memory_store_id: 'mstore_V1StGXR8Z5jdHi6B',
         });
 
       expect(res.status).toBe(400);
@@ -467,10 +467,10 @@ describe('Actors', () => {
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
 
-    test('PATCH /actors/:id with memory_id is rejected as an unknown field', async () => {
+    test('PATCH /actors/:id with memory_store_id is rejected as an unknown field', async () => {
       const res = await authenticatedTestClient(userToken)
         .patch(`/api/v1/actors/${actorId}`)
-        .send({ memory_id: 'mem_V1StGXR8Z5jdHi6B' });
+        .send({ memory_store_id: 'mstore_V1StGXR8Z5jdHi6B' });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');

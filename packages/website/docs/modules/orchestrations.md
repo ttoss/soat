@@ -105,8 +105,7 @@ A record holds external I/O only (resolved input, returned artifact) and no gene
 | `agent`        | Invokes a SOAT [Agent](./agents.md) with a prompt. Uses `agent_id` and `prompt`.                                                    |
 | `tool`         | Calls a SOAT [Tool](./tools.md). Uses `tool_id` and `input_mapping`. Its artifact is the tool's own result object — see [Node artifacts](#node-artifacts). Gated by [Guardrails](./guardrails.md) at dispatch — see [Guardrail interception](#guardrail-interception-on-tool-nodes).                     |
 | `transform`    | Evaluates a [JSON Logic](https://jsonlogic.com) rule against the current state. Uses `expression`.                                  |
-| `knowledge`    | Searches a knowledge source via the [Knowledge](./knowledge.md) module. Uses `input_mapping` with `query` and optional `memory_ids`. |
-| `memory_write` | Writes a [Memory](./memories.md) entry. Uses `memory_id` and `input_mapping` with `content`.                                        |
+| `knowledge`    | Searches a knowledge source via the [Knowledge](./knowledge.md) module. Uses `input_mapping` with `query` and optional `memoryStoreIds`. |
 | `condition`    | Evaluates a JSON Logic rule and emits a string label. Downstream edges use `condition: "<label>"` to select the active branch.      |
 | `human`        | Pauses the run and waits for external input. The run enters `awaiting_input` status with `required_action`.                         |
 | `approval`     | Proposes a guarded tool call and pauses for a human decision via the [Approvals](./approvals.md) queue. Uses `tool_id`, `arguments`, and `expires_in`. See [Approval Nodes](#approval-nodes).                         |
@@ -128,7 +127,6 @@ Every completed node produces an **artifact**: what `state_mapping` reads as `ou
 | `transform` | `{ result }` — the evaluated `expression`. |
 | `condition` | No artifact; the node emits a branch label. Its namespace entry is `{ label }`, read as `{"var": "nodes.<id>.label"}`. |
 | `knowledge` | `{ results }` — the matched entries. |
-| `memory_write` | `{ action }` — e.g. `"created"`. |
 | `human`, `webhook` (`mode: "receive"`) | The payload submitted to `submit-human-input`, verbatim. |
 | `approval` | `{ decision, approvalId, resolvedBy, reason, result, editedArgs }` — see [Approval Nodes](#approval-nodes). |
 | `loop` | `{ results }` — one entry per item, each the sub-run's `output`. See [Loops](#loops-collection-iteration). |
@@ -287,7 +285,7 @@ Postgres needs no extra infrastructure. A backoff longer than SQS's 15-minute ma
 
 #### Idempotency of node execution
 
-Each **side-effecting** node execution (`agent`, `tool`, `memory_write`, `emit_event`, `sub_orchestration`, `loop`) is written under a run-scoped idempotency key `{orchestration_run_id}:{node_id}:{attempt}`, inserted `running` **before** the side effect and updated in place after. A **redelivery** of the same `(run, node, attempt)` finds the key `completed` and reuses the stored output; a **retry** (new attempt) is a new key and runs for real.
+Each **side-effecting** node execution (`agent`, `tool`, `emit_event`, `sub_orchestration`, `loop`) is written under a run-scoped idempotency key `{orchestration_run_id}:{node_id}:{attempt}`, inserted `running` **before** the side effect and updated in place after. A **redelivery** of the same `(run, node, attempt)` finds the key `completed` and reuses the stored output; a **retry** (new attempt) is a new key and runs for real.
 
 A worker that crashes between the side effect and marking the key `completed` leaves a `running` key, and the redelivering worker re-executes under it. An `http` tool node forwards its key verbatim as an **`Idempotency-Key`** request header so downstream services can dedupe that window. Pure nodes (`condition`, `transform`, `delay`, `human`, `approval`, `webhook`) are unkeyed.
 

@@ -296,7 +296,7 @@ paths:
         Every project-scoped resource counts: agents, ai providers, model
         routes, tools, ingestion rules, actors, chats, conversations, sessions,
         generations, traces, datasets, evals, workflows, tasks, triggers,
-        orchestrations and their runs, formations, memories, secrets, files,
+        orchestrations and their runs, formations, memory stores, secrets, files,
         guardrails, quotas, usage history — and the activity, approval,
         exception and guardrail-evaluation records a project accumulates while
         it runs. Audit log entries are the one exception: they outlive the

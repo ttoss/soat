@@ -66,14 +66,14 @@ describe('Usage — storage metering', () => {
       chunkIndex: 0,
       embedding: null,
     });
-    const memory = await db.Memory.create({
-      publicId: generatePublicId(PUBLIC_ID_PREFIXES.memory),
+    const memoryStore = await db.MemoryStore.create({
+      publicId: generatePublicId(PUBLIC_ID_PREFIXES.memoryStore),
       projectId: projectInternalId,
-      name: 'storage-memory',
+      name: 'storage-memoryStore',
     });
-    await db.MemoryEntry.create({
-      publicId: generatePublicId(PUBLIC_ID_PREFIXES.memoryEntry),
-      memoryId: memory.id,
+    await db.Memory.create({
+      publicId: generatePublicId(PUBLIC_ID_PREFIXES.memory),
+      memoryStoreId: memoryStore.id,
       content: 'entry',
       embedding: null,
     });
@@ -153,7 +153,7 @@ describe('Usage — storage metering', () => {
     expect((await storageMeters()).length).toBe(before + 1);
   });
 
-  test("counts document chunks and memory entries on the next day's snapshot", async () => {
+  test("counts document chunks and memories on the next day's snapshot", async () => {
     await seedOneChunkAndOneEntry();
 
     const created = await snapshotProjectStorage({

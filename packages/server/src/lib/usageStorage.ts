@@ -43,14 +43,14 @@ type StoredFootprint = {
   bytes: {
     files: number;
     documentChunks: number;
-    memoryEntries: number;
+    memories: number;
     datasetItems: number;
     evalResults: number;
     total: number;
   };
   counts: {
     documentChunks: number;
-    memoryEntries: number;
+    memories: number;
     total: number;
   };
 };
@@ -79,7 +79,7 @@ const readStoredFootprint = (rows: unknown[]): StoredFootprint => {
     bytes: {
       files,
       documentChunks: chunkBytes,
-      memoryEntries: memoryBytes,
+      memories: memoryBytes,
       datasetItems: datasetItemBytes,
       evalResults: evalResultBytes,
       total:
@@ -87,7 +87,7 @@ const readStoredFootprint = (rows: unknown[]): StoredFootprint => {
     },
     counts: {
       documentChunks: chunkRows,
-      memoryEntries: memoryRows,
+      memories: memoryRows,
       total: chunkRows + memoryRows,
     },
   };
@@ -152,8 +152,8 @@ const projectStoredFootprint = async (
                       + COALESCE(pg_column_size(me."embedding"), 0)
                     ), 0) AS memory_bytes,
                     COUNT(*) AS memory_rows
-               FROM "memory_entries" me
-               JOIN "memories" m ON me."memory_id" = m."id"
+               FROM "memories" me
+               JOIN "memory_stores" m ON me."memory_store_id" = m."id"
               WHERE m."project_id" = :projectId) memories
        CROSS JOIN
             (SELECT COALESCE(SUM(
@@ -388,12 +388,12 @@ export const snapshotProjectStorage = async (args: {
     footprint.bytes.total,
     footprint.bytes.files,
     footprint.bytes.documentChunks,
-    footprint.bytes.memoryEntries,
+    footprint.bytes.memories,
     footprint.bytes.datasetItems,
     footprint.bytes.evalResults,
     footprint.counts.total,
     footprint.counts.documentChunks,
-    footprint.counts.memoryEntries,
+    footprint.counts.memories,
     created,
     costUsd
   );
