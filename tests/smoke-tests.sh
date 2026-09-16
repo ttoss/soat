@@ -1514,6 +1514,19 @@ if [ "$ME_PROV_INVAL" != "null" ]; then
 fi
 echo "Manual write reports no source and is valid."
 
+echo "--- List memories including invalidated ---"
+# Nothing is invalidated yet (the arbitration that supersedes entries ships
+# later), so this asserts the flag is wired end-to-end and does not change the
+# result set on its own.
+ME_INVAL_RESP=$($SOAT_CLI list-memories --memory-store-id "$MEM_ID" --include-invalidated true)
+ME_INVAL_COUNT=$(printf '%s\n' "$ME_INVAL_RESP" | jq '.data | length')
+if [ "$ME_INVAL_COUNT" -ne "$ME_LIST_COUNT" ]; then
+  echo "ERROR: Expected $ME_LIST_COUNT memories with include_invalidated, got $ME_INVAL_COUNT" >&2
+  echo "$ME_INVAL_RESP" >&2
+  exit 1
+fi
+echo "include_invalidated listing returned $ME_INVAL_COUNT memories."
+
 # A conversation-sourced write names the conversation it was learned in, and
 # the pair is validated: `conversation` without an id, or an id without it, is
 # a 400.
@@ -1541,19 +1554,6 @@ if [ "$ME_SRC_BAD_STATUS" != "400" ]; then
   exit 1
 fi
 echo "Conversation-sourced write names its source; the unpaired form is rejected."
-
-echo "--- List memories including invalidated ---"
-# Nothing is invalidated yet (the arbitration that supersedes entries ships
-# later), so this asserts the flag is wired end-to-end and does not change the
-# result set on its own.
-ME_INVAL_RESP=$($SOAT_CLI list-memories --memory-store-id "$MEM_ID" --include-invalidated true)
-ME_INVAL_COUNT=$(printf '%s\n' "$ME_INVAL_RESP" | jq '.data | length')
-if [ "$ME_INVAL_COUNT" -ne "$ME_LIST_COUNT" ]; then
-  echo "ERROR: Expected $ME_LIST_COUNT memories with include_invalidated, got $ME_INVAL_COUNT" >&2
-  echo "$ME_INVAL_RESP" >&2
-  exit 1
-fi
-echo "include_invalidated listing returned $ME_INVAL_COUNT memories."
 
 echo "--- Knowledge search via per-memory tags (memory granularity) ---"
 KS_TAG_RESP=$($SOAT_CLI search-knowledge \
