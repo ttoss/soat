@@ -3,6 +3,26 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.50.0](https://github.com/ttoss/soat/compare/v0.49.1...v0.50.0) (2026-09-16)
+
+* feat(server)!: versioned migrations and a pre-deploy schema step (#1321) ([1a6fd61](https://github.com/ttoss/soat/commit/1a6fd61ce7a94931323293002bdd9f39c8ada173)), closes [#1321](https://github.com/ttoss/soat/issues/1321) [#548](https://github.com/ttoss/soat/issues/548)
+
+* refactor(memories)!: memory/memory store rename, simplified provenance, and removal of the memory_write node (#1320) ([708ab71](https://github.com/ttoss/soat/commit/708ab71dfedfd328265ce57a5b22afee64c2aba6)), closes [#1320](https://github.com/ttoss/soat/issues/1320) [#1319](https://github.com/ttoss/soat/issues/1319) [#1318](https://github.com/ttoss/soat/issues/1318)
+
+### BREAKING CHANGES
+
+* a deployment that relied on the boot-time `sync({ alter: true })` must
+  run `node packages/server/dist/migrate.mjs run` as a pre-deploy step, or set
+  `DB_SYNC=true` to let the process prepare the schema itself. Without either,
+  the server refuses to start and names the migrations the database is missing.
+* `memory_entries` is renamed to `memories` and the old
+  `memories` to `memory_stores`, across REST paths, ids, IAM actions, SRN
+  resource types, SDK accessors, CLI commands, MCP tools and formation resource
+  types. `source_generation_id` and `source_conversation_id` are replaced by
+  `source_id`, `superseded_by_entry_id` by `superseded_by_memory_id`, and
+  `source_type` accepts only `manual` and `conversation`. No aliases are kept.
+* the `memory_write` orchestration node type is removed.
+
 ## [0.49.1](https://github.com/ttoss/soat/compare/v0.49.0...v0.49.1) (2026-09-14)
 
 ### Bug Fixes
