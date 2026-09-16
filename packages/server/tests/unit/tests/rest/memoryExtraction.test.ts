@@ -292,6 +292,101 @@ describe('MemoryStore Extraction', () => {
       expect(detail.body.source_id).toBe(convId);
     });
 
+    test('records a rule assertion naming the turn that produced the fact', async () => {
+      const memoryStoreId = await createMemoryStore(
+        'Assertion Extraction MemoryStore'
+      );
+      const agentId = await createAgent({
+        name: 'AssertionExtractionAgent',
+        knowledgeConfig: {
+          write_memory_store_id: memoryStoreId,
+          extraction: true,
+        },
+      });
+      const convId = await createConversationWithMessage(
+        'My shipping address is 5 Elm Street.'
+      );
+      await seedGeneration({ publicId: 'gen_assert_1', agentId });
+
+      mockCreateGeneration.mockResolvedValueOnce(
+        completedGeneration('gen_assert_1', 'Noted.')
+      );
+      mockRunExtractionCompletion.mockResolvedValueOnce(
+        '["User shipping address is 5 Elm Street"]'
+      );
+
+      const res = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/conversations/${convId}/generate?wait=true`)
+        .send({ agent_id: agentId });
+      expect(res.status).toBe(200);
+
+      const entries = await waitForEntries(memoryStoreId, 1);
+      const assertions = await authenticatedTestClient(adminToken).get(
+        `/api/v1/memories/${entries[0].id}/assertions`
+      );
+
+      expect(assertions.status).toBe(200);
+      expect(assertions.body.data).toHaveLength(1);
+      expect(assertions.body.data[0]).toMatchObject({
+        // `rule`, not `extraction`: the door, not today's implementation of it.
+        mechanism: 'rule',
+        // Null until #1324 gives the built-in extractor a row of its own.
+        rule_id: null,
+        generation_id: 'gen_assert_1',
+        // The extractor runs under the agent's identity.
+        principal_type: 'agent',
+        principal_id: agentId,
+        outcome: 'created',
+      });
+    });
+
+    test('the generation carries the rows behind its extraction counts', async () => {
+      const memoryStoreId = await createMemoryStore(
+        'Reconcile Extraction MemoryStore'
+      );
+      const agentId = await createAgent({
+        name: 'ReconcileExtractionAgent',
+        knowledgeConfig: {
+          write_memory_store_id: memoryStoreId,
+          extraction: true,
+        },
+      });
+      const convId = await createConversationWithMessage('My timezone is CET.');
+      await seedGeneration({ publicId: 'gen_reconcile_1', agentId });
+
+      mockCreateGeneration.mockResolvedValueOnce(
+        completedGeneration('gen_reconcile_1', 'Got it.')
+      );
+      // Two identical candidates: one lands, one is skipped as a duplicate.
+      mockRunExtractionCompletion.mockResolvedValueOnce(
+        '["User timezone is CET", "User timezone is CET"]'
+      );
+
+      await authenticatedTestClient(adminToken)
+        .post(`/api/v1/conversations/${convId}/generate?wait=true`)
+        .send({ agent_id: agentId });
+      await waitForExtractionSummary('gen_reconcile_1');
+
+      const generation = await authenticatedTestClient(adminToken).get(
+        '/api/v1/generations/gen_reconcile_1'
+      );
+
+      expect(generation.status).toBe(200);
+      expect(generation.body.extraction).toMatchObject({
+        candidates: 2,
+        created: 1,
+        superseded: 0,
+        skipped: 1,
+      });
+      // The summary and the rows it summarizes must agree.
+      expect(generation.body.memory_assertions).toHaveLength(2);
+      expect(
+        generation.body.memory_assertions.map((a: { outcome: string }) => {
+          return a.outcome;
+        })
+      ).toEqual(['created', 'skipped']);
+    });
+
     test('deduplicates extracted facts through the standard write algorithm', async () => {
       const memoryStoreId = await createMemoryStore(
         'Dedup Extraction MemoryStore'

@@ -4,6 +4,7 @@ import { resolveDocumentSearch } from 'src/lib/knowledgeDocuments';
 import { resolveMemoryStoreSearch } from 'src/lib/knowledgeMemory';
 import { writeMemory } from 'src/lib/memories';
 
+import { SEED_ASSERTION, seedMemory } from '../../fixtures/memoryWrites';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
@@ -182,14 +183,14 @@ describe('semantic search under an ANN index', () => {
     scopedMemoryStoreId = scopedMemoryStore.publicId;
 
     for (let index = 0; index < CROWD_SIZE; index += 1) {
-      await db.Memory.create({
-        memoryStoreId: crowdMemoryStore.id,
+      await seedMemory({
+        memoryStoreId: crowdMemoryStore.id as number,
         content: `Crowd fact ${index}.`,
         embedding: nearVector,
       });
     }
-    const targetEntry = await db.Memory.create({
-      memoryStoreId: scopedMemoryStore.id,
+    const targetEntry = await seedMemory({
+      memoryStoreId: scopedMemoryStore.id as number,
       content: 'The scoped fact.',
       embedding: farVector,
     });
@@ -202,8 +203,8 @@ describe('semantic search under an ANN index', () => {
       name: 'ann-dedup',
     });
     dedupMemoryStoreId = dedupMemoryStore.id;
-    const dedupEntry = await db.Memory.create({
-      memoryStoreId: dedupMemoryStore.id,
+    const dedupEntry = await seedMemory({
+      memoryStoreId: dedupMemoryStore.id as number,
       content: 'The customer prefers email.',
       embedding: nearDuplicateVector,
     });
@@ -255,6 +256,7 @@ describe('semantic search under an ANN index', () => {
     const result = await writeMemory({
       memoryStoreId: dedupMemoryStoreId,
       content: 'The customer prefers email.',
+      assertion: SEED_ASSERTION,
     });
 
     expect(result).toMatchObject({

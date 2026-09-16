@@ -54,6 +54,22 @@ export class MemoryStore extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare tags: Record<string, string> | null;
 
+  /**
+   * The corpus's dedup policy, tuned once. Null resolves to the algorithm
+   * constants in `memoryWrite.ts`; a request to `POST /api/v1/memories` may
+   * override either value for that one call.
+   *
+   * The effective pair must satisfy `supersedeThreshold < duplicateThreshold`:
+   * equal makes `superseded` unreachable, inverted swallows `skipped`.
+   * Validated on the store write and on the request, never here — a check
+   * spelled in the model would still let a one-sided request invert the pair.
+   */
+  @Column({ type: DataType.FLOAT, allowNull: true })
+  declare duplicateThreshold: number | null;
+
+  @Column({ type: DataType.FLOAT, allowNull: true })
+  declare supersedeThreshold: number | null;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

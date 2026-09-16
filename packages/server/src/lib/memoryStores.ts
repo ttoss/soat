@@ -34,6 +34,11 @@ const mapMemoryStore = (instance: MemoryStoreRow) => {
     name: instance.name,
     description: instance.description ?? undefined,
     tags: instance.tags ?? undefined,
+    // Null is "use the algorithm constant", and it is reported as null rather
+    // than as the constant: a store that has never set a policy must read
+    // differently from one pinned to today's default.
+    duplicate_threshold: instance.duplicateThreshold ?? null,
+    supersede_threshold: instance.supersedeThreshold ?? null,
     created_at: instance.createdAt,
     updated_at: instance.updatedAt,
   };
@@ -44,12 +49,16 @@ export const createMemoryStore = async (args: {
   name: string;
   description?: string;
   tags?: Record<string, string>;
+  duplicateThreshold?: number | null;
+  supersedeThreshold?: number | null;
 }) => {
   const memoryStore = await db.MemoryStore.create({
     projectId: args.projectId,
     name: args.name,
     description: args.description ?? null,
     tags: args.tags ?? null,
+    duplicateThreshold: args.duplicateThreshold ?? null,
+    supersedeThreshold: args.supersedeThreshold ?? null,
   });
 
   return mapMemoryStore(await memoryStores.reload(memoryStore));
@@ -86,6 +95,31 @@ export const listMemoryStores = async (args: {
   });
 };
 
+/**
+ * The internal id and the store's stored dedup policy — what a write route
+ * needs and the mapped view does not carry in internal form.
+ */
+export type MemoryStoreDedupPolicy = {
+  id: number;
+  duplicateThreshold: number | null;
+  supersedeThreshold: number | null;
+};
+
+export const findMemoryStoreDedupPolicy = async (args: {
+  id: string;
+}): Promise<MemoryStoreDedupPolicy | null> => {
+  const store = await db.MemoryStore.findOne({
+    where: { publicId: args.id },
+    attributes: ['id', 'duplicateThreshold', 'supersedeThreshold'],
+  });
+  if (!store) return null;
+  return {
+    id: store.id as number,
+    duplicateThreshold: store.duplicateThreshold,
+    supersedeThreshold: store.supersedeThreshold,
+  };
+};
+
 export const getMemoryStore = async (args: { id: string }) => {
   const memoryStore = await memoryStores.findByPublicId({ id: args.id });
   if (!memoryStore) return null;
@@ -97,6 +131,8 @@ export const updateMemoryStore = async (args: {
   name?: string;
   description?: string | null;
   tags?: Record<string, string> | null;
+  duplicateThreshold?: number | null;
+  supersedeThreshold?: number | null;
 }) => {
   const memoryStore = await db.MemoryStore.findOne({
     where: { publicId: args.id },
@@ -107,6 +143,12 @@ export const updateMemoryStore = async (args: {
   if (args.description !== undefined)
     memoryStore.description = args.description ?? null;
   if (args.tags !== undefined) memoryStore.tags = args.tags ?? null;
+  // `null` clears the override back to the algorithm constant, which is a
+  // different request from leaving the field out.
+  if (args.duplicateThreshold !== undefined)
+    memoryStore.duplicateThreshold = args.duplicateThreshold;
+  if (args.supersedeThreshold !== undefined)
+    memoryStore.supersedeThreshold = args.supersedeThreshold;
 
   await memoryStore.save();
 

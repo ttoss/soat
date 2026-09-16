@@ -3,6 +3,7 @@ import { db } from 'src/db';
 import { snapshotProjectStorage } from 'src/lib/usageStorage';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { seedMemory } from '../../fixtures/memoryWrites';
 
 /**
  * What the storage snapshot quantifies, row by row. The event shape,
@@ -137,16 +138,14 @@ describe('Usage — what the storage snapshot counts', () => {
       name: 'seed-memoryStore',
     });
 
-    await db.Memory.create({
-      publicId: generatePublicId(PUBLIC_ID_PREFIXES.memory),
-      memoryStoreId: memoryStore.id,
+    await seedMemory({
+      memoryStoreId: memoryStore.id as number,
       content: text(EMBEDDED_ENTRY_CHARS),
       embedding: vector(),
     });
 
-    await db.Memory.create({
-      publicId: generatePublicId(PUBLIC_ID_PREFIXES.memory),
-      memoryStoreId: memoryStore.id,
+    await seedMemory({
+      memoryStoreId: memoryStore.id as number,
       content: text(UNEMBEDDED_ENTRY_CHARS),
       embedding: null,
     });

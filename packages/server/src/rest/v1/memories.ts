@@ -8,11 +8,15 @@ import { buildSrn } from 'src/lib/iam';
 import {
   assertMemoryStorageQuota,
   deleteMemory,
+  findMemoryRowId,
+  findThresholdOrderError,
   getMemory,
   listMemories,
+  resolveMemoryThresholds,
   updateMemory,
   writeMemory,
 } from 'src/lib/memories';
+import { listMemoryAssertions } from 'src/lib/memoryAssertions';
 import { getMemoryStore } from 'src/lib/memoryStores';
 import { getMemoryTags, updateMemoryTags } from 'src/lib/memoryTags';
 import { compilePolicy } from 'src/lib/policyCompiler';
@@ -25,6 +29,7 @@ import {
 import {
   type AuthenticatedContext,
   parsePagination,
+  requestPrincipalFromCtx,
   requireAuth,
 } from './helpers';
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
@@ -42,6 +47,57 @@ const normalizeSourceType = (value: unknown): MemorySource | undefined => {
   return MEMORY_SOURCES.includes(value as MemorySource)
     ? (value as MemorySource)
     : undefined;
+};
+
+/**
+ * A per-request threshold, bounded to `[0, 1]` — the range a cosine similarity
+ * can take. A value outside it silently disables one of the three outcomes for
+ * that write, so it is refused rather than clamped.
+ */
+const readThreshold = (args: {
+  value: unknown;
+  field: string;
+}): number | undefined => {
+  if (args.value === undefined) return undefined;
+  if (
+    typeof args.value !== 'number' ||
+    !Number.isFinite(args.value) ||
+    args.value < 0 ||
+    args.value > 1
+  ) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      `${args.field} must be a number between 0 and 1`
+    );
+  }
+  return args.value;
+};
+
+/**
+ * Rejects a threshold pair that would make one of the three outcomes
+ * unreachable, checked against the **effective** pair — the store's defaults
+ * with this request's overrides applied. Checking the request against itself
+ * would let a body that sets only one value invert it against the store's
+ * other one.
+ */
+const assertThresholdOrder = async (args: {
+  memoryStoreRowId: number;
+  duplicateThreshold?: number;
+  supersedeThreshold?: number;
+}): Promise<void> => {
+  const store = await db.MemoryStore.findByPk(args.memoryStoreRowId, {
+    attributes: ['duplicateThreshold', 'supersedeThreshold'],
+  });
+  const error = findThresholdOrderError(
+    resolveMemoryThresholds({
+      store,
+      duplicateThreshold: args.duplicateThreshold,
+      supersedeThreshold: args.supersedeThreshold,
+    })
+  );
+  if (error) {
+    throw new DomainError('VALIDATION_FAILED', error);
+  }
 };
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> => {
@@ -223,7 +279,8 @@ memoriesRouter.post('/memories', async (ctx: Context) => {
     source_id?: string;
     tags?: unknown;
     metadata?: unknown;
-    duplicate_threshold?: number;
+    duplicate_threshold?: unknown;
+    supersede_threshold?: unknown;
   };
 
   const validationError = validateTagsMetadata(body, { allowNull: false });
@@ -255,6 +312,20 @@ memoriesRouter.post('/memories', async (ctx: Context) => {
     'memories:CreateMemory'
   );
 
+  const duplicateThreshold = readThreshold({
+    value: body.duplicate_threshold,
+    field: 'duplicate_threshold',
+  });
+  const supersedeThreshold = readThreshold({
+    value: body.supersede_threshold,
+    field: 'supersede_threshold',
+  });
+  await assertThresholdOrder({
+    memoryStoreRowId,
+    duplicateThreshold,
+    supersedeThreshold,
+  });
+
   await assertMemoryStorageQuota({
     memoryStoreId: memoryStoreRowId,
     content: body.content,
@@ -267,7 +338,15 @@ memoriesRouter.post('/memories', async (ctx: Context) => {
     sourceConversationPublicId: body.source_id,
     tags: isStringRecord(body.tags) ? body.tags : undefined,
     metadata: isPlainObject(body.metadata) ? body.metadata : undefined,
-    duplicateThreshold: body.duplicate_threshold,
+    // This is the only door that takes per-request thresholds: a caller
+    // addressing the corpus directly may tune one write, an agent or a rule
+    // may not.
+    duplicateThreshold,
+    supersedeThreshold,
+    assertion: {
+      mechanism: 'api',
+      ...requestPrincipalFromCtx(ctx),
+    },
   });
 
   ctx.status = result.action === 'created' ? 201 : 200;
@@ -285,6 +364,33 @@ memoriesRouter.get('/memories/:memory_id', async (ctx: Context) => {
   if (!entry) return;
 
   ctx.body = entry;
+});
+
+/**
+ * @openapi
+ * GET /api/v1/memories/{memory_id}/assertions
+ * operationId: listMemoryAssertions
+ * Returns every write that resolved into this memory — the one that created
+ * it, the duplicates it absorbed, and the assertion that superseded another
+ * memory in its favour, each naming the door, the principal and the similarity
+ * that decided the outcome.
+ */
+memoriesRouter.get('/memories/:memory_id/assertions', async (ctx: Context) => {
+  requireAuth(ctx);
+
+  // Gated on the store's SRN like every other item read, through the same
+  // two-bag check the memory's own routes use.
+  const entry = await resolveEntryForAction(
+    ctx,
+    ctx.params.memory_id,
+    'memories:ListMemoryAssertions'
+  );
+  if (!entry) return;
+
+  ctx.body = await listMemoryAssertions({
+    memoryId: (await findMemoryRowId({ id: ctx.params.memory_id }))!,
+    ...parsePagination(ctx),
+  });
 });
 
 memoriesRouter.put('/memories/:memory_id', async (ctx: Context) => {

@@ -87,9 +87,7 @@ const resolveMemoryStoreInternalIds = async (args: {
 
 /** `score` is left to the fusion step, the only place that knows it. */
 const mapEntry = (
-  entry: InstanceType<typeof db.Memory> & {
-    memoryStore: InstanceType<typeof db.MemoryStore>;
-  },
+  entry: MemoryWithStore,
   similarityScore?: number
 ): MemoryKnowledgeResult => {
   const memoryStore = entry.memoryStore;
@@ -98,7 +96,7 @@ const mapEntry = (
     memory_id: entry.publicId,
     memory_store_id: memoryStore.publicId,
     memory_store_name: memoryStore.name,
-    content: entry.content,
+    content: entry.content.content,
     tags: entry.tags ?? null,
     ...(similarityScore === undefined
       ? {}
@@ -114,11 +112,16 @@ type EntryWhere = NonNullable<
   NonNullable<Parameters<typeof db.Memory.findAll>[0]>['where']
 >;
 
-const ENTRY_CONTENT_COLUMN = '"Memory"."content"';
-const ENTRY_EMBEDDING_COLUMN = 'embedding';
+// Both columns live on the joined `memory_contents` row, not on the memory: a
+// memory keeps identity and validity, its content row keeps the text and the
+// vector. The alias is the include's `as`, and qualifying is not optional —
+// `memories` joins itself elsewhere in these queries.
+const ENTRY_CONTENT_COLUMN = '"content"."content"';
+const ENTRY_EMBEDDING_COLUMN = '"content"."embedding"';
 
 type MemoryWithStore = InstanceType<typeof db.Memory> & {
   memoryStore: InstanceType<typeof db.MemoryStore>;
+  content: InstanceType<typeof db.MemoryContent>;
 };
 
 const entryAttributes = (args: {
@@ -134,6 +137,12 @@ const entryAttributes = (args: {
   return include.length > 0 ? { include } : undefined;
 };
 
+/**
+ * The store (scoped by the caller's policy) and the shared content row every
+ * result reads its text and vector from. `required` on both: a memory always
+ * has a content row, and one that somehow did not could not be ranked or
+ * rendered anyway.
+ */
 const memoryStoreInclude = (args: {
   memoryStoreWhere: Record<string, unknown>;
 }) => {
@@ -142,6 +151,11 @@ const memoryStoreInclude = (args: {
       model: db.MemoryStore,
       as: 'memoryStore',
       where: args.memoryStoreWhere,
+      required: true,
+    },
+    {
+      model: db.MemoryContent,
+      as: 'content',
       required: true,
     },
   ];

@@ -3,7 +3,7 @@
   "metrics": {
     "recall_at_5": 0.8966,
     "recall_at_10": 0.931,
-    "mrr": 0.8218
+    "mrr": 0.8138
   },
   "by_kind": {
     "entity": {
@@ -29,7 +29,7 @@
     "semantic": {
       "recall_at_5": 0.6,
       "recall_at_10": 0.7333,
-      "mrr": 0.5111
+      "mrr": 0.4802
     }
   },
   "queries": [
@@ -378,7 +378,7 @@
     {
       "id": "semantic-002",
       "kind": "semantic",
-      "first_relevant_rank": 6,
+      "first_relevant_rank": 7,
       "hit_at_5": false,
       "hit_at_10": true,
       "recall_at_5": 0,
@@ -396,7 +396,7 @@
     {
       "id": "semantic-004",
       "kind": "semantic",
-      "first_relevant_rank": 1,
+      "first_relevant_rank": 3,
       "hit_at_5": true,
       "hit_at_10": true,
       "recall_at_5": 1,
@@ -423,7 +423,7 @@
     {
       "id": "semantic-007",
       "kind": "semantic",
-      "first_relevant_rank": 2,
+      "first_relevant_rank": 4,
       "hit_at_5": true,
       "hit_at_10": true,
       "recall_at_5": 1,
@@ -450,7 +450,7 @@
     {
       "id": "semantic-010",
       "kind": "semantic",
-      "first_relevant_rank": 6,
+      "first_relevant_rank": 7,
       "hit_at_5": false,
       "hit_at_10": true,
       "recall_at_5": 0,
@@ -477,7 +477,7 @@
     {
       "id": "semantic-013",
       "kind": "semantic",
-      "first_relevant_rank": 2,
+      "first_relevant_rank": 1,
       "hit_at_5": true,
       "hit_at_10": true,
       "recall_at_5": 1,

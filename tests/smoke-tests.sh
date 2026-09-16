@@ -1432,12 +1432,16 @@ if [ "$ME_SKIP_ACTION" != "skipped" ]; then
 fi
 echo "Duplicate correctly skipped."
 
-echo "--- Memories: similar write (created, no agent context to merge with) ---"
-# A manual write has no agent context, so an overlapping fact is stored as its
-# own entry rather than being merged into the existing one. `updated` is
-# reachable only from the agent write paths, which consolidate via the LLM.
+echo "--- Memories: similar write (created, below the supersede threshold) ---"
+# An overlapping but distinct fact is stored as its own entry: below
+# supersede_threshold, `created` is the safe outcome — a near-duplicate stays
+# searchable, where a wrongly retired fact would not. The pair is pinned so the
+# band is chosen by the assertion rather than by where the live embedding model
+# happens to place two similar sentences.
 ME_UPD_RESP=$($SOAT_CLI create-memory \
   --memory-store-id "$MEM_ID" \
+  --duplicate_threshold 0.995 \
+  --supersede_threshold 0.99 \
   --content "Smoke test customer prefers email, especially for billing inquiries")
 ME_UPD_ACTION=$(printf '%s\n' "$ME_UPD_RESP" | jq -r '.action')
 if [ "$ME_UPD_ACTION" != "created" ]; then
@@ -1445,13 +1449,86 @@ if [ "$ME_UPD_ACTION" != "created" ]; then
   echo "$ME_UPD_RESP" >&2
   exit 1
 fi
-# The pre-existing entry must be untouched — nothing is ever appended to it.
+# The pre-existing entry must be untouched — no write ever rewrites one.
 ME1_AFTER=$($SOAT_CLI get-memory --memory-id "$ME1_ID" | jq -r '.content')
 if [ "$ME1_AFTER" != "Smoke test customer prefers email over phone calls" ]; then
-  echo "ERROR: the existing memory was mutated by a merge-band write: $ME1_AFTER" >&2
+  echo "ERROR: the existing memory was mutated by a same-band write: $ME1_AFTER" >&2
   exit 1
 fi
 echo "Similar entry stored as its own entry; existing entry untouched."
+
+echo "--- Memories: supersede-band write retires the match ---"
+# A per-request supersede_threshold low enough to catch the restatement, with
+# duplicate_threshold raised above it so the write does not skip instead. The
+# retired entry keeps its own text and points at the replacement.
+ME_SUP_STORE=$($SOAT_CLI create-memory-store \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name smoke-supersede-store | jq -r '.id')
+ME_SUP_OLD=$($SOAT_CLI create-memory \
+  --memory-store-id "$ME_SUP_STORE" \
+  --content "Smoke delivery window is two weeks")
+ME_SUP_OLD_ID=$(printf '%s\n' "$ME_SUP_OLD" | jq -r '.id')
+ME_SUP_NEW=$($SOAT_CLI create-memory \
+  --memory-store-id "$ME_SUP_STORE" \
+  --content "Smoke delivery window is four weeks" \
+  --duplicate_threshold 0.999 \
+  --supersede_threshold 0.5)
+ME_SUP_ACTION=$(printf '%s\n' "$ME_SUP_NEW" | jq -r '.action')
+ME_SUP_NEW_ID=$(printf '%s\n' "$ME_SUP_NEW" | jq -r '.id')
+if [ "$ME_SUP_ACTION" != "superseded" ]; then
+  echo "ERROR: Expected action=superseded, got $ME_SUP_ACTION" >&2
+  echo "$ME_SUP_NEW" >&2
+  exit 1
+fi
+ME_SUP_RETIRED=$($SOAT_CLI get-memory --memory-id "$ME_SUP_OLD_ID")
+ME_SUP_INVAL=$(printf '%s\n' "$ME_SUP_RETIRED" | jq -r '.invalidated_at')
+ME_SUP_LINK=$(printf '%s\n' "$ME_SUP_RETIRED" | jq -r '.superseded_by_memory_id')
+ME_SUP_TEXT=$(printf '%s\n' "$ME_SUP_RETIRED" | jq -r '.content')
+if [ "$ME_SUP_INVAL" = "null" ] || [ "$ME_SUP_LINK" != "$ME_SUP_NEW_ID" ]; then
+  echo "ERROR: retired memory should be invalidated and linked, got invalidated_at=$ME_SUP_INVAL link=$ME_SUP_LINK" >&2
+  exit 1
+fi
+if [ "$ME_SUP_TEXT" != "Smoke delivery window is two weeks" ]; then
+  echo "ERROR: the retired memory lost its original text: $ME_SUP_TEXT" >&2
+  exit 1
+fi
+echo "Supersede retired the match, kept its text, and linked the replacement."
+
+echo "--- Memories: an inverted threshold pair is rejected ---"
+ME_THR_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$SERVER_URL/api/v1/memories" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"memory_store_id\":\"$MEM_ID\",\"content\":\"inverted pair\",\"duplicate_threshold\":0.8,\"supersede_threshold\":0.9}")
+if [ "$ME_THR_STATUS" != "400" ]; then
+  echo "ERROR: supersede_threshold >= duplicate_threshold expected 400, got $ME_THR_STATUS" >&2
+  exit 1
+fi
+echo "Inverted threshold pair rejected."
+
+echo "--- Memories: the write ledger records every outcome ---"
+# One assertion per write, including the skip — the outcome that produced no
+# memory at all.
+ME_ASSERT_RESP=$($SOAT_CLI list-memory-store-assertions --memory-store-id "$MEM_ID")
+ME_ASSERT_SKIPS=$(printf '%s\n' "$ME_ASSERT_RESP" | jq '[.data[] | select(.outcome == "skipped")] | length')
+ME_ASSERT_MECH=$(printf '%s\n' "$ME_ASSERT_RESP" | jq -r '[.data[].mechanism] | unique | join(",")')
+if [ "$ME_ASSERT_SKIPS" -lt 1 ]; then
+  echo "ERROR: expected at least one skipped assertion in the store ledger" >&2
+  echo "$ME_ASSERT_RESP" >&2
+  exit 1
+fi
+if [ "$ME_ASSERT_MECH" != "api" ]; then
+  echo "ERROR: CLI writes should record mechanism=api, got '$ME_ASSERT_MECH'" >&2
+  exit 1
+fi
+ME_SUP_ASSERTS=$($SOAT_CLI list-memory-assertions --memory-id "$ME_SUP_NEW_ID")
+ME_SUP_OUTCOME=$(printf '%s\n' "$ME_SUP_ASSERTS" | jq -r '.data[0].outcome')
+ME_SUP_RETIRED_ID=$(printf '%s\n' "$ME_SUP_ASSERTS" | jq -r '.data[0].superseded_memory_id')
+if [ "$ME_SUP_OUTCOME" != "superseded" ] || [ "$ME_SUP_RETIRED_ID" != "$ME_SUP_OLD_ID" ]; then
+  echo "ERROR: supersede assertion should name the retired memory, got outcome=$ME_SUP_OUTCOME retired=$ME_SUP_RETIRED_ID" >&2
+  echo "$ME_SUP_ASSERTS" >&2
+  exit 1
+fi
+echo "Write ledger recorded the skip and named the superseded memory."
 
 echo "--- Memories: unrelated write (created) ---"
 ME2_RESP=$($SOAT_CLI create-memory \

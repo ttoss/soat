@@ -7,7 +7,9 @@ import {
   createMemory,
   deleteMemory,
   getMemory,
+  updateMemory,
 } from '../memories';
+import { resolveFormationPrincipal } from '../memoryAssertionPrincipal';
 import {
   toNullableStringRecord,
   toOptionalString,
@@ -25,7 +27,7 @@ export const memoriesFormationModule = defineFormationModule({
   },
   propertiesLabel: 'Memory',
 
-  create: async ({ properties, projectId }) => {
+  create: async ({ properties, projectId, actingUserId }) => {
     const memoryStoreId = await lookupMemoryStoreInternalId({
       publicId: properties.memory_store_id as string,
       projectId,
@@ -44,6 +46,12 @@ export const memoriesFormationModule = defineFormationModule({
       metadata: isObjectRecord(properties.metadata)
         ? properties.metadata
         : null,
+      // The apply is the asserter here, under the identity that ran it: a
+      // formation write has no generation and no agent behind it.
+      assertion: {
+        mechanism: 'formation',
+        ...(await resolveFormationPrincipal({ actingUserId })),
+      },
     });
   },
 
@@ -56,22 +64,23 @@ export const memoriesFormationModule = defineFormationModule({
       throw new Error(`Memory not found: ${physicalResourceId}`);
     }
 
-    const content = toOptionalString(properties.content);
-    if (content !== undefined) {
-      entry.content = content;
-    }
-
-    if (properties.tags !== undefined) {
-      entry.tags = toNullableStringRecord(properties.tags) ?? null;
-    }
-
-    if (properties.metadata !== undefined) {
-      entry.metadata = isObjectRecord(properties.metadata)
-        ? properties.metadata
-        : null;
-    }
-
-    await entry.save();
+    // Through the lib rather than the row: a content change re-points the
+    // memory at the store's shared row for the new text, which this module
+    // must not reimplement.
+    await updateMemory({
+      id: physicalResourceId,
+      content: toOptionalString(properties.content),
+      tags:
+        properties.tags === undefined
+          ? undefined
+          : (toNullableStringRecord(properties.tags) ?? null),
+      metadata:
+        properties.metadata === undefined
+          ? undefined
+          : isObjectRecord(properties.metadata)
+            ? properties.metadata
+            : null,
+    });
   },
 
   remove: ({ physicalResourceId }) => {

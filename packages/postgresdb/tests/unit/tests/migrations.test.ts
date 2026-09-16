@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import type { Sequelize } from '@ttoss/postgresdb';
 import { createMigrationRunner, initialize } from '@ttoss/postgresdb';
 
@@ -7,6 +9,7 @@ import { createMigrationRunner, initialize } from '@ttoss/postgresdb';
 import { MIGRATIONS, models } from '../../../dist/index.cjs';
 import {
   columnType,
+  countRows,
   createDatabase,
   createEmptyDatabase,
   createLegacySchema,
@@ -221,7 +224,15 @@ describe('2026-09-16-memories-rename-and-provenance', () => {
       UPDATE memory_entries SET superseded_by_entry_id = 3 WHERE id = 2;
     `);
 
-    await runnerFor({ client }).run();
+    // By name, and stopping here: the migration that follows moves the text and
+    // the vector off `memories`, which would take the index and column
+    // assertions below out from under this suite.
+    await runnerFor({ client }).run({
+      names: [
+        '2026-09-11-memory-tags-to-jsonb',
+        '2026-09-16-memories-rename-and-provenance',
+      ],
+    });
   });
 
   afterAll(async () => {
@@ -334,7 +345,133 @@ describe('2026-09-16-memories-rename-and-provenance', () => {
   });
 });
 
-describe('a database that already carries both changes', () => {
+describe('2026-09-16-memory-assertions-and-shared-content', () => {
+  let client: Sequelize;
+
+  beforeAll(async () => {
+    ({ client } = await freshDatabase());
+
+    await createLegacySchema({ client, tagsType: 'jsonb' });
+
+    await client.query(`
+      INSERT INTO projects (public_id) VALUES ('proj_1');
+
+      INSERT INTO memories (public_id, project_id, name) VALUES
+        ('mem_store_1', 1, 'first store'),
+        ('mem_store_2', 1, 'second store');
+
+      -- Three rows whose text is the same once normalized, in one store: they
+      -- must collapse to a single content row. The oldest carries the vector,
+      -- and the newest a different one, so which vector survives is visible.
+      INSERT INTO memory_entries (public_id, memory_id, content, embedding, created_at)
+      VALUES
+        ('mem_entry_old', 1, 'Customer prefers email',
+         array_fill(0.25::real, ARRAY[1024])::vector, now() - interval '2 hours'),
+        ('mem_entry_mid', 1, 'Customer prefers email', NULL, now() - interval '1 hour'),
+        ('mem_entry_spaced', 1, '  Customer   prefers email  ',
+         array_fill(0.75::real, ARRAY[1024])::vector, now()),
+        ('mem_entry_other', 1, 'Fiscal year ends in December', NULL, now()),
+        -- The same text again, in the other store: stores never share a row.
+        ('mem_entry_cross', 2, 'Customer prefers email', NULL, now());
+    `);
+
+    await runnerFor({ client }).run();
+  });
+
+  afterAll(async () => {
+    await client.close();
+  });
+
+  test('identical texts in one store collapse to a single content row', async () => {
+    const rows = await selectRows<{ content: string; memories: string }>({
+      client,
+      sql: `SELECT mc.content, count(m.id)::text AS memories
+              FROM memory_contents mc
+              JOIN memories m ON m.content_id = mc.id
+             WHERE mc.memory_store_id = 1
+             GROUP BY mc.id, mc.content
+             ORDER BY mc.content`,
+    });
+
+    expect(rows).toEqual([
+      { content: 'Customer prefers email', memories: '3' },
+      { content: 'Fiscal year ends in December', memories: '1' },
+    ]);
+  });
+
+  // The migration's hash must agree with `hashMemoryContent` in the server, or
+  // a text written before the cutover and restated after it would be two rows.
+  test('the hash is over trimmed, whitespace-collapsed content', async () => {
+    const [row] = await selectRows<{ content_hash: string }>({
+      client,
+      sql: `SELECT content_hash FROM memory_contents
+             WHERE memory_store_id = 1 AND content = 'Customer prefers email'`,
+    });
+
+    expect(row.content_hash).toBe(
+      createHash('sha256').update('Customer prefers email').digest('hex')
+    );
+  });
+
+  // An older vector was produced by the model the rest of the corpus was
+  // embedded with, so keeping it is what leaves distances comparable.
+  test('the oldest row of a collapsed group keeps its vector', async () => {
+    const [row] = await selectRows<{ oldest: boolean; newest: boolean }>({
+      client,
+      sql: `SELECT embedding = array_fill(0.25::real, ARRAY[1024])::vector AS oldest,
+                   embedding = array_fill(0.75::real, ARRAY[1024])::vector AS newest
+              FROM memory_contents
+             WHERE memory_store_id = 1 AND content = 'Customer prefers email'`,
+    });
+
+    expect(row).toEqual({ oldest: true, newest: false });
+  });
+
+  test('the same text in another store is its own row', async () => {
+    const rows = await selectRows<{ memory_store_id: number }>({
+      client,
+      sql: `SELECT memory_store_id FROM memory_contents
+             WHERE content = 'Customer prefers email'
+             ORDER BY memory_store_id`,
+    });
+
+    expect(rows).toEqual([{ memory_store_id: 1 }, { memory_store_id: 2 }]);
+  });
+
+  test('every memory points at a content row', async () => {
+    expect(
+      await countRows({
+        client,
+        sql: 'SELECT count(*) FROM memories WHERE content_id IS NULL',
+      })
+    ).toBe(0);
+  });
+
+  test('the per-memory text and vector are gone', async () => {
+    expect(
+      await columnType({ client, table: 'memories', column: 'content' })
+    ).toBeUndefined();
+    expect(
+      await columnType({ client, table: 'memories', column: 'embedding' })
+    ).toBeUndefined();
+  });
+
+  // Historical writes cannot be reconstructed: a skip left no row and a merge
+  // left no trace, which is the problem this change fixes, not a gap here.
+  test('the assertion ledger is created empty', async () => {
+    expect(await tableExists({ client, table: 'memory_assertions' })).toBe(
+      true
+    );
+    expect(
+      await countRows({
+        client,
+        sql: 'SELECT count(*) FROM memory_assertions',
+      })
+    ).toBe(0);
+  });
+});
+
+describe('a database that already carries every change', () => {
   let client: Sequelize;
 
   beforeAll(async () => {

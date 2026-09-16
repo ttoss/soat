@@ -1,4 +1,5 @@
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { isolateMemory } from '../../fixtures/memoryWrites';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 describe('MemoryStoreTags', () => {
@@ -17,7 +18,7 @@ describe('MemoryStoreTags', () => {
   };
 
   // The test embedding stub returns one constant vector, so every entry looks
-  // like a duplicate of the last; a threshold above 1 keeps each write distinct.
+  // like a duplicate of the last; isolating each one keeps the writes distinct.
   const createEntry = async (args: {
     memoryStoreId: string;
     content: string;
@@ -29,8 +30,10 @@ describe('MemoryStoreTags', () => {
         memory_store_id: args.memoryStoreId,
         content: args.content,
         tags: args.tags,
-        duplicate_threshold: 1.1,
       });
+    // Every stub embedding is identical, so without this each write after the
+    // first would match the last one and be skipped as a duplicate.
+    await isolateMemory({ memoryId: res.body.id as string });
     return res.body.id as string;
   };
 

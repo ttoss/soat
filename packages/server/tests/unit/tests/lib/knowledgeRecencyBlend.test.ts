@@ -8,6 +8,8 @@ import { writeMemory } from 'src/lib/memories';
 import { createMemoryStore } from 'src/lib/memoryStores';
 import { createProject } from 'src/lib/projects';
 
+import { SEED_ASSERTION } from '../../fixtures/memoryWrites';
+
 /**
  * The recency blend: after fusion, a **memory store** result's `score` is multiplied
  * by `2 ^ (−age_days / half_life_days)`, read from `updated_at`. Document
@@ -143,10 +145,12 @@ const seed = async (): Promise<Fixtures> => {
   const fresh = await writeMemory({
     memoryStoreId: await memoryStoreRow(current.id),
     content: CONTENT.freshEntry,
+    assertion: SEED_ASSERTION,
   });
   const stale = await writeMemory({
     memoryStoreId: await memoryStoreRow(prior.id),
     content: CONTENT.staleEntry,
+    assertion: SEED_ASSERTION,
   });
   await backdate({
     table: 'memories',
@@ -360,6 +364,7 @@ describe('knowledge recency blend', () => {
     const written = await writeMemory({
       memoryStoreId: priorId!.id as number,
       content: CONTENT.staleEntry,
+      assertion: SEED_ASSERTION,
     });
 
     expect(written.action).toBe('skipped');

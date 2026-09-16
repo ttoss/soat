@@ -4,5 +4,13 @@ export type { AiProviderSlug } from './models/AiProvider';
 export { AI_PROVIDER_SLUGS } from './models/AiProvider';
 export type { MemorySource } from './models/Memory';
 export { MEMORY_SOURCES } from './models/Memory';
+export type {
+  MemoryAssertionMechanism,
+  MemoryAssertionOutcome,
+} from './models/MemoryAssertion';
+export {
+  MEMORY_ASSERTION_MECHANISMS,
+  MEMORY_ASSERTION_OUTCOMES,
+} from './models/MemoryAssertion';
 export * from './utils/embedding';
 export * from './utils/publicId';

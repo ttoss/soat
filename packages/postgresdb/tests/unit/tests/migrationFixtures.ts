@@ -234,3 +234,13 @@ export const selectRows = async <T>(args: {
 
   return rows as T[];
 };
+
+/** One `count(*)`, which Postgres hands back as a bigint string. */
+export const countRows = async (args: {
+  client: Sequelize;
+  sql: string;
+}): Promise<number> => {
+  const [rows] = await args.client.query(args.sql);
+
+  return Number((rows as Array<{ count: string }>)[0].count);
+};

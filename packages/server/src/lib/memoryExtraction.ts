@@ -34,7 +34,7 @@ export const resolveExtractionConfig = (
 export type ExtractionSummary = {
   candidates: number;
   created: number;
-  updated: number;
+  superseded: number;
   skipped: number;
 };
 
@@ -237,18 +237,15 @@ const resolveExtractionTarget = async (args: {
 
 const writeCandidates = async (args: {
   agentId: string;
-  projectIds?: number[];
   memoryStoreId: number;
   candidates: string[];
-  aiProviderId?: string;
-  model?: string;
   generationId?: string;
   conversationId?: string;
 }): Promise<ExtractionSummary> => {
   const summary: ExtractionSummary = {
     candidates: args.candidates.length,
     created: 0,
-    updated: 0,
+    superseded: 0,
     skipped: 0,
   };
 
@@ -257,15 +254,25 @@ const writeCandidates = async (args: {
       const result = await writeMemory({
         memoryStoreId: args.memoryStoreId,
         content,
-        // Extraction has an agent context, so merges consolidate via the LLM
-        // (reusing any extraction provider/model override).
-        consolidation: {
-          agentId: args.agentId,
-          projectIds: args.projectIds,
-          aiProviderId: args.aiProviderId,
-          model: args.model,
-        },
         sourceConversationPublicId: args.conversationId,
+        // `rule`, not `extraction`: this pass is the built-in extractor today
+        // and a `memory_rules` row with a pluggable handler after #1324, at
+        // which point only `ruleId` starts being set. Naming the value after
+        // the current implementation would schedule its own rename.
+        //
+        // No thresholds: the rule door uses the store's effective pair, like
+        // the tool door.
+        assertion: {
+          mechanism: 'rule',
+          // Null is the built-in extractor driven by
+          // `knowledge_config.extraction` — it has no rule row yet.
+          ruleId: null,
+          // The extractor is a tool-less completion that creates no generation
+          // of its own, so the turn's generation is the origin.
+          generationId: args.generationId,
+          principalType: 'agent',
+          principalId: args.agentId,
+        },
       });
       summary[result.action] += 1;
     } catch (error) {
@@ -282,8 +289,8 @@ const writeCandidates = async (args: {
 
 /**
  * Extracts atomic facts from a completed conversation turn and writes them to
- * the agent's `knowledge_config.write_memory_store_id` memory store through the standard
- * dedup/merge/skip write algorithm.
+ * the agent's `knowledge_config.write_memory_store_id` memory store through the
+ * standard create/supersede/skip write algorithm.
  *
  * Runs only when the agent's knowledge config has `extraction: true` and a
  * `write_memory_store_id`. Returns the summary, or null when extraction did not run.
@@ -342,21 +349,18 @@ export const runMemoryExtraction = async (args: {
 
   const summary = await writeCandidates({
     agentId: args.agentId,
-    projectIds: args.projectIds,
     memoryStoreId: memoryStore.id as number,
     candidates: parseFactCandidates(completionText),
-    aiProviderId: extraction.aiProviderId,
-    model: extraction.model,
     generationId: args.generationId,
     conversationId: args.conversationId,
   });
 
   log(
-    'runMemoryExtraction: done agentId=%s candidates=%d created=%d updated=%d skipped=%d',
+    'runMemoryExtraction: done agentId=%s candidates=%d created=%d superseded=%d skipped=%d',
     args.agentId,
     summary.candidates,
     summary.created,
-    summary.updated,
+    summary.superseded,
     summary.skipped
   );
 

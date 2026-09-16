@@ -1,0 +1,109 @@
+openapi: 3.0.3
+info:
+  title: SOAT Memory Assertions
+  version: 1.0.0
+  description: >-
+    Shared components for the append-only record of memory writes. This file
+    declares no paths: an assertion is read through three different modules —
+    a memory's own history, a store's write ledger, and the generation that
+    made the writes — and the shape is defined once rather than three times.
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+paths: {}
+components:
+  schemas:
+    MemoryAssertion:
+      type: object
+      description: >-
+        One write attempt against a memory store: some principal, through some
+        mechanism, claimed a fact. Append-only, and recorded whatever the
+        outcome — including the skips, which left no record anywhere before.
+      properties:
+        id:
+          type: string
+          example: massert_V1StGXR8Z5jdHi6B
+        memory_store_id:
+          x-soat-ref: memory-stores
+          type: string
+          example: mstore_V1StGXR8Z5jdHi6B
+        memory_id:
+          type: string
+          nullable: true
+          description: >-
+            The memory this assertion resolved into: the new memory for
+            `created` and `superseded`, the existing memory that matched for
+            `skipped`. Null only once that memory has been deleted.
+          example: mem_V1StGXR8Z5jdHi6B
+        superseded_memory_id:
+          type: string
+          nullable: true
+          description: >-
+            The memory this assertion retired, on a `superseded` outcome; null
+            otherwise. Read back from `memories.superseded_by_memory_id` rather
+            than stored here, because validity lives on the memory — where
+            every read filters it — and exactly one memory is superseded per
+            assertion.
+          example: mem_V1StGXR8Z5jdHi6B
+        content:
+          type: string
+          description: >-
+            The text as asserted, which is not necessarily the memory's text: a
+            `skipped` assertion records what was claimed, while the memory keeps
+            what it already held.
+          example: The customer prefers email communication over phone calls
+        mechanism:
+          type: string
+          enum: [tool, rule, api, formation]
+          description: >-
+            Which door the write came through. `tool` is the agent's
+            `write_memory` call mid-turn; `rule` is a post-turn pass over the
+            finished turn; `api` is `POST /api/v1/memories`; `formation` is a
+            `memory` resource in an applied template. It answers *how*, never
+            *who* — the principal fields answer that.
+          example: tool
+        rule_id:
+          type: integer
+          nullable: true
+          description: >-
+            Set only when `mechanism` is `rule`. Null means the built-in
+            extractor driven by the agent's `knowledge_config.extraction`.
+          example: null
+        generation_id:
+          x-soat-ref: generations
+          type: string
+          nullable: true
+          description: >-
+            The turn that asserted the fact — the origin of anything an agent
+            wrote, and the edge a conversation is reachable from. Null on the
+            `api` and `formation` doors, which have no generation behind them.
+          example: gen_V1StGXR8Z5jdHi6B
+        principal_type:
+          type: string
+          description: >-
+            Who claimed the fact, in the vocabulary a generation records its
+            starter with, plus `agent`. On both agent doors the principal is
+            the agent itself — the extractor runs under its identity.
+          example: agent
+        principal_id:
+          type: string
+          example: agent_V1StGXR8Z5jdHi6B
+        outcome:
+          type: string
+          enum: [created, superseded, skipped]
+          description: >-
+            What the write resolved to. `created` is a distinct fact,
+            `superseded` is the same fact changed (the top match was
+            invalidated and replaced), `skipped` is a fact already known.
+          example: created
+        similarity:
+          type: number
+          nullable: true
+          description: >-
+            The top match's cosine similarity — the number that chose the
+            outcome. Null when there was nothing to compare against, or when
+            the content could not be embedded.
+          example: 0.97
+        created_at:
+          type: string
+          format: date-time

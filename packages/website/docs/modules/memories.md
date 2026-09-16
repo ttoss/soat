@@ -13,7 +13,9 @@ A **memory** is one fact an agent knows. A **memory store** is the named contain
 
 A memory store is a namespace for text content that agents read and write during generation. Each store holds many **memories**, embedded for semantic search via the [Knowledge](./knowledge.md) module.
 
-Agents retrieve relevant memories via `knowledge_config` and write new facts with the built-in `write_memory` tool; see [Agent Integration](#agent-integration) and the [Memory & Knowledge Engine](../advanced/memory-and-knowledge-engine.md) deep dive. In the [engine & algorithms pattern](../advanced/engines-and-algorithms.md), the write funnel, embedding, provenance and invalidation are the **engine**; the [write algorithm](#write-algorithm) and [extraction](#automatic-extraction) are the **algorithms**, with customization seams in the [deep dive](../advanced/memory-and-knowledge-engine.md#extending-the-engine-today).
+Agents retrieve relevant memories via `knowledge_config` and write new facts with the built-in `write_memory` tool; see [Agent Integration](#agent-integration) and the [Memory & Knowledge Engine](../advanced/memory-and-knowledge-engine.md) deep dive. In the [engine & algorithms pattern](../advanced/engines-and-algorithms.md), the write funnel, embedding, the [assertion ledger](#assertions) and invalidation are the **engine**; the [write algorithm](#write-algorithm) and [extraction](#automatic-extraction) are the **algorithms**, with customization seams in the [deep dive](../advanced/memory-and-knowledge-engine.md#extending-the-engine-today).
+
+A memory is **state**. Every write that produced or changed it is an **assertion**: some principal, through some mechanism, claimed a fact. The two are separate records, which is what lets a write that changed nothing still leave a trace.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -36,12 +38,14 @@ Agents retrieve relevant memories via `knowledge_config` and write new facts wit
 | `name`        | `string`          | Human-readable name                       |
 | `description` | `string \| null`  | Optional description                      |
 | `tags`        | `object \| null`  | Optional key-value labels for filtering by category |
+| `duplicate_threshold` | `number \| null` | The store's skip cutoff; `null` uses the algorithm constant — see [Where the thresholds come from](#where-the-thresholds-come-from) |
+| `supersede_threshold` | `number \| null` | The store's supersede cutoff; `null` uses the algorithm constant |
 | `created_at`  | `string`          | ISO 8601 creation timestamp               |
 | `updated_at`  | `string`          | ISO 8601 last-updated timestamp           |
 
 ### Memory
 
-When a memory is created or updated, its `content` is embedded for semantic similarity search.
+When a memory is created or updated, its `content` is embedded for semantic similarity search. The text and its vector are stored **once per distinct text per store** and shared: a memory holds no copy of its own, and restating text the store already has costs no embedding call at all.
 
 | Field        | Type     | Description                                             |
 | ------------ | -------- | ------------------------------------------------------- |
@@ -57,6 +61,26 @@ When a memory is created or updated, its `content` is embedded for semantic simi
 | `created_at` | `string` | ISO 8601 creation timestamp                             |
 | `updated_at` | `string` | ISO 8601 last-updated timestamp                         |
 
+### Memory Assertion
+
+One row per write attempt, append-only, whatever the write resolved to.
+
+| Field        | Type     | Description                                             |
+| ------------ | -------- | ------------------------------------------------------- |
+| `id`         | `string` | Public ID (`massert_` prefix)                           |
+| `memory_store_id` | `string` | ID of the store written to                         |
+| `memory_id`  | `string \| null` | The memory the write resolved into: the new memory for `created` and `superseded`, the memory that matched for `skipped` |
+| `superseded_memory_id` | `string \| null` | The memory this assertion retired, on a `superseded` outcome |
+| `content`    | `string` | The text **as asserted**, which is not always the memory's text — a `skipped` assertion records what was claimed |
+| `mechanism`  | `string` | Which door the write came through: `tool`, `rule`, `api` or `formation` — see [Mechanism](#mechanism) |
+| `rule_id`    | `integer \| null` | Set only for `rule`; `null` is the built-in extractor |
+| `generation_id` | `string \| null` | The turn that asserted the fact; `null` on the `api` and `formation` doors |
+| `principal_type` | `string` | Who claimed it, in the vocabulary a [generation](./generations.md) records its starter with, plus `agent` |
+| `principal_id` | `string` | The principal's public ID                             |
+| `outcome`    | `string` | `created`, `superseded` or `skipped`                    |
+| `similarity` | `number \| null` | The top match's cosine — the number that chose the outcome; `null` when there was nothing to compare against |
+| `created_at` | `string` | ISO 8601 creation timestamp                             |
+
 ## Key Concepts
 
 ### What belongs in a memory
@@ -65,12 +89,12 @@ A memory is a **fact the agent learns about the world** (a customer's shipping
 address, a decision a team reached, a constraint discovered while working), retrieved by
 semantic similarity and consumed as context.
 
-Retrieval is **approximate**: `memories.embedding` carries an HNSW index, so a
+Retrieval is **approximate**: the shared content row's vector carries an HNSW index, so a
 similarity search reads a bounded candidate list rather than scanning every memory. Recall
 against the exact top-k is below 1.0, and `min_similarity` thresholds tuned against an
 exact scan may select a slightly different set. See
 [Ranking is approximate](./knowledge.md#ranking-is-approximate); it applies to memory
-search and to the consolidation similarity check below alike.
+search and to the dedup similarity check below alike.
 
 A **correction to the agent's behavior** ("never quote a delivery date without checking
 stock") is doctrine, not a fact, and its application must not depend on retrieval rank.
@@ -86,45 +110,76 @@ When the same correction keeps being made by hand, the
 
 ### Write Algorithm
 
-Every write to a memory store (REST, agent tool, or extraction) goes through the same deduplication algorithm.
+Every write to a memory store — REST, the agent tool, a post-turn rule, a formation — goes through the same three-outcome algorithm. There is **no model call** anywhere in it.
 
-On [`POST /api/v1/memories`](/docs/api/memories/create-memory) (with `memory_store_id` in the body), the server:
+1. **Resolve the content.** The text is matched against what the store already holds, by a hash of its trimmed, whitespace-collapsed form. A hit reuses the stored row and its vector and reaches no embedder; a miss embeds once and stores the pair.
+2. **Find the top match** — the most similar **currently-valid** memory in that store, by cosine. [Invalidated memories](#temporal-invalidation) are never candidates.
+3. **Resolve to one outcome:**
 
-1. **Embeds** the incoming content.
-2. **Finds** the most similar **currently-valid** existing memory in that store (cosine similarity via pgvector). [Invalidated memories](#temporal-invalidation) are never candidates.
-3. **Decides** based on two configurable thresholds:
+| Similarity range        | Outcome        | What happens                                                                                  |
+| ----------------------- | -------------- | --------------------------------------------------------------------------------------------- |
+| ≥ `duplicate_threshold` | **skipped**    | The fact is already known. The existing memory is returned unchanged.                           |
+| ≥ `supersede_threshold` | **superseded** | The same fact, changed. The match is invalidated and points at a new memory holding the new text. |
+| below it                | **created**    | A distinct fact. A new memory is written.                                                       |
 
-| Similarity range        | Decision   | What happens                                                      |
-| ----------------------- | ---------- | ----------------------------------------------------------------- |
-| ≥ `duplicate_threshold` | **Skip**   | The fact is already known. Returns the existing memory unchanged. |
-| below it                | **Create** | A new memory is written.                                          |
+Every call records exactly one [assertion](#assertions), whatever the outcome.
 
-`duplicate_threshold` is a per-request field on [`POST /api/v1/memories`](/docs/api/memories/create-memory), defaulting to `0.95`.
+On a **supersede**, the retired memory's `tags` and `metadata` are shallow-merged onto the replacement (incoming keys win), so a replacement stays inside every tag-scoped search and policy the original satisfied. [`PUT /api/v1/memories/:id`](/docs/api/memories/update-memory) replaces `tags`/`metadata` outright; pass `null` (or `{}` for tags) to clear.
 
-**Merge** is a third outcome, reachable only from agent write paths. A write made during a
-generation (the [`write_memory` tool](#write_memory-tool) and
-[automatic extraction](#automatic-extraction)) carries an agent context, so a fact scoring
-at or above `0.75` but below `duplicate_threshold` is consolidated with the existing memory
-into a **single atomic fact** by the agent's LLM, contradictions resolving in favour of the
-new fact.
+Below `supersede_threshold`, cosine covers both "same fact, changed" and "related but distinct" (*prefers email* vs *prefers Portuguese*), and embeddings sit close on negations. `created` is the outcome there because a near-duplicate stays searchable while a wrongly retired fact does not.
 
-A write with no agent context (the manual endpoint) creates instead.
-Consolidation is best-effort: if the completion fails or comes back empty, the write
-creates too. Nothing is ever appended to an existing memory, so no write can lose a fact;
-a near-duplicate pair is possible and is merged by future arbitration.
+### Where the thresholds come from
 
-On a **merge**, the incoming `tags` and `metadata` are both shallow-merged into the existing memory (incoming keys win). [`PUT /api/v1/memories/:id`](/docs/api/memories/update-memory) replaces `tags`/`metadata` outright; pass `null` (or `{}` for tags) to clear.
+Three layers, resolved request → store → constant, each value independently; the first non-null wins.
+
+| Layer | Where | Scope |
+| --- | --- | --- |
+| Per-request | `duplicate_threshold` / `supersede_threshold` on [`POST /api/v1/memories`](/docs/api/memories/create-memory) | that one call |
+| Store default | `duplicate_threshold` / `supersede_threshold` on the memory store, settable on create, update and as a formation resource property | the corpus's dedup policy |
+| Algorithm constant | built in | `0.95` / `0.90` |
+
+Only the `api` door takes per-request values. The [`write_memory` tool](#write_memory-tool) and the post-turn [rule](#automatic-extraction) always use the store's effective pair: a writer that could loosen the corpus's dedup policy from the side would make the store-level default meaningless. A formation sets store defaults through the store resource, never per memory.
+
+**Invariant:** the *effective* pair must satisfy `supersede_threshold < duplicate_threshold`. Equal makes `superseded` unreachable; inverted swallows `skipped`. Both are rejected with `400 VALIDATION_FAILED`, on the store write and on the request — and on the request the check runs against the effective pair, so a body overriding only one value cannot invert it against the store's other one. Each value is bounded to `[0, 1]`.
 
 #### Response `action` Field
 
 The response always includes an `action` field alongside the memory:
 
-| `action`  | HTTP status | Meaning                                      |
-| --------- | ----------- | -------------------------------------------- |
-| `created` | `201`       | New memory written                           |
-| `updated` | `200`       | Existing memory rewritten to absorb the incoming fact. Agent write paths only — the manual endpoint never returns it |
-| `skipped` | `200`       | Duplicate detected — existing memory returned |
-| `superseded` | `200`    | The incoming fact contradicted an existing memory, which was invalidated and replaced. Produced by the LLM-arbitrated write path, which has not shipped yet — the value is part of the API contract so clients can handle it from day one. |
+| `action`     | HTTP status | Meaning                                                                 |
+| ------------ | ----------- | ----------------------------------------------------------------------- |
+| `created`    | `201`       | New memory written                                                       |
+| `superseded` | `200`       | The match was invalidated and replaced; the **replacement** is returned   |
+| `skipped`    | `200`       | The fact was already known; the existing memory is returned unchanged     |
+
+### Assertions
+
+A memory row is **state**. The write that produced it is an **event**, recorded separately: one `memory_assertion` per write attempt, appended whatever the outcome, including the writes that changed nothing.
+
+An assertion names the content as asserted (not always the memory's text), the outcome and the similarity that chose it, the principal who claimed the fact, the mechanism it came through, and — for anything an agent wrote — the generation it happened in.
+
+#### Mechanism
+
+`mechanism` answers *through which door*, never *who*:
+
+| `mechanism` | The write |
+| --- | --- |
+| `tool` | the agent's [`write_memory`](#write_memory-tool) call, mid-turn |
+| `rule` | a post-turn pass over the finished turn — today the built-in [extractor](#automatic-extraction), with `rule_id` null |
+| `api` | [`POST /api/v1/memories`](/docs/api/memories/create-memory) |
+| `formation` | a `memory` resource in an applied [formation](./formations.md) |
+
+The *who* is `principal_type` / `principal_id`. On both agent doors the principal is the **agent**: the extractor runs under the agent's identity, and the generation's own `started_by` names whoever asked for the turn, which is a different question.
+
+#### Reading the ledger
+
+- [`GET /api/v1/memories/{memory_id}/assertions`](/docs/api/memories/list-memory-assertions) — one memory's full history, oldest first, skips included. A `superseded` assertion also names the memory it retired, so the chain reads in both directions. A retired memory keeps its own assertions.
+- [`GET /api/v1/memory-stores/{memory_store_id}/assertions`](/docs/api/memory-stores/list-memory-store-assertions) — the store's ledger, newest first, filterable by `mechanism`, `outcome`, `generation_id` and `since`. This is the volume question as a query.
+- [`GET /api/v1/generations/{generation_id}`](/docs/api/generations/get-generation) carries `memory_assertions` alongside the [extraction](#automatic-extraction) counts, so the summary and the rows it summarizes reconcile — and it covers the `write_memory` calls the summary never saw.
+
+Both listings are gated on `memories:ListMemoryAssertions`, against the store's SRN like every other item read.
+
+Validity — `invalidated_at` and `superseded_by_memory_id` — is on the memory, not on the assertion: it is the filter on every read, and an invalidation with no replacement has no assertion to carry it. `superseded_memory_id` is read back from the memory, and is unique because a write supersedes exactly its top match.
 
 ### Provenance
 
@@ -139,8 +194,9 @@ It deliberately does **not** describe the write *mechanism*. A fact the `write_m
 tool wrote during a generation that belongs to no conversation reads `manual`, because
 there is nothing to name — not because a human typed it.
 
-Provenance is recorded **when the memory is created and never rewritten by a later merge**;
-a turn that replaces the fact supersedes it with a new memory carrying its own provenance.
+Provenance is recorded when the memory is created and never rewritten. A turn that replaces
+the fact supersedes it with a new memory carrying its own provenance. Which door a write came
+through, and which turn made it, are on the [assertion](#assertions) instead.
 
 `source_id` is a loose pointer, not a foreign key: deleting the conversation leaves the id
 in place. The fact *was* learned there, and the record of where it came from outlives its
@@ -151,21 +207,20 @@ See [Agent with Persistent Memory - Step 13 (Trace a fact back to the conversati
 ### Temporal invalidation
 
 A memory that no longer holds is **retired rather than rewritten**: superseding sets
-`invalidated_at` and points `superseded_by_memory_id` at the replacement. `DELETE` remains
-the way to remove a memory outright.
+`invalidated_at` and points `superseded_by_memory_id` at the replacement.
 
 Invalidated memories are excluded from:
 
 - memory listing ([`GET /api/v1/memories`](/docs/api/memories/list-memories)) unless `include_invalidated=true` is passed
-- [write deduplication](#write-algorithm) — a retired fact is never a merge target, so
+- [write deduplication](#write-algorithm) — a retired fact is never a match candidate, so
   restating superseded knowledge creates a new memory
 - [Knowledge search](./knowledge.md), so a retired fact is never injected into a generation
 
-They stay readable by ID ([`GET /api/v1/memories/{memory_id}`](/docs/api/memories/get-memory)) for audit.
+They stay readable by ID ([`GET /api/v1/memories/{memory_id}`](/docs/api/memories/get-memory)),
+with their original text and their own [assertions](#assertions), for audit.
 
-The write path that *produces* an invalidation (LLM arbitration over a shortlist of
-similar memories) has not shipped yet; the columns and API shape are in place because
-supersede history cannot be reconstructed after the fact.
+Superseding is the write outcome that produces an invalidation. `DELETE` remains the way to
+remove a memory outright.
 
 ### Tag Filtering
 
@@ -228,7 +283,9 @@ Set `knowledge_config` on an agent to have the server search relevant memories b
 
 #### `write_memory` Tool
 
-Set `write_memory_store_id` in the agent's `knowledge_config` to inject a `write_memory` tool into every generation. The tool accepts a single `content` input, the atomic fact to write. The target store is fixed by `write_memory_store_id`; the agent cannot choose another. Memories written by the tool carry `source_type: "manual"` — the tool runs inside a generation that may belong to no conversation, so there is no source to name.
+Set `write_memory_store_id` in the agent's `knowledge_config` to inject a `write_memory` tool into every generation. The tool accepts a single `content` input, the atomic fact to write. The target store is fixed by `write_memory_store_id`; the agent cannot choose another, and it cannot set thresholds — the store's effective pair applies.
+
+Memories written by the tool carry `source_type: "manual"`: `source_id` is a pointer a client supplies on a hand-written fact, and the tool has none to give. The turn behind the write is on its [assertion](#assertions), with `mechanism: "tool"` and the agent as principal.
 
 ```json
 {
@@ -254,8 +311,9 @@ Set `extraction` alongside `write_memory_store_id` to have the server extract fa
 
 - After a conversation, session, or direct agent generation completes, the server runs a fire-and-forget extraction step that never blocks or fails the generation response.
 - The step sends the turn's transcript as a plain completion (no tools, no knowledge injection) and asks for a JSON array of atomic facts. Transient content such as greetings is skipped.
-- Each candidate fact (at most 20 per turn) goes through the standard [write algorithm](#write-algorithm). Memories from a conversation turn carry `source_type: "conversation"` and its id in `source_id`; a direct agent generation has no conversation, so those read `manual`.
-- A summary (`{ candidates, created, updated, skipped }`) is recorded on the originating generation's `extraction` field ([Generations](./generations.md) API).
+- Each candidate fact (at most 20 per turn) goes through the standard [write algorithm](#write-algorithm), on the store's effective thresholds. Memories from a conversation turn carry `source_type: "conversation"` and its id in `source_id`; a direct agent generation has no conversation, so those read `manual`.
+- Each write records an [assertion](#assertions) with `mechanism: "rule"`, `rule_id: null` and the turn's `generation_id`.
+- A summary (`{ candidates, created, superseded, skipped }`) is recorded on the originating generation's `extraction` field ([Generations](./generations.md) API), alongside the `memory_assertions` rows behind it.
 
 Object form fields (all optional):
 
@@ -355,7 +413,7 @@ const { data, error } = await soat.memories.createMemory({
   body: { memory_store_id: 'mstore_01', content: 'Customer prefers email over phone calls' },
 });
 if (error) throw new Error(JSON.stringify(error));
-// data.action is "created", "updated", or "skipped"
+// data.action is "created", "superseded", or "skipped"
 ```
 
 </TabItem>

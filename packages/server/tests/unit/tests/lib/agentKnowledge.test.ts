@@ -46,6 +46,7 @@ describe('buildWriteMemoryTool', () => {
     const writeMemoryTool = buildWriteMemoryTool({
       writeMemoryStoreId: memoryStoreId,
       agentId: 'agt_test',
+      generationId: 'gen_write_tool',
     });
 
     const result = await writeMemoryTool.execute!(
@@ -107,6 +108,7 @@ describe('buildWriteMemoryTool', () => {
     const writeMemoryTool = buildWriteMemoryTool({
       writeMemoryStoreId: provenanceMemoryStoreRes.body.id,
       agentId: agentPublicId,
+      generationId: 'gen_wm_prov_1',
     });
 
     const result = await writeMemoryTool.execute!(
@@ -124,12 +126,28 @@ describe('buildWriteMemoryTool', () => {
     // The tool never runs inside a conversation, so there is no source to name.
     expect(detail.body.source_type).toBe('manual');
     expect(detail.body.source_id).toBeNull();
+
+    // Where the write came from is on the assertion instead: the door, the
+    // agent that claimed the fact, and the turn it claimed it in.
+    const assertions = await authenticatedTestClient(adminToken).get(
+      `/api/v1/memories/${memoryId}/assertions`
+    );
+    expect(assertions.status).toBe(200);
+    expect(assertions.body.data).toHaveLength(1);
+    expect(assertions.body.data[0]).toMatchObject({
+      mechanism: 'tool',
+      generation_id: 'gen_wm_prov_1',
+      principal_type: 'agent',
+      principal_id: agentPublicId,
+      outcome: 'created',
+    });
   });
 
   test('returns an error when the target memoryStore does not exist', async () => {
     const writeMemoryTool = buildWriteMemoryTool({
       writeMemoryStoreId: 'mstore_nonexistent',
       agentId: 'agt_test',
+      generationId: 'gen_write_tool',
     });
 
     const result = await writeMemoryTool.execute!(
@@ -146,6 +164,7 @@ describe('buildWriteMemoryTool', () => {
     const writeMemoryTool = buildWriteMemoryTool({
       writeMemoryStoreId: memoryStoreId,
       agentId: 'agt_test',
+      generationId: 'gen_write_tool',
       boundaryPolicy: {
         statement: [{ effect: 'Deny', action: ['*'], resource: ['*'] }],
       },
@@ -173,12 +192,13 @@ describe('buildWriteMemoryTool', () => {
   });
 
   test('a targeted deny on the memory-write action blocks the write (F-11)', async () => {
-    // Allow everything, then deny only the update action — the write tool
-    // consolidates (may update), so the targeted deny must still block it even
-    // though create is permitted.
+    // Allow everything, then deny only the update action — the write tool may
+    // supersede an existing memory, so the targeted deny must still block it
+    // even though create is permitted.
     const writeMemoryTool = buildWriteMemoryTool({
       writeMemoryStoreId: memoryStoreId,
       agentId: 'agt_test',
+      generationId: 'gen_write_tool',
       boundaryPolicy: {
         statement: [
           { effect: 'Allow', action: ['*'], resource: ['*'] },
@@ -205,6 +225,7 @@ describe('buildWriteMemoryTool', () => {
     const writeMemoryTool = buildWriteMemoryTool({
       writeMemoryStoreId: memoryStoreId,
       agentId: 'agt_test',
+      generationId: 'gen_write_tool',
       boundaryPolicy: {
         statement: [
           {
@@ -827,6 +848,7 @@ describe('buildKnowledgeTools — formation-deployed agent casing', () => {
 
     buildKnowledgeTools({
       agentId,
+      generationId: 'gen_knowledge_tools',
       projectIds: [internalProjectId],
       typedAgent: toTypedAgent(agent.knowledge_config),
       resolvedTools,
@@ -852,6 +874,7 @@ describe('buildKnowledgeTools — formation-deployed agent casing', () => {
 
     buildKnowledgeTools({
       agentId,
+      generationId: 'gen_knowledge_tools',
       projectIds: [internalProjectId],
       typedAgent: toTypedAgent(agent.knowledge_config),
       resolvedTools,

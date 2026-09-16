@@ -750,6 +750,49 @@ describe('MCP tools - happy path', () => {
     ).toBe(true);
   });
 
+  test('list-memory-assertions and list-memory-store-assertions read the write ledger', async () => {
+    const store = parseResult(
+      await mcpCall('create-memory-store', {
+        project_id: projectId,
+        name: 'MCP Assertion Store',
+      })
+    );
+
+    const written = parseResult(
+      await mcpCall('create-memory', {
+        memory_store_id: store.id,
+        content: 'The MCP deploy window is Tuesday.',
+      })
+    );
+    // Every stub embedding is identical, so restating anything in this store
+    // matches the first memory and skips — the outcome that used to leave no
+    // record at all.
+    await mcpCall('create-memory', {
+      memory_store_id: store.id,
+      content: 'Deploys happen on Tuesdays.',
+    });
+
+    const history = parseResult(
+      await mcpCall('list-memory-assertions', { memory_id: written.id })
+    );
+    expect(
+      history.data.map((assertion: { outcome: string }) => {
+        return assertion.outcome;
+      })
+    ).toEqual(['created', 'skipped']);
+    expect(history.data[0].id).toMatch(/^massert_/);
+    expect(history.data[0].mechanism).toBe('api');
+
+    const ledger = parseResult(
+      await mcpCall('list-memory-store-assertions', {
+        memory_store_id: store.id,
+        outcome: 'skipped',
+      })
+    );
+    expect(ledger.total).toBe(1);
+    expect(ledger.data[0].outcome).toBe('skipped');
+  });
+
   test('create-memory rejects a source_type and source_id that disagree', async () => {
     const store = parseResult(
       await mcpCall('create-memory-store', {

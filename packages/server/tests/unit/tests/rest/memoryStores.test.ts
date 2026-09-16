@@ -1,6 +1,7 @@
 import { db } from 'src/db';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { setMemorySimilarity } from '../../fixtures/memoryWrites';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 describe('MemoryStores', () => {
@@ -437,37 +438,98 @@ describe('MemoryStores', () => {
         expect(response.body.id).toMatch(/^mem_/);
       });
 
-      // #1062: the manual path has no agent context, so a merge-band write
-      // creates a second entry rather than concatenating onto the first.
-      // `duplicate_threshold > 1` keeps this out of the skip branch.
-      test('a merge-band manual write creates instead of merging', async () => {
+      // The band that used to merge two facts into one by LLM now supersedes:
+      // the old memory is retired intact and a new one replaces it. Nothing is
+      // rewritten, so neither original text is lost.
+      test('a supersede-band write retires the match and replaces it', async () => {
         const freshMemoryStoreId = await createTestMemoryStore();
         const first = await authenticatedTestClient(userToken)
           .post('/api/v1/memories')
           .send({
             memory_store_id: freshMemoryStoreId,
-            content: 'First entry for merge',
+            content: 'Delivery window is two weeks',
           });
+        await setMemorySimilarity({
+          memoryId: first.body.id as string,
+          similarity: 0.92,
+        });
 
         const response = await authenticatedTestClient(userToken)
           .post('/api/v1/memories')
           .send({
             memory_store_id: freshMemoryStoreId,
-            content: 'Second entry for merge',
-            duplicate_threshold: 1.1,
+            content: 'Delivery window is four weeks',
           });
 
-        expect(response.status).toBe(201);
-        expect(response.body.action).toBe('created');
-        expect(response.body.id).toMatch(/^mem_/);
+        expect(response.status).toBe(200);
+        expect(response.body.action).toBe('superseded');
         expect(response.body.id).not.toBe(first.body.id);
-        expect(response.body.content).toBe('Second entry for merge');
+        expect(response.body.content).toBe('Delivery window is four weeks');
+        expect(response.body.invalidated_at).toBeNull();
 
-        // The pre-existing entry is untouched — nothing was appended to it.
+        // The retired entry keeps its own text and points at its replacement.
         const existing = await authenticatedTestClient(userToken).get(
           `/api/v1/memories/${first.body.id}`
         );
-        expect(existing.body.content).toBe('First entry for merge');
+        expect(existing.body.content).toBe('Delivery window is two weeks');
+        expect(existing.body.invalidated_at).not.toBeNull();
+        expect(existing.body.superseded_by_memory_id).toBe(response.body.id);
+      });
+
+      test('a threshold outside [0, 1] returns 400', async () => {
+        const freshMemoryStoreId = await createTestMemoryStore();
+        const response = await authenticatedTestClient(userToken)
+          .post('/api/v1/memories')
+          .send({
+            memory_store_id: freshMemoryStoreId,
+            content: 'Out of range threshold',
+            duplicate_threshold: 1.1,
+          });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      });
+
+      // Equal makes `superseded` unreachable and inverted swallows `skipped`,
+      // so either way one of the three outcomes silently stops occurring.
+      test('a threshold pair that is not supersede < duplicate returns 400', async () => {
+        const freshMemoryStoreId = await createTestMemoryStore();
+        const response = await authenticatedTestClient(userToken)
+          .post('/api/v1/memories')
+          .send({
+            memory_store_id: freshMemoryStoreId,
+            content: 'Inverted thresholds',
+            duplicate_threshold: 0.8,
+            supersede_threshold: 0.9,
+          });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      });
+
+      // The check runs against the effective pair, so a body that overrides one
+      // value cannot invert it against the store's other one.
+      test('a one-sided override that inverts the store pair returns 400', async () => {
+        const storeRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/memory-stores')
+          .send({
+            project_id: projectId,
+            name: `Effective Pair ${Date.now()}`,
+            duplicate_threshold: 0.9,
+            supersede_threshold: 0.8,
+          });
+
+        const response = await authenticatedTestClient(userToken)
+          .post('/api/v1/memories')
+          .send({
+            memory_store_id: storeRes.body.id,
+            content: 'One-sided override',
+            // Below the store's supersede_threshold of 0.8.
+            duplicate_threshold: 0.7,
+          });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error.code).toBe('VALIDATION_FAILED');
       });
 
       test('update_threshold is rejected as an unknown field', async () => {
@@ -768,14 +830,10 @@ describe('MemoryStores', () => {
     });
 
     describe('provenance and temporal invalidation', () => {
-      // Test embeddings are constant, so a second write scores 1.0 and is
-      // skipped as a duplicate. A threshold above 1 is the only way to land two
-      // independent entries in one memory store here.
       const createEntry = async (args: {
         memoryStoreId: string;
         content: string;
         sourceType?: string;
-        forceCreate?: boolean;
       }) => {
         return authenticatedTestClient(userToken)
           .post('/api/v1/memories')
@@ -783,26 +841,17 @@ describe('MemoryStores', () => {
             memory_store_id: args.memoryStoreId,
             content: args.content,
             source_type: args.sourceType,
-            ...(args.forceCreate ? { duplicate_threshold: 1.1 } : {}),
           });
       };
 
-      // No public path sets `invalidated_at` yet, so the state is seeded
-      // directly; the behaviour under test still runs entirely through the API.
-      const invalidateEntry = async (args: {
-        entryId: string;
-        supersededBy?: string;
-      }) => {
+      // Retirement with no replacement — a "forget this" — has no writer yet,
+      // so the state is seeded directly. The supersede case below is produced
+      // by the write path itself.
+      const invalidateEntry = async (args: { entryId: string }) => {
         const entry = await db.Memory.findOne({
           where: { publicId: args.entryId },
         });
         entry!.invalidatedAt = new Date();
-        if (args.supersededBy) {
-          const replacement = await db.Memory.findOne({
-            where: { publicId: args.supersededBy },
-          });
-          entry!.supersededByMemoryId = replacement!.id as number;
-        }
         await entry!.save();
       };
 
@@ -847,23 +896,24 @@ describe('MemoryStores', () => {
         expect(response.body.total).toBe(0);
       });
 
+      // The state here is produced by the write path itself rather than seeded:
+      // a supersede is the one thing that fills both columns at once.
       test('include_invalidated returns invalidated entries with their supersede link', async () => {
         const freshMemoryStoreId = await createTestMemoryStore();
         const oldEntry = await createEntry({
           memoryStoreId: freshMemoryStoreId,
           content: 'Pedro works at Company X',
         });
+        await setMemorySimilarity({
+          memoryId: oldEntry.body.id as string,
+          similarity: 0.92,
+        });
+
         const replacement = await createEntry({
           memoryStoreId: freshMemoryStoreId,
           content: 'Pedro left Company X',
-          forceCreate: true,
         });
-        expect(replacement.body.action).toBe('created');
-
-        await invalidateEntry({
-          entryId: oldEntry.body.id,
-          supersededBy: replacement.body.id,
-        });
+        expect(replacement.body.action).toBe('superseded');
 
         const response = await authenticatedTestClient(userToken).get(
           `/api/v1/memories?memory_store_id=${freshMemoryStoreId}&include_invalidated=true`

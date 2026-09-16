@@ -91,6 +91,7 @@ const resolveContextAndRecord = async (args: {
   nodeId?: string;
   nodeAttempt?: number;
   sessionId?: string;
+  conversationId?: string;
   metadata?: Record<string, unknown> | null;
   guardrailContext?: Record<string, unknown> | null;
   pinnedAgentVersion?: number | null;
@@ -139,6 +140,13 @@ const resolveContextAndRecord = async (args: {
     // Typed FK columns, not metadata keys: this is identity the platform
     // enforces and caps spend on, so it must not live in a caller-writable bag.
     sessionId: args.sessionId ?? null,
+    // The conversation this turn served, so a memory assertion recorded against
+    // the generation can be walked up to the conversation the fact was learned
+    // in. Absent on every other entry point — there is no conversation behind a
+    // direct generation, a trigger or an orchestration node. No `?? null`: the
+    // record writer normalizes it, and a branch here would cost this function
+    // its complexity budget, as the note on `nodeAttempt` below records.
+    conversationId: args.conversationId,
     // Usage attribution and the served agent version: typed columns, for the
     // same reason. `metadata` carries only what the caller sent (F-15).
     actionId: args.actionId ?? null,
@@ -227,6 +235,8 @@ export type CreateGenerationArgs = {
   // actor is derived. Set by the session path; absent for direct API
   // generations, triggers, and orchestration nodes — no end user behind them.
   sessionId?: string;
+  // The conversation this turn answers, set by the conversation path only.
+  conversationId?: string;
   metadata?: Record<string, unknown> | null;
   // Caller-supplied guardrail context (guardrails.md — Guards and Guardrail
   // Context); the `context.*` namespace guards read at tool-dispatch time.

@@ -7,8 +7,8 @@ import {
   Table,
 } from '@ttoss/postgresdb';
 
-import { getEmbeddingDimensions } from '../utils/embedding';
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
+import { MemoryContent } from './MemoryContent';
 import { MemoryStore } from './MemoryStore';
 
 export const MEMORY_SOURCES = ['manual', 'conversation'] as const;
@@ -23,12 +23,9 @@ export type MemorySource = (typeof MEMORY_SOURCES)[number];
       fields: ['public_id'],
     },
     {
-      // Without it a semantic search scans every vector in scope: the read
-      // pattern is only ever `ORDER BY embedding <=> $query LIMIT n` (#1220).
-      // Cosine, because that is the operator both search paths order on.
-      name: 'memories_embedding_hnsw_idx',
-      using: 'hnsw',
-      fields: [{ name: 'embedding', operator: 'vector_cosine_ops' }],
+      // Every read joins the shared content row for the text and the vector.
+      name: 'memories_content_id_idx',
+      fields: ['content_id'],
     },
   ],
   hooks: {
@@ -60,8 +57,24 @@ export class Memory extends Model {
   )
   declare memoryStore: MemoryStore;
 
-  @Column({ type: DataType.TEXT, allowNull: false })
-  declare content: string;
+  /**
+   * The text this memory currently holds, shared with every assertion that
+   * stated it. The memory keeps identity and validity; the content row keeps
+   * the text and its vector.
+   */
+  @ForeignKey(() => {
+    return MemoryContent;
+  })
+  @Column({ type: DataType.INTEGER, allowNull: false })
+  declare contentId: number;
+
+  @BelongsTo(
+    () => {
+      return MemoryContent;
+    },
+    { foreignKey: 'contentId', as: 'content', onDelete: 'CASCADE' }
+  )
+  declare content: MemoryContent;
 
   /**
    * Provenance — whether there is a source to point at, not how the write was
@@ -94,18 +107,15 @@ export class Memory extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare metadata: Record<string, unknown> | null;
 
-  @Column({
-    type: DataType.VECTOR(getEmbeddingDimensions()),
-    allowNull: true,
-  })
-  declare embedding: number[] | null;
-
   /**
    * Temporal invalidation — `null` means currently valid. A superseded memory
    * is retired rather than rewritten: it stays readable for audit and points
-   * at the memory that replaced it. The LLM arbitration that sets these ships
-   * later (Memories 5a); the columns and API shape land now because supersede
-   * history cannot be backfilled.
+   * at the memory that replaced it.
+   *
+   * Validity lives here and only here. It is the filter on every hot read
+   * (dedup, listing, knowledge search), and a future "forget this" is
+   * `invalidatedAt` set with no replacement — a state of the memory that no
+   * supersede assertion could express.
    */
   @Column({ type: DataType.DATE, allowNull: true })
   declare invalidatedAt: Date | null;

@@ -1,4 +1,5 @@
 import type { db } from '../db';
+import type { MappedMemoryAssertion } from './memoryAssertions';
 import type { UsageTotals } from './usageTotals';
 
 export type PersistedGeneration = {
@@ -8,6 +9,7 @@ export type PersistedGeneration = {
   trace_id: string;
   initiator_generation_id: string | null;
   chain_id: string | null;
+  conversation_id: string | null;
   session_id: string | null;
   actor_id: string | null;
   started_by_principal_type: string | null;
@@ -28,6 +30,13 @@ export type PersistedGeneration = {
   routing: Record<string, unknown> | null;
   extraction: Record<string, unknown> | null;
   /**
+   * The memory writes this turn made, as rows. Present on the single read,
+   * absent from the listing — a page of generations would be a page of extra
+   * queries. It is what the `extraction` counts summarize, so the two can be
+   * reconciled instead of taken on trust.
+   */
+  memory_assertions?: MappedMemoryAssertion[];
+  /**
    * What the turn cost. Present on the single read, absent from the listing:
    * it is a second query per generation, and a page of them would be a page of
    * queries. Undefined is "not asked for"; null is "asked for, nothing metered
@@ -43,6 +52,18 @@ export type PersistedGeneration = {
   updated_at: Date;
 };
 
+/**
+ * A linked row's public id, or null when the link is absent.
+ *
+ * Five associations read the same way, and spelling `?.publicId ?? null` at
+ * each of them costs the mapper its complexity budget.
+ */
+const linkedPublicId = (
+  linked?: { publicId: string } | null
+): string | null => {
+  return linked?.publicId ?? null;
+};
+
 export const mapGeneration = (
   gen: InstanceType<(typeof db)['Generation']> & {
     project?: InstanceType<(typeof db)['Project']>;
@@ -51,6 +72,7 @@ export const mapGeneration = (
     initiatorGeneration?: InstanceType<(typeof db)['Generation']> | null;
     session?: InstanceType<(typeof db)['Session']> | null;
     startedByActor?: InstanceType<(typeof db)['Actor']> | null;
+    conversation?: InstanceType<(typeof db)['Conversation']> | null;
   }
 ): PersistedGeneration => {
   if (!gen.project || !gen.agent || !gen.trace) {
@@ -62,15 +84,18 @@ export const mapGeneration = (
     project_id: gen.project.publicId,
     agent_id: gen.agent.publicId,
     trace_id: gen.trace.publicId,
-    initiator_generation_id: gen.initiatorGeneration?.publicId ?? null,
+    initiator_generation_id: linkedPublicId(gen.initiatorGeneration),
     // The continuation chain this turn belongs to; null when it is not one. The
     // chain's own key (`rootGenerationId`) stays internal — this is the handle.
     chain_id: gen.chainId,
+    // The conversation this turn served, null everywhere else. Persisted since
+    // #1322: before it, neither row carried the other's id.
+    conversation_id: linkedPublicId(gen.conversation),
     // The end-user attribution the usage event copies at metering time. Exposed
     // here too, because a session's spend is otherwise reconstructable only by
     // recording the session -> generation link outside the platform (#1265).
-    session_id: gen.session?.publicId ?? null,
-    actor_id: gen.startedByActor?.publicId ?? null,
+    session_id: linkedPublicId(gen.session),
+    actor_id: linkedPublicId(gen.startedByActor),
     started_by_principal_type: gen.startedByPrincipalType,
     started_by_principal_id: gen.startedByPrincipalId,
     status: gen.status,
@@ -111,7 +136,14 @@ export const mapGeneration = (
  */
 export const mapGenerationWithUsage = (
   gen: Parameters<typeof mapGeneration>[0],
-  usage: UsageTotals | null
+  usage: UsageTotals | null,
+  memoryAssertions?: MappedMemoryAssertion[]
 ): PersistedGeneration => {
-  return { ...mapGeneration(gen), usage };
+  return {
+    ...mapGeneration(gen),
+    usage,
+    ...(memoryAssertions === undefined
+      ? {}
+      : { memory_assertions: memoryAssertions }),
+  };
 };

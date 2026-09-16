@@ -96,6 +96,10 @@ export const resolveAgentToolSurface = async (args: {
   // `knowledge_config` (`write_memory`) on top of the bound ones.
   buildKnowledgeTools({
     agentId: args.agentId,
+    // The generation was already required here for the guardrail and activity
+    // contexts; forwarding it is what lets a `write_memory` call record which
+    // turn asserted the fact.
+    generationId: args.generationId,
     projectIds: args.projectIds,
     typedAgent: args.typedAgent,
     resolvedTools,

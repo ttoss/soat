@@ -251,12 +251,13 @@ echo "MEMORY_STORE_ID: $MEMORY_STORE_ID"
 
 ## Step 5 — Write memories
 
-Every write goes through semantic deduplication
-([Memories — Write Algorithm](/docs/modules/memories#write-algorithm)). A manual write
-has no agent context, so it yields **`created`** (201, stored as its own memory) or
-**`skipped`** (200, a near-identical memory exists). The third outcome, **`updated`**
-(an existing memory rewritten to absorb the fact), needs a model and is reached only by
-agent write paths ([Step 10](#step-10--observe-the-agent-writing-to-memory)).
+Every write goes through the same three-outcome algorithm
+([Memories — Write Algorithm](/docs/modules/memories#write-algorithm)), on every path:
+**`created`** (201, a distinct fact stored as its own memory), **`skipped`** (200, the
+fact is already known), or **`superseded`** (200, the same fact has changed — the old
+memory is retired and a new one replaces it). Each write also appends one
+[assertion](/docs/modules/memories#assertions), whatever it resolved to; Step 5e reads
+them back.
 
 ### 5a — First memory (action: created)
 
@@ -345,8 +346,8 @@ curl -s -X POST "$SOAT_URL/api/v1/memories" \
 
 ### 5c — Related content (action: created)
 
-Overlaps 5a with new detail. No model on this path folds the two, so the richer statement
-is stored as its own atomic memory.
+Overlaps 5a with new detail, but not closely enough to count as the same fact, so the
+richer statement is stored as its own atomic memory.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -429,6 +430,48 @@ curl -s -X POST "$SOAT_URL/api/v1/memories" \
 
 </TabItem>
 </Tabs>
+
+### 5e — Read the write ledger
+
+Every write above left an [assertion](/docs/modules/memories#assertions), including 5b,
+which produced no memory at all. Newest first:
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat list-memory-store-assertions --memory-store-id "$MEMORY_STORE_ID" \
+  | jq '[.data[] | {outcome, mechanism, principal_type, content}]'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: ledger } = await MemoryStores.listMemoryStoreAssertions({
+  client: authClient,
+  path: { memory_store_id: MEMORY_STORE_ID },
+});
+console.log(
+  ledger.data.map((a) => [a.outcome, a.mechanism, a.principal_type])
+);
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -s "$SOAT_URL/api/v1/memory-stores/$MEMORY_STORE_ID/assertions" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  | jq '[.data[] | {outcome, mechanism, principal_type, content}]'
+```
+
+</TabItem>
+</Tabs>
+
+Four rows for four writes: three `created` and the `skipped` from 5b, each `mechanism: "api"`
+because they came through the REST door. `content` is the text **as asserted**, so the skipped
+row holds what 5b tried to write, not what 5a stored.
 
 ---
 
@@ -644,7 +687,10 @@ curl -s -X POST "$SOAT_URL/api/v1/agents/$AGENT_ID/generate?wait=true" \
 
 ## Step 10 — Observe the agent writing to memory
 
-A `write_memory` call goes through the same deduplication as manual writes, plus one outcome: with an agent context, a fact overlapping an existing entry is consolidated into one atomic fact by the agent's LLM and returns `action: "updated"` instead of a second entry as in 5c. Send a message with a new fact:
+A `write_memory` call goes through exactly the same algorithm as a manual write, on the
+store's thresholds — an agent cannot loosen them. What differs is the assertion it records:
+`mechanism: "tool"`, the agent as principal, and the generation it happened in. Send a message
+with a new fact:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -723,7 +769,43 @@ curl -s "$SOAT_URL/api/v1/memories?memory_store_id=$MEMORY_STORE_ID" \
 </TabItem>
 </Tabs>
 
-If the model called `write_memory`, one memory holds the timezone fact, reading `"source_type": "manual"` with a null `source_id`. If no such memory appears, the model did not call the tool; Step 11 removes that dependency.
+If the model called `write_memory`, one memory holds the timezone fact, reading
+`"source_type": "manual"` with a null `source_id`. Where it came from is on its assertion
+instead — the door, the agent, and the turn:
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat list-memory-store-assertions --memory-store-id "$MEMORY_STORE_ID" --mechanism tool \
+  | jq '[.data[] | {outcome, principal_id, generation_id, content}]'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: toolWrites } = await MemoryStores.listMemoryStoreAssertions({
+  client: authClient,
+  path: { memory_store_id: MEMORY_STORE_ID },
+  query: { mechanism: 'tool' },
+});
+console.log(toolWrites.data.map((a) => [a.principal_id, a.generation_id]));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -s "$SOAT_URL/api/v1/memory-stores/$MEMORY_STORE_ID/assertions?mechanism=tool" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  | jq '[.data[] | {outcome, principal_id, generation_id, content}]'
+```
+
+</TabItem>
+</Tabs>
+
+An empty list means the model did not call the tool; Step 11 removes that dependency.
 
 ---
 
@@ -1028,12 +1110,12 @@ curl -s "$SOAT_URL/api/v1/conversations/$SRC_ID" \
 </TabItem>
 </Tabs>
 
-Provenance is set at creation and never rewritten by a later merge. `source_id` is a loose pointer: deleting the conversation leaves the id in place, because the fact was still learned there. A contradicted fact is retired, not edited; `--include-invalidated true` on `list-memories` shows retired memories ([Temporal invalidation](/docs/modules/memories#temporal-invalidation)).
+Provenance is set at creation and never rewritten. `source_id` is a loose pointer: deleting the conversation leaves the id in place, because the fact was still learned there. A fact that has changed is retired, not edited; `--include-invalidated true` on `list-memories` shows retired memories ([Temporal invalidation](/docs/modules/memories#temporal-invalidation)), and `list-memory-assertions` on the replacement names the memory it retired.
 
 ---
 
 ## What's next
 
 - **Tag-based filtering** — one memory store per customer, `tags` on the agent.
-- **Dedup threshold** — `duplicate_threshold` sets how close a fact must be to be skipped ([Memories](/docs/modules/memories#write-algorithm)).
+- **Dedup policy** — `duplicate_threshold` and `supersede_threshold` set how close a fact must be to be skipped or to retire the one it restates, per store or per write ([Memories](/docs/modules/memories#where-the-thresholds-come-from)).
 - **Audit what an agent was told** — pair provenance ids with the injected `<knowledge>` block ([Agents — Knowledge Config](/docs/modules/agents#knowledge-config)), whose source tags name the memory and document page behind each line.

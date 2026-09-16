@@ -21,6 +21,7 @@ import {
   type PersistedGeneration,
 } from './generationMapper';
 import { findOrCreateTrace, findTraceDbId } from './generationTrace';
+import { listGenerationMemoryAssertions } from './memoryAssertions';
 import { emptyPage, paginatedList } from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
 import { rollUpUsageTotals } from './usageAggregate';
@@ -43,7 +44,25 @@ const generationIncludes = () => {
     { model: db.Generation, as: 'initiatorGeneration' },
     { model: db.Session, as: 'session' },
     { model: db.Actor, as: 'startedByActor' },
+    { model: db.Conversation, as: 'conversation' },
   ];
+};
+
+/**
+ * The conversation a turn served, by public id. Resolved here rather than
+ * threaded as an internal id: every other caller of `createGenerationRecord`
+ * speaks in public ids, and a conversation that no longer exists simply leaves
+ * the column null.
+ */
+const findConversationDbId = async (
+  conversationId?: string | null
+): Promise<number | null> => {
+  if (!conversationId) return null;
+  const conversation = await db.Conversation.findOne({
+    where: { publicId: conversationId },
+    attributes: ['id'],
+  });
+  return (conversation?.id as number | undefined) ?? null;
 };
 
 const findInitiatorGeneration = async (args: {
@@ -91,12 +110,20 @@ const commitGenerationWithTrace = async (helperArgs: {
   };
   agentDbId: number;
   initiatorDbId: number | null;
+  conversationDbId: number | null;
   chainId: string | null;
   endUser: { actorId: number | null; sessionId: number | null };
   contentColumns: Record<string, unknown>;
 }) => {
-  const { args, agentDbId, initiatorDbId, chainId, endUser, contentColumns } =
-    helperArgs;
+  const {
+    args,
+    agentDbId,
+    initiatorDbId,
+    conversationDbId,
+    chainId,
+    endUser,
+    contentColumns,
+  } = helperArgs;
 
   return db.sequelize.transaction(async (transaction) => {
     const [parentTraceDbId, rootTraceDbId] = await Promise.all([
@@ -121,6 +148,7 @@ const commitGenerationWithTrace = async (helperArgs: {
         traceId: trace.id,
         initiatorGenerationId: initiatorDbId,
         rootGenerationId: args.rootGenerationId ?? null,
+        conversationId: conversationDbId,
         chainId,
         startedByPrincipalType: args.startedByPrincipalType ?? null,
         startedByPrincipalId: args.startedByPrincipalId ?? null,
@@ -157,6 +185,9 @@ export const createGenerationRecord = async (
     initiatorGenerationId?: string | null;
     startedByPrincipalType?: string | null;
     startedByPrincipalId?: string | null;
+    // Public id of the conversation this generation serves, when it serves one.
+    // The edge the memory assertions walk up from a generation.
+    conversationId?: string | null;
     // Public id of the session this generation serves. The end-user actor is
     // derived from it (see resolveEndUserAttribution), never passed separately.
     sessionId?: string | null;
@@ -211,6 +242,7 @@ export const createGenerationRecord = async (
     args,
     agentDbId: agent.id as number,
     initiatorDbId: initiatorGeneration?.id ?? null,
+    conversationDbId: await findConversationDbId(args.conversationId),
     chainId,
     endUser,
     contentColumns,
@@ -424,14 +456,20 @@ export const getGeneration = async (args: {
   // The turn's own events. A generation is metered once, so this is a roll-up
   // of one row in the ordinary case — but sub-agent turns meter against their
   // own generation, so summing is what keeps a delegating turn honest.
-  const usage = await rollUpUsageTotals({
-    projectId: gen.projectId,
-    from: null,
-    to: null,
-    generationId: gen.id,
-  });
+  const [usage, memoryAssertions] = await Promise.all([
+    rollUpUsageTotals({
+      projectId: gen.projectId,
+      from: null,
+      to: null,
+      generationId: gen.id,
+    }),
+    // Alongside the `extraction` counts, so the summary and the rows it
+    // summarizes can be reconciled. It also covers the writes the summary never
+    // saw: a `write_memory` call mid-turn is not extraction.
+    listGenerationMemoryAssertions({ generationDbId: gen.id as number }),
+  ]);
 
-  return mapGenerationWithUsage(gen, usage);
+  return mapGenerationWithUsage(gen, usage, memoryAssertions);
 };
 
 // Shallow-merged so repeated patches accumulate. The bag holds only caller
