@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "corpus": {
     "documents": [
       {
@@ -295,8 +295,7 @@
         "tags": {
           "account": "pinnacle"
         },
-        "age_days": 240,
-        "memory_store": "Knowledge golden corpus (prior quarter)"
+        "age_days": 240
       },
       {
         "key": "mem:cascade-contact",
@@ -311,8 +310,7 @@
         "tags": {
           "account": "cascade"
         },
-        "age_days": 300,
-        "memory_store": "Knowledge golden corpus (prior quarter)"
+        "age_days": 300
       },
       {
         "key": "mem:meridian-window",
@@ -327,8 +325,7 @@
         "tags": {
           "account": "meridian"
         },
-        "age_days": 420,
-        "memory_store": "Knowledge golden corpus (prior quarter)"
+        "age_days": 420
       },
       {
         "key": "mem:aurora-discount",
@@ -344,8 +341,7 @@
         "tags": {
           "account": "aurora"
         },
-        "age_days": 400,
-        "memory_store": "Knowledge golden corpus (prior quarter)"
+        "age_days": 400
       },
       {
         "key": "mem:borealis-portal",
@@ -361,8 +357,7 @@
         "tags": {
           "account": "borealis"
         },
-        "age_days": 120,
-        "memory_store": "Knowledge golden corpus (prior quarter)"
+        "age_days": 120
       },
       {
         "key": "mem:calder-incoterms",
@@ -378,8 +373,7 @@
         "tags": {
           "account": "calder"
         },
-        "age_days": 45,
-        "memory_store": "Knowledge golden corpus (prior quarter)"
+        "age_days": 45
       }
     ]
   },
