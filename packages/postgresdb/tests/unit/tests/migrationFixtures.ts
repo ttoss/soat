@@ -1,14 +1,66 @@
+import type { StartedPostgreSqlContainer } from '@testcontainers/postgresql';
+import { PostgreSqlContainer } from '@testcontainers/postgresql';
 import { Sequelize } from '@ttoss/postgresdb';
 
 const ADMIN_DATABASE = 'postgres';
 
-const connectionConfig = () => {
-  return {
-    username: process.env.TEST_DB_USERNAME ?? 'postgres',
-    password: process.env.TEST_DB_PASSWORD ?? '',
-    host: process.env.TEST_DB_HOST ?? '127.0.0.1',
-    port: Number(process.env.TEST_DB_PORT ?? 5432),
+type DatabaseConnection = {
+  username: string;
+  password: string;
+  host: string;
+  port: number;
+};
+
+let connection: DatabaseConnection | undefined;
+let container: StartedPostgreSqlContainer | undefined;
+
+/**
+ * Same escape hatch the rest of the package uses: point at an already-running
+ * Postgres with `TEST_DB_HOST`, otherwise start a container. Without the
+ * container branch this suite passes locally and fails in CI, which sets no
+ * `TEST_DB_HOST` and has nothing on 127.0.0.1:5432.
+ */
+export const startDatabaseServer = async (): Promise<void> => {
+  if (connection) {
+    return;
+  }
+
+  if (process.env.TEST_DB_HOST) {
+    connection = {
+      username: process.env.TEST_DB_USERNAME ?? 'postgres',
+      password: process.env.TEST_DB_PASSWORD ?? '',
+      host: process.env.TEST_DB_HOST,
+      port: Number(process.env.TEST_DB_PORT ?? 5432),
+    };
+
+    return;
+  }
+
+  container = await new PostgreSqlContainer(
+    'pgvector/pgvector:0.8.2-pg18-trixie'
+  ).start();
+
+  connection = {
+    username: container.getUsername(),
+    password: container.getPassword(),
+    host: container.getHost(),
+    port: container.getPort(),
   };
+};
+
+export const stopDatabaseServer = async (): Promise<void> => {
+  await container?.stop();
+
+  container = undefined;
+  connection = undefined;
+};
+
+export const databaseConnection = (): DatabaseConnection => {
+  if (!connection) {
+    throw new Error('startDatabaseServer() must run before the first test.');
+  }
+
+  return connection;
 };
 
 export const connectTo = (database: string): Sequelize => {
@@ -16,39 +68,49 @@ export const connectTo = (database: string): Sequelize => {
     dialect: 'postgres',
     logging: false,
     database,
-    ...connectionConfig(),
+    ...databaseConnection(),
   });
+};
+
+const withAdmin = async (fn: (admin: Sequelize) => Promise<void>) => {
+  const admin = connectTo(ADMIN_DATABASE);
+
+  try {
+    await fn(admin);
+  } finally {
+    await admin.close();
+  }
 };
 
 /**
  * A database of its own per test: the migrations read and write `public` by
  * name, so a schema per test would not isolate them.
  */
-export const createDatabase = async (name: string): Promise<Sequelize> => {
-  const admin = connectTo(ADMIN_DATABASE);
-
-  try {
-    await admin.query(`DROP DATABASE IF EXISTS "${name}"`);
+export const createEmptyDatabase = async (name: string): Promise<void> => {
+  await withAdmin(async (admin) => {
+    await admin.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);
     await admin.query(`CREATE DATABASE "${name}"`);
-  } finally {
-    await admin.close();
-  }
+  });
 
   const client = connectTo(name);
 
-  await client.query('CREATE EXTENSION IF NOT EXISTS vector');
+  try {
+    await client.query('CREATE EXTENSION IF NOT EXISTS vector');
+  } finally {
+    await client.close();
+  }
+};
 
-  return client;
+export const createDatabase = async (name: string): Promise<Sequelize> => {
+  await createEmptyDatabase(name);
+
+  return connectTo(name);
 };
 
 export const dropDatabase = async (name: string): Promise<void> => {
-  const admin = connectTo(ADMIN_DATABASE);
-
-  try {
+  await withAdmin(async (admin) => {
     await admin.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);
-  } finally {
-    await admin.close();
-  }
+  });
 };
 
 /**

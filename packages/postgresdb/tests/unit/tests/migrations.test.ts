@@ -8,10 +8,14 @@ import { MIGRATIONS, models } from '../../../dist/index.cjs';
 import {
   columnType,
   createDatabase,
+  createEmptyDatabase,
   createLegacySchema,
+  databaseConnection,
   dropDatabase,
   indexNames,
   selectRows,
+  startDatabaseServer,
+  stopDatabaseServer,
   tableExists,
 } from './migrationFixtures';
 
@@ -44,10 +48,16 @@ const runnerFor = (args: { client: Sequelize; sync?: () => Promise<void> }) => {
   });
 };
 
+beforeAll(async () => {
+  await startDatabaseServer();
+});
+
 afterAll(async () => {
   for (const name of databases) {
     await dropDatabase(name);
   }
+
+  await stopDatabaseServer();
 });
 
 describe('the migration list', () => {
@@ -354,15 +364,14 @@ describe('a database `sync` has just built', () => {
   beforeAll(async () => {
     databases.push(name);
 
+    await createEmptyDatabase(name);
+
     const db = await initialize({
       models,
       createVectorExtension: true,
       logging: false,
-      database: (await createDatabase(name)) && name,
-      username: process.env.TEST_DB_USERNAME ?? 'postgres',
-      password: process.env.TEST_DB_PASSWORD ?? '',
-      host: process.env.TEST_DB_HOST ?? '127.0.0.1',
-      port: Number(process.env.TEST_DB_PORT ?? 5432),
+      database: name,
+      ...databaseConnection(),
     });
 
     client = db.sequelize;
