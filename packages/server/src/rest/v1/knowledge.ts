@@ -101,7 +101,7 @@ const resolvePolicyWhere = async (
   });
   if (!document.hasAccess) return { forbidden: true };
 
-  // The memory store half roots at `Memory` with `memory store` joined, and each
+  // The memory store half roots at `Memory` with `MemoryStore` joined, and each
   // clause is applied to the model whose columns it names — no root rewrite.
   const memoryStore = compileFor({ resourceType: 'memory_store' });
   const memory = compileFor({ resourceType: 'memory' });

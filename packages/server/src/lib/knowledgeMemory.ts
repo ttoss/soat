@@ -365,7 +365,7 @@ const buildEntrySelection = async (args: {
 
 /**
  * The caller's compiled policy, split by the model each clause names. The
- * container clause filters the `memory store` join and the entry clause the entry
+ * container clause filters the `MemoryStore` join and the entry clause the entry
  * rows, so an entry is returned only when both its memory store and itself are
  * permitted — the same rule the entry routes enforce.
  */
@@ -376,7 +376,7 @@ export type MemoryStorePolicyWhere = {
 
 /**
  * The two WHERE clauses a memory store search runs with: one on the entry rows it
- * ranks, one on the `memory store` join. Each policy clause goes to the model whose
+ * ranks, one on the `MemoryStore` join. Each policy clause goes to the model whose
  * columns it names — an entry clause on the join, or the reverse, would filter
  * the wrong table or name a column that is not there.
  */
