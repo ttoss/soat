@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.51.0](https://github.com/ttoss/soat/compare/v0.50.0...v0.51.0) (2026-09-16)
+
+**Note:** Version bump only for package @soat/app
+
 # [0.50.0](https://github.com/ttoss/soat/compare/v0.49.1...v0.50.0) (2026-09-16)
 
 * feat(server)!: versioned migrations and a pre-deploy schema step (#1321) ([1a6fd61](https://github.com/ttoss/soat/commit/1a6fd61ce7a94931323293002bdd9f39c8ada173)), closes [#1321](https://github.com/ttoss/soat/issues/1321) [#548](https://github.com/ttoss/soat/issues/548)

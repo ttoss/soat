@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.51.0](https://github.com/ttoss/soat/compare/v0.50.0...v0.51.0) (2026-09-16)
+
+* feat(memories)!: record every write as an assertion and replace merge with supersede (#1326) ([b100847](https://github.com/ttoss/soat/commit/b100847cc323fcfe9f00bdd216c9312c05036902)), closes [#1326](https://github.com/ttoss/soat/issues/1326) [#1324](https://github.com/ttoss/soat/issues/1324) [#1322](https://github.com/ttoss/soat/issues/1322)
+
+### BREAKING CHANGES
+
+* the `updated` write outcome is gone from
+  `MemoryWriteResult.action`, and `Memory.content` / `Memory.embedding` move to a
+  shared row. The migration runs under the ledger; `sync --alter` cannot perform
+  it.
+
 # [0.50.0](https://github.com/ttoss/soat/compare/v0.49.1...v0.50.0) (2026-09-16)
 
 * feat(server)!: versioned migrations and a pre-deploy schema step (#1321) ([1a6fd61](https://github.com/ttoss/soat/commit/1a6fd61ce7a94931323293002bdd9f39c8ada173)), closes [#1321](https://github.com/ttoss/soat/issues/1321) [#548](https://github.com/ttoss/soat/issues/548)
