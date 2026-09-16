@@ -359,22 +359,32 @@ describe('Model Routes', () => {
       );
       expect(created.status).toBe(201);
 
-      // A key bound to `projectId` resolves only that project, so a route in
-      // otherProjectId is a not-found rather than a readable body.
+      // A key bound to `projectId` gets its own binding error, with the
+      // remedy in the message, rather than the opaque answer a project-filtered
+      // lookup produced (the #906 class, #1339). It still never returns a body.
       const scopedKey = await createRestrictedApiKey('model-routes:NoneOfThem');
       const res = await authenticatedTestClient(scopedKey).get(
         `/api/v1/model-routes/${created.body.id}`
       );
-      expect(res.status).toBe(404);
-      expect(res.body.error.code).toBe('RESOURCE_NOT_FOUND');
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('API_KEY_PROJECT_SCOPE');
     });
 
-    test('project-scoped key without GetModelRoute returns 403', async () => {
+    // A read the caller may not perform is indistinguishable from absence, now
+    // that the route authorizes against the route's own SRN (#1339). The id has
+    // to name a real route for the check to be reached at all — a made-up one
+    // answers `404` before any policy is consulted.
+    test('project-scoped key without GetModelRoute returns 404', async () => {
+      const created = await createRoute(userToken, {
+        name: 'unreadable-route',
+        targets: [{ ai_provider_id: providerA, model: 'm' }],
+      });
       const key = await createRestrictedApiKey('model-routes:GetModelRoute');
       const res = await authenticatedTestClient(key).get(
-        '/api/v1/model-routes/route_whatever00000'
+        `/api/v1/model-routes/${created.body.id}`
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('RESOURCE_NOT_FOUND');
     });
 
     test('unknown route returns 404', async () => {
@@ -454,10 +464,16 @@ describe('Model Routes', () => {
       expect(res.status).toBe(401);
     });
 
+    // The id has to name a real route: it is resolved before the policy check,
+    // so a made-up one answers `404` and never reaches the refusal (#1339).
     test('project-scoped key without UpdateModelRoute returns 403', async () => {
+      const created = await createRoute(userToken, {
+        name: 'unwritable-route',
+        targets: [{ ai_provider_id: providerA, model: 'm' }],
+      });
       const key = await createRestrictedApiKey('model-routes:UpdateModelRoute');
       const res = await authenticatedTestClient(key)
-        .put('/api/v1/model-routes/route_whatever00000')
+        .put(`/api/v1/model-routes/${created.body.id}`)
         .send({ cooldown_seconds: 5 });
       expect(res.status).toBe(403);
     });
@@ -519,10 +535,15 @@ describe('Model Routes', () => {
       expect(res.status).toBe(401);
     });
 
+    // As above: the id has to name a real route for the refusal to be reached.
     test('project-scoped key without DeleteModelRoute returns 403', async () => {
+      const created = await createRoute(userToken, {
+        name: 'undeletable-route',
+        targets: [{ ai_provider_id: providerA, model: 'm' }],
+      });
       const key = await createRestrictedApiKey('model-routes:DeleteModelRoute');
       const res = await authenticatedTestClient(key).delete(
-        '/api/v1/model-routes/route_whatever00000'
+        `/api/v1/model-routes/${created.body.id}`
       );
       expect(res.status).toBe(403);
     });

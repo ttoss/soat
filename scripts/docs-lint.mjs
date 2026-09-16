@@ -59,10 +59,14 @@ const CHECKS = [
   // Only flag `:camelCase` route-style path params, not every colon. The
   // lookbehind exempts the two double-curly template tokens, whose key is not a
   // path param and is legitimately camelCase (`{{context:ocaToken}}` — context
-  // keys follow the auto-populated `sessionId`/`actorId` spelling).
+  // keys follow the auto-populated `sessionId`/`actorId` spelling), and an SRN
+  // segment, which is not a path param either: three resource types
+  // (`aiProvider`, `ingestionRule`, `apiKey`) are spelled camelCase in the
+  // published policy vocabulary, and a doc that shows the working spelling is
+  // the point rather than the drift.
   {
     label: 'camelCase path param (use snake_case)',
-    re: /(?<!\{\{(?:context|secret)):[a-z]+[A-Z][a-zA-Z]*/,
+    re: /(?<!\{\{(?:context|secret)|\bsrn:[A-Za-z0-9_*<>{}\-]{1,64}):[a-z]+[A-Z][a-zA-Z]*/,
   },
   {
     label: 'stale action: documents:SearchDocuments',

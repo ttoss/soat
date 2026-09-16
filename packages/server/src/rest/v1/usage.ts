@@ -14,6 +14,7 @@ import {
   listThresholds,
   listUsageEvents,
 } from 'src/lib/usage';
+import { thresholds } from 'src/lib/usageThresholds';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
 import {
@@ -24,8 +25,22 @@ import {
   resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
+import { makeItemRouteAuthorizer } from './resourceAccess';
 
 export const usageRouter = new Router<Context>();
+
+/**
+ * A usage threshold is the module's only addressable resource, so deleting one
+ * authorizes against its own SRN rather than the project wildcard a statement
+ * naming one threshold can never match (#1339). The aggregate reads stay
+ * project-scoped: they *are* questions about a project.
+ */
+const thresholdAccess = makeItemRouteAuthorizer({
+  findScope: thresholds.findScope,
+  resourceType: 'usage',
+  param: 'threshold_id',
+  label: 'Usage threshold',
+});
 
 type UpsertPricesBody = {
   prices?: Array<{
@@ -246,12 +261,9 @@ usageRouter.post('/usage/thresholds', async (ctx: Context) => {
  * usage:ManageThresholds.
  */
 usageRouter.delete('/usage/thresholds/:threshold_id', async (ctx: Context) => {
-  requireAuth(ctx);
-
-  const projectIds = await requireProjectAccess({
+  const { projectIds } = await thresholdAccess.authorizeWrite({
     ctx,
     action: 'usage:ManageThresholds',
-    resourceType: 'usage',
   });
 
   // The success response is `204 No Content`, so the audit middleware has no

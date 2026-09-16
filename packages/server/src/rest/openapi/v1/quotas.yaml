@@ -225,6 +225,9 @@ paths:
       summary: Get a quota
       description: Returns a specific quota, including current window usage
       operationId: getQuota
+      x-soat-resource:
+        kind: quota
+        from: quota_id
       parameters:
         - name: quota_id
           in: path
@@ -252,6 +255,9 @@ paths:
       summary: Update a quota
       description: Updates a quota's limit and/or mode. Other fields are immutable.
       operationId: updateQuota
+      x-soat-resource:
+        kind: quota
+        from: quota_id
       parameters:
         - name: quota_id
           in: path
@@ -304,6 +310,9 @@ paths:
       summary: Delete a quota
       description: Deletes a quota and drops its window counters
       operationId: deleteQuota
+      x-soat-resource:
+        kind: quota
+        from: quota_id
       parameters:
         - name: quota_id
           in: path

@@ -556,12 +556,16 @@ The SRN is the one the route enforces, which is not always the id in the argumen
 | Memory store, memory, memory rule | ✅ against the store's SRN and tags |
 | Actor, conversation, session | ✅ against its own SRN and tags |
 | Agent | ✅ against its own SRN (agents carry no tags) |
+| Tool, guardrail, quota, model route, ingestion rule, chain, trace, generation, audit entry, usage threshold | ✅ against its own SRN |
+| Orchestration, and any run of one | ✅ against the orchestration's SRN |
+| Dataset, and any item in one | ✅ against the dataset's SRN |
+| Eval, and any run of one | ✅ against the eval's SRN |
 | Everything else | evaluated against `*` |
 
 Two cases stay `*`, and both refuse rather than admit when a statement names a resource:
 
 - **An action that names no resource** — a listing, a create, anything project-scoped. `*` is the whole truth about it; scope those with the caller's policy.
-- **A module not yet scoped** (documents, files, tools, triggers and the rest). Their routes are still resource-checked for the caller; only the agent boundary is action-level there.
+- **A module not yet scoped** (documents, files, tasks, triggers, webhooks, workflows and the rest). Their routes are still resource-checked for the caller; only the agent boundary is action-level there.
 
 An id that resolves to nothing is treated the same way: no SRN, so a scoped boundary denies the call before it is made.
 

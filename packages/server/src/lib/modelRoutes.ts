@@ -158,7 +158,7 @@ const validateName = (name: unknown): string => {
  */
 type ModelRouteRow = ModelRouteInstance & { project: { publicId: string } };
 
-const modelRoutes = makeResourceAccessor<ModelRouteRow>({
+export const modelRoutes = makeResourceAccessor<ModelRouteRow>({
   model: () => {
     return db.ModelRoute;
   },

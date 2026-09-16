@@ -6,6 +6,7 @@ import {
   createIngestionRule,
   deleteIngestionRule,
   getIngestionRule,
+  ingestionRules,
   listIngestionRules,
   updateIngestionRule,
 } from 'src/lib/ingestionRules';
@@ -13,12 +14,25 @@ import { setAuditResourceHint } from 'src/middleware/audit';
 
 import {
   requireAuth,
-  requireProjectAccess,
   resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
+import { makeItemRouteAuthorizer } from './resourceAccess';
 
 const ingestionRulesRouter = new Router<Context>();
+
+/**
+ * Every `/ingestion-rules/:ingestion_rule_id` route authorizes against the rule's own SRN rather than the
+ * project wildcard a statement naming one rule can never match (#1339).
+ */
+const ingestionRuleAccess = makeItemRouteAuthorizer({
+  findScope: ingestionRules.findScope,
+  // camelCase, unlike every other SRN type — renaming it is a public-contract
+  // change, tracked separately in #1339.
+  resourceType: 'ingestionRule',
+  param: 'ingestion_rule_id',
+  label: 'Ingestion rule',
+});
 
 type CreateBody = {
   project_id?: string;
@@ -61,15 +75,12 @@ ingestionRulesRouter.get('/ingestion-rules', async (ctx: Context) => {
 ingestionRulesRouter.get(
   '/ingestion-rules/:ingestion_rule_id',
   async (ctx: Context) => {
-    requireAuth(ctx);
-    const projectIds = await resolveReadProjectIds({
+    const { projectIds } = await ingestionRuleAccess.authorizeRead({
       ctx,
       action: 'ingestion-rules:GetIngestionRule',
-      resourceType: 'ingestionRule',
     });
-    // Scoping the fetch, rather than checking permission after an unscoped
-    // lookup, converges "doesn't exist" and "exists elsewhere" into one 404 —
-    // a cross-project id must not be distinguishable from a nonexistent one.
+    // Both "doesn't exist" and "exists but is not mine" answer one 404 — a
+    // cross-project id must not be distinguishable from a nonexistent one.
     ctx.body = await getIngestionRule({
       projectIds,
       id: ctx.params.ingestion_rule_id,
@@ -115,11 +126,9 @@ ingestionRulesRouter.post('/ingestion-rules', async (ctx: Context) => {
 ingestionRulesRouter.patch(
   '/ingestion-rules/:ingestion_rule_id',
   async (ctx: Context) => {
-    requireAuth(ctx);
-    const projectIds = await requireProjectAccess({
+    const { projectIds } = await ingestionRuleAccess.authorizeWrite({
       ctx,
       action: 'ingestion-rules:UpdateIngestionRule',
-      resourceType: 'ingestionRule',
     });
     const body = ctx.request.body as UpdateBody;
 
@@ -150,11 +159,9 @@ ingestionRulesRouter.patch(
 ingestionRulesRouter.delete(
   '/ingestion-rules/:ingestion_rule_id',
   async (ctx: Context) => {
-    requireAuth(ctx);
-    const projectIds = await requireProjectAccess({
+    const { projectIds } = await ingestionRuleAccess.authorizeWrite({
       ctx,
       action: 'ingestion-rules:DeleteIngestionRule',
-      resourceType: 'ingestionRule',
     });
     // The success response is `204 No Content`, so the audit middleware has
     // no body to backfill the project/SRN from — hand it the resolved

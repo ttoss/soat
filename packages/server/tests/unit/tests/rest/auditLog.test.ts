@@ -471,14 +471,14 @@ describe('Audit Log — read API authorization', () => {
     expect(unauth.status).toBe(401);
   });
 
-  test('a project-scoped credential lacking audit permission gets 403 fetching one entry', async () => {
+  test('a project-scoped credential lacking audit permission gets 404 fetching one entry', async () => {
     const all = await listEntries();
     const entryId = all[0].id as string;
 
     // A project-scoped API key whose boundary policy grants only secrets access
-    // (no audit:*): its resolveProjectIds probes the bound project, the check
-    // fails, and the get-one handler returns 403 (the null branch a plain JWT —
-    // which returns [] and 404s — never reaches).
+    // (no audit:*). Reading one entry is authorized against that entry's own
+    // SRN now, and a read the caller may not perform is indistinguishable from
+    // absence — so this is the same `404` a plain JWT already got (#1339).
     const policyRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/policies')
       .send({
@@ -498,7 +498,8 @@ describe('Audit Log — read API authorization', () => {
     const res = await authenticatedTestClient(rawKey).get(
       `/api/v1/audit-log/${entryId}`
     );
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe('RESOURCE_NOT_FOUND');
   });
 });
 

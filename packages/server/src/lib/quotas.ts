@@ -14,7 +14,10 @@ import {
   validateQuotaShape,
 } from './quotaShape';
 import { type QuotaWindow, windowKeyFor, windowResetsAt } from './quotaWindows';
-import { makeResourceAccessor } from './resourceAccessor';
+import {
+  makeResourceAccessor,
+  type ResourceAccessor,
+} from './resourceAccessor';
 
 const log = createDebug('soat:quotas');
 
@@ -59,7 +62,7 @@ export {
   validateQuotaShape,
 } from './quotaShape';
 
-type QuotaInstance = InstanceType<(typeof db)['Quota']>;
+export type QuotaInstance = InstanceType<(typeof db)['Quota']>;
 
 // ── Mapping ──────────────────────────────────────────────────────────────
 
@@ -196,13 +199,17 @@ const loadCurrentUsage = async (args: {
 
 // ── CRUD ───────────────────────────────────────────────────────────────────
 
-const quotas = makeResourceAccessor<QuotaInstance>({
-  model: () => {
-    return db.Quota;
-  },
-  includes: getQuotaIncludes,
-  label: 'Quota',
-});
+// The accessor's type is written out rather than inferred: `QuotaInstance` is a
+// bare model instance, whose inferred accessor reaches into
+// `sequelize-typescript` internals an emitted declaration cannot name (TS2883).
+export const quotas: ResourceAccessor<QuotaInstance> =
+  makeResourceAccessor<QuotaInstance>({
+    model: () => {
+      return db.Quota;
+    },
+    includes: getQuotaIncludes,
+    label: 'Quota',
+  });
 
 const reloadWithIncludes = async (row: {
   id?: unknown;

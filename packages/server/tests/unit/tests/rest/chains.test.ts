@@ -188,10 +188,11 @@ describe('Chains', () => {
       });
     });
 
-    test('a chain outside the credential project is not found', async () => {
-      // A project-scoped key resolves to exactly one project, so the lookup is
-      // scoped and a chain elsewhere reads as missing rather than as another
-      // project's row leaking through an id-only get.
+    // A project-scoped key hitting another project's chain gets its own
+    // binding error, with the remedy in the message, rather than the opaque
+    // answer an id-scoped lookup produced (the #906 class, #1339). It still
+    // never returns the row.
+    test('a chain outside the credential project reports the key binding', async () => {
       const own = await authenticatedTestClient(scopedKey).get(
         `/api/v1/chains/${activeChainId}`
       );
@@ -200,8 +201,8 @@ describe('Chains', () => {
       const res = await authenticatedTestClient(scopedKey).get(
         `/api/v1/chains/${otherProjectChainId}`
       );
-      expect(res.status).toBe(404);
-      expect(res.body.error.code).toBe('CHAIN_NOT_FOUND');
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('API_KEY_PROJECT_SCOPE');
     });
 
     test('an unknown chain returns 404', async () => {
@@ -217,11 +218,14 @@ describe('Chains', () => {
       expect(res.status).toBe(401);
     });
 
-    test('a user without the action returns 403', async () => {
+    // A read the caller may not perform is indistinguishable from absence, now
+    // that the route authorizes against the resource's own SRN (#1339).
+    test('a user without the action returns 404', async () => {
       const res = await authenticatedTestClient(noPermToken).get(
         `/api/v1/chains/${activeChainId}`
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('CHAIN_NOT_FOUND');
     });
   });
 });

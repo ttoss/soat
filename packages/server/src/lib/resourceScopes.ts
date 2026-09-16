@@ -23,20 +23,28 @@
  */
 import { actors } from './actors';
 import { agents } from './agentAccessor';
+import { auditEntries } from './auditLog';
 import { conversations } from './conversations';
 import { datasets } from './evaluationDatasets';
 import { evals } from './evaluations';
+import { chains } from './generationChains';
+import { generations } from './generations';
 import { guardrails } from './guardrails';
+import { ingestionRules } from './ingestionRules';
 import { getMemory } from './memories';
 import { getMemoryRule } from './memoryRules';
 import { memoryStores } from './memoryStores';
+import { modelRoutes } from './modelRoutes';
 import {
   findRunOrchestrationId,
   orchestrations,
 } from './orchestrationAccessor';
+import { quotas } from './quotas';
 import type { ResourceScope } from './resourceAccessor';
 import { findSessionAccess } from './sessions';
 import { tools } from './tools';
+import { traceRows } from './traces';
+import { thresholds } from './usageThresholds';
 
 /** The resource a policy statement names, resolved from a public id. */
 export type ScopedResource = ResourceScope & {
@@ -94,6 +102,20 @@ const RESOURCE_KINDS: Record<string, ResourceKind> = {
     resourceType: 'agent',
   },
 
+  audit: {
+    accessor: () => {
+      return auditEntries;
+    },
+    resourceType: 'audit',
+  },
+
+  chain: {
+    accessor: () => {
+      return chains;
+    },
+    resourceType: 'chain',
+  },
+
   conversation: {
     accessor: () => {
       return conversations;
@@ -117,11 +139,27 @@ const RESOURCE_KINDS: Record<string, ResourceKind> = {
     resourceType: 'eval',
   },
 
+  generation: {
+    accessor: () => {
+      return generations;
+    },
+    resourceType: 'generation',
+  },
+
   guardrail: {
     accessor: () => {
       return guardrails;
     },
     resourceType: 'guardrail',
+  },
+
+  // camelCase, unlike every other SRN type — renaming it is a public-contract
+  // change, tracked separately in #1339.
+  ingestionRule: {
+    accessor: () => {
+      return ingestionRules;
+    },
+    resourceType: 'ingestionRule',
   },
 
   // A memory authorizes against its store: `rest/v1/memories.ts` resolves the
@@ -149,6 +187,13 @@ const RESOURCE_KINDS: Record<string, ResourceKind> = {
     resourceType: 'memory_store',
   },
 
+  model_route: {
+    accessor: () => {
+      return modelRoutes;
+    },
+    resourceType: 'model_route',
+  },
+
   orchestration: {
     accessor: () => {
       return orchestrations;
@@ -160,6 +205,13 @@ const RESOURCE_KINDS: Record<string, ResourceKind> = {
   // type its routes have always probed — naming the run itself would be a new
   // type no existing `srn:<project>:orchestration:*` statement covers.
   orchestration_run: { via: 'orchestration', parentId: findRunOrchestrationId },
+
+  quota: {
+    accessor: () => {
+      return quotas;
+    },
+    resourceType: 'quota',
+  },
 
   session: {
     accessor: () => {
@@ -173,6 +225,21 @@ const RESOURCE_KINDS: Record<string, ResourceKind> = {
       return tools;
     },
     resourceType: 'tool',
+  },
+
+  trace: {
+    accessor: () => {
+      return traceRows;
+    },
+    resourceType: 'trace',
+  },
+
+  // A usage *threshold*, under the SRN type its route has always probed.
+  usage: {
+    accessor: () => {
+      return thresholds;
+    },
+    resourceType: 'usage',
   },
 };
 

@@ -165,6 +165,9 @@ paths:
       summary: Get a model route
       description: Returns a specific model route
       operationId: getModelRoute
+      x-soat-resource:
+        kind: model_route
+        from: route_id
       parameters:
         - name: route_id
           in: path
@@ -194,6 +197,9 @@ paths:
         Updates a model route's name, targets, retry classes, or breaker
         configuration. Omitted fields are left unchanged.
       operationId: updateModelRoute
+      x-soat-resource:
+        kind: model_route
+        from: route_id
       parameters:
         - name: route_id
           in: path
@@ -252,6 +258,9 @@ paths:
         a routed agent has no pinned provider to fall back on, so the reference
         must be repointed or the agent deleted first.
       operationId: deleteModelRoute
+      x-soat-resource:
+        kind: model_route
+        from: route_id
       parameters:
         - name: route_id
           in: path

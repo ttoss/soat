@@ -4,14 +4,27 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import {
+  auditEntries,
   getAuditEntry,
   listAuditEntries,
   streamAuditEntriesNdjson,
 } from 'src/lib/auditLog';
 
 import { requireAuth, resolveReadProjectIds } from './helpers';
+import { makeItemRouteAuthorizer } from './resourceAccess';
 
 const auditLogRouter = new Router<Context>();
+
+/**
+ * Every `/audit-log/:entry_id` route authorizes against the entry's own SRN rather than the
+ * project wildcard a statement naming one entry can never match (#1339).
+ */
+const auditEntryAccess = makeItemRouteAuthorizer({
+  findScope: auditEntries.findScope,
+  resourceType: 'audit',
+  param: 'entry_id',
+  label: 'Audit entry',
+});
 
 // Absent is not invalid: an unsupplied filter is simply not applied, but a
 // supplied unparseable one throws — it must never widen a query into "every
@@ -117,12 +130,9 @@ auditLogRouter.get('/audit-log/export', async (ctx: Context) => {
 });
 
 auditLogRouter.get('/audit-log/:entry_id', async (ctx: Context) => {
-  requireAuth(ctx);
-
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await auditEntryAccess.authorizeRead({
     ctx,
     action: 'audit:GetAuditEntry',
-    resourceType: 'audit',
   });
 
   ctx.body = await getAuditEntry({ id: ctx.params.entry_id, projectIds });

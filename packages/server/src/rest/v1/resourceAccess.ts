@@ -19,10 +19,18 @@
  * - a **write** is `403`, so a caller who can read a resource is told plainly
  *   that changing it is refused (#1029).
  *
- * The rule for picking one is mechanical, and preserves what each route
- * answered before: a route that reached for `resolveReadProjectIds` is `hide`,
- * a route that reached for `requireProjectAccess` is `refuse`. An id that names
- * nothing at all is `404` on both.
+ * Which one a route picks follows what its **action** does, not which helper it
+ * had reached for. Most routes agree either way — a read used the read helper —
+ * but `evaluations.ts` reached for `requireProjectAccess` on its reads too, and
+ * preserving that literally would have turned a cross-project read from `404`
+ * into `403`, announcing across a tenant boundary that a dataset exists.
+ *
+ * An id that names nothing at all is `404` under both.
+ *
+ * `actors.ts` and `secrets.ts` are the exception, and say so at their own call
+ * sites: they were already per-resource and already answered `403` on a denied
+ * read, so they share the preamble at their existing shape. What they gain from
+ * it is the `assertCredentialProjectScope` they were missing (#906).
  */
 import type { Context } from 'src/Context';
 import { DomainError, type ErrorCode } from 'src/errors';
@@ -174,5 +182,11 @@ export const makeItemRouteAuthorizer = (config: {
     authorizeWrite: (args: ItemRouteArgs): Promise<ResourceAccess> => {
       return authorize({ ...args, onDenied: 'refuse' });
     },
+    /**
+     * The refusal named outright, for the module whose existing contract does
+     * not follow the read/write rule — `secrets.ts` answers `403` on a denied
+     * read, and preserving that is not the same decision as making a read hide.
+     */
+    authorize,
   };
 };

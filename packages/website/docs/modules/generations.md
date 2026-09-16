@@ -270,6 +270,31 @@ An id naming nothing in scope yields an empty page, never an unfiltered one.
 
 The generation-creation endpoints ([`POST /agents/{agent_id}/generate`](/docs/api/agents/create-agent-generation), and the session and conversation generate endpoints) accept an optional `tool_context` object. Its entries are forwarded as `X-Soat-Context-*` request headers on every `http`, `mcp` and `builtin` tool call the generation makes; an invalid key is rejected with `400 INVALID_TOOL_CONTEXT_KEY` before the provider is called. It is not persisted on the Generation record. See the [Tool Context reference](../advanced/tool-context.md).
 
+### Who may act on a generation
+
+Every route that acts on one generation — read it, attach metadata, purge its
+content, or read its transcript — is authorized against **that generation's**
+SRN, `srn:<project_id>:generation:<generation_id>`, not against the project. A
+policy may therefore name the generations it covers:
+
+```json
+{
+  "statement": [
+    {
+      "effect": "Allow",
+      "action": ["generations:GetGeneration", "generations:UpdateGeneration"],
+      "resource": ["srn:proj_V1StGXR8Z5jdHi6B:generation:gen_V1StGXR8Z5jdHi6B"]
+    }
+  ]
+}
+```
+
+The [transcript](#transcript) projects the generation **and** its [trace](./traces.md), so it checks both: `generations:GetGeneration` against the generation and `traces:GetTrace` against the trace it was recorded on. A grant naming only one of them does not reach it.
+
+Refusals keep the shapes [IAM](./iam.md#what-a-denial-looks-like) defines: a read the caller may not perform is `404` (a generation it may not see does not announce itself), a write is `403`, and a credential scoped to another project is `403 API_KEY_PROJECT_SCOPE`. The trace half of a transcript is `403` rather than `404`: the generation read has already succeeded by then, so there is nothing left to conceal.
+
+Listing generations stays project-scoped: [`GET /api/v1/generations`](/docs/api/generations/list-generations) asks whether the caller may list generations in a project at all, so a policy that names individual generations grants no listing.
+
 ## Examples
 
 ### List generations

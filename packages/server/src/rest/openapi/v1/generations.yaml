@@ -170,6 +170,9 @@ paths:
         structured `error` payload when the generation failed (e.g. because the
         upstream AI provider returned an error).
       operationId: getGeneration
+      x-soat-resource:
+        kind: generation
+        from: generation_id
       parameters:
         - name: generation_id
           in: path
@@ -216,6 +219,9 @@ paths:
         extraction summary) lives in its own top-level fields and cannot be
         written from here.
       operationId: updateGeneration
+      x-soat-resource:
+        kind: generation
+        from: generation_id
       parameters:
         - name: generation_id
           in: path
@@ -295,6 +301,9 @@ paths:
         Idempotent — purging an already-purged generation succeeds and leaves the
         original `content_redacted_at` in place.
       operationId: purgeGenerationContent
+      x-soat-resource:
+        kind: generation
+        from: generation_id
       parameters:
         - name: generation_id
           in: path
@@ -355,6 +364,9 @@ paths:
         later. A generation that is still running returns the same shape with
         an empty `steps`; `status` disambiguates the two.
       operationId: getGenerationTranscript
+      x-soat-resource:
+        kind: generation
+        from: generation_id
       parameters:
         - name: generation_id
           in: path

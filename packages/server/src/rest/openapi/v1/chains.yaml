@@ -111,6 +111,9 @@ paths:
         Returns a single continuation chain. To read the generations in it, list
         generations filtered by `chain_id`.
       operationId: getChain
+      x-soat-resource:
+        kind: chain
+        from: chain_id
       parameters:
         - $ref: '#/components/parameters/chain_id'
       responses:

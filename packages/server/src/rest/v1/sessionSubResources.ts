@@ -10,7 +10,7 @@ import {
   updateSessionTags,
 } from 'src/lib/sessions';
 
-import { type AuthenticatedContext, requireProjectAccess } from './helpers';
+import { type AuthenticatedContext } from './helpers';
 import { checkSessionAccess } from './sessions';
 import { registerTagRoutes, type TagAccess } from './tagRoutes';
 
@@ -180,13 +180,11 @@ sessionSubResourcesRouter.post(
   async (ctx: Context) => {
     // Forking reads a session's full history as well as creating one, so
     // `agents:CreateSession` alone would be a way to read history a principal
-    // cannot fetch through `GET /sessions/{id}`.
+    // cannot fetch through `GET /sessions/{id}`. Both halves name the *parent*
+    // session's SRN — the fork's own id does not exist yet, and the parent is
+    // the resource whose history the call reaches (#1339).
     const { agentId } = await checkSessionAccess(ctx, 'agents:GetSession');
-    await requireProjectAccess({
-      ctx,
-      action: 'agents:CreateSession',
-      resourceType: 'session',
-    });
+    await checkSessionAccess(ctx, 'agents:CreateSession');
 
     const body = ctx.request.body as {
       fork_at_position?: number;

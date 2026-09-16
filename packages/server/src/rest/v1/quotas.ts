@@ -6,6 +6,7 @@ import {
   deleteQuota,
   getQuota,
   listQuotas,
+  quotas,
   updateQuota,
 } from 'src/lib/quotas';
 import { setAuditResourceHint } from 'src/middleware/audit';
@@ -13,12 +14,23 @@ import { setAuditResourceHint } from 'src/middleware/audit';
 import {
   parsePagination,
   requireAuth,
-  requireProjectAccess,
   resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
+import { makeItemRouteAuthorizer } from './resourceAccess';
 
 const quotasRouter = new Router<Context>();
+
+/**
+ * Every `/quotas/:quota_id` route authorizes against the quota's own SRN rather than the
+ * project wildcard a statement naming one quota can never match (#1339).
+ */
+const quotaAccess = makeItemRouteAuthorizer({
+  findScope: quotas.findScope,
+  resourceType: 'quota',
+  param: 'quota_id',
+  label: 'Quota',
+});
 
 const parseStringOrUndefined = (v: unknown): string | undefined => {
   return typeof v === 'string' ? v : undefined;
@@ -90,10 +102,9 @@ quotasRouter.get('/quotas', async (ctx: Context) => {
  *     $ref: 'openapi/v1/quotas.yaml#/paths/~1api~1v1~1quotas~1{quota_id}/get'
  */
 quotasRouter.get('/quotas/:quota_id', async (ctx: Context) => {
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await quotaAccess.authorizeRead({
     ctx,
     action: 'quotas:GetQuota',
-    resourceType: 'quota',
   });
   ctx.body = await getQuota({ projectIds, id: ctx.params.quota_id });
 });
@@ -105,10 +116,9 @@ quotasRouter.get('/quotas/:quota_id', async (ctx: Context) => {
  *     $ref: 'openapi/v1/quotas.yaml#/paths/~1api~1v1~1quotas~1{quota_id}/patch'
  */
 quotasRouter.patch('/quotas/:quota_id', async (ctx: Context) => {
-  const projectIds = await requireProjectAccess({
+  const { projectIds } = await quotaAccess.authorizeWrite({
     ctx,
     action: 'quotas:UpdateQuota',
-    resourceType: 'quota',
   });
   const body = ctx.request.body as Record<string, unknown>;
 
@@ -128,10 +138,9 @@ quotasRouter.patch('/quotas/:quota_id', async (ctx: Context) => {
  *     $ref: 'openapi/v1/quotas.yaml#/paths/~1api~1v1~1quotas~1{quota_id}/delete'
  */
 quotasRouter.delete('/quotas/:quota_id', async (ctx: Context) => {
-  const projectIds = await requireProjectAccess({
+  const { projectIds } = await quotaAccess.authorizeWrite({
     ctx,
     action: 'quotas:DeleteQuota',
-    resourceType: 'quota',
   });
   // The success response is `204 No Content`, so the audit middleware has no
   // body to backfill the project/SRN from — hand it the resolved resource

@@ -33,7 +33,7 @@ type AuditEntryRow = InstanceType<(typeof db)['AuditEntry']> & {
   project?: InstanceType<(typeof db)['Project']> | null;
 };
 
-const auditEntries = makeResourceAccessor<AuditEntryRow>({
+export const auditEntries = makeResourceAccessor<AuditEntryRow>({
   model: () => {
     return db.AuditEntry;
   },

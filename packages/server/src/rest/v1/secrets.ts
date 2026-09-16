@@ -1,12 +1,11 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
-import { DomainError } from 'src/errors';
-import { buildSrn } from 'src/lib/iam';
 import {
   createSecret,
   deleteSecret,
   getSecret,
   listSecrets,
+  secrets,
   updateSecret,
 } from 'src/lib/secrets';
 
@@ -16,8 +15,27 @@ import {
   resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
+import { makeItemRouteAuthorizer } from './resourceAccess';
 
 const secretsRouter = new Router<Context>();
+
+/**
+ * These routes already named the secret's own SRN, so what the shared preamble
+ * adds is the half they were missing: a credential pinned to another project
+ * now gets its own `API_KEY_PROJECT_SCOPE`, with the remedy in the message,
+ * instead of an opaque `Forbidden` (the #906 class, #1339).
+ *
+ * `refuse` on the read too, which is what this module already answered.
+ * Whether a denied read should hide the secret instead — as tools, agents and
+ * the modules moved in #1339 do — is a contract change of its own, not a side
+ * effect of sharing a preamble.
+ */
+const secretAccess = makeItemRouteAuthorizer({
+  findScope: secrets.findScope,
+  resourceType: 'secret',
+  param: 'secret_id',
+  label: 'Secret',
+});
 
 secretsRouter.get('/secrets', async (ctx: Context) => {
   requireAuth(ctx);
@@ -38,22 +56,13 @@ secretsRouter.get('/secrets', async (ctx: Context) => {
 });
 
 secretsRouter.get('/secrets/:secret_id', async (ctx: Context) => {
-  requireAuth(ctx);
+  await secretAccess.authorize({
+    ctx,
+    action: 'secrets:GetSecret',
+    onDenied: 'refuse',
+  });
 
   const secret = await getSecret({ id: ctx.params.secret_id });
-
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: secret.project_id!,
-    action: 'secrets:GetSecret',
-    resource: buildSrn({
-      projectPublicId: secret.project_id!,
-      resourceType: 'secret',
-      resourceId: secret.id,
-    }),
-  });
-  if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
-  }
 
   ctx.body = secret;
 });
@@ -85,22 +94,7 @@ secretsRouter.post('/secrets', async (ctx: Context) => {
 });
 
 secretsRouter.patch('/secrets/:secret_id', async (ctx: Context) => {
-  requireAuth(ctx);
-
-  const secret = await getSecret({ id: ctx.params.secret_id });
-
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: secret.project_id!,
-    action: 'secrets:UpdateSecret',
-    resource: buildSrn({
-      projectPublicId: secret.project_id!,
-      resourceType: 'secret',
-      resourceId: secret.id,
-    }),
-  });
-  if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
-  }
+  await secretAccess.authorizeWrite({ ctx, action: 'secrets:UpdateSecret' });
 
   const body = ctx.request.body as { name?: string; value?: string };
 
@@ -114,22 +108,7 @@ secretsRouter.patch('/secrets/:secret_id', async (ctx: Context) => {
 });
 
 secretsRouter.delete('/secrets/:secret_id', async (ctx: Context) => {
-  requireAuth(ctx);
-
-  const secret = await getSecret({ id: ctx.params.secret_id });
-
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: secret.project_id!,
-    action: 'secrets:DeleteSecret',
-    resource: buildSrn({
-      projectPublicId: secret.project_id!,
-      resourceType: 'secret',
-      resourceId: secret.id,
-    }),
-  });
-  if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
-  }
+  await secretAccess.authorizeWrite({ ctx, action: 'secrets:DeleteSecret' });
 
   const force = ctx.query.force === 'true';
   await deleteSecret({ id: ctx.params.secret_id, force });

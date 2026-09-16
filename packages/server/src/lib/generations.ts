@@ -352,6 +352,25 @@ export const generations = makeResourceAccessor<GenerationRow>({
   label: 'Generation',
 });
 
+/**
+ * The trace a generation was recorded on, by public id.
+ *
+ * The transcript route projects both, so it authorizes against both; this is
+ * the edge it walks to name the trace's SRN. Deliberately not the generation's
+ * own `findScope`, which answers a project rather than the second resource.
+ */
+export const findGenerationTraceId = async (args: {
+  id: string;
+}): Promise<string | null> => {
+  const row = (await db.Generation.findOne({
+    where: { publicId: args.id },
+    include: [{ model: db.Trace, as: 'trace', attributes: ['publicId'] }],
+  })) as { trace?: { publicId?: unknown } | null } | null;
+
+  const publicId = row?.trace?.publicId;
+  return typeof publicId === 'string' ? publicId : null;
+};
+
 export const listGenerations = async (args: {
   projectIds?: number[];
   agentId?: string;

@@ -96,7 +96,7 @@ const secretIncludes = () => {
   return [{ model: db.Project, as: 'project' }];
 };
 
-const secrets = makeResourceAccessor<SecretRow>({
+export const secrets = makeResourceAccessor<SecretRow>({
   model: () => {
     return db.Secret;
   },

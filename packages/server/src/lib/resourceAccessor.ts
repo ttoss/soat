@@ -78,6 +78,32 @@ type ScopedProjectRow = {
 };
 
 /**
+ * What {@link makeResourceAccessor} returns, named rather than inferred.
+ *
+ * An inferred shape reaches into `sequelize-typescript`'s internals through
+ * `TRow`, which `tsc` cannot write into an emitted declaration (`TS2883`) once a
+ * module exports its accessor — and exporting it is exactly what lets the route
+ * preamble and the boundary table read the same `findScope`.
+ */
+export type ResourceAccessor<TRow> = {
+  findByPublicId: (args: {
+    id: string;
+    projectIds?: number[];
+    where?: Record<string, unknown>;
+  }) => Promise<TRow | null>;
+  findScope: (args: { id: string }) => Promise<ResourceScope | null>;
+  getByPublicId: (args: {
+    id: string;
+    projectIds?: number[];
+    where?: Record<string, unknown>;
+    errorCode?: ErrorCode;
+  }) => Promise<TRow>;
+  notFound: (id: string, errorCode?: ErrorCode) => DomainError;
+  reload: (row: { id?: unknown }) => Promise<TRow>;
+  scopedWhere: typeof scopedWhere;
+};
+
+/**
  * Builds the four queries every resource module in `src/lib` was writing by
  * hand: the scoped `where`, the scoped lookup, its throwing counterpart, and
  * the reload-after-write.
@@ -116,7 +142,7 @@ export const makeResourceAccessor = <TRow extends { id?: unknown }>(config: {
   label: string;
   /** Defaults to `RESOURCE_NOT_FOUND`. */
   errorCode?: ErrorCode;
-}) => {
+}): ResourceAccessor<TRow> => {
   const notFound = (id: string, errorCode?: ErrorCode) => {
     return new DomainError(
       errorCode ?? config.errorCode ?? 'RESOURCE_NOT_FOUND',

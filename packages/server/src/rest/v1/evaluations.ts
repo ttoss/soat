@@ -231,21 +231,33 @@ evaluationsRouter.post(
     // `createDatasetItemFromGeneration` rejects it before a generation is
     // loaded.
     const generationId = body.generation_id;
-    if (typeof generationId === 'string' && generationId.trim() !== '') {
-      await authorizeResource({
-        ctx,
-        scope: await generations.findScope({ id: generationId }),
-        resourceType: 'generation',
-        resourceId: generationId,
-        label: 'Generation',
-        action: 'generations:GetGeneration',
-        onDenied: 'refuse',
-      });
-    }
+    const generationAccess =
+      typeof generationId === 'string' && generationId.trim() !== ''
+        ? await authorizeResource({
+            ctx,
+            scope: await generations.findScope({ id: generationId }),
+            resourceType: 'generation',
+            resourceId: generationId,
+            label: 'Generation',
+            // The generation is a *referenced* entity here, not the route's
+            // subject, so it keeps the module's referenced-entity code rather
+            // than the plain `RESOURCE_NOT_FOUND` its own routes answer.
+            errorCode: 'GENERATION_NOT_FOUND',
+            action: 'generations:GetGeneration',
+            onDenied: 'refuse',
+          })
+        : undefined;
 
     ctx.status = 201;
     ctx.body = await createDatasetItemFromGeneration({
-      projectIds,
+      // Both projects, because the two lookups behind this call are scoped by
+      // one filter: the dataset's and the generation's, each already authorized
+      // above. Narrowing to the dataset's alone would make a generation in
+      // another project read as missing, where the lib has a `400` naming the
+      // mismatch — the far more useful answer for a caller who can see both.
+      projectIds: [
+        ...new Set([...projectIds, ...(generationAccess?.projectIds ?? [])]),
+      ],
       datasetId: ctx.params.dataset_id,
       generationId,
       expectedOutput: body.expected_output,

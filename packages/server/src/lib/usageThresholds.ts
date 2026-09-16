@@ -55,7 +55,7 @@ const thresholdIncludes = () => {
   return [{ model: db.Project, as: 'project' }];
 };
 
-const thresholds = makeResourceAccessor<UsageThresholdRow>({
+export const thresholds = makeResourceAccessor<UsageThresholdRow>({
   model: () => {
     return db.UsageThreshold;
   },

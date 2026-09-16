@@ -93,6 +93,9 @@ paths:
       summary: Get a trace
       description: Returns a single trace by ID.
       operationId: getTrace
+      x-soat-resource:
+        kind: trace
+        from: trace_id
       parameters:
         - name: trace_id
           in: path
@@ -137,6 +140,9 @@ paths:
         execution session. The `children` array contains traces triggered by
         sub-agent tool calls from that trace.
       operationId: getTraceTree
+      x-soat-resource:
+        kind: trace
+        from: trace_id
       parameters:
         - name: trace_id
           in: path
@@ -204,6 +210,9 @@ paths:
         Idempotent — purging an already-purged trace succeeds and leaves the
         original `content_redacted_at` in place.
       operationId: purgeTraceContent
+      x-soat-resource:
+        kind: trace
+        from: trace_id
       parameters:
         - name: trace_id
           in: path

@@ -6,6 +6,7 @@ import {
   deleteModelRoute,
   getModelRoute,
   listModelRoutes,
+  modelRoutes,
   updateModelRoute,
 } from 'src/lib/modelRoutes';
 import { setAuditResourceHint } from 'src/middleware/audit';
@@ -13,12 +14,23 @@ import { setAuditResourceHint } from 'src/middleware/audit';
 import {
   parsePagination,
   requireAuth,
-  requireProjectAccess,
   resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
+import { makeItemRouteAuthorizer } from './resourceAccess';
 
 const modelRoutesRouter = new Router<Context>();
+
+/**
+ * Every `/model-routes/:route_id` route authorizes against the route's own SRN rather than the
+ * project wildcard a statement naming one route can never match (#1339).
+ */
+const modelRouteAccess = makeItemRouteAuthorizer({
+  findScope: modelRoutes.findScope,
+  resourceType: 'model_route',
+  param: 'route_id',
+  label: 'Model route',
+});
 
 const parseStringOrUndefined = (v: unknown): string | undefined => {
   return typeof v === 'string' ? v : undefined;
@@ -77,10 +89,9 @@ modelRoutesRouter.get('/model-routes', async (ctx: Context) => {
  *     $ref: 'openapi/v1/model-routes.yaml#/paths/~1api~1v1~1model-routes~1{route_id}/get'
  */
 modelRoutesRouter.get('/model-routes/:route_id', async (ctx: Context) => {
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await modelRouteAccess.authorizeRead({
     ctx,
     action: 'model-routes:GetModelRoute',
-    resourceType: 'model_route',
   });
   ctx.body = await getModelRoute({ projectIds, id: ctx.params.route_id });
 });
@@ -92,10 +103,9 @@ modelRoutesRouter.get('/model-routes/:route_id', async (ctx: Context) => {
  *     $ref: 'openapi/v1/model-routes.yaml#/paths/~1api~1v1~1model-routes~1{route_id}/put'
  */
 modelRoutesRouter.put('/model-routes/:route_id', async (ctx: Context) => {
-  const projectIds = await requireProjectAccess({
+  const { projectIds } = await modelRouteAccess.authorizeWrite({
     ctx,
     action: 'model-routes:UpdateModelRoute',
-    resourceType: 'model_route',
   });
   const body = ctx.request.body as Record<string, unknown>;
 
@@ -117,10 +127,9 @@ modelRoutesRouter.put('/model-routes/:route_id', async (ctx: Context) => {
  *     $ref: 'openapi/v1/model-routes.yaml#/paths/~1api~1v1~1model-routes~1{route_id}/delete'
  */
 modelRoutesRouter.delete('/model-routes/:route_id', async (ctx: Context) => {
-  const projectIds = await requireProjectAccess({
+  const { projectIds } = await modelRouteAccess.authorizeWrite({
     ctx,
     action: 'model-routes:DeleteModelRoute',
-    resourceType: 'model_route',
   });
   // `204 No Content` leaves the audit middleware no body to backfill from, so
   // hand it the resolved resource before the delete runs.

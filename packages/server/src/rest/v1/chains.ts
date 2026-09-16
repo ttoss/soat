@@ -1,15 +1,23 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
-import { getChain, listChains } from 'src/lib/generationChains';
+import { chains, getChain, listChains } from 'src/lib/generationChains';
 
-import {
-  parsePagination,
-  requireAuth,
-  requireProjectAccess,
-  resolveReadProjectIds,
-} from './helpers';
+import { parsePagination, requireAuth, resolveReadProjectIds } from './helpers';
+import { makeItemRouteAuthorizer } from './resourceAccess';
 
 const chainsRouter = new Router<Context>();
+
+/**
+ * Every `/chains/:chain_id` route authorizes against the chain's own SRN rather than the
+ * project wildcard a statement naming one chain can never match (#1339).
+ */
+const chainAccess = makeItemRouteAuthorizer({
+  findScope: chains.findScope,
+  resourceType: 'chain',
+  param: 'chain_id',
+  label: 'Chain',
+  errorCode: 'CHAIN_NOT_FOUND',
+});
 
 // Read-only by design: a chain is written by the continuation path, never by a
 // caller. There is nothing to create, and "stop this chain" is a property of the
@@ -34,15 +42,9 @@ chainsRouter.get('/chains', async (ctx: Context) => {
 });
 
 chainsRouter.get('/chains/:chain_id', async (ctx: Context) => {
-  requireAuth(ctx);
-
-  // The stricter helper: this route resolves one chain and checks its project,
-  // so an empty scope has to be a `403` — as `[]` it would make a chain the
-  // caller may not read look like one that does not exist.
-  const projectIds = await requireProjectAccess({
+  const { projectIds } = await chainAccess.authorizeRead({
     ctx,
     action: 'chains:GetChain',
-    resourceType: 'chain',
   });
 
   ctx.body = await getChain({ projectIds, id: ctx.params.chain_id });
