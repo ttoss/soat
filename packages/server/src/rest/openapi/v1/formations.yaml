@@ -1283,7 +1283,7 @@ components:
           type: array
           items:
             type: string
-          description: Event types to subscribe to (e.g. memory store.updated)
+          description: Event types to subscribe to (e.g. `documents.ingested`)
 
     TriggerResourceProperties:
       description: >-
@@ -1988,7 +1988,7 @@ components:
           description: Logical identifier from the template
         resource_type:
           type: string
-          description: Resource type (e.g. agent, memory store)
+          description: Resource type (e.g. `agent`, `memory_store`)
         physical_resource_id:
           type: string
           nullable: true
