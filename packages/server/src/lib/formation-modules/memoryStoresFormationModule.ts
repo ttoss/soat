@@ -1,3 +1,4 @@
+import { findThresholdOrderError, resolveMemoryThresholds } from '../memories';
 import {
   createMemoryStore,
   deleteMemoryStore,
@@ -11,6 +12,16 @@ import {
 } from '../resource-inputs/normalizers';
 import { defineFormationModule } from './defineFormationModule';
 
+/**
+ * A declared threshold, or `null` where the template states the field as null —
+ * which clears the override back to the algorithm constant. `undefined` is the
+ * field being absent, which leaves the stored value alone.
+ */
+const readThreshold = (value: unknown): number | null | undefined => {
+  if (value === undefined) return undefined;
+  return typeof value === 'number' ? value : null;
+};
+
 export const memoryStoresFormationModule = defineFormationModule({
   resourceType: 'memory_store',
   authorization: {
@@ -21,12 +32,31 @@ export const memoryStoresFormationModule = defineFormationModule({
   },
   propertiesLabel: 'Memory store',
 
+  // The schema already rejects a non-number and a value outside [0, 1]; what it
+  // cannot express is the relation between the two, which decides whether all
+  // three write outcomes stay reachable.
+  extraChecks: ({ properties, basePath, errors }) => {
+    const error = findThresholdOrderError(
+      resolveMemoryThresholds({
+        duplicateThreshold:
+          readThreshold(properties.duplicate_threshold) ?? undefined,
+        supersedeThreshold:
+          readThreshold(properties.supersede_threshold) ?? undefined,
+      })
+    );
+    if (error) {
+      errors.push({ path: `${basePath}.supersede_threshold`, message: error });
+    }
+  },
+
   create: ({ properties, projectId }) => {
     return createMemoryStore({
       projectId,
       name: properties.name as string,
       description: toOptionalString(properties.description) ?? undefined,
       tags: toNullableStringRecord(properties.tags) ?? undefined,
+      duplicateThreshold: readThreshold(properties.duplicate_threshold),
+      supersedeThreshold: readThreshold(properties.supersede_threshold),
     });
   },
 
@@ -36,6 +66,8 @@ export const memoryStoresFormationModule = defineFormationModule({
       name: toOptionalString(properties.name) ?? undefined,
       description: toNullableString(properties.description),
       tags: toNullableStringRecord(properties.tags),
+      duplicateThreshold: readThreshold(properties.duplicate_threshold),
+      supersedeThreshold: readThreshold(properties.supersede_threshold),
     });
   },
 

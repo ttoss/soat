@@ -97,6 +97,7 @@ type InternalGenerationResult =
 
 const runAgentGeneration = async (args: {
   agent: InstanceType<(typeof db)['Agent']>;
+  conversationId: string;
   messagesForModel: Array<{ role: string; content: unknown }>;
   toolContext?: Record<string, string>;
   abortSignal?: AbortSignal;
@@ -110,6 +111,10 @@ const runAgentGeneration = async (args: {
     toolContext: args.toolContext,
     abortSignal: args.abortSignal,
     sessionId: args.sessionId,
+    // Persisted on the generation rather than only passed to the post-turn
+    // extraction: a `write_memory` call mid-turn records its generation, and
+    // this is the edge that walks that generation up to its conversation.
+    conversationId: args.conversationId,
     authHeader: args.authHeader,
     initiatorGenerationId: args.initiatorGenerationId,
   });
@@ -142,6 +147,7 @@ const runAgentGeneration = async (args: {
 
 const runGenerationForAgent = async (args: {
   generatingAgent: GenerationContext['generatingAgent'];
+  conversationId: string;
   messagesForModel: Array<{ role: string; content: unknown }>;
   model?: string;
   toolContext?: Record<string, string>;
@@ -152,6 +158,7 @@ const runGenerationForAgent = async (args: {
 }): Promise<InternalGenerationResult> => {
   return runAgentGeneration({
     agent: args.generatingAgent,
+    conversationId: args.conversationId,
     messagesForModel: args.messagesForModel,
     toolContext: args.toolContext,
     abortSignal: args.abortSignal,
@@ -330,6 +337,7 @@ export const generateConversationMessage = async (args: {
 
   const genResult = await runGenerationForAgent({
     generatingAgent,
+    conversationId: args.conversationId,
     messagesForModel,
     model: args.model,
     toolContext: args.toolContext,

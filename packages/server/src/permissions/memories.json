@@ -80,6 +80,16 @@
       "operationId": "mergeMemoryTags",
       "action": "memories:UpdateMemory",
       "description": "Merge a memory's tags"
+    },
+    {
+      "operationId": "listMemoryAssertions",
+      "action": "memories:ListMemoryAssertions",
+      "description": "List the write assertions recorded against a memory"
+    },
+    {
+      "operationId": "listMemoryStoreAssertions",
+      "action": "memories:ListMemoryAssertions",
+      "description": "List the write assertions recorded against a memory store"
     }
   ]
 }

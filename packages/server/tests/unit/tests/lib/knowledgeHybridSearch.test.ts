@@ -7,6 +7,8 @@ import { writeMemory } from 'src/lib/memories';
 import { createMemoryStore } from 'src/lib/memoryStores';
 import { createProject } from 'src/lib/projects';
 
+import { SEED_ASSERTION } from '../../fixtures/memoryWrites';
+
 /**
  * The defect this covers: a chunk that literally contains the searched token is
  * dropped because its embedding sits far from the query, so a vector-only
@@ -111,10 +113,12 @@ const seed = async (): Promise<Fixtures> => {
   const lexicalEntry = await writeMemory({
     memoryStoreId: memoryStoreRow!.id as number,
     content: CONTENT.lexicalOnlyEntry,
+    assertion: SEED_ASSERTION,
   });
   const vectorEntry = await writeMemory({
     memoryStoreId: memoryStoreRow!.id as number,
     content: CONTENT.vectorOnlyEntry,
+    assertion: SEED_ASSERTION,
   });
 
   return {
@@ -492,6 +496,7 @@ describe('ranking does not allocate result slots by store', () => {
       const written = await writeMemory({
         memoryStoreId: memoryStoreRow!.id as number,
         content: entryContent(index),
+        assertion: SEED_ASSERTION,
       });
       expect(written.action).toBe('created');
     }

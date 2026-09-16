@@ -10,6 +10,7 @@ import {
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { Actor } from './Actor';
 import { Agent } from './Agent';
+import { Conversation } from './Conversation';
 import { Project } from './Project';
 import { Session } from './Session';
 import { Trace } from './Trace';
@@ -43,6 +44,11 @@ import { Trace } from './Trace';
     {
       name: 'generations_chain_id_idx',
       fields: ['chain_id'],
+    },
+    // Backs the walk from a generation up to the conversation it served.
+    {
+      name: 'generations_conversation_id_idx',
+      fields: ['conversation_id'],
     },
     // Backs `list-generations` filtered by `orchestration_run_id`/`node_id`.
     {
@@ -166,6 +172,27 @@ export class Generation extends Model {
     { onDelete: 'SET NULL' }
   )
   declare session: Session | null;
+
+  /**
+   * The conversation this generation served, when it served one. Neither model
+   * carried the other's id before: the conversation path passed its id to the
+   * post-turn side effects at runtime and persisted nothing, so a generation
+   * could not be walked up to the conversation it answered. `SET NULL` so
+   * deleting a conversation never blocks on the generations it produced.
+   */
+  @ForeignKey(() => {
+    return Conversation;
+  })
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare conversationId: number | null;
+
+  @BelongsTo(
+    () => {
+      return Conversation;
+    },
+    { onDelete: 'SET NULL' }
+  )
+  declare conversation: Conversation | null;
 
   // Denormalized principal info (set from JWT/API key context)
   @Column({ type: DataType.STRING, allowNull: true })

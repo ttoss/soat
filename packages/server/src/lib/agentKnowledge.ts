@@ -311,13 +311,13 @@ export const buildKnowledgeMessages = async (args: {
 };
 
 /**
- * The `write_memory` tool consolidates a fact — it may create a new memory or
- * merge into (update) an existing one. It is a SOAT-native action, so the
- * agent's `boundary_policy` must gate it the same way `buildSoatActionTool`
- * gates REST-backed native tools. Because the write can either create or
- * update, the boundary must allow **both** memory-write actions; a deny on
- * either (including a wildcard `Deny action:["*"]`) blocks the tool
- * fail-closed.
+ * The `write_memory` tool resolves a fact against the store — it may create a
+ * new memory, supersede an existing one, or skip a duplicate. It is a
+ * SOAT-native action, so the agent's `boundary_policy` must gate it the same
+ * way `buildSoatActionTool` gates REST-backed native tools. Because a
+ * supersede retires an existing memory, the boundary must allow **both**
+ * memory-write actions; a deny on either (including a wildcard
+ * `Deny action:["*"]`) blocks the tool fail-closed.
  */
 const MEMORY_WRITE_ACTIONS = [
   'memories:CreateMemory',
@@ -338,12 +338,18 @@ const findBoundaryDeniedMemoryWriteAction = (
 export const buildWriteMemoryTool = (args: {
   writeMemoryStoreId: string;
   agentId: string;
+  /**
+   * The turn this call belongs to — the origin every agent-written assertion
+   * records. It was already a required argument where the tool surface is
+   * resolved; it simply was not forwarded this far.
+   */
+  generationId: string;
   projectIds?: number[];
   boundaryPolicy?: unknown;
 }): Tool => {
   return tool({
     description:
-      'Write a fact to memory. The system automatically deduplicates: creates new memories, merges with similar existing ones, or skips duplicates.',
+      'Write a fact to memory. The system automatically deduplicates: creates a new memory, supersedes an existing one the fact has changed, or skips a duplicate.',
     inputSchema: jsonSchema<{ content: string }>({
       type: 'object',
       properties: {
@@ -371,14 +377,23 @@ export const buildWriteMemoryTool = (args: {
       const result = await writeMemory({
         memoryStoreId: memoryStore.id as number,
         content,
-        // Agent context is available here, so a merge-band write can be
-        // consolidated by the LLM into a single atomic fact. Without it the
-        // write would create a second memory instead.
+        // No `sourceConversationPublicId`: `Memory.source_id` is the pointer a
+        // client may supply on a hand-written fact, and this tool has none to
+        // give. Where the turn came from is on the assertion instead, as the
+        // generation — which a conversation is reachable from.
         //
-        // No `sourceConversationPublicId`: this tool runs inside a generation,
-        // which may or may not belong to a conversation and never carries a
-        // link to one, so the write is `manual` — there is no source to name.
-        consolidation: { agentId: args.agentId, projectIds: args.projectIds },
+        // No thresholds either: the tool door always uses the store's
+        // effective pair. An agent that could loosen the corpus's dedup policy
+        // from the side would make the store-level default meaningless.
+        assertion: {
+          mechanism: 'tool',
+          generationId: args.generationId,
+          // The agent is the asserter on both agent doors. `startedBy` on the
+          // generation names whoever asked for the turn, which is a different
+          // question from who claimed the fact.
+          principalType: 'agent',
+          principalId: args.agentId,
+        },
       });
       return { action: result.action, memoryId: result.entry.id };
     },
@@ -392,6 +407,7 @@ export const buildWriteMemoryTool = (args: {
  */
 export const buildKnowledgeTools = (args: {
   agentId: string;
+  generationId: string;
   projectIds?: number[];
   typedAgent: TypedAgent;
   resolvedTools: Record<string, unknown>;
@@ -401,6 +417,7 @@ export const buildKnowledgeTools = (args: {
     args.resolvedTools['write_memory'] = buildWriteMemoryTool({
       writeMemoryStoreId: knowledgeConfig.writeMemoryStoreId,
       agentId: args.agentId,
+      generationId: args.generationId,
       projectIds: args.projectIds,
       boundaryPolicy: args.typedAgent.boundaryPolicy,
     });

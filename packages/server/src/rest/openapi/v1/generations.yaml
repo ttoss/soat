@@ -430,6 +430,15 @@ components:
             Public ID of the continuation chain this generation belongs to.
             Set on every member of a chain — the continuations and the root they
             descend from — and null on a generation that is not part of one.
+        conversation_id:
+          x-soat-ref: conversations
+          type: string
+          nullable: true
+          description: >
+            Public ID of the conversation this turn served, or null for a
+            generation started outside one — a direct call, a trigger, an
+            orchestration node. This is the edge a memory assertion walks up
+            to reach the conversation a fact was learned in.
         session_id:
           x-soat-ref: sessions
           type: string
@@ -542,8 +551,10 @@ components:
           type: object
           nullable: true
           description: >
-            Memory store-extraction summary recorded for this generation. Set when the
+            Memory-extraction summary recorded for this generation. Set when the
             agent's `knowledge_config.extraction` produced one for this turn.
+            The rows behind these counts are in `memory_assertions`, so the
+            summary and what it summarizes can be reconciled.
           properties:
             candidates:
               type: integer
@@ -551,12 +562,23 @@ components:
             created:
               type: integer
               description: Number of new memories created
-            updated:
+            superseded:
               type: integer
-              description: Number of existing memories updated
+              description: >
+                Number of candidates that restated a known fact that had
+                changed, retiring the memory holding it
             skipped:
               type: integer
               description: Number of candidates skipped (e.g. duplicates)
+        memory_assertions:
+          type: array
+          description: >
+            Every memory write this turn made, oldest first — the post-turn
+            extractor's and the agent's own `write_memory` calls alike, which
+            the `extraction` counts never covered. Present on the single read
+            only; a listing would make it one extra query per generation.
+          items:
+            $ref: './memory-assertions.yaml#/components/schemas/MemoryAssertion'
         tool_surface:
           type: object
           nullable: true

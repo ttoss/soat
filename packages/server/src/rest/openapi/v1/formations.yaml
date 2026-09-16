@@ -1176,6 +1176,26 @@ components:
           description: What this memory store stores
         tags:
           $ref: './tags.yaml#/components/schemas/NullableTagBag'
+        duplicate_threshold:
+          type: number
+          nullable: true
+          minimum: 0
+          maximum: 1
+          description: >-
+            Cosine similarity at or above which an incoming fact is already
+            known and the write is skipped. Null uses the algorithm constant
+            (0.95). This is where a template sets the corpus's dedup policy:
+            a `memory` resource has no threshold of its own.
+        supersede_threshold:
+          type: number
+          nullable: true
+          minimum: 0
+          maximum: 1
+          description: >-
+            Cosine similarity at or above which an incoming fact restates a
+            known one that has changed, retiring it. Null uses the algorithm
+            constant (0.90). Must be lower than the effective
+            `duplicate_threshold`.
     MemoryResourceProperties:
       description: Adds a single memory to a memory store.
       type: object

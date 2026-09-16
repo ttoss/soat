@@ -93,11 +93,13 @@ paths:
         - Memories
       summary: Create a memory
       description: >-
-        Creates a new memory in the specified memory store. Automatically
-        generates an embedding for semantic search, and skips the write when an
-        existing memory is a near-duplicate (see `duplicate_threshold`). A merely
-        similar fact is stored as its own memory: this path has no agent context
-        and therefore no model to consolidate two facts into one.
+        Writes a fact to the specified memory store through the standard write
+        algorithm: the content is embedded (or matched to text the store
+        already holds), compared against the most similar currently-valid
+        memory, and resolved to exactly one of three outcomes — `skipped` at or
+        above `duplicate_threshold`, `superseded` at or above
+        `supersede_threshold`, `created` below it. Every call records one
+        assertion, whatever the outcome.
       operationId: createMemory
       x-iam-action: memories:CreateMemory
       requestBody:
@@ -146,13 +148,34 @@ paths:
                   example: { evidence: high, quarter: Q3 }
                 duplicate_threshold:
                   type: number
-                  description: Cosine similarity score at or above which the incoming content is considered a duplicate of an existing memory and skipped (default 0.95). Below it the memory is always created.
-                  default: 0.95
+                  description: >-
+                    Cosine similarity at or above which the incoming content is
+                    a duplicate of an existing memory and the write is skipped.
+                    Overrides the store's `duplicate_threshold` for this call;
+                    falls back to the store's value, then to `0.95`.
                   minimum: 0
                   maximum: 1
+                  example: 0.95
+                supersede_threshold:
+                  type: number
+                  description: >-
+                    Cosine similarity at or above which the incoming content
+                    restates a fact that has changed: the top match is
+                    invalidated and a new memory replaces it. Overrides the
+                    store's `supersede_threshold` for this call; falls back to
+                    the store's value, then to `0.90`. The effective pair must
+                    satisfy `supersede_threshold < duplicate_threshold`, and the
+                    check runs against the effective pair — so overriding only
+                    one value cannot invert it against the store's other one.
+                  minimum: 0
+                  maximum: 1
+                  example: 0.9
       responses:
         '200':
-          description: Memory deduplicated (action is "skipped")
+          description: >-
+            The write resolved against an existing memory — `action` is
+            `skipped` (the fact was already known) or `superseded` (the fact
+            had changed, and the returned memory is the replacement).
           content:
             application/json:
               schema:
@@ -164,7 +187,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/MemoryWriteResult'
         '400':
-          description: Bad request (missing required fields)
+          description: >-
+            Bad request — a missing required field, or a threshold pair whose
+            effective values are not `supersede_threshold <
+            duplicate_threshold`.
         '401':
           description: Unauthorized
         '403':
@@ -276,6 +302,70 @@ paths:
       responses:
         '204':
           description: Memory deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Memory store or memory not found
+        '500':
+          description: Internal server error
+  /api/v1/memories/{memory_id}/assertions:
+    get:
+      tags:
+        - Memories
+      summary: List a memory's assertions
+      description: >-
+        Returns every write that resolved into this memory, oldest first: the
+        one that created it, the duplicates it absorbed, and the assertion that
+        superseded another memory in its favour. A superseded memory keeps its
+        own assertions, so the chain can be walked in both directions.
+      operationId: listMemoryAssertions
+      x-iam-action: memories:ListMemoryAssertions
+      parameters:
+        - name: memory_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: mem_V1StGXR8Z5jdHi6B
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          description: Number of results to skip
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of assertions
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - total
+                  - limit
+                  - offset
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: './memory-assertions.yaml#/components/schemas/MemoryAssertion'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
         '401':
           description: Unauthorized
         '403':
@@ -404,6 +494,10 @@ components:
           example: mstore_V1StGXR8Z5jdHi6B
         content:
           type: string
+          description: >-
+            The text this memory currently holds. Stored once per distinct text
+            per store and shared with every assertion that stated it, so a
+            memory carries no copy of its own.
           example: The customer prefers email communication over phone calls
         source_type:
           type: string
@@ -440,7 +534,11 @@ components:
           type: string
           format: date-time
           nullable: true
-          description: When the memory was superseded. Null means the memory is currently valid. Invalidated memories are excluded from listing, from write deduplication, and from knowledge search, but remain readable by ID for audit.
+          description: >-
+            When the memory was superseded. Null means the memory is currently
+            valid. Invalidated memories are excluded from listing, from write
+            deduplication, and from knowledge search, but remain readable by ID
+            — with their original text — for audit.
         superseded_by_memory_id:
           type: string
           nullable: true
@@ -459,13 +557,13 @@ components:
           properties:
             action:
               type: string
-              enum: [created, updated, skipped, superseded]
+              enum: [created, superseded, skipped]
               description: >-
-                The outcome of the write operation. `updated` means an existing
-                memory was rewritten to absorb the incoming fact — it is produced
-                only by the LLM consolidation on agent write paths (the
-                `write_memory` tool and automatic extraction), never by this
-                endpoint, which creates instead of merging. `superseded` means
-                the incoming content contradicted an existing memory, which was
-                invalidated and replaced — it is produced by the LLM-arbitrated
-                write path and does not occur until that ships.
+                The outcome of the write. `created` means the fact was distinct
+                and a new memory holds it. `superseded` means it restated a
+                fact that had changed: the matched memory was invalidated,
+                points at the replacement, and the replacement is what is
+                returned. `skipped` means the fact was already known and the
+                existing memory is returned unchanged. Every outcome is
+                recorded as an assertion, readable at
+                `GET /api/v1/memories/{memory_id}/assertions`.

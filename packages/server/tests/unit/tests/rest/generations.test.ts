@@ -1,5 +1,9 @@
+import { db } from 'src/db';
 import { getGenerationPendingState } from 'src/lib/generationPendingState';
-import { updateGenerationRecord } from 'src/lib/generations';
+import {
+  createGenerationRecord,
+  updateGenerationRecord,
+} from 'src/lib/generations';
 
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
@@ -16,6 +20,7 @@ describe('Generations', () => {
   let userToken: string;
   let noPermToken: string;
   let agentId: string;
+  let projectId: string;
   let failedGenerationId: string;
   let failedTraceId: string;
 
@@ -43,7 +48,7 @@ describe('Generations', () => {
     const projectRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/projects')
       .send({ name: 'Generations Test Project' });
-    const projectId = projectRes.body.id;
+    projectId = projectRes.body.id;
 
     const policyRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/policies')
@@ -269,6 +274,42 @@ describe('Generations', () => {
       expect(response.body.error.code).toBe('RESOURCE_NOT_FOUND');
     });
 
+    // The edge a memory assertion walks up to reach the conversation a fact was
+    // learned in. Null for a generation that served no conversation.
+    test('reports the conversation a generation served', async () => {
+      const conversation = await authenticatedTestClient(adminToken)
+        .post('/api/v1/conversations')
+        .send({ project_id: projectId });
+      expect(conversation.status).toBe(201);
+
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+      await createGenerationRecord({
+        publicId: 'gen_conv_edge',
+        projectId: project!.id as number,
+        agentId,
+        traceId: 'trc_conv_edge',
+        conversationId: conversation.body.id,
+      });
+
+      const response = await authenticatedTestClient(userToken).get(
+        '/api/v1/generations/gen_conv_edge'
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.conversation_id).toBe(conversation.body.id);
+    });
+
+    test('reports no conversation for a direct generation', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/generations/${failedGenerationId}`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.conversation_id).toBeNull();
+    });
+
     test('does not expose internal numeric IDs', async () => {
       const response = await authenticatedTestClient(userToken).get(
         `/api/v1/generations/${failedGenerationId}`
@@ -284,7 +325,7 @@ describe('Generations', () => {
         pendingState: {
           messages: [{ role: 'user', content: 'secret internal message' }],
         },
-        extraction: { candidates: 2, created: 1, updated: 0, skipped: 1 },
+        extraction: { candidates: 2, created: 1, superseded: 0, skipped: 1 },
       });
 
       const response = await authenticatedTestClient(userToken).get(
@@ -295,7 +336,7 @@ describe('Generations', () => {
       expect(response.body.extraction).toEqual({
         candidates: 2,
         created: 1,
-        updated: 0,
+        superseded: 0,
         skipped: 1,
       });
       // `pendingState` has no mapper entry at all, so it cannot leak under its

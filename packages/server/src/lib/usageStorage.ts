@@ -129,7 +129,7 @@ const projectStoredFootprint = async (
     `SELECT files.file_bytes,
             chunks.chunk_bytes,
             chunks.chunk_rows,
-            memories.memory_bytes,
+            memory_content.memory_bytes,
             memories.memory_rows,
             dataset_items.dataset_item_bytes,
             eval_results.eval_result_bytes
@@ -147,11 +147,21 @@ const projectStoredFootprint = async (
                JOIN "files" f ON d."file_id" = f."id"
               WHERE f."project_id" = :projectId) chunks
        CROSS JOIN
+            -- Bytes are measured on memory_contents, where the text and the
+            -- vector now live. A store holds one row per distinct text, so a
+            -- fact asserted twice is billed once — which is what it costs.
             (SELECT COALESCE(SUM(
-                      OCTET_LENGTH(me."content")
-                      + COALESCE(pg_column_size(me."embedding"), 0)
-                    ), 0) AS memory_bytes,
-                    COUNT(*) AS memory_rows
+                      OCTET_LENGTH(mc."content")
+                      + COALESCE(pg_column_size(mc."embedding"), 0)
+                    ), 0) AS memory_bytes
+               FROM "memory_contents" mc
+               JOIN "memory_stores" m ON mc."memory_store_id" = m."id"
+              WHERE m."project_id" = :projectId) memory_content
+       CROSS JOIN
+            -- Rows are still counted on memories: the per-row half of the
+            -- price is charged per fact the project keeps, not per distinct
+            -- string behind them.
+            (SELECT COUNT(*) AS memory_rows
                FROM "memories" me
                JOIN "memory_stores" m ON me."memory_store_id" = m."id"
               WHERE m."project_id" = :projectId) memories

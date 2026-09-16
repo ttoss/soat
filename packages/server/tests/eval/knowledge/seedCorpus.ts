@@ -141,6 +141,13 @@ export const seedGoldenCorpus = async (args: {
       ),
       content: fixture.content,
       tags: fixture.tags ?? null,
+      // The eval seeds a corpus to measure retrieval against; there is no real
+      // door behind these writes, so they declare one asserter.
+      assertion: {
+        mechanism: 'api',
+        principalType: 'user',
+        principalId: 'user_seed',
+      },
     });
     // `writeMemory` deduplicates against the most similar existing entry
     // at 0.95. A fixture that merges into another is silently absent from the

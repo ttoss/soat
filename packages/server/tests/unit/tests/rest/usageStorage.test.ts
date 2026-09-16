@@ -6,6 +6,7 @@ import {
 } from 'src/lib/usageStorage';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { seedMemory } from '../../fixtures/memoryWrites';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 // No HTTP entry point — the daily snapshot runs from the scheduler tick, so the
@@ -71,9 +72,8 @@ describe('Usage — storage metering', () => {
       projectId: projectInternalId,
       name: 'storage-memoryStore',
     });
-    await db.Memory.create({
-      publicId: generatePublicId(PUBLIC_ID_PREFIXES.memory),
-      memoryStoreId: memoryStore.id,
+    await seedMemory({
+      memoryStoreId: memoryStore.id as number,
       content: 'entry',
       embedding: null,
     });

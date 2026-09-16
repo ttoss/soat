@@ -1,3 +1,4 @@
+import { isolateMemory } from '../../fixtures/memoryWrites';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
@@ -37,11 +38,11 @@ describe('Tag conditions on memoryStores and memories', () => {
         memory_store_id: args.memoryStoreId,
         content: args.content,
         tags: args.tags,
-        // The test embedding server answers every text with the same vector,
-        // so without this every second entry in a memory store is a "duplicate".
-        duplicate_threshold: 1.1,
       });
     expect(res.status).toBe(201);
+    // The test embedding server answers every text with the same vector, so
+    // without this every second entry in a memory store is a "duplicate".
+    await isolateMemory({ memoryId: res.body.id as string });
     return res.body.id as string;
   };
 

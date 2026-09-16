@@ -21,11 +21,12 @@ No separate vector database, no "knowledge base" resource. Knowledge lives in **
 flowchart TB
     subgraph WRITE["WRITE SIDE"]
         files["files"] --> ingest["ingestion pipeline<br/>extract → chunk → embed"]
-        sources["turns · agents (write_memory)<br/>REST (manual) · formations"] --> writealg["write algorithm<br/>dedup / merge / create"]
+        sources["turns · agents (write_memory)<br/>REST (manual) · formations"] --> writealg["write algorithm<br/>skip / supersede / create"]
     end
 
     ingest --> chunks[("DocumentChunk")]
-    writealg --> memories[("Memory")]
+    writealg --> memories[("Memory + MemoryContent")]
+    writealg --> assertions[("MemoryAssertion")]
 
     chunks --> search
     memories --> search
@@ -40,8 +41,9 @@ flowchart TB
 | Content extraction | Native extractors (PDF, text, markdown) or a converter you provide | [Ingestion rules](../modules/ingestion-rules.md) |
 | Chunking | `page` \| `whole` \| `size` (character window + overlap) | `chunk_strategy`, `chunk_size`, `chunk_overlap` |
 | Embedding | One deployment-wide model | `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, `EMBEDDING_DIMENSIONS` |
-| Memory write decision | Cosine dedup: skip / create everywhere; merge band on agent paths only | `duplicate_threshold` |
-| Memory merge | LLM consolidation into one atomic fact; a failed or blank completion creates instead | presence of an agent context; extraction's provider/model override |
+| Memory write decision | Cosine, three outcomes on every path: skip / supersede / create, no model call | `duplicate_threshold`, `supersede_threshold` (per request or per store) |
+| Memory supersede | The top match is invalidated and points at a new memory holding the new text; both texts stay readable | the same threshold pair |
+| Write record | One append-only assertion per write attempt, skips included | n/a — always recorded |
 | Fact extraction | Tool-less LLM completion over the finished turn | `knowledge_config.extraction`, per-turn `extract` |
 | Retrieval ranking | Hybrid: a vector and a full-text top-k per store, fused by reciprocal rank, then an optional recency decay on memory results | `min_similarity`, `rrf_k`, `recency_half_life_days`, `limit`, source filters |
 | Injection | Fenced `<knowledge>` block as a `user`-role message | `knowledge_config` |
@@ -52,37 +54,43 @@ flowchart TB
 
 Every memory write runs the same deduplication algorithm; the paths differ only in the context they carry:
 
-| Path | `source_type` | LLM merge? | Provenance recorded |
-| --- | --- | --- | --- |
-| [`POST /api/v1/memories`](/docs/api/memories/create-memory) (manual) | `manual`, or `conversation` when the caller names one | No — similar facts create | `source_id`, when given |
-| `write_memory` agent tool | `manual` | Yes (agent's provider) | none — the tool has no conversation to name |
-| [Automatic extraction](../modules/memories.md#automatic-extraction) on a conversation turn | `conversation` | Yes (extraction's provider) | the conversation, in `source_id` |
-| [Automatic extraction](../modules/memories.md#automatic-extraction) on a direct generation | `manual` | Yes (extraction's provider) | none — there is no conversation |
-| Formation `memory` resource | declared | n/a — declarative create, bypasses dedup | as declared |
+| Path | `mechanism` | `source_type` | May set thresholds? | Generation on the assertion |
+| --- | --- | --- | --- | --- |
+| [`POST /api/v1/memories`](/docs/api/memories/create-memory) (manual) | `api` | `manual`, or `conversation` when the caller names one | Yes, per request | none |
+| `write_memory` agent tool | `tool` | `manual` | No — the store's pair | the turn it was called in |
+| [Automatic extraction](../modules/memories.md#automatic-extraction) on a conversation turn | `rule` | `conversation` | No — the store's pair | the turn extracted from |
+| [Automatic extraction](../modules/memories.md#automatic-extraction) on a direct generation | `rule` | `manual` | No — the store's pair | the turn extracted from |
+| Formation `memory` resource | `formation` | declared | n/a — declarative create, bypasses dedup | none |
 
-The formation path bypasses dedup because a formation declares exact desired state.
+The formation path bypasses dedup because a formation declares exact desired state. It still
+records its assertion: the ledger covers every write, whichever door it came through.
 
 ### The write algorithm (deduplication)
 
 Caller-facing contract: [Memories — Write Algorithm](../modules/memories.md#write-algorithm). Mechanically, each write:
 
-1. **Embeds** the incoming content. Best-effort: on failure the memory is stored without a vector (not retrievable by semantic search until re-written).
-2. **Shortlists** the single most similar **currently-valid** memory in the target store by pgvector cosine distance. Memories with `invalidated_at` set are never candidates.
+1. **Resolves the content row.** Text is keyed per store by a sha256 of its trimmed, whitespace-collapsed form. A hash hit reuses the stored row and its vector and reaches no embedder; a miss embeds once and stores text and vector together. Embedding is best-effort: on failure the row is stored without a vector, and the next write of that text fills it in.
+2. **Shortlists** the single most similar **currently-valid** memory in the target store, by pgvector cosine over the joined content row. Memories with `invalidated_at` set are never candidates.
 3. **Decides** from the cosine score:
    - `score >= duplicate_threshold` (default `0.95`) → **skip**, return the existing memory.
-   - similar but below the duplicate bar (at or above a fixed `0.75` floor), **and the write carries an agent context** → **merge** by LLM consolidation (next section), re-embed.
-   - everything else → **create** a new memory.
-4. **Returns** `{ action, ...memory }` where `action` is `created`, `updated`, or `skipped`. The enum also reserves `superseded`, the contradiction-arbitration outcome (see [Design headroom](#design-headroom--where-the-engine-is-going)).
+   - `score >= supersede_threshold` (default `0.90`) → **supersede**: the match gets `invalidated_at` and `superseded_by_memory_id`, and a new memory holds the new text, inheriting the retired memory's `tags` and `metadata` under the incoming ones.
+   - below it → **create** a new memory.
+4. **Appends one assertion**, recording the content as asserted, the outcome, the deciding similarity, the principal, the mechanism and (on the agent doors) the generation.
+5. **Returns** `{ action, ...memory }` where `action` is `created`, `superseded`, or `skipped`.
 
-`duplicate_threshold` is a **per-request field** on [`POST /api/v1/memories`](/docs/api/memories/create-memory) only; the tool and extraction paths use the default. Cosine cutoffs depend on the embedding model: re-tune a custom threshold when you change `EMBEDDING_MODEL`.
+There is no model call in the algorithm. Both thresholds resolve request → store → constant; only the `api` door may set them per request ([Memories — Where the thresholds come from](../modules/memories.md#where-the-thresholds-come-from)). Cosine cutoffs depend on the embedding model: re-tune a custom pair when you change `EMBEDDING_MODEL`.
 
-### The merge (consolidation) algorithm
+### Shared content rows
 
-Merging is an **agent-path** behavior (`write_memory` tool and extraction). A tool-less, temperature-0 completion merges the existing and incoming facts into a **single, self-contained sentence**, preferring the new fact on contradiction, keeping memories atomic.
+`Memory` holds identity, store, tags, metadata and validity. The text and its vector live on `MemoryContent`, unique per `(store, content hash)` and referenced by both the memory and every assertion that stated that text.
 
-Nothing is ever appended to an existing memory. A write with no agent context (manual REST), and an agent-path write whose consolidation fails or comes back blank, **creates** instead; no write can lose a fact, at the cost of a possible near-duplicate pair until arbitration ships.
+One row per distinct text per store means a fact asserted twice is embedded once and stored once, and an assertion restating known text costs no embedding call at all — the case the in-turn `tool` door hits most. The HNSW index sits on the content row's vector, while `invalidated_at` stays on the memory, so the validity filter still decides candidacy.
 
-On a merge, incoming `tags` and `metadata` are both shallow-merged into the existing memory (incoming keys win). Provenance (`source_type`, `source_id`) is recorded at creation and **never rewritten by a later merge**.
+### The assertion ledger
+
+Every write appends one `MemoryAssertion`, including the ones that changed nothing. Caller-facing contract: [Memories — Assertions](../modules/memories.md#assertions).
+
+A memory row answers *what is known*. The ledger answers *who claimed it, through which door, in which turn, and what the write did* — including the skips, which produce no memory at all. `mechanism` is `rule`, not `extraction`, from the start: the post-turn pass becomes a `memory_rules` row with a pluggable handler, at which point only `rule_id` starts being populated.
 
 ### The extraction algorithm
 
@@ -93,8 +101,8 @@ Each run:
 1. Fires **after** the turn completes, fire-and-forget; it never blocks or fails the generation response.
 2. Builds a transcript from the turn's `user`/`assistant` string messages and sends a tool-less, temperature-0 completion. A custom `extraction.prompt` replaces only the task instructions; the engine always appends the JSON-array response contract and the transcript.
 3. Parses the response leniently (the text between the first `[` and last `]`), accepts strings or `{"content": "..."}` objects, and caps candidates at **20 per turn**.
-4. Writes each candidate through the standard write algorithm, inheriting dedup and LLM consolidation.
-5. Records `{ candidates, created, updated, skipped }` on the originating generation's `extraction` field ([Generations](../modules/generations.md) API).
+4. Writes each candidate through the standard write algorithm, on the store's effective thresholds, recording a `rule` assertion against the turn's generation.
+5. Records `{ candidates, created, superseded, skipped }` on the originating generation's `extraction` field ([Generations](../modules/generations.md) API), which also carries the `memory_assertions` rows behind those counts.
 
 **Coverage matrix** — which turn types extract today:
 
@@ -202,7 +210,7 @@ Orchestrations read knowledge mid-flow with the `knowledge` node. There is no de
 | `include_invalidated` | [`GET /api/v1/memories`](/docs/api/memories/list-memories) query | `false` | whether superseded memories appear in listings |
 | `EMBEDDING_*` env vars | server environment | — | the shared vector space |
 
-Fixed today (no knob): the cosine distance metric, the merge band's `0.75` floor (agent paths only), the fusion formula itself and the relative weight of the two channels, the decay curve behind `recency_half_life_days` (a plain exponential, with no floor damping it), the injection preamble and source-tag format, the extraction candidate cap (20), and the per-source embedding concurrency during ingestion.
+Fixed today (no knob): the cosine distance metric, the content hash's normalization, the fusion formula itself and the relative weight of the two channels, the decay curve behind `recency_half_life_days` (a plain exponential, with no floor damping it), the injection preamble and source-tag format, the extraction candidate cap (20), and the per-source embedding concurrency during ingestion.
 
 ## Extending the engine today
 
@@ -211,14 +219,15 @@ The same seam shape the evaluations engine exposes as [custom scorers](../module
 - **Custom content extraction — first-class.** An [ingestion rule](../modules/ingestion-rules.md) pointing at your own tool: OCR, audio transcription, layout-aware PDF parsing, table extraction — anything answering with pages of text, synchronously or via the deferred callback.
 - **Custom chunking — via pre-chunking.** Run your own splitter and create one document per chunk with `chunk_strategy: whole`, encoding structure in `path`, `title`, `tags`, and `metadata`. Retrieval treats your chunks like engine-made ones.
 - **Custom extraction behavior.** `extraction.prompt` changes *what* the fact miner looks for; `extraction.ai_provider_id`/`model` route it to another model.
-- **Custom write policy.** Curation pipelines writing through [`POST /api/v1/memories`](/docs/api/memories/create-memory) tune `duplicate_threshold` per write: lower to skip more aggressively, raise toward `1.0` to keep near-duplicates distinct. Manual writes never merge.
+- **Custom write policy.** A corpus's dedup policy is tuned once as the store's `duplicate_threshold` / `supersede_threshold`; a curation pipeline writing through [`POST /api/v1/memories`](/docs/api/memories/create-memory) may also override either per write. Lower `duplicate_threshold` to skip more aggressively, raise it toward `1.0` to keep near-duplicates distinct; raise `supersede_threshold` to retire fewer facts.
 - **Custom retrieval composition.** Exact-term matching no longer needs an index of your own — the lexical channel is built in, and a recency decay on memory results is one knob (`recency_half_life_days`). For reranking, or fusion with a signal the engine does not have, call [`POST /api/v1/knowledge/search`](/docs/api/knowledge/search-knowledge) with a generous `limit`, re-rank on your side using `similarity_score` plus your own features, and pass the survivors as input messages.
 
 ## Design headroom — where the engine is going
 
 None of the following has shipped; what has shipped is the room for it:
 
-- **`action: "superseded"` is already in the write response contract**, and memories carry `invalidated_at` / `superseded_by_memory_id`, with retrieval, listing, and dedup excluding invalidated memories. The planned LLM-arbitrated write decision (shortlist top-K candidates, let a model choose add / update / supersede / skip) populates that live schema.
+- **A same-fact judge for the band below `supersede_threshold`.** One boolean call in front of the supersede branch, never writing prose, would let the floor drop toward `0.75` without risking a wrongly retired fact. It is gated on what the [assertion ledger](#the-assertion-ledger) shows about outcomes in that band.
+- **`memory_rules` rows behind `mechanism: "rule"`.** `rule_id` is already on every assertion, null for today's built-in extractor; a pluggable post-turn handler populates it without changing the vocabulary.
 - **`score` is implementation-defined while `similarity_score` is pinned**, so hybrid retrieval (lexical search alongside vectors, rank fusion, an optional rerank stage, recency weighting for memories) can refill `score` as an internal upgrade.
 - **Extraction coverage for streaming and client-tool turns** closes the coverage matrix above without any API change.
 - **A retrieval evaluation harness** (golden query sets, recall@k / MRR) is sequenced before ranking changes.
@@ -230,9 +239,10 @@ Design records: [`docs/prd-memories.md`](https://github.com/ttoss/soat/blob/main
 
 Whatever algorithm runs at each stage:
 
-- **Writes are never lost to an LLM failure.** Consolidation and (future) arbitration degrade to deterministic fallbacks; extraction failures are logged and skipped.
+- **Writes are never lost to an LLM failure.** The write algorithm calls no model at all; extraction failures are logged and skipped.
+- **Every write leaves a record.** One assertion per attempt, including the skips, whichever door it came through.
 - **Invalidated memories never reach a generation.** Superseded facts are excluded from search, injection, and dedup, but stay readable by ID ([`GET /api/v1/memories/{memory_id}`](/docs/api/memories/get-memory)) for audit.
 - **Retrieved knowledge never gains `system` authority.** Injection is fenced, framed as reference material, and delivered as a `user` message; extraction runs tool-less.
-- **Every injected claim is traceable.** Source tags carry the memory ID or document path and page; a memory's provenance links back to the conversation that produced the fact.
+- **Every injected claim is traceable.** Source tags carry the memory ID or document path and page; a memory's assertions link back to the principal, the door and the turn that produced the fact.
 - **Slow stages never sit on the request path.** Extraction is fire-and-forget; ingestion is background by default; write latency stays embedding-bound.
-- **One write funnel, one search function.** Every write path shares the dedup algorithm; every retrieval surface shares the ranking.
+- **One write funnel, one search function.** Every write path shares the dedup algorithm and the ledger; every retrieval surface shares the ranking.

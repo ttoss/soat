@@ -2,6 +2,7 @@ import type { Migration } from '@ttoss/postgresdb';
 
 import { memoryTagsToJsonb } from './2026-09-11-memoryTagsToJsonb';
 import { memoriesRenameAndProvenance } from './2026-09-16-memoriesRenameAndProvenance';
+import { memoryAssertionsAndSharedContent } from './2026-09-16-memoryAssertionsAndSharedContent';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
@@ -25,4 +26,5 @@ import { memoriesRenameAndProvenance } from './2026-09-16-memoriesRenameAndProve
 export const MIGRATIONS: Migration[] = [
   memoryTagsToJsonb,
   memoriesRenameAndProvenance,
+  memoryAssertionsAndSharedContent,
 ];
