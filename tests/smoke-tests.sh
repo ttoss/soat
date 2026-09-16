@@ -581,7 +581,7 @@ fi
 $SOAT_CLI list-audit-entries \
   --project_id "$PROJECT_PUBLIC_ID" --action secrets:DeleteSecret >/dev/null
 
-AUDIT_GET_RESP=$($SOAT_CLI get-audit-entry --memory-id "$AUDIT_ENTRY_ID")
+AUDIT_GET_RESP=$($SOAT_CLI get-audit-entry --entry-id "$AUDIT_ENTRY_ID")
 AUDIT_GET_ACTION=$(printf '%s\n' "$AUDIT_GET_RESP" | jq -r '.action')
 if [ -z "$AUDIT_GET_ACTION" ] || [ "$AUDIT_GET_ACTION" = "null" ]; then
   echo "ERROR: Failed to fetch audit entry $AUDIT_ENTRY_ID" >&2
