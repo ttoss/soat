@@ -358,17 +358,23 @@ export const generations = makeResourceAccessor<GenerationRow>({
  * The transcript route projects both, so it authorizes against both; this is
  * the edge it walks to name the trace's SRN. Deliberately not the generation's
  * own `findScope`, which answers a project rather than the second resource.
+ *
+ * A `get*`, not a `find*`: every generation row carries a trace, so the only
+ * way this misses is a generation that is not there — and the caller has no
+ * second thing to do about that. Answering `null` instead would push a branch
+ * onto the route that nothing can reach.
  */
-export const findGenerationTraceId = async (args: {
+export const getGenerationTraceId = async (args: {
   id: string;
-}): Promise<string | null> => {
+}): Promise<string> => {
   const row = (await db.Generation.findOne({
     where: { publicId: args.id },
     include: [{ model: db.Trace, as: 'trace', attributes: ['publicId'] }],
   })) as { trace?: { publicId?: unknown } | null } | null;
 
   const publicId = row?.trace?.publicId;
-  return typeof publicId === 'string' ? publicId : null;
+  if (typeof publicId !== 'string') throw generations.notFound(args.id);
+  return publicId;
 };
 
 export const listGenerations = async (args: {

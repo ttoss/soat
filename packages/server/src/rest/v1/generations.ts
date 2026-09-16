@@ -3,9 +3,9 @@ import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { purgeGenerationContent } from 'src/lib/contentPurge';
 import {
-  findGenerationTraceId,
   generations,
   getGeneration,
+  getGenerationTraceId,
   listGenerations,
   updateGenerationMetadata,
 } from 'src/lib/generations';
@@ -33,6 +33,27 @@ const generationAccess = makeItemRouteAuthorizer({
   param: 'generation_id',
   label: 'Generation',
 });
+
+/**
+ * The generation a route resolved, past the `null` its lib lookup still
+ * declares.
+ *
+ * Each route below runs after `generationAccess`, which resolved the generation
+ * and its project, and then re-reads it narrowed to exactly that project — so
+ * the second lookup cannot miss. The lib signatures stay nullable because other
+ * callers pass a wider scope; this is the one place that difference is
+ * reconciled, rather than three unreachable guards that read as though a miss
+ * were expected.
+ */
+const requireResolved = <T>(args: { value: T | null; ctx: Context }): T => {
+  if (!args.value) {
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Generation '${args.ctx.params.generation_id}' not found.`
+    );
+  }
+  return args.value;
+};
 
 /**
  * @openapi
@@ -98,20 +119,14 @@ generationsRouter.get('/generations/:generation_id', async (ctx: Context) => {
     action: 'generations:GetGeneration',
   });
 
-  const generation = await getGeneration({
-    publicId: ctx.params.generation_id,
-    projectIds,
-    includeUsage: true,
+  ctx.body = requireResolved({
+    ctx,
+    value: await getGeneration({
+      publicId: ctx.params.generation_id,
+      projectIds,
+      includeUsage: true,
+    }),
   });
-
-  if (!generation) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Generation '${ctx.params.generation_id}' not found.`
-    );
-  }
-
-  ctx.body = generation;
 });
 
 /**
@@ -141,19 +156,15 @@ generationsRouter.get(
     // A refusal here stays `403` rather than hiding: the generation read above
     // already succeeded, so the caller knows the turn exists, and every
     // generation has a trace. There is nothing left to conceal.
-    const traceId = await findGenerationTraceId({
+    const traceId = await getGenerationTraceId({
       id: ctx.params.generation_id,
     });
-    //
-    // Every generation row carries a trace, so a null `traceId` means the
-    // generation disappeared between the check above and here — the `404` then
-    // names the generation, which is what actually went missing.
     await authorizeResource({
       ctx,
-      scope: traceId ? await traceRows.findScope({ id: traceId }) : null,
+      scope: await traceRows.findScope({ id: traceId }),
       resourceType: 'trace',
-      resourceId: traceId ?? ctx.params.generation_id,
-      label: traceId ? 'Trace' : 'Generation',
+      resourceId: traceId,
+      label: 'Trace',
       action: 'traces:GetTrace',
       onDenied: 'refuse',
     });
@@ -189,20 +200,14 @@ generationsRouter.patch('/generations/:generation_id', async (ctx: Context) => {
     throw new DomainError('VALIDATION_FAILED', metadataError);
   }
 
-  const generation = await updateGenerationMetadata({
-    publicId: ctx.params.generation_id,
-    projectIds: projectIds ?? undefined,
-    metadata: metadata as Record<string, unknown>,
+  ctx.body = requireResolved({
+    ctx,
+    value: await updateGenerationMetadata({
+      publicId: ctx.params.generation_id,
+      projectIds,
+      metadata: metadata as Record<string, unknown>,
+    }),
   });
-
-  if (!generation) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Generation '${ctx.params.generation_id}' not found.`
-    );
-  }
-
-  ctx.body = generation;
 });
 
 /**
@@ -221,19 +226,13 @@ generationsRouter.delete(
       action: 'generations:PurgeGenerationContent',
     });
 
-    const purged = await purgeGenerationContent({
-      publicId: ctx.params.generation_id,
-      projectIds,
-      principal: requestPrincipalFromCtx(ctx),
+    ctx.body = requireResolved({
+      ctx,
+      value: await purgeGenerationContent({
+        publicId: ctx.params.generation_id,
+        projectIds,
+        principal: requestPrincipalFromCtx(ctx),
+      }),
     });
-
-    if (!purged) {
-      throw new DomainError(
-        'RESOURCE_NOT_FOUND',
-        `Generation '${ctx.params.generation_id}' not found.`
-      );
-    }
-
-    ctx.body = purged;
   }
 );
