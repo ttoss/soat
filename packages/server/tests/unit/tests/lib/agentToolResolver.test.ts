@@ -1767,6 +1767,82 @@ describe('isSoatActionAllowedByBoundary', () => {
     expect(result).toBe(false);
   });
 
+  test('evaluates a resource-scoped statement against the passed SRN', () => {
+    const policy = {
+      statement: [
+        {
+          effect: 'Allow',
+          action: ['memories:CreateMemory'],
+          resource: ['srn:proj_abc:memory_store:mstore_support'],
+        },
+      ],
+    };
+
+    expect(
+      isSoatActionAllowedByBoundary({
+        boundaryPolicy: policy,
+        iamAction: 'memories:CreateMemory',
+        resource: 'srn:proj_abc:memory_store:mstore_support',
+      })
+    ).toBe(true);
+
+    expect(
+      isSoatActionAllowedByBoundary({
+        boundaryPolicy: policy,
+        iamAction: 'memories:CreateMemory',
+        resource: 'srn:proj_abc:memory_store:mstore_other',
+      })
+    ).toBe(false);
+  });
+
+  test('evaluates statement conditions against the passed context', () => {
+    const policy = {
+      statement: [
+        {
+          effect: 'Allow',
+          action: ['memories:CreateMemory'],
+          resource: ['*'],
+          condition: { StringEquals: { 'soat:ResourceTag/env': 'prod' } },
+        },
+      ],
+    };
+
+    expect(
+      isSoatActionAllowedByBoundary({
+        boundaryPolicy: policy,
+        iamAction: 'memories:CreateMemory',
+        context: { 'soat:ResourceTag/env': 'prod' },
+      })
+    ).toBe(true);
+
+    expect(
+      isSoatActionAllowedByBoundary({
+        boundaryPolicy: policy,
+        iamAction: 'memories:CreateMemory',
+        context: { 'soat:ResourceTag/env': 'staging' },
+      })
+    ).toBe(false);
+  });
+
+  test('falls back to the resource-less shape when no resource is passed', () => {
+    const policy = {
+      statement: [
+        {
+          effect: 'Allow',
+          action: ['memories:CreateMemory'],
+          resource: ['*'],
+        },
+      ],
+    };
+
+    expect(
+      isSoatActionAllowedByBoundary({
+        boundaryPolicy: policy,
+        iamAction: 'memories:CreateMemory',
+      })
+    ).toBe(true);
+  });
+
   test('returns true when wildcard action allows everything', () => {
     const policy = {
       statement: [
