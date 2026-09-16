@@ -47,17 +47,56 @@ pnpm run sync -e <your_environment>
 
 To alter the schema, add the flag `--alter`. Check the [@ttoss/postgresdb sync documentation](https://ttoss.dev/docs/modules/packages/postgresdb-cli/#sync) for more details.
 
-### Migrations `--alter` cannot perform
+### Migrations `sync` cannot perform
 
-`sync --alter` only adds; it never rewrites a column whose type Postgres
-refuses to cast automatically. Those changes live as dated SQL in
-`migrations/`, run by hand before deploying the release that carries the new
-models:
+`sequelize.sync()` creates missing tables and never alters an existing one: it
+will not change a column's type, rename a table, or backfill a value. Those
+changes are **versioned migrations** in `src/migrations/`, run by the ledger
+runner in [`@ttoss/postgresdb`](https://ttoss.dev/docs/modules/packages/postgresdb/)
+and recorded in a `schema_migrations` table it maintains itself.
 
-| File | Change |
+The flow they follow is
+[PostgreSQL Migrations](https://ttoss.dev/docs/engineering/guidelines/postgres-migrations).
+
+| Migration | Change |
 | --- | --- |
-| `2026-09-11-memory-tags-to-jsonb.sql` | `memories.tags` and `memory_entries.tags` from `text[]` to key-value `jsonb` |
-| `2026-09-16-memories-rename-and-provenance.sql` | `memories` -> `memory_stores` and `memory_entries` -> `memories`, `source_conversation_id`/`source_generation_id` collapsed into `source_id` |
+| `memory-tags-to-jsonb` | `memories.tags` and `memory_entries.tags` from `text[]` to key-value `jsonb` |
+| `memories-rename-and-provenance` | `memories` -> `memory_stores` and `memory_entries` -> `memories`, `source_conversation_id`/`source_generation_id` collapsed into `source_id` |
+
+Run them from the server package, which owns the entrypoint:
+
+```bash
+node packages/server/dist/migrate.mjs status     # every migration, and when it ran
+node packages/server/dist/migrate.mjs run --dry-run
+node packages/server/dist/migrate.mjs run        # apply what is pending, then sync
+```
+
+#### Migrations run BEFORE the sync, not after
+
+The guideline's default order is `sync` then `migrate`. This package inverts it,
+and the entrypoint enforces it: a migration here renames a table the models
+already describe under its new name, so a sync running first would create an
+empty `memory_stores` beside the populated `memories` and then fail building an
+index over a column the old table has not got. A migration that needs the
+models' indexes mid-way calls `context.sync()` itself.
+
+#### Adding one
+
+1. A module in `src/migrations/`, built with `defineMigration`.
+2. Append it to `MIGRATIONS` in `src/migrations/index.ts`. **Order is a
+   contract**, and a name is permanent identity once merged — renaming or
+   deleting one that has run anywhere makes the runner refuse to start.
+3. Write `isApplied`. It reads the migration's own change back out of the
+   schema, so a database that already carries it — one `sync` has just built,
+   or one migrated before the ledger existed — records it instead of replaying
+   it. `tests/unit/tests/migrations.test.ts` fails on a migration without one,
+   which is what keeps a new install from ever needing an operator `baseline`.
+4. Make it idempotent. The ledger records what *finished*: a migration that
+   throws leaves no row and is retried from the top.
+5. There is no `down`. Roll forward with a new migration.
+
+Never import a model into a migration: the models describe the schema the
+migration is in the middle of changing.
 
 ## Development
 
