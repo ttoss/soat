@@ -101,6 +101,9 @@ paths:
         `supersede_threshold`, `created` below it. Every call records one
         assertion, whatever the outcome.
       operationId: createMemory
+      x-soat-resource:
+        kind: memory_store
+        from: memory_store_id
       x-iam-action: memories:CreateMemory
       requestBody:
         required: true
@@ -212,6 +215,9 @@ paths:
       summary: Get a memory
       description: Returns a single memory by ID
       operationId: getMemory
+      x-soat-resource:
+        kind: memory
+        from: memory_id
       x-iam-action: memories:GetMemory
       parameters:
         - name: memory_id
@@ -241,6 +247,9 @@ paths:
       summary: Update a memory
       description: Updates an existing memory. Regenerates the embedding if content changes.
       operationId: updateMemory
+      x-soat-resource:
+        kind: memory
+        from: memory_id
       x-iam-action: memories:UpdateMemory
       parameters:
         - name: memory_id
@@ -291,6 +300,9 @@ paths:
       summary: Delete a memory
       description: Deletes a memory
       operationId: deleteMemory
+      x-soat-resource:
+        kind: memory
+        from: memory_id
       x-iam-action: memories:DeleteMemory
       parameters:
         - name: memory_id
@@ -321,6 +333,9 @@ paths:
         superseded another memory in its favour. A superseded memory keeps its
         own assertions, so the chain can be walked in both directions.
       operationId: listMemoryAssertions
+      x-soat-resource:
+        kind: memory
+        from: memory_id
       x-iam-action: memories:ListMemoryAssertions
       parameters:
         - name: memory_id
@@ -381,6 +396,9 @@ paths:
       summary: Get memory tags
       description: Returns all tags attached to the memory
       operationId: getMemoryTags
+      x-soat-resource:
+        kind: memory
+        from: memory_id
       x-iam-action: memories:GetMemory
       parameters:
         - name: memory_id
@@ -409,6 +427,9 @@ paths:
       summary: Replace memory tags
       description: Replaces all tags on the memory with the provided tags (not merged)
       operationId: replaceMemoryTags
+      x-soat-resource:
+        kind: memory
+        from: memory_id
       x-iam-action: memories:UpdateMemory
       parameters:
         - name: memory_id
@@ -445,6 +466,9 @@ paths:
       summary: Merge memory tags
       description: Merges provided tags into the memory's existing tags (existing tags are preserved unless overridden)
       operationId: mergeMemoryTags
+      x-soat-resource:
+        kind: memory
+        from: memory_id
       x-iam-action: memories:UpdateMemory
       parameters:
         - name: memory_id

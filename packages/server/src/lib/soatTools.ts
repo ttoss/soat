@@ -10,12 +10,9 @@ import * as url from 'node:url';
 import createDebug from 'debug';
 import { load } from 'js-yaml';
 
-import type {
-  OpenApiSpec,
-  OperationSpec,
-  ToolDefinition,
-} from './soatToolsHelpers';
+import type { ToolDefinition } from './soatToolsHelpers';
 import { processPath } from './soatToolsHelpers';
+import type { OpenApiSpec, OperationSpec } from './soatToolsSpecTypes';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 

@@ -457,7 +457,9 @@ describe('writeMemory', () => {
     test('leaves the row unembedded while the embedder is still down', async () => {
       const memoryStoreId = await createMemoryStoreId('Embedding Still Down');
       const getEmbedding = jest.spyOn(embeddingModule, 'getEmbedding');
-      getEmbedding.mockRejectedValue(new Error('embedding provider unavailable'));
+      getEmbedding.mockRejectedValue(
+        new Error('embedding provider unavailable')
+      );
 
       await writeMemory({
         memoryStoreId,
@@ -523,9 +525,9 @@ describe('writeMemory', () => {
       })
     );
 
-    results.forEach((result) => {
+    for (const result of results) {
       expect(result.entry.content).toBe('Contended sentence');
-    });
+    }
     const contents = await db.MemoryContent.findAll({
       where: { memoryStoreId },
     });

@@ -508,7 +508,38 @@ That tool writes in-process, so its boundary check is resource-scoped like the R
 }
 ```
 
-Every other `builtin` action is still evaluated action-only, against `*`: those tools run through the REST API, where the **caller's** policy applies the resource-scoped check. A boundary statement that names a `resource` other than `*` therefore denies them — scope the caller's policy instead.
+### Resource-scoped boundaries
+
+A `builtin` action that names a resource is evaluated against that resource's SRN and tags, the same pair its route checks the caller's policy against. So a boundary can confine an agent to named resources whatever the caller may reach:
+
+```json
+{
+  "boundary_policy": {
+    "statement": [
+      {
+        "effect": "Allow",
+        "action": ["memories:*"],
+        "resource": ["srn:proj_V1StGXR8Z5jdHi6B:memory_store:mstore_V1StGXR8Z5jdHi6B"]
+      }
+    ]
+  }
+}
+```
+
+The SRN is the one the route enforces, which is not always the id in the argument: a memory and a [memory rule](./memories.md#memory-rules) both authorize through their **memory store**, so a boundary naming the store covers every operation on the memories and rules inside it.
+
+| Resource named by the action | Scoped today |
+| --- | --- |
+| Memory store, memory, memory rule | ✅ against the store's SRN and tags |
+| Actor, conversation, session | ✅ against its own SRN and tags |
+| Everything else | evaluated against `*` |
+
+Two cases stay `*`, and both refuse rather than admit when a statement names a resource:
+
+- **An action that names no resource** — a listing, a create, anything project-scoped. `*` is the whole truth about it; scope those with the caller's policy.
+- **A module not yet scoped** (agents, documents, files, tools, triggers and the rest). Their routes are still resource-checked for the caller; only the agent boundary is action-level there.
+
+An id that resolves to nothing is treated the same way: no SRN, so a scoped boundary denies the call before it is made.
 
 Action strings are validated on write (`validate-formation`, `create-policy`, agent create/update); an unknown or mis-named action is rejected, so a typo'd `Deny` cannot no-op. `module:Operation` names: [Permissions Reference](../permissions.md). Only `builtin` actions are governed; `http`, `client` and `mcp` tools run outside the permission model.
 

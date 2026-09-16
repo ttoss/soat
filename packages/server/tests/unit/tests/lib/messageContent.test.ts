@@ -4,6 +4,7 @@ import type { AddressInfo } from 'node:net';
 import { db } from 'src/db';
 import { createDocument } from 'src/lib/documents';
 import { buildSrn } from 'src/lib/iam';
+import { createMemoryStore } from 'src/lib/memoryStores';
 import { resolveMessageContent } from 'src/lib/messageContent';
 import { createTool } from 'src/lib/tools';
 
@@ -45,6 +46,9 @@ let audioToolId: string;
 let counterToolId: string;
 let listToolId: string;
 let soatToolId: string;
+let scopedSoatToolId: string;
+let scopedStoreId: string;
+let otherStoreId: string;
 let contextPresetToolId: string;
 const echoedBodies: unknown[] = [];
 
@@ -145,6 +149,22 @@ describe('resolveMessageContent', () => {
       actions: ['list-tools'],
     });
     soatToolId = soat.id;
+
+    const scopedSoat = await createTool({
+      projectId,
+      name: 'soat-memory-store-tool',
+      type: 'builtin',
+      description: 'SOAT tool naming a resource',
+      actions: ['get-memory-store'],
+    });
+    scopedSoatToolId = scopedSoat.id;
+
+    scopedStoreId = (
+      await createMemoryStore({ projectId, name: 'Scoped Store' })
+    ).id;
+    otherStoreId = (
+      await createMemoryStore({ projectId, name: 'Other Scoped Store' })
+    ).id;
   });
 
   afterAll(async () => {
@@ -407,5 +427,76 @@ describe('resolveMessageContent', () => {
         },
       })
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  // The caller-driven door reaches the same builtin actions the model does, so
+  // a boundary confined to one resource has to bind here too.
+  test('rejects soat tool_output content aimed at a resource outside the boundary', async () => {
+    const authUser = createAuthUser();
+
+    await expect(
+      resolveMessageContent({
+        projectIds: [projectId],
+        authUser,
+        allowedToolIds: [scopedSoatToolId],
+        agentBoundaryPolicy: {
+          statement: [
+            {
+              effect: 'Allow',
+              action: ['memories:*'],
+              resource: [
+                buildSrn({
+                  projectPublicId,
+                  resourceType: 'memory_store',
+                  resourceId: scopedStoreId,
+                }),
+              ],
+            },
+          ],
+        },
+        content: {
+          type: 'tool_output',
+          tool_id: scopedSoatToolId,
+          action: 'get-memory-store',
+          input: { memory_store_id: otherStoreId },
+        },
+      })
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  // The boundary admitting the call is the whole assertion: this suite carries
+  // no bearer, so the call it lets through fails at the dispatch instead — a
+  // different error from the `FORBIDDEN` the boundary raises.
+  test('allows soat tool_output content aimed at the resource the boundary names', async () => {
+    const authUser = createAuthUser();
+
+    await expect(
+      resolveMessageContent({
+        projectIds: [projectId],
+        authUser,
+        allowedToolIds: [scopedSoatToolId],
+        agentBoundaryPolicy: {
+          statement: [
+            {
+              effect: 'Allow',
+              action: ['memories:*'],
+              resource: [
+                buildSrn({
+                  projectPublicId,
+                  resourceType: 'memory_store',
+                  resourceId: scopedStoreId,
+                }),
+              ],
+            },
+          ],
+        },
+        content: {
+          type: 'tool_output',
+          tool_id: scopedSoatToolId,
+          action: 'get-memory-store',
+          input: { memory_store_id: scopedStoreId },
+        },
+      })
+    ).rejects.toMatchObject({ code: 'TOOL_HTTP_ERROR' });
   });
 });

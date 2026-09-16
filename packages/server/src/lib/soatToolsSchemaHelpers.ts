@@ -1,4 +1,4 @@
-import type { OpenApiSpec } from './soatToolsHelpers';
+import type { OpenApiSpec } from './soatToolsSpecTypes';
 
 type ResolvedSchema = {
   type?: string;

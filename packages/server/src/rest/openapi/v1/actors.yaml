@@ -195,6 +195,9 @@ paths:
       summary: Get an actor by ID
       description: Returns an actor by its ID
       operationId: getActor
+      x-soat-resource:
+        kind: actor
+        from: actor_id
       parameters:
         - name: actor_id
           in: path
@@ -234,6 +237,9 @@ paths:
       summary: Delete an actor
       description: Deletes an actor by its ID
       operationId: deleteActor
+      x-soat-resource:
+        kind: actor
+        from: actor_id
       parameters:
         - name: actor_id
           in: path
@@ -269,6 +275,9 @@ paths:
       summary: Update an actor
       description: Updates an actor's properties
       operationId: updateActor
+      x-soat-resource:
+        kind: actor
+        from: actor_id
       parameters:
         - name: actor_id
           in: path
@@ -338,6 +347,9 @@ paths:
       summary: Get actor tags
       description: Returns all tags attached to the actor
       operationId: getActorTags
+      x-soat-resource:
+        kind: actor
+        from: actor_id
       parameters:
         - name: actor_id
           in: path
@@ -377,6 +389,9 @@ paths:
       summary: Replace actor tags
       description: Replaces all tags on the actor with the provided tags (not merged)
       operationId: replaceActorTags
+      x-soat-resource:
+        kind: actor
+        from: actor_id
       parameters:
         - name: actor_id
           in: path
@@ -422,6 +437,9 @@ paths:
       summary: Merge actor tags
       description: Merges provided tags into the actor's existing tags (existing tags are preserved unless overridden)
       operationId: mergeActorTags
+      x-soat-resource:
+        kind: actor
+        from: actor_id
       parameters:
         - name: actor_id
           in: path

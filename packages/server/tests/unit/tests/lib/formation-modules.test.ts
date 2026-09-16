@@ -462,7 +462,7 @@ const CASES: RoundTripCase[] = [
         // A handler in camelCase, which is also the only shape that resolves an
         // `agent_id` ref rather than leaving the built-in extractor in place.
         camel: {
-          memoryStoreId: memoryStoreId,
+          memoryStoreId,
           on: 'agents.generation.completed',
           agentId,
         },

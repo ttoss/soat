@@ -15,6 +15,7 @@ import {
 } from './externalToolCall';
 import { HttpToolError } from './httpToolError';
 import { dispatchApiRequestOrThrow, withCallTimeout } from './inProcessApi';
+import { resolveSoatActionBoundaryScope } from './soatActionBoundary';
 import { withoutAgentExcludedActions } from './soatAgentActions';
 import { soatTools } from './soatTools';
 import { buildSoatActionTarget } from './soatToolsHelpers';
@@ -147,6 +148,8 @@ const buildSoatActionTool = (args: {
   isSoatActionAllowedByBoundary: (args: {
     boundaryPolicy: unknown;
     iamAction: string;
+    resource?: string;
+    context?: Record<string, string>;
   }) => boolean;
   logToolCallingError: LogToolCallingError;
 }): Tool => {
@@ -160,20 +163,10 @@ const buildSoatActionTool = (args: {
     inputSchema: jsonSchema(effectiveInputSchema),
     execute: async (toolArgs: unknown) => {
       const iamAction = args.def.iamAction ?? args.def.name;
-      // Action-level only: the operation's arguments name path parameters, not
-      // the SRN and tags a resource-scoped statement is evaluated against, and
-      // the request that follows carries the caller's credentials — so the
-      // route re-checks the same action against the resource. The in-process
-      // `write_memory` door has no such second gate, which is why that one
-      // passes its store's SRN (#1323).
-      if (
-        !args.isSoatActionAllowedByBoundary({
-          boundaryPolicy: args.boundaryPolicy,
-          iamAction,
-        })
-      ) {
-        return { error: `Forbidden: boundary policy denies ${iamAction}` };
-      }
+      // Merged before the boundary check, not after: a preset or the pinned
+      // project can be what names the target, and a check run on the model's
+      // arguments alone would refuse a call whose resource the operator
+      // supplied.
       const rawArgs = mergePresetParameters({
         presetParameters: {
           ...resolvePresetParametersForCall({
@@ -186,6 +179,25 @@ const buildSoatActionTool = (args: {
         },
         input: toolArgs,
       });
+      // The SRN and tags of whatever this call names, so a boundary scoped to
+      // one resource means what it says. `null` when the operation names no
+      // resource (a listing, a create) or the id resolves to nothing, which
+      // leaves the resource-less `*` — and `*` matches no scoped statement, so
+      // the unresolved case refuses rather than admits.
+      const scope = await resolveSoatActionBoundaryScope({
+        resourceRef: args.def.resource,
+        toolArgs: rawArgs,
+        boundaryPolicy: args.boundaryPolicy,
+      });
+      if (
+        !args.isSoatActionAllowedByBoundary({
+          boundaryPolicy: args.boundaryPolicy,
+          iamAction,
+          ...(scope ?? {}),
+        })
+      ) {
+        return { error: `Forbidden: boundary policy denies ${iamAction}` };
+      }
       return executeSoatTool({
         toolName: args.toolName,
         def: args.def,
@@ -228,6 +240,8 @@ export const resolveSoatTools = (args: {
   isSoatActionAllowedByBoundary: (args: {
     boundaryPolicy: unknown;
     iamAction: string;
+    resource?: string;
+    context?: Record<string, string>;
   }) => boolean;
   logToolCallingError: LogToolCallingError;
 }): Record<string, Tool> => {
