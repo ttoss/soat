@@ -221,6 +221,104 @@ describe('buildWriteMemoryTool', () => {
     });
   });
 
+  test('a boundary scoped to another store denies the write', async () => {
+    const otherStoreRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/memory-stores')
+      .send({ project_id: projectId, name: 'Boundary Scoped Other Store' });
+
+    const writeMemoryTool = buildWriteMemoryTool({
+      writeMemoryStoreId: memoryStoreId,
+      agentId: 'agt_test',
+      generationId: 'gen_write_tool',
+      boundaryPolicy: {
+        statement: [
+          {
+            effect: 'Allow',
+            action: ['memories:*'],
+            resource: [
+              `srn:${projectId}:memory_store:${otherStoreRes.body.id}`,
+            ],
+          },
+        ],
+      },
+    });
+
+    const result = await writeMemoryTool.execute!(
+      { content: 'A fact the boundary does not reach.' },
+      {} as never
+    );
+
+    expect(result).toEqual({
+      error: 'Forbidden: boundary policy denies memories:CreateMemory',
+    });
+  });
+
+  test('a boundary scoped to the target store permits the write', async () => {
+    const writeMemoryTool = buildWriteMemoryTool({
+      writeMemoryStoreId: memoryStoreId,
+      agentId: 'agt_test',
+      generationId: 'gen_write_tool',
+      boundaryPolicy: {
+        statement: [
+          {
+            effect: 'Allow',
+            action: ['memories:*'],
+            resource: [`srn:${projectId}:memory_store:${memoryStoreId}`],
+          },
+        ],
+      },
+    });
+
+    const result = await writeMemoryTool.execute!(
+      { content: 'A fact the scoped boundary reaches.' },
+      {} as never
+    );
+
+    expect((result as { error?: string }).error).toBeUndefined();
+    expect(result).toMatchObject({ action: expect.any(String) });
+  });
+
+  test('a resource-tag condition reads the target store tags', async () => {
+    const prodStoreRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/memory-stores')
+      .send({
+        project_id: projectId,
+        name: 'Boundary Tagged Store',
+        tags: { env: 'prod' },
+      });
+
+    const boundaryPolicy = {
+      statement: [
+        {
+          effect: 'Allow',
+          action: ['memories:*'],
+          resource: ['*'],
+          condition: { StringEquals: { 'soat:ResourceTag/env': 'prod' } },
+        },
+      ],
+    };
+
+    const allowed = await buildWriteMemoryTool({
+      writeMemoryStoreId: prodStoreRes.body.id,
+      agentId: 'agt_test',
+      generationId: 'gen_write_tool',
+      boundaryPolicy,
+    }).execute!({ content: 'A fact about production.' }, {} as never);
+
+    expect((allowed as { error?: string }).error).toBeUndefined();
+
+    const denied = await buildWriteMemoryTool({
+      writeMemoryStoreId: memoryStoreId,
+      agentId: 'agt_test',
+      generationId: 'gen_write_tool',
+      boundaryPolicy,
+    }).execute!({ content: 'A fact about an untagged store.' }, {} as never);
+
+    expect(denied).toEqual({
+      error: 'Forbidden: boundary policy denies memories:CreateMemory',
+    });
+  });
+
   test('a boundary that allows the memory-write actions permits the write', async () => {
     const writeMemoryTool = buildWriteMemoryTool({
       writeMemoryStoreId: memoryStoreId,

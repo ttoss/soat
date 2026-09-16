@@ -492,6 +492,24 @@ A `boundary_policy` that is not a valid policy document allows nothing — it fa
 
 The boundary also gates the native **`write_memory`** tool (`knowledge_config.write_memory_store_id`): denying `memories:CreateMemory` / `memories:UpdateMemory` (or `Deny action:["*"]`) blocks it fail-closed.
 
+That tool writes in-process, so its boundary check is resource-scoped like the REST path's: both actions are evaluated against the target store's SRN (`srn:<project_id>:memory_store:<memory_store_id>`) and its tags as [condition](./iam.md#condition-keys) inputs. A boundary can therefore confine an agent to one store, whatever `write_memory_store_id` later says:
+
+```json
+{
+  "boundary_policy": {
+    "statement": [
+      {
+        "effect": "Allow",
+        "action": ["memories:CreateMemory", "memories:UpdateMemory"],
+        "resource": ["srn:proj_V1StGXR8Z5jdHi6B:memory_store:mstore_V1StGXR8Z5jdHi6B"]
+      }
+    ]
+  }
+}
+```
+
+Every other `builtin` action is still evaluated action-only, against `*`: those tools run through the REST API, where the **caller's** policy applies the resource-scoped check. A boundary statement that names a `resource` other than `*` therefore denies them — scope the caller's policy instead.
+
 Action strings are validated on write (`validate-formation`, `create-policy`, agent create/update); an unknown or mis-named action is rejected, so a typo'd `Deny` cannot no-op. `module:Operation` names: [Permissions Reference](../permissions.md). Only `builtin` actions are governed; `http`, `client` and `mcp` tools run outside the permission model.
 
 Example — read and search documents only, whatever the caller may do:

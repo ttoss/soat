@@ -160,6 +160,12 @@ const buildSoatActionTool = (args: {
     inputSchema: jsonSchema(effectiveInputSchema),
     execute: async (toolArgs: unknown) => {
       const iamAction = args.def.iamAction ?? args.def.name;
+      // Action-level only: the operation's arguments name path parameters, not
+      // the SRN and tags a resource-scoped statement is evaluated against, and
+      // the request that follows carries the caller's credentials — so the
+      // route re-checks the same action against the resource. The in-process
+      // `write_memory` door has no such second gate, which is why that one
+      // passes its store's SRN (#1323).
       if (
         !args.isSoatActionAllowedByBoundary({
           boundaryPolicy: args.boundaryPolicy,

@@ -2,13 +2,15 @@ import type { Tool } from 'ai';
 import { jsonSchema, tool } from 'ai';
 import createDebug from 'debug';
 
-import { db } from '../db';
 import type { TypedAgent } from './agentGenerationTypes';
 import { isSoatActionAllowedByBoundary } from './agentToolResolver';
 import type { EmbeddingBillingProjectId } from './embedding';
+import { buildSrn } from './iam';
 import { searchKnowledge } from './knowledge';
 import { writeMemory } from './memories';
+import { findMemoryStoreIamScope } from './memoryStores';
 import { isPlainObject } from './plainObject';
+import { buildResourceTagContext } from './tags';
 
 const log = createDebug('soat:knowledge');
 
@@ -290,17 +292,31 @@ export const buildKnowledgeMessages = async (args: {
  * supersede retires an existing memory, the boundary must allow **both**
  * memory-write actions; a deny on either (including a wildcard
  * `Deny action:["*"]`) blocks the tool fail-closed.
+ *
+ * Both are evaluated against the target store's SRN and tags, the same pair
+ * `rest/v1/memories.ts` checks a human against (#1323): this tool writes
+ * in-process, so the boundary is the only gate there is, and an operator must
+ * be able to say "this agent may write to this store only".
  */
 const MEMORY_WRITE_ACTIONS = [
   'memories:CreateMemory',
   'memories:UpdateMemory',
 ] as const;
 
-const findBoundaryDeniedMemoryWriteAction = (
-  boundaryPolicy: unknown
-): string | null => {
+const findBoundaryDeniedMemoryWriteAction = (args: {
+  boundaryPolicy: unknown;
+  resource: string;
+  context: Record<string, string>;
+}): string | null => {
   for (const iamAction of MEMORY_WRITE_ACTIONS) {
-    if (!isSoatActionAllowedByBoundary({ boundaryPolicy, iamAction })) {
+    if (
+      !isSoatActionAllowedByBoundary({
+        boundaryPolicy: args.boundaryPolicy,
+        iamAction,
+        resource: args.resource,
+        context: args.context,
+      })
+    ) {
       return iamAction;
     }
   }
@@ -333,21 +349,33 @@ export const buildWriteMemoryTool = (args: {
       required: ['content'],
     }),
     execute: async ({ content }: { content: string }) => {
-      const deniedAction = findBoundaryDeniedMemoryWriteAction(
-        args.boundaryPolicy
-      );
-      if (deniedAction) {
-        log('write_memory: boundary policy denies %s', deniedAction);
-        return { error: `Forbidden: boundary policy denies ${deniedAction}` };
-      }
-      const memoryStore = await db.MemoryStore.findOne({
-        where: { publicId: args.writeMemoryStoreId },
+      // The store is resolved before the boundary check because the check needs
+      // its SRN and tags. It leaks nothing a boundary would have hidden: the id
+      // comes from the agent's own `knowledge_config`, not from the model.
+      const memoryStore = await findMemoryStoreIamScope({
+        id: args.writeMemoryStoreId,
       });
       if (!memoryStore) {
         return { error: `Memory store ${args.writeMemoryStoreId} not found` };
       }
+      const deniedAction = findBoundaryDeniedMemoryWriteAction({
+        boundaryPolicy: args.boundaryPolicy,
+        resource: buildSrn({
+          projectPublicId: memoryStore.projectPublicId,
+          resourceType: 'memory_store',
+          resourceId: args.writeMemoryStoreId,
+        }),
+        context: buildResourceTagContext({
+          resourceType: 'memory_store',
+          tags: memoryStore.tags,
+        }),
+      });
+      if (deniedAction) {
+        log('write_memory: boundary policy denies %s', deniedAction);
+        return { error: `Forbidden: boundary policy denies ${deniedAction}` };
+      }
       const result = await writeMemory({
-        memoryStoreId: memoryStore.id as number,
+        memoryStoreId: memoryStore.id,
         content,
         // No `sourceConversationPublicId`: `Memory.source_id` is the pointer a
         // client may supply on a hand-written fact, and this tool has none to

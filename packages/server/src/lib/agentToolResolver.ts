@@ -126,9 +126,21 @@ export {
 
 // ── IAM Boundary Check ────────────────────────────────────────────────────
 
+/**
+ * Evaluates an agent's `boundary_policy` for one SOAT action.
+ *
+ * `resource` is the SRN the call acts on and `context` the condition inputs for
+ * it (`buildResourceTagContext`), so a boundary can scope a grant to a single
+ * resource the way a human's policy does on the REST path (#1323). Both fall
+ * back to the resource-less shape — `'*'` and no condition inputs — which is
+ * what a list or a create-in-project means, and all a caller that cannot name
+ * its resource may claim.
+ */
 export const isSoatActionAllowedByBoundary = (args: {
   boundaryPolicy: unknown;
   iamAction: string;
+  resource?: string;
+  context?: Record<string, string>;
 }): boolean => {
   if (!args.boundaryPolicy) {
     return true;
@@ -142,7 +154,8 @@ export const isSoatActionAllowedByBoundary = (args: {
   return evaluatePolicies({
     policies: [args.boundaryPolicy as PolicyDocument],
     action: args.iamAction,
-    resource: '*',
+    resource: args.resource ?? '*',
+    context: args.context,
   });
 };
 

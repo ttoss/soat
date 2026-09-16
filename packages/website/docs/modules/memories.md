@@ -285,6 +285,8 @@ Set `knowledge_config` on an agent to have the server search relevant memories b
 
 Set `write_memory_store_id` in the agent's `knowledge_config` to inject a `write_memory` tool into every generation. The tool accepts a single `content` input, the atomic fact to write. The target store is fixed by `write_memory_store_id`; the agent cannot choose another, and it cannot set thresholds — the store's effective pair applies.
 
+The agent's [`boundary_policy`](./agents.md#soat-action-permissions) gates the tool: it must allow `memories:CreateMemory` **and** `memories:UpdateMemory` (a write may supersede) on the target store's SRN, `srn:<project_id>:memory_store:<memory_store_id>`, with the store's tags as condition inputs. A boundary scoped to one store therefore holds even if `write_memory_store_id` is later pointed elsewhere.
+
 Memories written by the tool carry `source_type: "manual"`: `source_id` is a pointer a client supplies on a hand-written fact, and the tool has none to give. The turn behind the write is on its [assertion](#assertions), with `mechanism: "tool"` and the agent as principal.
 
 ```json
