@@ -1,3 +1,4 @@
+import { featureHashEmbedding } from 'tests/eval/knowledge/featureHashEmbedding';
 import {
   GOLDEN_QUERY_KINDS,
   loadGoldenSet,
@@ -5,8 +6,44 @@ import {
   readDocumentSection,
   resolveDocumentContent,
 } from 'tests/eval/knowledge/goldenSet';
+import {
+  CORPUS_DUPLICATE_THRESHOLD,
+  CORPUS_SUPERSEDE_THRESHOLD,
+} from 'tests/eval/knowledge/seedCorpus';
 
 const golden = loadGoldenSet();
+
+const DIMENSIONS = 1024;
+
+/**
+ * How far under the store's supersede threshold every twin pair must sit. A
+ * pair that merely clears it is one wording tweak from crossing, and the
+ * failure on the other side is a seeder throw in a job that takes minutes to
+ * reach it.
+ */
+const SUPERSEDE_MARGIN = 0.03;
+
+/**
+ * How far apart the query may score two twins before relevance, not age, is
+ * what separates them. The shipped pairs all sit under 0.005; the lexically
+ * divergent rewrites #1333 measured move it by 0.10–0.27 and fail this.
+ */
+const AMBIGUITY_MAX = 0.02;
+
+const embed = (text: string): number[] => {
+  return featureHashEmbedding({ text, dimensions: DIMENSIONS });
+};
+
+/** Cosine of two L2-normalised vectors is their dot product. */
+const cosine = (a: number[], b: number[]): number => {
+  return a.reduce((total, value, index) => {
+    return total + value * b[index];
+  }, 0);
+};
+
+const similarity = (a: string, b: string): number => {
+  return cosine(embed(a), embed(b));
+};
 
 const memoryStoresByKey = new Map(
   golden.corpus.memories.map((memoryStore) => {
@@ -24,6 +61,7 @@ const freshnessTwins = golden.queries
     const superseded = memoryStoresByKey.get(`${fresh.key}-superseded`);
     return {
       id: query.id,
+      text: query.query,
       expected: query.expected.length,
       fresh,
       superseded,
@@ -204,11 +242,15 @@ describe('knowledge eval golden set', () => {
     expect(withAge('180')).toThrow(/age_days/);
   });
 
-  test('pairs every freshness query with an older twin in another container', () => {
+  test('pairs every freshness query with an older twin in the same container', () => {
     // The blend only ever demotes, so a freshness query measures nothing
-    // without an aged near-twin for the decay to overtake — and it has to sit
-    // in another container, since `writeMemory` dedups twins sharing one
-    // at 0.95 and the seeder refuses anything but a `created` write.
+    // without an aged near-twin for the decay to overtake.
+    //
+    // Both twins share one container. They used to be split across two on the
+    // premise that `writeMemory` would dedup them — measured false in #1333,
+    // and the split was not free: a twin parked in a second store measures an
+    // unscoped search across a current/archive pair, which `memory_store_ids`
+    // already answers, rather than what the write path itself produces.
     //
     // The twin is the answer's key suffixed `-superseded`: pairing them by name
     // is what lets the gap be asserted per query, rather than the corpus merely
@@ -221,16 +263,82 @@ describe('knowledge eval golden set', () => {
         // More than one expected key and the query stops measuring the twin.
         expected: twin.expected,
         superseded: twin.superseded !== undefined,
-        elsewhere: twin.superseded?.memory_store !== twin.fresh.memory_store,
+        // `undefined` on both sides is the corpus's default container.
+        sameStore: twin.superseded?.memory_store === twin.fresh.memory_store,
         older: twin.gapDays > 0,
       }).toEqual({
         id: twin.id,
         expected: 1,
         superseded: true,
-        elsewhere: true,
+        sameStore: true,
         older: true,
       });
     }
+  });
+
+  test('keeps every freshness twin under the store supersede threshold', () => {
+    // Over it, `writeMemory` invalidates the older twin and the seeder throws:
+    // the pair never reaches the corpus and the query scores zero. The corpus
+    // store raises its own band for exactly this, so the check is against that
+    // value rather than the product default.
+    for (const twin of freshnessTwins) {
+      const score = similarity(twin.fresh.content, twin.superseded!.content);
+
+      expect({
+        id: twin.id,
+        clear: score < CORPUS_SUPERSEDE_THRESHOLD - SUPERSEDE_MARGIN,
+      }).toEqual({ id: twin.id, clear: true });
+    }
+  });
+
+  test('leaves every freshness pair unseparable by relevance', () => {
+    // If the query prefers the fresher twin on its own, ranking answers it
+    // without reading age and the kind scores 1.0 with every recency mechanism
+    // switched off — measuring nothing. Age has to be the only thing that
+    // separates them.
+    for (const twin of freshnessTwins) {
+      const gap =
+        similarity(twin.text, twin.fresh.content) -
+        similarity(twin.text, twin.superseded!.content);
+
+      expect({ id: twin.id, ambiguous: Math.abs(gap) < AMBIGUITY_MAX }).toEqual(
+        {
+          id: twin.id,
+          ambiguous: true,
+        }
+      );
+    }
+  });
+
+  test('seeds no two memories that collide on the write path', () => {
+    // The seeder writes every fixture naming no store of its own into one
+    // container and throws unless each lands as `created`. Checked across the
+    // whole corpus rather than within the pairs, because a fixture's nearest
+    // neighbour is not necessarily its twin.
+    const shared = golden.corpus.memories.filter((memory) => {
+      return memory.memory_store === undefined;
+    });
+    const vectors = shared.map((memory) => {
+      return { key: memory.key, vector: embed(memory.content) };
+    });
+
+    const collisions: string[] = [];
+    for (let i = 0; i < vectors.length; i += 1) {
+      for (let j = i + 1; j < vectors.length; j += 1) {
+        const score = cosine(vectors[i].vector, vectors[j].vector);
+        if (score >= CORPUS_SUPERSEDE_THRESHOLD) {
+          collisions.push(
+            `${vectors[i].key} ~ ${vectors[j].key} = ${score.toFixed(4)}`
+          );
+        }
+      }
+    }
+
+    expect(collisions).toEqual([]);
+  });
+
+  test('keeps superseding reachable below deduplication in the corpus store', () => {
+    expect(CORPUS_SUPERSEDE_THRESHOLD).toBeLessThan(CORPUS_DUPLICATE_THRESHOLD);
   });
 
   test('exercises twin age gaps a bounded decay cannot all reach', () => {

@@ -203,6 +203,11 @@ pnpm --filter @soat/server eval:knowledge                    # score and gate
 pnpm --filter @soat/server eval:knowledge --update-baseline  # rewrite the baseline
 ```
 
+Each query carries a `kind`, and the gate applies per kind as well as overall, so a change that lifts the headline number while breaking one kind still fails. Two kinds are worth knowing before reading a result:
+
+- **`freshness`** pairs two statements of one fact in a **single** store, close enough that the query cannot separate them and only `age_days` says which is current. The corpus store raises its own `supersede_threshold` so the pair survives the write path; on the product defaults the older twin would be invalidated and never reach the corpus. Its MRR is well under 1.0 by construction — no shipped mechanism orders by age, since `recency_half_life_days` defaults to `0`.
+- **`exact_token`** is saturated at recall 1.0: the eval's embedder is itself lexical, so it cannot show a lexical-vs-vector win. The harness proves a change regresses nothing; it does not prove a gain.
+
 Metric definitions, the baseline table, its caveats and the per-deployment method: [Retrieval Quality](../advanced/retrieval-quality.md), [Measuring Retrieval Quality](../tutorials/measure-retrieval-quality.md).
 
 ## Configuration

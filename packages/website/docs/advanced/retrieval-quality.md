@@ -56,6 +56,8 @@ The decay applies to memory results and not to the document chunks they share a 
 | `1825` | 1.0000 | 1.0000 | 0.7736 | 0.8082 |
 | `7300` | 1.0000 | 1.0000 | 0.9167 | 0.8394 |
 
+The sweep was run in one pass against the golden set as it stood at v3, so its `0` row is that version's overall MRR rather than the current one; the shape of the trade is what it is kept for, not the absolute values.
+
 Pick a half-life from a run against your own corpus, start long, and prefer scoping the search to `memory_store_ids` where freshness is what is actually being ranked.
 
 ## Retrieval baseline
@@ -69,18 +71,22 @@ pnpm --filter @soat/server eval:knowledge                    # score and gate
 pnpm --filter @soat/server eval:knowledge --update-baseline  # rewrite the baseline
 ```
 
+Golden set v4:
+
 | Scope         | recall@5 | recall@10 |    MRR |
 | ------------- | -------: | --------: | -----: |
-| Overall       |   0.8909 |    0.9273 | 0.8303 |
+| Overall       |   0.8966 |    0.9310 | 0.8138 |
 | `exact_token` |   1.0000 |    1.0000 | 1.0000 |
 | `exact_name`  |   1.0000 |    1.0000 | 0.9667 |
 | `entity`      |   1.0000 |    1.0000 | 0.9583 |
 | `freshness`   |   1.0000 |    1.0000 | 0.6667 |
-| `semantic`    |   0.6000 |    0.7333 | 0.5111 |
+| `semantic`    |   0.6000 |    0.7333 | 0.4802 |
 
-These figures are committed as `baseline.json`. The run exits non-zero when **recall@10 or MRR** drops below it, overall or for any single kind; recall@5 is reported, not gated. A ranking change lands with the diff of that file as its before/after table.
+These figures are committed as `baseline.json`, which is the copy to trust: the table above is transcribed from it and a corpus change moves both. The run exits non-zero when **recall@10 or MRR** drops below the committed values, overall or for any single kind; recall@5 is reported, not gated. A ranking change lands with the diff of that file as its before/after table.
 
 The `freshness` kind is the recency blend's own fixture: each query has one answer whose stale near-twin, seeded at a fixture `age_days` in the past, outranks it while the blend is off. Its `0.6667` is the blend-disabled figure this ships with, not a defect.
+
+Both twins sit in **one** memory store, which is what makes the kind a test of ranking rather than of search scope. The corpus store raises its own `supersede_threshold` so they survive the write path together; on the product defaults the older twin would be invalidated on write and never reach the corpus at all. A twin parked in a second store instead measures an unscoped search across a current/archive pair — a configuration `memory_store_ids` already answers, and not one ranking can fix.
 
 Two caveats on the absolute values:
 

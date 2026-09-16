@@ -58,13 +58,21 @@ export type GoldenMemory = {
    */
   age_days?: number;
   /**
-   * The memory store container to write this entry to, defaulting to the corpus's
-   * single one.
+   * The memory store container to write this entry to, defaulting to the
+   * corpus's single one.
    *
-   * `writeMemory` dedups against the most similar entry **of the same
-   * memory store** at 0.95, so a near-twin — which is the only fixture a freshness
-   * query can be scored against — has to live somewhere else or it merges
-   * into its own twin and never reaches the corpus.
+   * No fixture sets it. It used to hold the `freshness` twins apart, on the
+   * premise that a near-twin could not survive beside its pair in one store —
+   * measured false: five of the six sit at 0.77–0.90 cosine under the eval's
+   * embedder, and the corpus store now declares its own band
+   * (`CORPUS_SUPERSEDE_THRESHOLD`) so all six coexist. The split was not free:
+   * a twin in a second store measures an unscoped search across a
+   * current/archive pair, which `memory_store_ids` already answers, rather
+   * than what the write path actually produces (#1333).
+   *
+   * Kept because a future fixture may need two containers on purpose, and
+   * because `knowledgeGoldenFreshness.test.ts` asserts on its absence — which
+   * is what stops the archive arrangement returning unnoticed.
    */
   memory_store?: string;
 };

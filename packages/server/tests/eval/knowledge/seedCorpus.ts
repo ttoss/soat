@@ -22,6 +22,30 @@ export const CORPUS_TAGS: Record<string, string> = {
 /** The container every fixture that names no `memoryStore` of its own is written to. */
 const MEMORY_STORE_NAME = 'Knowledge golden corpus';
 
+/**
+ * The corpus store's write thresholds, set explicitly rather than left on the
+ * `0.95` / `0.90` product defaults.
+ *
+ * The `freshness` kind needs two statements of one fact to coexist in a single
+ * store, and under the eval's lexical embedder that is only possible with the
+ * band moved. The two goals are the same dial: a pair a query cannot separate
+ * shares nearly all of its vocabulary, which puts it at `0.88`–`0.91` cosine,
+ * and every rewrite that pushes it clear of the default `0.90` also pushes the
+ * query off one of the twins (measured: the divergent rewrites move the
+ * query's preference by `0.10`–`0.27`, so relevance alone starts answering the
+ * question age is supposed to). The wordings that achieve both do it by
+ * spelling the age into the text — a past tense, a dated rate card — which a
+ * reranker could read, and the kind would stop measuring age.
+ *
+ * So the corpus declares the tolerance instead of encoding it in word choice.
+ * This is a per-store product knob, not a loosened gate: a store holding a rate
+ * history is exactly the case it exists for, and `findRegressions` is untouched.
+ * `knowledgeEvalGoldenSet.test.ts` pins every pair under the supersede value
+ * with margin.
+ */
+export const CORPUS_DUPLICATE_THRESHOLD = 0.99;
+export const CORPUS_SUPERSEDE_THRESHOLD = 0.95;
+
 const MS_PER_DAY = 86400000;
 
 export type SeededCorpus = {
@@ -126,6 +150,8 @@ export const seedGoldenCorpus = async (args: {
       projectId,
       name,
       tags: CORPUS_TAGS,
+      duplicateThreshold: CORPUS_DUPLICATE_THRESHOLD,
+      supersedeThreshold: CORPUS_SUPERSEDE_THRESHOLD,
     });
     const id = await resolveMemoryStoreId({ publicId: created.id });
     memoryStoreIds.set(name, id);
