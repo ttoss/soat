@@ -21,6 +21,10 @@ const SPEC_PATH = path.resolve(
   '../../../../src/rest/openapi/v1/formations.yaml'
 );
 
+type ResourceDeclarationSchema = {
+  properties?: { type?: { description?: string } };
+};
+
 type PropertiesSchema = {
   type?: string;
   properties?: Record<string, { type?: string; nullable?: boolean }>;
@@ -28,7 +32,11 @@ type PropertiesSchema = {
 };
 
 const spec = load(fs.readFileSync(SPEC_PATH, 'utf-8')) as {
-  components?: { schemas?: Record<string, PropertiesSchema> };
+  components?: {
+    schemas?: Record<string, PropertiesSchema> & {
+      ResourceDeclaration?: ResourceDeclarationSchema;
+    };
+  };
 };
 
 /**
@@ -63,6 +71,23 @@ describe('supported formation resource types', () => {
     for (const resourceType of RESOURCE_TYPES) {
       expect(getFormationModule({ resourceType })).toBeDefined();
     }
+  });
+
+  test('the spec prose names exactly the registered types', () => {
+    // The generated reference and every SDK doc comment carry this prose, so a
+    // type renamed in the registry publishes a value that 400s whoever copies
+    // it — as `memory store` did for `memory_store`.
+    const description =
+      spec.components?.schemas?.ResourceDeclaration?.properties?.type
+        ?.description ?? '';
+    const sentence = description.split('\n\n')[0];
+    const named = [...sentence.matchAll(/`([a-z][a-z0-9_]*)`/g)]
+      .map((match) => {
+        return match[1];
+      })
+      .sort();
+
+    expect(named).toEqual(RESOURCE_TYPES);
   });
 
   test('a model_route resource validates', () => {
