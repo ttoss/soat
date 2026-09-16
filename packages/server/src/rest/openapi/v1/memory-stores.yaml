@@ -162,6 +162,9 @@ paths:
       summary: Get a memory store
       description: Returns a single memory store configuration by ID
       operationId: getMemoryStore
+      x-soat-resource:
+        kind: memory_store
+        from: memory_store_id
       parameters:
         - name: memory_store_id
           in: path
@@ -190,6 +193,9 @@ paths:
       summary: Update a memory store
       description: Updates an existing memory store configuration
       operationId: updateMemoryStore
+      x-soat-resource:
+        kind: memory_store
+        from: memory_store_id
       parameters:
         - name: memory_store_id
           in: path
@@ -269,6 +275,9 @@ paths:
       summary: Delete a memory store
       description: Deletes a memory store configuration
       operationId: deleteMemoryStore
+      x-soat-resource:
+        kind: memory_store
+        from: memory_store_id
       parameters:
         - name: memory_store_id
           in: path
@@ -298,6 +307,9 @@ paths:
         store?" is asked — a question no column on a memory row could answer,
         because a skipped write produced no memory at all.
       operationId: listMemoryStoreAssertions
+      x-soat-resource:
+        kind: memory_store
+        from: memory_store_id
       x-iam-action: memories:ListMemoryAssertions
       parameters:
         - name: memory_store_id
@@ -390,6 +402,9 @@ paths:
       summary: Get memory store tags
       description: Returns all tags attached to the memory store
       operationId: getMemoryStoreTags
+      x-soat-resource:
+        kind: memory_store
+        from: memory_store_id
       x-iam-action: memories:GetMemoryStore
       parameters:
         - name: memory_store_id
@@ -418,6 +433,9 @@ paths:
       summary: Replace memory store tags
       description: Replaces all tags on the memory store with the provided tags (not merged)
       operationId: replaceMemoryStoreTags
+      x-soat-resource:
+        kind: memory_store
+        from: memory_store_id
       x-iam-action: memories:UpdateMemoryStore
       parameters:
         - name: memory_store_id
@@ -454,6 +472,9 @@ paths:
       summary: Merge memory store tags
       description: Merges provided tags into the memory store's existing tags (existing tags are preserved unless overridden)
       operationId: mergeMemoryStoreTags
+      x-soat-resource:
+        kind: memory_store
+        from: memory_store_id
       x-iam-action: memories:UpdateMemoryStore
       parameters:
         - name: memory_store_id

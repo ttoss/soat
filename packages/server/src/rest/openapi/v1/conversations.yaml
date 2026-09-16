@@ -151,6 +151,9 @@ paths:
       summary: Get a conversation by ID
       description: Returns a conversation by its ID
       operationId: getConversation
+      x-soat-resource:
+        kind: conversation
+        from: conversation_id
       parameters:
         - name: conversation_id
           in: path
@@ -190,6 +193,9 @@ paths:
       summary: Update a conversation
       description: Updates the status of a conversation
       operationId: updateConversation
+      x-soat-resource:
+        kind: conversation
+        from: conversation_id
       parameters:
         - name: conversation_id
           in: path
@@ -250,6 +256,9 @@ paths:
       summary: Delete a conversation
       description: Deletes a conversation by its ID
       operationId: deleteConversation
+      x-soat-resource:
+        kind: conversation
+        from: conversation_id
       parameters:
         - name: conversation_id
           in: path
@@ -286,6 +295,9 @@ paths:
       summary: List conversation messages
       description: Returns all messages (documents) attached to a conversation, ordered by position
       operationId: listConversationMessages
+      x-soat-resource:
+        kind: conversation
+        from: conversation_id
       parameters:
         - name: conversation_id
           in: path
@@ -350,6 +362,9 @@ paths:
       summary: Add a message to a conversation
       description: Creates a document from the message text and attaches it to the conversation at the given position. If position is omitted, it is appended at the end.
       operationId: addConversationMessage
+      x-soat-resource:
+        kind: conversation
+        from: conversation_id
       parameters:
         - name: conversation_id
           in: path
@@ -445,6 +460,9 @@ paths:
         caller must submit tool outputs via the Agents module and re-invoke
         generate — so a flow using client tools should pass `?wait=true`.
       operationId: generateConversationMessage
+      x-soat-resource:
+        kind: conversation
+        from: conversation_id
       parameters:
         - name: conversation_id
           in: path
@@ -554,6 +572,9 @@ paths:
       summary: Remove a message from a conversation
       description: Removes a document from a conversation
       operationId: removeConversationMessage
+      x-soat-resource:
+        kind: conversation
+        from: conversation_id
       parameters:
         - name: conversation_id
           in: path
@@ -597,6 +618,9 @@ paths:
       summary: Get conversation tags
       description: Returns all tags attached to the conversation
       operationId: getConversationTags
+      x-soat-resource:
+        kind: conversation
+        from: conversation_id
       parameters:
         - name: conversation_id
           in: path
@@ -636,6 +660,9 @@ paths:
       summary: Replace conversation tags
       description: Replaces all tags on the conversation with the provided tags
       operationId: replaceConversationTags
+      x-soat-resource:
+        kind: conversation
+        from: conversation_id
       parameters:
         - name: conversation_id
           in: path
@@ -681,6 +708,9 @@ paths:
       summary: Merge conversation tags
       description: Merges provided tags into the conversation's existing tags (existing tags are preserved unless overridden)
       operationId: mergeConversationTags
+      x-soat-resource:
+        kind: conversation
+        from: conversation_id
       parameters:
         - name: conversation_id
           in: path

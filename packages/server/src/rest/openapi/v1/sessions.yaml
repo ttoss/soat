@@ -160,6 +160,9 @@ paths:
         by day or model, or one end user across every session, narrow the usage
         aggregate with `session_id` / `actor_id` instead.
       operationId: getSession
+      x-soat-resource:
+        kind: session
+        from: session_id
       parameters:
         - $ref: '#/components/parameters/SessionId'
       responses:
@@ -181,6 +184,9 @@ paths:
       summary: Update a session
       description: Updates the session name and/or status.
       operationId: updateSession
+      x-soat-resource:
+        kind: session
+        from: session_id
       parameters:
         - $ref: '#/components/parameters/SessionId'
       requestBody:
@@ -211,6 +217,9 @@ paths:
         session are not deleted either, since they are not linked to the
         session or conversation.
       operationId: deleteSession
+      x-soat-resource:
+        kind: session
+        from: session_id
       parameters:
         - $ref: '#/components/parameters/SessionId'
       responses:
@@ -234,6 +243,9 @@ paths:
         automatically and the response mirrors GenerateSessionResponse. Otherwise
         returns the saved user message.
       operationId: addSessionMessage
+      x-soat-resource:
+        kind: session
+        from: session_id
       parameters:
         - $ref: '#/components/parameters/SessionId'
       requestBody:
@@ -274,6 +286,9 @@ paths:
         receive the assistant reply (or a requires_action status if the agent
         needs client tool outputs) in the response.
       operationId: generateSessionResponse
+      x-soat-resource:
+        kind: session
+        from: session_id
       parameters:
         - $ref: '#/components/parameters/SessionId'
         - name: wait
@@ -346,6 +361,9 @@ paths:
         requires_action. The agent continues its loop and returns the
         final or next requires_action result.
       operationId: submitSessionToolOutputs
+      x-soat-resource:
+        kind: session
+        from: session_id
       parameters:
         - $ref: '#/components/parameters/SessionId'
       requestBody:
@@ -394,6 +412,9 @@ paths:
         meant to be driven by the same end user, since
         `single_session_per_actor` agents allow one open session per actor.
       operationId: forkSession
+      x-soat-resource:
+        kind: session
+        from: session_id
       parameters:
         - $ref: '#/components/parameters/SessionId'
       requestBody:
@@ -442,6 +463,9 @@ paths:
         Returns the sessions forked directly from this one. One level of
         lineage: a fork of a fork is listed under its own parent.
       operationId: listSessionForks
+      x-soat-resource:
+        kind: session
+        from: session_id
       parameters:
         - $ref: '#/components/parameters/SessionId'
         - name: limit
@@ -488,6 +512,9 @@ paths:
       summary: Get session tags
       description: Returns the session's tags object.
       operationId: getSessionTags
+      x-soat-resource:
+        kind: session
+        from: session_id
       parameters:
         - $ref: '#/components/parameters/SessionId'
       responses:
@@ -509,6 +536,9 @@ paths:
       summary: Replace session tags
       description: Replaces all tags on the session.
       operationId: replaceSessionTags
+      x-soat-resource:
+        kind: session
+        from: session_id
       parameters:
         - $ref: '#/components/parameters/SessionId'
       requestBody:
@@ -536,6 +566,9 @@ paths:
       summary: Merge session tags
       description: Merges the provided tags into the session's existing tags.
       operationId: mergeSessionTags
+      x-soat-resource:
+        kind: session
+        from: session_id
       parameters:
         - $ref: '#/components/parameters/SessionId'
       requestBody:

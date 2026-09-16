@@ -8,6 +8,7 @@ import {
   type PolicyDocument,
   validatePolicyDocument,
 } from './iam';
+import { resolveSoatActionBoundaryScope } from './soatActionBoundary';
 import { soatTools } from './soatTools';
 import { buildResourceTagContext } from './tags';
 import { callTool, getTool } from './tools';
@@ -209,12 +210,14 @@ const assertToolAllowedForAgent = (args: {
   }
 };
 
-const resolveSoatIamAction = (action: string): string => {
-  const definition = soatTools.find((tool) => {
+const findSoatToolDefinition = (action: string) => {
+  return soatTools.find((tool) => {
     return tool.name === action;
   });
+};
 
-  return definition?.iamAction ?? action;
+const resolveSoatIamAction = (action: string): string => {
+  return findSoatToolDefinition(action)?.iamAction ?? action;
 };
 
 const resolveDocumentContent = async (args: {
@@ -284,10 +287,19 @@ const resolveToolOutputContent = async (args: {
   });
 
   if (tool.type === 'builtin' && args.content.action) {
+    // The same SRN and tags the model's own call to this action would be
+    // checked against: a boundary confined to one resource must not be wider
+    // through the door a caller drives.
+    const scope = await resolveSoatActionBoundaryScope({
+      resourceRef: findSoatToolDefinition(args.content.action)?.resource,
+      toolArgs: args.content.input,
+      boundaryPolicy: args.agentBoundaryPolicy,
+    });
     assertBoundaryAllowed({
       boundaryPolicy: args.agentBoundaryPolicy,
       action: resolveSoatIamAction(args.content.action),
-      resource: '*',
+      resource: scope?.resource ?? '*',
+      context: scope?.context,
     });
   }
 

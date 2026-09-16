@@ -8,6 +8,7 @@ import type { JSONSchema7 } from 'ai';
 import createDebug from 'debug';
 
 import { getActionForOperation } from './permissionCatalog';
+import { readResourceRef, type SoatResourceRef } from './soatToolsResource';
 import {
   buildBodyFn,
   buildPathFn,
@@ -22,6 +23,11 @@ import {
   sanitizeDescription,
   type ToolQueryParam,
 } from './soatToolsSchemaHelpers';
+import type {
+  OpenApiSpec,
+  OperationSpec,
+  RequestBodySpec,
+} from './soatToolsSpecTypes';
 
 const log = createDebug('soat:tools');
 
@@ -34,6 +40,8 @@ export interface ToolDefinition {
   query?: (args: Record<string, unknown>) => string;
   body?: (args: Record<string, unknown>) => Record<string, unknown>;
   iamAction?: string;
+  /** See `x-soat-resource` on {@link OperationSpec}. */
+  resource?: SoatResourceRef;
   /** snake_case names of every top-level request body property this operation's schema declares, including server-managed ones. */
   acceptedBodyFields: string[];
   /** See `x-soat-agent-exclude` on {@link OperationSpec}. */
@@ -58,64 +66,6 @@ export const buildSoatActionTarget = (args: {
     args.def.path(args.args) + (args.def.query ? args.def.query(args.args) : '')
   );
 };
-
-export interface OpenApiSpec {
-  paths?: Record<string, Record<string, unknown>>;
-  components?: {
-    schemas?: Record<string, unknown>;
-    parameters?: Record<string, unknown>;
-  };
-}
-
-export type RequestBodySpec = {
-  required?: boolean;
-  content?: {
-    'application/json'?: {
-      schema?: {
-        type?: string;
-        required?: string[];
-        properties?: Record<string, unknown>;
-        oneOf?: Array<Record<string, unknown>>;
-        anyOf?: Array<Record<string, unknown>>;
-        $ref?: string;
-      };
-    };
-  };
-};
-
-export interface OperationSpec {
-  operationId?: string;
-  description?: string;
-  parameters?: Array<{
-    name?: string;
-    in?: string;
-    required?: boolean;
-    description?: string;
-    schema?: {
-      type?: string;
-      items?: { type?: string };
-    };
-    $ref?: string;
-  }>;
-  requestBody?: RequestBodySpec;
-  'x-iam-action'?: string;
-  /** When true, the operation is excluded from the MCP tool surface. */
-  'x-soat-mcp-exclude'?: boolean;
-  /**
-   * When true, an **agent** may not be bound to this operation, though an MCP
-   * client still can.
-   *
-   * The two surfaces differ in who chooses the arguments. An MCP client is a
-   * person acting as themselves; an agent's builtin tool is an LLM acting
-   * inside a generation, under a bearer somebody else handed it. So an
-   * operation that mints a credential, rewrites authorization, reads secret
-   * material or settles an approval is one the agent surface withholds even
-   * where that bearer would allow it — the approval gate in particular exists
-   * to put a person between an agent and an action, and an agent that can
-   * resolve its own approval has removed them.
-   */
-  'x-soat-agent-exclude'?: boolean;
-}
 
 export const resolveSchema = (
   schema: Record<string, unknown> | undefined,
@@ -478,6 +428,7 @@ export const processOperation = (args: {
     iamAction:
       args.operation['x-iam-action'] ??
       getActionForOperation(args.operation.operationId),
+    resource: readResourceRef(args.operation['x-soat-resource']),
     acceptedBodyFields,
     // Kept in the catalog rather than dropped like an MCP exclusion: the
     // operation is still an MCP tool, and the write-time refusal needs to tell
