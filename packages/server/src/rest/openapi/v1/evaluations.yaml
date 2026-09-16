@@ -138,6 +138,9 @@ paths:
       summary: Get a dataset
       description: Returns a specific dataset
       operationId: getDataset
+      x-soat-resource:
+        kind: dataset
+        from: dataset_id
       parameters:
         - name: dataset_id
           in: path
@@ -165,6 +168,9 @@ paths:
       summary: Update a dataset
       description: Updates a dataset's name and/or description
       operationId: updateDataset
+      x-soat-resource:
+        kind: dataset
+        from: dataset_id
       parameters:
         - name: dataset_id
           in: path
@@ -213,6 +219,9 @@ paths:
         runs that already scored those items keep their frozen copies of the
         input and expected output.
       operationId: deleteDataset
+      x-soat-resource:
+        kind: dataset
+        from: dataset_id
       parameters:
         - name: dataset_id
           in: path
@@ -237,6 +246,9 @@ paths:
       summary: List dataset items
       description: Returns the test cases in a dataset, oldest first
       operationId: listDatasetItems
+      x-soat-resource:
+        kind: dataset
+        from: dataset_id
       parameters:
         - name: dataset_id
           in: path
@@ -296,6 +308,9 @@ paths:
         Adds one test case. `input` is replayed verbatim as the generation's
         messages, so it must be a non-empty array of `{ role, content }`.
       operationId: createDatasetItem
+      x-soat-resource:
+        kind: dataset
+        from: dataset_id
       parameters:
         - name: dataset_id
           in: path
@@ -380,6 +395,9 @@ paths:
         it (`409 GENERATION_CONTENT_UNAVAILABLE`). Generations that predate input
         recording answer the same way.
       operationId: createDatasetItemFromGeneration
+      x-soat-resource:
+        kind: dataset
+        from: dataset_id
       parameters:
         - name: dataset_id
           in: path
@@ -450,6 +468,9 @@ paths:
         Updates a test case. Runs that already scored it are unaffected — each
         result carries its own frozen copy of the input and expected output.
       operationId: updateDatasetItem
+      x-soat-resource:
+        kind: dataset
+        from: dataset_id
       parameters:
         - name: dataset_id
           in: path
@@ -507,6 +528,9 @@ paths:
         Deletes a test case. Results of runs that already scored it stay
         readable; their `dataset_item_id` becomes null.
       operationId: deleteDatasetItem
+      x-soat-resource:
+        kind: dataset
+        from: dataset_id
       parameters:
         - name: dataset_id
           in: path
@@ -667,6 +691,9 @@ paths:
       summary: Get an eval
       description: Returns a specific eval
       operationId: getEval
+      x-soat-resource:
+        kind: eval
+        from: eval_id
       parameters:
         - name: eval_id
           in: path
@@ -697,6 +724,9 @@ paths:
         the new agent, since an `output_schema` scorer that was legal against
         the old one may not be.
       operationId: updateEval
+      x-soat-resource:
+        kind: eval
+        from: eval_id
       parameters:
         - name: eval_id
           in: path
@@ -751,6 +781,9 @@ paths:
       summary: Delete an eval
       description: Deletes an eval, its runs, and their results
       operationId: deleteEval
+      x-soat-resource:
+        kind: eval
+        from: eval_id
       parameters:
         - name: eval_id
           in: path
@@ -775,6 +808,9 @@ paths:
       summary: List eval runs
       description: Returns an eval's runs, newest first
       operationId: listEvalRuns
+      x-soat-resource:
+        kind: eval
+        from: eval_id
       parameters:
         - name: eval_id
           in: path
@@ -861,6 +897,9 @@ paths:
         delta over a shifted dataset is therefore never presented as a clean
         comparison.
       operationId: startEvalRun
+      x-soat-resource:
+        kind: eval
+        from: eval_id
       parameters:
         - name: eval_id
           in: path
@@ -980,6 +1019,9 @@ paths:
       summary: Get an eval run
       description: Returns a run's status, counts, and aggregate scores
       operationId: getEvalRun
+      x-soat-resource:
+        kind: eval
+        from: eval_id
       parameters:
         - name: eval_id
           in: path
@@ -1015,6 +1057,9 @@ paths:
       summary: List eval run results
       description: Returns the per-item results of a run, oldest first
       operationId: listEvalResults
+      x-soat-resource:
+        kind: eval
+        from: eval_id
       parameters:
         - name: eval_id
           in: path
@@ -1092,6 +1137,9 @@ paths:
 
         A run that has already finished is rejected with 400.
       operationId: cancelEvalRun
+      x-soat-resource:
+        kind: eval
+        from: eval_id
       parameters:
         - name: eval_id
           in: path

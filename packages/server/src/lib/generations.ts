@@ -344,7 +344,7 @@ type GenerationRow = InstanceType<(typeof db)['Generation']> & {
   startedByActor?: InstanceType<(typeof db)['Actor']> | null;
 };
 
-const generations = makeResourceAccessor<GenerationRow>({
+export const generations = makeResourceAccessor<GenerationRow>({
   model: () => {
     return db.Generation;
   },

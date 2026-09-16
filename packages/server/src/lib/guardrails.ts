@@ -41,7 +41,7 @@ const getGuardrailIncludes = () => {
   return [{ model: db.Project, as: 'project' }];
 };
 
-const guardrails = makeResourceAccessor<GuardrailInstance>({
+export const guardrails = makeResourceAccessor<GuardrailInstance>({
   model: () => {
     return db.Guardrail;
   },

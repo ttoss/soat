@@ -6,6 +6,7 @@ import {
   createGuardrail,
   deleteGuardrail,
   getGuardrail,
+  guardrails,
   listGuardrails,
   updateGuardrail,
 } from 'src/lib/guardrails';
@@ -23,9 +24,22 @@ import {
   requireProjectAccess,
   resolveReadProjectIds,
 } from './helpers';
+import { makeItemRouteAuthorizer } from './resourceAccess';
 import { coerceToJsonObject } from './tools';
 
 export const guardrailsRouter = new Router<Context>();
+
+/**
+ * Every `/guardrails/:guardrail_id` route — the guardrail itself, its dry-run
+ * evaluation and its version history — authorizes against the guardrail's own
+ * SRN rather than the project wildcard (#1339).
+ */
+const guardrailAccess = makeItemRouteAuthorizer({
+  findScope: guardrails.findScope,
+  resourceType: 'guardrail',
+  param: 'guardrail_id',
+  label: 'Guardrail',
+});
 
 const parseStringOrUndefined = (v: unknown): string | undefined => {
   return typeof v === 'string' ? v : undefined;
@@ -148,10 +162,9 @@ guardrailsRouter.get('/guardrails', async (ctx: Context) => {
  *     $ref: 'openapi/v1/guardrails.yaml#/paths/~1api~1v1~1guardrails~1{guardrail_id}/get'
  */
 guardrailsRouter.get('/guardrails/:guardrail_id', async (ctx: Context) => {
-  const projectIds = await resolveReadProjectIds({
+  const { projectIds } = await guardrailAccess.authorizeRead({
     ctx,
     action: 'guardrails:GetGuardrail',
-    resourceType: 'guardrail',
   });
   ctx.body = await getGuardrail({
     projectIds,
@@ -166,10 +179,9 @@ guardrailsRouter.get('/guardrails/:guardrail_id', async (ctx: Context) => {
  *     $ref: 'openapi/v1/guardrails.yaml#/paths/~1api~1v1~1guardrails~1{guardrail_id}/patch'
  */
 guardrailsRouter.patch('/guardrails/:guardrail_id', async (ctx: Context) => {
-  const projectIds = await requireProjectAccess({
+  const { projectIds } = await guardrailAccess.authorizeWrite({
     ctx,
     action: 'guardrails:UpdateGuardrail',
-    resourceType: 'guardrail',
   });
   const body = ctx.request.body as Record<string, unknown>;
 
@@ -200,10 +212,9 @@ guardrailsRouter.patch('/guardrails/:guardrail_id', async (ctx: Context) => {
  *     $ref: 'openapi/v1/guardrails.yaml#/paths/~1api~1v1~1guardrails~1{guardrail_id}/delete'
  */
 guardrailsRouter.delete('/guardrails/:guardrail_id', async (ctx: Context) => {
-  const projectIds = await requireProjectAccess({
+  const { projectIds } = await guardrailAccess.authorizeWrite({
     ctx,
     action: 'guardrails:DeleteGuardrail',
-    resourceType: 'guardrail',
   });
   // The success response is `204 No Content`, so the audit middleware has no
   // body to backfill the project/SRN from — hand it the resolved resource
@@ -239,10 +250,9 @@ guardrailsRouter.delete('/guardrails/:guardrail_id', async (ctx: Context) => {
 guardrailsRouter.post(
   '/guardrails/:guardrail_id/evaluate',
   async (ctx: Context) => {
-    const projectIds = await requireProjectAccess({
+    const { projectIds } = await guardrailAccess.authorizeWrite({
       ctx,
       action: 'guardrails:EvaluateGuardrail',
-      resourceType: 'guardrail',
     });
     const body = ctx.request.body as Record<string, unknown>;
     const args = coerceToJsonObject(body.args) ?? undefined;
@@ -269,10 +279,9 @@ guardrailsRouter.post(
 guardrailsRouter.get(
   '/guardrails/:guardrail_id/versions',
   async (ctx: Context) => {
-    const projectIds = await resolveReadProjectIds({
+    const { projectIds } = await guardrailAccess.authorizeRead({
       ctx,
       action: 'guardrails:ListGuardrailVersions',
-      resourceType: 'guardrail',
     });
     ctx.body = await listGuardrailVersions({
       projectIds,
@@ -291,10 +300,9 @@ guardrailsRouter.get(
 guardrailsRouter.get(
   '/guardrails/:guardrail_id/versions/:version',
   async (ctx: Context) => {
-    const projectIds = await resolveReadProjectIds({
+    const { projectIds } = await guardrailAccess.authorizeRead({
       ctx,
       action: 'guardrails:GetGuardrailVersion',
-      resourceType: 'guardrail',
     });
     ctx.body = await getGuardrailVersion({
       projectIds,
@@ -313,10 +321,9 @@ guardrailsRouter.get(
 guardrailsRouter.post(
   '/guardrails/:guardrail_id/versions/:version/restore',
   async (ctx: Context) => {
-    const projectIds = await requireProjectAccess({
+    const { projectIds } = await guardrailAccess.authorizeWrite({
       ctx,
       action: 'guardrails:RestoreGuardrailVersion',
-      resourceType: 'guardrail',
     });
     const body = ctx.request.body as { label?: unknown };
 

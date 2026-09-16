@@ -77,7 +77,7 @@ const datasetItemIncludes = (): ResourceIncludes => {
   ];
 };
 
-const datasets = makeResourceAccessor<DatasetRow>({
+export const datasets = makeResourceAccessor<DatasetRow>({
   model: () => {
     return db.Dataset;
   },

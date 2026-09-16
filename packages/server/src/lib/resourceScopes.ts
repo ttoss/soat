@@ -24,6 +24,9 @@
 import { actors } from './actors';
 import { agents } from './agentAccessor';
 import { conversations } from './conversations';
+import { datasets } from './evaluationDatasets';
+import { evals } from './evaluations';
+import { guardrails } from './guardrails';
 import { getMemory } from './memories';
 import { getMemoryRule } from './memoryRules';
 import { memoryStores } from './memoryStores';
@@ -96,6 +99,29 @@ const RESOURCE_KINDS: Record<string, ResourceKind> = {
       return conversations;
     },
     resourceType: 'conversation',
+  },
+
+  // A dataset item and an eval run carry no project of their own, so both the
+  // route and a boundary authorize them through the parent the path names.
+  dataset: {
+    accessor: () => {
+      return datasets;
+    },
+    resourceType: 'dataset',
+  },
+
+  eval: {
+    accessor: () => {
+      return evals;
+    },
+    resourceType: 'eval',
+  },
+
+  guardrail: {
+    accessor: () => {
+      return guardrails;
+    },
+    resourceType: 'guardrail',
   },
 
   // A memory authorizes against its store: `rest/v1/memories.ts` resolves the
