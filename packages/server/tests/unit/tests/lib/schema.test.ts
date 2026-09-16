@@ -4,6 +4,9 @@ import {
   isBootSchemaSyncEnabled,
   pendingMigrationNames,
   prepareOrAssertSchema,
+  prepareSchema,
+  prepareSchemaOrExit,
+  schemaRunnerOptions,
 } from 'src/schema';
 
 import { sequelize } from '../../setupTestsAfterEnv';
@@ -166,5 +169,73 @@ describe('prepareOrAssertSchema', () => {
     await prepareOrAssertSchema({ sequelize });
 
     expect(await pendingMigrationNames({ sequelize })).toEqual([]);
+  });
+});
+
+describe('schemaRunnerOptions', () => {
+  test('hands the runner a working sync, for a migration that calls context.sync()', async () => {
+    // No migration needs it yet, so nothing else would notice this option
+    // going wrong before the first one that does — by which point the failure
+    // reads as a broken migration rather than a broken runner.
+    const options = schemaRunnerOptions({ sequelize });
+
+    expect(options.sync).toBeDefined();
+    await expect(options.sync?.()).resolves.toBeUndefined();
+  });
+});
+
+describe('prepareSchema', () => {
+  test('a dry run records nothing, so the database stays behind', async () => {
+    await dropLedger();
+
+    await prepareSchema({ sequelize, dryRun: true });
+
+    expect(await pendingMigrationNames({ sequelize })).toEqual(ALL_NAMES);
+  });
+});
+
+/**
+ * Throwing rather than returning keeps `process.exit`'s real contract: nothing
+ * after it runs. A mock that returned would let a test walk past a line
+ * production never reaches.
+ */
+const stubProcessExit = () => {
+  return jest.spyOn(process, 'exit').mockImplementation((code) => {
+    throw new Error(`process.exit(${String(code)})`);
+  });
+};
+
+describe('prepareSchemaOrExit', () => {
+  const saved = process.env.DB_SYNC;
+
+  afterEach(() => {
+    if (saved === undefined) {
+      delete process.env.DB_SYNC;
+    } else {
+      process.env.DB_SYNC = saved;
+    }
+    jest.restoreAllMocks();
+  });
+
+  test('ends the process when the database is behind', async () => {
+    delete process.env.DB_SYNC;
+    await dropLedger();
+
+    const exit = stubProcessExit();
+
+    await expect(prepareSchemaOrExit({ sequelize })).rejects.toThrow(
+      'process.exit(1)'
+    );
+    expect(exit).toHaveBeenCalledWith(1);
+  });
+
+  test('returns without exiting when the database is prepared', async () => {
+    delete process.env.DB_SYNC;
+    await recordEvery();
+
+    const exit = stubProcessExit();
+
+    await expect(prepareSchemaOrExit({ sequelize })).resolves.toBeUndefined();
+    expect(exit).not.toHaveBeenCalled();
   });
 });
