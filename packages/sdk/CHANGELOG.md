@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.53.0](https://github.com/ttoss/soat/compare/v0.52.0...v0.53.0) (2026-09-17)
+
+**Note:** Version bump only for package @soat/sdk
+
 # [0.52.0](https://github.com/ttoss/soat/compare/v0.51.0...v0.52.0) (2026-09-17)
 
 * feat(memories)!: replace agent-side extraction with memory rules on the store (#1328) ([c3a4ed9](https://github.com/ttoss/soat/commit/c3a4ed9c5adb1486fae082ac7f09ac1c6758d03d)), closes [#1328](https://github.com/ttoss/soat/issues/1328)
