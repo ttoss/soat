@@ -104,7 +104,7 @@ const setup = await setupProjectWithUsers({
 - Signal with Promises, not timer polling. Never `await setTimeout(n)` to let a
   fire-and-forget path settle; resolve inside the dispatch boundary or poll a
   bounded predicate on a side effect. Advance an injected clock for TTLs.
-- Never assert across a wall-clock bucket boundary (#1049): counted sequences
+- Never assert across a wall-clock bucket boundary: counted sequences
   use `calendar_month` (`COUNTED_WINDOW` in `rest/quotas.test.ts`); test
   truncation math against a frozen clock.
 - Tear down global listeners (`eventBus.off`) in `finally` / `afterEach`; every

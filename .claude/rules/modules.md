@@ -53,7 +53,7 @@ Every module is `defineFormationModule({ … })`
 | `create` / `update` / `remove` | property → lib-arg mapping |
 | `fetch` + optional `read` | load the live resource; declare `read` only when a field is transformed, else `pickSpecFields` selects the schema's keys verbatim |
 
-Never hand-write the skeleton (#900, #901).
+Never hand-write the skeleton.
 
 When adding a field: REST spec → `formations.yaml` schema → `create`/`update`
 pass it → `read` returns it (if declared).

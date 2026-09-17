@@ -9,7 +9,8 @@ ttoss ecosystem conventions: https://ttoss.dev/ttoss-instructions.txt
 - kebab-case folders, camelCase files/variables/functions, PascalCase types,
   UPPER_SNAKE constants, `<file>.test.ts` for tests.
 - Comment only for a non-obvious why: hidden constraint, invariant, workaround
-  (reference the issue). Never restate the code, leave commented-out code,
+  — state the constraint itself, never an issue number or what changed
+  (`no-history.md`). Never restate the code, leave commented-out code,
   `TODO`/`FIXME`, or task narration. Applies to every package and to tests.
 - Lint a file: `pnpm eslint --fix path/to/file`.
 - **Module ceiling: 400 code lines** (`max-lines` in `eslint.config.js`; blanks

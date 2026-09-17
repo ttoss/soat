@@ -110,7 +110,7 @@ Each firing:
 4. Writes each candidate through the standard write algorithm, on the store's effective thresholds and against the project's storage quota, recording a `rule` assertion that names both the rule and the turn's generation.
 5. Records per-rule counts on the originating generation's `extraction` field ([Generations](../modules/generations.md) API), which also carries the `memory_assertions` rows behind them.
 
-Because a rule subscribes to `agents.generation.completed`, it covers every transport the old agent-side extractor could not: a background generation, a streamed one, and a turn that resumed from `requires_action` all emit that event when the record completes.
+Because a rule subscribes to `agents.generation.completed`, it covers every transport: a background generation, a streamed one, and a turn that resumed from `requires_action` all emit that event when the record completes.
 
 A handler agent's own turn emits the same event, so the dispatcher skips a generation it started itself and any generation by an agent that handles a rule in the project; a handler generation also declares the source turn as its initiator, inheriting its trace lineage and continuation budget.
 

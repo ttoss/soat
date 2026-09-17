@@ -13,7 +13,7 @@ wait omitted / false  →  background; answer immediately with a pollable handle
 wait: true            →  block until settled; answer with the result
 ```
 
-`async` is retired (#965); never `async`, `sync`, `blocking`, `background`.
+The toggle is always `wait`; never `async`, `sync`, `blocking`, `background`.
 
 ## Adding it to an endpoint
 
