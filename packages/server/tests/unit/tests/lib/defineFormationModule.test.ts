@@ -152,6 +152,119 @@ describe('defineFormationModule — validateProperties', () => {
     }).warnProperties!({ properties: 'nope', basePath: BASE_PATH });
     expect(warned).toEqual([]);
   });
+
+  // The nested half of the same rule. An `<Type>ResourceProperties` schema
+  // declares field lists below its top level too, and a key none of them names
+  // is meaningless by construction — so the template walk reads the schema to
+  // the depth the schema describes, which is the depth the resource route
+  // already validates to.
+  describe('nested levels', () => {
+    const AGENT_BASE_PATH = 'resources.<agent>.properties';
+
+    const agentModule = () => {
+      return defineFormationModule<{ id: string }>({
+        resourceType: 'agent',
+        authorization: {
+          srnResourceType: 'agent',
+          create: 'agents:CreateAgent',
+          delete: 'agents:DeleteAgent',
+        },
+        create: async () => {
+          return { id: 'agt_created' };
+        },
+        remove: async () => {},
+      });
+    };
+
+    const validate = (properties: Record<string, unknown>) => {
+      return agentModule().validateProperties!({
+        properties,
+        basePath: AGENT_BASE_PATH,
+      });
+    };
+
+    test('reports an unknown key inside a nested object', () => {
+      const errors = validate({
+        name: 'Nested',
+        knowledge_config: { limit: 4, extraction: true },
+      });
+
+      expect(errors).toEqual([
+        {
+          path: `${AGENT_BASE_PATH}.knowledge_config.extraction`,
+          message:
+            "Unknown agent field 'knowledge_config.extraction'. Allowed: " +
+            'memory_store_ids, document_ids, document_paths, tags, min_score, ' +
+            'limit, write_memory_store_id',
+        },
+      ]);
+    });
+
+    test('reports an unknown key inside an array element, with its index', () => {
+      const errors = validate({
+        stop_conditions: [
+          { type: 'has_tool_call', tool_name: 'search' },
+          { type: 'max_chain_generations', maxGenerations: 3 },
+        ],
+      });
+
+      expect(errors).toHaveLength(1);
+      expect(errors[0].path).toBe(
+        `${AGENT_BASE_PATH}.stop_conditions.1.maxGenerations`
+      );
+    });
+
+    test('reports a key nested two levels down', () => {
+      const errors = validate({
+        boundary_policy: {
+          statement: [{ effect: 'Allow', action: ['memories:*'], nope: 1 }],
+        },
+      });
+
+      expect(errors).toHaveLength(1);
+      expect(errors[0].path).toBe(
+        `${AGENT_BASE_PATH}.boundary_policy.statement.0.nope`
+      );
+    });
+
+    test('leaves a free-form bag alone', () => {
+      expect(validate({ output_schema: { anything: { at: 'all' } } })).toEqual(
+        []
+      );
+    });
+
+    test('reports an unknown key inside a tool binding', () => {
+      const errors = validate({ tool_bindings: [{ toolId: 'tool_1' }] });
+
+      expect(errors).toHaveLength(1);
+      expect(errors[0].path).toBe(`${AGENT_BASE_PATH}.tool_bindings.0.toolId`);
+    });
+
+    test('accepts a policy statement condition block', () => {
+      expect(
+        validate({
+          boundary_policy: {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['memories:ListMemories'],
+                condition: { StringEquals: { 'soat:ResourceType': 'memory' } },
+              },
+            ],
+          },
+        })
+      ).toEqual([]);
+    });
+
+    test('accepts a nested bag whose keys the schema declares', () => {
+      expect(
+        validate({
+          knowledge_config: { memory_store_ids: ['mst_1'], limit: 4 },
+          prompt_caching: { enabled: true },
+        })
+      ).toEqual([]);
+    });
+  });
 });
 
 describe('defineFormationModule — create', () => {

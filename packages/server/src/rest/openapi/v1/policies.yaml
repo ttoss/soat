@@ -91,6 +91,7 @@ paths:
               type: object
               required:
                 - document
+              additionalProperties: false
               properties:
                 name:
                   type: string
@@ -168,6 +169,7 @@ paths:
               type: object
               required:
                 - document
+              additionalProperties: false
               properties:
                 name:
                   type: string

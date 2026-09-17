@@ -93,6 +93,7 @@ paths:
               type: object
               required:
                 - content_type_glob
+              additionalProperties: false
               properties:
                 project_id:
                   x-soat-ref: projects
@@ -216,6 +217,7 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: false
               properties:
                 content_type_glob:
                   type: string

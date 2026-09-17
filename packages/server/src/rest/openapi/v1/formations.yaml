@@ -38,6 +38,7 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: false
               properties:
                 template:
                   $ref: '#/components/schemas/FormationTemplateInput'
@@ -79,6 +80,7 @@ paths:
               type: object
               required:
                 - template
+              additionalProperties: false
               properties:
                 project_id:
                   x-soat-ref: projects
@@ -199,6 +201,7 @@ paths:
               required:
                 - name
                 - template
+              additionalProperties: false
               properties:
                 project_id:
                   x-soat-ref: projects
@@ -315,6 +318,7 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: false
               properties:
                 template:
                   $ref: '#/components/schemas/FormationTemplateInput'
@@ -622,6 +626,18 @@ components:
           nullable: true
           items:
             type: object
+            additionalProperties: false
+            properties:
+              tool_id:
+                x-soat-ref: tools
+                type: string
+                description: Public ID of the tool to attach.
+              tool:
+                type: object
+                nullable: true
+                description: >-
+                  Inline tool definition. Not supported in a template: declare
+                  a tool resource and reference it via `tool_id`.
           description: >-
             Tools to attach, one binding object per tool: `{ tool_id }`.
             Tool-call gating is owned by guardrails (attached via `guardrail_ids`
@@ -641,6 +657,7 @@ components:
           description: Conditions that stop the agent's work early — turn-scoped (`has_tool_call`) or chain-scoped (`max_chain_generations`).
           items:
             type: object
+            additionalProperties: false
             properties:
               type:
                 type: string
@@ -673,6 +690,7 @@ components:
           description: Per-step overrides applied during multi-step generation. Steps not covered by a rule use the agent defaults.
           items:
             type: object
+            additionalProperties: false
             properties:
               step:
                 type: integer
@@ -692,12 +710,14 @@ components:
           type: object
           nullable: true
           description: Restricts which SOAT actions the agent may invoke. Evaluated as the intersection with the caller's own policy.
+          additionalProperties: false
           properties:
             statement:
               type: array
               description: List of IAM policy statements
               items:
                 type: object
+                additionalProperties: false
                 properties:
                   effect:
                     type: string
@@ -713,6 +733,14 @@ components:
                     items:
                       type: string
                     description: Resource SRN patterns (optional; omit to match all resources)
+                  condition:
+                    type: object
+                    nullable: true
+                    additionalProperties: true
+                    description: >-
+                      Condition block, in the same grammar a policy document
+                      uses: keys are condition operators mapping to
+                      context-key/value maps.
         temperature:
           type: number
           nullable: true
@@ -743,6 +771,7 @@ components:
           type: object
           nullable: true
           description: Knowledge retrieval configuration. When set, relevant documents and memories are injected into every generation.
+          additionalProperties: false
           properties:
             memory_store_ids:
               x-soat-ref: memory-stores
@@ -789,6 +818,7 @@ components:
             Prompt caching for this agent's turns. `{"enabled": true}` marks a
             cache breakpoint at the end of the turn's static prefix — the tool
             definitions and the instructions together. Null or omitted is off.
+          additionalProperties: false
           properties:
             enabled:
               type: boolean
@@ -899,6 +929,7 @@ components:
           type: object
           nullable: true
           description: HTTP execution configuration. Required for `http` tools.
+          additionalProperties: false
           properties:
             url:
               type: string
@@ -921,16 +952,54 @@ components:
             auth:
               type: object
               nullable: true
+              additionalProperties: false
               description: >-
                 Computed request credential. `type` is `aws_sigv4` (with
                 `region`, `service`, `access_key_id`, `secret_access_key` and
                 optional `session_token`) or `gcp_service_account` (with
                 `credentials` and `scopes`). Credential fields accept
                 `{{secret:...}}` references.
+              properties:
+                type:
+                  type: string
+                  description: '`aws_sigv4` or `gcp_service_account`'
+                region:
+                  type: string
+                  nullable: true
+                  description: '`aws_sigv4`: the signing region'
+                service:
+                  type: string
+                  nullable: true
+                  description: '`aws_sigv4`: the signing service'
+                access_key_id:
+                  type: string
+                  nullable: true
+                  description: '`aws_sigv4`: the access key id'
+                secret_access_key:
+                  type: string
+                  nullable: true
+                  description: '`aws_sigv4`: the secret access key'
+                session_token:
+                  type: string
+                  nullable: true
+                  description: '`aws_sigv4`: the temporary credential''s session token'
+                credentials:
+                  type: string
+                  nullable: true
+                  description: >-
+                    `gcp_service_account`: the service account key file JSON,
+                    as a string
+                scopes:
+                  type: array
+                  nullable: true
+                  items:
+                    type: string
+                  description: '`gcp_service_account`: the scopes to mint for'
         mcp:
           type: object
           nullable: true
           description: MCP server connection configuration. Required for `mcp` tools.
+          additionalProperties: false
           properties:
             url:
               type: string
@@ -1240,6 +1309,29 @@ components:
             (sum of `1 + max_retries`) is capped at 10.
           items:
             type: object
+            additionalProperties: false
+            required:
+              - ai_provider_id
+              - model
+            properties:
+              ai_provider_id:
+                x-soat-ref: ai-providers
+                type: string
+                description: AI provider in the route's project.
+              model:
+                type: string
+                description: Model name to call on that provider.
+              timeout_seconds:
+                type: integer
+                nullable: true
+                description: >-
+                  Per-attempt deadline. Omitted means no per-target deadline.
+              max_retries:
+                type: integer
+                nullable: true
+                description: >-
+                  Retries on this target before falling through to the next
+                  one.
         retry_on:
           type: array
           description: >-
@@ -1472,8 +1564,41 @@ components:
           description: Description of what the policy grants
         document:
           type: object
-          additionalProperties: true
+          additionalProperties: false
           description: Policy document containing an array of statements
+          properties:
+            statement:
+              type: array
+              description: IAM policy statements.
+              items:
+                type: object
+                additionalProperties: false
+                required:
+                  - effect
+                  - action
+                properties:
+                  effect:
+                    type: string
+                    description: '`Allow` or `Deny`'
+                  action:
+                    type: array
+                    items:
+                      type: string
+                    description: IAM action strings, e.g. `memories:*`.
+                  resource:
+                    type: array
+                    nullable: true
+                    items:
+                      type: string
+                    description: >-
+                      Resource SRN patterns. Omit to match every resource.
+                  condition:
+                    type: object
+                    nullable: true
+                    additionalProperties: true
+                    description: >-
+                      Condition block: keys are condition operators mapping to
+                      context-key/value maps.
 
     SecretResourceProperties:
       description: >-

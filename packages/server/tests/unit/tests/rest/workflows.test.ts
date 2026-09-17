@@ -140,6 +140,119 @@ describe('Workflows', () => {
     });
   });
 
+  // A state, a transition and an `on_enter` dispatch each declare their field
+  // list, and the wire mapper copies whatever else it finds — so an unknown key
+  // is refused at the boundary rather than stored in the definition.
+  describe('POST /api/v1/workflows — unknown keys in the definition', () => {
+    test('an unknown key on a state returns 400', async () => {
+      const res = await createWorkflow(userToken, {
+        states: [
+          { name: 'a', initial: true, stalledAfter: 60 },
+          { name: 'b', terminal: true },
+        ],
+        transitions: [{ name: 'go', from: ['a'], to: 'b' }],
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.meta.unknownFields).toEqual([
+        'states.0.stalledAfter',
+      ]);
+    });
+
+    test('an unknown key on a transition returns 400', async () => {
+      const res = await createWorkflow(userToken, {
+        states: [
+          { name: 'a', initial: true },
+          { name: 'b', terminal: true },
+        ],
+        transitions: [
+          { name: 'go', from: ['a'], to: 'b', requiresApproval: true },
+        ],
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.meta.unknownFields).toEqual([
+        'transitions.0.requiresApproval',
+      ]);
+    });
+
+    test('an unknown key inside an on_enter dispatch returns 400', async () => {
+      const res = await createWorkflow(userToken, {
+        states: [
+          {
+            name: 'a',
+            initial: true,
+            on_enter: {
+              dispatch: { kind: 'agent', agentId: 'agt_ghost' },
+            },
+          },
+          { name: 'b', terminal: true },
+        ],
+        transitions: [{ name: 'go', from: ['a'], to: 'b' }],
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.meta.unknownFields).toEqual([
+        'states.0.on_enter.dispatch.agentId',
+      ]);
+    });
+
+    test('every declared on_enter field is still accepted', async () => {
+      const provider = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: `wf-dispatch-provider-${Math.random().toString(36).slice(2, 8)}`,
+          provider: 'ollama',
+          default_model: 'llama3.2',
+        });
+      expect(provider.status).toBe(201);
+
+      const agent = await authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: provider.body.id,
+          name: `wf-dispatch-${Math.random().toString(36).slice(2, 8)}`,
+        });
+      expect(agent.status).toBe(201);
+
+      const res = await createWorkflow(adminToken, {
+        states: [
+          {
+            name: 'a',
+            initial: true,
+            stalled_after: 60,
+            on_enter: {
+              dispatch: {
+                kind: 'agent',
+                agent_id: agent.body.id,
+                input_mapping: { prompt: { var: 'task.payload.topic' } },
+                payload_writes: { last: { var: 'result.text' } },
+              },
+              retry: {
+                max_attempts: 2,
+                backoff_seconds: 1,
+                backoff_multiplier: 2,
+              },
+              on_complete: [{ when: true, transition: 'go' }],
+              on_failure: 'go',
+            },
+          },
+          { name: 'b', terminal: true },
+        ],
+        transitions: [{ name: 'go', from: ['a'], to: 'b' }],
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body.states[0].on_enter.retry.max_attempts).toBe(2);
+      expect(res.body.states[0].on_enter.on_complete).toEqual([
+        { when: true, transition: 'go' },
+      ]);
+    });
+  });
+
   describe('GET /api/v1/workflows', () => {
     test('lists workflows in the project', async () => {
       await createWorkflow(userToken);

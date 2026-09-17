@@ -3,6 +3,7 @@ import {
   RUNTIME_CONTEXT_CATALOG,
   validateGuardrailDocument,
 } from 'src/lib/guardrailDocument';
+import { getRequestSchemaFields } from 'src/lib/openapiSpec';
 
 const expectValidationError = (document: unknown, match?: RegExp) => {
   try {
@@ -82,6 +83,21 @@ describe('validateGuardrailDocument', () => {
 
     test('rejects an unknown top-level field', () => {
       expectValidationError({ class: 'C', rules: [] }, /unknown field 'rules'/);
+    });
+
+    // The document's field list lives in `GuardrailDocument`, and the schema is
+    // closed against it, so the two have to name the same fields: a field added
+    // to one and not the other is either refused here while the spec advertises
+    // it, or advertised nowhere while this accepts it.
+    test('the allowed list is the schema field list', () => {
+      const { allowedFields } = getRequestSchemaFields({
+        schemaName: 'GuardrailDocument',
+      });
+
+      expectValidationError(
+        { class: 'C', rules: [] },
+        new RegExp(`Allowed fields: ${[...allowedFields].join(', ')}\\.`)
+      );
     });
 
     test('rejects a missing class', () => {

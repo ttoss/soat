@@ -96,6 +96,7 @@ paths:
               type: object
               required:
                 - name
+              additionalProperties: false
               properties:
                 name:
                   type: string
@@ -185,6 +186,7 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: false
               properties:
                 name:
                   type: string

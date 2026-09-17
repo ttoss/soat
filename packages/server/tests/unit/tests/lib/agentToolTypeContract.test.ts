@@ -18,7 +18,7 @@ const SPEC_PATH = path.resolve(
 );
 
 type SchemaWithType = {
-  properties?: { type?: { enum?: string[] } };
+  properties?: { type?: { enum?: string[] }; execute?: unknown };
 };
 
 const spec = load(fs.readFileSync(SPEC_PATH, 'utf-8')) as {
@@ -27,10 +27,17 @@ const spec = load(fs.readFileSync(SPEC_PATH, 'utf-8')) as {
 
 const schemas = spec.components?.schemas ?? {};
 
-/** Every schema that publishes a `type` enum — the Tool read and write shapes. */
+/**
+ * The Tool read and write shapes: a `type` enum beside the `execute` config.
+ * `type` is a common field name in this file — an `execute.auth` strategy
+ * carries its own — and a shape that names one without the other is not a tool.
+ */
 const schemasDeclaringToolType = Object.entries(schemas).filter(
   ([, schema]) => {
-    return Array.isArray(schema.properties?.type?.enum);
+    return (
+      Array.isArray(schema.properties?.type?.enum) &&
+      schema.properties?.execute !== undefined
+    );
   }
 );
 

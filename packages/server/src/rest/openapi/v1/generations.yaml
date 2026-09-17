@@ -739,6 +739,7 @@ components:
       type: object
       required:
         - metadata
+      additionalProperties: false
       properties:
         metadata:
           type: object

@@ -97,6 +97,7 @@ paths:
               required:
                 - name
                 - targets
+              additionalProperties: false
               properties:
                 project_id:
                   x-soat-ref: projects
@@ -213,6 +214,7 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: false
               properties:
                 name:
                   type: string

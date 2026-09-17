@@ -111,6 +111,7 @@ paths:
                 - metric
                 - window
                 - limit
+              additionalProperties: false
               properties:
                 project_id:
                   x-soat-ref: projects
@@ -271,6 +272,7 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: false
               properties:
                 limit:
                   type: number

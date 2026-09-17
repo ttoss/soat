@@ -387,6 +387,7 @@ components:
 
     CreateChatRequest:
       type: object
+      additionalProperties: false
       properties:
         ai_provider_id:
           x-soat-ref: ai-providers

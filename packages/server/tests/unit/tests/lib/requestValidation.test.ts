@@ -121,6 +121,46 @@ describe('validateRequestBody', () => {
       }).not.toThrow();
     });
 
+    // A union of closed objects still names a finite field set: a key no branch
+    // declares is unknown whichever branch the body means. Which branch it is
+    // stays the handler's question, so a key any branch declares passes.
+    test('rejects a key no branch of a union declares', () => {
+      const error = expectThrows(() => {
+        return validateRequestBody({
+          method: 'post',
+          path: '/sessions/:session_id/messages',
+          body: { message: 'hi', bogus: 1 },
+        });
+      });
+      expect(error.meta).toEqual({ unknownFields: ['bogus'] });
+    });
+
+    test('accepts fields drawn from more than one branch of a union', () => {
+      expect(() => {
+        return validateRequestBody({
+          method: 'post',
+          path: '/sessions/:session_id/messages',
+          body: { message: 'hi', document_id: 'doc_1' },
+        });
+      }).not.toThrow();
+    });
+
+    test('rejects a key no scorer branch declares, with its indexed path', () => {
+      const error = expectThrows(() => {
+        return validateRequestBody({
+          method: 'post',
+          path: '/evals',
+          body: {
+            name: 'eval',
+            dataset_id: 'dst_1',
+            agent_id: 'agent_1',
+            scorers: [{ type: 'exact_match', bogus: true }],
+          },
+        });
+      });
+      expect(error.meta).toEqual({ unknownFields: ['scorers.0.bogus'] });
+    });
+
     test('accepts a policy statement condition (open object) after the spec fix', () => {
       expect(() => {
         return validateRequestBody({

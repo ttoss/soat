@@ -160,7 +160,9 @@ describe('Guardrails', () => {
         });
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
-      expect(response.body.error.message).toMatch(/unknown field 'rules'/);
+      expect(response.body.error.meta.unknownFields).toEqual([
+        'document.rules',
+      ]);
     });
 
     test('document missing class returns 400', async () => {

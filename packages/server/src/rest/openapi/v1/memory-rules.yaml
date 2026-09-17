@@ -110,6 +110,7 @@ paths:
               required:
                 - memory_store_id
                 - on
+              additionalProperties: false
               properties:
                 memory_store_id:
                   x-soat-ref: memory-stores
@@ -247,6 +248,7 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: false
               properties:
                 on:
                   $ref: '#/components/schemas/MemoryRuleEvent'

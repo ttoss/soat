@@ -467,6 +467,7 @@ components:
         - type
         - target_type
         - target_id
+      additionalProperties: false
       properties:
         project_id:
           x-soat-ref: projects
@@ -515,6 +516,7 @@ components:
 
     UpdateTriggerRequest:
       type: object
+      additionalProperties: false
       properties:
         name:
           type: string
@@ -551,6 +553,7 @@ components:
 
     FireTriggerRequest:
       type: object
+      additionalProperties: false
       properties:
         input:
           type: object

@@ -4029,20 +4029,41 @@ resources:
     });
   });
 
-  // ── agent knowledge_config extraction ───────────────────────────────
+  // ── nested unknown keys ─────────────────────────────────────────────────
 
-  describe('Formation agent with knowledge_config extraction', () => {
-    let extractionFormationId: string;
-    let extractionAgentId: string;
+  // The template path and the resource's own route read one field list, so a
+  // key nested inside a declared object is refused at validate time — the one
+  // moment an author can still act on it — rather than stored as dead state
+  // that no retrieval reads.
+  describe('Formation agent with an unknown key inside knowledge_config', () => {
     let aiProviderId: string;
     let memoryStoreId: string;
+
+    const agentProperties = (knowledgeConfig: Record<string, unknown>) => {
+      return {
+        ai_provider_id: aiProviderId,
+        name: 'nested-key-agent',
+        knowledge_config: knowledgeConfig,
+      };
+    };
+
+    const template = (knowledgeConfig: Record<string, unknown>) => {
+      return {
+        resources: {
+          NestedKeyAgent: {
+            type: 'agent',
+            properties: agentProperties(knowledgeConfig),
+          },
+        },
+      };
+    };
 
     beforeAll(async () => {
       const aiProvRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/ai-providers')
         .send({
           project_id: projectId,
-          name: 'FormationExtractionProvider',
+          name: 'FormationNestedKeyProvider',
           provider: 'ollama',
           default_model: 'llama3.2',
         });
@@ -4052,115 +4073,91 @@ resources:
         .post('/api/v1/memory-stores')
         .send({
           project_id: projectId,
-          name: 'Formation Extraction MemoryStore',
+          name: 'Formation Nested Key MemoryStore',
         });
       memoryStoreId = memRes.body.id;
     });
 
-    test('validate accepts knowledge_config with the extraction object form', async () => {
+    test('validate reports the nested key by its dotted path', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/formations/validate')
         .send({
-          template: {
-            resources: {
-              ExtractionAgent: {
-                type: 'agent',
-                properties: {
-                  ai_provider_id: aiProviderId,
-                  name: 'extraction-agent',
-                  knowledge_config: {
-                    write_memory_store_id: memoryStoreId,
-                    extraction: {
-                      model: 'cheap-model',
-                      prompt: 'Extract decisions only.',
-                    },
-                  },
-                },
-              },
-            },
-          },
+          template: template({
+            write_memory_store_id: memoryStoreId,
+            extraction: { model: 'cheap-model' },
+          }),
         });
 
       expect(res.status).toBe(200);
-      expect(res.body.valid).toBe(true);
+      expect(res.body.valid).toBe(false);
+      expect(res.body.errors).toEqual([
+        {
+          path: 'resources.NestedKeyAgent.properties.knowledge_config.extraction',
+          message:
+            "Unknown agent field 'knowledge_config.extraction'. Allowed: " +
+            'memory_store_ids, document_ids, document_paths, tags, min_score, ' +
+            'limit, write_memory_store_id',
+        },
+      ]);
     });
 
-    test('creates an agent whose knowledge_config includes extraction', async () => {
+    test('the same key is refused on the resource route', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ...agentProperties({
+            write_memory_store_id: memoryStoreId,
+            extraction: { model: 'cheap-model' },
+          }),
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.meta.unknownFields).toEqual([
+        'knowledge_config.extraction',
+      ]);
+    });
+
+    test('a deploy carrying the nested key is refused', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/formations')
         .send({
           project_id: projectId,
-          name: `extraction-formation-${Date.now()}`,
-          template: {
-            resources: {
-              ExtractionAgent: {
-                type: 'agent',
-                properties: {
-                  ai_provider_id: aiProviderId,
-                  name: 'extraction-agent',
-                  knowledge_config: {
-                    write_memory_store_id: memoryStoreId,
-                    extraction: {
-                      model: 'cheap-model',
-                      prompt: 'Extract decisions only.',
-                    },
-                  },
-                },
-              },
-            },
-          },
+          name: `nested-key-formation-${Date.now()}`,
+          template: template({
+            write_memory_store_id: memoryStoreId,
+            extraction: true,
+          }),
+        });
+
+      expect(res.status).toBe(400);
+    });
+
+    test('a declared nested bag deploys', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `nested-declared-formation-${Date.now()}`,
+          template: template({
+            write_memory_store_id: memoryStoreId,
+            limit: 4,
+          }),
         });
 
       expect(res.status).toBe(201);
       expect(res.body.status).toBe('active');
-      extractionFormationId = res.body.id;
-      extractionAgentId = res.body.resources[0].physical_resource_id;
-      expect(extractionAgentId).toMatch(/^agent_/);
 
+      const agentId = res.body.resources[0].physical_resource_id;
       const agentRes = await authenticatedTestClient(adminToken).get(
-        `/api/v1/agents/${extractionAgentId}`
+        `/api/v1/agents/${agentId}`
       );
       expect(agentRes.status).toBe(200);
-      expect(agentRes.body.knowledge_config.write_memory_store_id).toBe(
-        memoryStoreId
-      );
-      expect(agentRes.body.knowledge_config.extraction.model).toBe(
-        'cheap-model'
-      );
-      expect(agentRes.body.knowledge_config.extraction.prompt).toBe(
-        'Extract decisions only.'
-      );
-    });
-
-    test('formation update can switch extraction to the boolean form', async () => {
-      const res = await authenticatedTestClient(userToken)
-        .put(`/api/v1/formations/${extractionFormationId}`)
-        .send({
-          template: {
-            resources: {
-              ExtractionAgent: {
-                type: 'agent',
-                properties: {
-                  ai_provider_id: aiProviderId,
-                  name: 'extraction-agent',
-                  knowledge_config: {
-                    write_memory_store_id: memoryStoreId,
-                    extraction: true,
-                  },
-                },
-              },
-            },
-          },
-        });
-
-      expect(res.status).toBe(200);
-      expect(res.body.status).toBe('active');
-
-      const agentRes = await authenticatedTestClient(adminToken).get(
-        `/api/v1/agents/${extractionAgentId}`
-      );
-      expect(agentRes.status).toBe(200);
-      expect(agentRes.body.knowledge_config.extraction).toBe(true);
+      expect(agentRes.body.knowledge_config).toEqual({
+        write_memory_store_id: memoryStoreId,
+        limit: 4,
+      });
     });
   });
 

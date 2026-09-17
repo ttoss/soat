@@ -7,6 +7,8 @@ import {
   matchOpenApiPath,
   resolveSchemaRef,
 } from '../lib/openapiSpec';
+// The same "not checkable at this level" rule the inbound walk applies.
+import { isOpenOrAmbiguous } from '../lib/openapiUnknownFields';
 
 const log = createDebug('soat:responseContract');
 
@@ -39,19 +41,6 @@ type Next = () => Promise<void>;
 /** Statuses whose bodies are error envelopes, not the documented resource. */
 const isErrorStatus = (status: number): boolean => {
   return status >= 400;
-};
-
-/**
- * A schema level is not checkable when it accepts arbitrary keys or could take
- * several shapes: `oneOf`/`anyOf`/`allOf` (the concrete branch is unknown),
- * `additionalProperties` (an open map), or no `properties` at all (a free-form
- * object). Mirrors `requestValidation`'s rule for the inbound direction.
- */
-const isOpenOrAmbiguous = (schema: Record<string, unknown>): boolean => {
-  if ('oneOf' in schema || 'anyOf' in schema || 'allOf' in schema) return true;
-  const additional = schema.additionalProperties;
-  if (additional === true || isObjectRecord(additional)) return true;
-  return !isObjectRecord(schema.properties);
 };
 
 /** A key carrying an interior capital — `projectId`, `createdAt`, `PascalKey`. */

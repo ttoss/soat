@@ -175,6 +175,114 @@ describe('Tools', () => {
     });
   });
 
+  // `execute` and `mcp` declare their field lists, so a key neither names is
+  // refused at the boundary rather than stored in the tool's config, where a
+  // reader would find it and nothing would act on it.
+  describe('POST /api/v1/tools — unknown keys inside execute and mcp', () => {
+    test('an unknown key inside execute returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'schema-probe',
+          type: 'http',
+          execute: {
+            url: 'https://example.com/hook',
+            method: 'POST',
+            bogus_key: true,
+          },
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.meta.unknownFields).toEqual([
+        'execute.bogus_key',
+      ]);
+    });
+
+    test('an unknown key inside execute.auth returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'auth-schema-probe',
+          type: 'http',
+          execute: {
+            url: 'https://example.com/hook',
+            auth: {
+              type: 'aws_sigv4',
+              region: 'us-east-1',
+              service: 'execute-api',
+              access_key_id: 'AKIA',
+              secret_access_key: 'secret',
+              regionn: 'us-east-2',
+            },
+          },
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.meta.unknownFields).toEqual([
+        'execute.auth.regionn',
+      ]);
+    });
+
+    test('an unknown key inside mcp returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'mcp-schema-probe',
+          type: 'mcp',
+          mcp: { url: 'https://example.com/mcp', bogus_key: true },
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.meta.unknownFields).toEqual(['mcp.bogus_key']);
+    });
+
+    test('an update carrying the unknown key returns 400', async () => {
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'patch-schema-probe',
+          type: 'http',
+          execute: { url: 'https://example.com/hook' },
+        });
+      expect(created.status).toBe(201);
+
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/tools/${created.body.id}`)
+        .send({ execute: { url: 'https://example.com/hook', bogus_key: 1 } });
+
+      expect(response.status).toBe(400);
+    });
+
+    test('every declared execute field is still accepted', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'declared-execute',
+          type: 'http',
+          execute: {
+            url: 'https://example.com/{userId}',
+            method: 'POST',
+            headers: { Authorization: 'Bearer static' },
+            body_mode: 'json',
+            auth: {
+              type: 'gcp_service_account',
+              credentials: '{"type":"service_account"}',
+              scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+            },
+          },
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.execute.body_mode).toBe('json');
+    });
+  });
+
   describe('GET /api/v1/tools', () => {
     test('authenticated user can list tools', async () => {
       const response = await authenticatedTestClient(userToken)
@@ -1188,7 +1296,7 @@ describe('Tools', () => {
           type: 'http',
           execute: {
             url: 'https://example.com',
-            auth: { type: 'azure_ad', tenant: 'x' },
+            auth: { type: 'azure_ad' },
           },
         });
 

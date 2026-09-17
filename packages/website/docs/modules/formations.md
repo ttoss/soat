@@ -122,7 +122,8 @@ A template has four top-level keys. Complete 14-resource template: [Deploy a Mul
 
 The template is stored and returned **verbatim**; keys are never rewritten.
 
-- **Resource `properties` keys** are **snake_case**, matching the REST API body fields (`default_model`, `ai_provider_id`). A camelCase key is rejected at validation as an unknown field.
+- **Resource `properties` keys** are **snake_case**, matching the REST API body fields (`default_model`, `ai_provider_id`). A top-level key authored in camelCase is read as the snake_case field it spells; one that spells no field is rejected at validation as an unknown field.
+- **Unknown keys are rejected at every depth the resource's fields are declared**, reported by their dotted path (`knowledge_config.extraction`, `execute.bogus_key`, `stop_conditions.0.tool`) — the same field list the resource's own REST route enforces. Below the top level nothing is re-spelled, so a nested camelCase key is unknown. A free-form bag — `metadata`, a JSON Schema, a JSON Logic body, `preset_parameters` — is carried as a value and never read.
 - **Declared allowed values are checked at validation**: `validate-formation` and `plan-formation` refuse `"provider": "openia"` before anything is created. Accepted values: [Formations Types](/docs/formations-types).
 - **Logical IDs, parameter names, and output names** are preserved exactly, in any case. A `--parameter` override (or a key in the request's top-level `parameters` bag) must match the declared name exactly (`--parameter aiProviderName=…` matches `aiProviderName`, not `ai_provider_name`).
 
