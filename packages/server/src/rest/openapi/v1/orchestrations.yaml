@@ -1020,6 +1020,7 @@ components:
             remain, the run parks as `sleeping` and re-executes the node after
             the backoff delay. Terminal errors (4xx business errors) fail
             immediately. Absent or `max_attempts <= 1` means fail-fast.
+          additionalProperties: false
           properties:
             max_attempts:
               type: integer
@@ -1027,6 +1028,7 @@ components:
                 Total attempts including the first (default 1, ceiling 20).
             backoff:
               type: object
+              additionalProperties: false
               properties:
                 strategy:
                   type: string
@@ -1129,6 +1131,7 @@ components:
         - name
         - nodes
         - edges
+      additionalProperties: false
       properties:
         project_id:
           x-soat-ref: projects
@@ -1162,6 +1165,7 @@ components:
 
     UpdateOrchestrationRequest:
       type: object
+      additionalProperties: false
       properties:
         name:
           type: string
@@ -1258,6 +1262,7 @@ components:
 
     RestoreOrchestrationVersionRequest:
       type: object
+      additionalProperties: false
       properties:
         label:
           type: string
@@ -1595,6 +1600,7 @@ components:
       type: object
       required:
         - node_id
+      additionalProperties: false
       properties:
         node_id:
           type: string
@@ -1607,6 +1613,7 @@ components:
       type: object
       required:
         - orchestration_id
+      additionalProperties: false
       properties:
         orchestration_id:
           x-soat-ref: orchestrations
@@ -1676,6 +1683,7 @@ components:
 
     ValidateOrchestrationRequest:
       type: object
+      additionalProperties: false
       properties:
         nodes:
           type: array

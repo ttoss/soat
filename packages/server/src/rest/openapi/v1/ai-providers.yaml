@@ -140,6 +140,7 @@ paths:
                 - name
                 - provider
                 - default_model
+              additionalProperties: false
               properties:
                 project_id:
                   x-soat-ref: projects
@@ -289,6 +290,7 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: false
               properties:
                 name:
                   type: string
@@ -586,6 +588,7 @@ components:
       type: object
       required:
         - prices
+      additionalProperties: false
       properties:
         prices:
           type: array
@@ -597,6 +600,7 @@ components:
               - unit
               - unit_price
               - effective_from
+            additionalProperties: false
             properties:
               model:
                 type: string

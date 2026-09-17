@@ -26,6 +26,7 @@ import type {
 import type { ModuleOpenApiSpec } from './formationSpecLoader';
 import {
   isObjectRecord,
+  loadModuleSchema,
   loadModuleSpec,
   pickSpecFields,
   pushFieldEnumErrors,
@@ -183,7 +184,7 @@ const buildValidator = <TResource>(args: {
     const spec: ModuleOpenApiSpec = loadModuleSpec({ schemaName });
     const errors: ValidationError[] = [];
     pushUnknownFieldErrors({
-      spec,
+      schema: loadModuleSchema({ schemaName }),
       resourceLabel,
       properties,
       basePath,

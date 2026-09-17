@@ -376,7 +376,6 @@ const CASES: RoundTripCase[] = [
             memory_store_ids: [memoryStoreId],
             write_memory_store_id: memoryStoreId,
             limit: 25,
-            extraction: { enabled: true, model: 'llama3.2:1b' },
           },
         },
         expectRead: {
@@ -393,7 +392,6 @@ const CASES: RoundTripCase[] = [
             memory_store_ids: [memoryStoreId],
             write_memory_store_id: memoryStoreId,
             limit: 25,
-            extraction: { enabled: true, model: 'llama3.2:1b' },
           },
         },
         // Agent templates must accept camelCase top-level keys like every
@@ -1273,12 +1271,7 @@ describe('agentsFormationModule tool_bindings', () => {
       resolvedProperties: {
         ai_provider_id: aiProviderId,
         name: 'FM Binding Agent',
-        tool_bindings: [
-          { tool_id: converterToolId },
-          // A stray unknown key on a binding is ignored — formations read only
-          // tool_id; guardrails attach via guardrail_ids, not the binding.
-          { tool_id: converterToolId, bogus_field: true },
-        ],
+        tool_bindings: [{ tool_id: converterToolId }],
       },
     });
 
@@ -1286,12 +1279,9 @@ describe('agentsFormationModule tool_bindings', () => {
       projectId: internalProjectId,
       physicalResourceId: agentPhysId,
     });
-    // Canonical view carries only the reference (any stray policy dropped).
+    // Canonical view carries only the reference.
     expect(read).toMatchObject({
-      tool_bindings: [
-        { tool_id: converterToolId },
-        { tool_id: converterToolId },
-      ],
+      tool_bindings: [{ tool_id: converterToolId }],
     });
     expect(read).not.toHaveProperty('tool_ids');
   });
@@ -1387,7 +1377,7 @@ describe('policiesFormationModule', () => {
         actingUserId: internalUserId,
         resourceType: 'policy',
         projectId: internalProjectId,
-        resolvedProperties: { document: { not: 'a valid document' } },
+        resolvedProperties: { document: { statement: 'not an array' } },
       })
     ).rejects.toThrow(/Policy document is invalid/);
   });
@@ -1411,7 +1401,7 @@ describe('policiesFormationModule', () => {
         projectId: internalProjectId,
         resourceType: 'policy',
         physicalResourceId: policyId,
-        resolvedProperties: { document: { not: 'valid' } },
+        resolvedProperties: { document: { statement: 'not an array' } },
       })
     ).rejects.toThrow(/Policy document is invalid/);
   });

@@ -6,12 +6,19 @@ import createDebug from 'debug';
 import { load } from 'js-yaml';
 
 import type { ValidationError } from '../formationsTypes';
-import type { FieldSpec, SchemaFields } from '../openapiSchemaFields';
+import type {
+  FieldSpec,
+  SchemaFields,
+  SchemaWithProperties,
+} from '../openapiSchemaFields';
 import {
   deriveSchemaFields,
   hasProperties,
   isObjectRecord,
 } from '../openapiSchemaFields';
+import { resolveSchemaRef } from '../openapiSpec';
+import type { SchemaRefResolver } from '../openapiUnknownFields';
+import { collectUnknownFields } from '../openapiUnknownFields';
 
 const log = createDebug('soat:formations:specLoader');
 
@@ -23,17 +30,9 @@ const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
 // ── OpenAPI types ────────────────────────────────────────────────────────
 
-type OpenApiSchema = {
-  type?: string;
-  nullable?: boolean;
-  enum?: unknown[];
-  properties?: Record<string, OpenApiSchema>;
-  required?: string[];
-};
-
 type OpenApiSpec = {
   components?: {
-    schemas?: Record<string, OpenApiSchema>;
+    schemas?: Record<string, unknown>;
   };
 };
 
@@ -131,23 +130,26 @@ const resolveFormationSpecPath = (): string => {
 
 // ── Spec loading ─────────────────────────────────────────────────────────
 
-const specCache: Record<string, ModuleOpenApiSpec> = {};
+let documentCache: OpenApiSpec | null = null;
 
-export const loadModuleSpec = (args: {
-  schemaName: string;
-}): ModuleOpenApiSpec => {
-  const cached = specCache[args.schemaName];
-  if (cached) return cached;
+const loadFormationDocument = (): OpenApiSpec => {
+  if (documentCache) return documentCache;
 
   const specPath = resolveFormationSpecPath();
-  log(
-    'loading formation spec for schema %s from %s',
-    args.schemaName,
-    specPath
-  );
-  const raw = fs.readFileSync(specPath, 'utf-8');
-  const spec = load(raw) as OpenApiSpec;
-  const schema = spec.components?.schemas?.[args.schemaName];
+  log('loading formation spec from %s', specPath);
+  documentCache = load(fs.readFileSync(specPath, 'utf-8')) as OpenApiSpec;
+  return documentCache;
+};
+
+/**
+ * The `<Type>ResourceProperties` schema as written, so a caller can read it
+ * below its top level. {@link loadModuleSpec} flattens the top level; the
+ * nested walk needs the schema itself.
+ */
+export const loadModuleSchema = (args: {
+  schemaName: string;
+}): SchemaWithProperties => {
+  const schema = loadFormationDocument().components?.schemas?.[args.schemaName];
 
   /* istanbul ignore next */
   if (!hasProperties(schema)) {
@@ -156,9 +158,22 @@ export const loadModuleSpec = (args: {
     );
   }
 
+  return schema;
+};
+
+const specCache: Record<string, ModuleOpenApiSpec> = {};
+
+export const loadModuleSpec = (args: {
+  schemaName: string;
+}): ModuleOpenApiSpec => {
+  const cached = specCache[args.schemaName];
+  if (cached) return cached;
+
   // Identity key transform: formation templates use the spec's snake_case
   // property names verbatim.
-  const result = deriveSchemaFields({ schema });
+  const result = deriveSchemaFields({
+    schema: loadModuleSchema({ schemaName: args.schemaName }),
+  });
 
   specCache[args.schemaName] = result;
   return result;
@@ -204,23 +219,43 @@ export const isFormationExpression = (value: unknown): boolean => {
 
 // ── Generic validation push helpers ─────────────────────────────────────
 
+/**
+ * Reports every declared key the schema does not name, at every depth the
+ * schema describes — so a template is refused for the same nested key the
+ * resource's own route refuses. A `ref`/`param`/`sub` expression stands for a
+ * whole value that resolves at deploy time, so it is never read as an object.
+ *
+ * The walk reads; it never rewrites a key (`.claude/rules/case-convention.md`).
+ * Nested keys are compared against the spec's own snake_case names — only the
+ * declaration's top level is normalized, by `normalizeDeclaredProperties`.
+ */
 export const pushUnknownFieldErrors = (args: {
-  spec: ModuleOpenApiSpec;
+  schema: SchemaWithProperties;
   resourceLabel: string;
   properties: Record<string, unknown>;
   basePath: string;
   errors: ValidationError[];
+  /**
+   * How a nested `$ref` is followed. Defaults to the merged OpenAPI document,
+   * which is where a `<Type>ResourceProperties` schema's refs live.
+   */
+  resolveRef?: SchemaRefResolver;
 }): void => {
-  for (const key of Object.keys(args.properties)) {
-    if (args.properties[key] === undefined) continue;
-    if (!args.spec.allowedFields.has(key)) {
-      args.errors.push({
-        path: `${args.basePath}.${key}`,
-        message: `Unknown ${args.resourceLabel} field '${key}'. Allowed: ${[
-          ...args.spec.allowedFields,
-        ].join(', ')}`,
-      });
+  const unknownFields = collectUnknownFields(
+    { schema: args.schema, value: args.properties },
+    {
+      resolveRef: args.resolveRef ?? resolveSchemaRef,
+      isOpaque: isFormationExpression,
     }
+  );
+
+  for (const field of unknownFields) {
+    args.errors.push({
+      path: `${args.basePath}.${field.path}`,
+      message: `Unknown ${args.resourceLabel} field '${field.path}'. Allowed: ${field.allowedFields.join(
+        ', '
+      )}`,
+    });
   }
 };
 

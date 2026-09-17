@@ -1229,6 +1229,7 @@ components:
         - metric
         - window
         - threshold
+      additionalProperties: false
       properties:
         project_id:
           x-soat-ref: projects
@@ -1373,6 +1374,7 @@ components:
       type: object
       required:
         - prices
+      additionalProperties: false
       properties:
         prices:
           type: array
@@ -1391,6 +1393,7 @@ components:
               and `cache_write_tokens`) components with unit `token`; for
               platform SKUs supply the platform component (e.g.
               `compute_second`).
+            additionalProperties: false
             properties:
               ai_provider_id:
                 x-soat-ref: ai-providers

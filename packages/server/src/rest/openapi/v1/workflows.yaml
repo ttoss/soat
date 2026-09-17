@@ -373,7 +373,6 @@ components:
         is adjudicated by the same guardrails as an orchestration `tool` node;
         for anything that must wait (a delay, a poll, a multi-step pipeline, or
         an approval-gated tool), dispatch an orchestration instead.
-      additionalProperties: true
       required:
         - name
       properties:
@@ -401,7 +400,107 @@ components:
         on_enter:
           type: object
           nullable: true
-          additionalProperties: true
+          description: >-
+            What entering the state dispatches, and how the result routes.
+            Omitted or null on a state that only parks.
+          properties:
+            dispatch:
+              type: object
+              description: >-
+                The one thing entering the state runs. `kind` picks it and
+                names the id it needs: `agent` → `agent_id`,
+                `orchestration` → `orchestration_id`, `tool` → `tool_id`
+                (with an optional `operation_id`).
+              properties:
+                kind:
+                  type: string
+                  enum:
+                    - agent
+                    - orchestration
+                    - tool
+                  description: Which target is dispatched.
+                agent_id:
+                  x-soat-ref: agents
+                  type: string
+                  nullable: true
+                  description: >-
+                    The agent a `kind: agent` dispatch generates with.
+                orchestration_id:
+                  x-soat-ref: orchestrations
+                  type: string
+                  nullable: true
+                  description: >-
+                    The orchestration a `kind: orchestration` dispatch starts a
+                    run of.
+                tool_id:
+                  x-soat-ref: tools
+                  type: string
+                  nullable: true
+                  description: >-
+                    The tool a `kind: tool` dispatch calls.
+                operation_id:
+                  type: string
+                  nullable: true
+                  description: >-
+                    Which operation of a multi-operation tool to invoke — the
+                    same selector an orchestration `tool` node takes.
+                input_mapping:
+                  type: object
+                  nullable: true
+                  additionalProperties: true
+                  description: >-
+                    JSON Logic building the dispatch input from the task.
+                    Carried verbatim.
+                payload_writes:
+                  type: object
+                  nullable: true
+                  additionalProperties: true
+                  description: >-
+                    JSON Logic expressions over `{task, result}` whose values
+                    are written into `task.payload` when the dispatch
+                    completes, one named channel per key. Carried verbatim.
+            retry:
+              type: object
+              nullable: true
+              description: >-
+                Re-runs the dispatch's execution failures before `on_failure`
+                applies. Omitted means a single attempt.
+              properties:
+                max_attempts:
+                  type: integer
+                  description: Attempts to make, 1–10.
+                backoff_seconds:
+                  type: number
+                  nullable: true
+                  description: Delay before the second attempt.
+                backoff_multiplier:
+                  type: number
+                  nullable: true
+                  description: >-
+                    Factor the delay grows by per further attempt:
+                    `backoff_seconds * backoff_multiplier^(n - 2)`.
+            on_complete:
+              type: array
+              nullable: true
+              description: >-
+                Rules evaluated in order when the dispatch completes; the first
+                whose `when` is truthy fires its transition.
+              items:
+                type: object
+                properties:
+                  when:
+                    description: >-
+                      JSON Logic over `{task, result}`. Carried verbatim.
+                  transition:
+                    type: string
+                    description: The transition to fire, by name.
+            on_failure:
+              type: string
+              nullable: true
+              description: >-
+                Transition fired when the dispatch fails after its last
+                attempt. Omitted parks the task with
+                `automation_status: failed`.
     WorkflowTransition:
       type: object
       description: >-
@@ -409,7 +508,6 @@ components:
         one target state. `guard` is a JSON Logic expression over
         `{task, transition, principal}` that must be truthy for the move to
         apply.
-      additionalProperties: true
       required:
         - name
         - from
@@ -479,6 +577,7 @@ components:
         - name
         - states
         - transitions
+      additionalProperties: false
       properties:
         project_id:
           type: string
@@ -505,6 +604,7 @@ components:
           example: initial
     UpdateWorkflowRequest:
       type: object
+      additionalProperties: false
       properties:
         name:
           type: string
@@ -593,6 +693,7 @@ components:
           format: date-time
     RestoreWorkflowVersionRequest:
       type: object
+      additionalProperties: false
       properties:
         label:
           type: string

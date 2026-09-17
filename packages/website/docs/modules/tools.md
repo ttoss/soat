@@ -57,6 +57,10 @@ A [Trigger](./triggers.md) with `target_type: tool` invokes a tool automatically
 
 ## Key Concepts
 
+### Configs Take Only Their Own Fields
+
+`execute`, `execute.auth` and `mcp` accept the fields in the table above and nothing else: a key outside the list is `400 VALIDATION_FAILED` on create and update, named by path (`execute.bogus_key`). `execute.headers`, `mcp.headers`, `parameters`, `preset_parameters`, `pipeline` and `output_mapping` are caller-owned bags and take any key.
+
 ### Header Name Casing
 
 Header names in `execute.headers` and `mcp.headers` are preserved verbatim (`Authorization` stays `Authorization`).

@@ -232,6 +232,8 @@ Otherwise [`FORCED_TOOL_CHOICE_CANNOT_STOP`](../error-codes.md#forced_tool_choic
 | `tool_choice`     | string/object | no       | Override tool choice for this step  |
 | `active_tool_ids` | array         | no       | Override active tools for this step |
 
+A rule takes these three fields and nothing else. The same holds for every nested object on an agent — a `stop_conditions` entry, a `boundary_policy` statement, `knowledge_config`, `prompt_caching`: a key the field list does not name is `400 VALIDATION_FAILED`, reported by its path (`step_rules.0.active_tools`).
+
 Example — force `search` on step 1, then `analyze` on step 2:
 
 ```json

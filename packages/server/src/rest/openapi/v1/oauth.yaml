@@ -312,6 +312,7 @@ components:
       description: RFC 7591 client metadata. Fields beyond those listed are stored as sent.
       required:
         - redirect_uris
+      additionalProperties: false
       properties:
         redirect_uris:
           type: array

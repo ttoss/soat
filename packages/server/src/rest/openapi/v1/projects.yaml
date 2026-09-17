@@ -86,6 +86,7 @@ paths:
               type: object
               required:
                 - name
+              additionalProperties: false
               properties:
                 name:
                   type: string
@@ -172,6 +173,7 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: false
               properties:
                 name:
                   type: string
@@ -558,6 +560,7 @@ components:
       type: object
       required:
         - prices
+      additionalProperties: false
       properties:
         prices:
           type: array
@@ -570,6 +573,7 @@ components:
               - unit
               - unit_price
               - effective_from
+            additionalProperties: false
             properties:
               provider:
                 type: string

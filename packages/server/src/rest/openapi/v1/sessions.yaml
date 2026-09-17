@@ -725,6 +725,7 @@ components:
 
     ForkSessionRequest:
       type: object
+      additionalProperties: false
       properties:
         fork_at_position:
           type: integer
@@ -763,6 +764,7 @@ components:
       type: object
       required:
         - agent_id
+      additionalProperties: false
       properties:
         agent_id:
           x-soat-ref: agents
@@ -815,6 +817,7 @@ components:
 
     UpdateSessionRequest:
       type: object
+      additionalProperties: false
       properties:
         name:
           type: string
@@ -941,6 +944,7 @@ components:
 
     GenerateSessionRequest:
       type: object
+      additionalProperties: false
       properties:
         model:
           type: string
@@ -1039,6 +1043,7 @@ components:
       required:
         - generation_id
         - tool_outputs
+      additionalProperties: false
       properties:
         generation_id:
           x-soat-ref: generations
@@ -1051,6 +1056,7 @@ components:
             required:
               - tool_call_id
               - output
+            additionalProperties: false
             properties:
               tool_call_id:
                 type: string

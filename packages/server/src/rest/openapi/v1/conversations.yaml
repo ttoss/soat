@@ -98,6 +98,7 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: false
               properties:
                 project_id:
                   x-soat-ref: projects
@@ -210,6 +211,7 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: false
               properties:
                 status:
                   type: string
@@ -382,6 +384,7 @@ paths:
               required:
                 - message
                 - role
+              additionalProperties: false
               properties:
                 message:
                   type: string
@@ -486,6 +489,7 @@ paths:
               type: object
               required:
                 - agent_id
+              additionalProperties: false
               properties:
                 agent_id:
                   x-soat-ref: agents

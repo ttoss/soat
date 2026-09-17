@@ -62,5 +62,14 @@ pass it → `read` returns it (if declared).
 
 Transport-independent rules (mutual exclusivity, invariants, preconditions)
 live once in `src/lib/<module>.ts` as an exported pure function used by both
-the route and the formation module. Schema-driven formation validation
-(`pushUnknownFieldErrors` etc.) is not shared; REST relies on types for that.
+the route and the formation module.
+
+The field list is one of those rules, and the schema is where it lives: the
+route (`requestValidation.ts`) and the template
+(`pushUnknownFieldErrors`) refuse an undeclared key through one walk,
+`lib/openapiUnknownFields.ts`, at every depth the schema declares. So a
+nested object gets its fields declared in **both** the module's REST spec and
+its `*ResourceProperties` schema, or the two paths answer differently for the
+same field. An object that declares no `properties` is a free-form bag and is
+never read. `tests/unit/tests/lib/openapiClosedSchemas.test.ts` holds the
+declared lists closed.

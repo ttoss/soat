@@ -153,6 +153,8 @@ Every move appends one `TaskTransition` record; [`GET /tasks/{id}/history`](/doc
 - **`retry`** (optional) — covers **execution** failures, never `on_complete` routing. `max_attempts` counts the first attempt (1–10); the delay before attempt `n` is `backoff_seconds * backoff_multiplier^(n - 2)` (defaults: 0, 1). `on_failure`, or the parked `automation_status: failed`, fires only after the last attempt; leaving the state between attempts abandons the rest. Each attempt is `active_dispatch.attempt`; every retried failure emits `tasks.automation_retrying` (`attempt`, `max_attempts`, the error, the failed `generation_id`/`orchestration_run_id`).
 - **`on_failure`** — transition fired on terminal dispatch failure. Omitted → the task stays with `automation_status: failed` for a human.
 
+A state, a transition and everything under `on_enter` take the fields named here and nothing else: any other key is `400 VALIDATION_FAILED` on create and update, by path (`states.0.on_enter.dispatch.agent`). `input_mapping`, `payload_writes`, a guard and an `on_complete` `when` are JSON Logic bodies, so their contents are carried as written.
+
 Entering a state cancels any dispatch still running from the state left, an in-flight orchestration run included: task state is the source of truth.
 
 #### Tool dispatch

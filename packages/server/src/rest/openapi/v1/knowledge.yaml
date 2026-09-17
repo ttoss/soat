@@ -33,6 +33,7 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: false
               properties:
                 project_id:
                   x-soat-ref: projects

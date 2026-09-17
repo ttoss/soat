@@ -30,6 +30,7 @@ import type {
   ValidationError,
 } from '../formationsTypes';
 import { isObjectRecord } from '../openapiSchemaFields';
+import { resolveInlineSchema } from '../openapiUnknownFields';
 import { findProjectPublicId } from '../projects';
 import {
   pushFieldTypeErrors,
@@ -63,11 +64,12 @@ const buildValidator = (args: {
     const spec = registration.schemaFields;
     const errors: ValidationError[] = [];
     pushUnknownFieldErrors({
-      spec,
+      schema: registration.schema,
       resourceLabel: label,
       properties,
       basePath: validateArgs.basePath,
       errors,
+      resolveRef: resolveInlineSchema,
     });
     // A template update is a patch, exactly as for a built-in type.
     if (!validateArgs.forUpdate) {

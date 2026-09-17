@@ -222,6 +222,7 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: false
               properties:
                 arguments:
                   type: object
@@ -269,6 +270,7 @@ paths:
               type: object
               required:
                 - reason
+              additionalProperties: false
               properties:
                 reason:
                   type: string

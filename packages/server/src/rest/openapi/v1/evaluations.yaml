@@ -99,6 +99,7 @@ paths:
               type: object
               required:
                 - name
+              additionalProperties: false
               properties:
                 project_id:
                   x-soat-ref: projects
@@ -185,6 +186,7 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: false
               properties:
                 name:
                   type: string
@@ -327,6 +329,7 @@ paths:
               type: object
               required:
                 - input
+              additionalProperties: false
               properties:
                 input:
                   $ref: '#/components/schemas/DatasetItemInput'
@@ -414,6 +417,7 @@ paths:
               type: object
               required:
                 - generation_id
+              additionalProperties: false
               properties:
                 generation_id:
                   type: string
@@ -492,6 +496,7 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: false
               properties:
                 input:
                   $ref: '#/components/schemas/DatasetItemInput'
@@ -638,6 +643,7 @@ paths:
                 - agent_id
                 - dataset_id
                 - scorers
+              additionalProperties: false
               properties:
                 project_id:
                   x-soat-ref: projects
@@ -741,6 +747,7 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: false
               properties:
                 name:
                   type: string
@@ -914,6 +921,7 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: false
               properties:
                 wait:
                   type: boolean
@@ -1182,6 +1190,7 @@ components:
         required:
           - role
           - content
+        additionalProperties: false
         properties:
           role:
             type: string

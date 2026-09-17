@@ -500,6 +500,7 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: false
               properties:
                 metadata:
                   type: string
@@ -703,6 +704,7 @@ components:
       type: object
       required:
         - content
+      additionalProperties: false
       properties:
         project_id:
           x-soat-ref: projects
@@ -733,6 +735,7 @@ components:
       type: object
       required:
         - project_id
+      additionalProperties: false
       properties:
         project_id:
           x-soat-ref: projects
@@ -770,6 +773,7 @@ components:
           description: Token expiration timestamp
     UploadFileWithTokenRequest:
       type: object
+      additionalProperties: false
       properties:
         content:
           type: string

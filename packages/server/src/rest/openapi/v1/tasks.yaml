@@ -606,6 +606,7 @@ components:
       required:
         - workflow_id
         - title
+      additionalProperties: false
       properties:
         project_id:
           type: string
@@ -677,6 +678,7 @@ components:
             source: zendesk
     UpdateTaskRequest:
       type: object
+      additionalProperties: false
       properties:
         title:
           type: string
@@ -702,6 +704,7 @@ components:
       type: object
       required:
         - transition
+      additionalProperties: false
       properties:
         transition:
           type: string

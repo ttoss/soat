@@ -2184,6 +2184,91 @@ describe('Agents', () => {
     });
   });
 
+  // `stop_conditions`, `step_rules` and `boundary_policy` each declare their
+  // field list, so a key none of them names is refused where the author can
+  // still fix it, instead of being stored and never read.
+  describe('unknown keys inside a nested agent object', () => {
+    const create = (properties: Record<string, unknown>) => {
+      return authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: `nested-${Math.random().toString(36).slice(2, 8)}`,
+          ...properties,
+        });
+    };
+
+    test('a stop condition key the schema does not name returns 400', async () => {
+      const res = await create({
+        stop_conditions: [{ type: 'has_tool_call', toolName: 'done' }],
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.meta.unknownFields).toEqual([
+        'stop_conditions.0.toolName',
+      ]);
+    });
+
+    test('a step rule key the schema does not name returns 400', async () => {
+      const res = await create({
+        step_rules: [{ step: 1, active_tools: ['tool_x'] }],
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.meta.unknownFields).toEqual([
+        'step_rules.0.active_tools',
+      ]);
+    });
+
+    test('a boundary policy statement key the schema does not name returns 400', async () => {
+      const res = await create({
+        boundary_policy: {
+          statement: [
+            { effect: 'Allow', action: ['memories:*'], resources: [] },
+          ],
+        },
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.meta.unknownFields).toEqual([
+        'boundary_policy.statement.0.resources',
+      ]);
+    });
+
+    test('a boundary policy statement condition is accepted', async () => {
+      const res = await create({
+        boundary_policy: {
+          statement: [
+            {
+              effect: 'Allow',
+              action: ['memories:ListMemories'],
+              resource: ['*'],
+              condition: { StringEquals: { 'soat:ResourceType': 'memory' } },
+            },
+          ],
+        },
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body.boundary_policy.statement[0].condition).toEqual({
+        StringEquals: { 'soat:ResourceType': 'memory' },
+      });
+    });
+
+    test('an update carrying the unknown nested key returns 400', async () => {
+      const created = await create({});
+      expect(created.status).toBe(201);
+
+      const res = await authenticatedTestClient(userToken)
+        .put(`/api/v1/agents/${created.body.id}`)
+        .send({ step_rules: [{ step: 1, nope: true }] });
+
+      expect(res.status).toBe(400);
+    });
+  });
+
   describe('a forcing tool_choice requires a way to stop', () => {
     const DONE: object = { type: 'has_tool_call', tool_name: 'done' };
 

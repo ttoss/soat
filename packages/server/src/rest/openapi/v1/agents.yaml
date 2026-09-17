@@ -1260,6 +1260,7 @@ components:
 
     RestoreAgentVersionRequest:
       type: object
+      additionalProperties: false
       properties:
         label:
           type: string
@@ -1274,6 +1275,7 @@ components:
         - stable_version
         - canary_version
         - canary_percent
+      additionalProperties: false
       properties:
         stable_version:
           type: integer
@@ -1326,6 +1328,7 @@ components:
         Exactly one of `ai_provider_id` or `model_route_id` must be set (400
         otherwise). `model` names the model on a pinned provider and cannot be
         combined with `model_route_id`, whose targets each name their own model.
+      additionalProperties: false
       properties:
         project_id:
           x-soat-ref: projects
@@ -1367,7 +1370,7 @@ components:
         stop_conditions:
           type: array
           items:
-            type: object
+            $ref: '#/components/schemas/AgentStopCondition'
           description: >-
             Conditions that end the agent's work early, on top of `max_steps`.
             Two scopes:
@@ -1405,13 +1408,14 @@ components:
         step_rules:
           type: array
           items:
-            type: object
+            $ref: '#/components/schemas/AgentStepRule'
         boundary_policy:
-          type: object
+          $ref: '#/components/schemas/AgentBoundaryPolicy'
         temperature:
           type: number
         knowledge_config:
           type: object
+          additionalProperties: false
           properties:
             memory_store_ids:
               x-soat-ref: memory-stores
@@ -1460,6 +1464,7 @@ components:
             re-read would pay for the privilege. An agent with no `instructions`
             has no block to mark and caches nothing. Cache reads are reported as
             `cached_tokens` and cache writes as `cache_write_tokens` on usage.
+          additionalProperties: false
           properties:
             enabled:
               type: boolean
@@ -1511,6 +1516,7 @@ components:
         `model_route_id`. To switch a pinned agent to a route, send
         `model_route_id` together with `ai_provider_id: null` in the same
         request (and vice versa).
+      additionalProperties: false
       properties:
         ai_provider_id:
           x-soat-ref: ai-providers
@@ -1550,7 +1556,7 @@ components:
           type: array
           nullable: true
           items:
-            type: object
+            $ref: '#/components/schemas/AgentStopCondition'
           description: >-
             Conditions that end the agent's work early, on top of `max_steps`.
             Two scopes:
@@ -1590,16 +1596,16 @@ components:
           type: array
           nullable: true
           items:
-            type: object
+            $ref: '#/components/schemas/AgentStepRule'
         boundary_policy:
-          type: object
-          nullable: true
+          $ref: '#/components/schemas/AgentBoundaryPolicy'
         temperature:
           type: number
           nullable: true
         knowledge_config:
           type: object
           nullable: true
+          additionalProperties: false
           properties:
             memory_store_ids:
               x-soat-ref: memory-stores
@@ -1648,6 +1654,7 @@ components:
             re-read would pay for the privilege. An agent with no `instructions`
             has no block to mark and caches nothing. Cache reads are reported as
             `cached_tokens` and cache writes as `cache_write_tokens` on usage.
+          additionalProperties: false
           properties:
             enabled:
               type: boolean
@@ -1699,6 +1706,7 @@ components:
       type: object
       required:
         - messages
+      additionalProperties: false
       properties:
         messages:
           type: array
@@ -1804,6 +1812,7 @@ components:
           type: object
           nullable: true
           description: Per-generation knowledge retrieval override. Array filters (memory_store_ids, document_ids, document_paths) are unioned with the agent's stored knowledge_config; `tags` pairs are merged with the override winning per key; scalar fields (min_score, limit) use the per-generation value when present.
+          additionalProperties: false
           properties:
             memory_store_ids:
               x-soat-ref: memory-stores
@@ -1835,6 +1844,7 @@ components:
       required:
         - type
         - tool_id
+      additionalProperties: false
       properties:
         type:
           type: string
@@ -1863,6 +1873,7 @@ components:
       required:
         - type
         - document_id
+      additionalProperties: false
       properties:
         type:
           type: string
@@ -1877,6 +1888,7 @@ components:
       type: object
       required:
         - tool_outputs
+      additionalProperties: false
       properties:
         tool_outputs:
           type: array
@@ -1886,6 +1898,7 @@ components:
             required:
               - tool_call_id
               - output
+            additionalProperties: false
             properties:
               tool_call_id:
                 type: string
@@ -2009,3 +2022,110 @@ components:
                   args:
                     type: object
                     description: Arguments for the tool call
+    AgentStopCondition:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+      description: >-
+        One stop condition. `has_tool_call` ends the turn after the step that
+        calls `tool_name`; `max_chain_generations` bounds the continuation
+        chain at `max_generations`.
+      properties:
+        type:
+          type: string
+          enum:
+            - has_tool_call
+            - max_chain_generations
+          description: Which scope the condition ends.
+        tool_name:
+          type: string
+          nullable: true
+          description: >-
+            The resolved tool name a `has_tool_call` condition matches.
+            Required for that type.
+        max_generations:
+          type: integer
+          nullable: true
+          description: >-
+            Generations the continuation chain may reach before further
+            resumptions stop with `chain_limit`. Required for
+            `max_chain_generations`, and must be a positive integer.
+    AgentStepRule:
+      type: object
+      additionalProperties: false
+      required:
+        - step
+      description: >-
+        One per-step override. Steps not named by a rule use the agent's own
+        `tool_choice` and `active_tool_ids`.
+      properties:
+        step:
+          type: integer
+          description: >-
+            The 1-indexed step of the turn this rule applies to. The numbering
+            spans a `requires_action` pause.
+        tool_choice:
+          description: >-
+            Tool choice for this step — `auto`, `required`, `null`, or
+            `{ "type": "tool", "tool_name": "search" }`. Stored verbatim.
+        active_tool_ids:
+          x-soat-ref: tools
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: Tool IDs active on this step.
+    AgentBoundaryPolicy:
+      type: object
+      nullable: true
+      additionalProperties: false
+      required:
+        - statement
+      description: >-
+        Restricts which SOAT actions the agent may invoke. Evaluated as the
+        intersection with the caller's own policy, so it can only narrow.
+      properties:
+        statement:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgentBoundaryPolicyStatement'
+          description: IAM policy statements, in the policy document grammar.
+    AgentBoundaryPolicyStatement:
+      type: object
+      additionalProperties: false
+      required:
+        - effect
+        - action
+      properties:
+        effect:
+          type: string
+          enum:
+            - Allow
+            - Deny
+          example: Allow
+        action:
+          type: array
+          items:
+            type: string
+          example:
+            - memories:*
+            - agents:DeleteAgent
+        resource:
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: Resource SRN patterns. Omit to match every resource.
+          example:
+            - srn:proj_abc:memories:*
+        condition:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: >-
+            Condition block, in the same grammar a policy document uses: keys
+            are condition operators mapping to context-key/value maps.
+          example:
+            StringEquals:
+              soat:ResourceTag/env: prod

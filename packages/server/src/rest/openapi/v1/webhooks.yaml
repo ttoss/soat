@@ -389,6 +389,7 @@ components:
         - name
         - url
         - events
+      additionalProperties: false
       properties:
         project_id:
           x-soat-ref: projects
@@ -410,6 +411,7 @@ components:
 
     UpdateWebhookRequest:
       type: object
+      additionalProperties: false
       properties:
         name:
           type: string

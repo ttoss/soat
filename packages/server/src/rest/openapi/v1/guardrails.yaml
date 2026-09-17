@@ -525,6 +525,7 @@ paths:
           application/json:
             schema:
               type: object
+              additionalProperties: false
               properties:
                 args:
                   type: object
@@ -576,12 +577,11 @@ components:
       type: object
       required:
         - class
-      # Free-form: the inner keys are the contract fields plus author-authored
-      # JSON Logic operators/vars, so the request-validation middleware must not
-      # walk this object (its snake_case `default_class` would be mis-flagged
-      # against the camelCase allowlist). `additionalProperties: true` marks it
-      # open so validation is delegated entirely to `validateGuardrailDocument`.
-      additionalProperties: true
+      # The five fields below are the whole document; `validateGuardrailDocument`
+      # refuses any other key. The JSON Logic an author writes lives inside
+      # `class` and `guard`, which declare no properties of their own and are
+      # therefore carried as opaque values.
+      additionalProperties: false
       description: >
         The action-class document. `class` maps a call to an action class;
         `guard` gates class-B autonomy. Both are single JSON Logic expressions
@@ -801,6 +801,7 @@ components:
           format: date-time
     RestoreGuardrailVersionRequest:
       type: object
+      additionalProperties: false
       properties:
         label:
           type: string
@@ -813,6 +814,7 @@ components:
       required:
         - name
         - document
+      additionalProperties: false
       properties:
         project_id:
           x-soat-ref: projects
@@ -846,6 +848,7 @@ components:
           example: initial
     UpdateGuardrailRequest:
       type: object
+      additionalProperties: false
       properties:
         name:
           type: string
