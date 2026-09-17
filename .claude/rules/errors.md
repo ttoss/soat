@@ -71,7 +71,7 @@ Every guard in `src/rest/v1/helpers.ts` throws; call one as a bare statement:
 | `requireOwnerOrAdmin(ctx, { ownerPublicId, action })` | own-resource-or-admin | `UNAUTHORIZED` · `FORBIDDEN` |
 
 Never call `ctx.authUser.resolveProjectIds` from a route. Never use the read
-helper on a write route (#1029).
+helper on a write route.
 
 Static checks: `rest/errorShapeContract.test.ts` (manual error bodies, inline
 `!ctx.authUser`, direct `resolveProjectIds`), `rest/adminGateContract.test.ts`

@@ -79,8 +79,7 @@ is safe on **every** release rather than something to remember.
 
 A **new database needs no special handling**. Every migration can recognise its
 own change in the schema, so one the sync has just built records them without
-running them, and so does a database migrated before the ledger existed. There
-is no baseline step to remember.
+running them. There is no baseline step to remember.
 
 An ordinary boot performs no DDL: it reads the ledger and refuses to start if
 the database is behind the code, naming the migrations that are missing. That

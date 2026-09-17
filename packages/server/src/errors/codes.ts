@@ -253,12 +253,12 @@ export const ERROR_CODES = {
   ORCHESTRATION_RUN_NOT_PAUSABLE: {
     httpStatus: 409,
     description:
-      "The orchestration run has already settled, so there is nothing left to pause. Unlike cancel, a pause keeps the run's last checkpoint and the existing resume route re-drives it from there — so it only applies to a run that is queued, running, sleeping or awaiting input (#1237).",
+      "The orchestration run has already settled, so there is nothing left to pause. Unlike cancel, a pause keeps the run's last checkpoint and the existing resume route re-drives it from there — so it only applies to a run that is queued, running, sleeping or awaiting input.",
   },
   ORCHESTRATION_RUN_PAUSED: {
     httpStatus: 409,
     description:
-      'An operator pause is in force on the run, so the requested action was refused. An operator pause has no payload to supply, and a pause standing behind a human or approval node must not be lifted by satisfying it — resume the run first, then submit (#1237).',
+      'An operator pause is in force on the run, so the requested action was refused. An operator pause has no payload to supply, and a pause standing behind a human or approval node must not be lifted by satisfying it — resume the run first, then submit.',
   },
   ORCHESTRATION_HUMAN_NODE_MISMATCH: {
     httpStatus: 400,
@@ -268,12 +268,12 @@ export const ERROR_CODES = {
   ORCHESTRATION_NESTED_RUN_FAILED: {
     httpStatus: 422,
     description:
-      "A `loop` / `sub_orchestration` child run settled in a non-success terminal status (failed, cancelled, or expired) carrying no code of its own, so the node that started it failed too. A child that carries a code fails its parent under that code instead, so the cause reaches the run a caller reads (#1185). Matches ORCHESTRATION_DISPATCH_FAILED, the same rule for a workflow on_enter dispatch's run.",
+      "A `loop` / `sub_orchestration` child run settled in a non-success terminal status (failed, cancelled, or expired) carrying no code of its own, so the node that started it failed too. A child that carries a code fails its parent under that code instead, so the cause reaches the run a caller reads. Matches ORCHESTRATION_DISPATCH_FAILED, the same rule for a workflow on_enter dispatch's run.",
   },
   ORCHESTRATION_RUN_DEPTH_LIMIT: {
     httpStatus: 409,
     description:
-      "Starting the next `loop` / `sub_orchestration` child run would nest past the depth bound, so it was refused. This bounds a cycle no intra-graph validator can see — a graph whose `sub_orchestration` node names itself, directly or through a cycle of two graphs — which the orchestration cycle validator (intra-graph, and excluding loop nodes deliberately) cannot detect. The bound is the smaller of MAX_ORCHESTRATION_RUN_DEPTH (default 10) and the project's `max_orchestration_run_depth`; the error meta names the depth reached, the limit, and which of the two set it (#1185).",
+      "Starting the next `loop` / `sub_orchestration` child run would nest past the depth bound, so it was refused. This bounds a cycle no intra-graph validator can see — a graph whose `sub_orchestration` node names itself, directly or through a cycle of two graphs — which the orchestration cycle validator (intra-graph, and excluding loop nodes deliberately) cannot detect. The bound is the smaller of MAX_ORCHESTRATION_RUN_DEPTH (default 10) and the project's `max_orchestration_run_depth`; the error meta names the depth reached, the limit, and which of the two set it.",
   },
   ORCHESTRATION_MAX_ITERATIONS_EXCEEDED: {
     httpStatus: 422,
@@ -590,22 +590,22 @@ export const ERROR_CODES = {
   TASK_NOT_PAUSABLE: {
     httpStatus: 409,
     description:
-      'The task is closed, so there is no automation left to pause. A workflow has no run object, so an operator pause lands on its instance — the task — and suppresses every state dispatch until it is resumed (#1237).',
+      'The task is closed, so there is no automation left to pause. A workflow has no run object, so an operator pause lands on its instance — the task — and suppresses every state dispatch until it is resumed.',
   },
   TASK_NOT_PAUSED: {
     httpStatus: 409,
     description:
-      'The task carries no operator pause, so there is nothing to resume. Resuming is only how a pause is lifted; a task that is merely idle is advanced by firing a transition (#1237).',
+      'The task carries no operator pause, so there is nothing to resume. Resuming is only how a pause is lifted; a task that is merely idle is advanced by firing a transition.',
   },
   TASK_AUTOMATION_PROVENANCE_MISSING: {
     httpStatus: 500,
     description:
-      'An automation-caused transition was about to be persisted with no recorded cause: principal_id, generation_id, and orchestration_run_id would all be null. This is a writer bug, not a valid degraded record — the transition is rejected instead of being silently written (#792).',
+      'An automation-caused transition was about to be persisted with no recorded cause: principal_id, generation_id, and orchestration_run_id would all be null. This is a writer bug, not a valid degraded record — the transition is rejected instead of being silently written.',
   },
   TASK_AUTOMATION_CHAIN_LIMIT: {
     httpStatus: 409,
     description:
-      'The task has run too many machine-driven transitions back-to-back with no outside intervention, and the next one was refused. This bounds a cycle composed across modules — a workflow state dispatching work that transitions the task back into that same state — which neither the orchestration cycle validator (intra-graph) nor the workflow itself (where revisiting states is deliberate) can see. Any move by a person, a plain API key, or an approval resolution resets the chain. The ceiling is TASK_AUTOMATION_CHAIN_LIMIT (default 50) (#885).',
+      'The task has run too many machine-driven transitions back-to-back with no outside intervention, and the next one was refused. This bounds a cycle composed across modules — a workflow state dispatching work that transitions the task back into that same state — which neither the orchestration cycle validator (intra-graph) nor the workflow itself (where revisiting states is deliberate) can see. Any move by a person, a plain API key, or an approval resolution resets the chain. The ceiling is TASK_AUTOMATION_CHAIN_LIMIT (default 50).',
   },
   GUARDRAIL_NOT_FOUND: {
     httpStatus: 400,

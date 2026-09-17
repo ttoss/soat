@@ -38,7 +38,7 @@ const MEMORY_STORE_NAME = 'Knowledge golden corpus';
  *
  * So the corpus declares the tolerance instead of encoding it in word choice.
  * This is a per-store product knob, not a loosened gate: a store holding a rate
- * history is exactly the case it exists for, and `findRegressions` is untouched.
+ * history is exactly the case it exists for.
  * `knowledgeEvalGoldenSet.test.ts` pins every pair under the supersede value
  * with margin.
  */
