@@ -1,13 +1,14 @@
 import { defineMigration } from '@ttoss/postgresdb';
 
 /**
- * The ledger learns to say *why* a supersede happened: a caller naming the
- * memory it replaces, or the bands choosing the top match.
+ * `memory_assertions.declared` separates a supersede the caller named from one
+ * the thresholds chose.
  *
- * `sync` cannot add it — it creates missing tables and never alters one that
- * exists — and `similarity` could not carry the distinction: it is already null
- * whenever there was nothing to compare against, so every write made before the
- * column existed reads `false`, which is exactly what it was.
+ * `sync` creates missing tables and never alters one that exists, so the column
+ * is a migration. `similarity` cannot carry the distinction: it is null
+ * whenever there is nothing to compare against, which a convention there would
+ * make indistinguishable from a declaration. The `false` default is the right
+ * answer for every row already in the table — a supersede nobody declared.
  */
 const DECLARED_SQL = `
   ALTER TABLE memory_assertions

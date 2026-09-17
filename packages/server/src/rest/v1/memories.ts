@@ -343,8 +343,8 @@ memoriesRouter.post('/memories', async (ctx: Context) => {
   // authorize touching, so the target is resolved through the same two-bag
   // check `PUT /memories/:id` uses: a declaration says no more, and does no
   // more, than updating that memory directly would. Only after the store check,
-  // so the field cannot be used to probe memories in a store the caller cannot
-  // reach at all.
+  // so the field cannot probe memories in a store the caller cannot reach at
+  // all.
   const supersedes = readSupersedes(body.supersedes);
   if (supersedes) {
     await resolveEntryForAction(ctx, supersedes, 'memories:UpdateMemory');

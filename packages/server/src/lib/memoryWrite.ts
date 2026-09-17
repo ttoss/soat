@@ -166,10 +166,11 @@ const findTopSimilarMemory = async (args: {
  * softened into an outcome: a write that named the wrong memory must fail
  * loudly rather than land as a `created` the caller never asked for.
  *
- * Same store only, per #1308's standing decision — a store is an ownership and
- * scope boundary, and the cross-store case is #1270's problem 3, not this one.
- * No chaining either: a retired memory is already pointing at its replacement,
- * and superseding it again would fork the chain the ledger reads back along.
+ * Same store only: a store is an ownership and scope boundary, and a
+ * declaration reaching across one would retire a fact under a policy this write
+ * was never checked against. No chaining either: a retired memory already
+ * points at its replacement, and superseding it again forks the chain the
+ * ledger reads back along.
  */
 const resolveDeclaredTarget = async (args: {
   memoryStoreId: number;
