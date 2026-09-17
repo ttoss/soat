@@ -245,12 +245,7 @@ A denial's status code depends on what the route does, not on which policy faile
 
 A write is refused **before** body validation, so an unauthorized caller gets `403` whether the body is well-formed or not.
 
-The `403`/`404` split on a write is about **which project**, not which resource, and it makes a write agree with the read the same caller would get:
-
-- a project your policies name → you could read the resource, so a write you may not perform is `403`, stated plainly. Being told that one agent is off limits tells you nothing you could not already work out.
-- a project none of your policies name → you could not read the resource either, so a write is `404`, the same answer. A `403` there would confirm it exists to someone with no business knowing it does — including a caller holding no policy at all, for whom *every* project is someone else's.
-
-So a denied write never says more than a denied read of the same resource would. This is what #1029 asked for: its bug was the two *disagreeing* — a write answering `404` while the caller's own `GET` answered `200` — not the `403` itself.
+The `403`/`404` split on a write is about **which project**, not which resource. Being told plainly that one agent in a project you work in is off limits tells you nothing you could not already work out, so that stays `403`. A resource in a project none of your policies name is `404`: a `403` there would confirm it exists to someone with no business knowing it does — including to a caller whose policies name no project at all, for whom every project is someone else's. A denied write never says more than a denied read of the same resource would.
 
 ## Policy Evaluation
 
