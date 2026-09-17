@@ -15,17 +15,28 @@ const ADD_VALUE_SQL = `
   ALTER TYPE ${ENUM_TYPE} ADD VALUE IF NOT EXISTS 'typesafe';
 `;
 
-const slugExists = async (args: {
+/**
+ * Whether the enum type is there at all, and whether it already carries the
+ * slug. The type is the subject of this migration, so it is also the probe: a
+ * database without it has nothing to alter, whatever its `ai_providers` looks
+ * like.
+ */
+const enumState = async (args: {
   select: <T>(a: { sql: string }) => Promise<T[]>;
-}): Promise<boolean> => {
-  const rows = await args.select<{ count: string }>({
-    sql: `SELECT count(*) AS count
-            FROM pg_enum e
-            JOIN pg_type t ON t.oid = e.enumtypid
-           WHERE t.typname = '${ENUM_TYPE}'
-             AND e.enumlabel = 'typesafe'`,
+}): Promise<{ typeExists: boolean; hasSlug: boolean }> => {
+  const rows = await args.select<{ type_count: string; label_count: string }>({
+    sql: `SELECT
+            (SELECT count(*) FROM pg_type
+              WHERE typname = '${ENUM_TYPE}') AS type_count,
+            (SELECT count(*) FROM pg_enum e
+               JOIN pg_type t ON t.oid = e.enumtypid
+              WHERE t.typname = '${ENUM_TYPE}'
+                AND e.enumlabel = 'typesafe') AS label_count`,
   });
-  return Number(rows[0]?.count ?? 0) > 0;
+  return {
+    typeExists: Number(rows[0]?.type_count ?? 0) > 0,
+    hasSlug: Number(rows[0]?.label_count ?? 0) > 0,
+  };
 };
 
 export const aiProviderTypesafeSlug = defineMigration({
@@ -33,15 +44,18 @@ export const aiProviderTypesafeSlug = defineMigration({
   description:
     "'typesafe' is added to the ai_providers.provider enum so decider credentials can be stored alongside every other provider.",
   /**
-   * A fresh install has no `ai_providers` yet — the migrations run before the
-   * sync that creates it, and that sync builds the enum with every slug the
-   * model declares. Nothing to alter, so this is recorded rather than replayed.
+   * Nothing to do unless the enum type is already there.
+   *
+   * Migrations run *before* the sync, so a fresh install has no type yet and
+   * the sync that follows builds it carrying every slug the model declares.
+   * The same holds for any database whose `ai_providers` predates the enum
+   * column — the table existing says nothing about the type, so the type is
+   * what is probed. Either way this is recorded rather than replayed, which is
+   * what keeps a new install from needing an operator `baseline`.
    */
   isApplied: async (context) => {
-    if (!(await context.tableExists({ table: 'ai_providers' }))) {
-      return true;
-    }
-    return slugExists(context);
+    const { typeExists, hasSlug } = await enumState(context);
+    return !typeExists || hasSlug;
   },
   up: async (context) => {
     context.say("adding 'typesafe' to the provider enum");
