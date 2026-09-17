@@ -3,6 +3,32 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.52.0](https://github.com/ttoss/soat/compare/v0.51.0...v0.52.0) (2026-09-17)
+
+* feat(memories)!: replace agent-side extraction with memory rules on the store (#1328) ([c3a4ed9](https://github.com/ttoss/soat/commit/c3a4ed9c5adb1486fae082ac7f09ac1c6758d03d)), closes [#1328](https://github.com/ttoss/soat/issues/1328)
+
+### Features
+
+* **memories:** let a caller declare the supersede, not only cosine ([#1350](https://github.com/ttoss/soat/issues/1350)) ([5372d14](https://github.com/ttoss/soat/commit/5372d1437b0cfaabb94cbc7bd50f0f813d0fbaef)), closes [#1331](https://github.com/ttoss/soat/issues/1331)
+
+### BREAKING CHANGES
+
+* `knowledge_config.extraction` is removed from agents, and with
+  it the per-turn `extract` flag on `POST /agents/:id/generate` — it was defined
+  as an override of the field that is gone. Both are now rejected as unknown
+  fields rather than accepted and ignored. The migration turns every agent with
+  an enabled `extraction` and a `write_memory_store_id` into one rule on that
+  store before stripping the field, so behaviour changes only where several
+  agents wrote to one store — the case that was invisible before.
+
+  `memory_assertions.rule_id` is now a foreign key into `memory_rules`, exposed
+  as the rule's public id rather than an integer, and populated on every firing.
+  `generations.extraction` is keyed by rule id, because a store may have several
+  rules and one flat pair of counts cannot say which produced them.
+
+  The issue's `source_tags` selector is not implemented: agents carry no `tags`
+  column, so it has nothing to match against. `source_agent_ids` is the selector.
+
 # [0.51.0](https://github.com/ttoss/soat/compare/v0.50.0...v0.51.0) (2026-09-16)
 
 * feat(memories)!: record every write as an assertion and replace merge with supersede (#1326) ([b100847](https://github.com/ttoss/soat/commit/b100847cc323fcfe9f00bdd216c9312c05036902)), closes [#1326](https://github.com/ttoss/soat/issues/1326) [#1324](https://github.com/ttoss/soat/issues/1324) [#1322](https://github.com/ttoss/soat/issues/1322)
