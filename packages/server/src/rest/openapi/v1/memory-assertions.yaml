@@ -103,10 +103,19 @@ components:
           type: number
           nullable: true
           description: >-
-            The top match's cosine similarity — the number that chose the
-            outcome. Null when there was nothing to compare against, or when
-            the content could not be embedded.
+            The cosine similarity the outcome was decided against — the top
+            match's, or the declared target's when `declared` is true, where it
+            decides nothing and only records how far apart the two statements
+            were. Null when there was nothing to compare against, or when the
+            content could not be embedded.
           example: 0.97
+        declared:
+          type: boolean
+          description: >-
+            Whether the write named the memory it replaced (`supersedes` on
+            create) instead of the thresholds choosing one. Always false on a
+            `created` or `skipped` outcome.
+          example: false
         created_at:
           type: string
           format: date-time

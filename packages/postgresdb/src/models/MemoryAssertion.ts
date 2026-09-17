@@ -197,9 +197,21 @@ export class MemoryAssertion extends Model {
   @Column({ type: DataType.STRING(16), allowNull: false })
   declare outcome: MemoryAssertionOutcome;
 
-  /** The top match's cosine similarity — what decided the outcome. */
+  /**
+   * The cosine the outcome was decided against: the top match's on a threshold
+   * write, the declared target's on a `declared` one.
+   */
   @Column({ type: DataType.FLOAT, allowNull: true })
   declare similarity: number | null;
+
+  /**
+   * Whether the write named the memory it replaced instead of the bands
+   * choosing one. `similarity` cannot carry this: it is already null whenever
+   * there was nothing to compare against, so a convention there would collapse
+   * a declaration into an unembedded write.
+   */
+  @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
+  declare declared: boolean;
 
   @Column({ type: DataType.DATE })
   declare createdAt: Date;

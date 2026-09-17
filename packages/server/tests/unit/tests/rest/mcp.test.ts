@@ -812,6 +812,45 @@ describe('MCP tools - happy path', () => {
     );
   });
 
+  test('create-memory supersedes the memory it names, not the top match', async () => {
+    const store = parseResult(
+      await mcpCall('create-memory-store', {
+        project_id: projectId,
+        name: 'MCP Declared Supersede',
+      })
+    );
+
+    const target = parseResult(
+      await mcpCall('create-memory', {
+        memory_store_id: store.id,
+        content: 'The MCP office is in Lisbon.',
+      })
+    );
+
+    // Every stub embedding is identical, so this restatement scores 1.0 against
+    // the target and would skip. The declaration outranks that band.
+    const replacement = parseResult(
+      await mcpCall('create-memory', {
+        memory_store_id: store.id,
+        content: 'The MCP Lisbon office closed.',
+        supersedes: target.id,
+      })
+    );
+
+    expect(replacement.action).toBe('superseded');
+    expect(replacement.id).not.toBe(target.id);
+
+    const retired = parseResult(
+      await mcpCall('get-memory', { memory_id: target.id })
+    );
+    expect(retired.superseded_by_memory_id).toBe(replacement.id);
+
+    const history = parseResult(
+      await mcpCall('list-memory-assertions', { memory_id: replacement.id })
+    );
+    expect(history.data[0].declared).toBe(true);
+  });
+
   test('the memory-rule tools drive a store\u2019s ingestion policy', async () => {
     const store = parseResult(
       await mcpCall('create-memory-store', {

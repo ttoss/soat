@@ -1494,6 +1494,50 @@ if [ "$ME_SUP_TEXT" != "Smoke delivery window is two weeks" ]; then
 fi
 echo "Supersede retired the match, kept its text, and linked the replacement."
 
+echo "--- Memories: a declared supersede retires a target no threshold would ---"
+# Two statements that contradict each other without coming close on cosine, so
+# nothing the bands could be set to would retire the first. The caller names it.
+ME_DEC_STORE=$($SOAT_CLI create-memory-store \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name smoke-declared-supersede-store | jq -r '.id')
+ME_DEC_OLD_ID=$($SOAT_CLI create-memory \
+  --memory-store-id "$ME_DEC_STORE" \
+  --content "Smoke office is in Lisbon" | jq -r '.id')
+ME_DEC_NEW=$($SOAT_CLI create-memory \
+  --memory-store-id "$ME_DEC_STORE" \
+  --content "Smoke closed the Lisbon office last quarter" \
+  --supersedes "$ME_DEC_OLD_ID")
+ME_DEC_ACTION=$(printf '%s\n' "$ME_DEC_NEW" | jq -r '.action')
+ME_DEC_NEW_ID=$(printf '%s\n' "$ME_DEC_NEW" | jq -r '.id')
+if [ "$ME_DEC_ACTION" != "superseded" ]; then
+  echo "ERROR: Expected action=superseded for a declared supersede, got $ME_DEC_ACTION" >&2
+  echo "$ME_DEC_NEW" >&2
+  exit 1
+fi
+ME_DEC_LINK=$($SOAT_CLI get-memory --memory-id "$ME_DEC_OLD_ID" | jq -r '.superseded_by_memory_id')
+if [ "$ME_DEC_LINK" != "$ME_DEC_NEW_ID" ]; then
+  echo "ERROR: the declared target should point at the replacement, got $ME_DEC_LINK" >&2
+  exit 1
+fi
+# The ledger separates a declaration from a threshold supersede, which is what
+# makes "how often is this needed?" a query rather than a guess.
+ME_DEC_DECLARED=$($SOAT_CLI list-memory-assertions --memory-id "$ME_DEC_NEW_ID" | jq -r '.data[0].declared')
+if [ "$ME_DEC_DECLARED" != "true" ]; then
+  echo "ERROR: the assertion should report declared=true, got $ME_DEC_DECLARED" >&2
+  exit 1
+fi
+# No chaining: the target is already retired, so a second declaration naming it
+# is refused rather than forking the chain.
+ME_DEC_AGAIN_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$SERVER_URL/api/v1/memories" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"memory_store_id\":\"$ME_DEC_STORE\",\"content\":\"Smoke office moved again\",\"supersedes\":\"$ME_DEC_OLD_ID\"}")
+if [ "$ME_DEC_AGAIN_STATUS" != "400" ]; then
+  echo "ERROR: superseding an already-retired memory expected 400, got $ME_DEC_AGAIN_STATUS" >&2
+  exit 1
+fi
+echo "Declared supersede retired a distant target, recorded the declaration, and refused a chain."
+
 # A query names no store, so it reaches both; include_memories takes the memory
 # store back out. Placed after the memory fixtures exist — the search steps
 # earlier in this script run before this project has any memory at all.
