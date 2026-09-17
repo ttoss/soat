@@ -3,8 +3,6 @@ import {
   GOLDEN_QUERY_KINDS,
   loadGoldenSet,
   parseGoldenSet,
-  readDocumentSection,
-  resolveDocumentContent,
 } from 'tests/eval/knowledge/goldenSet';
 import {
   CORPUS_DUPLICATE_THRESHOLD,
@@ -92,11 +90,15 @@ describe('knowledge eval golden set', () => {
     }
   });
 
-  test('resolves every document fixture to non-empty content', () => {
+  test('carries frozen, non-empty content on every document fixture', () => {
+    // The corpus is static text, never a pointer into the module docs: a
+    // fixture read at seed time makes the baseline a function of
+    // documentation prose as well as ranking code (#1345).
     for (const document of golden.corpus.documents) {
-      expect(
-        resolveDocumentContent({ document }).trim().length
-      ).toBeGreaterThan(0);
+      expect({
+        key: document.key,
+        empty: document.content.trim().length === 0,
+      }).toEqual({ key: document.key, empty: false });
     }
   });
 
@@ -105,7 +107,7 @@ describe('knowledge eval golden set', () => {
     // answer, and the query silently stops measuring lexical precision.
     const corpus = [
       ...golden.corpus.documents.map((document) => {
-        return resolveDocumentContent({ document });
+        return document.content;
       }),
       ...golden.corpus.memories.map((memoryStore) => {
         return memoryStore.content;
@@ -161,7 +163,7 @@ describe('knowledge eval golden set', () => {
     }).toThrow(/duplicate corpus key/);
   });
 
-  test('rejects a document that names both a source section and inline content', () => {
+  test('rejects a document that points at a module doc section', () => {
     expect(() => {
       return parseGoldenSet({
         raw: {
@@ -181,7 +183,7 @@ describe('knowledge eval golden set', () => {
           queries: [],
         },
       });
-    }).toThrow(/not both and not neither/);
+    }).toThrow(/must carry inline `content`/);
   });
 
   test('reads a memoryStore fixture age and the container it belongs to', () => {
@@ -386,33 +388,5 @@ describe('knowledge eval golden set', () => {
         },
       });
     }).toThrow(/must be one of/);
-  });
-});
-
-describe('readDocumentSection', () => {
-  test('returns the heading and its body', () => {
-    const section = readDocumentSection({
-      source: 'packages/website/docs/modules/knowledge.md',
-      section: 'Relevance scoring',
-    });
-    expect(section.startsWith('### Relevance scoring')).toBe(true);
-    expect(section.length).toBeGreaterThan(100);
-  });
-
-  test('stops at the next heading of the same or a higher level', () => {
-    const section = readDocumentSection({
-      source: 'packages/website/docs/modules/knowledge.md',
-      section: 'Relevance scoring',
-    });
-    expect(section).not.toContain('### Ranking is approximate');
-  });
-
-  test('throws when the section names no heading', () => {
-    expect(() => {
-      return readDocumentSection({
-        source: 'packages/website/docs/modules/knowledge.md',
-        section: 'A Section That Does Not Exist',
-      });
-    }).toThrow(/expected exactly one/);
   });
 });

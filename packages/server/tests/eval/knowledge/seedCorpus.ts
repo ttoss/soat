@@ -5,7 +5,6 @@ import { createMemoryStore } from 'src/lib/memoryStores';
 import { createProject } from 'src/lib/projects';
 
 import type { GoldenSet } from './goldenSet';
-import { resolveDocumentContent } from './goldenSet';
 
 /**
  * The tag every corpus fixture carries and every golden query filters on.
@@ -126,7 +125,7 @@ export const seedGoldenCorpus = async (args: {
   for (const fixture of args.golden.corpus.documents) {
     const created = await createDocument({
       projectId,
-      content: resolveDocumentContent({ document: fixture }),
+      content: fixture.content,
       path: fixture.path,
       title: fixture.key,
       tags: CORPUS_TAGS,
