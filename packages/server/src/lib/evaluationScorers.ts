@@ -102,8 +102,8 @@ const SCORER_TYPE_SET: ReadonlySet<unknown> = new Set(SCORER_TYPES);
 /**
  * Takes `unknown` rather than `string` because it guards two callers: the
  * validator, which reads a type off an untyped template, and {@link scoreOne},
- * which reads one off a stored Eval. The latter used to reach its dispatch
- * through an `as ScorerType` cast (#1001).
+ * which reads one off a stored Eval and would otherwise reach its dispatch
+ * through an `as ScorerType` cast.
  */
 const isScorerType = (value: unknown): value is ScorerType => {
   return SCORER_TYPE_SET.has(value);

@@ -1,10 +1,9 @@
 /**
  * Deleting an agent, and the cascade a forced delete performs.
  *
- * Split out of `agents.ts`, which had grown to a god module mixing CRUD,
- * mapping, cross-reference validation and this 120-line cascade — and carried
- * an `eslint-disable max-lines` to say so. The cascade shares nothing with the
- * write paths but the accessor, which is why it can leave.
+ * Separate from `agents.ts`, which holds the CRUD, the mapping and the
+ * cross-reference validation: the cascade shares nothing with the write paths
+ * but the accessor, and together they exceed the module ceiling.
  */
 import createDebug from 'debug';
 
@@ -55,7 +54,7 @@ const findDependentIds = async (args: {
 // Cross-references from other agents' rows are nulled first, since those
 // self-referencing FKs are RESTRICT. Storage objects behind the traces' step
 // files are cleaned up only once the transaction commits: the row must be gone
-// before the object, or a concurrent read references bytes mid-delete (#835).
+// before the object, or a concurrent read references bytes mid-delete.
 const forceDeleteAgentWithDependents = async (args: {
   agent: InstanceType<typeof db.Agent>;
   agentId: number;
@@ -131,7 +130,7 @@ const countAgentDependents = async (
  * teardown — formation stack deletion — can learn the answer *before* it starts
  * destroying anything. Reaching the refusal by attempting the delete is too
  * late there: the resources ordered ahead of the agent are already gone by then,
- * which is the partial teardown #985 reported.
+ * leaving a partial teardown.
  *
  * The count logic is shared with `deleteAgent` rather than restated, so the
  * pre-flight can never disagree with the delete it predicts.

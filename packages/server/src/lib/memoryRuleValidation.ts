@@ -59,7 +59,7 @@ const findHandlerError = (shape: MemoryRuleShape): string | null => {
 /**
  * `prompt` / `ai_provider_id` / `model` configure the built-in extractor's own
  * completion. A handler makes its own model call — or none — so the three would
- * be accepted and ignored, which is the shape #1318 forbids.
+ * be accepted and ignored, which is the shape this refuses.
  */
 const findExtractorOverrideError = (shape: MemoryRuleShape): string | null => {
   if (!hasHandler(shape)) return null;

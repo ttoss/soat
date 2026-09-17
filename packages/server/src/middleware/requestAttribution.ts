@@ -27,7 +27,7 @@ type Next = () => Promise<void>;
  * `INSERT … ON CONFLICT DO UPDATE … RETURNING "count"` that is both the
  * increment and the value compared to the limit, so enforcement never evaluates
  * a count missing a predecessor — pinned by the two "under concurrency" tests
- * in `rest/quotas.test.ts` (#1049).
+ * in `rest/quotas.test.ts`.
  *
  * Idempotent per request: the first call wins, so a handler that authorizes
  * twice is counted once.
@@ -82,10 +82,10 @@ export const attributeRequestToProject = async (args: {
  *
  * Two properties make it safe, both load-bearing:
  *
- * - **Only granted checks count.** The DoS vector that blocked the naive fix
- *   (#742) was trusting a client-supplied `project_id`: any key holder could
- *   burn an unrelated project's quota by naming its public id. Here the project
- *   has already passed the route's own permission check.
+ * - **Only granted checks count.** Trusting a client-supplied `project_id`
+ *   would be a DoS vector: any key holder could burn an unrelated project's
+ *   quota by naming its public id. Here the project has already passed the
+ *   route's own permission check.
  * - **Enumeration probes are invisible.** `resolveProjectIds` builds its
  *   list-scoping calls from the *unwrapped* `isAllowed`, the same property
  *   `auditMiddleware` relies on; without it a cross-project list would
@@ -110,7 +110,7 @@ const deferAttributionUntilAuthorized = (args: {
     if (ctx.state.requestAttributed) return;
 
     // Sequelize throws on a `WHERE` bound to `undefined`, and not being a
-    // `DomainError` it surfaced as a raw 500 on a valid route (#801).
+    // `DomainError` it surfaced as a raw 500 on a valid route.
     // `isAllowed` now denies such a check outright, so this is the last line of
     // the same fail-open philosophy the rest of the module applies.
     if (!projectPublicId) {
@@ -173,9 +173,9 @@ const deferAttributionUntilAuthorized = (args: {
  * **Run-as tokens are exempt, deliberately.** A background drive continues work
  * whose arrival was already counted; metering it would bill a run's self-calls
  * as fresh client traffic and let a long chain breach the starting key's quota
- * mid-flight. Until #887 the exemption was accidental (`apiKeyPublicId` simply
- * went unset), and the `isRunToken` marker (#885) is what makes it statable
- * without decoding a token here.
+ * mid-flight. The `isRunToken` marker states the exemption outright, so it
+ * does not rest on `apiKeyPublicId` happening to be unset and needs no token
+ * decoding here.
  */
 export const requestAttributionMiddleware = async (
   ctx: Context,

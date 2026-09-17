@@ -36,7 +36,7 @@ export const toolsRouter = new Router<Context>();
  * `tools:CallTool` is why this module went first: the route *executes*, and
  * `approvals.ts` has always checked `CallTool` against the tool's SRN. Until
  * this, the same per-tool grant was honored on the approval path and ignored on
- * the direct route (#1339).
+ * the direct route.
  */
 const toolAccess = makeItemRouteAuthorizer({
   findScope: tools.findScope,
@@ -112,7 +112,7 @@ const resolveToolProjectId = async (
   requireAuth(ctx);
   // `requireProjectAccess`, not the read helper: a caller permitted in zero
   // projects cannot create here, and an empty scope must say so with a `403`
-  // rather than falling through to "project_id is required" (#1029).
+  // rather than falling through to "project_id is required".
   const projectIds = await requireProjectAccess({
     ctx,
     projectPublicId,
@@ -343,7 +343,7 @@ toolsRouter.delete('/tools/:tool_id', async (ctx: Context) => {
  * Koa body sets no status, so the response would keep the framework default of
  * `404` and report a call that *succeeded* as a missing resource. A tool whose
  * action legitimately returns nothing — a SOAT action answering `204`, now that
- * those resolve instead of failing to parse (#888) — reaches here.
+ * those resolve instead of failing to parse — reaches here.
  */
 const setCallToolResponseBody = (ctx: Context, result: unknown): void => {
   if (result !== null && result !== undefined && typeof result === 'object') {
@@ -395,7 +395,7 @@ toolsRouter.post('/tools/:tool_id/call', async (ctx: Context) => {
     authHeader,
     // No session here, so nothing downstream will overwrite a forged identity
     // key — the sanitize is what keeps a caller off the `X-Soat-Context-*`
-    // headers a tool trusts (#1151).
+    // headers a tool trusts.
     toolContext: sanitizeCallerToolContext(
       parseToolContextBody(rawToolContext)
     ),

@@ -1,5 +1,5 @@
 /**
- * Operator-registered formation resource types (#1078).
+ * Operator-registered formation resource types.
  *
  * A deployment fronting SOAT with its own product resources needs them
  * declarable in a template without forking `formationsRegistry.ts` or
@@ -352,8 +352,7 @@ export const parseFormationResourceTypeConfig = (args: {
 /**
  * Reads the registration file named by `FORMATION_RESOURCE_TYPES_CONFIG`, or
  * returns nothing when the variable is unset — the overwhelmingly common case,
- * and the one where a deployment must behave exactly as it did before this
- * existed.
+ * and the one where a deployment runs on the built-in resource types alone.
  */
 export const loadFormationResourceTypeConfig = (args: {
   builtInTypes: ReadonlySet<string>;

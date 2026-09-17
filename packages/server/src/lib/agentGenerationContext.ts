@@ -140,7 +140,7 @@ const assembleContextMessages = async (args: {
   return allMessages;
 };
 
-// The identity chokepoint (#850): every fresh generation builds its context
+// The identity chokepoint: every fresh generation builds its context
 // here, so pinning once makes the reserved `tool_context` keys unforgeable on
 // every path, with no per-entry-point pin left to forget. The pinned bag is
 // what `pendingState` persists, so a recovered generation resumes trusted.
@@ -206,7 +206,7 @@ export const buildGenerationContext = async (
     allowedToolIds: splitToolBindings(readAgentToolBindings(typedAgent))
       .toolIds,
     agentBoundaryPolicy: typedAgent.boundaryPolicy,
-    toolContext, // identity-pinned, not the raw caller bag (#345)
+    toolContext, // identity-pinned, not the raw caller bag
   });
   const { model } = await resolveGenerationModel({
     agentId: args.agentId,

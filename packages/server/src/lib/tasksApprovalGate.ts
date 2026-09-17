@@ -79,7 +79,7 @@ const emitGateApproval = async (args: {
   note: string | null;
   /**
    * The `tool_context` the task held before the claim, restored alongside the
-   * claim itself. The park is what stores the requester's bag (#950), so a park
+   * claim itself. The park is what stores the requester's bag, so a park
    * that does not survive must not leave it behind for the next dispatch — which
    * would run a later, unrelated move's work with this requester's credential.
    */
@@ -124,7 +124,7 @@ export const parkTransitionForApproval = async (args: {
   task: TaskInstance;
   transition: WorkflowTransition;
   /**
-   * The transitions of the version the task is pinned to (#882), resolved by
+   * The transitions of the version the task is pinned to, resolved by
    * the caller. Taking them as an argument rather than reading
    * `task.workflow.transitions` is what keeps the gate on the same machine the
    * transition was validated against a moment earlier.
@@ -133,7 +133,7 @@ export const parkTransitionForApproval = async (args: {
   note: string | null;
   /**
    * The sanitized `tool_context` this move supplied, or `undefined` to keep the
-   * task's stored bag (#950). Written as part of the same guarded claim that
+   * task's stored bag. Written as part of the same guarded claim that
    * takes the gate, so the bag and the pending transition it belongs to are
    * never half-applied.
    */

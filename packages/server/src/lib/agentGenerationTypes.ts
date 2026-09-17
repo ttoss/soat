@@ -2,11 +2,10 @@
  * The types the agent-generation cluster is built from, and the round trip
  * between an agent's config and the snapshot a paused generation carries.
  *
- * This module is a **leaf**: it imports nothing from the cluster. Five of the
- * six import cycles #910 found formed because a type lived next to one of its
- * implementations, and the agent cluster had grown the same three (#911) — a
- * module that needed `TypedAgent` had to import the 800-line helper file that
- * happened to declare it. Keeping the vocabulary here is what lets
+ * This module is a **leaf**: it imports nothing from the cluster. A type living
+ * next to one of its implementations is how an import cycle forms — a module
+ * needing `TypedAgent` would have to import the 800-line helper file that
+ * happens to declare it. Keeping the vocabulary here is what lets
  * `agentStepRules`, `agentToolSurface` and `agentModelResolution` be leaves too.
  */
 import type { LanguageModel, LanguageModelUsage, Tool } from 'ai';

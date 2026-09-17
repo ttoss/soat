@@ -35,7 +35,7 @@ const buildTaskContext = (task: TaskInstance) => {
     payload: task.payload,
     assignee: task.assignee,
     // Server-owned, in its own namespace: a guard on `task.last_result` can
-    // only be satisfied by a value an automation wrote (#846).
+    // only be satisfied by a value an automation wrote.
     last_result: task.lastResult ?? null,
   };
 };
@@ -64,9 +64,9 @@ const cancelDispatchOnExit = async (args: {
   // staleness check in tasksAutomation (task re-validated on completion).
 };
 
-// An `automation` transition carries no principal id (#786) — the cause lives
+// An `automation` transition carries no principal id — the cause lives
 // in `generationId`/`orchestrationRunId`/`toolId`. With all of those null,
-// nothing records why the task moved, so the write is rejected (#792).
+// nothing records why the task moved, so the write is rejected.
 const assertAutomationHasProvenance = (args: {
   transitionArgs: TransitionArgs;
   transitionName: string;
@@ -140,7 +140,7 @@ type TransitionArgs = {
    */
   viaRunToken?: boolean;
   /**
-   * Caller context for the dispatches the task makes from here on (#950).
+   * Caller context for the dispatches the task makes from here on.
    *
    * The precedence rule is the whole rule: **supplying one replaces the stored
    * bag wholesale; omitting it (`undefined`) keeps what the task already has.**
@@ -166,8 +166,8 @@ const chainLimit = (): number => {
 
 /**
  * Whether this move continues a machine-driven chain rather than starting one.
- * Two shapes qualify, because the loop #885 bounds can close through either:
- * an `automation` principal (the engine routing a dispatch outcome), and a
+ * Two shapes qualify, because the bounded loop can close through either: an
+ * `automation` principal (the engine routing a dispatch outcome), and a
  * run-as token (the dispatched run calling `transition-task` with the
  * credential it was minted, which authenticates as the user who started the
  * chain and is otherwise indistinguishable from a person clicking a button).
@@ -392,7 +392,7 @@ export const transitionTask = async (args: TransitionArgs) => {
   if (!loaded) {
     throw new DomainError('TASK_NOT_FOUND', `Task '${args.id}' not found.`);
   }
-  // The machine the task entered on, not the one the workflow holds now (#882).
+  // The machine the task entered on, not the one the workflow holds now.
   const { states, transitions } = await resolveTaskDefinition({
     task: loaded,
     workflow: loaded.workflow!,

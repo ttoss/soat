@@ -7,16 +7,16 @@ import { workflowCollectionToCamel } from './workflowsWire';
 const log = createDebug('soat:tasks');
 
 /**
- * Resolves the state machine a task lives in (#882).
+ * Resolves the state machine a task lives in.
  *
  * A task is pinned to a workflow version at creation and every later read of
  * the definition resolves through here rather than the live `Workflow` row, so
  * `update-workflow` can rewire freely and a task parked for weeks still
  * transitions on the machine it entered on.
  *
- * The single seam matters as much as the pinning: before this, three call sites
- * each cast `workflow.transitions`, so missing one would look correct in review
- * and leave the bug in the path a long-lived task ends up in.
+ * The single seam matters as much as the pinning: a call site casting
+ * `workflow.transitions` for itself looks correct in review, and missing one
+ * leaves the defect in the path a long-lived task ends up in.
  */
 
 export type WorkflowDefinition = {

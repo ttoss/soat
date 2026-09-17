@@ -291,7 +291,7 @@ export const readFileBuffer = async (args: {
  * Used by bulk cascades (agent/project force-delete) where the row is gone
  * by the time storage cleanup runs, so a failed object delete must never
  * roll back or re-throw — it is logged for a future reconciliation sweep
- * instead (see #835).
+ * instead.
  */
 export const deleteStorageObjects = async (
   files: { storagePath: string; storageType: string }[]

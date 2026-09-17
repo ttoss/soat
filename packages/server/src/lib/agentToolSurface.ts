@@ -39,9 +39,9 @@ export const resolveAgentToolSurface = async (args: {
    */
   guardrailContext?: Record<string, unknown> | null;
   /**
-   * #851 — the typed argument, never the `tool_context` bag: guard decisions
-   * and their audit records must attribute to a session id the server derived,
-   * not one a caller typed.
+   * The typed argument, never the `tool_context` bag: guard decisions and their
+   * audit records must attribute to a session id the server derived, not one a
+   * caller typed.
    */
   sessionId?: string | null;
 }): Promise<Record<string, Tool>> => {

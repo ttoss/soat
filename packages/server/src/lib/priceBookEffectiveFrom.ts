@@ -58,7 +58,7 @@ const hasPriorPriceRow = async (args: {
 /**
  * The row a refusal is about, as structured context rather than prose. A write
  * here carries a batch and fails on the first bad row, so without it a client
- * has to parse the message to learn which row to correct (#1203).
+ * has to parse the message to learn which row to correct.
  */
 const priceRowMeta = (price: {
   provider: string;
@@ -84,7 +84,7 @@ const priceRowMeta = (price: {
  * against one. Requiring the future there instead opens a window in which a
  * provider is live and unpriced, and a generation landing inside it is metered
  * at zero permanently — the cost is frozen when the event is written, so the
- * row arriving a moment later cannot reach back (#1196).
+ * row arriving a moment later cannot reach back.
  *
  * Memoised per request, and each key is checked before it is written, so a
  * batch carrying several rows for one key reads "already priced" as of the

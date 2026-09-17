@@ -55,7 +55,7 @@ const zeroRetentionColumns = (zeroRetention?: boolean) => {
  * Records a structured error payload on a trace so failed generations are
  * distinguishable from pending ones. Fire-and-forget safe.
  *
- * Suppressed in zero-retention mode (#838). An error payload can carry a
+ * Suppressed in zero-retention mode. An error payload can carry a
  * tool's request/response bodies — which is exactly why a purge clears
  * `error` — so a mode that promises nothing is written must refuse it here
  * too, or every failed generation would leak the content the mode exists to
@@ -224,7 +224,7 @@ type SaveTraceArgs = {
   /**
    * The generation these steps belong to. It is what makes a `trace_id` shared
    * by several generations safe: the call owns one segment of the steps object
-   * and can never write over another generation's (#1024).
+   * and can never write over another generation's.
    */
   generationId: string;
   /** Every step of `generationId` so far — a resumed turn passes its earlier
@@ -270,8 +270,8 @@ const readTraceSteps = async (
  *
  * In-process only, and deliberately so: the alternative is holding a row lock
  * across a storage write. Concurrent generations on one `trace_id` served by
- * *different* server processes can still race — a much narrower window than the
- * unconditional overwrite this replaces, and grouping is a single-caller flow.
+ * *different* server processes can still race — a much narrower window than an
+ * unconditional overwrite, and grouping is a single-caller flow.
  */
 const traceWrites = new Map<string, Promise<void>>();
 
@@ -330,7 +330,7 @@ const writeTrace = async (args: SaveTraceArgs): Promise<void> => {
   const serializedSteps = serializeSteps(args.steps);
 
   // The steps object is never written, so there are no bytes to leak or miss in
-  // a sweep (#838). The skeleton row is still upserted, stamped with the same
+  // a sweep. The skeleton row is still upserted, stamped with the same
   // redaction columns a purge sets so every reader already understands it.
   const mode = await resolveTraceContentModeForAgent({
     projectDbId: args.projectId,
@@ -419,7 +419,7 @@ const writeTrace = async (args: SaveTraceArgs): Promise<void> => {
  * the trace, indexed by `Trace.stepSegments`. A call rewrites only its own
  * generation's segment, so the documented "group generations under one
  * `trace_id`" flow keeps every turn instead of leaving the last writer's steps
- * as the whole trace (#1024), and `step_count` counts them all.
+ * as the whole trace, and `step_count` counts them all.
  *
  * Fire-and-forget safe: callers may not await this.
  */

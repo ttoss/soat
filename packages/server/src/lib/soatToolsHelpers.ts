@@ -424,7 +424,7 @@ export const processOperation = (args: {
     // Resolved from the same operationId→action catalog the route handlers
     // enforce, so `boundary_policy` is evaluated against a name a policy author
     // may write. Falling back to the kebab-case tool name left a `Deny`
-    // matching nothing (#1070). `x-iam-action` overrides per operation.
+    // matching nothing. `x-iam-action` overrides per operation.
     iamAction:
       args.operation['x-iam-action'] ??
       getActionForOperation(args.operation.operationId),

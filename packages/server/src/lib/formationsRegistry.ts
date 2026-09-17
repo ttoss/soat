@@ -100,7 +100,7 @@ export const getFormationModule = (args: {
  * The resource types a formation template may declare — derived from the
  * registry rather than restated, so registering a module is the single step
  * that makes its type reachable. A hand-written copy of this set had already
- * fallen one entry behind (#900), leaving `model_route` unusable.
+ * fallen one entry behind, leaving `model_route` unusable.
  */
 export const supportedResourceTypes = (): ReadonlySet<string> => {
   return new Set(registeredModules.keys());
@@ -109,7 +109,7 @@ export const supportedResourceTypes = (): ReadonlySet<string> => {
 // ── Operator-registered resource types ────────────────────────────────────
 
 /**
- * Adds the resource types a deployment operator declared (#1078).
+ * Adds the resource types a deployment operator declared.
  *
  * Called once from `initFormationResourceTypes` at boot with the contents of the
  * file `FORMATION_RESOURCE_TYPES_CONFIG` names, and deliberately not reachable

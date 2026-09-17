@@ -26,7 +26,7 @@ type QuotaInstance = InstanceType<(typeof db)['Quota']>;
  * carries severity, an `exceptions.created` webhook, and an acknowledge/resolve
  * lifecycle.
  *
- * **A partly-priced window files the same item as a blacked-out one** (#1228).
+ * **A partly-priced window files the same item as a blacked-out one**.
  * The fix is identical — price the rows in `unpricedRows` — and the refusal is
  * the only thing the two shapes differ on, so a separate kind would split one
  * degraded cap across two triage items and halve the occurrence count that says

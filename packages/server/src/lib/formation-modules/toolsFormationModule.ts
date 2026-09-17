@@ -120,7 +120,7 @@ export const toolsFormationModule = defineFormationModule({
     }
 
     // `preset_parameters` takes the shape rule only: a `{{context:...}}` token
-    // is legitimate there (#345), so it is not run through the headers/elsewhere
+    // is legitimate there, so it is not run through the headers/elsewhere
     // split that decides "misplaced".
     const presetMessage = describeToolTemplateTokenProblems({
       invalid: findInvalidTemplateTokens(properties.preset_parameters),

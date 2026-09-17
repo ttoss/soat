@@ -12,7 +12,7 @@
  * and `maxChainGenerations` bounds one agent chain (each child run meters its
  * own). So the runaway was bounded only by whatever ran out first — queue
  * capacity, the project's concurrency limit, provider spend — and the failure
- * that eventually surfaced named nothing about the real cause (#1185).
+ * that eventually surfaced named nothing about the real cause.
  */
 import { db } from '../db';
 import { DomainError } from '../errors';

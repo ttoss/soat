@@ -38,7 +38,7 @@ export const setAuditResourceHint = (
  * .role !== 'admin'`, an API key's owner check) that `instrumentAuthUser`
  * never sees because no wrapped function was called. Without this, a route
  * built entirely on such a comparison records zero `checks` and produces no
- * audit entry at all, even for a successful mutation (see #745).
+ * audit entry at all, even for a successful mutation.
  *
  * Call it with the actual decision being enforced — this does not itself
  * gate anything, it only makes an already-made decision visible to the audit

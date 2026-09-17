@@ -29,7 +29,7 @@ const buildTaskContext = (task: TaskWithWorkflow) => {
       payload: task.payload,
       assignee: task.assignee,
       // Server-owned, in its own namespace: a guard on `task.last_result`
-      // can only be satisfied by a value an automation wrote (#846).
+      // can only be satisfied by a value an automation wrote.
       last_result: task.lastResult ?? null,
     },
   };
@@ -45,7 +45,7 @@ const setDispatchState = async (args: {
   args.task.automationStatus = args.automationStatus;
   if (args.lastResult !== undefined) {
     // Typed column, never the payload bag — the payload is caller-owned and a
-    // caller-writable `last_result` key must not feed transition guards (#846).
+    // caller-writable `last_result` key must not feed transition guards.
     args.task.lastResult = args.lastResult;
   }
   await args.task.save();
@@ -59,7 +59,7 @@ const REJECTION_CODES: ReadonlySet<string> = new Set([
   'TASK_TRANSITION_CONFLICT',
   // Routed here to make the bound visible: otherwise it reaches the
   // fire-and-forget `.catch` in `dispatchOnEnter` and the cycle stops silently,
-  // barely better than looping (#885).
+  // barely better than looping.
   'TASK_AUTOMATION_CHAIN_LIMIT',
 ]);
 
@@ -140,7 +140,7 @@ const routeOnComplete = async (args: {
         id: args.taskPublicId,
         transition: matched.transition,
         // No principal moved the task: `generationId` / `orchestrationRunId`
-        // below carry the cause, so the id is not duplicated here (#786).
+        // below carry the cause, so the id is not duplicated here.
         principal: { kind: 'automation', id: null },
         generationId: args.generationId,
         orchestrationRunId: args.orchestrationRunId,
@@ -231,7 +231,7 @@ const handleFailure = async (args: {
   dispatchKind: ActiveDispatch['kind'];
   attempt: number | undefined;
   error: unknown;
-  /** Set for a `tool` dispatch: the cause `on_failure` records (#792). */
+  /** Set for a `tool` dispatch: the cause `on_failure` records. */
   toolId: string | null;
 }): Promise<void> => {
   log(
@@ -269,7 +269,7 @@ const handleFailure = async (args: {
 };
 
 // Discarded rather than clobbering the new state if the task moved or
-// re-entered since the dispatch started (#590).
+// re-entered since the dispatch started.
 const commitCompletion = async (args: {
   taskPublicId: string;
   stateName: string;
@@ -334,7 +334,7 @@ const dispatchKindOf = (kind: string): ActiveDispatch['kind'] => {
 /**
  * A failed dispatch's provenance for the `tool` kind. The success path reads it
  * off the `DispatchResult`, but a failure has no result to read — and an
- * automation move still needs a recorded cause (#792), so it comes from the
+ * automation move still needs a recorded cause, so it comes from the
  * definition instead.
  */
 const failedToolId = (dispatch: WorkflowDispatch): string | null => {
@@ -365,7 +365,7 @@ const markDispatchRunning = (args: {
  *
  * `runStateAutomation` is the one place every state dispatch passes through, so
  * the check here stops all of them at once — an agent generation, a tool call
- * and a sub-orchestration alike (#1237). Recorded rather than silently skipped,
+ * and a sub-orchestration alike. Recorded rather than silently skipped,
  * so `resumeTask` knows this state's `on_enter` still owes its work.
  */
 const suppressIfPaused = async (args: {
@@ -408,7 +408,7 @@ export const runStateAutomation = async (args: {
   const inputs = applyInputMapping(dispatch.inputMapping, context);
 
   // No `retry` declared means one attempt and no `attempt` counter on
-  // `active_dispatch` — exactly today's behavior (#822).
+  // `active_dispatch` — exactly today's behavior.
   const retry = args.onEnter.retry ?? null;
 
   await markDispatchRunning({ task, dispatchKind, retry });
@@ -447,7 +447,7 @@ export const runStateAutomation = async (args: {
   const dispatched: DispatchResult = outcome.dispatched;
 
   // Cancellation-on-exit: commit the completion only if the task hasn't moved
-  // or re-entered since the dispatch started (#590).
+  // or re-entered since the dispatch started.
   const current = await commitCompletion({
     taskPublicId: args.taskPublicId,
     stateName: args.stateName,

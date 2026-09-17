@@ -411,7 +411,7 @@ const lookupInternalId = async (args: {
   });
   // The same error a public id that does not exist at all raises, deliberately:
   // a distinguishable "exists, but elsewhere" would make this an oracle for ids
-  // in other projects (#1180).
+  // in other projects.
   if (!row) throw new Error(`${args.label} not found: ${args.publicId}`);
   return row.id;
 };
@@ -422,8 +422,9 @@ const lookupInternalId = async (args: {
  * `projectId` is **required** on every one of these: the REST routes resolve a
  * caller-supplied id with the project in the `where`, and the formation modules
  * resolved it on the public id alone — so a template deployed into project A
- * could name project B's `sec_…` and get a provider in A holding B's credential
- * (#1180). Public ids appear in responses, traces and deploy logs, so they are
+ * could name project B's `sec_…` and get a provider in A holding B's
+ * credential. Public ids appear in responses, traces and deploy logs, so they
+ * are
  * not an access boundary. Every call site is a module `create`/`update`, which
  * runs under a known project, so there is no case where the value is genuinely
  * unavailable.

@@ -139,8 +139,8 @@ export const processResourceChange = async (args: {
     formationId,
   } = args;
   // At the top of the pipeline, so the diff and the `lastAppliedProperties`
-  // snapshot are keyed the way the module's `read()` reports them — a camelCase
-  // template used to compare its own keys against a snake_case read (#901).
+  // snapshot are keyed the way the module's `read()` reports them, so a
+  // camelCase template never compares its own keys against a snake_case read.
   const resolvedProperties = normalizeDeclaredProperties(
     resolveRefs(decl.properties, resolvedIds) as Record<string, unknown>
   );
@@ -266,7 +266,7 @@ const runResourceChanges = async (args: {
 
 /**
  * The error a succeeded deploy still carries, when a replaced resource could not
- * be disposed of (#1193).
+ * be disposed of.
  *
  * The desired state is realised, so the operation is not a failure — but a
  * `succeeded` with a null `error` was the only signal a caller had, and it hid a
@@ -373,7 +373,7 @@ export const applyFormationTemplate = async (args: {
   );
 
   // Seeded with what an earlier operation recorded and could not delete, so a
-  // transient failure self-heals on the next deploy (#1193).
+  // transient failure self-heals on the next deploy.
   const pendingCleanups = collectRecordedPendingCleanups({ existingResources });
 
   const ok = await runResourceChanges({
@@ -401,7 +401,7 @@ export const applyFormationTemplate = async (args: {
 
   // After every resource change and every orphan removal: a dependent that
   // still references the superseded resource has been re-pointed by then, and a
-  // delete that refuses over live references would otherwise fail (#1194).
+  // delete that refuses over live references would otherwise fail.
   const cleanupFailures = await runPendingCleanups({
     pendingCleanups,
     projectId: args.projectId,

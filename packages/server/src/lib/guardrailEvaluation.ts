@@ -146,7 +146,7 @@ const isUnresolvedFailClosedVarNode = (
  * Whether `expression` contains a `<` / `<=` / `>` / `>=` comparison with a
  * direct operand that is an unresolved `runtime.*`/`context.*` var — the exact
  * shape whose `null → 0` coercion silently turns an unresolvable reference
- * into a passing comparison (issue #666). Scoped to just these operators (not
+ * into a passing comparison. Scoped to just these operators (not
  * every `var` reference anywhere in the expression) so an `==`-based
  * conditional that intentionally treats "unconfirmed" as its own branch —
  * a normal, safe use of `null`'s own equality — is left alone.

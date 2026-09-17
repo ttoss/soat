@@ -210,10 +210,10 @@ const OPAQUE_MESSAGE = 'Internal Server Error';
  * hint, docs_url, meta? } }`.
  *
  * Every branch below routes through here, the catch-all included. A response a
- * caller cannot parse the same way as every other response is the branch #913
- * set out to delete, and the catch-all is the worst place to leave one — it is
- * the response that arrives unannounced, so it is the one a client is least
- * likely to have special-cased.
+ * caller cannot parse the same way as every other response has no place in the
+ * API, and the catch-all is the worst place to leave one — it is the response
+ * that arrives unannounced, so it is the one a client is least likely to have
+ * special-cased.
  */
 const errorBody = (args: {
   code: ErrorCode;

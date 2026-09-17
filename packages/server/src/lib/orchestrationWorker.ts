@@ -131,7 +131,7 @@ export const handleRunTask = async (args: {
 
   // A parked run has nothing for a worker to drive — every resumption is
   // request-driven — and re-driving one that an operator paused would run the
-  // very work the pause stopped (#1237). The scheduler's wake claim is guarded
+  // very work the pause stopped. The scheduler's wake claim is guarded
   // on `sleeping`, so a `wake` task never arrives for a parked run.
   if (run.status === 'awaiting_input') {
     log(

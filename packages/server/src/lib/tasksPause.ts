@@ -5,7 +5,7 @@ import { applyLocked, stillInState } from './tasksAutomationLocking';
 const log = createDebug('soat:tasks');
 
 /**
- * An operator pause on a workflow instance (#1237).
+ * An operator pause on a workflow instance.
  *
  * A workflow has no run object — its instance is the task — so the pause an
  * orchestration run gets lands here instead, and it stops the only work a task

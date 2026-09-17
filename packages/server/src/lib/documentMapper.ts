@@ -35,7 +35,7 @@ const mapDocumentFileFields = (doc: MappableDocument) => {
     path: doc.file?.path ?? undefined,
     filename: doc.file?.filename,
     // The source file's media type, echoed so a caller can tell a PDF from a
-    // transcript without also fetching the file (#1041).
+    // transcript without also fetching the file.
     content_type: doc.file?.contentType ?? undefined,
     size: doc.file?.size,
   };

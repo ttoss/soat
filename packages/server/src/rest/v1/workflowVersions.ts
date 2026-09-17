@@ -12,7 +12,7 @@ import {
 import { parsePagination, requireAuth } from './helpers';
 
 /**
- * Workflow state-machine version history (issue #882).
+ * Workflow state-machine version history.
  *
  * Versions are never written through this router: they are archived by the
  * shared workflow write path, so this surface is read-only apart from `restore`,

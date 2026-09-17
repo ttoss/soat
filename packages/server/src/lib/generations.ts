@@ -94,7 +94,7 @@ const findInitiatorGeneration = async (args: {
  * Creates the Trace (if needed) and the Generation in one transaction.
  *
  * They must commit together, or a `Generation.create` failure orphans an
- * invisible Trace that still blocks `deleteAgent` (soat#815).
+ * invisible Trace that still blocks `deleteAgent`.
  */
 const commitGenerationWithTrace = async (helperArgs: {
   args: GenerationAttribution & {
@@ -222,7 +222,7 @@ export const createGenerationRecord = async (
     sessionId: args.sessionId,
   });
 
-  // Zero-retention (#838): `metadata` and `inputMessages` are content, so they
+  // Zero-retention: `metadata` and `inputMessages` are content, so they
   // are refused at creation rather than written and purged later. The row itself
   // is still created — the skeleton is what metering and audit read.
   const contentColumns = await buildCreateContentColumns({
@@ -311,7 +311,7 @@ export const updateGenerationRecord = async (
   }
 
   // Drops the content columns while the lifecycle columns on the same update
-  // still land (#838). Enforced here, the only place those columns can be
+  // still land. Enforced here, the only place those columns can be
   // written, so a future caller inherits the guarantee.
   await suppressContentWrites({
     agentDbId: gen.agentId,

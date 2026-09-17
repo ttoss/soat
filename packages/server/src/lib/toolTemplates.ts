@@ -19,7 +19,7 @@ const log = createDebug('soat:toolTemplates');
  * `{{context:}}` exists because `tool_context` alone can only produce headers
  * under the deployment's context prefix — an invariant that must not be
  * relaxed, since caller context must never overwrite a tool's configured
- * credential headers or the server-pinned identity headers (#843/#850/#851).
+ * credential headers or the server-pinned identity headers.
  * The token inverts the authority: the **tool** declares which header its
  * credential goes in, and the caller supplies only the value.
  *
@@ -347,7 +347,7 @@ export const resolveToolHeaderTemplates = async (args: {
 
 /**
  * A tool's `preset_parameters` with every `{{context:<key>}}` token resolved
- * from this call's `tool_context` (#345), plus the top-level keys that carried
+ * from this call's `tool_context`, plus the top-level keys that carried
  * at least one — the input {@link coercePresetParametersToSchema} needs to know
  * which values came from a caller-supplied string rather than from the
  * operator's own literal.

@@ -38,7 +38,7 @@ export const isStale = (args: {
 // Locks the row, re-runs `guard` against the locked read and only then writes,
 // all in one transaction — so no concurrent `transitionTask` can commit between
 // the check and the write. Returns `null` when the guard rejected, which is
-// exactly where a plain read-check-write clobbered it with stale data (#590).
+// exactly where a plain read-check-write clobbered it with stale data.
 export const applyLocked = async (args: {
   taskPublicId: string;
   guard: (task: TaskWithWorkflow) => boolean;

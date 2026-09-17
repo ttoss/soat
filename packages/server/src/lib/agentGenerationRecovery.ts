@@ -141,8 +141,8 @@ const buildPendingFromState = async (args: {
     authHeader: args.authHeader,
     toolContext: args.pendingState.toolContext ?? undefined,
     remainingDepth: args.pendingState.remainingDepth ?? undefined,
-    // Trusted: `pendingState.toolContext` is persisted after the chokepoint pin
-    // (#850), so a caller-forged value never reaches it.
+    // Trusted: `pendingState.toolContext` is persisted after the chokepoint
+    // pin, so a caller-forged value never reaches it.
     sessionId: args.pendingState.toolContext?.sessionId ?? null,
   });
 

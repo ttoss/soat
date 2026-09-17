@@ -5,7 +5,7 @@
  *
  * Its own leaf module so the listing (`mcpToolListing.ts`) and the call
  * (`agentToolResolverMcp.ts`) share one reading of the protocol rather than
- * each keeping the subset it happened to need (#1301).
+ * each keeping the subset it happened to need.
  */
 import { isPlainObject } from './plainObject';
 
@@ -96,10 +96,9 @@ const contentBlocks = (result: McpCallResult | null): McpContentBlock[] => {
 };
 
 /**
- * `type` is absent as well as `'text'` because servers omit it and the reader
- * this replaces never looked: a block with a string `text` was that block's
- * text. Narrowing to the spelled type here would silently turn those answers
- * into block arrays.
+ * `type` is accepted absent as well as `'text'`, because servers omit it: a
+ * block with a string `text` is that block's text. Narrowing to the spelled
+ * type would silently turn those answers into block arrays.
  */
 const blockText = (block: McpContentBlock): string | null => {
   if (typeof block.text !== 'string') return null;

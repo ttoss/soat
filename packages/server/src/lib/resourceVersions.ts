@@ -12,13 +12,12 @@ import { paginatedList, type PaginatedResult } from './pagination';
 const log = createDebug('soat:versions');
 
 /**
- * The shared resource-versioning engine (#877, layer 1).
+ * The shared resource-versioning engine, layer 1.
  *
  * Agents and guardrails both keep an append-only archive of their config: an
  * immutable `(resource_id, version, config)` row written by the resource's own
- * write path, plus list / get / restore. The two had grown as parallel copies —
- * `AgentVersion`'s doc comment literally said "Mirrors `GuardrailVersion`" — so
- * the mechanism lives here once and each resource supplies only the config
+ * write path, plus list / get / restore. The two are the same mechanism, so it
+ * lives here once and each resource supplies only the config
  * projection, `applyConfig`, `mapVersion` and `loadResource`.
  *
  * Version *tables* stay per resource so the foreign key to the parent is a real

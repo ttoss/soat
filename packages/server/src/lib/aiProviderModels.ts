@@ -218,9 +218,9 @@ const defaultVertexAccessToken = async (
 
 /**
  * Vertex's `launchStage` enum is `LAUNCH_STAGE_UNSPECIFIED | EXPERIMENTAL |
- * PRIVATE_PREVIEW | PUBLIC_PREVIEW | GA` — `DEPRECATED` is not in it, so the
- * branch that used to look for it was dead and every model fell through to
- * `active`, preview and experimental ones included (#1089).
+ * PRIVATE_PREVIEW | PUBLIC_PREVIEW | GA` — `DEPRECATED` is not in it, so a
+ * branch looking for it is dead and every model falls through to `active`,
+ * preview and experimental ones included.
  *
  * Only `GA` maps: it is the one stage that means what `active` means. Nothing
  * in the enum means `legacy` or `deprecated`, and a preview stage is not
@@ -254,8 +254,8 @@ const readBedrockLifecycle = (
  *
  * Three of Vertex's locations are not regions; interpolating them into the
  * regional shape builds a host that does not exist, and Google answers it with
- * a generic HTML 404, so listing failed for every provider configured that way
- * (#1087). `global` is not a corner case — several Gemini models are served
+ * a generic HTML 404, so listing failed for every provider configured that way.
+ * `global` is not a corner case — several Gemini models are served
  * only there. Mirrors the mapping the AI SDK uses for generation's `baseURL`.
  */
 const vertexListingHost = (location: string): string => {
@@ -300,7 +300,7 @@ const enumerateVertex = async (
     fetchImpl: args.fetchImpl,
     // Rooted at `publishers/*`, not the project-scoped path generation's
     // `baseURL` uses — that shape is one Google does not serve, and its HTML
-    // 404 surfaced as MODEL_LISTING_FAILED for every vertex caller (#1080).
+    // 404 surfaced as MODEL_LISTING_FAILED for every vertex caller.
     // `project` stays required by `resolveVertexSettings` even though it no
     // longer reaches the URL: it selects the branch that mints the token and is
     // what the token is billed against. `PUBLISHER_MODEL_VIEW_FULL` is what
@@ -325,7 +325,7 @@ const enumerateVertex = async (
         vendor: 'google',
         // The listing carries no streaming field and serves embedding, TTS and
         // classification models too, so asserting `streaming: true` for every
-        // entry was wrong for a good share of them (#1089).
+        // entry was wrong for a good share of them.
         ...(lifecycle ? { lifecycle } : {}),
       },
     ];

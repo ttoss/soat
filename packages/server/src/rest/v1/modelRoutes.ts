@@ -23,7 +23,7 @@ const modelRoutesRouter = new Router<Context>();
 
 /**
  * Every `/model-routes/:route_id` route authorizes against the route's own SRN rather than the
- * project wildcard a statement naming one route can never match (#1339).
+ * project wildcard a statement naming one route can never match.
  */
 const modelRouteAccess = makeItemRouteAuthorizer({
   findScope: modelRoutes.findScope,

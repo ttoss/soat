@@ -236,8 +236,8 @@ const isKnownAction = (action: string): boolean => {
  * stops a mis-named `Deny` (a typo or a guessed action) from being silently
  * accepted and then never matching anything at evaluation time (fail-open at
  * authoring). Applied only at authoring boundaries (policy create/update,
- * formation validation) — never in the runtime evaluation path, so previously
- * stored policies keep evaluating unchanged.
+ * formation validation) — never in the runtime evaluation path, so an
+ * already-stored policy keeps evaluating unchanged.
  */
 const collectUnknownActionErrors = (args: {
   stmt: unknown;

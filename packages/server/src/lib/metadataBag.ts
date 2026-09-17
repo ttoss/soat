@@ -2,7 +2,7 @@ import { DomainError } from 'src/errors';
 
 /**
  * Validates a caller-owned `metadata` bag. Shared by every entry point that
- * accepts one (#342) so they enforce the same rule and answer with the same
+ * accepts one so they enforce the same rule and answer with the same
  * message. Returns an error message, or null when valid.
  *
  * There is no reserved-key list, and that is the point: every piece of state

@@ -192,8 +192,7 @@ documentsRouter.post('/documents', async (ctx: Context) => {
     resourceType: 'document',
   });
   // Asserted here rather than inside `createDocument`: every conversation
-  // message is a Document too, and that path must never be refused mid-turn
-  // (#1249).
+  // message is a Document too, and that path must never be refused mid-turn.
   await assertStorageQuota({
     projectId: Number(targetProjectId),
     addedBytes: contentBytes(body.content),

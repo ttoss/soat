@@ -64,7 +64,7 @@ export type FormationModuleDefinition<TResource> = {
   /**
    * The action each operation is authorized as, before the module runs. Required
    * so a new module cannot be reachable from a template without saying what
-   * permission applying it needs (#1181).
+   * permission applying it needs.
    */
   authorization: FormationModuleAuthorization;
   /**

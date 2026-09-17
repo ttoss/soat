@@ -4,7 +4,7 @@
  *
  * A leaf module by design — it imports `db` and `resourceAccessor` and nothing
  * else — so the four orchestration modules can share a scoped lookup without
- * importing one another; the cluster already has enough cycles (#910).
+ * importing one another; the cluster already has enough cycles.
  *
  * Those four spelled the same scope rule three ways: `!== undefined`, a truthy
  * `if`, and `projectIds && projectIds.length > 0`. The third is not a stylistic

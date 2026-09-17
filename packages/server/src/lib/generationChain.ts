@@ -22,7 +22,7 @@ const log = createDebug('soat:generation');
  * with a fresh step budget, so `max_call_depth` — which bounds recursion
  * *within* a request — never sees it. An agent that cannot terminate on its own
  * therefore compounds one round per approval TTL until someone notices, which
- * took 17 days and ~US$424 the first time (#1161).
+ * took 17 days and ~US$424 the first time.
  *
  * The budget counts generations, not hops, because the runaway fans out: a turn
  * holding N gated calls seeds N continuations, so a depth limit of D still

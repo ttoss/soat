@@ -23,12 +23,12 @@ const ingestionRulesRouter = new Router<Context>();
 
 /**
  * Every `/ingestion-rules/:ingestion_rule_id` route authorizes against the rule's own SRN rather than the
- * project wildcard a statement naming one rule can never match (#1339).
+ * project wildcard a statement naming one rule can never match.
  */
 const ingestionRuleAccess = makeItemRouteAuthorizer({
   findScope: ingestionRules.findScope,
   // camelCase, unlike every other SRN type — renaming it is a public-contract
-  // change, tracked separately in #1339.
+  // change of its own.
   resourceType: 'ingestionRule',
   param: 'ingestion_rule_id',
   label: 'Ingestion rule',

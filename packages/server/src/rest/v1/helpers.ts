@@ -1,17 +1,15 @@
 /**
  * Common helper functions for REST API handlers.
  *
- * Every guard here **throws** a `DomainError` rather than writing a response —
- * the rule `.claude/rules/errors.md` states and the one these helpers used to
- * contradict, institutionalizing the ❌ example for 349 call sites (#913).
- * Throwing also removes the `return` bookkeeping a boolean guard needed, where
- * a forgotten `return` continued into the handler with the response already set.
+ * Every guard here **throws** a `DomainError` rather than writing a response,
+ * the rule `.claude/rules/errors.md` states. Throwing also removes the `return`
+ * bookkeeping a boolean guard needs, where a forgotten `return` continues into
+ * the handler with the response already set.
  *
- * The auth/scope preamble lives here and nowhere else (#908). Before, ~170
- * routes re-derived it inline and eight modules kept a private `check*Access`
- * clone differing only in a `resourceType` literal, each free to pick a
- * different failure. `rest/errorShapeContract.test.ts` enforces both properties
- * statically.
+ * The auth/scope preamble lives here and nowhere else. Re-derived inline per
+ * route, or kept as a private `check*Access` clone per module, each copy is
+ * free to pick a different failure. `rest/errorShapeContract.test.ts` enforces
+ * both properties statically.
  */
 import type { AuthUser, Context } from 'src/Context';
 import { DomainError } from 'src/errors';
@@ -30,14 +28,13 @@ import { recordAuthorizationDecision } from 'src/middleware/audit';
  *
  * The denial is recorded before it is thrown. This check short-circuits ahead
  * of `resolveProjectIds`, so the audit wrapper never observes it — without the
- * explicit record a cross-project refusal would leave no audit entry at all
- * (the #745 class).
+ * explicit record a cross-project refusal would leave no audit entry at all.
  *
  * No-op when the credential is unscoped or the project matches.
  *
  * `null` is a *target*, not an absence: the request names no project at all —
  * minting or managing an unscoped key. A confined credential must be refused
- * there too, or the boundary is one `POST /api-keys` deep (#1038). A route with
+ * there too, or the boundary is one `POST /api-keys` deep. A route with
  * nothing to check should not call this.
  */
 export const assertCredentialProjectScope = (args: {
@@ -172,7 +169,7 @@ export const requireAuth: (
  * Records the decision for the audit log via `recordAuthorizationDecision` —
  * this comparison bypasses `isAllowed`/`resolveProjectIds` entirely, so
  * without this call the request produces no audit entry at all, even on a
- * successful mutation (see #745).
+ * successful mutation.
  */
 export const requireAdmin = (ctx: Context, action: string): void => {
   requireAuth(ctx);
@@ -222,11 +219,10 @@ export const requireOwnerOrAdmin = (
  * `project_id` — which lib list/get functions already treat that way, so the
  * return type passes straight through.
  *
- * Every non-admin read route funnels through here. The eight `check*Access`
- * clones this replaces differed only in a `resourceType` literal, yet 21 of 25
- * read routes reached the variant *without* `assertCredentialProjectScope`, so
- * a scoped key got an opaque `Forbidden` (#906). With one preamble there is no
- * second variant to pick.
+ * Every non-admin read route funnels through here. Per-module `check*Access`
+ * clones differ only in a `resourceType` literal, so a route reaching the
+ * variant *without* `assertCredentialProjectScope` hands a scoped key an opaque
+ * `Forbidden`. With one preamble there is no second variant to pick.
  */
 export const resolveReadProjectIds = async (args: {
   ctx: Context;
@@ -374,8 +370,8 @@ export type { RequestPrincipal } from 'src/lib/principals';
 
 /**
  * The principal to credit for an action, resolved from the auth context only —
- * never from a body. Attribution that a caller cannot address is the whole point
- * (#853), so the derivation lives here rather than per handler.
+ * never from a body. Attribution that a caller cannot address is the whole
+ * point, so the derivation lives here rather than per handler.
  *
  * The rule itself is `principalFromAuthUser`, shared with the audit middleware
  * and task transitions; this is just the `ctx` adapter for it.
@@ -390,7 +386,7 @@ export const requestPrincipalFromCtx = (ctx: Context): RequestPrincipal => {
  *
  * Fail-closed on every value, empty string included: an unset client-side
  * variable interpolates to nothing, and answering `?status=` with the whole
- * listing hands back the full scan a status filter exists to avoid (#1242).
+ * listing hands back the full scan a status filter exists to avoid.
  */
 export const parseEnumListQuery = (args: {
   ctx: Context;

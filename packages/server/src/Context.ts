@@ -65,7 +65,7 @@ export type AuthUser = {
    * a handler is that the caller is machinery continuing a chain rather than a
    * person starting one — which is what lets the task engine bound a composed
    * dispatch→transition→dispatch cycle that otherwise looks like a series of
-   * ordinary user moves (#885).
+   * ordinary user moves.
    */
   isRunToken?: boolean;
 };

@@ -1,7 +1,7 @@
 /**
  * The half of template validation that has to leave the process.
  *
- * Only an operator-registered resource type (#1078) has one today: a
+ * Only an operator-registered resource type has one today: a
  * registration declaring the `validate` capability gets a plan-time round trip
  * to its handler for the checks a JSON Schema cannot express. Every built-in is
  * fully validated synchronously, so a deployment registering nothing adds one
@@ -40,7 +40,7 @@ const validateDeclaration = async (args: {
 
   return hook({
     // The same shallow declaration normalization the synchronous seam applies,
-    // so a handler sees the key spelling the schema declares (#901).
+    // so a handler sees the key spelling the schema declares.
     properties: isPlainObject(declRaw.properties)
       ? normalizeDeclaredProperties(declRaw.properties)
       : declRaw.properties,

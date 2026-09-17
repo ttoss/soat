@@ -249,14 +249,13 @@ export const recencyDecayFactor = (args: {
 /**
  * Multiplies each memory store result's fused score by its decay and re-sorts.
  *
- * Applied per result **after** fusion, never as a third ranked list: a
- * per-store list is the defect #1272 measured, where each store claims result
- * slots by position rather than by what its rows are worth.
+ * Applied per result **after** fusion, never as a third ranked list: a per-store
+ * list lets a store claim result slots by position rather than by what its rows
+ * are worth.
  *
  * Document results are left alone — a fact goes stale, a paragraph of a manual
  * does not — and at a half-life of `0` the fused order is returned as it came,
- * so an untouched deployment's ranking is identical to the pre-blend one rather
- * than merely equal to it.
+ * untouched rather than merely equal to it.
  */
 const blendRecency = <T extends { updated_at: Date }>(args: {
   fused: Array<FusedResult<T>>;

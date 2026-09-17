@@ -38,7 +38,7 @@ type WindowScope = {
   projectId: number;
   agentId: number | null;
   actorId: number | null;
-  /** The meter a `cost_usd` cap answers for; null is every meter (#1240). */
+  /** The meter a `cost_usd` cap answers for; null is every meter. */
   meterType: string | null;
   windowStart: Date;
 };
@@ -230,7 +230,7 @@ export const UNPRICED_BLACKOUT_MIN_EVENTS = 3;
  * limit; `coverage` is meaningful only for `cost_usd` and says how much of the
  * window's AI usage the total actually accounts for — a `blackedOut` window
  * cannot be enforced at all, a partly-priced one is enforced on a figure that
- * understates real spend (#1228).
+ * understates real spend.
  */
 type WindowAggregate = {
   total: number;
@@ -360,9 +360,9 @@ const resolveSessionActor = async (args: {
  * event — an operator sees the dead cap before a caller is stopped by it.
  *
  * Only a **blackout** reaches here. A partly-priced window is reported and then
- * enforced on its priced total: refusing on a ratio is what made a cost cap
- * unrecoverable in #1201, since the refusal blocks the very generation that
- * would land the first priced event.
+ * enforced on its priced total: refusing on a ratio makes a cost cap
+ * unrecoverable, since the refusal blocks the very generation that would land
+ * the first priced event.
  *
  * `on_unpriced: "allow"` is the operator's opt-out, recorded on the quota
  * itself; `monitor` observes and never blocks, here as everywhere.
@@ -418,7 +418,7 @@ const evaluateGenerationQuota = async (args: {
 
   // The triage item files from the first unpriced row, whatever else the window
   // priced: a cap enforced on part of its window is not measuring what it caps,
-  // and nothing else reports that (#1228). It is the whole of the answer for a
+  // and nothing else reports that. It is the whole of the answer for a
   // partly-priced window — the refusal below is a blackout's alone.
   if (coverage.hasUnpricedUsage) {
     await reportUnpricedCostQuota({ quota, coverage });

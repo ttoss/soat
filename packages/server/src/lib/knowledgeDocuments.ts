@@ -185,11 +185,10 @@ const mapChunkResult = (chunk: ChunkWithDocument): QueryDocumentResult => {
 /**
  * Drops vector candidates whose raw cosine sits below the floor, before fusion.
  *
- * The floor is on cosine because that is the only thing it has ever measured:
- * `score` used to equal `similarity_score`, so the old `min_score` filtered
- * cosine by identity. Applying it to the fused value instead would turn it into
- * a rank cutoff in disguise — `1 / (k + 1)` is the same number for the best
- * result of a perfect list and the best of a useless one.
+ * The floor is on cosine, which is the only thing it measures. Applying it to
+ * the fused value instead would turn it into a rank cutoff in disguise —
+ * `1 / (k + 1)` is the same number for the best result of a perfect list and
+ * the best of a useless one.
  */
 const applySimilarityFloor = <T>(args: {
   candidates: Array<SignalCandidate<T>>;
@@ -488,8 +487,8 @@ export const resolveDocumentSearchLists = async (args: {
       minSimilarity: config.minSimilarity,
     }),
     // Never floored: a chunk that literally contains the searched token is the
-    // evidence, and dropping it for a low cosine re-creates the defect hybrid
-    // retrieval exists to fix.
+    // evidence, and dropping it for a low cosine is the failure hybrid
+    // retrieval exists to prevent.
     lexical: lexical.map(toLexicalCandidate),
   };
 };

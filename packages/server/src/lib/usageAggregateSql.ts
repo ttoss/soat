@@ -52,7 +52,7 @@ const ORCHESTRATION_RUN_TABLE = 'orchestration_runs';
  * How each dimension is bucketed in SQL.
  *
  * `keyExpr` is the grouped expression, `join` the single association it needs
- * (against the six the row-by-row rollup used to hydrate for every event). The
+ * (against the six a row-by-row rollup would hydrate for every event). The
  * `model` dimension is the only one that also reports a provider — see
  * `providerExpr` below.
  */
@@ -88,7 +88,7 @@ const GROUP_DIMENSIONS: { [K in UsageGroupBy]: GroupDimension } = {
   // no orchestration — a direct agent generation, an eval item, a trigger
   // firing — carries no run and collapses into the single null bucket, so the
   // bucket count is not a count of anything. `totals.distinct` is what answers
-  // "how many" (#1216).
+  // "how many".
   orchestration_run: {
     keyExpr: 'run."public_id"',
     join: {
@@ -418,7 +418,7 @@ export const loadWindowComponents = async (
  *
  * Bucket cardinality, not an entity count: every dimension that admits nulls
  * has a null bucket of its own, and it is a real bucket. "How many" is
- * `totals.distinct` (#1216).
+ * `totals.distinct`.
  */
 export const countGroups = async (args: {
   filter: EventFilter;

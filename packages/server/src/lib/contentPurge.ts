@@ -136,8 +136,8 @@ export const purgeGenerationContent = async (args: {
  *
  * The cascade is required for the erasure to mean anything. A child trace holds
  * its own steps file covering the same run, so purging only the named trace
- * would leave that content readable through the child — the same "deleted but
- * still reachable" gap #835 was about.
+ * would leave that content readable through the child — content deleted but
+ * still reachable.
  *
  * Descendants are found via `rootTraceId`, then filtered down the parent chain,
  * so purging a mid-tree trace does not touch its siblings or its parent.
@@ -253,8 +253,8 @@ const commitTracePurge = async (args: {
  * Purges a trace's content — deletes the steps object from storage, clears the
  * content columns, and cascades to descendant traces and their generations.
  *
- * Storage-aware delete order per #835/#841: collect locations, commit the DB
- * changes in a transaction, then delete the bytes best-effort, so a concurrent
+ * Storage-aware delete order: collect locations, commit the DB changes in a
+ * transaction, then delete the bytes best-effort, so a concurrent
  * read never references content mid-delete. Idempotent — already-redacted
  * traces keep their timestamps. Null when the trace is out of scope.
  */

@@ -74,8 +74,8 @@ const sweepProject = async (args: {
 
     for (const trace of due) {
       // Shared with the REST route so both paths produce identical audit
-      // entries, events and redaction semantics — one purge implementation
-      // (#837), scoped so it can never reach across projects.
+      // entries, events and redaction semantics — one purge implementation,
+      // scoped so it can never reach across projects.
       await purgeTraceContent({
         traceId: trace.publicId,
         projectIds: [args.projectDbId],
@@ -112,7 +112,7 @@ const sweepProject = async (args: {
 /**
  * Content-purges every trace older than its project's
  * `trace_content_retention_days`, turning "the customer must remember to
- * request a purge" into "the system guarantees it" (#837).
+ * request a purge" into "the system guarantees it".
  *
  * Opt-in: a project with a `null` window is skipped, so shipping this destroys
  * nothing anyone already stored. Safe under overlapping ticks and multiple

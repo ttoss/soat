@@ -63,7 +63,7 @@ const writeRunCheckpoint = async (args: {
  * The operator pause to stop at this round's checkpoint, or null.
  *
  * The checkpoint is the pause's boundary: the round's work is durable, so the
- * frontier can be parked and re-driven without repeating any of it (#1237). The
+ * frontier can be parked and re-driven without repeating any of it. The
  * flag is re-read here rather than taken off the loaded row, because a request
  * writes it while this loop runs.
  *
@@ -275,7 +275,7 @@ export type RunLoopResult = {
   /**
    * The frontier and reason to park on when an operator pause stopped the loop,
    * or null when nothing paused it. Carried out rather than persisted here so
-   * one place settles a run (#1237).
+   * one place settles a run.
    */
   pause: { reason: string | null; frontier: string[] } | null;
 };

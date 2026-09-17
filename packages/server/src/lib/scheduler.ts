@@ -135,7 +135,7 @@ export const createScheduler = (
     // The first tick lands one whole interval after boot, and a restart begins
     // the interval again from zero — so a sweep on a daily interval only ever
     // runs if the process survives 24 unbroken hours, which a service that
-    // redeploys or recycles daily never does (#1229). Assigned to `timer`
+    // redeploys or recycles daily never does. Assigned to `timer`
     // first, so this stays idempotent against a re-entrant `start`.
     runSweeps();
   };

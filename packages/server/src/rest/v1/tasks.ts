@@ -217,12 +217,12 @@ tasksRouter.post('/tasks/:task_id/transitions', async (ctx: Context) => {
     transition: body.transition,
     note: body.note,
     // Passed straight through, `undefined` included: omitting the field keeps
-    // the task's stored bag, which is not the same as sending `{}` (#950).
+    // the task's stored bag, which is not the same as sending `{}`.
     toolContext: body.tool_context,
     principal: principalFromCtx(ctx),
     // A run-as token names a user or key like any other credential, so the
     // principal above cannot distinguish a dispatch continuing its own chain
-    // from the person who started it. This can (#885).
+    // from the person who started it. This can.
     viaRunToken: ctx.authUser!.isRunToken === true,
   });
 });

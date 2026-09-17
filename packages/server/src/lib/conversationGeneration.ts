@@ -255,10 +255,10 @@ const buildPersonaSystem = (agent: {
 /**
  * The turn is finished and persisted; everything after it happens on the bus.
  *
- * Extraction used to be called from here as a second fire-and-forget branch.
- * It is a `memory_rules` subscriber now, so a conversation turn feeds a store
- * through the same path a bare generation does — and through the store's
- * policy, not this agent's (#1324).
+ * Extraction is a `memory_rules` subscriber rather than a second
+ * fire-and-forget branch here, so a conversation turn feeds a store through the
+ * same path a bare generation does — and through the store's policy, not this
+ * agent's.
  */
 const firePostTurnSideEffects = (args: {
   conversationId: string;
@@ -309,8 +309,8 @@ export const generateConversationMessage = async (args: {
   // it). Plain conversation generations leave it unset.
   sessionId?: string;
   // The credential the turn's tools run with. Set only by request-less callers
-  // that re-minted one for durable work (an approved tool call's continuation,
-  // #894); a request-driven turn leaves it unset, exactly as before.
+  // that re-minted one for durable work (an approved tool call's
+  // continuation); a request-driven turn leaves it unset.
   authHeader?: string;
   // The generation this turn continues, when a resumption drove it (an
   // approval's continuation). Declares the chain so it is bounded and linked;

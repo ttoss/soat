@@ -44,7 +44,7 @@ export const isFetchFailure = (
  * response was already `200`, so there is no `APICallError` to match on. Left
  * unmatched it fell through to the generic wrapper, and a fault the provider had
  * named reached the caller as "Internal Server Error" and the record as
- * `[object Object]` (#1084).
+ * `[object Object]`.
  *
  * A real `Error` is excluded: those are served by `toProviderDomainError`'s
  * earlier branches, and mapping them all to `AI_PROVIDER_ERROR` would relabel
@@ -85,7 +85,7 @@ const apiCallDomainError = (error: APICallError): DomainError => {
  * rather than as a failed request — a frame streamed mid-run, or an answer
  * that ignored a forced `tool_choice`. Upstream-caused like
  * `OUTPUT_SCHEMA_VALIDATION_FAILED`; unmapped they read as a fault in the
- * runtime (500) rather than in the model (#1084).
+ * runtime (500) rather than in the model.
  */
 const modelFaultDomainError = (error: unknown): DomainError | null => {
   if (StreamProviderError.isInstance(error)) {

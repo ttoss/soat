@@ -6,28 +6,29 @@ import { isPlainObject } from './plainObject';
 const log = createDebug('soat:usage');
 
 /**
- * One-time rewrite of the stored documents that carry a name #1216 renamed.
+ * One-time rewrite of the stored documents that carry a usage name under an
+ * older spelling.
  *
  * Both validators behind those names — `isKnownAction` for policy actions,
  * `RUNTIME_CONTEXT_CATALOG` for guardrail variables — run at authoring time
- * only, so a document a tenant stored before this release keeps its old
- * strings and the release silently changes what they do: an `Allow` grants
- * nothing and a `Deny` denies nothing (fail-open), while an unresolvable
- * guardrail variable makes `guardPasses` fail every call (fail-closed, an
- * outage for that agent).
+ * only, so a stored document keeps whatever string it was written with and a
+ * spelling the platform no longer answers to silently changes what it does: an
+ * `Allow` grants nothing and a `Deny` denies nothing (fail-open), while an
+ * unresolvable guardrail variable makes `guardPasses` fail every call
+ * (fail-closed, an outage for that agent).
  *
  * Idempotent and prefiltered in SQL, so a converged database reads no rows and
  * it is safe to leave wired into every boot. The rewrite touches only names
  * the platform owns, enumerated below — never a string a tenant wrote.
  */
 
-/** IAM actions renamed by §3 and §4. Wildcards (`usage:*`) are untouched. */
+/** IAM action names the platform rewrites. Wildcards (`usage:*`) are untouched. */
 const RENAMED_ACTIONS: Record<string, string> = {
   'usage:ListUsageMeters': 'usage:ListEvents',
   'usage:GetUsage': 'usage:GetAggregate',
 };
 
-/** Guardrail `runtime.*` variables renamed by §2. */
+/** Guardrail `runtime.*` variable names the platform rewrites. */
 const RENAMED_VAR_PATHS: Record<string, string> = {
   'runtime.usage.run_tokens': 'runtime.usage.orchestration_run_tokens',
   'runtime.usage.run_cost_usd': 'runtime.usage.orchestration_run_cost_usd',

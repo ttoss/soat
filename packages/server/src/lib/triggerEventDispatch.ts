@@ -247,9 +247,9 @@ const handleEvent = async (event: SoatEvent): Promise<void> => {
   } catch (error) {
     // Outside the per-trigger guard below, so it is caught here — this function
     // must never reject, or a transient DB error becomes an unhandled rejection
-    // long after the emitting write committed. Never a silent `catch`, per
-    // #1130: a blip on this read unhooks every event trigger in the project,
-    // and the lost firing is indistinguishable from nothing subscribing.
+    // long after the emitting write committed. Never a silent `catch`: a blip
+    // on this read unhooks every event trigger in the project, and the lost
+    // firing is indistinguishable from nothing subscribing.
     recordDroppedEvent({
       stage: 'trigger_lookup',
       type: event.type,

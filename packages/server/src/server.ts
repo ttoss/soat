@@ -65,7 +65,7 @@ const startServer = async () => {
 
   try {
     const database = await initializeDatabase(app);
-    // Schema DDL is a pre-deploy step (#548): boot binds its port in seconds
+    // Schema DDL is a pre-deploy step: boot binds its port in seconds
     // and only checks that the step has run. DB_SYNC=true opts a deployment
     // that has no such step — a single container against its own database —
     // back into preparing the schema here, serialized on the advisory locks.
@@ -75,8 +75,8 @@ const startServer = async () => {
     // converged database pays a single indexless scan and writes nothing.
     await backfillKnowledgeConfigCasing();
     // One-time rewrite of stored policy / guardrail / formation documents that
-    // name a string #1216 renamed. Same shape: idempotent, prefiltered in SQL,
-    // and a converged database writes nothing.
+    // name a usage string under an older spelling. Same shape: idempotent,
+    // prefiltered in SQL, and a converged database writes nothing.
     await backfillUsageRenames();
     // Start the durable orchestration scheduler once the database is ready so
     // it can wake sleeping runs whose delay/poll waits are due (including runs

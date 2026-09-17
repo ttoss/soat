@@ -20,15 +20,14 @@ import { makeItemRouteAuthorizer } from './resourceAccess';
 const secretsRouter = new Router<Context>();
 
 /**
- * These routes already named the secret's own SRN, so what the shared preamble
- * adds is the half they were missing: a credential pinned to another project
- * now gets its own `API_KEY_PROJECT_SCOPE`, with the remedy in the message,
- * instead of an opaque `Forbidden` (the #906 class, #1339).
+ * These routes name the secret's own SRN; the shared preamble adds the
+ * tenant-boundary half, so a credential pinned to another project gets its own
+ * `API_KEY_PROJECT_SCOPE` with the remedy in the message rather than an opaque
+ * `Forbidden`.
  *
- * `refuse` on the read too, which is what this module already answered.
- * Whether a denied read should hide the secret instead — as tools, agents and
- * the modules moved in #1339 do — is a contract change of its own, not a side
- * effect of sharing a preamble.
+ * `refuse` on the read too. Whether a denied read should hide the secret
+ * instead — as tools and agents do — is a contract change of its own, not a
+ * side effect of sharing a preamble.
  */
 const secretAccess = makeItemRouteAuthorizer({
   findScope: secrets.findScope,

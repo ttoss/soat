@@ -54,7 +54,7 @@ export interface OperationSpec {
    *
    * It is what lets an agent's `boundary_policy` be evaluated against the SRN
    * and tags of the resource a call actually touches, the way the route
-   * evaluates the caller's policy (#1323). An operation that declares none —
+   * evaluates the caller's policy. An operation that declares none —
    * a listing, a create, anything project-scoped — is evaluated against `*`,
    * which is the whole truth about a call that names no resource.
    */

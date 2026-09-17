@@ -154,7 +154,7 @@ const RESOURCE_KINDS: Record<string, ResourceKind> = {
   },
 
   // camelCase, unlike every other SRN type — renaming it is a public-contract
-  // change, tracked separately in #1339.
+  // change of its own.
   ingestionRule: {
     accessor: () => {
       return ingestionRules;

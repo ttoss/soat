@@ -445,7 +445,7 @@ export const assertOrchestrationValid = (args: {
 }): void => {
   // Throws `INVALID_TOOL_CONTEXT_KEY` rather than joining the graph issues
   // below, so one mistake answers with one code whether it was made on a tool's
-  // allowlist or a node's (#1153). A typo'd entry has to be a rejected write:
+  // allowlist or a node's. A typo'd entry has to be a rejected write:
   // silently it would be a key that never matches, presenting later as a child
   // run mysteriously missing its credential.
   for (const node of args.nodes) {

@@ -30,7 +30,7 @@ const apiKeysRouter = new Router<Context>();
  * is self-service, so a confined key could mint a brand-new **unscoped** key
  * for its owning user and be outside its boundary in one call; the item routes,
  * gated on owner-or-admin alone, then let it read, re-scope or delete that
- * owner's keys in any project (#1038). A per-tenant credential is only a
+ * owner's keys in any project. A per-tenant credential is only a
  * boundary if it cannot mint its way past it.
  *
  * Every route below therefore runs `assertCredentialProjectScope` against the
@@ -220,7 +220,7 @@ apiKeysRouter.post('/api-keys', async (ctx: Context) => {
 
   // Self-service — any authenticated caller may create a key for themselves,
   // so there is no allow/deny branch to record; this is the one point that
-  // makes the mutation visible to the audit log at all (see #745).
+  // makes the mutation visible to the audit log at all.
   recordAuthorizationDecision(ctx, {
     action: 'api-keys:CreateApiKey',
     allowed: true,

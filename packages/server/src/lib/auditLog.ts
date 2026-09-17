@@ -66,7 +66,7 @@ const mapAuditEntry = (
     // reads an entry documents the same snake_case contract — so the
     // conversion belongs here rather than in each of them. Shallow only: a
     // nested `contextSnapshot` is a runtime-owned bag, and a deep transform
-    // would rename keys SOAT does not own (the #690 class).
+    // would rename keys SOAT does not own.
     detail: isPlainObject(instance.detail)
       ? convertKeys(instance.detail, camelToSnakeKey)
       : ((instance.detail as null) ?? null),

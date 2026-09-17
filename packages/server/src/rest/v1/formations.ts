@@ -31,8 +31,8 @@ import {
 export const formationsRouter = new Router<Context>();
 
 /**
- * Answers the per-resource authorization questions the deploy path asks
- * (#1181), for one request and one project.
+ * Answers the per-resource authorization questions the deploy path asks, for
+ * one request and one project.
  *
  * A closure rather than a threaded `Context`: the lib layer stays free of the
  * request, and every decision is recorded here — a Deny that silently failed to

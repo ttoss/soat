@@ -50,7 +50,7 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> => {
  * the SDK, CLI and MCP surface are generated from, and a route is strict the
  * moment it is documented. Ignoring an unknown parameter is not a missing
  * answer but a wrong one — a dropped `?model=` hands back a project-wide usage
- * total under the caller's belief that it is one model's (#1265) — and a
+ * total under the caller's belief that it is one model's — and a
  * `?limitt=5` that silently pages by 20 is the same failure in miniature.
  *
  * A path no operation documents (`/openapi.json`, the OAuth consent pages) is

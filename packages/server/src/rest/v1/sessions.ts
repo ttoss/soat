@@ -29,7 +29,7 @@ export const sessionsRouter = new Router<Context>();
  * the tags it names are known. The project-level probe this replaced asked
  * `srn:<project>:session:*` with no context, so a conditioned statement never
  * matched and the resource segment of a policy was never compared at all —
- * sessions advertised tag-based access control they did not enforce (#1278).
+ * sessions advertised tag-based access control they did not enforce.
  *
  * Throws `DomainError` with codes:
  *  - `UNAUTHORIZED`       – no authenticated user

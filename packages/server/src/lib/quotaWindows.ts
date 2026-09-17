@@ -14,8 +14,7 @@ export type QuotaWindow = (typeof QUOTA_WINDOWS)[number];
 /**
  * The `window` a stock metric carries. A stock — `storage_bytes` — is not
  * aggregated over time at all: the measurement *is* the footprint, it never
- * resets, and waiting never clears it, so none of the math below applies to it
- * (#1249).
+ * resets, and waiting never clears it, so none of the math below applies to it.
  *
  * A sentinel rather than a nullable column: the quota's identity is
  * `(project, scope, scope_ref, metric, window)`, and a null there would make

@@ -5,7 +5,7 @@
  * It sits next to `agentNonStreamGeneration.ts` rather than inside
  * `agentGenerationHelpers.ts`, which is where it grew — a module named
  * "helpers" holding one of the two run paths is how `buildPrepareStep` ended
- * up written twice (#911): the stream copy was unreachable from the non-stream
+ * up written twice: the stream copy was unreachable from the non-stream
  * module, so it was re-implemented instead of shared.
  */
 import type { LanguageModel, LanguageModelUsage, ModelMessage, Tool } from 'ai';
@@ -194,8 +194,8 @@ const recordStreamFailure = async (args: {
  * Wraps `streamText`'s stream so a captured failure reaches the caller.
  *
  * `streamText` hands failures to `onError` and then closes the stream cleanly,
- * so the route read an ordinary end-of-stream and answered `200` with no error
- * (#1084). Chunks are forwarded as they arrive and the failure raised after the
+ * so the route read an ordinary end-of-stream and answered `200` with no error.
+ * Chunks are forwarded as they arrive and the failure raised after the
  * last one, which keeps partial output and makes the route's `catch` — terminal
  * SSE error frame, no `[DONE]` — reachable.
  */

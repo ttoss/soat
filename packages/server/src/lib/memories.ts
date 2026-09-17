@@ -48,7 +48,7 @@ const resolveMemoryStoreProjectId = async (args: {
  * Called from the REST route, the formation resource and a memory rule's
  * firing rather than from `writeMemory` itself: the `write_memory` tool reaches
  * that function mid-turn, and a refusal there would fail a generation already
- * under way — the corpus cap is a request-boundary refusal by design (#1249). A
+ * under way — the corpus cap is a request-boundary refusal by design. A
  * rule runs after the turn completes, so it has nothing in flight to break.
  */
 export const assertMemoryStorageQuota = async (args: {

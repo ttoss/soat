@@ -13,7 +13,7 @@ export const MIGRATE_COMMAND = 'node packages/server/dist/migrate.mjs run';
 /**
  * Whether boot performs the schema DDL itself.
  *
- * Off by default (#548): `sync({ alter: true })` is `await`ed before
+ * Off by default: `sync({ alter: true })` is `await`ed before
  * `app.listen`, so on a schema-changing release against a populated database a
  * task could not answer `/health` for minutes and an orchestrator that
  * health-gates the rollout killed it first. Schema changes are a discrete

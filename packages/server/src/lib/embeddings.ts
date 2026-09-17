@@ -9,7 +9,7 @@ const log = createDebug('soat:embeddings');
 /**
  * The project a stateless embedding call is billed to. `null` when the request
  * names none and the credential is bound to none — a plain JWT call belongs to
- * no project, so there is nothing to attribute the usage event to (#1208).
+ * no project, so there is nothing to attribute the usage event to.
  */
 const resolveBillingProjectId = async (args: {
   projectPublicId: string | null;

@@ -1,10 +1,10 @@
 /**
  * Resolving an `mcp` tool binding into AI-SDK tools, and calling one.
  *
- * Split from `agentToolResolverExternalTools.ts`, which held this and the
- * `builtin` (SOAT) resolution: the two share nothing but the shape of the
- * error callback, and together they had grown past the module ceiling. The
- * protocol reading itself lives in `mcpProtocol.ts` and `mcpToolListing.ts`.
+ * Separate from `agentToolResolverExternalTools.ts`, which holds the `builtin`
+ * (SOAT) resolution: the two share nothing but the shape of the error callback,
+ * and together they exceed the module ceiling. The protocol reading itself
+ * lives in `mcpProtocol.ts` and `mcpToolListing.ts`.
  */
 import type { JSONSchema7, JSONValue, Tool } from 'ai';
 import { jsonSchema, tool } from 'ai';
@@ -29,7 +29,7 @@ export const buildMcpToolExecute = (args: {
   presetParameters?: object | null;
   // A `{{context:}}` token in a preset resolves against this call's context and
   // is retyped by the tool's schema — at call time, so a missing key fails this
-  // call rather than the resolution of every tool the agent has (#345).
+  // call rather than the resolution of every tool the agent has.
   toolContext?: Record<string, string>;
   presetSchema?: unknown;
   logToolCallingError: LogToolCallingError;
@@ -162,7 +162,7 @@ export const resolveMcpTools = async (args: {
     // of enumerating every read tool.
     deniedActions?: string[] | null;
     // Per-tool allowlist of `tool_context` keys that may be forwarded as
-    // prefixed context headers. `null`/`undefined` forwards all (#945).
+    // prefixed context headers. `null`/`undefined` forwards all.
     contextKeys?: string[] | null;
     // Fixed values the operator pinned on the binding. They apply to every tool
     // the MCP server exposes through it — the same reach `builtin` presets have

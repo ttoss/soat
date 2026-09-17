@@ -2,7 +2,7 @@
  * The seam a `loop` or `sub_orchestration` node uses to start a child run.
  *
  * Those two nodes are the only reason the executors need the engine, and the
- * engine needs the executors back — a real runtime cycle (#910). A dynamic
+ * engine needs the executors back — a real runtime cycle. A dynamic
  * import is resolved at call time, not when the module graph is built, so
  * nothing here appears in the engine's load-time dependencies.
  *
@@ -28,7 +28,7 @@ export type NestedRunParent = {
    * off the parent's row by the engine driving it rather than looked up from
    * `runId` here: the row is already in hand there, and a child started by a
    * parent whose row had since been deleted would otherwise restart the count
-   * from zero — the unbounded case by another route (#1185).
+   * from zero — the unbounded case by another route.
    */
   runDepth: number;
 };
@@ -40,11 +40,11 @@ export type NestedRunStarter = (args: {
   input: Record<string, unknown>;
   authHeader?: string;
   // The parent run's `tool_context`, inherited by the child so an agent several
-  // levels down still calls its tools with the caller's context (#945).
+  // levels down still calls its tools with the caller's context.
   toolContext?: Record<string, string>;
   wait: boolean;
-  // Stamped on the child so a parent's cost roll-up reaches the work it ordered
-  // (#1135). Deliberately outside the public contract: parentage is recorded by
+  // Stamped on the child so a parent's cost roll-up reaches the work it
+  // ordered. Deliberately outside the public contract: parentage is recorded by
   // the engine executing the parent, never claimed by a caller.
   parent: NestedRunParent;
 }) => Promise<{

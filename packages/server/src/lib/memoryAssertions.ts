@@ -226,7 +226,7 @@ export const listMemoryAssertions = async (args: {
 
 /**
  * The volume question as a query: which door is filling this store, and with
- * what outcomes. Unanswerable before this table — a skip left no row at all.
+ * what outcomes. The ledger is the only place a skipped write leaves a row.
  */
 export const listMemoryStoreAssertions = async (args: {
   memoryStoreId: number;

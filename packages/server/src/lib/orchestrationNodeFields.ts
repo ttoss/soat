@@ -5,9 +5,8 @@ import type { OrchestrationNode } from './orchestrations';
  * Which field each node type cannot execute without. One table, two consumers:
  * {@link validateNodes} rejects a graph that omits the field at author time,
  * and {@link requireNodeField} rejects it at dispatch time. Adding a node type
- * means adding one entry here — the eleven hand-written throws that used to
- * restate this table, each with its own message string and its own idea of
- * what "missing" meant, are gone (#914).
+ * means adding one entry here, rather than a hand-written throw per call site
+ * with its own message string and its own idea of what "missing" means.
  */
 export const REQUIRED_NODE_FIELDS: Partial<
   Record<OrchestrationNode['type'], keyof OrchestrationNode>

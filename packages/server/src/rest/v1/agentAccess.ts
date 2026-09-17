@@ -1,7 +1,7 @@
 /**
  * The agent's binding of the shared item-route preamble.
  *
- * Agents were the first module moved off the project-level probe (#1336) and
+ * Agents were the first module moved off the project-level probe and
  * the shape held for every other one, so the decision itself now lives in
  * `resourceAccess.ts`. What stays here is only what is agent-specific: the
  * accessor the scope comes from, the SRN's type, and the noun a `404` names.

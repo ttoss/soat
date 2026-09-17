@@ -88,12 +88,12 @@ export const mapGeneration = (
     // The continuation chain this turn belongs to; null when it is not one. The
     // chain's own key (`rootGenerationId`) stays internal — this is the handle.
     chain_id: gen.chainId,
-    // The conversation this turn served, null everywhere else. Persisted since
-    // #1322: before it, neither row carried the other's id.
+    // The conversation this turn served, null everywhere else. Persisted on the
+    // generation, so neither side has to be found through the other.
     conversation_id: linkedPublicId(gen.conversation),
     // The end-user attribution the usage event copies at metering time. Exposed
     // here too, because a session's spend is otherwise reconstructable only by
-    // recording the session -> generation link outside the platform (#1265).
+    // recording the session -> generation link outside the platform.
     session_id: linkedPublicId(gen.session),
     actor_id: linkedPublicId(gen.startedByActor),
     started_by_principal_type: gen.startedByPrincipalType,

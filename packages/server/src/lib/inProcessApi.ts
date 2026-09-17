@@ -16,14 +16,13 @@ const log = createDebug('soat:inprocess');
 const SYNTHETIC_HOST = 'localhost';
 
 /**
- * Bounds how long a caller waits for a SOAT action, replacing the
- * `AbortSignal.timeout` that bounded the loopback request before #888.
+ * Bounds how long a caller waits for a SOAT action.
  *
- * It bounds the *wait*, not the work — which is exactly what the aborted fetch
- * bounded too. Aborting a request never stopped the handler on the other end;
- * it only stopped the client listening for the answer. An agent whose `soat`
- * tool reaches a genuinely stuck action still gets its tool call back instead of
- * hanging for the rest of the generation.
+ * It bounds the *wait*, not the work, exactly as an aborted fetch would:
+ * aborting a request never stops the handler on the other end, it only stops
+ * the client listening for the answer. An agent whose `soat` tool reaches a
+ * genuinely stuck action still gets its tool call back instead of hanging for
+ * the rest of the generation.
  */
 export const withCallTimeout = async <T>(args: {
   promise: Promise<T>;
@@ -148,7 +147,7 @@ const toWireBody = (args: {
 
 /**
  * Serves one API request against this process's own app, with no network — the
- * seam a `soat` tool calls instead of fetching `http://localhost:$PORT` (#888).
+ * seam a `soat` tool calls instead of fetching `http://localhost:$PORT`.
  *
  * It runs **the app's real middleware stack** against a synthetic request and
  * reads the response off the resulting Koa context. Running the stack, rather
@@ -159,8 +158,8 @@ const toWireBody = (args: {
  *
  * Identity still arrives as a credential in the `Authorization` header, because
  * the auth middleware is where a token's markers become `authUser` fields —
- * `isRunToken` bounds a composed dispatch→transition cycle (#885) and
- * `apiKeyPublicId` attributes a key-started chain (#887). Passing a principal
+ * `isRunToken` bounds a composed dispatch→transition cycle and
+ * `apiKeyPublicId` attributes a key-started chain. Passing a principal
  * object would strip both silently while HTTP-path tests kept passing.
  *
  * Each call gets a fresh context, so a self-call is metered, audited and
@@ -207,7 +206,7 @@ export const dispatchApiRequest = async (args: {
  * Returning an error body as data made an unauthorized action
  * indistinguishable from a successful one: an orchestration tool node stored
  * the error as its artifact and carried on, and the MCP surface rendered a `401`
- * as a tool result for years (#888).
+ * as a tool result for years.
  *
  * Both callers reach the platform the same way; all that differs is how a
  * failure is spelled — an `HttpToolError` carrying the status for the agent's

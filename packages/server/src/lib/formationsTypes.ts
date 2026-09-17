@@ -55,7 +55,7 @@ export type ValidationResult = {
  * Where a resource sits in the formation being applied.
  *
  * Every built-in module ignores all of it — it provisions through a lib call
- * that needs nothing beyond the properties. An operator-registered type (#1078)
+ * that needs nothing beyond the properties. An operator-registered type
  * forwards it to its handler: `logicalId` is the name the template author gave
  * the resource, and `resourceKey` is the `formation_resources` row's public id,
  * which is unique per (formation, logical id) and therefore stable across
@@ -64,7 +64,7 @@ export type ValidationResult = {
  * Those two are optional because the module contract does not require a caller
  * to be inside an apply; the apply pipeline always supplies them.
  *
- * `projectId` is **required**, and deliberately so (#1179). A handler for a
+ * `projectId` is **required**, and deliberately so. A handler for a
  * resource that lives in the system SOAT is fronted by — rather than in the
  * handler's own database — has no way to reach that resource without knowing
  * whose project it belongs to, and a project it is never told is not a failure
@@ -83,7 +83,7 @@ export type FormationResourceContext = {
  * request, and what a formation deploy had no way to name.
  *
  * Three modules need it, and for two of them it is what bounds the resource's
- * authority rather than merely labelling it (#1181): an `api_key` mints under
+ * authority rather than merely labelling it: an `api_key` mints under
  * it, so the key can never exceed whoever deployed it, and a `trigger`'s
  * `created_by` is the run-as identity a firing mints a token for. An `agent`
  * version uses it as authorship.
@@ -109,12 +109,12 @@ export type UpdateOutcome = { replacedWithPhysicalResourceId: string };
 /**
  * How a formation resource type is authorized, per operation.
  *
- * A formation used to be authorized once, as `formations:CreateFormation` on the
- * request, and every resource it declared was then applied by calling the
- * module's lib function directly — so the per-action check the REST routes
- * perform never ran for anything a template declared (#1181). A principal
- * denied `guardrails:CreateGuardrail` created a guardrail by declaring one, and
- * the `policy` + `api_key` pair turned that into privilege escalation.
+ * Authorizing a formation once, as `formations:CreateFormation` on the request,
+ * and then applying every resource it declares by calling the module's lib
+ * function directly would skip the per-action check the REST routes perform. A
+ * principal denied `guardrails:CreateGuardrail` would create a guardrail by
+ * declaring one, and the `policy` + `api_key` pair turns that into privilege
+ * escalation.
  *
  * Declaring it here, required, is what makes the check impossible to forget: a
  * new module does not compile without saying which action each of its
@@ -149,7 +149,7 @@ export type FormationModuleAuthorization =
     }
   | {
       /**
-       * An operator-registered type (#1078) has no SOAT action to check: its
+       * An operator-registered type has no SOAT action to check: its
        * actions are not in the permission catalog, so no policy could grant
        * them and every apply would be denied. Such a type stays gated on the
        * request's own `formations:*` action, as before.
@@ -330,7 +330,7 @@ export type PlanResult = {
   changes: PlanChange[];
   /**
    * The per-resource actions the caller may not perform, so a plan says up
-   * front what an apply would refuse (#1181). Omitted when the caller may
+   * front what an apply would refuse. Omitted when the caller may
    * perform every action the plan implies — a plan is read-only, so it reports
    * the refusals rather than becoming one.
    */
@@ -353,7 +353,7 @@ export type FormationEvent = {
  *
  * It is stored on the `FormationOperation` *and* on the formation itself, so
  * the response a caller already holds explains its own `status: 'failed'`
- * instead of pointing at a second call to `list-formation-events` (#1028).
+ * instead of pointing at a second call to `list-formation-events`.
  * Being a stored bag it is written snake_case, like every other wire value.
  */
 export type FormationError = {
@@ -482,7 +482,7 @@ export type MappedFormation = {
   resolved_parameters: Record<string, string> | null;
   /**
    * Why the formation is `failed` / `delete_failed`, or — while the formation is
-   * `active` — a replaced resource a succeeded deploy could not delete (#1193).
+   * `active` — a replaced resource a succeeded deploy could not delete.
    * Null otherwise; a successful apply with nothing outstanding clears it.
    */
   error: FormationError | null;

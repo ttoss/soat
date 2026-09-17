@@ -16,7 +16,7 @@ export const findTraceDbId = async (args: {
 
 // Reuses an existing Trace (same publicId/project) or creates one, scoped to
 // the caller's transaction so a subsequent Generation.create failure rolls
-// the (newly-created) Trace back too — see createGenerationRecord (soat#815).
+// the (newly-created) Trace back too — see createGenerationRecord.
 export const findOrCreateTrace = async (args: {
   traceId: string;
   projectId: number;

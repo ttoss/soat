@@ -11,7 +11,7 @@ import crypto from 'node:crypto';
  * **raw** bytes it read, never a re-encoded parse.
  *
  * Extracted from the webhook dispatcher so the formation resource-type handler
- * protocol (#1078) signs identically rather than growing a second scheme.
+ * protocol signs identically rather than growing a second scheme.
  */
 
 export const SIGNATURE_HEADER = 'X-Soat-Signature';

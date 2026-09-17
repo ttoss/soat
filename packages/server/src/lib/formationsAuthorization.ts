@@ -1,5 +1,5 @@
 /**
- * The per-resource authorization pre-flight (#1181).
+ * The per-resource authorization pre-flight.
  *
  * A formation was authorized once — `formations:CreateFormation` on the request
  * — and then applied every resource its template declared by calling the
@@ -38,7 +38,7 @@ const NEW_RESOURCE_ID = '*';
 
 /**
  * One authorization question, or `null` when the type has no SOAT action to ask
- * about: an operator-registered type (#1078), or a type not in the registry at
+ * about: an operator-registered type, or a type not in the registry at
  * all — the apply refuses that itself, and inventing a denial for it would
  * report the wrong reason.
  */

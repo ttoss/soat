@@ -119,7 +119,7 @@ const resolveContextAndRecord = async (args: {
 
   // Persisted rather than left to the request: work resuming after the request
   // is gone — an approved tool call's continuation days later — re-mints its
-  // credential from this pair (#894).
+  // credential from this pair.
   const principal = resolveStartingPrincipal({
     authUser: args.authUser,
     authHeader: args.authHeader,

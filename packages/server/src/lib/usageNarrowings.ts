@@ -12,7 +12,7 @@ import type { EventFilter } from './usageAggregateSql';
  * it and needs no lookup: an unrecognised meter, model or workload source
  * simply selects nothing, which is also why `trigger_id` and `action_id` are
  * values — the event stores them denormalized so spend outlives the trigger
- * that incurred it (#1265).
+ * that incurred it.
  */
 
 /** The narrowings as the caller sent them, before any are resolved. */

@@ -4,7 +4,7 @@
  *
  * Split from `formationsApplyHelpers.ts`, which owns create, delete and the
  * failure unwind — the disposal is a phase of its own, deferred to the end of
- * the operation (#1194), and the two halves share only the ledger predicates.
+ * the operation, and the two halves share only the ledger predicates.
  */
 
 import createDebug from 'debug';
@@ -47,7 +47,7 @@ const pendingCleanupIds = (resource: ResourceRow): string[] => {
  * The row already points at the replacement, so an id only this operation
  * remembers is one nothing can name again — a crash, a later failure in the
  * same apply, or a handler that refuses the delete would each leave the
- * resource live and unowned (#1193). Recorded first, it is retried by the next
+ * resource live and unowned. Recorded first, it is retried by the next
  * operation instead.
  */
 export const recordPendingCleanup = async (args: {
@@ -102,7 +102,7 @@ export type CleanupFailure = {
  * Disposes of every resource a replacement superseded, once the rest of the
  * operation has been applied.
  *
- * Deferred to the end on purpose (#1194): the dependents that reference the old
+ * Deferred to the end on purpose: the dependents that reference the old
  * resource are re-pointed by their own update, and a type whose delete refuses
  * over live references (`ai_provider` answers `409` while an agent names it, and
  * `force` does not override that) could never be cleaned up while a reference
@@ -252,7 +252,7 @@ export const applyUpdateChange = async (args: {
     unknown
   >;
   // Shared with `plan-formation`, so the preview and the apply it previews can
-  // no longer disagree about whether a resource changed (#902).
+  // no longer disagree about whether a resource changed.
   const { merged: mergedProperties, changed: propertiesChanged } =
     mergeWithPrevious({ resolved: resolvedProperties, previous: lastProps });
   // `resourceRow` is `existing` here, so the update below mutates it — reading

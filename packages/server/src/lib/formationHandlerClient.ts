@@ -1,5 +1,5 @@
 /**
- * The wire half of an operator-registered formation resource type (#1078): one
+ * The wire half of an operator-registered formation resource type: one
  * signed `POST` per lifecycle operation to the URL the registration names.
  * Ordering, `{ref}` resolution, apply, rollback, recording and drift stay in
  * SOAT; the handler owns only what its resource means.

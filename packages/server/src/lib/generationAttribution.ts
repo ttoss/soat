@@ -36,7 +36,7 @@ export const resolveEndUserAttribution = async (args: {
 
 /**
  * Resolves the trusted identity `pinServerIdentityToolContext` stamps into a
- * generation's `tool_context` (#850). `sessionId` is a typed argument set only
+ * generation's `tool_context`. `sessionId` is a typed argument set only
  * by server code (the session and conversation dispatch paths), never read
  * from a caller bag, so it is stamped even when the session row has already
  * been deleted mid-flight; the actor keys come from the session's actor link.

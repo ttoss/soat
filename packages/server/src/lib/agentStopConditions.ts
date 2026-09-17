@@ -2,16 +2,14 @@
  * The agent's `stop_conditions`, resolved into the AI SDK `stopWhen` array the
  * generation loop actually runs under.
  *
- * The field is documented (`modules/agents.md` — Stop Conditions) and was
- * reaching nothing: every `stopWhen` was `isStepCount(maxSteps)` alone, so the
- * "done tool" idiom the docs describe terminated the loop only by accident of
- * the model choosing to stop. Same shape as #811, where `active_tool_ids` was
- * stored, versioned and silently ignored.
+ * The field is documented (`modules/agents.md` — Stop Conditions), so it has to
+ * reach the loop. A `stopWhen` of `isStepCount(maxSteps)` alone leaves the
+ * "done tool" idiom the docs describe terminating only by accident of the model
+ * choosing to stop — a field stored, versioned and silently ignored.
  *
  * Resolved in one place for all three call sites — the fresh turn, its no-tools
  * retry, and the resume after `submit-tool-outputs` — because two sites
- * deriving the same thing independently is exactly how #1163's bug survived in
- * both at once.
+ * deriving the same thing independently let a defect survive in both at once.
  */
 import { hasToolCall, isStepCount, type StopCondition, type ToolSet } from 'ai';
 import createDebug from 'debug';

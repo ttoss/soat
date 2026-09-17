@@ -314,7 +314,7 @@ export const startEvalRun = async (args: {
    */
   triggerId?: string;
   /**
-   * Caller-owned annotations stored on the run and returned verbatim (#342).
+   * Caller-owned annotations stored on the run and returned verbatim.
    * Read by nothing in the scoring path — it exists so a caller (typically CI)
    * can say what this measurement was of.
    */
@@ -322,7 +322,7 @@ export const startEvalRun = async (args: {
   /**
    * Forwarded to every item's generation, so an agent whose tools authorize
    * through `tool_context` is scored against the configuration it runs in
-   * production rather than one with an empty bag (#1150). Stored on the run,
+   * production rather than one with an empty bag. Stored on the run,
    * since the worker driving a queued run has no request to read it from.
    */
   toolContext?: Record<string, string>;

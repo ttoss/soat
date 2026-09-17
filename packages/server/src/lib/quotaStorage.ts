@@ -1,6 +1,5 @@
 /**
- * The `storage_bytes` stock cap: what bounds how much a project may store
- * (#1249).
+ * The `storage_bytes` stock cap: what bounds how much a project may store.
  *
  * A stock in a flow engine shares almost none of the windowed machinery. There
  * is no `quota_window_counters` row to increment, no window key, no

@@ -12,7 +12,7 @@ export type MemoryRow = InstanceType<(typeof db)['Memory']> & {
  * Every read path that feeds `mapMemory` must use these includes: the
  * mapper reports the text, the store and the supersede link from the loaded
  * associations, so a query that omits one would silently return `null` for a
- * link that exists (the #801 failure shape) — or, for `content`, fail outright.
+ * link that exists — or, for `content`, fail outright.
  */
 export type MemoryInclude = {
   model: DB['MemoryStore'] | DB['MemoryContent'] | DB['Memory'];

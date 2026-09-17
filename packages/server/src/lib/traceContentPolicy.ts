@@ -8,11 +8,11 @@ const log = createDebug('soat:trace-content-policy');
  * Whether trace/generation content is persisted at all.
  *
  * - `full` — content is written and kept until purged, either on demand
- *   (`DELETE /traces/{id}/content`, #836) or by the retention sweep (#837).
- * - `none` — zero-retention: content is never written in the first place
- *   (#838). "We never stored it" is a stronger claim than "we deleted it", and
- *   it is the only mode where content cannot be missed by a sweep or survive in
- *   a backup.
+ *   (`DELETE /traces/{id}/content`) or by the retention sweep.
+ * - `none` — zero-retention: content is never written in the first place. "We
+ *   never stored it" is a stronger claim than "we deleted it", and it is the
+ *   only mode where content cannot be missed by a sweep or survive in a
+ *   backup.
  */
 export const TRACE_CONTENT_MODES = ['full', 'none'] as const;
 
@@ -107,8 +107,8 @@ export const validateTraceContentRetentionDays = (
  * status, stop reason, usage attribution — is deliberately absent.
  *
  * Defined here, once, because two features must agree on it exactly: the purge
- * path clears these columns (#836/#837) and zero-retention refuses to write
- * them (#838). A field added to one list and not the other would be a field
+ * path clears these columns and zero-retention refuses to write
+ * them. A field added to one list and not the other would be a field
  * that a purge erases but zero-retention still persists — the drift this shared
  * definition makes unrepresentable.
  */

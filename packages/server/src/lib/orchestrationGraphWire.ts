@@ -15,8 +15,8 @@ import type {
  * data migration while mapping here needs none. And every value is copied as a
  * value: `expression`, `arguments`, `input_mapping`, `output_schema` and the
  * rest are JSON Logic or caller-owned payloads whose inner keys must round-trip
- * byte-for-byte, so nothing here recurses into one — which makes #737's bug
- * class unrepresentable rather than merely avoided.
+ * byte-for-byte, so nothing here recurses into one — which makes a rewritten
+ * inner key unrepresentable rather than merely avoided.
  *
  * Both directions are explicit field lists, so a field added to the spec but
  * forgotten here fails `strictFields` instead of being silently dropped.

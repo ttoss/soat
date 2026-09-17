@@ -32,7 +32,7 @@ export const usageRouter = new Router<Context>();
 /**
  * A usage threshold is the module's only addressable resource, so deleting one
  * authorizes against its own SRN rather than the project wildcard a statement
- * naming one threshold can never match (#1339). The aggregate reads stay
+ * naming one threshold can never match. The aggregate reads stay
  * project-scoped: they *are* questions about a project.
  */
 const thresholdAccess = makeItemRouteAuthorizer({

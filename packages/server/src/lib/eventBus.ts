@@ -76,7 +76,7 @@ export const droppedEventCount = (args: { stage: EventDropStage }): number => {
  * counts the event as dropped via {@link recordDroppedEvent} only once the
  * retries are spent. Every bus subscriber's dispatch handler needs this exact
  * pairing around the write that happens after its own commit, so it is
- * written once here rather than once per subscriber (#1130).
+ * written once here rather than once per subscriber.
  */
 export const retryOrRecordDrop = (args: {
   stage: EventDropStage;
@@ -179,10 +179,10 @@ export const onEvent = (args: {
  * {@link emitCustomEvent}: the `timestamp`, the project public-id lookup, and
  * the `.catch()` on it.
  *
- * Seventeen sites resolved the public id through a floating promise (#903), so
+ * Seventeen sites resolved the public id through a floating promise, so
  * a transient DB failure became an unhandled rejection that killed the process
  * after the write had committed. A bare `.catch()` fixed the crash by dropping
- * the event, which lost events on a single blip (#1130) — so the lookup is
+ * the event, which lost events on a single blip — so the lookup is
  * retried and only a failure outliving the retries drops, through
  * {@link recordDroppedEvent}. An emit never fails the operation behind it.
  *

@@ -10,8 +10,7 @@ import { scopedWhere } from './resourceAccessor';
  * rollup — and each held its own copy of it. A filter naming a resource that
  * does not exist in the caller's project scope resolves to `null` and empties
  * the answer instead of being dropped: a narrowing silently ignored reads back
- * as the project's whole traffic, a wrong answer rather than a missing one
- * (#1265).
+ * as the project's whole traffic, a wrong answer rather than a missing one.
  */
 
 type Finder = (

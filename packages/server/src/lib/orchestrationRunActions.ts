@@ -90,7 +90,7 @@ const pausedFrontier = async (args: {
 
 /**
  * Pauses a run in flight: the stop `cancel` cannot be, because a pause keeps the
- * checkpoint and the existing `resume` re-drives from it (#1237).
+ * checkpoint and the existing `resume` re-drives from it.
  *
  * The flag is written first, and to the whole run tree — a parent whose
  * `loop` / `sub_orchestration` children kept generating would have paused
@@ -175,7 +175,7 @@ export const submitHumanInput = async (args: {
 
   // An operator pause has no payload to supply, and a pause standing behind a
   // human node must not be lifted by satisfying it — resume the run first, then
-  // submit (#1237).
+  // submit.
   if (isRunPaused(run))
     throw new DomainError(
       'ORCHESTRATION_RUN_PAUSED',
