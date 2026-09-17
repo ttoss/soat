@@ -119,7 +119,11 @@ describe('Audit Log — write hook', () => {
     expect(del.resource_public_id).toBe(secretId);
   });
 
-  test('a denied delete (missing permission) yields one entry with status 403 and the same action', async () => {
+  // The status is whatever the caller was actually told. This caller holds no
+  // policy naming the project, so the delete hides the secret rather than
+  // refusing it by name (#1339) — and the entry records that, which is the
+  // property under test: a refused call is auditable under its own action.
+  test('a denied delete (missing permission) yields one entry with the answered status and the same action', async () => {
     // Admin creates a secret the no-perm user will try (and fail) to delete.
     const createRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/secrets')
@@ -129,11 +133,11 @@ describe('Audit Log — write hook', () => {
     const deleteRes = await authenticatedTestClient(noPermToken).delete(
       `/api/v1/secrets/${secretId}`
     );
-    expect(deleteRes.status).toBe(403);
+    expect(deleteRes.status).toBe(404);
 
     const entries = await listEntries({ resource_public_id: secretId });
     const denied = entries.find((e) => {
-      return e.action === 'secrets:DeleteSecret' && e.status === 403;
+      return e.action === 'secrets:DeleteSecret' && e.status === 404;
     });
     expect(denied).toBeDefined();
     expect(denied!.resource_srn).toBe(`srn:${projectId}:secret:${secretId}`);

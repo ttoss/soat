@@ -144,7 +144,7 @@ describe('Tools', () => {
       expect(response.status).toBe(401);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .post('/api/v1/tools')
         .send({ project_id: projectId, name: 'Tool' });
@@ -190,7 +190,7 @@ describe('Tools', () => {
       expect(response.status).toBe(401);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .get('/api/v1/tools')
         .query({ project_id: projectId });
@@ -281,11 +281,11 @@ describe('Tools', () => {
 
     // A caller permitted in zero projects is denied outright on a write:
     // `requireProjectAccess` answers 403 where the read path 404s (#1029).
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .patch(`/api/v1/tools/${toolId}`)
         .send({ name: 'X' });
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('non-existent tool returns 404', async () => {
@@ -340,11 +340,11 @@ describe('Tools', () => {
 
     // A caller permitted in zero projects is denied outright on a write:
     // `requireProjectAccess` answers 403 where the read path 404s (#1029).
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken).delete(
         `/api/v1/tools/${toolId}`
       );
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('non-existent tool returns 404', async () => {
@@ -373,11 +373,11 @@ describe('Tools', () => {
 
     // A caller permitted in zero projects is denied outright on a write:
     // `requireProjectAccess` answers 403 where the read path 404s (#1029).
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .post(`/api/v1/tools/${soatToolId}/call`)
         .send({ action: 'list-tools' });
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('non-existent tool returns 404', async () => {
@@ -795,11 +795,11 @@ describe('Tools', () => {
 
     // A caller permitted in zero projects is denied outright on a write:
     // `requireProjectAccess` answers 403 where the read path 404s (#1029).
-    test('pipeline call without permission returns 403', async () => {
+    test('pipeline call without permission returns 404', async () => {
       const res = await authenticatedTestClient(noPermToken)
         .post(`/api/v1/tools/${pipelineToolId}/call`)
         .send({ input: {} });
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
   });
 
@@ -1384,7 +1384,7 @@ describe('Tools', () => {
       expect(callRes.body.error.code).toBe('TOOL_AUTH_FAILED');
     });
 
-    test('calling an auth-configured tool without permission returns 403', async () => {
+    test('calling an auth-configured tool without permission returns 404', async () => {
       const createRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')
         .send({
@@ -1410,7 +1410,7 @@ describe('Tools', () => {
         .send({ input: {} });
       // The call never reaches the tool's credentials: the empty scope is
       // refused up front (#1029).
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
 
     test('creating a tool with auth requires authentication', async () => {

@@ -198,7 +198,7 @@ describe('Orchestrations', () => {
       expect(response.status).toBe(401);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .post('/api/v1/orchestrations')
         .send({ ...simpleOrchestration, project_id: projectId });
@@ -490,7 +490,7 @@ describe('Orchestrations', () => {
       expect(response.body.error.message).toBe('project_id is required');
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .get('/api/v1/orchestrations')
         .query({ project_id: projectId });
@@ -582,11 +582,11 @@ describe('Orchestrations', () => {
 
     // A caller permitted in zero projects is denied outright on a write:
     // `requireProjectAccess` answers 403 where the read path 404s (#1029).
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .patch(`/api/v1/orchestrations/${orchestrationId}`)
         .send({ name: 'X' });
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('can update nodes and edges', async () => {
@@ -668,7 +668,7 @@ describe('Orchestrations', () => {
     // resolveStartRunScope explicitly 403s on an empty projectIds array
     // (unlike the plain orchestration CRUD routes, which just filter to no
     // results and 404).
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .post('/api/v1/orchestration-runs')
         .send({ wait: true, orchestration_id: orchestrationId, input: {} });
@@ -2639,7 +2639,7 @@ describe('Orchestrations', () => {
     // Unlike get-by-id, the list route explicitly checks for an empty
     // projectIds array and 403s rather than falling through to an
     // empty-filter query.
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken).get(
         `/api/v1/orchestration-runs?orchestration_id=${orchestrationId}`
       );
@@ -2872,11 +2872,11 @@ describe('Orchestrations', () => {
 
     // A caller permitted in zero projects is denied outright on a write:
     // `requireProjectAccess` answers 403 where the read path 404s (#1029).
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken).delete(
         `/api/v1/orchestrations/${orchestrationId}`
       );
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('project-scoped API key without DeleteOrchestration permission returns 403', async () => {
@@ -2935,11 +2935,11 @@ describe('Orchestrations', () => {
     });
 
     // resolveRunAuth explicitly 403s on an empty projectIds array.
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken).post(
         `/api/v1/orchestration-runs/${cancelRunId}/cancel`
       );
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
   });
 
@@ -3029,11 +3029,11 @@ describe('Orchestrations', () => {
     });
 
     // resolveRunAuth explicitly 403s on an empty projectIds array.
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .post(`/api/v1/orchestration-runs/${humanRunId}/human-input`)
         .send({ node_id: 'approval', output: {} });
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     // The bootstrap admin has no project membership, so `resolveProjectIds()`
@@ -3081,7 +3081,7 @@ describe('Orchestrations', () => {
 
     // The run has to exist: the route resolves it before authorizing, so a
     // made-up id answers `404` and never reaches the refusal (#1339).
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations')
         .send({
@@ -3096,7 +3096,7 @@ describe('Orchestrations', () => {
       const response = await authenticatedTestClient(noPermToken).post(
         `/api/v1/orchestration-runs/${runRes.body.id}/resume`
       );
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('resuming an awaiting-input run succeeds', async () => {
@@ -4439,7 +4439,7 @@ describe('Orchestrations', () => {
     });
 
     // As for resume: the run has to exist for the refusal to be reached.
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const orchId = await createOrch({
         ...simpleOrchestration,
         name: 'Pause Denied',
@@ -4451,7 +4451,7 @@ describe('Orchestrations', () => {
       const response = await authenticatedTestClient(noPermToken)
         .post(`/api/v1/orchestration-runs/${runRes.body.id}/pause`)
         .send({});
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
   });
 

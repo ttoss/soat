@@ -36,7 +36,7 @@
  */
 import type { Context } from 'src/Context';
 import { DomainError, type ErrorCode } from 'src/errors';
-import { buildSrn } from 'src/lib/iam';
+import { buildSrn, extractProjectIdsFromPolicies } from 'src/lib/iam';
 import type { ResourceScope } from 'src/lib/resourceAccessor';
 import { buildResourceTagContext } from 'src/lib/tags';
 
@@ -54,43 +54,49 @@ import {
 export type ResourceAccess = { projectIds: number[]; projectPublicId: string };
 
 /**
- * Whether the resource sits in a project this caller reaches for nothing.
+ * Whether nothing the caller holds concerns the resource's project.
  *
  * A write refusal names a resource, so on its own it doubles as an existence
  * oracle: `403` for a resource that is there, `404` for an id that is not. That
- * is the right trade *inside* a project the caller can see — being told plainly
- * that a tool is off limits tells them nothing they could not already work out
- * (#1029) — and the wrong one across a tenant boundary, where it confirms a
- * resource exists to someone with no business knowing it does.
+ * is the right trade *inside* a project the caller's policies concern — being
+ * told plainly that a tool is off limits tells them nothing they could not
+ * already work out (#1029) — and the wrong one across a tenant boundary, where
+ * it confirms a resource exists to someone with no business knowing it does.
  *
- * So the refusal is split by whether the resource's project is one of the
- * caller's at all, which is the same question the project-level helpers ask and
- * the reason a cross-project write used to read as absent: the lib's
- * `projectIds` filter simply never matched it (#1339).
+ * The question is which **project** the caller's policy set is about, not which
+ * action it permits there. `resolveProjectIds` answers the second and cannot
+ * stand in for the first: a statement naming one tool matches no type-level
+ * probe, so it reports zero reachable projects while plainly concerning the
+ * project that tool is in. Reading that as a tenant boundary would hide a
+ * sibling the caller *can* see — the very refusal #1029 wants stated plainly.
+ *
+ * `extractProjectIdsFromPolicies` asks the first question directly, over the
+ * effective documents for this request, and answers `undefined` for a statement
+ * that names no project at all — an unrestricted grant, or an admin.
+ *
+ * A caller whose policies name **no** project is beyond every boundary rather
+ * than inside none: nothing they hold concerns this project, so the least
+ * privileged caller there is gets the same `404` as a made-up id.
+ *
+ * The net effect is that a denied write never says more than a denied read of
+ * the same resource would. That is what #1029 asked for — its bug was the two
+ * *disagreeing*, a write answering `404` while the caller's own `GET` answered
+ * `200`, not the `403` itself, and a caller who can read a resource still gets
+ * that `403` when they may not change it.
  *
  * Asked only once a call is already refused, so the permitted path pays nothing
  * for it.
- *
- * An **empty** reach is deliberately not "beyond" it: a caller permitted in no
- * project has no tenant boundary to be on the far side of, and `403` is what
- * #1029 settled on for them. They can still tell a real id from a made-up one
- * that way — the narrow residue of this oracle, kept because the alternative is
- * answering `404` to every write by anyone with no grants at all.
  */
 const beyondReach = async (args: {
   ctx: AuthenticatedContext;
   scope: ResourceScope;
-  resourceType: string;
-  action: string;
 }): Promise<boolean> => {
-  const reachable = await args.ctx.authUser.resolveProjectIds({
-    action: args.action,
-    resourceType: args.resourceType,
-  });
+  const named = extractProjectIdsFromPolicies(
+    await args.ctx.authUser.getPolicies(args.scope.projectPublicId)
+  );
 
-  // `undefined` is an unrestricted caller — every project is theirs.
-  if (!Array.isArray(reachable) || reachable.length === 0) return false;
-  return !reachable.includes(args.scope.projectId);
+  if (named === undefined) return false;
+  return !named.includes(args.scope.projectPublicId);
 };
 
 export const authorizeResource = async (args: {
@@ -169,12 +175,7 @@ export const authorizeResource = async (args: {
   if (!allowed) {
     const hide =
       args.onDenied === 'hide' ||
-      (await beyondReach({
-        ctx,
-        scope: args.scope,
-        resourceType: args.resourceType,
-        action: args.action,
-      }));
+      (await beyondReach({ ctx, scope: args.scope }));
 
     throw hide ? notFound : new DomainError('FORBIDDEN', 'Forbidden');
   }

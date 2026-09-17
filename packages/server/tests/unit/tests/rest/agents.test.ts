@@ -801,11 +801,11 @@ describe('Agents', () => {
       expect(response.status).toBe(401);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .put(`/api/v1/agents/${agentId}`)
         .send({ name: 'renamed' });
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('unknown agentId returns 404', async () => {
@@ -952,14 +952,17 @@ describe('Agents', () => {
       expect(response.status).toBe(401);
     });
 
-    // The bug #1029 opened with: this answered 404 while the caller's own
-    // `GET /agents/:id` answered 200 for the same agent at the same instant.
-    test('user without permission returns 403, not 404', async () => {
+    // #1029's bug was the *disagreement*: a write answered 404 while the
+    // caller's own `GET /agents/:id` answered 200 for the same agent at the
+    // same instant. It is still fixed — this caller's `GET` answers 404 too, so
+    // the two agree. A caller who *can* read the agent still gets the plain
+    // `403` on a write; that pair is pinned in `agentsResourceScope.test.ts`.
+    test('user without permission returns 404, as their own read does', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .patch(`/api/v1/agents/${agentId}`)
         .send({ instructions: 'x' });
-      expect(response.status).toBe(403);
-      expect(response.body.error.code).toBe('FORBIDDEN');
+      expect(response.status).toBe(404);
+      expect(response.body.error.code).toBe('RESOURCE_NOT_FOUND');
     });
 
     test('unknown agentId returns 404', async () => {
@@ -1037,11 +1040,11 @@ describe('Agents', () => {
       expect(response.status).toBe(401);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken).delete(
         `/api/v1/agents/${agentId}`
       );
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('unknown agentId returns 404', async () => {
@@ -1753,14 +1756,14 @@ describe('Agents', () => {
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
 
-    test('user without CreateAgentGeneration permission returns 403', async () => {
+    test('user without CreateAgentGeneration permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({ messages: [{ role: 'user', content: 'Hello' }] });
 
       // noPermToken has no policies → projectIds=[] → refused outright, before
       // the agent lookup that used to turn the denial into a 404 (#1029).
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('agent with knowledge_config injects knowledge context before generation', async () => {
@@ -1973,7 +1976,7 @@ describe('Agents', () => {
       expect(response.body.error).toBeDefined();
     });
 
-    test('user without CreateAgentGeneration permission on tool-outputs returns 403', async () => {
+    test('user without CreateAgentGeneration permission on tool-outputs returns 404', async () => {
       const agentRes = await authenticatedTestClient(userToken)
         .post('/api/v1/agents')
         .send({ ai_provider_id: aiProviderId, project_id: projectId });
@@ -1987,7 +1990,7 @@ describe('Agents', () => {
 
       // noPermToken has no policies → projectIds=[] → refused outright, before
       // the agent lookup that used to turn the denial into a 404 (#1029).
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
   });
 

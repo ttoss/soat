@@ -449,7 +449,7 @@ describe('Agent versions', () => {
       );
       // A write refuses an empty scope outright — the `GET` twin above still
       // answers 404, but a restore the caller may not perform is a 403 (#1029).
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
 
       // The write must not have landed: the agent is still on version 1.
       const agent = await authenticatedTestClient(userToken).get(
@@ -666,7 +666,7 @@ describe('Agent versions', () => {
 
       // 403, not 404: the caller may write in no project at all, and the
       // denial is decided before the body is even validated (#1029).
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
 
       // What matters is that no release was created.
       const agent = await authenticatedTestClient(userToken).get(
@@ -756,7 +756,7 @@ describe('Agent versions', () => {
         `/api/v1/agents/${agentId}/release/promote`
       );
 
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
 
       // The rollout is untouched — an unauthorized call must not end it.
       const agent = await authenticatedTestClient(userToken).get(
@@ -772,7 +772,7 @@ describe('Agent versions', () => {
         `/api/v1/agents/${agentId}/release/abort`
       );
 
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
 
       const agent = await authenticatedTestClient(userToken).get(
         `/api/v1/agents/${agentId}`

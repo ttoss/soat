@@ -129,7 +129,7 @@ describe('Actors', () => {
       expect(response.status).toBe(400);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .post('/api/v1/actors')
         .send({ project_id: projectId, name: 'Forbidden' });
@@ -234,7 +234,7 @@ describe('Actors', () => {
       expect(response.status).toBe(401);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken).get(
         `/api/v1/actors?project_id=${projectId}`
       );
@@ -303,12 +303,12 @@ describe('Actors', () => {
       expect(response.status).toBe(404);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken).get(
         `/api/v1/actors/${actorId}`
       );
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
   });
 
@@ -351,7 +351,7 @@ describe('Actors', () => {
       expect(response.status).toBe(404);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/actors')
         .send({ project_id: projectId, name: 'ToDeleteForbidden' });
@@ -360,7 +360,7 @@ describe('Actors', () => {
         `/api/v1/actors/${createRes.body.id}`
       );
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
   });
 
@@ -409,12 +409,12 @@ describe('Actors', () => {
       expect(response.status).toBe(404);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .patch(`/api/v1/actors/${actorId}`)
         .send({ name: 'ForbiddenUpdate' });
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
   });
 

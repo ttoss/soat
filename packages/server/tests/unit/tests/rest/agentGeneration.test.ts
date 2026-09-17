@@ -192,12 +192,12 @@ describe('Agent Generation Routes', () => {
       expect(response.status).toBe(400);
     });
 
-    test('returns 403 when the caller may generate in no project', async () => {
+    test('returns 404 when the caller may generate in no project', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({ messages: [{ role: 'user', content: 'hello' }] });
 
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('returns 404 when the target agent does not exist', async () => {

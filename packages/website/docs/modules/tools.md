@@ -422,7 +422,7 @@ This is the same check [approvals](./approvals.md) have always made for
 `tools:CallTool`, so a per-tool grant now means the same thing whether the call
 arrives directly or through an approval.
 
-Refusals keep the shapes [IAM](./iam.md#what-a-denial-looks-like) defines: a read the caller may not perform is `404` (a tool it may not see does not announce itself), a write or a call is `403`, and a credential scoped to another project is `403 API_KEY_PROJECT_SCOPE`. A write on a resource in a project the caller does not reach at all is `404` too, so a refusal never confirms existence across a tenant boundary.
+Refusals keep the shapes [IAM](./iam.md#what-a-denial-looks-like) defines: a read the caller may not perform is `404` (a tool it may not see does not announce itself), a write or a call is `403`, and a credential scoped to another project is `403 API_KEY_PROJECT_SCOPE`. A write on a resource in a project none of the caller's policies name is `404` too — the same answer their read would get, so a refusal never confirms existence across a tenant boundary.
 
 Listing tools stays project-scoped: [`GET /api/v1/tools`](/docs/api/tools/list-tools) asks whether the caller may list tools in a project at all, so a policy that names individual tools grants no listing.
 

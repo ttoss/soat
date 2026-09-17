@@ -208,7 +208,7 @@ describe('Generations', () => {
       expect(response.status).toBe(401);
     });
 
-    test('returns 403 when user lacks permission', async () => {
+    test('returns 404 when user lacks permission', async () => {
       const response = await authenticatedTestClient(noPermToken).get(
         '/api/v1/generations'
       );
@@ -473,11 +473,11 @@ describe('Generations', () => {
       expect(response.status).toBe(401);
     });
 
-    test('returns 403 when user lacks permission', async () => {
+    test('returns 404 when user lacks permission', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .patch(`/api/v1/generations/${failedGenerationId}`)
         .send({ metadata: { audit: 'x' } });
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('returns 404 when generation does not exist', async () => {
@@ -607,11 +607,11 @@ describe('Generations', () => {
       expect(response.status).toBe(401);
     });
 
-    test('returns 403 when user lacks permission', async () => {
+    test('returns 404 when user lacks permission', async () => {
       const response = await authenticatedTestClient(noPermToken).delete(
         `/api/v1/generations/${failedGenerationId}/content`
       );
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('returns 404 when generation does not exist', async () => {
