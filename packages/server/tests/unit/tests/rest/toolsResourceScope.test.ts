@@ -155,6 +155,74 @@ describe('a policy scoped to one tool does not reach another', () => {
     });
   });
 
+  /**
+   * The two halves of a write refusal, side by side.
+   *
+   * A sibling in a project the caller *does* reach is `403`: they can see the
+   * project, so being told plainly that this tool is off limits tells them
+   * nothing they could not already work out (#1029). A tool in a project they
+   * reach not at all is `404`: there, a `403` would confirm its existence to
+   * someone with no business knowing it exists.
+   */
+  describe('a caller whose projects do not include the tool at all', () => {
+    let outsiderToken: string;
+    let insideToolId: string;
+
+    beforeAll(async () => {
+      const otherProject = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'Tool Scope Other Project' });
+
+      const outsider = await authenticatedTestClient(adminToken)
+        .post('/api/v1/users')
+        .send({ username: 'toolscopeoutsider', password: 'toolScopePass2' });
+      const policy = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [
+              {
+                effect: 'Allow',
+                action: TOOL_ACTIONS,
+                resource: [`srn:${otherProject.body.id}:*:*`],
+              },
+            ],
+          },
+        });
+      await authenticatedTestClient(adminToken)
+        .put(`/api/v1/users/${outsider.body.id}/policies`)
+        .send({ policy_ids: [policy.body.id] });
+      outsiderToken = await loginAs('toolscopeoutsider', 'toolScopePass2');
+
+      insideToolId = await createTool('outsider-target-tool');
+    });
+
+    test('hides the tool on a write, where a sibling in reach is refused', async () => {
+      const response = await authenticatedTestClient(outsiderToken)
+        .patch(`/api/v1/tools/${insideToolId}`)
+        .send({ description: 'Reached across a tenant boundary.' });
+
+      expect(response.status).toBe(404);
+      expect(response.body.error.code).toBe('RESOURCE_NOT_FOUND');
+    });
+
+    test('hides the tool on a call', async () => {
+      const response = await authenticatedTestClient(outsiderToken)
+        .post(`/api/v1/tools/${insideToolId}/call`)
+        .send({});
+
+      expect(response.status).toBe(404);
+    });
+
+    test('hides the tool on a read, as it always did', async () => {
+      const response = await authenticatedTestClient(outsiderToken).get(
+        `/api/v1/tools/${insideToolId}`
+      );
+
+      expect(response.status).toBe(404);
+    });
+  });
+
   describe('DELETE /api/v1/tools/:tool_id', () => {
     test('refuses a sibling tool', async () => {
       const response = await authenticatedTestClient(scopedToken).delete(

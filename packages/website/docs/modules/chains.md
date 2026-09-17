@@ -91,7 +91,7 @@ covers:
 }
 ```
 
-Refusals keep the shapes [IAM](./iam.md#what-a-denial-looks-like) defines: a read the caller may not perform is `404` (a chain it may not see does not announce itself), a write is `403`, and a credential scoped to another project is `403 API_KEY_PROJECT_SCOPE`.
+Refusals keep the shapes [IAM](./iam.md#what-a-denial-looks-like) defines: a read the caller may not perform is `404` (a chain it may not see does not announce itself), a write is `403`, and a credential scoped to another project is `403 API_KEY_PROJECT_SCOPE`. A write on a resource in a project the caller does not reach at all is `404` too, so a refusal never confirms existence across a tenant boundary.
 
 Listing chains stays project-scoped: [`GET /api/v1/chains`](/docs/api/chains/list-chains) asks whether the caller may list chains in a project at all, so a policy that names individual chains grants no listing.
 

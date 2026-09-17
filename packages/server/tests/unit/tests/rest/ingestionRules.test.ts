@@ -1214,7 +1214,7 @@ describe('IngestionRules', () => {
     });
   });
 
-  describe('cross-project access on a rule the caller may not see', () => {
+  describe('cross-project access does not leak resource existence', () => {
     let otherProjectUserToken: string;
     let ruleInProjectId: string;
 
@@ -1271,25 +1271,22 @@ describe('IngestionRules', () => {
       expect(res.status).toBe(404);
     });
 
-    // A **write** the caller may not perform says so, in this project or any
-    // other: the refusal is the same `403` every module answers since routes
-    // began authorizing against the resource's own SRN (#1336, #1339). The read
-    // above still hides the rule, which is what keeps an id-only `GET` from
-    // being an existence oracle.
-    test('patch on a rule from an inaccessible project returns 403', async () => {
+    // A write is `403` for a resource the caller can see but may not change —
+    // and `404` here, because this caller reaches a different project entirely.
+    // A `403` would confirm the rule exists to someone with no business knowing
+    // it does; the sibling case in `toolsResourceScope.test.ts` is the contrast.
+    test('patch on a rule from an inaccessible project returns 404, not 403', async () => {
       const res = await authenticatedTestClient(otherProjectUserToken)
         .patch(`/api/v1/ingestion-rules/${ruleInProjectId}`)
         .send({ chunk_strategy: 'whole' });
-      expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe('FORBIDDEN');
+      expect(res.status).toBe(404);
     });
 
-    test('delete on a rule from an inaccessible project returns 403', async () => {
+    test('delete on a rule from an inaccessible project returns 404, not 403', async () => {
       const res = await authenticatedTestClient(otherProjectUserToken).delete(
         `/api/v1/ingestion-rules/${ruleInProjectId}`
       );
-      expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe('FORBIDDEN');
+      expect(res.status).toBe(404);
     });
   });
 

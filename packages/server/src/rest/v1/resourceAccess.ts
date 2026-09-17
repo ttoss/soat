@@ -17,7 +17,9 @@
  *   they cannot see — or one their policy does not name — does not announce its
  *   existence;
  * - a **write** is `403`, so a caller who can read a resource is told plainly
- *   that changing it is refused (#1029).
+ *   that changing it is refused (#1029) — unless the resource is in a project
+ *   they reach for nothing, where that would leak existence and it is `404`
+ *   instead. See {@link beyondReach}.
  *
  * Which one a route picks follows what its **action** does, not which helper it
  * had reached for. Most routes agree either way — a read used the read helper —
@@ -38,7 +40,11 @@ import { buildSrn } from 'src/lib/iam';
 import type { ResourceScope } from 'src/lib/resourceAccessor';
 import { buildResourceTagContext } from 'src/lib/tags';
 
-import { assertCredentialProjectScope, requireAuth } from './helpers';
+import {
+  assertCredentialProjectScope,
+  type AuthenticatedContext,
+  requireAuth,
+} from './helpers';
 
 /**
  * What the route hands its lib calls afterwards. Authorization is settled by
@@ -46,6 +52,46 @@ import { assertCredentialProjectScope, requireAuth } from './helpers';
  * reaching past it.
  */
 export type ResourceAccess = { projectIds: number[]; projectPublicId: string };
+
+/**
+ * Whether the resource sits in a project this caller reaches for nothing.
+ *
+ * A write refusal names a resource, so on its own it doubles as an existence
+ * oracle: `403` for a resource that is there, `404` for an id that is not. That
+ * is the right trade *inside* a project the caller can see — being told plainly
+ * that a tool is off limits tells them nothing they could not already work out
+ * (#1029) — and the wrong one across a tenant boundary, where it confirms a
+ * resource exists to someone with no business knowing it does.
+ *
+ * So the refusal is split by whether the resource's project is one of the
+ * caller's at all, which is the same question the project-level helpers ask and
+ * the reason a cross-project write used to read as absent: the lib's
+ * `projectIds` filter simply never matched it (#1339).
+ *
+ * Asked only once a call is already refused, so the permitted path pays nothing
+ * for it.
+ *
+ * An **empty** reach is deliberately not "beyond" it: a caller permitted in no
+ * project has no tenant boundary to be on the far side of, and `403` is what
+ * #1029 settled on for them. They can still tell a real id from a made-up one
+ * that way — the narrow residue of this oracle, kept because the alternative is
+ * answering `404` to every write by anyone with no grants at all.
+ */
+const beyondReach = async (args: {
+  ctx: AuthenticatedContext;
+  scope: ResourceScope;
+  resourceType: string;
+  action: string;
+}): Promise<boolean> => {
+  const reachable = await args.ctx.authUser.resolveProjectIds({
+    action: args.action,
+    resourceType: args.resourceType,
+  });
+
+  // `undefined` is an unrestricted caller — every project is theirs.
+  if (!Array.isArray(reachable) || reachable.length === 0) return false;
+  return !reachable.includes(args.scope.projectId);
+};
 
 export const authorizeResource = async (args: {
   ctx: Context;
@@ -121,9 +167,16 @@ export const authorizeResource = async (args: {
   });
 
   if (!allowed) {
-    throw args.onDenied === 'hide'
-      ? notFound
-      : new DomainError('FORBIDDEN', 'Forbidden');
+    const hide =
+      args.onDenied === 'hide' ||
+      (await beyondReach({
+        ctx,
+        scope: args.scope,
+        resourceType: args.resourceType,
+        action: args.action,
+      }));
+
+    throw hide ? notFound : new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   return {
