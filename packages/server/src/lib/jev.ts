@@ -190,9 +190,14 @@ export const askSystemOne = async (args: {
   if (!response.ok) {
     // The provider's own body goes to the log, never to the caller: the host
     // that wrote it is one the provider record named, as for model listing.
-    const detail = await response.text().catch(() => {
-      return '';
-    });
+    // A body that cannot be read changes nothing the caller sees, so the status
+    // is reported either way.
+    let detail = '';
+    try {
+      detail = await response.text();
+    } catch {
+      // Unreadable body: the status is the whole of what the caller is told.
+    }
     log('askSystemOne: provider returned %d: %s', response.status, detail);
     throw new DomainError(
       'AI_PROVIDER_ERROR',

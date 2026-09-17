@@ -1,6 +1,7 @@
 import { db } from 'src/db';
 import { createActor } from 'src/lib/actors';
 import { createConversation } from 'src/lib/conversations';
+import { createDecider } from 'src/lib/deciders';
 import { writeMemory } from 'src/lib/memories';
 import { createMemoryRule } from 'src/lib/memoryRules';
 import { createMemoryStore } from 'src/lib/memoryStores';
@@ -380,6 +381,64 @@ describe('resolveResourceScope', () => {
     });
   });
 
+  test('a decider resolves to its own SRN parts', async () => {
+    const provider = await db.AiProvider.create({
+      projectId,
+      name: 'Scopes TypeSafe',
+      provider: 'typesafe',
+      defaultModel: 'jev-latest',
+    });
+
+    const decider = await createDecider({
+      projectId,
+      name: 'Scopes Decider',
+      aiProviderId: provider.publicId,
+      questions: { a: { type: 'noul', instructions: 'A?' } },
+    });
+
+    const scope = await resolveResourceScope({
+      kind: 'decider',
+      publicId: decider.id,
+    });
+
+    // Neither carries a `tags` column, so the scope has no bag to read.
+    expect(scope).toEqual({
+      resourceType: 'decider',
+      resourceId: decider.id,
+      projectId,
+      projectPublicId,
+      tags: null,
+    });
+  });
+
+  // A decision is written by an evaluation, which calls the provider; the row
+  // is created directly here because the scope table is what is under test,
+  // not the call that fills it.
+  test('a decision resolves to its own SRN parts', async () => {
+    const decision = await db.Decision.create({
+      projectId,
+      deciderId: 'dcd_scopes',
+      deciderVersion: 1,
+      model: 'jev-latest',
+      answers: { a: { type: 'noul', noul: 0.5 } },
+      usage: {},
+    });
+
+    const scope = await resolveResourceScope({
+      kind: 'decision',
+      publicId: decision.publicId,
+    });
+
+    // Neither carries a `tags` column, so the scope has no bag to read.
+    expect(scope).toEqual({
+      resourceType: 'decision',
+      resourceId: decision.publicId,
+      projectId,
+      projectPublicId,
+      tags: null,
+    });
+  });
+
   // Both leave the caller with the resource-less `*`, which matches no scoped
   // statement — so an unknown kind and a dangling id refuse rather than admit.
   test('an unknown kind resolves to nothing', async () => {
@@ -402,6 +461,8 @@ describe('resolveResourceScope', () => {
     ['actor', 'actor_absent'],
     ['conversation', 'conv_absent'],
     ['session', 'sess_absent'],
+    ['decider', 'dcd_absent'],
+    ['decision', 'dec_absent'],
   ])('an id that names no %s resolves to nothing', async (kind, publicId) => {
     await expect(resolveResourceScope({ kind, publicId })).resolves.toBeNull();
   });
