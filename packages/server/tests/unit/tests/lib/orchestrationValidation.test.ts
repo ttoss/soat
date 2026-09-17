@@ -368,8 +368,8 @@ describe('validateOrchestrationGraph', () => {
 
     test('accepts a namespaced `input.<name>` reference against the input schema', () => {
       // Run input is seeded under `input.`, so a reference through it must
-      // validate even with a closed input_schema — this used to be rejected as
-      // "no upstream node writes 'state.input'".
+      // validate even with a closed input_schema, never be rejected as "no
+      // upstream node writes 'state.input'".
       const result = validate({
         nodes: [
           {

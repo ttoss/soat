@@ -5,9 +5,9 @@ import type { OrchestrationNode } from 'src/lib/orchestrations';
 
 /**
  * One table, one test. `REQUIRED_NODE_FIELDS` declares which field each node
- * type cannot execute without; the executors used to restate that rule with
- * eleven hand-written throws spread over four files, which is why nothing
- * noticed that they disagreed on both message and meaning (#914).
+ * type cannot execute without. An executor restating that rule with its own
+ * throw is a copy that can disagree on both message and meaning, with nothing
+ * to notice it.
  *
  * Driving the cases from the table means a new node type is covered the moment
  * its entry is added, and a type whose executor forgets the guard fails here

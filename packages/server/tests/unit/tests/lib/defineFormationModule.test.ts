@@ -3,8 +3,9 @@ import {
   schemaNameForResourceType,
 } from 'src/lib/formation-modules/defineFormationModule';
 
-// The mechanical half of a formation module used to be restated in all 24, which
-// is what allowed #900 and #901. Now one implementation, tested once.
+// The mechanical half of a formation module, restated per module, is how a
+// type allowlist falls behind the registry and a key normalization goes
+// missing. One implementation, tested once.
 //
 // A `lib/` test per the keep-list rule: pure validation over a large input
 // space, where REST's bare "Unknown field" would not say which rule fired.

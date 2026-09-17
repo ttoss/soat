@@ -496,7 +496,7 @@ describe('Usage', () => {
   });
 
   /**
-   * Reading spend per session and per end user (#1265).
+   * Reading spend per session and per end user.
    *
    * The dimensions existed on the aggregate, but nothing narrowed a rollup to
    * one of them and no record reported its own spend, so "what did this
@@ -629,7 +629,7 @@ describe('Usage', () => {
   });
 
   /**
-   * Every dimension the rollup buckets on, readable as a narrowing too (#1265).
+   * Every dimension the rollup buckets on, readable as a narrowing too.
    *
    * Grouping answers "how is this project's spend split"; narrowing answers
    * "what did *this one thing* cost", which is the question an invoice line, a
@@ -1174,7 +1174,7 @@ describe('Usage', () => {
 
     // A (provider, model, component) with no rows has priced nothing, so its
     // first price may take effect now; back-dating it afterwards would rewrite
-    // history a recorded cost has to stay explainable by (#1196).
+    // history a recorded cost has to stay explainable by.
     test('accepts a past-dated first price, then rejects back-dating it (immutable history)', async () => {
       const effectiveFrom = new Date(Date.now() - 1000).toISOString();
       const first = await authenticatedTestClient(adminToken)
@@ -3336,7 +3336,7 @@ describe('Usage', () => {
       expect(afterLines.length).toBe(beforeLlm + 1);
 
       // Both attempts group under one node_id, so the node's cost is their sum
-      // — the reading `node_id` on a receipt line is meant to support (#1134).
+      // — the reading `node_id` on a receipt line is meant to support.
       expect(afterLines.length).toBeGreaterThanOrEqual(2);
     });
 
@@ -3633,7 +3633,7 @@ describe('Usage', () => {
    * The dimension the old spec pointed at (`groups.total` under
    * `group_by=orchestration_run`) counts *buckets*, and a null key is a real bucket, so a
    * project whose traffic is standalone generations reported 1 whatever the
-   * volume (#1216). These pin the distinction: the bucket count stays what it
+   * volume. These pin the distinction: the bucket count stays what it
    * is, and the entity counts live on `totals` behind `include=distinct`.
    */
   describe('GET /api/v1/usage/aggregate — totals.distinct', () => {

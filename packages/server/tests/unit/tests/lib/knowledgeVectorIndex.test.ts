@@ -14,7 +14,7 @@ import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
  * through a required join to `files.project_id`, entry search and the dedup
  * check through `memory_store_id` — so a scope that is selective enough drops every
  * candidate. Nothing errors: a search returns nothing, and the dedup check
- * reports no match and lets a near-duplicate be written (#1220).
+ * reports no match and lets a near-duplicate be written.
  *
  * The setup forces exactly that: `hnsw.ef_search = 1` shrinks the candidate
  * list to a single row, and a wall of nearer rows in another project owns it.

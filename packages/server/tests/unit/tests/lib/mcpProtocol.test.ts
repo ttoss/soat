@@ -7,7 +7,7 @@ import { McpToolError } from 'src/lib/mcpProtocol';
  *
  * Direct rather than through a generation: each property here is a branch of
  * one JSON-RPC answer, and provoking twelve distinct server answers through a
- * model turn would test the turn, not the reading (#1301).
+ * model turn would test the turn, not the reading.
  */
 describe('MCP protocol fidelity', () => {
   const MCP_URL = 'http://localhost:19999/mcp';

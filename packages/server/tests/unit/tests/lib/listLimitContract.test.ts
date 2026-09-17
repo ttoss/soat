@@ -10,7 +10,7 @@ import { join } from 'node:path';
  *
  * That is how `GET /actors?limit=1000000` came to attempt a full-table read with
  * an `include` fan-out across four associations while `GET /tools?limit=1000000`
- * correctly returned 100 (#904). Same contract, same envelope, different bound,
+ * correctly returned 100. Same contract, same envelope, different bound,
  * decided by which lib function the route happened to call.
  *
  * Static on purpose, and the reason this is the durable half of the fix: a

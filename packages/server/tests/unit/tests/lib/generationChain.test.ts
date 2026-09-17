@@ -23,7 +23,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> => {
  * declaration is what the chain is bounded and observed by — the trace lineage
  * is derived from it rather than passed in, so a caller cannot half-declare a
  * continuation. Without it a chain minted a fresh, unlinked root every hop and
- * nothing counted the hops (#1161).
+ * nothing counted the hops.
  *
  * A `lib/` test (tests.md keep-list rule 2): a continuation is spawned by an
  * internal resumption path, never by a request, so there is no entry point that
@@ -428,8 +428,7 @@ describe('continuation chain lineage and budget', () => {
   test('an agent may cap its chain below the platform budget', async () => {
     // The platform default (100) is untouched here: the agent's own ceiling is
     // what stops the chain, which is the point — a runaway is a property of one
-    // agent's wiring, and waiting for a deployment-wide backstop to notice it
-    // is what made #1161 take 17 days.
+    // agent's wiring, and a deployment-wide backstop notices it far too late.
     const agentId = await createAgentWithChainBudget({
       name: 'Agent Budget',
       maxGenerations: 2,
@@ -615,7 +614,7 @@ describe('continuation chain lineage and budget', () => {
  * `parentTraceId`/`rootTraceId` on every surviving trace that pointed at the
  * agent it removes. A budget keyed on that lineage therefore reset itself
  * whenever an unrelated ancestor agent was deleted, which is a runaway escaping
- * through a cleanup path (#1161).
+ * through a cleanup path.
  */
 describe('chain identity survives trace lineage rewrites', () => {
   let modelServer: Server;

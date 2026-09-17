@@ -235,7 +235,7 @@ describe('resolveReadProjectIds', () => {
  * The one behavioural difference between the two read preambles. Getting it
  * backwards turns an authorization failure into a `404` (empty scope treated as
  * "no filter") or an empty list into a `403` — which is why it is pinned here
- * rather than left to the individual routes that used to inline it.
+ * rather than left to each route that would otherwise inline it.
  */
 describe('requireProjectAccess', () => {
   test('rejects an empty scope that resolveReadProjectIds allows', async () => {

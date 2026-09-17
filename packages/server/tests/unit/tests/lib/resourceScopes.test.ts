@@ -212,7 +212,7 @@ describe('resolveResourceScope', () => {
    * row, one SRN — not the routes, which their own `*ResourceScope` suites drive
    * end to end.
    */
-  describe('the kinds moved off the project-level probe (#1339)', () => {
+  describe('the kinds a route resolves through its own accessor', () => {
     let seeded: Record<string, string>;
 
     beforeAll(async () => {

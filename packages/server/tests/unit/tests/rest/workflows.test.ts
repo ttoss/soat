@@ -88,7 +88,7 @@ describe('Workflows', () => {
     // A nonexistent agent id is fine here: the structural checks (including the
     // retry policy) run before dispatch targets are resolved, so this asserts
     // the retry message specifically rather than a missing-agent one.
-    test('rejects an out-of-range retry max_attempts (#822)', async () => {
+    test('rejects an out-of-range retry max_attempts', async () => {
       const res = await createWorkflow(userToken, {
         states: [
           {
@@ -329,7 +329,7 @@ describe('Workflows', () => {
       expect(res.body.error.code).toBe('WORKFLOW_HAS_OPEN_TASKS');
     });
 
-    test('deletes a workflow once its only task is closed (no bare 500) (#604)', async () => {
+    test('deletes a workflow once its only task is closed (no bare 500)', async () => {
       // Minimal workflow with a direct terminal transition so the task can be
       // closed without satisfying the SIMPLE_TRANSITIONS publish guard.
       const created = (

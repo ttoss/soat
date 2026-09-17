@@ -121,7 +121,7 @@ describe('Audit Log — write hook', () => {
 
   // The status is whatever the caller was actually told. This caller holds no
   // policy naming the project, so the delete hides the secret rather than
-  // refusing it by name (#1339) — and the entry records that, which is the
+  // refusing it by name — and the entry records that, which is the
   // property under test: a refused call is auditable under its own action.
   test('a denied delete (missing permission) yields one entry with the answered status and the same action', async () => {
     // Admin creates a secret the no-perm user will try (and fail) to delete.
@@ -219,8 +219,8 @@ describe('Audit Log — write hook', () => {
 
 describe('Audit Log — item-scoped mutations authorized via resolveProjectIds (no explicit project_id)', () => {
   // These routes authorize without a `projectPublicId`, since the project is
-  // unknown until the lib resolves it — such routes used to write no audit
-  // entry at all (#689).
+  // unknown until the lib resolves it — the shape most at risk of writing no
+  // audit entry at all.
   test('updating a tool by id yields a tools:UpdateTool entry scoped to its project', async () => {
     const createRes = await authenticatedTestClient(userToken)
       .post('/api/v1/tools')
@@ -396,9 +396,8 @@ describe('Audit Log — read API filters', () => {
     expect(future).toHaveLength(0);
   });
 
-  // Regression coverage for github.com/ttoss/soat/issues/691: an unparseable
-  // `from`/`to` used to be silently dropped rather than applied, so a typo
-  // widened a compliance query into "every entry" instead of failing loudly.
+  // An unparseable `from`/`to` must fail loudly rather than be dropped: a
+  // silently ignored typo widens a compliance query into "every entry".
   test('an unparseable ?from= is rejected with 400, not silently dropped', async () => {
     await flushAuditQueue();
     const res = await authenticatedTestClient(adminToken)
@@ -482,7 +481,7 @@ describe('Audit Log — read API authorization', () => {
     // A project-scoped API key whose boundary policy grants only secrets access
     // (no audit:*). Reading one entry is authorized against that entry's own
     // SRN now, and a read the caller may not perform is indistinguishable from
-    // absence — so this is the same `404` a plain JWT already got (#1339).
+    // absence — so this is the same `404` a plain JWT already got.
     const policyRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/policies')
       .send({
@@ -596,9 +595,8 @@ describe('Audit Log — pagination and queue metrics', () => {
     expect(getDroppedAuditCount()).toBeGreaterThanOrEqual(0);
   });
 
-  // Regression coverage for github.com/ttoss/soat/issues/707: a non-numeric
-  // `limit`/`offset` used to reach Sequelize as `NaN` and crash with a bare
-  // 500, instead of failing loudly like the `from`/`to` date params do.
+  // A non-numeric `limit`/`offset` must fail loudly like the `from`/`to` date
+  // params do, rather than reach Sequelize as `NaN` and crash with a bare 500.
   test('a non-numeric ?limit= is rejected with 400, not a 500', async () => {
     const res = await authenticatedTestClient(adminToken)
       .get('/api/v1/audit-log')
@@ -1163,8 +1161,8 @@ describe('Audit Log — NDJSON export (audit-log P3)', () => {
 
 // Global admin operations gate on a direct role comparison rather than
 // `isAllowed`, so they never touched the audit instrumentation and produced zero
-// entries, successful mutations included (#745).
-describe('Audit Log — global admin-gated mutations (#745)', () => {
+// entries, successful mutations included.
+describe('Audit Log — global admin-gated mutations', () => {
   test('creating a user is audited', async () => {
     const res = await authenticatedTestClient(adminToken)
       .post('/api/v1/users')

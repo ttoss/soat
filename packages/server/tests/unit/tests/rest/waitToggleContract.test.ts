@@ -12,8 +12,7 @@ import { load as parseYaml } from 'js-yaml';
  * because the failure it guards is a *convention* drift, not a broken route: a
  * new endpoint that spells the toggle `async`, defaults to blocking, or omits
  * the `202` its callers poll on would pass its own tests perfectly while
- * splitting the contract again. #965 unified four surfaces that had drifted
- * exactly that way, each of them individually green.
+ * splitting the contract — each drifted surface individually green.
  *
  * The specs are the single source of truth for REST, the SDK, the CLI and the
  * MCP tool surface, so checking them covers every generated client at once.

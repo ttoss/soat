@@ -2,8 +2,8 @@
  * Deterministic fixture embedder for the retrieval eval.
  *
  * The unit suite's stub returns one constant vector for every input, so every
- * cosine score ties and no ranking change is observable. This replaces it for
- * the eval with feature hashing: each text becomes a signed, L2-normalised bag
+ * cosine score ties and no ranking change is observable. The eval uses feature
+ * hashing instead: each text becomes a signed, L2-normalised bag
  * of its tokens and character trigrams, so two texts sharing terms score high
  * and two that share none score near zero — deterministic, distinct per text,
  * and ordered by term overlap.

@@ -283,7 +283,7 @@ describe('Guardrails', () => {
     });
 
     // A read the caller may not perform is indistinguishable from absence, now
-    // that the route authorizes against the guardrail's own SRN (#1339). The
+    // that the route authorizes against the guardrail's own SRN. The
     // write routes below keep `403`.
     test('project-scoped API key without GetGuardrail returns 404', async () => {
       const rawKey = await createRestrictedApiKey('guardrails:GetGuardrail');
@@ -314,7 +314,7 @@ describe('Guardrails', () => {
         .patch(`/api/v1/guardrails/${patchId}`)
         .send({ name: 'Denied' });
       // The `GET` twin above 404s on the same empty scope; a write says
-      // forbidden, and says it before parsing the body (#1029).
+      // forbidden, and says it before parsing the body.
       expect(response.status).toBe(404);
     });
 
@@ -685,12 +685,12 @@ describe('Guardrails', () => {
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
 
-    test('the run namespace resolves under its renamed path', async () => {
+    test('the run namespace resolves under its declared path', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/guardrails')
         .send({
           project_id: projectId,
-          name: 'Renamed Run Namespace Guardrail',
+          name: 'Run Namespace Guardrail',
           document: {
             class: 'A',
             guard: {

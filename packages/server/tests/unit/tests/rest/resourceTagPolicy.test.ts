@@ -68,14 +68,13 @@ describe('Resource tag policies (end-to-end)', () => {
   });
 
   /**
-   * The regression guard for the fix, not a reproduction of the bug: it must
-   * pass before and after. `buildDocumentContext` derives the condition context
-   * key from the *stored* tag key, so a policy only authorizes when the stored
-   * tag key and the stored condition key are the same string. Before the fix
-   * both sides were rewritten (`cost_center` → `costCenter`) and so agreed by
-   * coincidence; after it both are verbatim and agree by construction. This
-   * pins that they never disagree — the failure mode being a policy that
-   * silently authorizes nothing, or authorizes everything.
+   * `buildDocumentContext` derives the condition context key from the *stored*
+   * tag key, so a policy only authorizes when the stored tag key and the stored
+   * condition key are the same string. Both are kept verbatim, so they agree by
+   * construction rather than by both being rewritten the same way
+   * (`cost_center` → `costCenter`). This pins that they never disagree — the
+   * failure mode being a policy that silently authorizes nothing, or authorizes
+   * everything.
    */
   test('a multi-word tag key authorizes item access through its policy', async () => {
     const allowed = await authenticatedTestClient(adminToken)

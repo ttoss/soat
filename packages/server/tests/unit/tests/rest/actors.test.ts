@@ -168,7 +168,7 @@ describe('Actors', () => {
       expect(Array.isArray(response.body.data)).toBe(true);
     });
 
-    // #904: `listActors` hand-rolled `args.limit ?? 50`, bypassing the only
+    // `listActors` hand-rolled `args.limit ?? 50`, bypassing the only
     // place `MAX_LIST_LIMIT` is enforced. `parsePagination` does not clamp
     // either, so this asked for a full-table read with the `include` fan-out
     // across four associations.
@@ -184,7 +184,7 @@ describe('Actors', () => {
 
     test('an empty accessible-project set reports the clamped limit too', async () => {
       // The early-return page must describe the request the same way a real
-      // query would; it used to hardcode the default.
+      // query would, never by hardcoding the default.
       const response = await authenticatedTestClient(noPermToken).get(
         '/api/v1/actors?limit=1000000'
       );
@@ -418,11 +418,11 @@ describe('Actors', () => {
     });
   });
 
-  // #1062 removed the actor↔memory store link. `memory_store_id` / `auto_create_memory`
-  // were a platform promise nothing in the generation pipeline read — retrieval
-  // scope comes exclusively from the agent's `knowledge_config`. Both fields are
-  // gone from the spec, so `strictFields` now rejects them outright.
-  describe('the removed memoryStore link', () => {
+  // An actor carries no memory store link. Retrieval scope comes exclusively
+  // from the agent's `knowledge_config`, so `memory_store_id` /
+  // `auto_create_memory` would be a platform promise nothing in the generation
+  // pipeline reads. Neither is in the spec, so `strictFields` rejects them.
+  describe('no memoryStore link on an actor', () => {
     let actorId: string;
 
     beforeAll(async () => {

@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 /**
  * Nothing on a tool surface reaches the platform over the network any more.
- * Both the agent-side `soat` tool (#888) and the MCP tool surface dispatch
+ * Both the agent-side `soat` tool and the MCP tool surface dispatch
  * in-process, through the app's own middleware chain.
  *
  * This is a static check for the same reason `wireKeyContract` is one: the
@@ -11,14 +11,14 @@ import { join } from 'node:path';
  * behavioral test. A tool that self-called `http://localhost:$PORT` would work
  * perfectly in any environment where the server happens to be listening —
  * production, a dev machine, a smoke stack — and fail only where it isn't. The
- * unit suite binds no listener today precisely so that gap is visible, but a
- * future test file that binds one (as `mcp.test.ts` used to) would hide it
- * again. Reading the source catches the class.
+ * unit suite binds no listener precisely so that gap is visible, but a test
+ * file that binds one would hide it again. Reading the source catches the
+ * class.
  *
- * What the loopback cost, and what a new one would cost again: a bearer token
- * has to be minted and handed to any background caller just to satisfy the hop
- * (#879, #884); a non-2xx arrives as a body to be interpreted rather than a
- * failure, which is how a `401` was served as tool *data* for years; and every
+ * What a loopback costs: a bearer token has to be minted and handed to any
+ * background caller just to satisfy the hop; a non-2xx arrives as a body to be
+ * interpreted rather than a failure, so a `401` is served as tool *data*; and
+ * every
  * call pays a process hop plus a JSON round trip.
  *
  * The check is deliberately narrow — it looks only at how the tool surfaces

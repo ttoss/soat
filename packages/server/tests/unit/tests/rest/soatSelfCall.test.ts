@@ -14,12 +14,12 @@ import { authenticatedTestClient } from '../../testClient';
  * Covers the platform *self-call* path: a `soat` tool reaching the REST API
  * through `executeSoatTool`.
  *
- * That path used to be a loopback HTTP request to `http://localhost:$PORT`, so
- * this file bound the worker's own port — like `mcp.test.ts` still does — or
- * every self-call was refused before the behaviour under test could happen.
- * Since #888 the action is served in-process, and the listener is gone: these
- * tests now pass on `app.callback()` alone, which is itself part of the
- * evidence that no self-call goes back over the wire.
+ * The action is served in-process, with no listener, so these tests pass on
+ * `app.callback()` alone — which is itself part of the evidence that no
+ * self-call goes back over the wire. A loopback HTTP request to
+ * `http://localhost:$PORT` would need this file to bind the worker's own port,
+ * as `mcp.test.ts` does, or every self-call would be refused before the
+ * behaviour under test could happen.
  *
  * Three concerns live here because all three are properties of that one path:
  *   1. a non-2xx self-call must fail the tool call, not return the error body
@@ -28,7 +28,7 @@ import { authenticatedTestClient } from '../../testClient';
  *      a `soat` tool node authenticates — and never exceeds the credential
  *      that started the run;
  *   3. the same holds for a workflow-dispatched *agent*, whose generation is
- *      just as request-less as a durable run (#884).
+ *      just as request-less as a durable run.
  */
 
 /**
@@ -39,7 +39,7 @@ import { authenticatedTestClient } from '../../testClient';
  * This — not the generation's status — is the assertion for every
  * authentication test here: the AI SDK turns a thrown tool error into a
  * `tool-error` part fed back to the model, so a generation whose self-call was
- * refused still reports `completed` (#884).
+ * refused still reports `completed`.
  */
 const toolResultFromFollowUp = (
   completionBodies: Record<string, unknown>[]
@@ -119,8 +119,9 @@ describe('SOAT self-call', () => {
           input: { agent_id: 'agent_nonexistent' },
         });
 
-      // The self-call 404s. Before this was fixed the body came back as a
-      // successful tool result, so a caller could not tell failure from data.
+      // The self-call 404s, and that has to reach the caller as a failure:
+      // returning the body as a successful tool result leaves a caller unable
+      // to tell failure from data.
       expect(response.status).toBe(502);
       expect(response.body.error.code).toBe('TOOL_HTTP_ERROR');
       expect(response.body.error.meta.tool_status_code).toBe(404);
@@ -128,18 +129,18 @@ describe('SOAT self-call', () => {
   });
 
   /**
-   * The action's query string (#924). `buildPathFn` substitutes path params
+   * The action's query string. `buildPathFn` substitutes path params
    * only; every `in: query` parameter is built separately by `buildQueryFn`, and
-   * the SOAT tool path used to drop it entirely — so a `list-*` action returned
-   * everything the credential could see no matter what the model asked for, and
-   * a `preset_parameters` value targeting a query parameter had no effect at
-   * all. The failure was silent: the call succeeded with a superset.
+   * the SOAT tool path has to carry it. Dropping it makes a `list-*` action
+   * return everything the credential can see no matter what the model asked
+   * for, and a `preset_parameters` value targeting a query parameter have no
+   * effect at all — silently, with the call succeeding on a superset.
    *
    * Asserted through `POST /tools/:id/call` because that is where both halves
    * are observable — the model-supplied argument and the preset — and one shape
    * per case: supplied, preset, and omitted.
    */
-  describe('query parameters on a soat action (#924)', () => {
+  describe('query parameters on a soat action', () => {
     let otherProjectId: string;
     let soatToolId: string;
     let presetSoatToolId: string;
@@ -430,7 +431,7 @@ describe('SOAT self-call', () => {
     });
 
     /**
-     * The attribution half of the same path (#887). Authorization was already
+     * The attribution half of the same path. Authorization was already
      * correct — a key-started run is bounded by the key's policies (the next
      * test) — but the run-as token is JWT-shaped, so `apiKeyPublicId` was unset
      * and every downstream record named the *owning user* instead of the key
@@ -646,7 +647,7 @@ describe('SOAT self-call', () => {
   });
 
   /**
-   * The agent half of the same dispatch (#884). A workflow state with
+   * The agent half of the same dispatch. A workflow state with
    * `dispatch.kind: 'agent'` runs request-less exactly like an orchestration
    * dispatch, so an agent holding a `soat` tool needs the same run-as identity —
    * without one its self-call reaches the loopback unauthenticated.
@@ -946,7 +947,7 @@ describe('SOAT self-call', () => {
   });
 
   /**
-   * The approval half of the same gap (#894). When a human approves a tool call
+   * The approval half of the same gap. When a human approves a tool call
    * an agent proposed, `fireContinuation` resumes that agent in a fresh
    * generation — with the resolving request already gone, and possibly days
    * later. So the continuation is as request-less as a workflow dispatch and

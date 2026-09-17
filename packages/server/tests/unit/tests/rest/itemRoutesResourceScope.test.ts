@@ -6,9 +6,9 @@ import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, loginAs } from '../../testClient';
 
 /**
- * The remaining modules from the #1339 audit, each with one to four item
- * routes: ingestion rules, quotas, model routes, generations, traces, chains,
- * the audit log, usage thresholds and the session fork.
+ * The modules with one to four item routes each: ingestion rules, quotas,
+ * model routes, generations, traces, chains, the audit log, usage thresholds
+ * and the session fork.
  *
  * One file rather than nine, because the property is one property — a policy
  * naming one resource reaches it and refuses its siblings — and each module

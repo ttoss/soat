@@ -17,9 +17,9 @@ import {
  * `{ type: "has_tool_call", tool_name: "<resolved name>" }` — the terminator for
  * the "done tool" idiom.
  *
- * It was stored, wire-mapped, versioned and snapshotted, and reached nothing:
- * every `stopWhen` was `isStepCount(maxSteps)` alone, so an author who set it
- * got silence. Same shape as #811 (`active_tool_ids` silently ignored).
+ * It is stored, wire-mapped, versioned and snapshotted, so it has to reach the
+ * loop. A `stopWhen` of `isStepCount(maxSteps)` alone answers an author who
+ * sets it with silence.
  *
  * A `lib/` test (tests.md keep-list rule 2): what is under test is how many
  * times the *provider* is called, which no REST assertion can see. Real DB,
@@ -334,8 +334,8 @@ describe('stop_conditions', () => {
   });
 
   test('an unknown condition type is ignored rather than failing the turn', async () => {
-    // Rows written before the vocabulary was validated may carry anything; a
-    // stored value must not break a generation that used to run.
+    // A stored row may carry a condition type this build does not know, and
+    // that must not break the generation.
     const result = await run({
       generationId: 'gen_stopcond_unknown',
       stopConditions: [{ type: 'someFutureCondition', value: 3 }],

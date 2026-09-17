@@ -9,7 +9,7 @@ import { seedMemory } from '../../fixtures/memoryWrites';
  * What the storage snapshot quantifies, row by row. The event shape,
  * idempotency and pricing are covered in `rest/usageStorage.test.ts`; this
  * asserts the measured quantities themselves, on a project of its own so each
- * one is exactly what these fixtures seed (#1221, #1232).
+ * one is exactly what these fixtures seed.
  *
  * An embedding is the dominant term — a `vector(1024)` stores ~4 KB against the
  * ~1 KB of text it encodes — so a meter blind to it reports a fraction of the
@@ -20,7 +20,7 @@ import { seedMemory } from '../../fixtures/memoryWrites';
  * see and which costs more per element than the vector itself. `chunk_count`
  * is the term that prices it, so what it counts is asserted here beside them.
  *
- * The evaluations corpus is seeded here for the same reason (#1247): an eval
+ * The evaluations corpus is seeded here for the same reason: an eval
  * result freezes its own copy of the item it scored, so the stored bytes grow
  * with runs rather than with the dataset, and the retention sweep clears only
  * `output` of them.
@@ -367,7 +367,7 @@ describe('Usage — what the storage snapshot counts', () => {
 
   /**
    * The corpus grows with runs, not with the dataset: re-running one item
-   * stores a second frozen copy of it, and the meter must see that (#1247).
+   * stores a second frozen copy of it, and the meter must see that.
    */
   test('a re-run of the same item adds its own frozen copy', async () => {
     const before = await meteredBytes(new Date('2026-08-13T00:00:00.000Z'));

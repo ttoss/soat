@@ -171,8 +171,8 @@ describe('sweepExpiredTraceContent', () => {
     const row = await db.Trace.findByPk(seeded.traceDbId);
     expect(row!.contentRedactedAt).not.toBeNull();
     expect(row!.fileId).toBeNull();
-    // The bytes, not just the pointer — a purge that leaves the object is the
-    // fake erasure #835 closed.
+    // The bytes, not just the pointer — a purge that leaves the object is a
+    // fake erasure.
     expect(await db.File.findByPk(fileDbId as number)).toBeNull();
   });
 

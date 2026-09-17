@@ -18,10 +18,10 @@ import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
  * in this process; nothing is bound to a port, so a tool that went back over
  * the loopback would fail with `ECONNREFUSED` rather than pass quietly.
  *
- * This file used to bind `app.listen(process.env.PORT)` to match the base URL
- * `src/mcp/server.ts` froze at import time. That requirement is gone with the
- * `fetch` it existed for — the same move `soatInProcessDispatch.test.ts` pins
- * for the agent-side `soat` tool.
+ * No `app.listen(process.env.PORT)` is needed to match a base URL frozen at
+ * import time, because nothing here goes out through `fetch` — the same
+ * property `soatInProcessDispatch.test.ts` pins for the agent-side `soat`
+ * tool.
  */
 describe('MCP tools - happy path', () => {
   let adminToken: string;
@@ -393,7 +393,7 @@ describe('MCP tools - happy path', () => {
       })
     ).toBe(true);
 
-    // Alternate entry point (#821): `state` places the task directly in a
+    // Alternate entry point: `state` places the task directly in a
     // named non-initial state instead of the workflow's `initial` state.
     const midFlow = parseResult(
       await mcpCall('create-task', {
@@ -435,7 +435,7 @@ describe('MCP tools - happy path', () => {
     );
     expect(workflow.version).toBe(1);
 
-    // A task is pinned to the version it entered on (#882).
+    // A task is pinned to the version it entered on.
     const task = parseResult(
       await mcpCall('create-task', {
         project_id: projectId,
@@ -703,7 +703,7 @@ describe('MCP tools - happy path', () => {
 
   // ── Memories ─────────────────────────────────────────────────────────────
 
-  test('create-memory-store and create-memory carry the renamed tool surface', async () => {
+  test('create-memory-store and create-memory carry the memory tool surface', async () => {
     const store = parseResult(
       await mcpCall('create-memory-store', {
         project_id: projectId,
@@ -765,8 +765,8 @@ describe('MCP tools - happy path', () => {
       })
     );
     // Every stub embedding is identical, so restating anything in this store
-    // matches the first memory and skips — the outcome that used to leave no
-    // record at all.
+    // matches the first memory and skips — the outcome the ledger is the only
+    // record of.
     await mcpCall('create-memory', {
       memory_store_id: store.id,
       content: 'Deploys happen on Tuesdays.',
@@ -2126,7 +2126,7 @@ describe('MCP tools - happy path', () => {
     });
 
     // PATCH/DELETE-backed MCP tools surfaced a DomainError body as the literal
-    // "[object Object]" while the equivalent GET tool surfaced it cleanly (#375).
+    // "[object Object]" while the equivalent GET tool surfaced it cleanly.
     test('get-orchestration surfaces a readable not-found message', async () => {
       const res = await mcpCall('get-orchestration', {
         orchestration_id: 'orch_doesnotexist',
@@ -2232,7 +2232,7 @@ describe('MCP tools - happy path', () => {
   // A guardrail `document` and an evaluation `context_snapshot` are free-form
   // bags whose keys are contract fields and fully-qualified var paths. A
   // key-blind transform mangled both, breaking read→write round-trips and the
-  // audit-key contract (#651).
+  // audit-key contract.
   describe('Guardrails', () => {
     let guardrailId: string;
 
@@ -2626,7 +2626,7 @@ describe('MCP OAuth discovery (RFC 9728)', () => {
     expect(res.status).toBe(401);
   });
 
-  test('accepts an sk_ API key for authentication (#609)', async () => {
+  test('accepts an sk_ API key for authentication', async () => {
     // A valid, working API key (confirmed against REST below) must also
     // authenticate to the MCP endpoint — the documented headless-agent path.
     const keyRes = await authenticatedTestClient(adminToken)
@@ -2640,7 +2640,7 @@ describe('MCP OAuth discovery (RFC 9728)', () => {
     const rest = await authenticatedTestClient(rawKey).get('/api/v1/projects');
     expect(rest.status).toBe(200);
 
-    // The same key against /mcp must succeed (previously a blanket 401).
+    // The same key against /mcp must succeed, not meet a blanket 401.
     const res = await testClient
       .post('/mcp')
       .set('Content-Type', 'application/json')
@@ -2767,10 +2767,10 @@ describe('MCP in-process dispatch', () => {
   });
 
   test('a failed action surfaces as an error, never as tool data', async () => {
-    // A non-2xx used to come back as the response body rendered into the tool
-    // result, so an agent read "unauthorized" or "not found" as the answer and
-    // carried on. The status is what decides, and it decides in one place for
-    // both tool surfaces (`dispatchApiRequestOrThrow`).
+    // A non-2xx rendered into the tool result reads to an agent as the answer
+    // — "unauthorized" or "not found" — and it carries on. The status is what
+    // decides, and it decides in one place for both tool surfaces
+    // (`dispatchApiRequestOrThrow`).
     const res = await callTool(adminToken, 'get-project', {
       project_id: 'prj_does_not_exist',
     });

@@ -9,14 +9,14 @@ import { createApiKeyIsAllowed, createJwtIsAllowed } from 'src/lib/permissions';
  * input on purpose, which is why it is covered here rather than through REST.
  *
  * The input arises when a lib mapper hands a permission check an object whose
- * `project_id` is absent (a camelCase twin, as in #801) or empty (an association
- * the query forgot to `include`). Both are undetectable by the caller's types:
+ * `project_id` is absent (a camelCase twin holds the value) or empty (an
+ * association the query forgot to `include`). Both are undetectable by types:
  * `projectPublicId: string` is satisfied by a `!`-asserted `undefined`.
  */
 describe('project authorizers reject a check that names no project', () => {
   const cases: [string, string][] = [
     ['empty string', ''],
-    // `doc.project_id!` on an object missing the field — the #801 shape.
+    // `doc.project_id!` on an object missing the field.
     ['undefined', undefined as unknown as string],
   ];
 

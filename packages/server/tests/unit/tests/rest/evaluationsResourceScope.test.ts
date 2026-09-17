@@ -8,13 +8,13 @@ import { authenticatedTestClient, loginAs } from '../../testClient';
  * dataset **item** through its dataset, an eval **run** through its eval — the
  * way a memory authorizes through its store. Neither carries a project of its
  * own, so the parent is both the only resource that can answer "which project"
- * and the one a policy author names (#1339).
+ * and the one a policy author names.
  *
  * Which refusal a route answers follows what its action does, not which helper
- * it used to reach for: a read hides the resource (`404`), a write refuses it
- * (`403`). This module reached for the write helper on its reads too, and
- * keeping that literally would have turned a cross-project read from `404` into
- * `403` — announcing across a tenant boundary that a dataset exists.
+ * it reaches for: a read hides the resource (`404`), a write refuses it
+ * (`403`). Reaching for the write helper on a read would turn a cross-project
+ * read from `404` into `403` — announcing across a tenant boundary that a
+ * dataset exists.
  */
 describe('a policy scoped to one dataset or eval does not reach another', () => {
   let adminToken: string;

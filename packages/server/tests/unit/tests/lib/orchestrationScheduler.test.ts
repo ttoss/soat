@@ -572,7 +572,7 @@ describe('wakeRun (branch coverage)', () => {
 
 // Three entry points failed a run whose orchestration was gone, each writing a
 // different field set — `wakeRun` left `leaseExpiresAt` on a run it had just
-// failed, so the reaper saw an active lease on a terminal run (#907).
+// failed, so the reaper saw an active lease on a terminal run.
 // `redriveRun`'s superset is the intended semantics, asserted for every path.
 describe('a run whose orchestration is gone fails the same way from every path', () => {
   const LEASE = new Date(Date.now() - 60_000);

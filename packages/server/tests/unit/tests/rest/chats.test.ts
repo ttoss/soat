@@ -461,9 +461,8 @@ describe('Chats', () => {
         });
 
       // Ollama isn't running in unit CI, so the provider call fails at the
-      // socket — mapped to `502 AI_PROVIDER_ERROR` since #1081, where it used
-      // to be a bare 500. This still exercises the stored-instructions branch,
-      // which runs before the provider call.
+      // socket and maps to `502 AI_PROVIDER_ERROR`. This still exercises the
+      // stored-instructions branch, which runs before the provider call.
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/chat/completions')
         .send({
@@ -538,9 +537,8 @@ describe('Chats', () => {
 
     test('user without chats:CreateChatCompletion returns 403', async () => {
       // A stateless completion is authorized against the AI provider's own
-      // project — the only project such a call belongs to. Before this gate the
-      // route ran on `requireAuth` alone, so the declared action was never
-      // enforced on this branch.
+      // project — the only project such a call belongs to. On `requireAuth`
+      // alone the declared action would go unenforced on this branch.
       const response = await authenticatedTestClient(noPermToken)
         .post('/api/v1/chat/completions')
         .send({
@@ -641,7 +639,7 @@ describe('Chats', () => {
     });
   });
 
-  // ── Upstream provider rejections (#1081) ────────────────────────────────
+  // ── Upstream provider rejections ────────────────────────────────
 
   describe('POST /api/v1/chat/completions - upstream provider rejection', () => {
     test('a provider rejection is mapped to 502 AI_PROVIDER_ERROR, not a bare 500', async () => {
@@ -655,7 +653,7 @@ describe('Chats', () => {
       expect(response.status).toBe(502);
       expect(response.body.error.code).toBe('AI_PROVIDER_ERROR');
       // The provider's own status is what tells a caller "this model is not
-      // available here" apart from "SOAT is broken" — the whole point of #1081.
+      // available here" apart from "SOAT is broken".
       expect(response.body.error.message).toContain('404');
     });
 
@@ -855,7 +853,7 @@ describe('Chats', () => {
       // createChatCompletion reaches generateText, which throws because this
       // suite has no live Ollama server (only the smoke/tutorials CI jobs set
       // one up) — the connection failure is an upstream fault, so it maps to
-      // `502 AI_PROVIDER_ERROR` (#1081).
+      // `502 AI_PROVIDER_ERROR`.
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/chat/completions')
         .send({

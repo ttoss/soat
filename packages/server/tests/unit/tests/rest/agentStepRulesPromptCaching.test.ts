@@ -10,7 +10,7 @@ import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
  * A rule's `active_tool_ids` narrows the tool block the SDK serializes, and the
  * cache breakpoint hangs off the last system message — which sits *after* the
  * tools in the prefix. A step whose active set differs from the previous step's
- * therefore sends a different prefix and re-buys all of it (#1301 item 4).
+ * therefore sends a different prefix and re-buys all of it.
  *
  * The assertion is on the bytes the provider receives, because that is the only
  * place the two features meet: each reads correct on every SOAT surface, and

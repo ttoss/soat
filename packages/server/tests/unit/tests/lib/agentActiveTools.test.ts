@@ -3,7 +3,7 @@ import { narrowToActiveTools } from 'src/lib/agentToolSelection';
 /**
  * `active_tool_ids` is a restriction on which bound tools a generation may use
  * (`modules/agents.md` — Active Tools). It was accepted, persisted and returned
- * but never applied, so every bound tool stayed callable (#811).
+ * but never applied, so every bound tool stayed callable.
  *
  * A pure `lib/` test: the whole input space is a handful of list shapes, and
  * driving each through a real generation would cost an LLM round trip per case

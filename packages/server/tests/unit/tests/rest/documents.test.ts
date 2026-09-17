@@ -806,7 +806,7 @@ describe('Documents', () => {
       expect(status.chunk_count).toBe(1);
     });
 
-    test('re-ingesting the same file_id into a different path returns 409 FILE_ALREADY_INGESTED (issue #797)', async () => {
+    test('re-ingesting the same file_id into a different path returns 409 FILE_ALREADY_INGESTED', async () => {
       const fileId = await uploadFile({
         buffer: ONE_PAGE_PDF_BUFFER,
         filename: 'duplicate.pdf',
@@ -1233,8 +1233,8 @@ describe('Documents', () => {
       expect(ingestRes.status).toBe(201);
       expect(ingestRes.body.status).toBe('ready');
       // The stored path is leading-slash normalized (F-10) so that a
-      // `document_paths` prefix filter (`/archive/`) can match it. Previously
-      // it was stored as `archive/2024/...` and never matched.
+      // `document_paths` prefix filter (`/archive/`) can match it. Stored as
+      // `archive/2024/...` it would never match.
       expect(ingestRes.body.path).toBe('/archive/2024/prefixed.txt');
     });
 
@@ -1258,9 +1258,9 @@ describe('Documents', () => {
 
   // A fronting layer that reacts to ingestion needs two things SOAT did not
   // expose: the source file's media type on the document itself, and a
-  // terminal event when ingestion settles (issue #1041). Without them the
+  // terminal event when ingestion settles. Without them the
   // caller mirrors the document locally and edge-triggers on a polled status.
-  describe('content_type and ingestion lifecycle events (issue #1041)', () => {
+  describe('content_type and ingestion lifecycle events', () => {
     let extractSpy: jest.SpyInstance;
 
     const uploadFile = async (args: {
@@ -1836,10 +1836,10 @@ describe('Documents', () => {
    * **unscoped** API key surfaces it: that is the one credential whose usage
    * attribution is deferred until a check is granted, and it then queries
    * `Project.findOne({ where: { publicId: undefined } })`, which Sequelize
-   * rejects with a raw 500 (#801). A JWT session and a project-scoped key both
+   * rejects with a raw 500. A JWT session and a project-scoped key both
    * bypass that path, which is why every existing test above passed.
    */
-  describe('unscoped API key on document routes (issue #801)', () => {
+  describe('unscoped API key on document routes', () => {
     let unscopedKey: string;
     let docId: string;
 

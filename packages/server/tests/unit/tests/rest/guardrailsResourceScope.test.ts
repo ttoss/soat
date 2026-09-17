@@ -3,7 +3,7 @@ import { authenticatedTestClient, loginAs } from '../../testClient';
 
 /**
  * Guardrails authorize per guardrail, not per project — on the guardrail's own
- * routes, on its dry-run evaluation, and on its version history (#1339).
+ * routes, on its dry-run evaluation, and on its version history.
  */
 describe('a policy scoped to one guardrail does not reach another', () => {
   let adminToken: string;

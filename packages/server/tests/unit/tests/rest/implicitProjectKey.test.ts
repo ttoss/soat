@@ -1,7 +1,7 @@
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
- * Project-scoped API keys make `projectId` implicit (issue #267).
+ * Project-scoped API keys make `projectId` implicit.
  *
  * When a request authenticates with a project-scoped API key:
  *  - omitting `project_id` defaults to the key's project;
@@ -254,11 +254,10 @@ describe('Implicit projectId via project-scoped API key', () => {
   });
 
   /**
-   * Regression for #673: the key's project binding is a hard boundary that the
-   * owner's `admin` role does NOT lift. An admin-owned, project-scoped key can
-   * create a project (an admin-gated op) yet is still confined to its own
-   * project for resource writes — and the refusal is now actionable rather than
-   * a bare `Forbidden`.
+   * The key's project binding is a hard boundary that the owner's `admin` role
+   * does NOT lift. An admin-owned, project-scoped key can create a project (an
+   * admin-gated op) yet is still confined to its own project for resource
+   * writes — and the refusal is actionable rather than a bare `Forbidden`.
    */
   describe('admin-owned project-scoped key stays project-bound', () => {
     let adminScopedKey: string;
@@ -308,16 +307,15 @@ describe('Implicit projectId via project-scoped API key', () => {
   });
 
   /**
-   * #906: the write path was consistent — 18 route files resolved through
-   * `resolveWriteProjectId`, which runs the scope assertion. Reads had drifted:
-   * only 4 of 25 route files that name a project on a read went through
-   * `resolveProjectIdsWithAction`, so the other 21 answered the *same*
-   * condition with a bare `{"error":"Forbidden"}` while `GET /chats` answered
-   * with a message naming both projects and the fix.
+   * Every write resolves through `resolveWriteProjectId`, which runs the scope
+   * assertion, and every read that names a project resolves through
+   * `resolveProjectIdsWithAction`. A read that skips it answers the *same*
+   * condition with a bare `{"error":"Forbidden"}` instead of a message naming
+   * both projects and the remedy.
    *
    * The table covers one route per module family that reads a `project_id`, so
-   * the diagnostic is asserted as a property of the read contract rather than of
-   * whichever handler someone remembered to migrate.
+   * the diagnostic is asserted as a property of the read contract rather than
+   * of whichever handler happens to run it.
    */
   describe('cross-project reads report the same actionable scope error', () => {
     const READ_ROUTES = [

@@ -6,7 +6,7 @@ import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 // The Trace row was once created before the Generation with no shared
 // transaction, so a failed `Generation.create` left an orphaned Trace —
 // invisible to the generations listing, but enough to trip `deleteAgent`'s
-// no-dependents precondition with a 409 (#815). `Generation.create` is spied to
+// no-dependents precondition with a 409. `Generation.create` is spied to
 // reject once, the sanctioned force-failure pattern.
 describe('createGenerationRecord — Trace/Generation atomicity', () => {
   test('a Generation.create failure does not leave an orphaned Trace behind', async () => {
@@ -61,10 +61,10 @@ describe('createGenerationRecord — Trace/Generation atomicity', () => {
     );
     expect(listRes.body.total).toBe(0);
 
-    // Before the fix: the orphaned Trace tripped deleteAgent's dependents
-    // check even though no Generation ever existed, forcing 409. After the
-    // fix: the Generation.create failure rolls back the Trace insert too, so
-    // the agent has no dependents and deletes cleanly.
+    // The Generation.create failure rolls the Trace insert back with it, so
+    // the agent has no dependents and deletes cleanly. An orphaned Trace would
+    // trip deleteAgent's dependents check and force a 409 though no Generation
+    // ever existed.
     const deleteRes = await authenticatedTestClient(adminToken).delete(
       `/api/v1/agents/${agentId}`
     );

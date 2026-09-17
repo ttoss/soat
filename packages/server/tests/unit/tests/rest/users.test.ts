@@ -296,7 +296,7 @@ describe('Admin user operations', () => {
       expect(response.status).toBe(403);
     });
 
-    test('deletes a user who owns an API key (no bare 500) (#611)', async () => {
+    test('deletes a user who owns an API key (no bare 500)', async () => {
       const createRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/users')
         .send({ username: 'keyowner', password: 'keyownerpass' });

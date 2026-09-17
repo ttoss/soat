@@ -192,8 +192,8 @@ describe('unpriced cost_usd quotas', () => {
    * set — `EMBEDDING_INPUT_1M_TOKEN_PRICE_USD` is the deployment's, and no
    * price-book tier reaches a call that carries no provider record. So it is
    * read out of the blackout verdict in both directions: it can neither raise
-   * one (#1213, where ingestion alone turned a healthy cap into a 409) nor
-   * clear one.
+   * one — ingestion alone must not turn a healthy cap into a 409 — nor clear
+   * one.
    */
   test('a window of only embedding events is not a blackout', async () => {
     const ctx = await freshProjectAndAgent('genquota-unpriced-embedding');
@@ -369,7 +369,7 @@ describe('unpriced cost_usd quotas', () => {
 
   test('names the rows to price, so the fix does not need the rollup', async () => {
     // The operator's next action is to price exactly these; without them the
-    // refusal says a price is missing but not which one (#1213).
+    // refusal says a price is missing but not which one.
     const ctx = await freshProjectAndAgent('genquota-unpriced-rows');
     await seedUnpricedEvents(ctx, 3);
     await createQuotaRow({
@@ -393,15 +393,15 @@ describe('unpriced cost_usd quotas', () => {
   });
 
   /**
-   * The partly-priced window (#1228). Model A carries a price row, model B
+   * The partly-priced window. Model A carries a price row, model B
    * does not: `SUM(cost_usd)` reads A's spend alone, so the cap passes on a
-   * fraction of what was really spent. The blackout verdict is cleared by A,
-   * so before this the window reported nothing at all — no exception, no
-   * refusal, and a `current_usage` that only looks healthy.
+   * fraction of what was really spent. A cleared blackout verdict is not
+   * enough on its own: without the signal the window reports nothing at all —
+   * no exception, no refusal, and a `current_usage` that only looks healthy.
    *
    * The signal is observability-only: the priced total is real, if
    * incomplete, so the window is still measured against the limit. Refusing
-   * on a ratio is what made a cost cap unrecoverable in #1201.
+   * on a ratio makes a cost cap unrecoverable.
    */
   test('files a triage item for a partly-priced window without refusing it', async () => {
     const ctx = await freshProjectAndAgent('genquota-unpriced-partial');

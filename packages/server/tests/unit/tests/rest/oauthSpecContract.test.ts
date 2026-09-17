@@ -13,9 +13,9 @@ import { testClient } from '../../testClient';
  * `/api/v1/openapi.json`, the published `/openapi.json`, the reference pages.
  *
  * An agent looking for the OAuth flow finds it exactly one way, by reading a
- * description; prose in `docs/modules/oauth.md` is not one. An external
- * readiness audit read the published bundle and reported "OAuth mentioned but
- * no standard endpoints found" (#1099, item 1) — correctly.
+ * description; prose in `docs/modules/oauth.md` is not one. A reader of the
+ * published bundle alone must not be able to conclude "OAuth mentioned but no
+ * standard endpoints found".
  *
  * Declaring them in a spec is only half a fix, because a hand-written spec for
  * routes a dependency owns is exactly the kind that goes stale on a bump. So

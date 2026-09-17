@@ -3,16 +3,15 @@ import { join } from 'node:path';
 
 /**
  * `makeResourceAccessor` (`src/lib/resourceAccessor.ts`) owns the four queries
- * every resource module in `src/lib` used to write out by hand: the scoped
+ * a resource module in `src/lib` would otherwise write out by hand: the scoped
  * `where`, the scoped lookup, its throwing counterpart, and the
  * reload-after-write.
  *
- * The helper landing was never the fix on its own. #916 names the failure mode
- * directly — *"a half-migrated helper is worse than no helper, because it makes
- * the correct path look optional"* — and the epic's own defects are the
- * evidence: an allowlist that dropped an entry (#900), a normalization four of
- * twenty-four modules skipped (#901). Both were rules stated in more than one
- * place, and both diverged in the copy nobody re-read.
+ * The helper existing is not the guarantee. A half-migrated helper is worse
+ * than no helper, because it makes the correct path look optional — an
+ * allowlist drops an entry, a normalization is skipped in a handful of
+ * modules, and a rule stated in more than one place diverges in the copy
+ * nobody re-reads.
  *
  * So this test is the half that lasts. It is static for the same reason
  * `listLimitContract.test.ts` is: a per-module integration test only covers the

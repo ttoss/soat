@@ -3,14 +3,14 @@ import { authenticatedTestClient } from '../../testClient';
 
 /**
  * A task runs on the state machine it entered on, not the one the workflow holds
- * now (issue #882).
+ * now.
  *
- * A task lives in a workflow for weeks, so an edit to the definition used to
- * reach every task already in flight: three read paths — the transition
- * validator, the approval gate, and payload validation — resolved `states` /
- * `transitions` / `payload_schema` from the live `Workflow` row. A task could be
- * stranded in a state that no longer existed, or refused a move that was legal
- * when it was created.
+ * A task lives in a workflow for weeks, so an edit to the definition must not
+ * reach a task already in flight. Three read paths — the transition validator,
+ * the approval gate, and payload validation — resolve `states` / `transitions` /
+ * `payload_schema`, and each one reading the live `Workflow` row would strand a
+ * task in a state that is gone, or refuse a move that was legal when it was
+ * created.
  *
  * Every test here creates a task on v1, edits the workflow to v2, and then drives
  * the task — so the assertion names *which definition ran*, not merely that the

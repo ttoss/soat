@@ -251,7 +251,7 @@ describe('validateQuotaShape', () => {
  * every fixed window is meaningless on it. The rule has to be fail-closed in
  * both directions, because either half stored is a quota that reads healthy
  * while enforcing nothing — a windowed storage cap would never be evaluated,
- * and `current` on a flow metric has no window math behind it (#1249).
+ * and `current` on a flow metric has no window math behind it.
  */
 describe('validateQuotaShape — the storage_bytes stock metric', () => {
   const base = {

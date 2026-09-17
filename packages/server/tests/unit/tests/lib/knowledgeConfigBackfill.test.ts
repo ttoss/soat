@@ -7,11 +7,8 @@ import {
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
-/**
- * The bag exactly as request middleware used to store it, before
- * single-casing: every key camelCased.
- */
-const PRE_SINGLE_CASING_CONFIG = {
+/** A stored bag with every key camelCased, the shape the backfill rewrites. */
+const CAMEL_CASED_CONFIG = {
   memoryStoreIds: ['mstore_seed'],
   // `tags` has no camelCase spelling to rewrite, so it must survive the pass
   // untouched — the case a rename map gets wrong by over-reaching.
@@ -35,9 +32,7 @@ const WIRE_CONFIG = {
 
 describe('toWireKnowledgeConfig', () => {
   test('rewrites every pre-single-casing key to the wire spelling', () => {
-    expect(toWireKnowledgeConfig(PRE_SINGLE_CASING_CONFIG)).toEqual(
-      WIRE_CONFIG
-    );
+    expect(toWireKnowledgeConfig(CAMEL_CASED_CONFIG)).toEqual(WIRE_CONFIG);
   });
 
   test('returns null for a bag that is already wire-shaped', () => {
@@ -114,7 +109,7 @@ describe('backfillKnowledgeConfigCasing', () => {
 
   const seedPreSingleCasingAgent = async () => {
     const agent = await db.Agent.findOne({ where: { publicId: agentId } });
-    agent!.knowledgeConfig = { ...PRE_SINGLE_CASING_CONFIG };
+    agent!.knowledgeConfig = { ...CAMEL_CASED_CONFIG };
     await agent!.save();
   };
 
@@ -176,7 +171,7 @@ describe('backfillKnowledgeConfigCasing', () => {
     const config = version!.config as Record<string, unknown>;
     version!.config = {
       ...config,
-      knowledge_config: { ...PRE_SINGLE_CASING_CONFIG },
+      knowledge_config: { ...CAMEL_CASED_CONFIG },
     };
     await version!.save();
 

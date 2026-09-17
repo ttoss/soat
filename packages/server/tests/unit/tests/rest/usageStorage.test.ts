@@ -242,7 +242,7 @@ describe('Usage — storage metering', () => {
     expect(Number(count!.quantity)).toBe(2);
     expect(Number(count!.cost_usd)).toBeCloseTo(0.5);
 
-    // The event's cost is both components, not the one it used to carry.
+    // The event's cost is both components, not one of them.
     const componentSum = event!.components.reduce((total, c) => {
       return total + Number(c.cost_usd);
     }, 0);

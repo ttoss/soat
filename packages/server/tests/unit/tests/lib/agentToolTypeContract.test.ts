@@ -7,7 +7,7 @@ import { AGENT_TOOL_TYPES } from 'src/lib/agentToolResolver';
 // Pins `AGENT_TOOL_TYPES` to the enum the OpenAPI spec publishes — the direction
 // a typechecker cannot see, since the spec is YAML. Without it, a type added to
 // the spec but never to the union is accepted on write and silently dropped on
-// read, which is #1002 ("the agent ignored my tool") by another road.
+// read — "the agent ignored my tool" by another road.
 //
 // A `lib/` test per the keep-list rule: no entry point reports *which* type went
 // missing, only an agent that quietly has fewer tools.

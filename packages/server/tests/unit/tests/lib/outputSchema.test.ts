@@ -134,8 +134,8 @@ describe('validateStructuredOutput', () => {
   });
 });
 
-// Proves a generation actually reaches the validator: before the fix, the stub's
-// degenerate object completed with `output.object` set and no error anywhere.
+// Proves a generation actually reaches the validator. Unvalidated, the stub's
+// degenerate object completes with `output.object` set and no error anywhere.
 describe('output_schema enforcement (stub server)', () => {
   let stubServer: Server;
   let stubBaseUrl: string;

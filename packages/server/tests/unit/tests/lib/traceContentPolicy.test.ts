@@ -87,8 +87,9 @@ describe('traceContentPolicy', () => {
       ['full', 'none', 'none'],
       ['none', null, 'none'],
       ['none', 'none', 'none'],
-      // Defence in depth: the write guard refuses this combination, but if a
-      // row predates the guard the stricter side must still win at read time.
+      // Defence in depth: the write guard refuses this combination, and a
+      // stored row carrying it anyway resolves to the stricter side at read
+      // time.
       ['none', 'full', 'none'],
     ] as const)(
       'project=%s agent=%s resolves to %s',

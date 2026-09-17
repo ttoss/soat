@@ -9,7 +9,7 @@ import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
- * Covers issue #179 — error surfacing on generation failure:
+ * Error surfacing on generation failure:
  * - upstream provider errors are mapped to 502 AI_PROVIDER_ERROR
  * - failed generations are persisted with status 'failed' and an error payload
  * - traces record the error of failed generations
@@ -260,7 +260,7 @@ describe('Generations', () => {
     });
 
     // A read the caller may not perform is indistinguishable from absence, now
-    // that the route authorizes against the generation's own SRN (#1339); the
+    // that the route authorizes against the generation's own SRN; the
     // listing above keeps `403`, and so do the writes below.
     test('returns 404 when user lacks permission', async () => {
       const response = await authenticatedTestClient(noPermToken).get(
@@ -330,7 +330,7 @@ describe('Generations', () => {
           messages: [{ role: 'user', content: 'secret internal message' }],
         },
         // Keyed by memory rule: a store can have several, so one flat pair of
-        // counts could not say which produced them (#1324).
+        // counts could not say which produced them.
         extraction: {
           mrule_V1StGXR8Z5jdHi6B: {
             candidates: 2,
@@ -396,8 +396,8 @@ describe('Generations', () => {
     });
 
     test('accepts a caller metadata key that collides with an attribution field name', async () => {
-      // Previously rejected as "reserved". Now harmless: the bag cannot reach
-      // the column, so there is nothing to protect and nothing to reject.
+      // Harmless rather than "reserved": the bag cannot reach the column, so
+      // there is nothing to protect and nothing to reject.
       const response = await authenticatedTestClient(userToken)
         .patch(`/api/v1/generations/${attributedGenerationId}`)
         .send({

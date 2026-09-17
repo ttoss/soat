@@ -438,9 +438,9 @@ describe('MemoryStores', () => {
         expect(response.body.id).toMatch(/^mem_/);
       });
 
-      // The band that used to merge two facts into one by LLM now supersedes:
-      // the old memory is retired intact and a new one replaces it. Nothing is
-      // rewritten, so neither original text is lost.
+      // The supersede band retires the matched memory intact and replaces it
+      // with a new one. Nothing is rewritten or merged, so neither original
+      // text is lost.
       test('a supersede-band write retires the match and replaces it', async () => {
         const freshMemoryStoreId = await createTestMemoryStore();
         const first = await authenticatedTestClient(userToken)

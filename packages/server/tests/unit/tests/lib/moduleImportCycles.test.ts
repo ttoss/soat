@@ -5,23 +5,19 @@ import path from 'node:path';
  * No two modules within a cluster may import each other.
  *
  * This is the deterministic replacement for the prose rule "don't import back".
- * Eleven mutual-import pairs accumulated among the `orchestration*.ts` files
- * before anyone counted them (#910), one of them a real runtime cycle between
- * the engine and the node executors — invisible in review, and only felt at
- * load time. The `agent*.ts` files had grown three more the same way (#911),
- * all of them running through a re-export barrel in `agents.ts` that existed
- * only so seven callers could keep importing `createGeneration` from the CRUD
- * module. So the graph is asserted here instead of remembered.
+ * Mutual-import pairs accumulate uncounted — a runtime cycle between an engine
+ * and its node executors is invisible in review and only felt at load time, and
+ * a re-export barrel kept for the convenience of a few callers grows more of
+ * them. So the graph is asserted here instead of remembered.
  *
  * The guard is per-cluster rather than per-package because that is the unit a
  * baseline can honestly shrink to zero: a prefix names a set of files one
- * person owns and can untangle in one pass. It started orchestration-only; the
- * agent cluster was added when #911 broke its cycles, and adding the next
- * cluster is one {@link CLUSTERS} entry.
+ * person owns and can untangle in one pass. Adding a cluster is one
+ * {@link CLUSTERS} entry.
  *
  * Every static edge counts, `import type` included: a type that can only live
- * next to an implementation is exactly how five of the six #910 cycles formed,
- * and the fix (a leaf types module) is the same either way.
+ * next to an implementation is how a cycle forms, and the fix (a leaf types
+ * module) is the same either way.
  *
  * A **dynamic** `import('./x')` is deliberately not an edge. It resolves when
  * the call is made rather than when the module graph is built, so it cannot
@@ -29,8 +25,8 @@ import path from 'node:path';
  * being a registry, as `registerApprovalResumeHandler` does).
  * `orchestrationNestedRun.ts` reaches the engine that way on purpose.
  *
- * A cluster's `knownMutualImports` is a baseline of pairs that predate this
- * guard, not an allowlist to grow. Two assertions keep it honest: a pair not on
+ * A cluster's `knownMutualImports` is a shrinking baseline, not an allowlist to
+ * grow. Two assertions keep it honest: a pair not on
  * it fails, and a pair on it that no longer exists fails too — so fixing a
  * cycle forces its entry to be deleted and the baseline can only shrink. The
  * agent cluster's baseline is empty, and must stay that way.
@@ -44,8 +40,8 @@ const CLUSTERS = [
     /**
      * Every remaining pair runs through `orchestrations.ts`, the module that
      * owns the run/node types and their mappers, or through the engine.
-     * Untangling that hub is the engine split #912 implies — out of scope for
-     * #910, which covered the node-execution layer.
+     * Untangling that hub is a split of the engine itself, beyond the
+     * node-execution layer these entries cover.
      */
     knownMutualImports: [
       'orchestrationEngine <-> orchestrationWorker',

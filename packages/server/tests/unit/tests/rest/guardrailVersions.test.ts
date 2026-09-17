@@ -12,7 +12,7 @@ const GUARDRAIL_VERSION_ACTIONS = [
 ];
 
 /**
- * Guardrail version history, on the shared archive engine (issue #877).
+ * Guardrail version history, on the shared archive engine.
  *
  * Every assertion drives the REST entry point: versions are written by the
  * shared lib choke point in `guardrails.ts`, so a create, a `PATCH` and a
@@ -373,7 +373,7 @@ describe('Guardrail versions', () => {
       );
       // `noPermToken` resolves to an empty project list. On a read that is a
       // 404 (nothing matches the filter); on a write it is a denial, and the
-      // route says so before touching the guardrail (#1029).
+      // route says so before touching the guardrail.
       expect(res.status).toBe(404);
     });
   });
@@ -406,7 +406,7 @@ describe('Guardrail versions', () => {
      *
      * The id below has to name a real guardrail: the route resolves it before
      * authorizing, so a made-up id would answer `404` and never reach the
-     * refusal these tests are about (#1339).
+     * refusal these tests are about.
      */
     const createRestrictedApiKey = async (excludedAction: string) => {
       const allowedActions = GUARDRAIL_VERSION_ACTIONS.filter((action) => {
@@ -444,7 +444,7 @@ describe('Guardrail versions', () => {
     });
 
     // A read the caller may not perform is indistinguishable from absence, now
-    // that the route authorizes against the guardrail's own SRN (#1339);
+    // that the route authorizes against the guardrail's own SRN;
     // `restore` is a write and keeps `403`.
     test('without ListGuardrailVersions returns 404', async () => {
       const rawKey = await createRestrictedApiKey(

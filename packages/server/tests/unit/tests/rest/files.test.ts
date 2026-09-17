@@ -864,7 +864,7 @@ describe('Files', () => {
     });
 
     test('returns 403 when project does not exist', async () => {
-      // Project resolution now flows through resolveProjectIds (#267), which
+      // Project resolution now flows through resolveProjectIds, which
       // returns 403 for a project the caller cannot prove access to —
       // including one that does not exist — rather than leaking its absence.
       const response = await authenticatedTestClient(userToken)

@@ -104,13 +104,13 @@ describe('Usage — API-request metering', () => {
   });
 
   /**
-   * #887 set `apiKeyPublicId` on a run-as token's auth context so attribution
+   * A run-as token's auth context carries `apiKeyPublicId`, so attribution
    * names the key that started the work. Request metering keys off that same
    * field, so the exemption here is deliberate and must stay visible: a
    * background drive is machinery continuing work the caller already paid a
-   * request for, not a new arrival. Before #887 run traffic was exempt only
-   * because the field happened to be unset — delete the `isRunToken` check in
-   * `requestAttribution.ts` and this test is what goes red.
+   * request for, not a new arrival. It rests on the explicit `isRunToken`
+   * check in `requestAttribution.ts`, not on that field happening to be unset —
+   * delete the check and this test is what goes red.
    */
   test('run-as token requests are not counted against the key that started the work', async () => {
     resetRequestCounters();
@@ -145,7 +145,7 @@ describe('Usage — API-request metering', () => {
     expect(written).toBe(0);
   });
 
-  // #749: an unscoped key (no bound project) is counted against the project the
+  // An unscoped key (no bound project) is counted against the project the
   // route resolved and authorized — here the single project the key can reach.
   test('unscoped API key requests are counted against the resolved project', async () => {
     resetRequestCounters();

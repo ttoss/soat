@@ -66,10 +66,9 @@ describe('toProviderDomainError', () => {
   /**
    * A provider that fails *part-way* through a stream sends its fault as a
    * `data: {"error": {...}}` frame, which the AI SDK hands on as the raw JSON
-   * value rather than an `APICallError` — nothing threw, the response was
-   * already `200`. Before #1084 it fell through to the generic wrapper and the
-   * caller was told "Internal Server Error" about a fault the provider had
-   * named.
+   * value rather than an `APICallError` — nothing throws, and the response is
+   * already `200`. Falling through to the generic wrapper tells the caller
+   * "Internal Server Error" about a fault the provider itself named.
    */
   test('maps a mid-stream provider error frame to its own message', () => {
     // The shape the AI SDK forwards from an OpenAI-compatible `data: {"error":
@@ -96,7 +95,7 @@ describe('toProviderDomainError', () => {
 
   // The SDK wraps a streamed frame in an `Error`, so the raw-object branch
   // above no longer sees it; unmatched it reaches the caller as "Internal
-  // Server Error" again (#1084).
+  // Server Error" again.
   test('maps a streamed provider error the SDK wrapped in StreamProviderError', () => {
     const error = toProviderDomainError(
       new StreamProviderError({

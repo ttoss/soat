@@ -8,14 +8,14 @@ import {
 import { authenticatedTestClient } from '../../testClient';
 
 /**
- * The boot backfill behind #1216's renames.
+ * The boot backfill that rewrites stored usage names.
  *
  * Every stored document here is written **directly**, because the authoring
- * validators (`isKnownAction`, `RUNTIME_CONTEXT_CATALOG`) reject the old names
- * — which is the point: they run at authoring time only, so a document stored
- * before the release keeps its old strings and nothing rewrites them on a
- * read. It has no entry point of its own, so it is exercised here and its
- * effect asserted through the REST surface it repairs.
+ * validators (`isKnownAction`, `RUNTIME_CONTEXT_CATALOG`) reject the older
+ * spellings — which is the point: they run at authoring time only, so a stored
+ * document keeps whatever strings it was written with and nothing rewrites
+ * them on a read. The backfill has no entry point of its own, so it is
+ * exercised here and its effect asserted through the REST surface it repairs.
  */
 describe('usage rename backfill', () => {
   let adminToken: string;
@@ -46,7 +46,7 @@ describe('usage rename backfill', () => {
         actions: ['usage:GetAggregate', 'usage:ListEvents'],
       });
 
-      // Rewind the stored document to what a tenant wrote before the release.
+      // Write the stored document under the older spelling of the action.
       const policies = await db.Policy.findAll();
       for (const policy of policies) {
         const document = policy.document as {

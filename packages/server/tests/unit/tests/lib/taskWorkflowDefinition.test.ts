@@ -5,7 +5,7 @@ import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
- * The live-definition fallbacks in `resolveTaskDefinition` (issue #882).
+ * The live-definition fallbacks in `resolveTaskDefinition`.
  *
  * Tested directly rather than through the REST entry point because the *states*
  * they cover cannot be produced through any entry point: `POST /tasks` always

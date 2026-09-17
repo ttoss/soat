@@ -15,7 +15,7 @@ import {
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 /**
- * Curating a real generation into a dataset item (#1003, first slice).
+ * Curating a real generation into a dataset item.
  *
  * The generation under test is a **real** one: the agent's AI provider points at
  * a local OpenAI-compatible stub, so the whole path runs — input messages are

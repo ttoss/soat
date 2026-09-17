@@ -14,15 +14,14 @@ const AUDIT_FILE = process.env.OPENAPI_DRIFT_AUDIT_FILE;
  *
  * Responses returned by a `rest/` test through {@link authenticatedTestClient} /
  * {@link testClient} are checked against the OpenAPI schema for their
- * `(path, method, status)` so the shapes issue #661 governs cannot drift again.
+ * `(path, method, status)`, so a response shape cannot drift from its spec.
  *
- * Enforcement scope (full surface since the 2026-08 drift burn-down, #977):
+ * Enforcement scope:
  * - **Every documented `(path, method, status)` JSON schema** is enforced on
- *   every response a `rest/` test produces. The pre-existing drift (~1900 raw
- *   failures at the time of #661) was enumerated and burned down before this
- *   was switched on; a mapper or spec change that reintroduces drift now
- *   fails the suite with the field named. `additionalProperties: false`
- *   (rejecting undeclared response keys) remains a follow-up.
+ *   every response a `rest/` test produces, so a mapper or spec change that
+ *   introduces drift fails the suite with the field named.
+ *   `additionalProperties: false` (rejecting undeclared response keys) is not
+ *   enforced.
  * - **List endpoints** are additionally validated against the synthesized
  *   envelope contract `{ data: [], total, limit, offset }`, which asserts
  *   `required` — the list schemas themselves do not.
@@ -202,7 +201,7 @@ const getEnvelopeValidator = (): ValidateFunction => {
  * the synthesized envelope contract. The envelope check is kept alongside the
  * full schema because it asserts `required` on data/total/limit/offset, which
  * the list schemas themselves do not declare — dropping it would weaken the
- * #661 guarantee.
+ * guarantee.
  */
 const getResponseValidators = (args: {
   template: string;

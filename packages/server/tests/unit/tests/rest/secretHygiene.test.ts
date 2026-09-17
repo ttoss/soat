@@ -76,8 +76,8 @@ describe('Secret hygiene', () => {
 
       router.get('/db-boom', async () => {
         // `bind`, not `replacements`: bind values travel to Postgres as
-        // parameters, which is the shape every model write uses and the one
-        // the log payload used to carry verbatim.
+        // parameters, which is the shape every model write uses and the one a
+        // log payload would carry verbatim.
         await models.Actor.sequelize?.query(
           'SELECT 1::integer / 0 WHERE $1 = $1',
           { bind: ['sk-live-do-not-log-me'] }

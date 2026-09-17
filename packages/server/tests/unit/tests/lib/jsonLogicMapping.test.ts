@@ -281,7 +281,7 @@ describe('jsonLogicMapping', () => {
       expect(result).toEqual({ document_id: null });
     });
 
-    // #819 — the mapping context also carries the request's merged input,
+    // The mapping context also carries the request's merged input,
     // so a mapping can echo a field the target endpoint never returns.
     test('resolves input.* against the merged input passed as the third argument', () => {
       const result = applyToolOutputMapping(
@@ -354,9 +354,9 @@ describe('jsonLogicMapping', () => {
       const result = evaluateLogic(mapping, {
         output: { archived_at: null },
       });
-      // Indistinguishable from a miss at this layer — same as #818's proposal
-      // ("loggable event", not a hard error) — but still worth flagging since
-      // a legitimately-null field is rare for an id/reference mapping.
+      // Indistinguishable from a miss at this layer, and a loggable event
+      // rather than a hard error — but still worth flagging, since a
+      // legitimately-null field is rare for an id/reference mapping.
       expect(findNullVarMappings(mapping, result)).toEqual([
         { key: 'archived_at', path: 'output.archived_at' },
       ]);

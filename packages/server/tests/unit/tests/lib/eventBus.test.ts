@@ -113,7 +113,7 @@ describe('eventBus', () => {
      * The emit path resolves the project public id through a real DB read when
      * the caller does not already hold one, and swallows a failure there: an
      * event is best-effort, and an unhandled rejection would terminate the
-     * process long after the write it belonged to had committed (#903).
+     * process long after the write it belonged to had committed.
      *
      * A real DB read does not fail on demand, so this is the sanctioned
      * force-failure stub for a `.catch()` resilience branch

@@ -289,7 +289,7 @@ describe('guardrail cost ceiling over an unpriced window', () => {
     expect(toolRequests).toHaveLength(1);
   });
 
-  // Deliberately so, and now decided rather than deferred (#1228): refusing a
+  // Deliberately so, and now decided rather than deferred: refusing a
   // partly-priced window on a ratio would block the very generation that would
   // price it. The gap is reported through the project's `cost_usd` quota
   // instead — see `quotaUnpricedCost.test.ts`.

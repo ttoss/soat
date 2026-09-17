@@ -555,12 +555,11 @@ describe('evaluation scorers', () => {
 
   describe('a scorer type the dispatch does not handle', () => {
     /**
-     * `scoreOutput` used to end its switch on `case 'output_schema': default:`,
-     * so any type it did not recognise was scored *as* `output_schema` — and
-     * reported under that name. Nothing surfaced the substitution: the run
-     * reached a terminal status carrying scores that were never computed from
-     * the requested criterion, and `resolveRunPassed` fed that verdict to
-     * eval-gated promotion.
+     * A `scoreOutput` switch ending on `case 'output_schema': default:` scores
+     * any type it does not recognise *as* `output_schema`, and reports it under
+     * that name. Nothing surfaces the substitution: the run reaches a terminal
+     * status carrying scores never computed from the requested criterion, and
+     * `resolveRunPassed` feeds that verdict to eval-gated promotion.
      *
      * `validateScorers` rejects an unknown type at Eval create, so this is
      * reachable only from a stored Eval whose scorer type the running server

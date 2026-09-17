@@ -48,8 +48,8 @@ describe('isBootSchemaSyncEnabled', () => {
   });
 
   test('is off when DB_SYNC is unset, so an ordinary boot binds its port at once', () => {
-    // The whole point of #548: schema DDL is a pre-deploy step, not something
-    // every task blocks `app.listen` on.
+    // Schema DDL is a pre-deploy step, not something every task blocks
+    // `app.listen` on.
     delete process.env.DB_SYNC;
     expect(isBootSchemaSyncEnabled()).toBe(false);
   });

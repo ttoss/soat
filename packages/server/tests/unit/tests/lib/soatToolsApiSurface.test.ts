@@ -7,7 +7,7 @@ import { soatTools } from 'src/lib/soatTools';
  * `oauth.yaml` describes endpoints that do not: `/authorize`, `/token`,
  * `/register` and the two `.well-known` documents are mounted at the root by
  * `@ttoss/auth-core`, with paths the RFCs fix. They are in a spec so that a
- * client can *find* the flow (#1099), and wrapping them would be wrong rather
+ * client can *find* the flow, and wrapping them would be wrong rather
  * than merely useless: `/authorize` is a browser redirect with no response body
  * to return, and `/token` takes a form-encoded body that a JSON-shaped
  * generated caller cannot send. An agent handed a `soat`-namespaced tool for

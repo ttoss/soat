@@ -37,8 +37,8 @@ describe('createScheduler', () => {
     scheduler.start();
 
     // A daily interval only reaches its first tick after 24 unbroken hours, so
-    // a service that restarts more often than that never sweeps at all
-    // (#1229). Every sweep runs at start for that reason.
+    // a service that restarts more often than that never sweeps at all. Every
+    // sweep runs at start for that reason.
     expect(first).toHaveBeenCalledTimes(1);
     expect(second).toHaveBeenCalledTimes(1);
 

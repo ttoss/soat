@@ -194,8 +194,8 @@ describe('Sessions', () => {
       expect(response.body.tool_context).toEqual(toolContext);
     });
 
-    // A leading-uppercase key used to come back as `_pascal_key`, so reading a
-    // session and re-sending its `tool_context` changed which header went out.
+    // A leading-uppercase key coming back as `_pascal_key` would mean reading a
+    // session and re-sending its `tool_context` changes which header goes out.
     test('tool_context survives a read-modify-write round-trip', async () => {
       const created = await authenticatedTestClient(userToken)
         .post('/api/v1/sessions')
@@ -217,9 +217,9 @@ describe('Sessions', () => {
       });
     });
 
-    // Distinct keys that the inbound normalizer used to collapse into one
-    // (`user_id` → `userId`) now survive as two independent headers, so neither
-    // value is silently dropped before validation can see it.
+    // Keys an inbound normalizer would collapse into one (`user_id` → `userId`)
+    // survive as two independent headers, so neither value is silently dropped
+    // before validation can see it.
     test('keeps snake_case and camelCase spellings as distinct keys', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/sessions')
@@ -1701,7 +1701,7 @@ describe('Sessions', () => {
       );
     });
 
-    test('does not leak response_messages into metadata after tool-output completion (#844)', async () => {
+    test('does not leak response_messages into metadata after tool-output completion', async () => {
       const responseMessages = [
         {
           role: 'assistant',
@@ -1757,8 +1757,8 @@ describe('Sessions', () => {
         }
       );
       expect(assistantMsg).toBeDefined();
-      // response_messages is server-owned state stored on its own column
-      // (#844), not in the caller-owned metadata bag — metadata stays
+      // response_messages is server-owned state stored on its own column, not
+      // in the caller-owned metadata bag — metadata stays
       // untouched by this write.
       expect(assistantMsg.metadata).toBeNull();
     });
@@ -1866,7 +1866,7 @@ describe('Sessions', () => {
     });
   });
 
-  // The reserved identity keys are stamped at the generation chokepoint (#850),
+  // The reserved identity keys are stamped at the generation chokepoint,
   // not here. What this path owes it: the typed, trusted `sessionId` argument,
   // and caller bags forwarded without inventing identity keys.
 

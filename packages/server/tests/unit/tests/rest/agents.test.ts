@@ -690,7 +690,7 @@ describe('Agents', () => {
     test('rejects an active_tool_ids entry that names no tool in the project', async () => {
       // `active_tool_ids` is a declared reference (`x-soat-ref: tools`) and
       // narrows the agent's tool surface at generation time, so an unknown id
-      // has to fail on write rather than silently disarm a tool (#811) — the
+      // has to fail on write rather than silently disarm a tool — the
       // same contract `guardrail_ids` already had.
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/agents')
@@ -952,11 +952,11 @@ describe('Agents', () => {
       expect(response.status).toBe(401);
     });
 
-    // #1029's bug was the *disagreement*: a write answered 404 while the
-    // caller's own `GET /agents/:id` answered 200 for the same agent at the
-    // same instant. It is still fixed — this caller's `GET` answers 404 too, so
-    // the two agree. A caller who *can* read the agent still gets the plain
-    // `403` on a write; that pair is pinned in `agentsResourceScope.test.ts`.
+    // What must never happen is a *disagreement*: a write answering 404 while
+    // the caller's own `GET /agents/:id` answers 200 for the same agent at the
+    // same instant. This caller's `GET` answers 404 too, so the two agree. A
+    // caller who *can* read the agent still gets the plain `403` on a write;
+    // that pair is pinned in `agentsResourceScope.test.ts`.
     test('user without permission returns 404, as their own read does', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .patch(`/api/v1/agents/${agentId}`)
@@ -1555,24 +1555,23 @@ describe('Agents', () => {
       expect(res.body.tool_bindings).toEqual([{ tool_id: clientToolId }]);
     });
 
-    // The `tool_ids` / `tools` shorthands were removed for v1. They are no
-    // longer in the OpenAPI specs, so `strictFields` rejects them as unknown
-    // fields — one deterministic check covering REST, the SDK, the CLI and the
-    // MCP tool surface at once.
-    test('create rejects the removed `tool_ids` field', async () => {
+    // There is no `tool_ids` / `tools` shorthand in the OpenAPI specs, so
+    // `strictFields` rejects both as unknown fields — one deterministic check
+    // covering REST, the SDK, the CLI and the MCP tool surface at once.
+    test('create rejects a `tool_ids` field', async () => {
       const res = await createAgentWith({ tool_ids: [httpToolId] });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
 
-    test('create rejects the removed `tools` field', async () => {
+    test('create rejects a `tools` field', async () => {
       const res = await createAgentWith({
         tools: [
           {
-            name: 'inline-removed',
+            name: 'inline-tool',
             type: 'http',
-            execute: { url: 'https://example.com/removed' },
+            execute: { url: 'https://example.com/inline' },
             parameters: { type: 'object', properties: {} },
           },
         ],
@@ -1762,7 +1761,7 @@ describe('Agents', () => {
         .send({ messages: [{ role: 'user', content: 'Hello' }] });
 
       // noPermToken has no policies → projectIds=[] → refused outright, before
-      // the agent lookup that used to turn the denial into a 404 (#1029).
+      // the agent lookup runs at all.
       expect(response.status).toBe(404);
     });
 
@@ -1989,7 +1988,7 @@ describe('Agents', () => {
         });
 
       // noPermToken has no policies → projectIds=[] → refused outright, before
-      // the agent lookup that used to turn the denial into a 404 (#1029).
+      // the agent lookup runs at all.
       expect(response.status).toBe(404);
     });
   });
@@ -2050,9 +2049,9 @@ describe('Agents', () => {
     });
   });
 
-  describe('reasoning config removed', () => {
-    // The `reasoning` field no longer exists in the agent OpenAPI schema, so the
-    // strict-fields middleware rejects it as an unknown field before the handler.
+  describe('no reasoning config on an agent', () => {
+    // The agent OpenAPI schema declares no `reasoning` field, so the
+    // strict-fields middleware rejects it as unknown before the handler.
     test('rejects reasoning on agent create', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/agents')
@@ -2144,8 +2143,8 @@ describe('Agents', () => {
     });
 
     test('rejects an unknown condition type', async () => {
-      // The field used to accept anything and enforce nothing. A typo now fails
-      // the write instead of reading as a condition that never fires.
+      // The field is validated on write, so a typo fails there instead of
+      // reading as a condition that never fires.
       const res = await create([{ type: 'hasToolcall', tool_name: 'done' }]);
 
       expect(res.status).toBe(400);
@@ -2493,8 +2492,8 @@ describe('Agents', () => {
   describe('boundary_policy action validation', () => {
     // A boundary is the one policy surface where a mis-named action fails
     // *open*: `Deny` on a typo matches nothing, so the agent stays permitted.
-    // Only the formation path used to run this check, so a typo written
-    // through REST was stored unchecked (#1070).
+    // Every authoring path runs the check, so a typo written through REST is
+    // no more acceptable than one written through a template.
     test('rejects a create whose boundary_policy names an unknown action', async () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/agents')

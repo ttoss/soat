@@ -939,13 +939,13 @@ describe('IngestionRules', () => {
         expect(getRes.body.content).toBe('Async transcript delivered later.');
       });
 
-      test('a metadata PATCH mid-ingestion does not corrupt the pending conversion (#845)', async () => {
+      test('a metadata PATCH mid-ingestion does not corrupt the pending conversion', async () => {
         const docId = await ingestPendingAudio('callback-patch-race.mp3');
 
         // A caller annotates the document while the async conversion is still
-        // in flight. Before #845 this replaced the whole metadata bag, which
-        // is where the pending doc_path / conversion config used to live —
-        // corrupting the callback's file-resolution state.
+        // in flight. Replacing the whole metadata bag here would take the
+        // pending doc_path / conversion config with it, corrupting the
+        // callback's file-resolution state.
         const patchRes = await authenticatedTestClient(adminToken)
           .patch(`/api/v1/documents/${docId}`)
           .send({ metadata: { reviewed_by: 'alice' } });
@@ -1129,7 +1129,7 @@ describe('IngestionRules', () => {
         `/api/v1/ingestion-rules/${ruleId}`
       );
       // A read the caller may not perform is indistinguishable from absence,
-      // now that the route authorizes against the rule's own SRN (#1339).
+      // now that the route authorizes against the rule's own SRN.
       expect(res.status).toBe(404);
     });
 

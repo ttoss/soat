@@ -25,7 +25,7 @@ const fakeFetch = (
     calls.push({ url, headers: new Headers(init?.headers) });
     // Keyed by the whole URL, not the origin: an origin-keyed fake answers every
     // path under a host, so a request for a route the provider does not serve
-    // still passes. That is how #1080 shipped past three green tests.
+    // still passes — green tests over a listing that never happened.
     const response = responses[url];
     if (!response) {
       return Promise.reject(new Error(`unexpected request to ${url}`));
@@ -44,7 +44,7 @@ const fakeFetch = (
 /**
  * The vertex listing URL, `view` included. `launchStage` is only populated
  * under the FULL view — the default view omits it, which is what made the
- * lifecycle mapping unverifiable before (#1089).
+ * lifecycle mapping unverifiable before.
  */
 const VERTEX_LIST_URL =
   'https://us-central1-aiplatform.googleapis.com/v1beta1/publishers/google/models?view=PUBLISHER_MODEL_VIEW_FULL';
@@ -52,7 +52,7 @@ const VERTEX_LIST_URL =
 /**
  * The same listing at `location: 'global'`. Vertex's global endpoint is
  * `aiplatform.googleapis.com` with **no** location prefix — `global-` is not a
- * host Google serves (#1087).
+ * host Google serves.
  */
 const VERTEX_GLOBAL_LIST_URL =
   'https://aiplatform.googleapis.com/v1beta1/publishers/google/models?view=PUBLISHER_MODEL_VIEW_FULL';
@@ -60,7 +60,7 @@ const VERTEX_GLOBAL_LIST_URL =
 /**
  * The same listing at the EU data-residency multi-region. `eu` and `us` are
  * not regions either: they are served from `aiplatform.<eu|us>.rep.googleapis.com`,
- * a third host shape (#1087).
+ * a third host shape.
  */
 const VERTEX_EU_LIST_URL =
   'https://aiplatform.eu.rep.googleapis.com/v1beta1/publishers/google/models?view=PUBLISHER_MODEL_VIEW_FULL';
@@ -262,9 +262,9 @@ describe('enumerateProviderModels — vertex', () => {
     });
 
     // Rooted at `publishers/*`, not project-scoped like generation's `baseURL`
-    // — Google answers that path with a generic HTML 404 (#1080). The query
+    // — Google answers that path with a generic HTML 404. The query
     // string is pinned too: `launchStage` only appears under the FULL view, and
-    // a fake ignoring the query cannot tell the views apart (#1089).
+    // a fake ignoring the query cannot tell the views apart.
     expect(calls[0].url).toBe(
       'https://us-central1-aiplatform.googleapis.com/v1beta1/publishers/google/models?view=PUBLISHER_MODEL_VIEW_FULL'
     );
@@ -283,8 +283,8 @@ describe('enumerateProviderModels — vertex', () => {
   test('reports a lifecycle only for a launch stage that means one, and never a blanket streaming', async () => {
     // The real enum is LAUNCH_STAGE_UNSPECIFIED | EXPERIMENTAL |
     // PRIVATE_PREVIEW | PUBLIC_PREVIEW | GA — `DEPRECATED` is never emitted,
-    // so the branch that used to test for it was dead and every model,
-    // preview ones included, was reported `active` (#1089).
+    // so a branch testing for it is dead and every model, preview ones
+    // included, falls through to `active`.
     const { fetchImpl } = fakeFetch({
       [VERTEX_LIST_URL]: {
         body: {
@@ -384,7 +384,7 @@ describe('enumerateProviderModels — vertex', () => {
     });
 
     // `global` is not a region and takes no `<location>-` host prefix — the
-    // prefixed host is a non-endpoint 404 (#1087). Not a corner case: several
+    // prefixed host is a non-endpoint 404. Not a corner case: several
     // current Gemini models are served only at `global`.
     expect(calls[0].url).toBe(VERTEX_GLOBAL_LIST_URL);
     expect(models).toEqual([
@@ -653,7 +653,7 @@ describe('toBedrockClientConfig', () => {
   });
 });
 
-describe('enumerateProviderModels — listing honors the linked secret (#1044)', () => {
+describe('enumerateProviderModels — listing honors the linked secret', () => {
   test('bedrock signs the control-plane call with the secret IAM credentials', async () => {
     let seen: BedrockListArgs | undefined;
     await enumerateProviderModels({
@@ -670,8 +670,9 @@ describe('enumerateProviderModels — listing honors the linked secret (#1044)',
       },
     });
 
-    // Generation signs with these; listing used to ignore them and fall through
-    // to the ambient chain, so a correctly-configured record could not list.
+    // Generation signs with these, and listing must use the same ones: falling
+    // through to the ambient chain leaves a correctly-configured record unable
+    // to list.
     expect(seen?.credentials).toEqual({
       region: 'us-east-1',
       accessKeyId: 'AKIAEXAMPLE',
@@ -791,7 +792,8 @@ describe('enumerateProviderModels — listing honors the linked secret (#1044)',
     });
 
     // Generation resolves `config.project ?? secret.project_id`, so a record
-    // carrying only a key file generates fine. Listing used to throw here.
+    // carrying only a key file generates fine — and listing must not throw on
+    // the same record.
     await enumerateProviderModels({
       provider: 'vertex',
       config: {},
@@ -811,7 +813,7 @@ describe('enumerateProviderModels — listing honors the linked secret (#1044)',
   });
 
   test('vertex still refuses to list when no project can be resolved at all', async () => {
-    // `project` no longer reaches the listing URL (#1080), so it cannot be read
+    // `project` no longer reaches the listing URL, so it cannot be read
     // back out of the request. Refusing the record without it is what proves the
     // field is resolved rather than ignored.
     await expect(

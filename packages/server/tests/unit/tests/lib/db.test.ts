@@ -175,7 +175,7 @@ describe('syncSchemaWithAdvisoryLock', () => {
   test('fails fast with a lock-timeout error when the lock is held past the bound', async () => {
     // A peer SIGKILLed mid-boot holds the advisory lock until its backend is
     // reaped, which can be minutes behind a pooler — unbounded, every later boot
-    // blocks forever and the deploy deadlocks (#549).
+    // blocks forever and the deploy deadlocks.
     const saved = process.env.SCHEMA_SYNC_LOCK_TIMEOUT_MS;
     process.env.SCHEMA_SYNC_LOCK_TIMEOUT_MS = '250';
 
