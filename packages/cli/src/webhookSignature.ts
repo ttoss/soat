@@ -1,15 +1,17 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 /**
- * Verification of the signature headers SOAT puts on an outbound webhook
- * delivery, for the local `soat listen` listener. Two schemes are accepted:
+ * Verification of the signature on a payload the local `soat listen` listener
+ * receives. The listener takes two kinds, each with its own scheme:
  *
- * - `X-Soat-Signature-V2: t=<unix>,v1=<hex>` — digest over `<t>.<raw body>`, so
- *   the timestamp is authenticated and a subscriber can bound a replay by age.
- * - `X-Soat-Signature: sha256=<hex>` — deprecated, digest over the bare body.
+ * - A **webhook delivery** carries `X-Soat-Signature-V2: t=<unix>,v1=<hex>` — a
+ *   digest over `<t>.<raw body>`, so the timestamp is authenticated and a
+ *   subscriber can bound a replay by age.
+ * - A **trigger** payload carries `X-Soat-Signature: sha256=<hex>`, a digest
+ *   over the bare body, which is the scheme a webhook-type trigger's sender
+ *   signs with.
  *
- * V2 wins when both are present; the fallback keeps `soat listen` working
- * against a server that sends the v1 header alone.
+ * V2 wins when both are present.
  */
 
 export type SignatureScheme = 'v1' | 'v2';
@@ -31,8 +33,8 @@ const digestMatches = (args: { expected: string; actual: string }) => {
   return timingSafeEqual(expectedBuffer, actualBuffer);
 };
 
-/** Deprecated scheme: `sha256=<hex>` over the bare body. */
-const verifyLegacySignature = (args: {
+/** The trigger scheme: `sha256=<hex>` over the bare body. */
+const verifyBareBodySignature = (args: {
   secret: string;
   payload: string;
   header: string;
@@ -87,10 +89,10 @@ export const inspectDeliverySignature = (args: {
   headers: Record<string, string | string[] | undefined>;
 }): SignatureInspection => {
   const timestamped = headerValue(args.headers['x-soat-signature-v2']);
-  const legacy = headerValue(args.headers['x-soat-signature']);
+  const bareBody = headerValue(args.headers['x-soat-signature']);
 
   const scheme: SignatureScheme = timestamped ? 'v2' : 'v1';
-  const signature = timestamped || legacy;
+  const signature = timestamped || bareBody;
 
   if (!args.secret) {
     return { signature, scheme, valid: null };
@@ -103,10 +105,10 @@ export const inspectDeliverySignature = (args: {
           payload: args.payload,
           header: timestamped,
         })
-      : verifyLegacySignature({
+      : verifyBareBodySignature({
           secret: args.secret,
           payload: args.payload,
-          header: legacy,
+          header: bareBody,
         });
 
   return { signature, scheme, valid };

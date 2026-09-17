@@ -83,7 +83,6 @@ A matching event is delivered as an HTTP POST with these headers:
 | `X-Soat-Event`        | The event type (e.g., `files.created`)                                     |
 | `X-Soat-Delivery`     | Unique delivery ID                                                         |
 | `X-Soat-Signature-V2` | Timestamped signature, `t=<unix>,v1=<hex>` — see [Signature verification](#secret-and-signature-verification) |
-| `X-Soat-Signature`    | **Deprecated.** HMAC-SHA256 hex digest of the bare request body, as `sha256=<hex>` |
 
 Deliveries are retried up to three times; each attempt is recorded in the delivery log. See [Chat with an LLM - Step 11 (Verify delivery)](/docs/tutorials/chat-with-llm#step-11---verify-delivery-and-final-assistant-message). Test locally with [`soat listen`](../cli/usage.md#testing-webhooks-locally).
 
@@ -190,16 +189,6 @@ const isValid = (secret, body, header) => {
 ```
 
 Each attempt is signed when sent, so a retry carries a fresh timestamp.
-
-#### The deprecated `X-Soat-Signature`
-
-`X-Soat-Signature: sha256=<hex>` signs the bare body with no timestamp, so it cannot bound a replay. It is sent alongside `X-Soat-Signature-V2`; verify the V2 header instead.
-
-```js
-// Deprecated — no replay bound.
-const expected = crypto.createHmac('sha256', secret).update(body).digest('hex');
-const isValid = `sha256=${expected}` === header;
-```
 
 ### Policy Gating
 

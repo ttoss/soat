@@ -469,7 +469,7 @@ LISTENER_PID=$!
 sleep 2
 ```
 
-Optional: pass `--secret <webhook-secret>` to validate `X-Soat-Signature`.
+Optional: pass `--secret <webhook-secret>` to validate `X-Soat-Signature-V2`.
 
 </TabItem>
 <TabItem value="sdk" label="SDK">

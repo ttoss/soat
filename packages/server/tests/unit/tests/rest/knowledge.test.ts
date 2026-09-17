@@ -630,42 +630,38 @@ describe('Knowledge', () => {
       expect(response.body.results[0].similarity_score).toBeUndefined();
     });
 
-    test('min_score filters on score', async () => {
+    test('min_similarity filters on the cosine floor', async () => {
       const above = await authenticatedTestClient(userToken)
         .post('/api/v1/knowledge/search')
-        .send({ project_id: projectId, query: 'anything', min_score: 0 });
+        .send({ project_id: projectId, query: 'anything', min_similarity: 0 });
       expect(above.status).toBe(200);
       expect(above.body.results.length).toBeGreaterThan(0);
       for (const result of above.body.results) {
         expect(result.score).toBeGreaterThanOrEqual(0);
       }
 
-      // A threshold above any achievable score filters everything out.
+      // A floor above any achievable cosine filters everything out.
       const below = await authenticatedTestClient(userToken)
         .post('/api/v1/knowledge/search')
-        .send({ project_id: projectId, query: 'anything', min_score: 1.5 });
+        .send({ project_id: projectId, query: 'anything', min_similarity: 1.5 });
       expect(below.status).toBe(200);
       expect(below.body.results).toHaveLength(0);
     });
 
-    test('min_similarity and the deprecated min_score are interchangeable', async () => {
-      const body = {
-        project_id: projectId,
-        query: 'anything',
-        memory_store_ids: [memoryStoreId],
-      };
-
-      const deprecated = await authenticatedTestClient(userToken)
+    test('min_score is not a field the search accepts', async () => {
+      // One spelling of the cosine floor. A second one accepted silently is a
+      // request whose meaning depends on which of the two the server prefers.
+      const response = await authenticatedTestClient(userToken)
         .post('/api/v1/knowledge/search')
-        .send({ ...body, min_score: 0.5 });
-      const current = await authenticatedTestClient(userToken)
-        .post('/api/v1/knowledge/search')
-        .send({ ...body, min_similarity: 0.5 });
+        .send({
+          project_id: projectId,
+          query: 'anything',
+          min_score: 0.5,
+        });
 
-      expect(deprecated.status).toBe(200);
-      expect(current.status).toBe(200);
-      expect(deprecated.body.results.length).toBeGreaterThan(0);
-      expect(deprecated.body.results).toEqual(current.body.results);
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.meta.unknownFields).toContain('min_score');
     });
 
     test('min_similarity filters on similarity_score, not on score', async () => {
@@ -1008,16 +1004,16 @@ describe('Knowledge', () => {
       expect(docResult.similarity_score).toBeGreaterThan(0);
     });
 
-    test('min_score keeps a document whose true score clears the threshold', async () => {
-      // The constant-vector stub scores 1, and the sub-query bug collapsed it to
-      // 0 — so a `min_score` between the two is what makes this genuinely
-      // red/green rather than merely asserting non-null.
+    test('min_similarity keeps a document whose cosine clears the floor', async () => {
+      // The constant-vector stub scores 1, and a document whose similarity is
+      // read as 0 collapses to 0 — so a floor between the two is what makes
+      // this genuinely red/green rather than merely asserting non-null.
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/knowledge/search')
         .send({
           project_id: projectId,
           query: 'fox',
-          min_score: 0.5,
+          min_similarity: 0.5,
         });
       expect(response.status).toBe(200);
       const docResult = response.body.results.find(
@@ -1044,14 +1040,14 @@ describe('Knowledge', () => {
       expect(Array.isArray(response.body.results)).toBe(true);
     });
 
-    test('applies min_score to a semantic memoryStore search', async () => {
+    test('applies min_similarity to a semantic memoryStore search', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/knowledge/search')
         .send({
           project_id: projectId,
           query: 'sky',
           memory_store_ids: [memoryStoreId],
-          min_score: -1,
+          min_similarity: -1,
         });
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body.results)).toBe(true);

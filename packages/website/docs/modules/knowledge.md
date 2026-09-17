@@ -171,7 +171,6 @@ Use it to answer "why is this here?" without a harness — a result you expected
 | `min_similarity` | none | Minimum raw cosine a **vector** candidate must reach to be ranked at all, applied before fusion |
 | `rrf_k` | `KNOWLEDGE_RRF_K`, itself `60` | The `k` in `1 / (k + rank)`; smaller weights the top of each ranking more heavily |
 | `recency_half_life_days` | `KNOWLEDGE_RECENCY_HALF_LIFE_DAYS`, itself `0` (off) | Half-life of a decay applied to **memory** results after fusion; `0` disables it |
-| `min_score` | none | **Deprecated** alias for `min_similarity` |
 
 `min_similarity` filters cosine, never `score`. A floor on a fused value would be a rank cutoff wearing a similarity knob's clothes.
 
@@ -179,7 +178,7 @@ Use it to answer "why is this here?" without a harness — a result you expected
 
 **The floor filters, it does not refill.** It runs over the `limit` rows each store's vector query already took, so `limit: 10` with `min_similarity: 0.8` returning three rows means seven of that store's ten nearest fell below the floor — not that the corpus holds only three above it. Raise `limit` to widen the candidate set the floor is applied to.
 
-`min_score` is the field's earlier name and keeps working unchanged. While ranking was single-signal `score` equaled `similarity_score`, so `min_score` has only ever filtered cosine — an existing value, per request or as `knowledge_config.min_score` on an agent, returns the same results it always did, plus the lexical hits the floor was never meant to exclude. `min_similarity` wins if both are sent.
+The agent record spells the same floor `knowledge_config.min_score` — one field, two surfaces, so a value set on an agent and a value sent per request mean the same cosine.
 
 #### Recency blend
 

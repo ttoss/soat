@@ -285,11 +285,14 @@ describe('webhook delivery outbox', () => {
     expect(skewSeconds).toBeLessThan(120);
   });
 
-  test('the legacy signature header is sent alongside the v2 one', async () => {
-    const url = 'https://example.com/outbox-legacy-signature';
-    const webhook = await createWebhook({ name: 'Legacy Signature', url });
+  test('a delivery carries one signature, and it is the timestamped one', async () => {
+    // A second header signing the bare body offers a subscriber a scheme that
+    // cannot bound a replay, and a subscriber that verifies it gets no replay
+    // protection while believing the delivery is signed.
+    const url = 'https://example.com/outbox-one-signature';
+    await createWebhook({ name: 'One Signature', url });
 
-    emitFileCreated('fil_legacy_signature');
+    emitFileCreated('fil_one_signature');
 
     await waitFor(() => {
       return callsToUrl(url).length > 0;
@@ -300,13 +303,9 @@ describe('webhook delivery outbox', () => {
       { body: string; headers: HeadersInit },
     ];
 
-    const legacy = crypto
-      .createHmac('sha256', webhook.secret)
-      .update(init.body)
-      .digest('hex');
-    expect(new Headers(init.headers).get('X-Soat-Signature')).toBe(
-      `sha256=${legacy}`
-    );
+    const headers = new Headers(init.headers);
+    expect(headers.get('X-Soat-Signature-V2')).toMatch(/^t=\d+,v1=[0-9a-f]{64}$/);
+    expect(headers.get('X-Soat-Signature')).toBeNull();
   });
 
   test('each attempt re-signs, so a retry never ships a stale timestamp', async () => {

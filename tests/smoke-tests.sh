@@ -967,21 +967,6 @@ if [ "$LEXICAL_HIT" -lt 1 ]; then
 fi
 echo "Exact-token search reached the chunk below the similarity floor: OK"
 
-# --min_score is the deprecated spelling of the same floor, so the same value
-# must return the same results.
-DEPRECATED_FLOOR_RESP=$($SOAT_CLI search-knowledge \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --query "SMOKE-SKU-4711" \
-  --min_score 0.9 \
-  --limit 5)
-DEPRECATED_IDS=$(printf '%s\n' "$DEPRECATED_FLOOR_RESP" | jq -c '[.results[].chunk_id]')
-CURRENT_IDS=$(printf '%s\n' "$LEXICAL_SEARCH_RESP" | jq -c '[.results[].chunk_id]')
-if [ "$DEPRECATED_IDS" != "$CURRENT_IDS" ]; then
-  echo "ERROR: --min_score and --min_similarity disagreed: $DEPRECATED_IDS vs $CURRENT_IDS" >&2
-  exit 1
-fi
-echo "Deprecated --min_score matches --min_similarity: OK"
-
 # The recency blend ships off, and 0 is its disable sentinel at either level,
 # so naming it explicitly must return exactly what omitting it returns.
 RECENCY_OFF_RESP=$($SOAT_CLI search-knowledge \
