@@ -4,10 +4,10 @@ import { inspectDeliverySignature } from '../../../src/webhookSignature';
 
 /**
  * `soat listen` is the tool the docs point users at before they aim a webhook
- * at a real endpoint, so it has to verify the scheme the server actually sends.
- * The server signs `<t>.<body>` under `X-Soat-Signature-V2` and also sends the
- * bare `X-Soat-Signature`; the listener must accept both and say which one it
- * checked.
+ * at a real endpoint, so it has to verify the schemes it actually receives. A
+ * webhook delivery signs `<t>.<body>` under `X-Soat-Signature-V2`; a trigger
+ * payload signs the bare body under `X-Soat-Signature`. The listener accepts
+ * either and says which one it checked.
  */
 
 const SECRET = 'whsec_test_secret';
@@ -25,7 +25,7 @@ const timestampedHeader = (args: {
   return `t=${timestamp},v1=${digest}`;
 };
 
-const legacyHeader = (args: { secret?: string; body?: string }) => {
+const bareBodyHeader = (args: { secret?: string; body?: string }) => {
   return createHmac('sha256', args.secret ?? SECRET)
     .update(args.body ?? BODY)
     .digest('hex');
@@ -85,37 +85,39 @@ describe('inspectDeliverySignature', () => {
     expect(result.valid).toBe(false);
   });
 
-  test('falls back to the deprecated header when v2 is absent', () => {
+  test('checks the bare-body scheme when v2 is absent', () => {
     const result = inspectDeliverySignature({
       secret: SECRET,
       payload: BODY,
-      headers: { 'x-soat-signature': legacyHeader({}) },
+      headers: { 'x-soat-signature': bareBodyHeader({}) },
     });
 
     expect(result).toEqual({
-      signature: legacyHeader({}),
+      signature: bareBodyHeader({}),
       scheme: 'v1',
       valid: true,
     });
   });
 
-  test('rejects a deprecated signature computed with the wrong secret', () => {
+  test('rejects a bare-body signature computed with the wrong secret', () => {
     const result = inspectDeliverySignature({
       secret: SECRET,
       payload: BODY,
-      headers: { 'x-soat-signature': legacyHeader({ secret: 'wrong-secret' }) },
+      headers: {
+        'x-soat-signature': bareBodyHeader({ secret: 'wrong-secret' }),
+      },
     });
 
     expect(result.valid).toBe(false);
   });
 
-  test('prefers v2 when the server sends both headers', () => {
+  test('prefers v2 when a payload carries both headers', () => {
     const result = inspectDeliverySignature({
       secret: SECRET,
       payload: BODY,
       headers: {
         'x-soat-signature-v2': timestampedHeader({}),
-        'x-soat-signature': legacyHeader({}),
+        'x-soat-signature': bareBodyHeader({}),
       },
     });
 

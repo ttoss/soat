@@ -661,8 +661,8 @@ describe('buildKnowledgeMessages', () => {
       tags: { team: 'finance' },
       paths: ['path/to/doc'],
       documentIds: [42],
-      // The agent record still spells it `min_score`; it has always meant the
-      // cosine floor, which is what `minSimilarity` is.
+      // The agent record spells the cosine floor `min_score`, which is what
+      // `minSimilarity` is.
       minSimilarity: 0.5,
       limit: 5,
       // `tags` scopes both stores, so neither is switched off.

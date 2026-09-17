@@ -6,7 +6,7 @@ import { DomainError } from '../errors';
 import type { SoatEvent } from './eventBus';
 import { onEvent, recordDroppedEvent } from './eventBus';
 import { evaluateEventPolicy, matchesEvent } from './eventMatching';
-import { hmacHex, timestampedSignature } from './hmacSignature';
+import { timestampedSignature } from './hmacSignature';
 import { createScheduler, createSweep } from './scheduler';
 import { fetchWithEgressGuard } from './toolEgress';
 import { retryTransient } from './transientRetry';
@@ -38,27 +38,20 @@ const MAX_BACKOFF_MS = 60_000;
 const LEASE_MS = 60_000;
 
 const SIGNATURE_HEADER = 'X-Soat-Signature-V2';
-const LEGACY_SIGNATURE_HEADER = 'X-Soat-Signature';
 
 type DeliveryRow = InstanceType<(typeof db)['WebhookDelivery']>;
 
 /**
- * Both signature headers for one attempt.
+ * The signature header for one attempt.
  *
- * The v2 header is the shared `timestampedSignature` scheme (`hmacSignature.ts`)
- * — it signs `<timestamp>.<body>` and ships the timestamp alongside the digest,
- * so a subscriber can reject a replayed body by age. The legacy header signs the
- * bare body, which carries no such bound; it is sent alongside the v2 header
- * and is documented as deprecated.
+ * One scheme, the shared `timestampedSignature` (`hmacSignature.ts`): it signs
+ * `<timestamp>.<body>` and ships the timestamp alongside the digest, so a
+ * subscriber can reject a replayed body by age. A second header signing the
+ * bare body would carry no such bound, and a subscriber verifying that one
+ * would have no replay protection while believing the delivery is signed.
  */
 const signatureHeaders = (args: { payload: string; secret: string }) => {
-  return {
-    [SIGNATURE_HEADER]: timestampedSignature(args),
-    [LEGACY_SIGNATURE_HEADER]: `sha256=${hmacHex({
-      secret: args.secret,
-      value: args.payload,
-    })}`,
-  };
+  return { [SIGNATURE_HEADER]: timestampedSignature(args) };
 };
 
 /** Exponential backoff with jitter, so a fleet of retries does not sync up. */

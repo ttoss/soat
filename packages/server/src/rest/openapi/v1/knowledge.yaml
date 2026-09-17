@@ -59,18 +59,6 @@ paths:
                   minimum: 0
                   maximum: 1
                   example: 0.5
-                min_score:
-                  type: number
-                  deprecated: true
-                  description: >-
-                    Deprecated alias for `min_similarity`, with identical behavior.
-                    While ranking was single-signal `score` equaled `similarity_score`,
-                    so this has only ever filtered cosine and an existing value keeps
-                    returning the same results. `min_similarity` wins when both are sent.
-                    Removed in v2.
-                  minimum: 0
-                  maximum: 1
-                  example: 0.5
                 rrf_k:
                   type: integer
                   description: >-

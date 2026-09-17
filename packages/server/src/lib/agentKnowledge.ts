@@ -269,8 +269,8 @@ export const buildKnowledgeMessages = async (args: {
     paths: config.documentPaths,
     documentIds: config.documentIds,
     tags: config.tags,
-    // The agent record's field is still `min_score`; it has always meant the
-    // cosine floor, which is exactly what `minSimilarity` is.
+    // The agent record spells the cosine floor `min_score`, which is exactly
+    // what `minSimilarity` is.
     minSimilarity: config.minScore,
     limit: config.limit,
     includeDocuments,

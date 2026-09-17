@@ -13,8 +13,6 @@ const knowledgeRouter = new Router<Context>();
 type KnowledgeSearchBody = {
   project_id?: string;
   query?: string;
-  /** Deprecated alias for `min_similarity`; see {@link resolveSimilarityFloor}. */
-  min_score?: number;
   min_similarity?: number;
   rrf_k?: number;
   recency_half_life_days?: number;
@@ -27,21 +25,6 @@ type KnowledgeSearchBody = {
   tags?: unknown;
   include_documents?: boolean;
   include_memories?: boolean;
-};
-
-/**
- * The cosine floor this request asks for.
- *
- * `min_score` is the deprecated spelling, kept because it has only ever
- * filtered cosine: while `score` equaled `similarity_score`, the two were the
- * same number, so honoring an existing `min_score` as `min_similarity` returns
- * every caller exactly the results it got before — plus the lexical hits the
- * floor was never meant to exclude. `min_similarity` wins when both are sent.
- */
-const resolveSimilarityFloor = (
-  body: KnowledgeSearchBody
-): number | undefined => {
-  return body.min_similarity ?? body.min_score;
 };
 
 /**
@@ -162,7 +145,7 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
     billingProjectId: projectIds?.length === 1 ? projectIds[0] : null,
     policyWhere,
     query: body.query,
-    minSimilarity: resolveSimilarityFloor(body),
+    minSimilarity: body.min_similarity,
     rrfK: body.rrf_k,
     recencyHalfLifeDays: body.recency_half_life_days,
     limit: body.limit,
