@@ -56,7 +56,7 @@ The decay applies to memory results and not to the document chunks they share a 
 | `1825` | 1.0000 | 1.0000 | 0.7736 | 0.8082 |
 | `7300` | 1.0000 | 1.0000 | 0.9167 | 0.8394 |
 
-The sweep was run in one pass against the golden set as it stood at v3, so its `0` row is that version's overall MRR rather than the current one; the shape of the trade is what it is kept for, not the absolute values.
+Read the shape of the trade, not the absolute values: the sweep is a single pass, and its `0` row is not the committed baseline.
 
 Pick a half-life from a run against your own corpus, start long, and prefer scoping the search to `memory_store_ids` where freshness is what is actually being ranked.
 
@@ -92,4 +92,4 @@ One caveat on the absolute values:
 
 - **The embedder is a stand-in.** CI has no embedding provider, so the eval substitutes a deterministic feature hasher that ranks by term overlap. Being itself lexical, it starts the `exact_token` row saturated: the gate can prove [hybrid retrieval](../modules/knowledge.md#hybrid-retrieval) regresses nothing, but cannot show the lexical channel's win; that proof is a unit test over a chunk whose cosine sits below the floor. What the gate measures reliably is change.
 
-Every fixture's text is committed in `golden.json`. The corpus used to point at module-doc sections and read them at seed time, which made the baseline move with the documentation; the snapshots are deliberately frozen, so editing a module doc no longer touches the numbers. Both halves of that are enforced: `parseGoldenSet` refuses a fixture carrying a `source` pointer, and `knowledgeEvalCorpusContract.test.ts` refuses an eval source that reads outside `tests/eval`.
+Every fixture's text is committed in `golden.json`, so the corpus is self-contained and editing a module doc does not touch the numbers. Two checks hold that: `parseGoldenSet` refuses a fixture that points at a file, and `knowledgeEvalCorpusContract.test.ts` refuses an eval source that reads outside `tests/eval`.

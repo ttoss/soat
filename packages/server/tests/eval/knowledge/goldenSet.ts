@@ -34,12 +34,11 @@ export const GOLDEN_QUERY_KINDS: GoldenQueryKind[] = [
  * in the whole corpus, which is what an `exact_token` query needs to have a
  * single correct answer.
  *
- * The snapshots are committed, never re-read from the docs at seed time: a
- * pointer made the baseline a function of documentation prose as well as
- * ranking code, so any docs edit moved the numbers and any ranking PR that
- * documented itself could not read its own eval diff (#1345). Going stale
- * relative to the live docs costs nothing — the eval needs plausible prose to
- * rank against, not accurate documentation.
+ * A snapshot is committed here rather than read from the docs at seed time, so
+ * the baseline is a function of ranking code alone: a docs edit must not move
+ * the numbers, and a ranking change that documents itself must still be able to
+ * read its own eval diff. Drift from the live docs costs nothing — the eval
+ * needs plausible prose to rank against, not accurate documentation.
  */
 export type GoldenDocument = {
   key: string;
@@ -56,27 +55,25 @@ export type GoldenMemory = {
    * relative to the run — never an absolute timestamp, so two runs a month
    * apart score the same ranking.
    *
-   * Omitted means "written by this run", which is what every fixture was
-   * before the recency blend existed: at age zero every decay factor is 1 and
-   * the blend leaves the ranking exactly as it found it.
+   * Omitted means "written by this run": at age zero every decay factor is 1
+   * and the blend leaves the ranking exactly as it found it.
    */
   age_days?: number;
   /**
    * The memory store container to write this entry to, defaulting to the
    * corpus's single one.
    *
-   * No fixture sets it. It used to hold the `freshness` twins apart, on the
-   * premise that a near-twin could not survive beside its pair in one store —
-   * measured false: five of the six sit at 0.77–0.90 cosine under the eval's
-   * embedder, and the corpus store now declares its own band
-   * (`CORPUS_SUPERSEDE_THRESHOLD`) so all six coexist. The split was not free:
-   * a twin in a second store measures an unscoped search across a
-   * current/archive pair, which `memory_store_ids` already answers, rather
-   * than what the write path actually produces (#1333).
+   * No fixture sets it: the `freshness` twins share one store, which is what
+   * makes the kind a test of ranking rather than of search scope. A twin in a
+   * second store would measure an unscoped search across a current/archive
+   * pair, which `memory_store_ids` already answers, rather than what the write
+   * path produces. They coexist in one store because it declares its own band
+   * (`CORPUS_SUPERSEDE_THRESHOLD`); five of the six sit at 0.77–0.90 cosine
+   * under the eval's embedder.
    *
-   * Kept because a future fixture may need two containers on purpose, and
-   * because `knowledgeGoldenFreshness.test.ts` asserts on its absence — which
-   * is what stops the archive arrangement returning unnoticed.
+   * The field stays because a future fixture may need two containers on
+   * purpose, and because `knowledgeGoldenFreshness.test.ts` asserts on its
+   * absence.
    */
   memory_store?: string;
 };
@@ -169,7 +166,7 @@ const readDocument = (args: {
   }
   if (args.value.source !== undefined || args.value.section !== undefined) {
     throw new Error(
-      `golden.json: ${args.field} must carry inline \`content\`; a \`source\` + \`section\` pointer into a module doc makes the baseline move with the docs (#1345)`
+      `golden.json: ${args.field} must carry inline \`content\`; a \`source\` + \`section\` pointer would make the baseline move with the docs`
     );
   }
   return {

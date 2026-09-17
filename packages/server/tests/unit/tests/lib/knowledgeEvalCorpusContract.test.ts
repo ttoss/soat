@@ -5,23 +5,18 @@ import { join, relative } from 'node:path';
  * The retrieval eval seeds its corpus from committed fixtures, never from a
  * file it reads out of the repository at seed time.
  *
- * 22 document fixtures used to carry a `source` + `section` pointer and were
- * lifted out of the live module docs when the corpus was seeded. That made the
- * baseline a function of documentation prose as well as ranking code: editing a
- * seeded section moved the numbers, and a ranking change that documented itself
- * could not read its own eval diff. The recorded cost was an IAM change failing
- * the eval because it rewrote one `iam.md` section, at one CI round and a first
- * diagnosis that blamed the base branch (#1345).
+ * The baseline must be a function of ranking code alone. A fixture whose text
+ * is read from a live module doc makes it a function of documentation too: a
+ * docs edit moves the numbers, and a ranking change that documents itself
+ * cannot read its own eval diff.
  *
- * `parseGoldenSet` refuses that pointer now, so the coupling cannot return
- * through the data. It can still return through the code: one `readFileSync`
- * reaching up out of `tests/eval` re-couples the corpus without touching
- * `golden.json` at all. That is the half this test closes.
+ * `parseGoldenSet` holds the data half — a fixture cannot name a file. This is
+ * the code half: one `readFileSync` reaching up out of `tests/eval` re-couples
+ * the corpus without touching `golden.json` at all.
  *
  * Static, because the failure is silent. A corpus seeded from live prose still
  * seeds, still scores and still passes; nothing goes red until an unrelated
- * edit moves a rank, in a different pull request, where the number reads as a
- * ranking regression.
+ * edit moves a rank, where the number reads as a ranking regression.
  */
 
 const EVAL_DIR = join(__dirname, '../../../eval');
@@ -44,18 +39,17 @@ const evalSources = (): EvalSource[] => {
     });
 };
 
-/** A path into a workspace package — the shape the retired pointer took. */
+/** A path into a workspace package: no corpus fixture may name one. */
 const PACKAGE_PATH = /packages\/[a-z][a-z-]*\//;
 
 /**
  * A quoted path that climbs out of its own directory: `'../…'`, `'a/../b'`.
  *
  * Matched as one construct rather than by enumerating string literals, which a
- * regex cannot do over TypeScript — an apostrophe in a comment ("the corpus's
- * store") opens a literal that swallows the rest of the file, and the first
- * draft of this test passed against a deliberately reintroduced
- * `path.resolve(__dirname, '../../../../..')` for exactly that reason. Newlines
- * are excluded so a stray quote cannot span lines and hide the next one.
+ * regex cannot do over TypeScript: an apostrophe in a comment ("the corpus's
+ * store") opens a literal that swallows the rest of the file, hiding every real
+ * path literal after it. Newlines are excluded so a stray quote cannot span
+ * lines and hide the next one.
  */
 const CLIMBING_PATH = /['"`][^'"`\n]*\.\.\//;
 
