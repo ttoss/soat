@@ -1,0 +1,45 @@
+{
+  "module": "deciders",
+  "operations": [
+    {
+      "operationId": "createDecider",
+      "action": "deciders:CreateDecider",
+      "description": "Create a decider"
+    },
+    {
+      "operationId": "listDeciders",
+      "action": "deciders:ListDeciders",
+      "description": "List deciders in a project"
+    },
+    {
+      "operationId": "getDecider",
+      "action": "deciders:GetDecider",
+      "description": "Get a decider by ID"
+    },
+    {
+      "operationId": "updateDecider",
+      "action": "deciders:UpdateDecider",
+      "description": "Update a decider"
+    },
+    {
+      "operationId": "deleteDecider",
+      "action": "deciders:DeleteDecider",
+      "description": "Delete a decider"
+    },
+    {
+      "operationId": "evaluateDecider",
+      "action": "deciders:EvaluateDecider",
+      "description": "Evaluate a decider's question set against a state"
+    },
+    {
+      "operationId": "listDecisions",
+      "action": "deciders:ListDecisions",
+      "description": "List recorded decisions in a project"
+    },
+    {
+      "operationId": "getDecision",
+      "action": "deciders:GetDecision",
+      "description": "Get a recorded decision by ID"
+    }
+  ]
+}

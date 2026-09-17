@@ -11,6 +11,8 @@ export { Conversation } from './Conversation';
 export { ConversationMessage } from './ConversationMessage';
 export { Dataset } from './Dataset';
 export { DatasetItem } from './DatasetItem';
+export { Decider } from './Decider';
+export { Decision } from './Decision';
 export { Document } from './Document';
 export { DocumentChunk } from './DocumentChunk';
 export { Eval } from './Eval';

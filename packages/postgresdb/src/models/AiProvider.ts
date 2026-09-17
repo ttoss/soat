@@ -23,6 +23,7 @@ export const AI_PROVIDER_SLUGS = [
   'vertex',
   'gateway',
   'custom',
+  'typesafe',
 ] as const;
 
 export type AiProviderSlug = (typeof AI_PROVIDER_SLUGS)[number];

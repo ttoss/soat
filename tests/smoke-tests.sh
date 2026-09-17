@@ -7902,6 +7902,83 @@ $SOAT_CLI delete-dataset --dataset_id "$DATASET_ID"
 echo "Evaluations: OK"
 
 echo ""
+echo "--- Deciders coverage ---"
+# A decider needs a `typesafe` provider; the credential is never used here
+# because `evaluate-decider` calls the live System One endpoint, which this
+# offline smoke run has no key for. Everything up to the call is covered.
+DECIDER_SECRET_RESP=$($SOAT_CLI create-secret \
+  --project_id "$PROJECT_PUBLIC_ID" --name smoke-decider-key --value smoke-jev-key)
+DECIDER_SECRET_ID=$(printf '%s\n' "$DECIDER_SECRET_RESP" | jq -r '.id')
+
+DECIDER_PROVIDER_RESP=$($SOAT_CLI create-ai-provider \
+  --project_id "$PROJECT_PUBLIC_ID" --name smoke-typesafe \
+  --provider typesafe --default_model jev-latest \
+  --secret_id "$DECIDER_SECRET_ID")
+DECIDER_PROVIDER_ID=$(printf '%s\n' "$DECIDER_PROVIDER_RESP" | jq -r '.id')
+if [ -z "$DECIDER_PROVIDER_ID" ] || [ "$DECIDER_PROVIDER_ID" = "null" ]; then
+  echo "ERROR: Failed to create typesafe provider" >&2
+  printf '%s\n' "$DECIDER_PROVIDER_RESP" >&2
+  exit 1
+fi
+
+DECIDER_RESP=$($SOAT_CLI create-decider \
+  --project_id "$PROJECT_PUBLIC_ID" --name smoke-decider \
+  --ai_provider_id "$DECIDER_PROVIDER_ID" \
+  --questions '{"is_urgent":{"type":"noul","instructions":"The message conveys urgency"}}')
+DECIDER_ID=$(printf '%s\n' "$DECIDER_RESP" | jq -r '.id')
+if [ -z "$DECIDER_ID" ] || [ "$DECIDER_ID" = "null" ]; then
+  echo "ERROR: Failed to create decider" >&2
+  printf '%s\n' "$DECIDER_RESP" >&2
+  exit 1
+fi
+echo "Decider id: $DECIDER_ID"
+
+DECIDER_GET_RESP=$($SOAT_CLI get-decider --decider_id "$DECIDER_ID")
+DECIDER_VERSION=$(printf '%s\n' "$DECIDER_GET_RESP" | jq -r '.version')
+if [ "$DECIDER_VERSION" != "1" ]; then
+  echo "ERROR: expected decider version 1, got $DECIDER_VERSION" >&2
+  exit 1
+fi
+
+$SOAT_CLI list-deciders --project_id "$PROJECT_PUBLIC_ID" >/dev/null
+
+# A question-set write bumps the version; a rename does not.
+DECIDER_PATCH_RESP=$($SOAT_CLI update-decider --decider_id "$DECIDER_ID" \
+  --questions '{"is_urgent":{"type":"noul","instructions":"Is this time-sensitive?"}}')
+DECIDER_VERSION_2=$(printf '%s\n' "$DECIDER_PATCH_RESP" | jq -r '.version')
+if [ "$DECIDER_VERSION_2" != "2" ]; then
+  echo "ERROR: expected decider version 2 after a questions write, got $DECIDER_VERSION_2" >&2
+  exit 1
+fi
+
+DECIDER_RENAME_RESP=$($SOAT_CLI update-decider --decider_id "$DECIDER_ID" --name smoke-decider-renamed)
+DECIDER_VERSION_3=$(printf '%s\n' "$DECIDER_RENAME_RESP" | jq -r '.version')
+if [ "$DECIDER_VERSION_3" != "2" ]; then
+  echo "ERROR: a rename must not bump the version, got $DECIDER_VERSION_3" >&2
+  exit 1
+fi
+
+# A text-generation provider cannot serve a System One call.
+expect_cli_error_status 400 create-decider \
+  --project_id "$PROJECT_PUBLIC_ID" --name smoke-decider-bad-provider \
+  --ai_provider_id "$AI_PROVIDER_ID" \
+  --questions '{"is_urgent":{"type":"noul","instructions":"Urgent?"}}'
+
+# A Choice with one option has no judgment to make.
+expect_cli_error_status 400 create-decider \
+  --project_id "$PROJECT_PUBLIC_ID" --name smoke-decider-bad-questions \
+  --ai_provider_id "$DECIDER_PROVIDER_ID" \
+  --questions '{"team":{"type":"choice","instructions":"Which team","criteria":{"billing":"Payments"}}}'
+
+$SOAT_CLI list-decisions --project_id "$PROJECT_PUBLIC_ID" >/dev/null
+
+$SOAT_CLI delete-decider --decider_id "$DECIDER_ID"
+expect_cli_error_status 404 get-decider --decider_id "$DECIDER_ID"
+$SOAT_CLI delete-ai-provider --ai_provider_id "$DECIDER_PROVIDER_ID"
+$SOAT_CLI delete-secret --secret_id "$DECIDER_SECRET_ID"
+echo "Deciders: OK"
+
+echo ""
 echo "--- Smoke: GET /app returns HTML ---"
 APP_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/app")
 if [ "$APP_HTTP_CODE" != "200" ]; then

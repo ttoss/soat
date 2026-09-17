@@ -1,3 +1,5 @@
+import { createServer, type Server } from 'node:http';
+
 import { db } from 'src/db';
 import { emitActivityEntry } from 'src/lib/activity';
 import { flushAuditQueue } from 'src/lib/auditQueue';
@@ -1165,6 +1167,132 @@ describe('MCP tools - happy path', () => {
       const res = await mcpCall('delete-ai-provider', {
         ai_provider_id: testAiProviderId,
       });
+      expect(res.status).toBe(200);
+    });
+  });
+
+  // ── Deciders ──────────────────────────────────────────────────────────────
+
+  describe('Deciders tools', () => {
+    let deciderId: string;
+    let decisionId: string;
+    let stub: Server;
+
+    const questions = {
+      is_urgent: {
+        type: 'noul',
+        instructions: 'The message conveys urgency or time-sensitivity',
+      },
+    };
+
+    beforeAll(async () => {
+      // A real System One stub on loopback rather than a spy: the provider is
+      // outbound HTTP, and a local fake keeps `lib/jev.ts` running for real.
+      stub = createServer((req, res) => {
+        req.resume();
+        req.on('end', () => {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              model: 'jev-latest',
+              answers: { is_urgent: { type: 'noul', noul: 0.97 } },
+              usage: { input_tokens: 12, output_tokens: 4 },
+            })
+          );
+        });
+      });
+      await new Promise<void>((resolve) => {
+        stub.listen(0, '127.0.0.1', resolve);
+      });
+      const address = stub.address();
+      const port = typeof address === 'object' && address ? address.port : 0;
+
+      const secret = parseResult(
+        await mcpCall('create-secret', {
+          project_id: projectId,
+          name: 'Decider Key',
+          value: 'ts-mcp-key',
+        })
+      );
+      const provider = parseResult(
+        await mcpCall('create-ai-provider', {
+          project_id: projectId,
+          name: 'TypeSafe MCP',
+          provider: 'typesafe',
+          default_model: 'jev-latest',
+          base_url: `http://127.0.0.1:${port}`,
+          secret_id: secret.id,
+        })
+      );
+      const decider = parseResult(
+        await mcpCall('create-decider', {
+          project_id: projectId,
+          name: 'MCP Decider',
+          ai_provider_id: provider.id,
+          questions,
+        })
+      );
+      deciderId = decider.id as string;
+    });
+
+    afterAll(async () => {
+      await new Promise<void>((resolve) => {
+        stub.close(() => {
+          resolve();
+        });
+      });
+    });
+
+    test('create-decider created the decider', () => {
+      expect(deciderId).toMatch(/^dcd_/);
+    });
+
+    test('list-deciders returns results', async () => {
+      const res = await mcpCall('list-deciders');
+      expect(res.status).toBe(200);
+    });
+
+    test('get-decider returns the decider', async () => {
+      const res = await mcpCall('get-decider', { decider_id: deciderId });
+      expect(res.status).toBe(200);
+      expect(parseResult(res).id).toBe(deciderId);
+    });
+
+    test('update-decider bumps the version on a question write', async () => {
+      const res = await mcpCall('update-decider', {
+        decider_id: deciderId,
+        questions: {
+          is_urgent: { type: 'noul', instructions: 'Is this time-sensitive?' },
+        },
+      });
+      expect(res.status).toBe(200);
+      expect(parseResult(res).version).toBe(2);
+    });
+
+    test('evaluate-decider returns typed answers', async () => {
+      const res = await mcpCall('evaluate-decider', {
+        decider_id: deciderId,
+        state: 'Everything is down and we cannot ship.',
+      });
+      expect(res.status).toBe(200);
+      const result = parseResult(res);
+      expect(result.id as string).toMatch(/^dec_/);
+      decisionId = result.id as string;
+    });
+
+    test('list-decisions returns results', async () => {
+      const res = await mcpCall('list-decisions', { decider_id: deciderId });
+      expect(res.status).toBe(200);
+    });
+
+    test('get-decision returns the recorded decision', async () => {
+      const res = await mcpCall('get-decision', { decision_id: decisionId });
+      expect(res.status).toBe(200);
+      expect(parseResult(res).id).toBe(decisionId);
+    });
+
+    test('delete-decider deletes the decider', async () => {
+      const res = await mcpCall('delete-decider', { decider_id: deciderId });
       expect(res.status).toBe(200);
     });
   });

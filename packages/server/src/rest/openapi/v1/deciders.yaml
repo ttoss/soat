@@ -1,0 +1,667 @@
+openapi: 3.0.3
+info:
+  title: SOAT Deciders API
+  version: 1.0.0
+  description: |
+    Deciders are reusable, versioned question sets evaluated by a System One
+    model. A decider is to a System One model what an agent is to an LLM: the
+    named configuration a caller invokes. Evaluating one produces a decision —
+    typed answers your code branches on directly, with no text to parse.
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+servers:
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
+    variables:
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
+tags:
+  - name: Deciders
+    description: Typed question sets and the decisions they produce
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/deciders:
+    post:
+      tags:
+        - Deciders
+      summary: Create a decider
+      description: |
+        Creates a decider from a question set. Every question is validated on
+        write: a Choice needs at least two options, a Score at least two ordered
+        levels, and every question needs `instructions`.
+
+        `ai_provider_id` must name a `typesafe` provider. A System One model
+        answers typed questions rather than generating text, so a provider of
+        any other type is refused with `VALIDATION_FAILED`.
+      operationId: createDecider
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - ai_provider_id
+                - questions
+              properties:
+                project_id:
+                  type: string
+                  description: Project the decider belongs to. A project-scoped credential supplies its own.
+                  example: proj_V1StGXR8Z5jdHi6B
+                name:
+                  type: string
+                  example: Support Triage
+                description:
+                  type: string
+                  nullable: true
+                ai_provider_id:
+                  type: string
+                  description: A `typesafe` AI provider in the same project.
+                  example: aip_V1StGXR8Z5jdHi6B
+                model:
+                  type: string
+                  nullable: true
+                  description: >-
+                    System One model to evaluate with. Omitted or `null` falls
+                    back to the provider's `default_model`, then `jev-latest`.
+                  example: jev-latest
+                questions:
+                  $ref: '#/components/schemas/Questions'
+      responses:
+        '201':
+          description: Decider created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Decider'
+        '400':
+          description: Invalid question set, or the provider is not a `typesafe` provider
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+    get:
+      tags:
+        - Deciders
+      summary: List deciders
+      description: Returns all deciders in the project.
+      operationId: listDeciders
+      parameters:
+        - name: project_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Project public ID to filter by
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          description: Number of results to skip
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of deciders
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - total
+                  - limit
+                  - offset
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Decider'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/deciders/{decider_id}:
+    get:
+      tags:
+        - Deciders
+      summary: Get a decider
+      description: Returns a single decider by ID.
+      operationId: getDecider
+      x-soat-resource:
+        kind: decider
+        from: decider_id
+      parameters:
+        - name: decider_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The decider
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Decider'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+    patch:
+      tags:
+        - Deciders
+      summary: Update a decider
+      description: |
+        Updates a decider. Writing `questions` bumps `version`, because the
+        question set is the whole behaviour and a stored decision names the
+        version that produced it. Changing only the name, description, model or
+        provider leaves the version alone.
+      operationId: updateDecider
+      x-soat-resource:
+        kind: decider
+        from: decider_id
+      parameters:
+        - name: decider_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                  nullable: true
+                ai_provider_id:
+                  type: string
+                model:
+                  type: string
+                  nullable: true
+                questions:
+                  $ref: '#/components/schemas/Questions'
+      responses:
+        '200':
+          description: The updated decider
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Decider'
+        '400':
+          description: Invalid question set, or the provider is not a `typesafe` provider
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Deciders
+      summary: Delete a decider
+      description: |
+        Deletes the decider. Decisions it already produced are kept: they record
+        what the system decided, and each keeps the decider's ID as a dangling
+        reference.
+      operationId: deleteDecider
+      x-soat-resource:
+        kind: decider
+        from: decider_id
+      parameters:
+        - name: decider_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/deciders/{decider_id}/evaluate:
+    post:
+      tags:
+        - Deciders
+      summary: Evaluate a decider
+      description: |
+        Evaluates the decider's whole question set against one state and records
+        the result as a decision.
+
+        The caller supplies only the state. The questions come from the stored
+        decider, so a decision is always reproducible from the version it names
+        and no caller can widen a decider's judgment at call time. Every
+        question is evaluated in parallel and in isolation, so the round trip
+        costs roughly the same whether the decider asks one question or twenty.
+      operationId: evaluateDecider
+      x-soat-resource:
+        kind: decider
+        from: decider_id
+      parameters:
+        - name: decider_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - state
+              properties:
+                state:
+                  description: >-
+                    The content being judged — a string, or a JSON object whose
+                    parts the questions address by path. Passed through as
+                    given; it is not stored.
+                  oneOf:
+                    - type: string
+                    - type: object
+                  example: 'Our API integration started returning 500 errors 20 minutes ago.'
+      responses:
+        '201':
+          description: The decision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Decision'
+        '400':
+          description: '`state` is missing, or the provider record links no secret'
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '502':
+          description: The System One provider was unreachable or rejected the request
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/decisions:
+    get:
+      tags:
+        - Deciders
+      summary: List decisions
+      description: Returns recorded decisions, newest first.
+      operationId: listDecisions
+      parameters:
+        - name: project_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Project public ID to filter by
+        - name: decider_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Only decisions produced by this decider
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          description: Number of results to skip
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of decisions
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - total
+                  - limit
+                  - offset
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Decision'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/decisions/{decision_id}:
+    get:
+      tags:
+        - Deciders
+      summary: Get a decision
+      description: Returns a single recorded decision by ID.
+      operationId: getDecision
+      x-soat-resource:
+        kind: decision
+        from: decision_id
+      parameters:
+        - name: decision_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The decision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Decision'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Questions:
+      type: object
+      description: |
+        The question set, keyed by question ID. The ID identifies the answer in
+        a decision and is never sent to the model, so `instructions` must carry
+        the complete question.
+      minProperties: 1
+      additionalProperties:
+        $ref: '#/components/schemas/Question'
+      example:
+        department:
+          type: choice
+          instructions: Which team should handle this
+          criteria:
+            billing: Payment or subscription issues
+            technical: Bugs or integration problems
+            sales: Pricing or account questions
+        is_urgent:
+          type: noul
+          instructions: The message conveys urgency or time-sensitivity
+
+    Question:
+      type: object
+      required:
+        - type
+        - instructions
+      properties:
+        type:
+          type: string
+          enum:
+            - choice
+            - score
+            - noul
+          description: |
+            `choice` picks one of a set of unordered options, `score` places the
+            state along ordered levels, `noul` returns the probability that a
+            statement is true.
+        instructions:
+          type: string
+          description: The complete question, as a clear statement or question.
+        criteria:
+          description: |
+            A Choice's options as an object mapping each option to its
+            description (at least two), a Score's ordered levels as an array of
+            descriptions (at least two), or a Noul's optional clarification of
+            what yes and no mean.
+          oneOf:
+            - type: object
+            - type: array
+              items:
+                type: string
+
+    Decider:
+      type: object
+      properties:
+        id:
+          type: string
+          example: dcd_V1StGXR8Z5jdHi6B
+        project_id:
+          type: string
+          example: proj_V1StGXR8Z5jdHi6B
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        version:
+          type: integer
+          description: Incremented on every `questions` write; a decision names the version that produced it.
+        ai_provider_id:
+          type: string
+          example: aip_V1StGXR8Z5jdHi6B
+        model:
+          type: string
+          example: jev-latest
+        questions:
+          $ref: '#/components/schemas/Questions'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Decision:
+      type: object
+      description: |
+        One evaluation of a decider. Append-only: a decision is evidence of what
+        the system decided at a point in time.
+      properties:
+        id:
+          type: string
+          example: dec_V1StGXR8Z5jdHi6B
+        project_id:
+          type: string
+          example: proj_V1StGXR8Z5jdHi6B
+        decider_id:
+          type: string
+          description: The decider evaluated. Kept even once that decider is deleted.
+          example: dcd_V1StGXR8Z5jdHi6B
+        decider_version:
+          type: integer
+        model:
+          type: string
+          example: jev-latest
+        answers:
+          type: object
+          description: The typed answers, keyed by question ID.
+          additionalProperties:
+            $ref: '#/components/schemas/Answer'
+        usage:
+          type: object
+          properties:
+            input_tokens:
+              type: integer
+            output_tokens:
+              type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    Answer:
+      type: object
+      description: |
+        The answer shape follows the question type. A Choice carries `choice`,
+        `probabilities` and `confidence`; a Score carries `score`, `legend`,
+        `probabilities` and `confidence`; a Noul carries `noul` alone, the
+        probability that the statement is true.
+      properties:
+        type:
+          type: string
+          enum:
+            - choice
+            - score
+            - noul
+        choice:
+          type: string
+          description: The selected option (Choice only).
+        score:
+          type: number
+          description: Position along the levels, which may fall between two of them (Score only).
+        noul:
+          type: number
+          description: Probability that the answer is yes, 0 to 1 (Noul only).
+        legend:
+          type: object
+          description: The Score's levels by number (Score only).
+          additionalProperties:
+            type: string
+        probabilities:
+          type: object
+          description: Distribution across the options or levels.
+          additionalProperties:
+            type: number
+        confidence:
+          type: number
+          description: How peaked the distribution is. Noul has no separate confidence.

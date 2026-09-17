@@ -4,6 +4,7 @@ import { memoryTagsToJsonb } from './2026-09-11-memoryTagsToJsonb';
 import { memoriesRenameAndProvenance } from './2026-09-16-memoriesRenameAndProvenance';
 import { memoryAssertionsAndSharedContent } from './2026-09-16-memoryAssertionsAndSharedContent';
 import { memoryRulesFromAgentExtraction } from './2026-09-16-memoryRulesFromAgentExtraction';
+import { aiProviderTypesafeSlug } from './2026-09-17-aiProviderTypesafeSlug';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
@@ -29,4 +30,5 @@ export const MIGRATIONS: Migration[] = [
   memoriesRenameAndProvenance,
   memoryAssertionsAndSharedContent,
   memoryRulesFromAgentExtraction,
+  aiProviderTypesafeSlug,
 ];

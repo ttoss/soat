@@ -41,6 +41,7 @@ The generation engine and its building blocks.
 - [Sessions](./sessions.md) — the 1↔1 user/agent interface
 - [Conversations](./conversations.md) — the multi-party message engine
 - [Chats](./chats.md) — raw LLM completions without an agent
+- [Deciders](./deciders.md) — versioned typed question sets a System One model answers, for judgments your code branches on
 - [Actors](./actors.md) — participant identities in conversations
 - [Generations](./generations.md) — generation records and async jobs
 - [Chains](./chains.md) — continuation chains and the ceilings that stop them
