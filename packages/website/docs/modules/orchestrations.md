@@ -635,7 +635,7 @@ A run has no SRN of its own: it authorizes through the orchestration it runs, th
 way a [memory](./memories.md) authorizes through its store. So the statement
 above covers every run of that orchestration and no run of another.
 
-Refusals keep the shapes [IAM](./iam.md#what-a-denial-looks-like) defines: a read the caller may not perform is `404` (`ORCHESTRATION_NOT_FOUND`, or `ORCHESTRATION_RUN_NOT_FOUND` on a run route), a write is `403`, and a credential scoped to another project is `403 API_KEY_PROJECT_SCOPE`.
+Refusals keep the shapes [IAM](./iam.md#what-a-denial-looks-like) defines: a read the caller may not perform is `404` (`ORCHESTRATION_NOT_FOUND`, or `ORCHESTRATION_RUN_NOT_FOUND` on a run route), a write is `403`, and a credential scoped to another project is `403 API_KEY_PROJECT_SCOPE`. A write on a resource in a project the caller does not reach at all is `404` too, so a refusal never confirms existence across a tenant boundary.
 
 Listing orchestrations and runs stays project-scoped: [`GET /api/v1/orchestrations`](/docs/api/orchestrations/list-orchestrations) and [`GET /api/v1/orchestration-runs`](/docs/api/orchestrations/list-orchestration-runs) ask whether the caller may list in a project at all, so a policy that names individual orchestrations grants no listing. Starting a run ([`POST /api/v1/orchestration-runs`](/docs/api/orchestrations/start-orchestration-run)) is project-scoped for the same reason — it names its orchestration in the body, not in the path.
 

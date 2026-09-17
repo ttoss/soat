@@ -168,7 +168,7 @@ policy may therefore name the ingestion rules it covers:
 
 The SRN type is spelled `ingestionRule`, in camelCase, where every other type is snake_case. `srn:<project_id>:ingestion_rule:…` matches nothing — renaming it would change a published contract, so it is tracked on its own.
 
-Refusals keep the shapes [IAM](./iam.md#what-a-denial-looks-like) defines: a read the caller may not perform is `404` (an ingestion rule it may not see does not announce itself), a write is `403`, and a credential scoped to another project is `403 API_KEY_PROJECT_SCOPE`.
+Refusals keep the shapes [IAM](./iam.md#what-a-denial-looks-like) defines: a read the caller may not perform is `404` (an ingestion rule it may not see does not announce itself), a write is `403`, and a credential scoped to another project is `403 API_KEY_PROJECT_SCOPE`. A write on a resource in a project the caller does not reach at all is `404` too, so a refusal never confirms existence across a tenant boundary.
 
 Listing ingestion rules stays project-scoped: [`GET /api/v1/ingestion-rules`](/docs/api/ingestion-rules/list-ingestion-rules) asks whether the caller may list ingestion rules in a project at all, so a policy that names individual ingestion rules grants no listing.
 

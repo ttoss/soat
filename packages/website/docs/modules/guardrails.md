@@ -290,7 +290,7 @@ policy may therefore name the guardrails it covers:
 }
 ```
 
-Refusals keep the shapes [IAM](./iam.md#what-a-denial-looks-like) defines: a read the caller may not perform is `404` (a guardrail it may not see does not announce itself), a write or an evaluation is `403`, and a credential scoped to another project is `403 API_KEY_PROJECT_SCOPE`.
+Refusals keep the shapes [IAM](./iam.md#what-a-denial-looks-like) defines: a read the caller may not perform is `404` (a guardrail it may not see does not announce itself), a write or an evaluation is `403`, and a credential scoped to another project is `403 API_KEY_PROJECT_SCOPE`. A write on a resource in a project the caller does not reach at all is `404` too, so a refusal never confirms existence across a tenant boundary.
 
 Listing guardrails stays project-scoped: [`GET /api/v1/guardrails`](/docs/api/guardrails/list-guardrails) asks whether the caller may list guardrails in a project at all, so a policy that names individual guardrails grants no listing.
 
