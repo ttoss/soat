@@ -27,20 +27,24 @@ export const GOLDEN_QUERY_KINDS: GoldenQueryKind[] = [
 ];
 
 /**
- * A corpus document: either a section lifted out of a module doc (`source` +
- * `section`) or synthetic text carried inline (`content`).
+ * A corpus document: frozen text carried inline.
  *
- * The module docs supply real prose whose rare tokens recur across files;
- * the synthetic documents supply identifiers that occur exactly once in the
- * whole corpus, which is what an `exact_token` query needs to have a single
- * correct answer.
+ * Some fixtures are snapshots of module-doc prose, whose rare tokens recur
+ * across files; the synthetic ones supply identifiers that occur exactly once
+ * in the whole corpus, which is what an `exact_token` query needs to have a
+ * single correct answer.
+ *
+ * The snapshots are committed, never re-read from the docs at seed time: a
+ * pointer made the baseline a function of documentation prose as well as
+ * ranking code, so any docs edit moved the numbers and any ranking PR that
+ * documented itself could not read its own eval diff (#1345). Going stale
+ * relative to the live docs costs nothing — the eval needs plausible prose to
+ * rank against, not accurate documentation.
  */
 export type GoldenDocument = {
   key: string;
   path: string;
-  source?: string;
-  section?: string;
-  content?: string;
+  content: string;
 };
 
 export type GoldenMemory = {
@@ -93,11 +97,6 @@ export type GoldenSet = {
   version: number;
   corpus: { documents: GoldenDocument[]; memories: GoldenMemory[] };
   queries: GoldenQuery[];
-};
-
-/** The repository root, four levels above `tests/eval/knowledge`. */
-const repositoryRoot = (): string => {
-  return path.resolve(__dirname, '../../../../..');
 };
 
 export const GOLDEN_SET_PATH = path.join(__dirname, 'golden.json');
@@ -168,34 +167,19 @@ const readDocument = (args: {
   if (!isRecord(args.value)) {
     throw new Error(`golden.json: ${args.field} must be an object`);
   }
-  const document: GoldenDocument = {
+  if (args.value.source !== undefined || args.value.section !== undefined) {
+    throw new Error(
+      `golden.json: ${args.field} must carry inline \`content\`; a \`source\` + \`section\` pointer into a module doc makes the baseline move with the docs (#1345)`
+    );
+  }
+  return {
     key: readString({ value: args.value.key, field: `${args.field}.key` }),
     path: readString({ value: args.value.path, field: `${args.field}.path` }),
-    source: readOptionalString({
-      value: args.value.source,
-      field: `${args.field}.source`,
-    }),
-    section: readOptionalString({
-      value: args.value.section,
-      field: `${args.field}.section`,
-    }),
-    content: readOptionalString({
+    content: readString({
       value: args.value.content,
       field: `${args.field}.content`,
     }),
   };
-  const hasSection = document.source !== undefined;
-  if (hasSection === (document.content !== undefined)) {
-    throw new Error(
-      `golden.json: ${args.field} must carry either \`source\` + \`section\` or inline \`content\`, not both and not neither`
-    );
-  }
-  if (hasSection && document.section === undefined) {
-    throw new Error(
-      `golden.json: ${args.field}.section is required with \`source\``
-    );
-  }
-  return document;
 };
 
 const readMemory = (args: { value: unknown; field: string }): GoldenMemory => {
@@ -373,59 +357,5 @@ export const parseGoldenSet = (args: { raw: unknown }): GoldenSet => {
 export const loadGoldenSet = (): GoldenSet => {
   return parseGoldenSet({
     raw: JSON.parse(readFileSync(GOLDEN_SET_PATH, 'utf8')),
-  });
-};
-
-const HEADING = /^(#{1,6})\s+(.*?)\s*$/;
-
-/**
- * Lifts one section out of a module doc: its heading line plus every line up to
- * the next heading at the same or a higher level.
- *
- * The heading must match exactly once. An ambiguous or renamed section is a
- * corpus error the eval must report on the spot, not a silently empty document
- * that drags recall down for a reason nobody can see.
- */
-export const readDocumentSection = (args: {
-  source: string;
-  section: string;
-}): string => {
-  const absolute = path.join(repositoryRoot(), args.source);
-  const lines = readFileSync(absolute, 'utf8').split('\n');
-
-  const matches: number[] = [];
-  for (const [index, line] of lines.entries()) {
-    const heading = HEADING.exec(line);
-    if (heading && heading[2] === args.section) matches.push(index);
-  }
-
-  if (matches.length !== 1) {
-    throw new Error(
-      `golden.json: '${args.section}' matches ${matches.length} headings in ${args.source}; expected exactly one`
-    );
-  }
-
-  const start = matches[0];
-  const level = HEADING.exec(lines[start])![1].length;
-
-  let end = lines.length;
-  for (let index = start + 1; index < lines.length; index += 1) {
-    const heading = HEADING.exec(lines[index]);
-    if (heading && heading[1].length <= level) {
-      end = index;
-      break;
-    }
-  }
-
-  return `${lines.slice(start, end).join('\n').trimEnd()}\n`;
-};
-
-export const resolveDocumentContent = (args: {
-  document: GoldenDocument;
-}): string => {
-  if (args.document.content !== undefined) return args.document.content;
-  return readDocumentSection({
-    source: args.document.source!,
-    section: args.document.section!,
   });
 };

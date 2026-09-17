@@ -64,7 +64,7 @@ Pick a half-life from a run against your own corpus, start long, and prefer scop
 
 SOAT's own ranking changes are gated on a versioned golden set, not on judgement. This is a contributor harness: it needs a repository checkout and a test database, and it is not a way to measure a deployment. For that, follow the [tutorial](/docs/tutorials/measure-retrieval-quality).
 
-`packages/server/tests/eval/knowledge/golden.json` seeds a corpus (module-doc sections, synthetic documents carrying identifiers that occur exactly once, curated memory entries) and scores 55 labeled queries through `searchKnowledge` at `limit: 10`.
+`packages/server/tests/eval/knowledge/golden.json` seeds a corpus (frozen snapshots of module-doc prose, synthetic documents carrying identifiers that occur exactly once, curated memory entries) and scores 55 labeled queries through `searchKnowledge` at `limit: 10`.
 
 ```bash
 pnpm --filter @soat/server eval:knowledge                    # score and gate
@@ -88,7 +88,8 @@ The `freshness` kind is the recency blend's own fixture: each query has one answ
 
 Both twins sit in **one** memory store, which is what makes the kind a test of ranking rather than of search scope. The corpus store raises its own `supersede_threshold` so they survive the write path together; on the product defaults the older twin would be invalidated on write and never reach the corpus at all. A twin parked in a second store instead measures an unscoped search across a current/archive pair — a configuration `memory_store_ids` already answers, and not one ranking can fix.
 
-Two caveats on the absolute values:
+One caveat on the absolute values:
 
 - **The embedder is a stand-in.** CI has no embedding provider, so the eval substitutes a deterministic feature hasher that ranks by term overlap. Being itself lexical, it starts the `exact_token` row saturated: the gate can prove [hybrid retrieval](../modules/knowledge.md#hybrid-retrieval) regresses nothing, but cannot show the lexical channel's win; that proof is a unit test over a chunk whose cosine sits below the floor. What the gate measures reliably is change.
-- **The corpus tracks these docs.** Fixtures naming a `source` and a `section` are read from the module docs at seed time, so editing one of those sections moves the numbers. Re-run with `--update-baseline` and commit the diff.
+
+Every fixture's text is committed in `golden.json`. The corpus used to point at module-doc sections and read them at seed time, which made the baseline move with the documentation; the snapshots are deliberately frozen, so editing a module doc no longer touches the numbers.
