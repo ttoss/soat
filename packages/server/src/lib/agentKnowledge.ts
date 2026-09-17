@@ -250,13 +250,16 @@ export const buildKnowledgeMessages = async (args: {
 
   if (!query && !hasKnowledgeFilters(config)) return [];
 
-  // `searchKnowledge` treats any defined `query` as "also search documents",
-  // but here `query` is auto-derived from the chat message every turn — letting
-  // it drive documents would silently widen a memory-only config into an
-  // all-project document search. Only the document branch is suppressed;
-  // `query` still ranks memory store relevance.
+  // `searchKnowledge` treats any defined `query` as "both stores", but here
+  // `query` is auto-derived from the chat message every turn — letting it pick
+  // the stores would silently widen a config scoped to one of them into an
+  // all-project search of the other. So each store follows the config: on when
+  // the config names it, or when the config names neither and the agent asked
+  // for project-wide knowledge. `query` still ranks whatever is searched.
   const includeDocuments =
     hasDocumentFilters(config) || !hasMemoryStoreFilters(config);
+  const includeMemories =
+    hasMemoryStoreFilters(config) || !hasDocumentFilters(config);
 
   const results = await searchKnowledge({
     projectIds: args.projectIds,
@@ -271,6 +274,7 @@ export const buildKnowledgeMessages = async (args: {
     minSimilarity: config.minScore,
     limit: config.limit,
     includeDocuments,
+    includeMemories,
   });
 
   log('buildKnowledgeMessages: results count=%d', results.length);

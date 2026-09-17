@@ -3,7 +3,7 @@
   "metrics": {
     "recall_at_5": 0.8966,
     "recall_at_10": 0.931,
-    "mrr": 0.8138
+    "mrr": 0.8229
   },
   "by_kind": {
     "entity": {
@@ -14,7 +14,7 @@
     "exact_name": {
       "recall_at_5": 1,
       "recall_at_10": 1,
-      "mrr": 0.9667
+      "mrr": 1
     },
     "exact_token": {
       "recall_at_5": 1,
@@ -29,7 +29,7 @@
     "semantic": {
       "recall_at_5": 0.6,
       "recall_at_10": 0.7333,
-      "mrr": 0.4802
+      "mrr": 0.4817
     }
   },
   "queries": [
@@ -171,7 +171,7 @@
     {
       "id": "exact-name-006",
       "kind": "exact_name",
-      "first_relevant_rank": 2,
+      "first_relevant_rank": 1,
       "hit_at_5": true,
       "hit_at_10": true,
       "recall_at_5": 1,
@@ -378,7 +378,7 @@
     {
       "id": "semantic-002",
       "kind": "semantic",
-      "first_relevant_rank": 7,
+      "first_relevant_rank": 6,
       "hit_at_5": false,
       "hit_at_10": true,
       "recall_at_5": 0,

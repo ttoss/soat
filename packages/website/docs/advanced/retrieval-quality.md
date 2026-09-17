@@ -75,12 +75,12 @@ Golden set v4:
 
 | Scope         | recall@5 | recall@10 |    MRR |
 | ------------- | -------: | --------: | -----: |
-| Overall       |   0.8966 |    0.9310 | 0.8138 |
+| Overall       |   0.8966 |    0.9310 | 0.8229 |
 | `exact_token` |   1.0000 |    1.0000 | 1.0000 |
-| `exact_name`  |   1.0000 |    1.0000 | 0.9667 |
+| `exact_name`  |   1.0000 |    1.0000 | 1.0000 |
 | `entity`      |   1.0000 |    1.0000 | 0.9583 |
 | `freshness`   |   1.0000 |    1.0000 | 0.6667 |
-| `semantic`    |   0.6000 |    0.7333 | 0.4802 |
+| `semantic`    |   0.6000 |    0.7333 | 0.4817 |
 
 These figures are committed as `baseline.json`, which is the copy to trust: the table above is transcribed from it and a corpus change moves both. The run exits non-zero when **recall@10 or MRR** drops below the committed values, overall or for any single kind; recall@5 is reported, not gated. A ranking change lands with the diff of that file as its before/after table.
 

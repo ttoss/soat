@@ -1494,6 +1494,40 @@ if [ "$ME_SUP_TEXT" != "Smoke delivery window is two weeks" ]; then
 fi
 echo "Supersede retired the match, kept its text, and linked the replacement."
 
+# A query names no store, so it reaches both; include_memories takes the memory
+# store back out. Placed after the memory fixtures exist — the search steps
+# earlier in this script run before this project has any memory at all.
+echo "--- Knowledge: a bare query reaches both stores ---"
+BOTH_STORES_RESP=$($SOAT_CLI search-knowledge \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --query "smoke delivery window" \
+  --limit 20)
+BOTH_SOURCES=$(printf '%s\n' "$BOTH_STORES_RESP" | jq -c '[.results[].source_type] | unique')
+case "$BOTH_SOURCES" in
+  *memory*) ;;
+  *)
+    echo "ERROR: a bare query must reach memories, got source types $BOTH_SOURCES" >&2
+    echo "$BOTH_STORES_RESP" >&2
+    exit 1
+    ;;
+esac
+echo "Bare query reached: $BOTH_SOURCES"
+
+DOCS_ONLY_RESP=$($SOAT_CLI search-knowledge \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --query "smoke delivery window" \
+  --include_memories false \
+  --limit 20)
+DOCS_ONLY_SOURCES=$(printf '%s\n' "$DOCS_ONLY_RESP" | jq -c '[.results[].source_type] | unique')
+case "$DOCS_ONLY_SOURCES" in
+  *memory*)
+    echo "ERROR: --include_memories false must not return memories, got $DOCS_ONLY_SOURCES" >&2
+    echo "$DOCS_ONLY_RESP" >&2
+    exit 1
+    ;;
+esac
+echo "include_memories=false excluded the memory store: OK"
+
 echo "--- Memories: an inverted threshold pair is rejected ---"
 ME_THR_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$SERVER_URL/api/v1/memories" \
   -H "Authorization: Bearer $TOKEN" \

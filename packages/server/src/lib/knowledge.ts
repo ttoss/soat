@@ -84,14 +84,23 @@ type SearchKnowledgeArgs = {
    */
   tags?: Record<string, string>;
   /**
-   * Internal-only override (not exposed on the REST search endpoint) that
-   * forces document search off even when `query` is set. Callers that derive
-   * `query` from context rather than an explicit caller request — e.g. agent
-   * generation injection deriving it from the chat message — use this to keep
-   * a memory-scoped config from silently widening into an all-project
-   * document search, while still passing `query` through for memory store ranking.
+   * Switches the document store off even when the request would otherwise
+   * reach it. Default `true`.
+   *
+   * Two callers use it. A request says `include_documents: false` to search
+   * memories alone. Agent generation injection sets it from its own config,
+   * because there `query` is derived from the chat message rather than asked
+   * for: without it, a memory-scoped config would silently widen into an
+   * all-project document search every turn, while `query` still needs to pass
+   * through to rank memories.
    */
   includeDocuments?: boolean;
+  /**
+   * Switches the memory store off even when the request would otherwise reach
+   * it. Default `true`. The mirror of {@link SearchKnowledgeArgs.includeDocuments},
+   * for a caller that wants documents alone.
+   */
+  includeMemories?: boolean;
   policyWhere?: KnowledgePolicyWhere;
 };
 
@@ -105,18 +114,32 @@ export type KnowledgePolicyWhere = MemoryStorePolicyWhere & {
   document?: Record<string, any>;
 };
 
+const namesAny = (...filters: Array<string[] | undefined>): boolean => {
+  return filters.some((filter) => {
+    return filter !== undefined && filter.length > 0;
+  });
+};
+
+/**
+ * Which stores this search reads.
+ *
+ * A `query` names no store, so it reaches **both**: a caller who asked for
+ * "everything I can see" gets it. Store-specific filters narrow within a
+ * store rather than choosing between them, and `include_*` is the only way to
+ * take one out — a flag the caller set, never overridden by a filter that
+ * happens to name the other store.
+ */
 const getSearchFlags = (
   args: SearchKnowledgeArgs
 ): { hasDocumentSearch: boolean; hasMemoryStoreSearch: boolean } => {
+  // `query` and `tags` name no store, so either one reaches both.
+  const everyStore = args.query !== undefined || hasTagFilter(args.tags);
   const hasDocumentSearch =
     args.includeDocuments !== false &&
-    (args.query !== undefined ||
-      (args.paths !== undefined && args.paths.length > 0) ||
-      (args.documentIds !== undefined && args.documentIds.length > 0) ||
-      hasTagFilter(args.tags));
+    (everyStore || namesAny(args.paths, args.documentIds));
   const hasMemoryStoreSearch =
-    (args.memoryStoreIds !== undefined && args.memoryStoreIds.length > 0) ||
-    hasTagFilter(args.tags);
+    args.includeMemories !== false &&
+    (everyStore || namesAny(args.memoryStoreIds));
   return { hasDocumentSearch, hasMemoryStoreSearch };
 };
 
@@ -213,7 +236,7 @@ export const searchKnowledge = async (
     : undefined;
 
   const [documents, memoryStores] = await Promise.all([
-    !hasMemoryStoreSearch || hasDocumentSearch
+    hasDocumentSearch
       ? resolveDocumentSearchLists({
           projectIds: args.projectIds,
           embedding,
