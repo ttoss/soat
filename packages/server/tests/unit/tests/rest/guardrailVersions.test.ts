@@ -374,7 +374,7 @@ describe('Guardrail versions', () => {
       // `noPermToken` resolves to an empty project list. On a read that is a
       // 404 (nothing matches the filter); on a write it is a denial, and the
       // route says so before touching the guardrail (#1029).
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
   });
 

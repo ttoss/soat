@@ -530,11 +530,11 @@ describe('Traces REST API', () => {
       expect(res.status).toBe(401);
     });
 
-    test('returns 403 when the user lacks permission', async () => {
+    test('returns 404 when the user lacks permission', async () => {
       const res = await authenticatedTestClient(noPermToken).delete(
         `/api/v1/traces/${traceId}/content`
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
 
     test('returns 404 when the trace does not exist', async () => {

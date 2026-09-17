@@ -163,7 +163,10 @@ describe('Secrets', () => {
     test('a key scoped to another project reports the binding', async () => {
       const keyRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/api-keys')
-        .send({ name: 'Other Project Secrets Key', project_id: otherProjectId });
+        .send({
+          name: 'Other Project Secrets Key',
+          project_id: otherProjectId,
+        });
       expect(keyRes.status).toBe(201);
 
       const response = await authenticatedTestClient(
@@ -181,7 +184,7 @@ describe('Secrets', () => {
       expect(response.status).toBe(401);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       // Create a secret in otherProject (as admin) and try to access it as user
       const adminRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/secrets')
@@ -195,7 +198,7 @@ describe('Secrets', () => {
       const response = await authenticatedTestClient(noPermToken).get(
         `/api/v1/secrets/${otherId}`
       );
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('unknown ID returns 404', async () => {
@@ -239,7 +242,7 @@ describe('Secrets', () => {
       expect(response.status).toBe(401);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const adminRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/secrets')
         .send({
@@ -251,7 +254,7 @@ describe('Secrets', () => {
       const response = await authenticatedTestClient(noPermToken)
         .patch(`/api/v1/secrets/${adminRes.body.id}`)
         .send({ name: 'x' });
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('unknown ID returns 404', async () => {
@@ -286,7 +289,7 @@ describe('Secrets', () => {
       expect(response.status).toBe(401);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const adminRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/secrets')
         .send({
@@ -298,7 +301,7 @@ describe('Secrets', () => {
       const response = await authenticatedTestClient(noPermToken).delete(
         `/api/v1/secrets/${adminRes.body.id}`
       );
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('unknown ID returns 404', async () => {

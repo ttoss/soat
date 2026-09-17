@@ -360,12 +360,12 @@ describe('POST /api/v1/datasets/:dataset_id/items/from-generation', () => {
     expect(res.status).toBe(401);
   });
 
-  test('returns 403 for a user without evaluations:CreateDataset', async () => {
+  test('returns 404 for a user without evaluations:CreateDataset', async () => {
     const generation = await runGeneration({});
 
     const res = await promote({ generation_id: generation.id }, noPermToken);
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
   });
 
   test('returns 403 for a caller that may write items but may not read generations', async () => {

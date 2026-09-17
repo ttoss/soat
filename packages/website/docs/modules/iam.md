@@ -239,13 +239,18 @@ A denial's status code depends on what the route does, not on which policy faile
 | **List** ([`GET /agents`](/docs/api/agents/list-agents))                                                 | `200` with an empty list — the caller may read zero projects, so nothing matches      |
 | **Read one** ([`GET /agents/{id}`](/docs/api/agents/get-agent))                                        | `404 RESOURCE_NOT_FOUND` — existence is not leaked for a resource the caller can't see |
 | **Write / act on one** ([`PATCH /agents/{id}`](/docs/api/agents/patch-agent), `POST .../release/promote`) | `403 FORBIDDEN`                                                                        |
-| **Write / act on one, in a project the caller does not reach**          | `404 RESOURCE_NOT_FOUND` — as above, a refusal must not confirm existence either      |
+| **Write / act on one, in a project none of the caller's policies name** | `404 RESOURCE_NOT_FOUND` — as above, a refusal must not confirm existence either      |
 | **Create** ([`POST /agents`](/docs/api/agents/create-agent))                                             | `403 FORBIDDEN`                                                                        |
 | Scoped credential targeting another project                             | `403 API_KEY_PROJECT_SCOPE`, naming both projects                                     |
 
 A write is refused **before** body validation, so an unauthorized caller gets `403` whether the body is well-formed or not.
 
-The `403`/`404` split on a write is about **which project**, not which resource. Being told plainly that one agent in a project you work in is off limits tells you nothing you could not already work out, so that stays `403`. A resource in a project none of your policies name is `404`: a `403` there would confirm it exists to someone with no business knowing it does. A caller whose policies name no project at all is the one exception — they have no tenant boundary to be on the far side of, and keep the `403`.
+The `403`/`404` split on a write is about **which project**, not which resource, and it makes a write agree with the read the same caller would get:
+
+- a project your policies name → you could read the resource, so a write you may not perform is `403`, stated plainly. Being told that one agent is off limits tells you nothing you could not already work out.
+- a project none of your policies name → you could not read the resource either, so a write is `404`, the same answer. A `403` there would confirm it exists to someone with no business knowing it does — including a caller holding no policy at all, for whom *every* project is someone else's.
+
+So a denied write never says more than a denied read of the same resource would. This is what #1029 asked for: its bug was the two *disagreeing* — a write answering `404` while the caller's own `GET` answered `200` — not the `403` itself.
 
 ## Policy Evaluation
 

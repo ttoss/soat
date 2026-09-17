@@ -254,7 +254,7 @@ describe('Evaluations', () => {
       expect(res.status).toBe(401);
     });
 
-    test('a user without the action returns 403', async () => {
+    test('a user without the action returns 404', async () => {
       const res = await authenticatedTestClient(noPermToken)
         .post('/api/v1/datasets')
         .send({ project_id: projectId, name: 'nope' });
@@ -461,11 +461,11 @@ describe('Evaluations', () => {
       expect(res.status).toBe(401);
     });
 
-    test('a user without the action returns 403', async () => {
+    test('a user without the action returns 404', async () => {
       const res = await authenticatedTestClient(noPermToken)
         .post(`/api/v1/datasets/${datasetId}/items`)
         .send({ input: [{ role: 'user', content: 'hi' }] });
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
 
     test('an item with no reference answer or metadata stores nulls', async () => {
@@ -647,7 +647,7 @@ describe('Evaluations', () => {
       expect(res.status).toBe(401);
     });
 
-    test('a user without the action returns 403', async () => {
+    test('a user without the action returns 404', async () => {
       const res = await authenticatedTestClient(noPermToken)
         .post('/api/v1/evals')
         .send({
@@ -1069,11 +1069,11 @@ describe('Evaluations', () => {
       expect(res.status).toBe(401);
     });
 
-    test('a user without the action returns 403', async () => {
+    test('a user without the action returns 404', async () => {
       const res = await authenticatedTestClient(noPermToken)
         .post(`/api/v1/evals/${evalId}/runs`)
         .send({ wait: true });
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
   });
 
@@ -1765,11 +1765,11 @@ describe('Evaluations', () => {
       expect(res.status).toBe(401);
     });
 
-    test('a user without evaluations:RunEval returns 403', async () => {
+    test('a user without evaluations:RunEval returns 404', async () => {
       const res = await authenticatedTestClient(noPermToken).post(
         `/api/v1/evals/${evalId}/runs/evrun_x/cancel`
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
   });
 

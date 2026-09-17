@@ -530,7 +530,7 @@ describe('Quotas', () => {
       expect(res.status).toBe(401);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const res = await createQuota(noPermToken, {
         scope: 'project',
         metric: 'requests',
@@ -573,7 +573,7 @@ describe('Quotas', () => {
       expect(res.status).toBe(401);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const res = await authenticatedTestClient(noPermToken).get(
         `/api/v1/quotas?project_id=${projectId}`
       );
@@ -780,13 +780,14 @@ describe('Quotas', () => {
       expect(res.status).toBe(404);
     });
 
-    test('user with zero policies returns 403 (empty project list)', async () => {
+    test('user with zero policies returns 404 (no project of theirs)', async () => {
       const res = await authenticatedTestClient(noPermToken)
         .patch(`/api/v1/quotas/${quotaId}`)
         .send({ limit: 1 });
-      // A write refuses the empty scope outright; only the GET above 404s
-      // (#1029).
-      expect(res.status).toBe(403);
+      // Nothing this caller holds names this project, so the write hides the
+      // quota exactly as the GET above does — a `403` would confirm it exists
+      // to the least privileged caller there is.
+      expect(res.status).toBe(404);
     });
 
     test('project-scoped API key without UpdateQuota returns 403', async () => {
@@ -824,7 +825,7 @@ describe('Quotas', () => {
       expect(res.status).toBe(404);
     });
 
-    test('user with zero policies returns 403 (empty project list)', async () => {
+    test('user with zero policies returns 404 (no project of theirs)', async () => {
       const created = await createQuota(userToken, {
         scope: 'project',
         metric: 'tokens',
@@ -834,7 +835,7 @@ describe('Quotas', () => {
       const res = await authenticatedTestClient(noPermToken).delete(
         `/api/v1/quotas/${created.body.id}`
       );
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
 
     // The id has to name a real quota: the route resolves it before

@@ -128,7 +128,7 @@ describe('Guardrails', () => {
       expect(response.status).toBe(401);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .post('/api/v1/guardrails')
         .send({ project_id: projectId, name: 'X', document: { class: 'C' } });
@@ -241,7 +241,7 @@ describe('Guardrails', () => {
       expect(response.status).toBe(401);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .get('/api/v1/guardrails')
         .query({ project_id: projectId });
@@ -309,13 +309,13 @@ describe('Guardrails', () => {
       patchId = res.body.id;
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .patch(`/api/v1/guardrails/${patchId}`)
         .send({ name: 'Denied' });
       // The `GET` twin above 404s on the same empty scope; a write says
       // forbidden, and says it before parsing the body (#1029).
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('metadata-only edit does not bump the version', async () => {
@@ -419,7 +419,7 @@ describe('Guardrails', () => {
   });
 
   describe('DELETE /api/v1/guardrails/:guardrail_id', () => {
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/guardrails')
         .send({
@@ -431,7 +431,7 @@ describe('Guardrails', () => {
       const response = await authenticatedTestClient(noPermToken).delete(
         `/api/v1/guardrails/${createRes.body.id}`
       );
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('deletes a guardrail and its versions', async () => {
@@ -501,11 +501,11 @@ describe('Guardrails', () => {
       evalGuardrailId = res.body.id;
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .post(`/api/v1/guardrails/${evalGuardrailId}/evaluate`)
         .send({ args: { amount: 100 } });
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(404);
     });
 
     test('returns the would-be record and executes nothing (class B, guard passes)', async () => {

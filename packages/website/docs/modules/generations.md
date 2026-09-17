@@ -291,7 +291,7 @@ policy may therefore name the generations it covers:
 
 The [transcript](#transcript) projects the generation **and** its [trace](./traces.md), so it checks both: `generations:GetGeneration` against the generation and `traces:GetTrace` against the trace it was recorded on. A grant naming only one of them does not reach it.
 
-Refusals keep the shapes [IAM](./iam.md#what-a-denial-looks-like) defines: a read the caller may not perform is `404` (a generation it may not see does not announce itself), a write is `403`, and a credential scoped to another project is `403 API_KEY_PROJECT_SCOPE`. A write on a resource in a project the caller does not reach at all is `404` too, so a refusal never confirms existence across a tenant boundary. The trace half of a transcript is `403` rather than `404`: the generation read has already succeeded by then, so there is nothing left to conceal.
+Refusals keep the shapes [IAM](./iam.md#what-a-denial-looks-like) defines: a read the caller may not perform is `404` (a generation it may not see does not announce itself), a write is `403`, and a credential scoped to another project is `403 API_KEY_PROJECT_SCOPE`. A write on a resource in a project none of the caller's policies name is `404` too — the same answer their read would get, so a refusal never confirms existence across a tenant boundary. The trace half of a transcript is `403` rather than `404`: the generation read has already succeeded by then, so there is nothing left to conceal.
 
 Listing generations stays project-scoped: [`GET /api/v1/generations`](/docs/api/generations/list-generations) asks whether the caller may list generations in a project at all, so a policy that names individual generations grants no listing.
 

@@ -527,7 +527,7 @@ that eval, and a dataset grant covers every item in that dataset.
 
 Curating an item from a generation ([`POST /api/v1/datasets/{dataset_id}/items/from-generation`](/docs/api/evaluations/create-dataset-item-from-generation)) checks both halves: `evaluations:CreateDataset` against the dataset, and `generations:GetGeneration` against the generation being copied — so it can never become a way to read a turn the caller could not fetch directly.
 
-Refusals keep the shapes [IAM](./iam.md#what-a-denial-looks-like) defines: a read the caller may not perform is `404` (a dataset or eval it may not see does not announce itself, across projects or within one), a write or a run is `403`, and a credential scoped to another project is `403 API_KEY_PROJECT_SCOPE`. A write on a resource in a project the caller does not reach at all is `404` too, so a refusal never confirms existence across a tenant boundary.
+Refusals keep the shapes [IAM](./iam.md#what-a-denial-looks-like) defines: a read the caller may not perform is `404` (a dataset or eval it may not see does not announce itself, across projects or within one), a write or a run is `403`, and a credential scoped to another project is `403 API_KEY_PROJECT_SCOPE`. A write on a resource in a project none of the caller's policies name is `404` too — the same answer their read would get, so a refusal never confirms existence across a tenant boundary.
 
 Listing datasets and evals stays project-scoped: [`GET /api/v1/datasets`](/docs/api/evaluations/list-datasets) and [`GET /api/v1/evals`](/docs/api/evaluations/list-evals) ask whether the caller may list in a project at all, so a policy that names individual datasets or evals grants no listing.
 

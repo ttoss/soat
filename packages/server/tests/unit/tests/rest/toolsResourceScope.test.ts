@@ -15,6 +15,7 @@ describe('a policy scoped to one tool does not reach another', () => {
   let adminToken: string;
   let projectId: string;
   let scopedToken: string;
+  let noPermToken: string;
   let allowedToolId: string;
   let otherToolId: string;
 
@@ -49,6 +50,7 @@ describe('a policy scoped to one tool does not reach another', () => {
     });
     adminToken = setup.adminToken;
     projectId = setup.projectId;
+    noPermToken = setup.noPermToken as string;
 
     allowedToolId = await createTool('scoped-tool');
     otherToolId = await createTool('other-tool');
@@ -220,6 +222,34 @@ describe('a policy scoped to one tool does not reach another', () => {
       );
 
       expect(response.status).toBe(404);
+    });
+  });
+
+  /**
+   * A caller whose policies name no project at all is the far side of every
+   * tenant boundary, not the near side of none: nothing they hold concerns the
+   * project this tool is in, so a `403` would confirm it exists to the least
+   * privileged caller there is.
+   */
+  describe('a caller with no grants at all', () => {
+    test('hides the tool on a write', async () => {
+      const response = await authenticatedTestClient(noPermToken)
+        .patch(`/api/v1/tools/${allowedToolId}`)
+        .send({ description: 'Reached with no grants whatsoever.' });
+
+      expect(response.status).toBe(404);
+      expect(response.body.error.code).toBe('RESOURCE_NOT_FOUND');
+    });
+
+    // The same answer a made-up id gets, which is the point: the two are no
+    // longer distinguishable.
+    test('answers a made-up id identically', async () => {
+      const response = await authenticatedTestClient(noPermToken)
+        .patch('/api/v1/tools/tool_doesnotexist000')
+        .send({ description: 'Reached with no grants whatsoever.' });
+
+      expect(response.status).toBe(404);
+      expect(response.body.error.code).toBe('RESOURCE_NOT_FOUND');
     });
   });
 
