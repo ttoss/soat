@@ -7,8 +7,8 @@ import {
   RESERVED_TOOL_CONTEXT_KEYS,
 } from 'src/lib/toolContext';
 
-// #850/#851 — the reserved identity keys must be unaddressable by a caller on
-// every generation path. This is the pure pinning algorithm; the chokepoint
+// The reserved identity keys must be unaddressable by a caller on every
+// generation path. This is the pure pinning algorithm; the chokepoint
 // wiring is covered by generationContextPinning.test.ts.
 describe('pinServerIdentityToolContext', () => {
   test('reserves exactly the three identity keys', () => {
@@ -96,7 +96,7 @@ describe('pinServerIdentityToolContext', () => {
 });
 
 // The header prefix is deployment configuration, so a platform fronting SOAT
-// does not leak the substrate name to third-party tool providers (#945). A plain
+// does not leak the substrate name to third-party tool providers. A plain
 // concatenation: no character of the key is transformed.
 describe('TOOL_CONTEXT_HEADER_PREFIX', () => {
   const originalPrefix = process.env.TOOL_CONTEXT_HEADER_PREFIX;

@@ -5,9 +5,9 @@ import { inspectDeliverySignature } from '../../../src/webhookSignature';
 /**
  * `soat listen` is the tool the docs point users at before they aim a webhook
  * at a real endpoint, so it has to verify the scheme the server actually sends.
- * The server signs `<t>.<body>` under `X-Soat-Signature-V2` and keeps the bare
- * `X-Soat-Signature` during the deprecation window; the listener must accept
- * both and say which one it checked.
+ * The server signs `<t>.<body>` under `X-Soat-Signature-V2` and also sends the
+ * bare `X-Soat-Signature`; the listener must accept both and say which one it
+ * checked.
  */
 
 const SECRET = 'whsec_test_secret';

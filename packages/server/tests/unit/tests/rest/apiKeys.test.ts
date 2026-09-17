@@ -826,7 +826,7 @@ describe('API Keys', () => {
   });
 
   /**
-   * #1038: every resource route honours a scoped credential's project binding,
+   * Every resource route honours a scoped credential's project binding,
    * but key management itself did not. `POST /api-keys` is self-service — it
    * runs `requireAuth` and nothing else — so a credential confined to project A
    * could mint a **new unscoped key** for the same owning user and walk out of

@@ -21,7 +21,7 @@ const log = createDebug('soat:permissions');
  * without ever inspecting `projectPublicId`, and the granted check then hands
  * `undefined` to the usage-attribution wrapper, whose `Project.findOne` throws
  * on the undefined `WHERE` binding — a raw 500 on a route that is otherwise
- * fine (#801). Denying instead is the correct direction: a check that cannot
+ * fine. Denying instead is the correct direction: a check that cannot
  * name its project has not proven access to one, so it gets `403`, no usage is
  * attributed, and the cause is logged rather than swallowed.
  *

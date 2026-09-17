@@ -586,7 +586,7 @@ describe('extractBodyProps', () => {
     ).toBe(false);
   });
 
-  test('deep-resolves $refs nested inside array item properties (issue #344)', () => {
+  test('deep-resolves $refs nested inside array item properties', () => {
     // `messages[].content` is a oneOf of `$ref`s, which must be inlined before
     // the schema reaches a provider — the provider-facing schema has no
     // `components` section to resolve against.

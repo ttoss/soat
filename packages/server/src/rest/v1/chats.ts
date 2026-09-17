@@ -168,13 +168,12 @@ chatsRouter.delete('/chats/:chat_id', async (ctx: Context) => {
  * Authorizes a stateless completion.
  *
  * Such a call belongs to no chat, so it is checked against the AI provider's
- * own project — the only project it has. Until #998 this branch ran on
- * `requireAuth` alone: `chats:CreateChatCompletion` was declared in the
- * permission catalog and enforced for `chat_id`, but any authenticated
- * principal could complete against any provider it could name.
+ * own project — the only project it has. Without that check `requireAuth`
+ * alone would carry the branch, and any authenticated principal could complete
+ * against any provider it could name.
  *
- * The provider is loaded first so an unknown `ai_provider_id` keeps answering
- * `404`, as it did when the lib raised it after the (absent) permission check.
+ * The provider is loaded first so an unknown `ai_provider_id` answers `404`
+ * rather than the permission refusal.
  */
 const requireStatelessCompletionAccess = async (args: {
   ctx: Context;
@@ -189,7 +188,7 @@ const requireStatelessCompletionAccess = async (args: {
   }
 
   // Passing the `undefined` through would read as "no project named" and fall
-  // back to the caller's entire scope — the #801 widening, where it would be
+  // back to the caller's entire scope — a silent widening, where it would be
   // least visible.
   if (!provider.project_id) {
     throw new DomainError('FORBIDDEN', 'Forbidden');
@@ -270,7 +269,7 @@ const handleStreamingCompletion = async (args: {
   } catch (error) {
     // Headers went out with the `200` before the provider was called, so an
     // upstream rejection can never become a status code — the terminal SSE
-    // event is the only place left to report it (#1081).
+    // event is the only place left to report it.
     const mapped = toProviderDomainError(error) ?? error;
     const message =
       mapped instanceof Error ? mapped.message : 'Internal server error';
@@ -365,8 +364,8 @@ chatsRouter.post('/chat/completions', async (ctx: Context) => {
     }
 
     // Without this an upstream rejection came back as a bare
-    // `500 INTERNAL_ERROR`, indistinguishable from a fault in SOAT itself
-    // (#1081). Non-provider errors map to `null` and rethrow untouched.
+    // `500 INTERNAL_ERROR`, indistinguishable from a fault in SOAT itself.
+    // Non-provider errors map to `null` and rethrow untouched.
     throw toProviderDomainError(error) ?? error;
   }
 });

@@ -113,9 +113,8 @@ const isVarExpression = (
 
 /**
  * Scans an outputMapping's top-level `var` expressions for ones whose
- * evaluated result is `null` — see #818: a `var` path that resolves to
- * nothing on an otherwise-successful call is meant to be a loggable event,
- * not a silent `null`. Only the mapping's declared keys (or a bare top-level
+ * evaluated result is `null`: a `var` path that resolves to nothing on an
+ * otherwise-successful call is a loggable event, not a silent `null`. Only the mapping's declared keys (or a bare top-level
  * expression) are checked; a `var` nested deeper inside a key's value is out
  * of scope, same as `applyToolOutputMapping`'s own resolution depth.
  */
@@ -143,7 +142,7 @@ export const findNullVarMappings = (
  * Reshapes a tool's raw result via its `outputMapping` (JSON Logic evaluated
  * over `{ output: rawResult, input: mergedInput }`), e.g. `{ var: "output.text" }`
  * extracts a bare scalar field and `{ var: "input.title" }` echoes back a field
- * of the request that produced the response (#819). When no mapping is
+ * of the request that produced the response. When no mapping is
  * configured, the raw result is returned untouched — unlike
  * {@link applyOutputMapping}, which defaults to `{}`.
  */

@@ -125,8 +125,8 @@ describe('agentNonStreamGeneration', () => {
   });
 
   test('runNonStreamGeneration resolves a step rule active_tool_ids via resolveToolIdsToNames before calling generateText', async () => {
-    // `activeTools` needs names, not the persisted ids `active_tool_ids` holds
-    // (#809). `resolveToolIdsToNames` is mocked here only because the dynamic
+    // `activeTools` needs names, not the persisted ids `active_tool_ids` holds.
+    // `resolveToolIdsToNames` is mocked here only because the dynamic
     // module reload leaves `src/db` uninitialized; it is covered for real in
     // `agentToolIdResolution.test.ts`.
     const mockResolveToolIdsToNamesFn = jest

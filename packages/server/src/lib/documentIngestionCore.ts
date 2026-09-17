@@ -35,7 +35,7 @@ export const fetchIngestedDocById = (
 };
 
 /**
- * Emits the terminal ingestion event for a document (#1041). Every path that
+ * Emits the terminal ingestion event for a document. Every path that
  * settles an ingestion — the pipeline tail here, the async-callback completion,
  * the pipeline's catch-all, and the stall sweeper — ends in one of these, so a
  * subscriber learns that a document became queryable (or gave up) without
@@ -116,7 +116,7 @@ export const resolveChunkConfig = (
  * periodically rewrites `indexedChunks`, which also bumps `updatedAt` to keep
  * a long-running ingestion from looking stalled (issue #4). These are typed
  * columns, not `metadata` — that bag is caller-owned and a `PATCH` replacing
- * it must never disturb ingestion progress (#845).
+ * it must never disturb ingestion progress.
  */
 const persistChunksWithProgress = async (args: {
   doc: InstanceType<(typeof db)['Document']>;

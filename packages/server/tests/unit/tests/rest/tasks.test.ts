@@ -187,14 +187,14 @@ describe('Tasks', () => {
       expect(history.body[0].to_state).toBe('triage');
       expect(history.body[0].principal_kind).toBe('user');
       expect(history.body[0].principal_id).toBe(userId);
-      // The pre-#786 names are gone from the wire, not aliased.
+      // The wire names the principal, never an `actor_*` alias.
       expect(history.body[0].actor_kind).toBeUndefined();
       expect(history.body[0].actor_id).toBeUndefined();
     });
 
     // A task's only caller-settable bag was `payload`, which every guard reads
     // and `payload_writes` can write — so a label there is neither inert nor
-    // safe from the engine (#342).
+    // safe from the engine.
     describe('metadata', () => {
       test('round-trips verbatim on create, single read and list', async () => {
         const metadata = { tenant_account_id: '42', source: 'zendesk' };
@@ -292,7 +292,7 @@ describe('Tasks', () => {
       expect(res.status).toBe(403);
     });
 
-    test('history principal_id is the API key id (not the owner user id) for api_key auth (#608)', async () => {
+    test('history principal_id is the API key id (not the owner user id) for api_key auth', async () => {
       // The user creates an unscoped API key it owns; the key inherits the
       // owner's permissions.
       const keyRes = await authenticatedTestClient(userToken)
@@ -324,7 +324,7 @@ describe('Tasks', () => {
     });
   });
 
-  describe('POST /api/v1/tasks — alternate entry point via `state` (#821)', () => {
+  describe('POST /api/v1/tasks — alternate entry point via `state`', () => {
     test('creates the task directly in a named non-initial state', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/tasks')
@@ -511,7 +511,7 @@ describe('Tasks', () => {
       expect(again.body.error.code).toBe('TASK_TRANSITION_CONFLICT');
     });
 
-    test('a guard reads the firing principal as `principal` (#786)', async () => {
+    test('a guard reads the firing principal as `principal`', async () => {
       // A guard that only a `user` principal satisfies. If the guard context
       // did not bind `principal`, `var` would resolve to null and this move
       // would be rejected — so a 200 here proves the binding.
@@ -546,10 +546,10 @@ describe('Tasks', () => {
       expect(moved.body.state).toBe('done');
     });
 
-    test('a guard on the removed `actor` name no longer resolves (#786)', async () => {
-      // `actor` was renamed to `principal`; the old name is not aliased, so a
-      // guard still reading `actor.kind` resolves to null and rejects the move.
-      // This pins the rename as a real break rather than a silent dual-binding.
+    test('a guard naming `actor` resolves nothing', async () => {
+      // The guard vocabulary is `principal`, with no `actor` alias, so a guard
+      // reading `actor.kind` resolves to null and rejects the move. One
+      // binding, not a silent dual-binding.
       const wf = (
         await authenticatedTestClient(userToken)
           .post('/api/v1/workflows')
@@ -634,7 +634,7 @@ describe('Tasks', () => {
 
   // The stop side of a spend gate has to find the cards whose automation is
   // still dispatching. `status=open` narrows a board; it does not say which of
-  // those cards is costing anything (#1242).
+  // those cards is costing anything.
   describe('GET /api/v1/tasks — automation_status filter', () => {
     let filterWorkflowId: string;
     let pausedTaskId: string;
@@ -862,7 +862,7 @@ describe('Tasks', () => {
       expect(res.body.error.code).toBe('TASK_NOT_FOUND');
     });
 
-    test('rejects a `state` field as an unknown field, leaving state unchanged (#605)', async () => {
+    test('rejects a `state` field as an unknown field, leaving state unchanged', async () => {
       const task = (await createTask()).body;
       const stateBefore = task.state;
 
@@ -900,7 +900,7 @@ describe('Tasks', () => {
     });
   });
 
-  // ── Operator pause (#1237) ──────────────────────────────────────────────
+  // ── Operator pause ──────────────────────────────────────────────
   //
   // A workflow has no run object, so the pause an orchestration run gets lands
   // on the instance: the task. What it stops is every state's `on_enter`
@@ -1194,11 +1194,11 @@ describe('Tasks', () => {
     });
   });
 
-  // #846 — `last_result` is the record of what an automation actually did, so
+  // `last_result` is the record of what an automation actually did, so
   // it lives in its own server-owned column, exposed to guards as
   // `task.last_result`. `payload` is 100% caller-owned: a caller can write a
   // `last_result` key into it, but nothing server-side reads it back.
-  describe('last_result is server-owned (#846)', () => {
+  describe('last_result is server-owned', () => {
     let lrWorkflowId: string;
 
     beforeAll(async () => {
@@ -1761,11 +1761,11 @@ describe('Tasks', () => {
         },
       });
       expect(settled.status).toBe('closed');
-      // No `retry` declared: exactly one attempt (#822).
+      // No `retry` declared: exactly one attempt.
       expect(mockCreateGeneration).toHaveBeenCalledTimes(1);
     });
 
-    test('an on_enter retry policy round-trips snake_case (#822)', async () => {
+    test('an on_enter retry policy round-trips snake_case', async () => {
       const created = await authenticatedTestClient(userToken)
         .post('/api/v1/workflows')
         .send({
@@ -1797,7 +1797,7 @@ describe('Tasks', () => {
       });
     });
 
-    test('a retry policy re-dispatches after a transient failure and completes (#822)', async () => {
+    test('a retry policy re-dispatches after a transient failure and completes', async () => {
       mockCreateGeneration
         .mockRejectedValueOnce(
           new DomainError('AI_PROVIDER_ERROR', 'transient 502', {
@@ -1858,7 +1858,7 @@ describe('Tasks', () => {
       expect(routed.generation_id).toBe('gen_ok2');
     });
 
-    test('on_failure fires only after the last retry attempt (#822)', async () => {
+    test('on_failure fires only after the last retry attempt', async () => {
       mockCreateGeneration.mockRejectedValue(
         new DomainError('AI_PROVIDER_ERROR', 'always down', {
           generation_id: 'gen_down822',
@@ -1902,7 +1902,7 @@ describe('Tasks', () => {
       ).toHaveLength(1);
     });
 
-    test('an exhausted retry policy parks the task with the burned attempt count (#822)', async () => {
+    test('an exhausted retry policy parks the task with the burned attempt count', async () => {
       mockCreateGeneration.mockRejectedValue(
         new DomainError('AI_PROVIDER_ERROR', 'always down', {
           generation_id: 'gen_parked822',
@@ -1939,7 +1939,7 @@ describe('Tasks', () => {
       });
     });
 
-    test('a dispatch with no retry policy records no attempt counter (#822)', async () => {
+    test('a dispatch with no retry policy records no attempt counter', async () => {
       mockCreateGeneration.mockRejectedValue(
         new DomainError('AI_PROVIDER_ERROR', 'down', {
           generation_id: 'gen_noretry822',
@@ -1972,7 +1972,7 @@ describe('Tasks', () => {
       });
     });
 
-    test('a task that leaves the state between attempts abandons its remaining retries (#822)', async () => {
+    test('a task that leaves the state between attempts abandons its remaining retries', async () => {
       mockCreateGeneration.mockRejectedValue(
         new DomainError('AI_PROVIDER_ERROR', 'transient', {
           generation_id: 'gen_stale822',
@@ -2030,7 +2030,7 @@ describe('Tasks', () => {
       ).toBe(false);
     });
 
-    test('a failed dispatch with no recoverable cause id never persists a provenance-less automation transition (#792)', async () => {
+    test('a failed dispatch with no recoverable cause id never persists a provenance-less automation transition', async () => {
       // A dispatch failure surfacing before any generation or run id exists.
       // Unchecked, this writes a history row with every cause column null — a
       // transition with no recorded cause at all.
@@ -2072,7 +2072,7 @@ describe('Tasks', () => {
       ).toBe(false);
     });
 
-    test('on_failure history links the failed generation (#607)', async () => {
+    test('on_failure history links the failed generation', async () => {
       // Production createGeneration wraps terminal failures in a DomainError
       // whose meta carries the generation_id (see recordGenerationFailure).
       mockCreateGeneration.mockRejectedValue(
@@ -2114,7 +2114,7 @@ describe('Tasks', () => {
       // The causing (failed) generation is linked so a reader can jump to its trace.
       expect(routed.generation_id).toBe('gen_failed607');
       // The cause is not a principal: it is carried by `generation_id` alone,
-      // never duplicated into the principal field (#786).
+      // never duplicated into the principal field.
       expect(routed.principal_id).toBeNull();
     });
 
@@ -2169,7 +2169,7 @@ describe('Tasks', () => {
       expect(routed.principal_kind).toBe('automation');
       expect(typeof routed.orchestration_run_id).toBe('string');
       // An orchestration run is a cause, not a principal — it is never copied
-      // into `principal_id` (#786).
+      // into `principal_id`.
       expect(routed.principal_id).toBeNull();
     });
 
@@ -2287,7 +2287,7 @@ describe('Tasks', () => {
       expect(settled.last_result).toBeNull();
     });
 
-    test('cancellation-on-exit cancels a genuinely in-flight orchestration run (#606)', async () => {
+    test('cancellation-on-exit cancels a genuinely in-flight orchestration run', async () => {
       // Gate the orchestration's agent-node generation so the run is genuinely
       // in flight (not merely parked on human input) when we transition out.
       let releaseGen: (() => void) | undefined;
@@ -2299,9 +2299,8 @@ describe('Tasks', () => {
         signalStarted = resolve;
       });
       // Gates the generation so the run is genuinely in flight when the manual
-      // transition fires. A second spy used to be needed here because the
-      // shared one named a re-export; the barrel is gone (#911), so there is
-      // one spy again and nothing to restore.
+      // transition fires. One spy, on the module that defines
+      // `createGeneration` rather than on a re-export of it.
       mockCreateGeneration.mockImplementationOnce(async () => {
         signalStarted!();
         await gate;
@@ -2350,9 +2349,9 @@ describe('Tasks', () => {
       await started;
 
       try {
-        // The task must expose the real run id while the dispatch is running —
-        // the fix. Previously active_dispatch.id stayed null through the wait,
-        // so cancellation-on-exit could never reach the in-flight run.
+        // The task must expose the real run id while the dispatch is running.
+        // An `active_dispatch.id` that stays null through the wait leaves
+        // cancellation-on-exit unable to reach the in-flight run.
         const running = await pollTask({
           token: userToken,
           taskId,
@@ -2387,7 +2386,7 @@ describe('Tasks', () => {
       await flushTaskAutomations();
     });
 
-    test('a task-dispatched orchestration with a delay node parks durably as `sleeping` and resumes via the scheduler, without an in-process sleep (#855)', async () => {
+    test('a task-dispatched orchestration with a delay node parks durably as `sleeping` and resumes via the scheduler, without an in-process sleep', async () => {
       const orchestrationId = (
         await authenticatedTestClient(userToken)
           .post('/api/v1/orchestrations')
@@ -2434,9 +2433,9 @@ describe('Tasks', () => {
       const orchestrationRunId = (running.active_dispatch as { id: string }).id;
 
       // The run must durably park as `sleeping`, its wake persisted rather than
-      // held open by an in-process timer. `wait: true` used to sleep through the
-      // whole delay and never reach this state, so the wake sweep never saw it
-      // (#855).
+      // held open by an in-process timer. A `wait: true` that slept through the
+      // whole delay would never reach this state, so the wake sweep would never
+      // see it.
       let parked: InstanceType<typeof db.OrchestrationRun> | null = null;
       for (let i = 0; i < 100; i += 1) {
         parked = await db.OrchestrationRun.findOne({
@@ -2464,7 +2463,7 @@ describe('Tasks', () => {
     });
 
     test('a dispatched run that settled while no in-process awaiter existed is reconciled and routed (restart recovery)', async () => {
-      // The run survives a restart because the scheduler owns its wake (#855);
+      // The run survives a restart because the scheduler owns its wake;
       // the task awaiting it does not. `runDispatch` resolves through an
       // in-process poll loop tracked only in memory, so a restart while the run
       // is `sleeping` — a state that can last hours — loses it. The run then
@@ -3013,8 +3012,8 @@ describe('Tasks', () => {
       expect(after.body.last_result).toBeNull();
     });
 
-    test('a concurrent transition committing between the automation completion read and write is not clobbered (#590)', async () => {
-      // The TOCTOU of #590: a concurrent `transitionTask` commits after the
+    test('a concurrent transition committing between the automation completion read and write is not clobbered', async () => {
+      // The TOCTOU: a concurrent `transitionTask` commits after the
       // automation's post-dispatch read but before its write. There is no
       // natural yield point between them, so a spy on the completion `.save()`
       // widens the gap. `on_complete` deliberately never matches — an auto-fired
@@ -3080,7 +3079,7 @@ describe('Tasks', () => {
         const abortPromise = transition(taskId, 'abort');
         // Give the concurrent transition, which goes through the full
         // REST/auth stack, time to reach the DB before releasing the stale
-        // write — reproducing the ordering #590 describes: concurrent commit
+        // write — reproducing the ordering under test: concurrent commit
         // first, stale write fires anyway afterward.
         await new Promise((resolve) => {
           setTimeout(resolve, 150);
@@ -3135,7 +3134,7 @@ describe('Tasks', () => {
     });
   });
 
-  describe('on_enter tool dispatch (#1039)', () => {
+  describe('on_enter tool dispatch', () => {
     // A local HTTP server standing in for the tool's target: the only thing
     // mocked is the network hop SOAT does not own. Every layer under test —
     // validation, the wire mapping, the guardrail gate, the tool executor —
@@ -3289,7 +3288,7 @@ describe('Tasks', () => {
       // The tool's own return value is what `on_complete` and `last_result` see.
       expect(settled.last_result).toMatchObject({ ok: true });
 
-      // Every automation move must record a machine-readable cause (#792). A
+      // Every automation move must record a machine-readable cause. A
       // tool call produces no generation and no run, so the tool is the cause —
       // without this the move would be rejected outright, not merely untraced.
       const history = (
@@ -3306,7 +3305,7 @@ describe('Tasks', () => {
       expect(routed.orchestration_run_id).toBeNull();
     });
 
-    // #345: a task's stored `tool_context` reaches its `agent` and
+    // A task's stored `tool_context` reaches its `agent` and
     // `orchestration` dispatches; the `tool` kind dropped it, so a tool pinning
     // a `{{context:}}` parameter (or naming one in a header) could not be
     // dispatched from a workflow at all.
@@ -3968,11 +3967,11 @@ describe('Tasks', () => {
     });
   });
 
-  // The composed cycle #879 made possible: a state dispatches, the dispatch
-  // routes the task back into that same state, and it dispatches again. Neither
+  // The composed cycle: a state dispatches, the dispatch routes the task back
+  // into that same state, and it dispatches again. Neither
   // layer's validator sees it — orchestration cycle detection is intra-graph,
-  // and revisiting a workflow state is the module's whole point (#885).
-  describe('automation chain limit (#885)', () => {
+  // and revisiting a workflow state is the module's whole point.
+  describe('automation chain limit', () => {
     const LIMIT = 3;
     let previousLimit: string | undefined;
 
@@ -4206,8 +4205,8 @@ describe('Tasks', () => {
   });
   // Context attaches per move, creation counting as the first, and the move that
   // supplies one replaces the bag wholesale — so a dispatch's credential belongs
-  // to the same principal `resolveDispatchPrincipal` runs it as (#950).
-  describe('tool_context (#950)', () => {
+  // to the same principal `resolveDispatchPrincipal` runs it as.
+  describe('tool_context', () => {
     let ctxWorkflowId: string;
     let orchWorkflowId: string;
     let retryWorkflowId: string;
@@ -4449,7 +4448,7 @@ describe('Tasks', () => {
       expect(created.status).toBe(201);
       await awaitDispatch(created.body.id);
 
-      // Identity is server-derived at the generation chokepoint (#843/#850/#851);
+      // Identity is server-derived at the generation chokepoint;
       // a task-dispatched generation cannot smuggle one in through the task row.
       expect(forwardedContext(0)).toEqual({ ocaToken: 'tok_keep' });
       expect(await storedContext(created.body.id)).toEqual({
@@ -4590,7 +4589,7 @@ describe('Tasks', () => {
       expect(forwardedContext(1)).toEqual({ ocaToken: 'tok_retry' });
     });
 
-    test('an orchestration dispatch inherits the task bag (#945 item 1)', async () => {
+    test('an orchestration dispatch inherits the task bag', async () => {
       const created = await startCtxTask({
         workflow: orchWorkflowId,
         toolContext: { ocaToken: 'tok_orch' },

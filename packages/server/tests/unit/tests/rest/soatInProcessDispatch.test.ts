@@ -7,19 +7,18 @@ import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
- * Pins the in-process dispatch path (#888): a `soat` tool reaches the platform
+ * Pins the in-process dispatch path: a `soat` tool reaches the platform
  * by running the app's own middleware stack against a synthetic request,
  * instead of making an HTTP request to `http://localhost:$PORT`.
  *
  * **The file's setup is the primary assertion.** It deliberately binds no
- * listener — unlike `soatSelfCall.test.ts` before #888, and unlike
- * `mcp.test.ts`, which still needs one. A self-call that goes back over the
- * wire has nothing to connect to here, so it fails with `ECONNREFUSED` rather
- * than passing quietly.
+ * listener, unlike `mcp.test.ts`, which needs one. A self-call that goes back
+ * over the wire has nothing to connect to here, so it fails with
+ * `ECONNREFUSED` rather than passing quietly.
  *
- * Everything else in the file is about what must *not* change now that the
- * network hop is gone: the same permission evaluation, on the caller's live
- * policies, and the same error contract.
+ * Everything else in the file is about what the missing network hop must not
+ * cost: the same permission evaluation, on the caller's live policies, and the
+ * same error contract.
  */
 describe('SOAT in-process dispatch', () => {
   let adminToken: string;
@@ -338,11 +337,11 @@ describe('SOAT in-process dispatch', () => {
       authHeader,
     });
 
-    // The cycle budget (#885) keys on `isRunToken`, which exists only because
+    // The cycle budget keys on `isRunToken`, which exists only because
     // the auth middleware decoded the `orn` claim off this header. A seam
     // passing a principal instead of a credential skips that middleware, so the
     // hop counts as a person's move and the cycle becomes unbounded — while
-    // every #885 test still passes, since they all drive the route directly.
+    // every chain-limit test still passes, since they drive the route directly.
     expect(
       (result as { automation_chain_depth?: number }).automation_chain_depth
     ).toBe(1);

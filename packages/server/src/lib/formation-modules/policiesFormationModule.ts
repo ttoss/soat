@@ -14,9 +14,8 @@ export const policiesFormationModule = defineFormationModule({
   resourceType: 'policy',
   // The policies routes gate on the `admin` role, not on a policy-grantable
   // action — a policy that granted `policies:CreatePolicy` to a non-admin would
-  // otherwise make the formation path the weaker of the two, and a template
-  // declaring a `*` policy plus an `api_key` carrying it is the escalation
-  // #1181 reports.
+  // otherwise make the formation path the weaker of the two: a template
+  // declaring a `*` policy plus an `api_key` carrying it is an escalation.
   authorization: {
     srnResourceType: 'policy',
     create: 'policies:CreatePolicy',

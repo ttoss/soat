@@ -138,10 +138,10 @@ const validateResourceProperties = (args: {
 /**
  * The single seam where a template's property bag reaches a formation module's
  * validation hooks — and therefore the only place the camelCase→snake_case
- * normalization has to be applied. Twenty modules used to call
- * `normalizePropertyKeys` themselves and four forgot (#901); doing it here
- * makes the step unskippable for the 25th module too. Shallow by design: the
- * nested value bags a module owns are left verbatim.
+ * normalization has to be applied. A module calling `normalizePropertyKeys`
+ * for itself is a module that can forget to; doing it here makes the step
+ * unskippable. Shallow by design: the nested value bags a module owns are left
+ * verbatim.
  */
 const runFormationModuleHooks = (args: {
   type: string;

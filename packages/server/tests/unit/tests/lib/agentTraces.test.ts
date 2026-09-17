@@ -190,7 +190,7 @@ describe('saveTrace and upsertTraceRecord', () => {
   });
 });
 
-// #1024: `POST /agents/{agent_id}/generate` accepts a caller-supplied
+// `POST /agents/{agent_id}/generate` accepts a caller-supplied
 // `trace_id` to group generations. Each generation owns a segment of the
 // trace's steps object, so grouping keeps every turn instead of leaving the
 // last writer's steps as the whole trace.
@@ -326,9 +326,8 @@ describe('saveTrace groups generations under one trace_id', () => {
     ).toEqual(['A_1', 'A_2', 'B_1']);
   });
 
-  // A trace whose object predates the segment index cannot have its steps
-  // attributed, so the next write replaces them — the behaviour before this
-  // change — and indexes the trace from there.
+  // An unindexed steps object cannot have its steps attributed, so the next
+  // write replaces them and indexes the trace from there.
   test('replaces an unindexed steps object, then groups normally', async () => {
     const traceId = `trc_group_legacy_${Date.now()}`;
     const common = {

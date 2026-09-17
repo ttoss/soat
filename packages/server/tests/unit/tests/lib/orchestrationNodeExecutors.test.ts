@@ -349,7 +349,7 @@ describe('executeAgentNode', () => {
     spy.mockRestore();
   });
 
-  // #747: a model commonly wraps structured JSON in a markdown code fence even
+  // A model commonly wraps structured JSON in a markdown code fence even
   // when told to return it bare — a plain JSON.parse rejects that outright and
   // silently fell back to { content }, discarding the schema's own fields.
   test('strips a markdown code fence before parsing JSON content', async () => {

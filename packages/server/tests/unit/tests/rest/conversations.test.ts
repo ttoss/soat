@@ -960,9 +960,9 @@ describe('Conversations', () => {
       expect(res.status).toBe(404);
     });
 
-    // This route used to put the internal result straight on the wire, in
-    // camelCase. The rest of this block only exercises `completed`, so the
-    // `requires_action` branch of the mapping needs its own coverage.
+    // The internal result is mapped, never put on the wire in camelCase. The
+    // rest of this block only exercises `completed`, so the `requires_action`
+    // branch of the mapping needs its own coverage.
     test('maps a requires_action result to the documented snake_case shape', async () => {
       const aiProvRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/ai-providers')
@@ -1195,7 +1195,7 @@ describe('Conversations', () => {
     });
   });
 
-  describe('Tool-call history preservation (regression for issue #147)', () => {
+  describe('Tool-call history preservation', () => {
     let agentId: string;
     let convId: string;
 
@@ -1343,7 +1343,7 @@ describe('Conversations', () => {
       expect(hasToolResult).toBe(true);
     });
 
-    test('caller-supplied metadata.responseMessages is not replayed as LLM history (#844)', async () => {
+    test('caller-supplied metadata.responseMessages is not replayed as LLM history', async () => {
       const injectedRes = await authenticatedTestClient(userToken)
         .post(`/api/v1/conversations/${convId}/messages`)
         .send({
@@ -1397,7 +1397,7 @@ describe('Conversations', () => {
       expect(renderedAsUserContent).toBe(true);
     });
 
-    test('does not leak server-recorded tool-call chain through GET messages metadata (#844)', async () => {
+    test('does not leak server-recorded tool-call chain through GET messages metadata', async () => {
       const leakConvRes = await authenticatedTestClient(userToken)
         .post('/api/v1/conversations')
         .send({ project_id: projectId });

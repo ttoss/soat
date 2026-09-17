@@ -543,7 +543,7 @@ describe('Orchestrations', () => {
     });
 
     // A read the caller may not perform is indistinguishable from absence, now
-    // that the route authorizes against the orchestration's own SRN (#1339).
+    // that the route authorizes against the orchestration's own SRN.
     test('project-scoped API key without GetOrchestration permission returns 404', async () => {
       const rawKey = await createRestrictedApiKey(
         'orchestrations:GetOrchestration'
@@ -581,7 +581,7 @@ describe('Orchestrations', () => {
     });
 
     // A caller permitted in zero projects is denied outright on a write:
-    // `requireProjectAccess` answers 403 where the read path 404s (#1029).
+    // `requireProjectAccess` answers 403 where the read path 404s.
     test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .patch(`/api/v1/orchestrations/${orchestrationId}`)
@@ -998,9 +998,8 @@ describe('Orchestrations', () => {
         });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('awaiting_input');
-      // `input_mapping` keys are author-authored and carry back verbatim. This
-      // used to expect rewritten keys, because the outbound transform mangled
-      // the author's own (#737).
+      // `input_mapping` keys are author-authored and carry back verbatim, never
+      // rewritten by the outbound transform.
       expect(runRes.body.required_action.context).toEqual({
         language: 'pt-BR',
         threshold: 0.8,
@@ -1269,7 +1268,7 @@ describe('Orchestrations', () => {
       }
     });
 
-    // #945 item 1: a run carries `tool_context` for its whole lifetime, so a
+    // A run carries `tool_context` for its whole lifetime, so a
     // scheduled/orchestrated flow can hand a per-user credential to the tools its
     // agents call. The bag lives on the run row rather than on the request, which
     // is what makes it survive a pause and a background drive.
@@ -1394,8 +1393,8 @@ describe('Orchestrations', () => {
         }
       });
 
-      // #345 / #945: a `tool` node is the run acting directly, so it must carry
-      // the run's context the way an `agent` node's generation does — and a
+      // A `tool` node is the run acting directly, so it must carry the run's
+      // context the way an `agent` node's generation does — and a
       // `{{context:}}` pin on the tool is how the run's own boundary (the ad
       // account it may touch) reaches the call without the model in between.
       test("is forwarded to a tool node, resolving the tool's {{context:}} preset", async () => {
@@ -1716,7 +1715,7 @@ describe('Orchestrations', () => {
         await expectNoRuns(orchId);
       });
 
-      // #1153: `context_keys` exists on a tool because a tool should not
+      // `context_keys` exists on a tool because a tool should not
       // receive credentials it has no business seeing. A child run had no
       // equivalent — it took the parent's whole bag — so the same delegation
       // was contained or not depending on whether it was spelled as a
@@ -1836,9 +1835,9 @@ describe('Orchestrations', () => {
           }
         });
 
-        // The default has to be "forward everything" or every graph authored
-        // before this field changes behavior on upgrade.
-        test('omitting it forwards the whole bag, as before', async () => {
+        // The default is "forward everything", so a graph that declares no
+        // allowlist is unrestricted.
+        test('omitting it forwards the whole bag', async () => {
           const childId = await createChild('Child Ctx Keys Absent');
           const parentRes = await createParent({
             name: 'Parent Ctx Keys Absent',
@@ -2031,7 +2030,7 @@ describe('Orchestrations', () => {
     });
 
     // A run is the one long-lived resumable object and had nowhere to record
-    // whose it is, while a generation did (#342). Caller-owned, round-tripped
+    // whose it is, while a generation did. Caller-owned, round-tripped
     // verbatim, and never merged into run state — which is why not `input`.
     describe('metadata', () => {
       const createRun = async (name: string, body: object) => {
@@ -2143,7 +2142,7 @@ describe('Orchestrations', () => {
     });
 
     // An `output_schema` silently reverted to `{ content }` when the model
-    // fenced its JSON — the standard shape models return it in (#747). The
+    // fenced its JSON — the standard shape models return it in. The
     // parsing edge cases are covered in `orchestrationNodeExecutors.test.ts`.
     test('an agent node with output_schema parses a markdown-fenced JSON response', async () => {
       const aiProviderRes = await authenticatedTestClient(adminToken)
@@ -2303,9 +2302,9 @@ describe('Orchestrations', () => {
     });
 
     test('run input is visible to node logic through the input namespace', async () => {
-      // Regression: run input used to be seeded only as flat top-level state
-      // keys, so a graph following the documented `{ "var": "input.<name>" }`
-      // convention read null. It must now resolve to the supplied value.
+      // Run input seeded only as flat top-level state keys leaves a graph
+      // following the documented `{ "var": "input.<name>" }` convention reading
+      // null. It must resolve to the supplied value.
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations')
         .send({
@@ -2589,7 +2588,7 @@ describe('Orchestrations', () => {
         expect(response.status).toBe(404);
       });
 
-      // As above: `GetRun` is a read, so a refusal hides the run (#1339).
+      // As above: `GetRun` is a read, so a refusal hides the run.
       test('project-scoped API key without GetRun permission returns 404', async () => {
         const rawKey = await createRestrictedApiKey('orchestrations:GetRun');
         const response = await authenticatedTestClient(rawKey).get(
@@ -2650,7 +2649,7 @@ describe('Orchestrations', () => {
   // A background job stopping async spend has to find the runs still driving.
   // Without this filter the only correct read is every run the project ever
   // started, since a long-running old run sits behind any number of newer
-  // terminal ones (#1242).
+  // terminal ones.
   describe('GET /api/v1/orchestration-runs — status filter', () => {
     let statusOrchId: string;
     let succeededRunId: string;
@@ -2871,7 +2870,7 @@ describe('Orchestrations', () => {
     });
 
     // A caller permitted in zero projects is denied outright on a write:
-    // `requireProjectAccess` answers 403 where the read path 404s (#1029).
+    // `requireProjectAccess` answers 403 where the read path 404s.
     test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken).delete(
         `/api/v1/orchestrations/${orchestrationId}`
@@ -3080,7 +3079,7 @@ describe('Orchestrations', () => {
     });
 
     // The run has to exist: the route resolves it before authorizing, so a
-    // made-up id answers `404` and never reaches the refusal (#1339).
+    // made-up id answers `404` and never reaches the refusal.
     test('user without permission returns 404', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations')
@@ -3334,9 +3333,8 @@ describe('Orchestrations', () => {
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('awaiting_input');
 
-      // Regression: https://github.com/ttoss/soat/issues/377 — without a
-      // `type` discriminator, a client can't tell this webhook-receive pause
-      // apart from a `human` node pause (see also #376).
+      // Without a `type` discriminator, a client cannot tell this
+      // webhook-receive pause apart from a `human` node pause.
       expect(runRes.body.required_action.type).toBe('webhook_receive');
 
       const submitRes = await authenticatedTestClient(userToken)
@@ -3976,7 +3974,7 @@ describe('Orchestrations', () => {
     });
   });
 
-  // ── Human node execution record is finalized on resume (#384) ─────────────
+  // ── Human node execution record is finalized on resume ─────────────
 
   describe('Human node execution record after resume', () => {
     test("the human node's own node_executions entry is updated to completed, not left as requires_action", async () => {
@@ -4103,7 +4101,7 @@ describe('Orchestrations', () => {
     });
   });
 
-  // ── Operator pause (#1237) ────────────────────────────────────────────────
+  // ── Operator pause ────────────────────────────────────────────────
 
   describe('POST /api/v1/orchestration-runs/:orchestration_run_id/pause', () => {
     const getRun = (orchestrationRunId: string) => {
@@ -4337,8 +4335,8 @@ describe('Orchestrations', () => {
       expect(accepted.status).toBe(200);
     });
 
-    // Edge case 3 of #1237: without this a parent's pause bounds nothing, since
-    // a `sub_orchestration` child drives its own graph and its own spend.
+    // Without this a parent's pause bounds nothing, since a
+    // `sub_orchestration` child drives its own graph and its own spend.
     test('flags a nested descendant, which parks at its own next checkpoint', async () => {
       const childId = await createOrch({
         ...humanNodeOrchestration,

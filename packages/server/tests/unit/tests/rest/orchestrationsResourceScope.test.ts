@@ -10,7 +10,7 @@ import { authenticatedTestClient, loginAs } from '../../testClient';
  * `srn:<project>:orchestration:<orchestration_id>`, which is the resource type
  * these routes have always probed. Naming the run itself would be a new type in
  * the public policy vocabulary and would stop an existing
- * `srn:<project>:orchestration:*` statement from covering run actions (#1339).
+ * `srn:<project>:orchestration:*` statement from covering run actions.
  */
 describe('a policy scoped to one orchestration does not reach another', () => {
   let adminToken: string;

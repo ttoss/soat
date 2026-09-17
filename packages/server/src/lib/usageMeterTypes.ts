@@ -5,8 +5,8 @@
  * `usageComputeRecording.ts`, `usageRequests.ts` and `usageStorage.ts`.
  *
  * The price book's `meter_type` stays free-form: a price row names a SKU, and
- * refusing an unrecognised one would refuse pricing a meter added upstream
- * before this list heard of it.
+ * refusing an unrecognised one would refuse pricing a meter this list does not
+ * name.
  */
 
 import { DEFAULT_METER_TYPE } from './priceCompute';

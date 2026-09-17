@@ -53,7 +53,7 @@ describe('buildRunError', () => {
   });
 
   // `fetch` throws a generic `TypeError: fetch failed` with the real reason on
-  // `.cause`. Dropping it is what made #820 unreproducible — nothing told a bad
+  // `.cause`. Dropping it makes a failure unreproducible — nothing tells a bad
   // host from a DNS failure or a timeout.
   test('an Error with an Error cause appends the cause message, surfacing the real network reason', () => {
     const cause = new Error('connect ECONNREFUSED 10.0.0.1:80');

@@ -3,7 +3,7 @@
  * before there is a surface to build.
  *
  * Split from `agentToolResolverMcp.ts` when pagination made it the larger half
- * of that file (#1301).
+ * of that file.
  */
 import type { JSONValue } from 'ai';
 

@@ -291,7 +291,7 @@ const runNodeAndRecord = async (
     runDepth: ctx.runRecord.orchestrationRunDepth,
     triggerId: ctx.runRecord.triggerId ?? undefined,
     // Read off the run row like `triggerId` above, so every drive of the run
-    // carries the same context without having to thread it (#945).
+    // carries the same context without having to thread it.
     toolContext: ctx.runRecord.toolContext ?? undefined,
     traceId: ctx.traceId,
     authHeader: ctx.authHeader,

@@ -10,7 +10,7 @@ import { resolveAgentTools } from 'src/lib/agentToolResolver';
 import { clearGuardrailContextToolCache } from 'src/lib/guardrailContext';
 import { createGuardrail } from 'src/lib/guardrails';
 
-// The per-run cumulative ceiling (#486): the windowed per-project counters are
+// The per-run cumulative ceiling: the windowed per-project counters are
 // the wrong granularity for aborting one runaway run, so these sum only the
 // meter rows recorded against the current run. Driven through the resolver
 // dispatch so the assertions cover the real gate.

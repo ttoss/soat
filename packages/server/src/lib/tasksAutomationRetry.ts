@@ -24,7 +24,7 @@ const log = createDebug('soat:tasks');
  * Outcome of running a state's dispatch under its (optional) retry policy.
  * `attempt` is the 1-based attempt the outcome came from, or `undefined` when no
  * retry policy was declared — a dispatch without `retry` records no attempt
- * counter at all, so its `active_dispatch` keeps the pre-retry shape (#822).
+ * counter at all, so its `active_dispatch` keeps the pre-retry shape.
  */
 export type DispatchAttemptOutcome =
   | {
@@ -54,7 +54,7 @@ const STALENESS_POLL_MS = 500;
  * where an operator pause is most likely to arrive: a pause abandons the
  * remaining attempts and records the dispatch as suppressed, so the resume
  * starts the state's `on_enter` over rather than leaving a half-spent retry
- * chain nobody restarts (#1237).
+ * chain nobody restarts.
  */
 const waitForRetry = async (args: {
   taskPublicId: string;
@@ -155,7 +155,7 @@ type AttemptContext = {
   retry: RetryPolicy | null;
   principal?: RequestPrincipal;
   /**
-   * The task's caller context (#950), read off the task row by
+   * The task's caller context, read off the task row by
    * `runStateAutomation` rather than threaded down from the transition that
    * caused this dispatch — which is what carries it across an approval gate, a
    * retry and an automation hop with no per-path plumbing to forget. Read once,
@@ -167,7 +167,7 @@ type AttemptContext = {
 
 // One attempt: marks the (re)dispatch running with its attempt number, then runs
 // it, persisting the dispatch id as soon as it is known — before the blocking
-// wait — so cancellation-on-exit can reach a genuinely in-flight run (#606).
+// wait — so cancellation-on-exit can reach a genuinely in-flight run.
 const runOneAttempt = async (args: {
   context: AttemptContext;
   attempt: number;

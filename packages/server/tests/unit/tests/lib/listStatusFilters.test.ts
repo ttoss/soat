@@ -6,8 +6,8 @@ import {
 } from 'src/lib/tasksAutomationStatus';
 
 /**
- * The listing filters of #1242 are only useful if the values a caller may send
- * are the values the column holds. Two lists say what those are — the code
+ * The listing filters are only useful if the values a caller may send are the
+ * values the column holds. Two lists say what those are — the code
  * constant the route validates against, and the spec enum the SDK, the CLI and
  * the MCP tool surface are generated from — and nothing else makes them agree:
  * a status added upstream reaches the constant through the type checker and the
@@ -33,7 +33,7 @@ const parameterEnum = (args: { path: string; name: string }): string[] => {
   return parameter.schema.items.enum;
 };
 
-describe('list status filters (#1242)', () => {
+describe('list status filters', () => {
   test('the run listing offers every status a run can hold', () => {
     expect(
       parameterEnum({ path: '/api/v1/orchestration-runs', name: 'status' })

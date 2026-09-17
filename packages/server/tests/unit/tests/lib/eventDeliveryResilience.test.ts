@@ -235,7 +235,7 @@ describe('event delivery resilience', () => {
 
       // The row survived the crash, so the delivery is owned by the database
       // and the sweep can retry it — the whole point of separating the row
-      // write from the first attempt (#1130). Its status is deliberately not
+      // write from the first attempt. Its status is deliberately not
       // asserted: the sweep may already have reclaimed and delivered it.
       expect(delivery.eventType).toBe('files.created');
 

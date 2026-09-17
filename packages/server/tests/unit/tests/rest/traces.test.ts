@@ -278,7 +278,7 @@ describe('Traces REST API', () => {
     });
 
     // A read the caller may not perform is indistinguishable from absence, now
-    // that the route authorizes against the trace's own SRN (#1339); purging
+    // that the route authorizes against the trace's own SRN; purging
     // content is a write and keeps `403`.
     test('project-scoped API key without GetTrace permission returns 404', async () => {
       const policyRes = await authenticatedTestClient(adminToken)

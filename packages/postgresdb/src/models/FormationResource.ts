@@ -76,7 +76,7 @@ export class FormationResource extends Model {
   /**
    * Physical resources this logical id superseded by replacement and could not
    * delete. Kept so a later operation retries the disposal instead of leaving
-   * the resource live and owned by nothing (#1193) — the ledger has already
+   * the resource live and owned by nothing — the ledger has already
    * moved to the replacement, so nothing else would ever name it again.
    */
   @Column({ type: DataType.JSONB, allowNull: true })

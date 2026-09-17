@@ -2,7 +2,7 @@ import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 /**
- * Workflow state-machine version history (issue #882).
+ * Workflow state-machine version history.
  *
  * The archive mechanics are shared with agents, guardrails and orchestrations
  * (`resourceVersions.ts`); what is workflow-specific — and what these tests pin —

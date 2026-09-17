@@ -12,14 +12,14 @@ import { join } from 'node:path';
  * files — a missing webhook answered `{"error":"Webhook not found"}` while a
  * missing delivery in the same module answered
  * `{"error":{"code":"RESOURCE_NOT_FOUND",…}}`. Every client, the SDK and the CLI
- * had to handle both shapes for the same condition (#913).
+ * had to handle both shapes for the same condition.
  *
  * This test is the deterministic replacement. It is static because the failure
  * is a *shape*, not a status: a route that answers `404` with a bare string
  * passes any test that only asserts `response.status`, which is exactly how the
  * drift stayed invisible.
  *
- * The same argument covers the auth/scope preamble (#908). `checkAuth` and the
+ * The same argument covers the auth/scope preamble. `checkAuth` and the
  * eight `check*Access` clones each re-implemented `401`/`403` by hand, and each
  * copy was free to pick a different error body — that substrate is what let 21
  * of 25 read routes miss the actionable scoped-key `403`. With the preamble in
@@ -62,7 +62,7 @@ const DIRECT_SCOPE_RESOLUTION = /\bauthUser!?\.resolveProjectIds\(/;
 /**
  * The modules allowed to read `ctx.authUser` for a guard — they *are* the
  * shared preamble: `helpers.ts` owns the project-level half, `resourceAccess.ts`
- * the per-resource half an item route uses instead (#1339). Both may still not
+ * the per-resource half an item route uses instead. Both may still not
  * write a manual error body.
  */
 const PREAMBLE_OWNERS = ['helpers.ts', 'resourceAccess.ts'];
@@ -148,10 +148,10 @@ const scan = (rawSource: string, pattern: RegExp) => {
 };
 
 /**
- * The middleware is the last place a string-shaped body could come back, and it
- * is the place it survived longest: #913 converged the 349 handler bodies but
- * left the 500 catch-all as `{ error: 'Internal Server Error' }`, so a client
- * still had to test the type of `error` before reading it.
+ * The middleware is the last place a string-shaped body could come back.
+ * Converging every handler body but leaving the 500 catch-all as
+ * `{ error: 'Internal Server Error' }` still makes a client test the type of
+ * `error` before reading it.
  */
 describe('the error middleware emits one shape', () => {
   test('assigns no bare-string error body', () => {
@@ -211,14 +211,14 @@ describe('REST handlers signal errors with DomainError', () => {
 });
 
 /**
- * The audit behind #1339 found twelve modules whose `/:x_id` routes authorized
- * with the project wildcard `srn:<project>:<type>:*` — a probe a statement
- * naming one resource can never match, so a policy scoped to one tool reached
- * *nothing* while an action-only one reached every sibling in the project.
+ * An `/:x_id` route authorizing with the project wildcard
+ * `srn:<project>:<type>:*` probes something a statement naming one resource can
+ * never match, so a policy scoped to one tool reaches *nothing* while an
+ * action-only one reaches every sibling in the project.
  *
- * It was an audit finding because nothing failed: each route answered `200` for
- * the callers it was tested with, and the granularity it dropped is invisible
- * from a single response. This is the deterministic replacement — the same
+ * Nothing fails when it happens: the route answers `200` for the callers it is
+ * tested with, and the granularity it drops is invisible from a single
+ * response. Hence a static check — the same
  * argument that makes the error *shape* a static test rather than a status
  * assertion. A route that names a resource authorizes against that resource,
  * through `resourceAccess.ts`; reaching for a project-level helper there is now
@@ -246,7 +246,7 @@ describe('a route that names a resource authorizes against it', () => {
           `${file}:${route.line} ${route.method.toUpperCase()} ${route.path} ` +
           `authorizes at project level — the probe is \`srn:<project>:<type>:*\`, ` +
           `which no statement naming one resource matches. Use ` +
-          `authorizeResource from resourceAccess.ts (#1339)`
+          `authorizeResource from resourceAccess.ts`
         );
       });
 

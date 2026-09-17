@@ -12,8 +12,8 @@ const log = createDebug('soat:usage');
 // behind them. Bytes alone cannot price a vector corpus — an HNSW element costs
 // a whole 8 KiB page whatever the chunk's text weighs, and no `pg_column_size`
 // can see it — so what a byte figure reports drifts by ~3× with a chunking
-// parameter the caller picks, in whichever direction the proxy happens to lean
-// (#1232). The count is the term that fixed per-row cost is charged against.
+// parameter the caller picks, in whichever direction the proxy happens to lean.
+// The count is the term that fixed per-row cost is charged against.
 //
 // A separate meterType and idempotency namespace from tokens/compute, so a
 // day's snapshot never collides with another meter's key.
@@ -34,7 +34,7 @@ const utcDateKey = (now: Date): string => {
 /**
  * What a project stores, split by where it lives so the debug line names each
  * term: a term that reads zero is the only visible symptom of one this meter
- * stopped reaching (#1221).
+ * stopped reaching.
  *
  * Bytes and rows are read in one statement, so the two components of an event
  * can never describe two different moments of the same corpus.
@@ -110,7 +110,7 @@ const readStoredFootprint = (rows: unknown[]): StoredFootprint => {
  * The evaluations corpus is measured the same way, and it is the term that
  * grows on its own: an eval result freezes its own copy of the item it scored,
  * so a dataset run N times stores N+1 copies of every payload, and the content
- * retention sweep clears only a result's `output` (#1247).
+ * retention sweep clears only a result's `output`.
  *
  * Each vector-bearing term is counted by the same scan that sums it, so the
  * count costs no extra pass over either table.
@@ -198,8 +198,7 @@ const projectStoredFootprint = async (
  * `projectStoredFootprint`: that query joins every chunk row through documents
  * and files, which is a daily-snapshot cost, not a per-upload one. So a cap
  * accepts up to a day of staleness — the same posture the cost path takes
- * against its own meter tick — and the caller's own delta is added on top
- * (#1249).
+ * against its own meter tick — and the caller's own delta is added on top.
  *
  * Read as one statement over the newest storage event's `gb_day` component,
  * rather than by guessing today's or yesterday's idempotency key: a sweep that

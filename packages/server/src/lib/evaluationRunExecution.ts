@@ -151,7 +151,7 @@ export const runEvalItem = async (args: {
       pinnedAgentVersion: args.agentVersion,
       source: EVAL_USAGE_SOURCE,
       // The run's bag, so the item is scored against the configuration the
-      // agent runs in production (#1150). An eval generation has no session, so
+      // agent runs in production. An eval generation has no session, so
       // `buildGenerationContext` stamps no identity over it — the reserved keys
       // were already stripped when the run was started.
       toolContext: args.toolContext,
@@ -401,7 +401,7 @@ export const finalizeEvalRun = async (args: {
     aggregateScores: aggregate,
     passed,
     // The bag is only needed while items execute, and a finished run is a
-    // report that outlives the work (#1150).
+    // report that outlives the work.
     toolContext: null,
     completedCount: results.length - erroredCount,
     erroredCount,

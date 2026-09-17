@@ -131,7 +131,7 @@ export class Generation extends Model {
   // value, so it has to survive every cleanup path unchanged. An FK would drag
   // it into `agentDelete`'s null-out of self-referencing references — the same
   // rewrite that, applied to trace lineage, let a chain re-root itself and reset
-  // its budget when an unrelated ancestor agent was deleted (#1161).
+  // its budget when an unrelated ancestor agent was deleted.
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare rootGenerationId: string | null;
 

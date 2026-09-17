@@ -24,7 +24,7 @@ import {
   startFakeFormationHandler,
 } from '../../fixtures/formationHandler';
 
-// An operator-registered type has no SOAT action to authorize (#1181), so the
+// An operator-registered type has no SOAT action to authorize, so the
 // deploy path must never consult the authorizer for one.
 const neverAsked: FormationAuthorizer = (request) => {
   throw new Error(
@@ -32,7 +32,7 @@ const neverAsked: FormationAuthorizer = (request) => {
   );
 };
 
-// The seam is the HTTP boundary to an operator's handler (#1078), so a real
+// The seam is the HTTP boundary to an operator's handler, so a real
 // handler runs on localhost: the request is genuinely serialized and signed, and
 // the signature verified here by independent HMAC.
 //
@@ -721,7 +721,7 @@ describe('a registered type inside a real formation deploy', () => {
     });
 
     // A deploy that fails to reconcile answers with `status: failed` and the
-    // reason, rather than throwing (#1028).
+    // reason, rather than throwing.
     expect(created.status).toBe('failed');
     expect(created.error?.message).toMatch(/number not verified/);
   });

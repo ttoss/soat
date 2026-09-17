@@ -9,7 +9,7 @@ import { isPlainObject } from './plainObject';
  * cancellation-on-exit token a single attempt does: if the task leaves the state
  * between attempts, the remaining ones are abandoned. `on_failure` / the parked
  * `automation_status: 'failed'` fire only after the last attempt, so declaring
- * no `retry` is exactly the pre-#822 behavior.
+ * no `retry` means a single attempt.
  */
 export type RetryPolicy = {
   maxAttempts: number;

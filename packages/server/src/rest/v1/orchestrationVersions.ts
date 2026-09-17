@@ -14,7 +14,7 @@ import {
 } from './orchestrationAccess';
 
 /**
- * Orchestration graph version history (issue #872).
+ * Orchestration graph version history.
  *
  * Versions are never written through this router: they are archived by the
  * shared orchestration write path, so this surface is read-only apart from

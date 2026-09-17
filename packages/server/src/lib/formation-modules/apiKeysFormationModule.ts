@@ -20,8 +20,8 @@ export const apiKeysFormationModule = defineFormationModule({
 
   // Minted under the caller, as `POST /api-keys` is: a key inherits its owner's
   // permissions as a ceiling, so one minted under the *project owner* would let
-  // any caller who can deploy a formation escalate to the owner's access
-  // (#1181). Owning it themselves, they gain nothing they did not already have.
+  // any caller who can deploy a formation escalate to the owner's access.
+  // Owning it themselves, they gain nothing they did not already have.
   create: async ({ properties, projectId, actingUserId }) => {
     const rawPolicyIds = properties.policy_ids;
     const policyPublicIds = Array.isArray(rawPolicyIds)

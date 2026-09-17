@@ -179,7 +179,7 @@ export const createFormation = async (args: {
     Object.keys(args.template.resources).length
   );
   // Before the formation row exists: a refusal must leave nothing behind, not a
-  // `failed` stack the caller then has to clean up (#1181).
+  // `failed` stack the caller then has to clean up.
   await assertResourceActionsAuthorized({
     authorize: args.authorize,
     requests: collectApplyAuthorizationRequests({

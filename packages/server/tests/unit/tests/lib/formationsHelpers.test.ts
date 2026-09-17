@@ -765,7 +765,7 @@ describe('formationsHelpers', () => {
       ).rejects.toThrow('Actor not found: actor_doesnotexist000');
     });
 
-    // #1180: a template deployed into one project could name another
+    // A template deployed into one project could name another
     // project's resource, and the lookup resolved it on the public id alone.
     test('lookupActorInternalId refuses an actor in another project', async () => {
       const otherProject = await db.Project.create({
@@ -826,8 +826,8 @@ describe('formationsHelpers', () => {
   // ── mergeWithPrevious ────────────────────────────────────────────────────
 
   // The predicate `plan-formation` and apply now share. The first two cases are
-  // the divergences that made a plan disagree with the apply it previewed
-  // (#902): apply's whole-object `JSON.stringify` comparison reported a change
+  // the divergences that made a plan disagree with the apply it previewed:
+  // apply's whole-object `JSON.stringify` comparison reported a change
   // for both, plan's per-key comparison for neither.
   describe('mergeWithPrevious', () => {
     test('a previous key the template omits is not a change', () => {

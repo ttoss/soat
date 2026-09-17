@@ -15,8 +15,7 @@ export const tracesRouter = new Router<Context>();
 
 /**
  * Every `/traces/:trace_id` route authorizes against the trace's own SRN rather
- * than the project wildcard a statement naming one trace can never match
- * (#1339).
+ * than the project wildcard a statement naming one trace can never match.
  */
 const traceAccess = makeItemRouteAuthorizer({
   findScope: traceRows.findScope,

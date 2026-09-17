@@ -170,7 +170,7 @@ export const readTraceSteps = async (
  *
  * A `trace_id` may group several generations, and the object then holds every
  * one of their segments — so a turn reader must take its own slice or it would
- * report a neighbouring turn's steps as this one's (#1024). A trace written
+ * report a neighbouring turn's steps as this one's. A trace written
  * before the index existed holds a single turn and is read whole, which is what
  * every reader did before grouping worked.
  */
@@ -204,9 +204,9 @@ export const generationStepCount = (
  * - **Not completed** — a paused or failed turn has no finished answer, so an
  *   item built from it would score whatever the agent does next.
  * - **Content unavailable** — zero-retention never wrote the input, or a purge
- *   cleared it; replay needs exactly the content those policies withhold
- *   (#1003). Checked on `inputMessages`, not `contentRedactedAt`, so a
- *   generation predating the column reads the same way.
+ *   cleared it; replay needs exactly the content those policies withhold.
+ *   Checked on `inputMessages`, not `contentRedactedAt`, so a generation
+ *   carrying no value in that column reads the same way.
  */
 export const getGenerationTurn = async (args: {
   generationId: string;

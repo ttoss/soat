@@ -7,7 +7,7 @@ import { createQuotaRow } from '../../fixtures/quotaSeed';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
- * The `storage_bytes` stock cap (#1249).
+ * The `storage_bytes` stock cap.
  *
  * A stock is not a flow: nothing resets, so the refusal is a `409` with no
  * `Retry-After`, and what clears it is deleting content. These drive the real
@@ -263,7 +263,7 @@ describe('Quotas — the storage_bytes stock cap', () => {
       expect(response.body.error.code).toBe('QUOTA_STORAGE_EXCEEDED');
     });
 
-    // A `dataset_items` row is summed by the storage snapshot (#1250), so a
+    // A `dataset_items` row is summed by the storage snapshot, so a
     // fixture is a corpus write the cap has to bound like any other.
     test('a dataset-item create over the cap is refused', async () => {
       await enforceOverCap();

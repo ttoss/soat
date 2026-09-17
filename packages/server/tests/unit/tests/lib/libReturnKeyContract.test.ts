@@ -13,7 +13,7 @@ import { join } from 'node:path';
  * missing the field entirely and excess-property checking never fires on a
  * variable.
  *
- * `getDocumentStatus` shipped exactly that (#801). It returned `projectId`
+ * `getDocumentStatus` shipped exactly that. It returned `projectId`
  * while both routes that consume it read `project_id`, so the authorization
  * call named no project and the request 500'd for any unscoped API key. It
  * typechecked, and 80-odd REST tests over those routes passed, because the two

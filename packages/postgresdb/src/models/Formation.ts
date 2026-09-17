@@ -84,7 +84,7 @@ export class Formation extends Model {
 
   // Written on entering `failed`/`delete_failed` and cleared on the next
   // successful apply, so reading a failed formation tells the caller why
-  // without a second call (#1028).
+  // without a second call.
   @Column({ type: DataType.JSONB, allowNull: true })
   declare error: Record<string, unknown> | null;
 

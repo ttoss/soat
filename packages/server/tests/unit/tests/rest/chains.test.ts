@@ -190,7 +190,7 @@ describe('Chains', () => {
 
     // A project-scoped key hitting another project's chain gets its own
     // binding error, with the remedy in the message, rather than the opaque
-    // answer an id-scoped lookup produced (the #906 class, #1339). It still
+    // answer an id-scoped lookup produced. It still
     // never returns the row.
     test('a chain outside the credential project reports the key binding', async () => {
       const own = await authenticatedTestClient(scopedKey).get(
@@ -219,7 +219,7 @@ describe('Chains', () => {
     });
 
     // A read the caller may not perform is indistinguishable from absence, now
-    // that the route authorizes against the resource's own SRN (#1339).
+    // that the route authorizes against the resource's own SRN.
     test('a user without the action returns 404', async () => {
       const res = await authenticatedTestClient(noPermToken).get(
         `/api/v1/chains/${activeChainId}`

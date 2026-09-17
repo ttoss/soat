@@ -691,7 +691,7 @@ const CASES: RoundTripCase[] = [
           context_tool_id: converterToolId,
         },
         // Only `class` is re-sent on update — the document is a single atomic
-        // write, so previously set default_class/guard/escalate are dropped
+        // write, so any default_class/guard/escalate already stored is dropped
         // rather than merged (matches `updateGuardrail`'s full-replace
         // contract for `document`).
         update: { name: `Guardrail ${seed} Updated`, class: 'C' },

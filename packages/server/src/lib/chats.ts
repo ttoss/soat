@@ -388,8 +388,8 @@ export const streamChatCompletion = async (
     await prepareChatCompletion(args);
 
   // `streamText` hands a failure to `onError` and closes the stream cleanly, so
-  // an unavailable model answered `200` with no content and no error at all
-  // (#1081). Captured here and rethrown once the stream drains, giving the
+  // an unavailable model answered `200` with no content and no error at all.
+  // Captured here and rethrown once the stream drains, giving the
   // route something to turn into a terminal event.
   let streamError: unknown;
 

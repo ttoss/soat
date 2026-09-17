@@ -23,7 +23,7 @@ const quotasRouter = new Router<Context>();
 
 /**
  * Every `/quotas/:quota_id` route authorizes against the quota's own SRN rather than the
- * project wildcard a statement naming one quota can never match (#1339).
+ * project wildcard a statement naming one quota can never match.
  */
 const quotaAccess = makeItemRouteAuthorizer({
   findScope: quotas.findScope,

@@ -81,7 +81,7 @@ const isEmbeddingProvider = (value: string): value is EmbeddingProvider => {
  * The project an embedding call is billed to. `null` where the call belongs to
  * no single project — an unscoped `POST /embeddings`, or a knowledge search
  * whose scope spans several projects — in which case nothing is metered because
- * a usage event has no project to attribute (#1208).
+ * a usage event has no project to attribute.
  *
  * Required rather than optional at every call site, so a new caller has to say
  * which it is instead of defaulting into unmetered spend.

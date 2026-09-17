@@ -23,7 +23,7 @@ const log = createDebug('soat:tasks');
 
 /**
  * Pauses a task's automation: no state's `on_enter` dispatches and no retry
- * chain continues until it is resumed (#1237).
+ * chain continues until it is resumed.
  *
  * A dispatch already in flight is deliberately left to finish — it is one
  * generation, tool call or run, the same bound an orchestration pause accepts

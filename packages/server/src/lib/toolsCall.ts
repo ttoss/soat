@@ -410,7 +410,7 @@ export const callResolvedTool = async (args: {
             remainingDepth: step.remainingDepth,
             // A step is the pipeline's own work, so it inherits the context the
             // pipeline was called with — the same rule a nested orchestration
-            // run follows (#945).
+            // run follows.
             toolContext: args.toolContext,
           });
         }

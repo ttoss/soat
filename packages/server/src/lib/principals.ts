@@ -17,14 +17,13 @@ export type RequestPrincipal = {
  *
  * `apiKeyPublicId` decides the kind, and it is set for every credential shape
  * through which a key acts: a raw `sk_` key (scoped or unscoped) and a run-as
- * token carrying a `key` claim (#887). So a record names *which* key acted
+ * token carrying a `key` claim. So a record names *which* key acted
  * rather than merely that a key did — including when the actor is a background
  * drive that re-minted the key's identity.
  *
- * This lived in three hand-synced copies (the REST helper, the audit middleware,
- * the task-transition helper), each with its own paraphrase of the rule. That is
- * the shape #801 shipped through: one copy drifts, and the surface it feeds goes
- * quietly wrong while every test still passes. One function, three call sites.
+ * One function, three call sites (the REST helper, the audit middleware, the
+ * task-transition helper). Hand-synced copies, each with its own paraphrase of
+ * the rule, drift: one goes quietly wrong while every test still passes.
  */
 export const principalFromAuthUser = (authUser: {
   publicId: string;

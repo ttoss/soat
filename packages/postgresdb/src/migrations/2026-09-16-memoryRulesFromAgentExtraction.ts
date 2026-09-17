@@ -34,8 +34,9 @@ const MEMORY_RULES_SQL = `
 `;
 
 /**
- * The constraint #1322 could not add, because the table it points at did not
- * exist yet. `SET NULL`, like every other key on the ledger: deleting a rule
+ * The key from the assertion ledger to the rules table, added here rather than
+ * with the ledger, because `memory_rules` does not exist until this migration
+ * creates it. `SET NULL`, like every other key on the ledger: deleting a rule
  * must not erase the writes it made.
  */
 export const ASSERTION_RULE_FK = 'memory_assertions_rule_id_fkey';

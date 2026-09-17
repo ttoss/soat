@@ -99,8 +99,8 @@ describe('actions withheld from the agent tool surface', () => {
     });
   });
 
-  // The write refuses these now, so a row naming one predates the rule — the
-  // surface must still not carry it.
+  // The write refuses these, so a stored row can only name one by having been
+  // written elsewhere — the surface must still not carry it.
   test('a stored binding naming an excluded action resolves without it', () => {
     const resolved = resolveSoatTools({
       typedTool: {

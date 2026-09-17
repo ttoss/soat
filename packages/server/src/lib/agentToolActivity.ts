@@ -114,9 +114,9 @@ export const recordToolActivity = (args: {
  * be reached — an unreachable MCP server, most often.
  *
  * The resolver drops such a binding rather than failing the turn, which is the
- * right call (one flaky server must not take an agent down) but used to be
- * indistinguishable from an agent that simply has no tools: the generation
- * completed, carried no warning and no error, and answered without the tools it
+ * right call — one flaky server must not take an agent down. Unrecorded, that
+ * is indistinguishable from an agent that simply has no tools: the generation
+ * completes, carries no warning and no error, and answers without the tools it
  * was configured to have. That is a correctness problem, not a cost one, and it
  * is only visible here — the prompt is the one place the absence shows, and
  * nobody reads the prompt.

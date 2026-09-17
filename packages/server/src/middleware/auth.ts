@@ -178,7 +178,7 @@ const resolveProjectKey = async (ctx: Context, rawKey: string) => {
  *
  * `apiKeyPublicId` is set from a run token's `key` claim so a key-started run
  * *names the key* everywhere attribution is derived — task history, audit
- * entries, the principal an automation chain inherits (#887). The claim already
+ * entries, the principal an automation chain inherits. The claim already
  * decided the run's authorization boundary in `resolveScopedBoundaryDocs`; this
  * makes the identity match the authority.
  *
@@ -342,7 +342,7 @@ const resolveJwt = async (ctx: Context, token: string) => {
  * Verifies a raw `sk_` API key against the ApiKey table (prefix lookup + bcrypt
  * compare) and returns a minimal identity payload, or null when the token is
  * not a valid key. Used by the MCP endpoint's `verifyToken` gate so `sk_` keys
- * are a first-class MCP credential (#609); the actual per-request authorization
+ * are a first-class MCP credential; the actual per-request authorization
  * still runs in `resolveProjectKey` when the MCP tool handler forwards the same
  * bearer token to the REST API, so scope/policy enforcement is unchanged.
  */

@@ -77,7 +77,7 @@ export const applyStateMapping = (
  * Fallback for when the AI SDK's own structured output is unavailable: parses
  * `content` itself, stripping a markdown code fence first — the shape a model
  * commonly wraps JSON in even when told to return it bare, which a plain
- * `JSON.parse` rejects outright. A parse failure is logged (see #747) rather
+ * `JSON.parse` rejects outright. A parse failure is logged rather
  * than silently reverting to `{ content }` with no signal, though the
  * artifact still degrades to `{ content }` so a run never fails on account of
  * the model's prose not being JSON.
@@ -144,7 +144,7 @@ export const executeAgentNode = async (args: {
   // retried node's generations apart without guessing from timestamps.
   nodeAttempt?: number;
   // The run's `tool_context`, forwarded to this generation so the agent's
-  // `http`/`mcp`/`soat` tool calls carry the caller's context headers (#945).
+  // `http`/`mcp`/`soat` tool calls carry the caller's context headers.
   toolContext?: Record<string, string>;
 }): Promise<NodeExecutionResult> => {
   const {
@@ -214,7 +214,7 @@ export const executeToolNode = async (args: {
   approvedArguments?: Record<string, unknown> | null;
   // The run's `tool_context`, forwarded to the tool call so a `{{context:}}`
   // header or preset on the tool resolves from the run's own bag — the same
-  // reach an `agent` node's generation already has (#345).
+  // reach an `agent` node's generation already has.
   toolContext?: Record<string, string>;
 }): Promise<NodeExecutionResult> => {
   const { node, state, projectIds, authHeader, idempotencyKey, toolContext } =

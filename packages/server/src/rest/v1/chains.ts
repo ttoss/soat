@@ -9,7 +9,7 @@ const chainsRouter = new Router<Context>();
 
 /**
  * Every `/chains/:chain_id` route authorizes against the chain's own SRN rather than the
- * project wildcard a statement naming one chain can never match (#1339).
+ * project wildcard a statement naming one chain can never match.
  */
 const chainAccess = makeItemRouteAuthorizer({
   findScope: chains.findScope,

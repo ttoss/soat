@@ -122,7 +122,7 @@ type AgentVersionAuthorship = {
  * Every agent config column a write may set. Exported because it is also the
  * contract `agentConfigEnforcement.test.ts` holds the runtime to: a field the
  * API accepts and stores must reach a place that acts on it, which
- * `active_tool_ids` (#811) and `stop_conditions` (#1167) both failed to do.
+ * `active_tool_ids` and `stop_conditions` both failed to do.
  */
 export const AGENT_SCALAR_FIELDS = [
   'name',

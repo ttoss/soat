@@ -8,13 +8,13 @@
  * passes. The quota path answers that window with `QUOTA_UNENFORCEABLE`; the
  * readers here are what let a guardrail's cost ceiling answer it too, by
  * resolving to `null` instead of a figure that cannot be trusted. A null
- * `runtime.*` operand of a `<`/`>` comparison already fails closed (#666), so
+ * `runtime.*` operand of a `<`/`>` comparison already fails closed, so
  * the refusal needs no new machinery in the evaluator.
  *
  * **The verdict reads the AI meter alone**, and `countsTowardPricingVerdict` is
  * the one definition of that. A platform meter is priced by the operator rather
  * than by a tenant's provider, and an embedding is priced from deployment
- * configuration with no price-book tier a tenant can reach (#1213) — counting
+ * configuration with no price-book tier a tenant can reach — counting
  * either would refuse a ceiling nobody in the project can make enforceable, and
  * a project that has not generated yet would be refused the very call that
  * would price the window. Both are held out in *both* directions: an unset
@@ -24,10 +24,10 @@
  * is real spend.
  *
  * **A partly-priced window still reports its priced total**, and gets a signal
- * rather than a refusal (#1228). That total is real spend, if incomplete, so
- * escalating on it would repeat #1201, where an over-broad fail-closed verdict
- * made a cost cap unrecoverable: the refusal blocked the very generation that
- * would have landed the first priced event. `unpricedRowsFrom` names the
+ * rather than a refusal. That total is real spend, if incomplete, so escalating
+ * on it would make a cost cap unrecoverable: the refusal blocks the very
+ * generation that would land the first priced event. `unpricedRowsFrom` names
+ * the
  * `(provider, model, component)` rows behind the gap instead, which the quota
  * check files as a `quota_unpriced` exception.
  *

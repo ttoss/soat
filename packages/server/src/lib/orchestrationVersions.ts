@@ -14,7 +14,7 @@ import {
 } from './resourceVersions';
 
 /**
- * Orchestration graph version history (issue #872).
+ * Orchestration graph version history.
  *
  * The archive mechanics live in `resourceVersions.ts` and are shared with agents
  * and guardrails; this module supplies the orchestration-specific adapters.
@@ -25,7 +25,7 @@ import {
  * Orchestrations have no release/canary layer: a run is pinned at
  * `start-orchestration-run` and stays on that version for its whole life, which
  * can be days. Splitting *new* runs across two graphs is a coherent idea but
- * nothing has asked for it (#883), and the mechanism is already extracted and
+ * nothing has asked for it, and the mechanism is already extracted and
  * pure in `releaseAssignment.ts` for when something does.
  */
 

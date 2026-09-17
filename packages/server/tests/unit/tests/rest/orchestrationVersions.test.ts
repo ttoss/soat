@@ -14,7 +14,7 @@ const ORCHESTRATION_VERSION_ACTIONS = [
 ];
 
 /**
- * Orchestration version history, on the shared archive engine (issue #872).
+ * Orchestration version history, on the shared archive engine.
  *
  * Every assertion drives the REST entry point: versions are written by the
  * shared lib choke point in `orchestrations.ts`, so a create, a `PATCH` and a
@@ -468,7 +468,7 @@ describe('Orchestration versions', () => {
       );
       // `noPermToken` resolves to an empty project list. On a read that is a
       // 404 (nothing matches the filter); on a write it is a denial, and the
-      // route says so before touching the orchestration (#1029).
+      // route says so before touching the orchestration.
       expect(res.status).toBe(404);
     });
   });
@@ -503,7 +503,7 @@ describe('Orchestration versions', () => {
      *
      * The id below has to name a real orchestration: the route resolves it
      * before authorizing, so a made-up id would answer `404` and never reach
-     * the refusal these tests are about (#1339).
+     * the refusal these tests are about.
      */
     const createRestrictedApiKey = async (excludedAction: string) => {
       const allowedActions = ORCHESTRATION_VERSION_ACTIONS.filter((action) => {
@@ -538,7 +538,7 @@ describe('Orchestration versions', () => {
     });
 
     // A read the caller may not perform is indistinguishable from absence, now
-    // that the route authorizes against the orchestration's own SRN (#1339);
+    // that the route authorizes against the orchestration's own SRN;
     // `restore` below is a write and keeps `403`.
     test('without ListOrchestrationVersions returns 404', async () => {
       const rawKey = await createRestrictedApiKey(

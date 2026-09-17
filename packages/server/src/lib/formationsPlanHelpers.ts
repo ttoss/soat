@@ -64,7 +64,7 @@ const buildComparedChange = (args: {
     templateResourceKeys,
     existingMap,
   });
-  // The same predicate apply runs, not a restatement of it (#902): a plan that
+  // The same predicate apply runs, not a restatement of it: a plan that
   // decides "changed" differently from the apply it previews is a lie.
   const { merged: desired, changed } = mergeWithPrevious({
     resolved: resolvedProperties,

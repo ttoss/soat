@@ -16,7 +16,7 @@ const log = createDebug('soat:usage');
 /**
  * The workload label every embedding event carries. Separate from the
  * generation and completion sources so a rollup can price retrieval and
- * ingestion apart from the turns that read them (#1208), and so quota
+ * ingestion apart from the turns that read them, and so quota
  * enforcement can tell a call the tenant configured from one the deployment
  * did.
  */
@@ -55,7 +55,7 @@ const priceEmbeddingComponents = (args: {
  * the provider *slug* with `ai_provider_id = null` and is priced from
  * `EMBEDDING_INPUT_1M_TOKEN_PRICE_USD`. An unset rate meters at zero, so an
  * embedding always carries a cost and can never make a `cost_usd` quota
- * unenforceable (#1213).
+ * unenforceable.
  *
  * Like a generation-less completion, an embedding call has no replay identity —
  * nothing re-delivers it and a retried request really did reach the provider —

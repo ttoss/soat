@@ -311,7 +311,7 @@ const resolveToolOutputContent = async (args: {
     input: args.content.input,
     authHeader: args.authHeader,
     // The generation calling a tool on its own behalf, so it carries the same
-    // bag the model's own tool calls resolve from (#345).
+    // bag the model's own tool calls resolve from.
     toolContext: args.toolContext,
   });
 

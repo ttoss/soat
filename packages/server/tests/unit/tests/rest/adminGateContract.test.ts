@@ -5,10 +5,10 @@ import { join } from 'node:path';
  * `requireAdmin` exists because a bare `ctx.authUser.role !== 'admin'`
  * comparison bypasses `isAllowed`/`resolveProjectIds`, and therefore bypasses
  * `recordAuthorizationDecision` — so a route built on the bare comparison makes
- * an authorization decision that nothing downstream can see (#745).
+ * an authorization decision that nothing downstream can see.
  *
  * `policies.ts` and `users.ts` both *imported* `requireAdmin`, used it on their
- * write routes, and hand-rolled the comparison on their reads (#905). That
+ * write routes, and hand-rolled the comparison on their reads. That
  * within-file split is what made the helper look optional to the next reader,
  * and it is the reason this check is static: the two forms return the same
  * status for the same caller, so every behavioural test of those routes passed
@@ -26,7 +26,7 @@ const ROUTES_DIR = join(__dirname, '../../../../src/rest/v1');
  * A role comparison, and the `403` it answers with, within a few lines.
  *
  * Both denial forms count. `ctx.status = 403` was the only one that existed when
- * this check was written; once the error-shape convergence (#913) replaced the
+ * this check was written; once the error-shape convergence replaced the
  * manual bodies with `throw new DomainError('FORBIDDEN', …)`, matching only the
  * old form would have left the check passing vacuously — green because the
  * spelling it hunts for no longer appears anywhere, not because no route

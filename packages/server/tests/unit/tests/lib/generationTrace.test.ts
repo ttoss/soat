@@ -3,10 +3,9 @@ import { findOrCreateTrace } from 'src/lib/generationTrace';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
-// findOrCreateTrace is the extracted helper createGenerationRecord uses to
-// reuse-or-create a Trace inside a shared transaction (soat#815). Both
-// branches — reuse and create — need direct coverage since the helper now
-// lives in its own small module.
+// findOrCreateTrace is the helper createGenerationRecord uses to reuse-or-create
+// a Trace inside a shared transaction. Both branches — reuse and create — need
+// direct coverage, since the helper lives in its own small module.
 describe('findOrCreateTrace', () => {
   let agentId: number;
   let projectId: number;

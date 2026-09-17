@@ -229,11 +229,11 @@ describe('Tools', () => {
       expect(response.status).toBe(404);
     });
 
-    // A read a caller may not perform is indistinguishable from absence, now
-    // that the route authorizes against the tool's own SRN rather than the
-    // project wildcard (#1339). It used to be `403` only because the refusal
-    // came from the project probe, before any tool was resolved — the write
-    // routes below keep `403`, which is the deliberate half of the pair.
+    // A read a caller may not perform is indistinguishable from absence, since
+    // the route authorizes against the tool's own SRN rather than the project
+    // wildcard. A `403` here would mean the refusal came from the project
+    // probe, before any tool was resolved — the write routes below keep `403`,
+    // which is the deliberate half of the pair.
     test('project-scoped API key without GetTool permission returns 404', async () => {
       const rawKey = await createRestrictedApiKey('tools:GetTool');
       const response = await authenticatedTestClient(rawKey).get(
@@ -280,7 +280,7 @@ describe('Tools', () => {
     });
 
     // A caller permitted in zero projects is denied outright on a write:
-    // `requireProjectAccess` answers 403 where the read path 404s (#1029).
+    // `requireProjectAccess` answers 403 where the read path 404s.
     test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .patch(`/api/v1/tools/${toolId}`)
@@ -339,7 +339,7 @@ describe('Tools', () => {
     });
 
     // A caller permitted in zero projects is denied outright on a write:
-    // `requireProjectAccess` answers 403 where the read path 404s (#1029).
+    // `requireProjectAccess` answers 403 where the read path 404s.
     test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken).delete(
         `/api/v1/tools/${toolId}`
@@ -372,7 +372,7 @@ describe('Tools', () => {
     });
 
     // A caller permitted in zero projects is denied outright on a write:
-    // `requireProjectAccess` answers 403 where the read path 404s (#1029).
+    // `requireProjectAccess` answers 403 where the read path 404s.
     test('user without permission returns 404', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .post(`/api/v1/tools/${soatToolId}/call`)
@@ -794,7 +794,7 @@ describe('Tools', () => {
     });
 
     // A caller permitted in zero projects is denied outright on a write:
-    // `requireProjectAccess` answers 403 where the read path 404s (#1029).
+    // `requireProjectAccess` answers 403 where the read path 404s.
     test('pipeline call without permission returns 404', async () => {
       const res = await authenticatedTestClient(noPermToken)
         .post(`/api/v1/tools/${pipelineToolId}/call`)
@@ -1409,7 +1409,7 @@ describe('Tools', () => {
         .post(`/api/v1/tools/${createRes.body.id}/call`)
         .send({ input: {} });
       // The call never reaches the tool's credentials: the empty scope is
-      // refused up front (#1029).
+      // refused up front.
       expect(res.status).toBe(404);
     });
 
@@ -1435,7 +1435,7 @@ describe('Tools', () => {
   });
 
   describe('Invalid template tokens ({{...}}) in tool configs', () => {
-    // #345: `preset_parameters` is now a place `{{context:...}}` is resolved, so
+    // `preset_parameters` is now a place `{{context:...}}` is resolved, so
     // it is also a place a malformed token must be caught at write time rather
     // than shipped verbatim to the target as a parameter value.
     test('creating a tool with a {{context:...}} preset parameter is accepted', async () => {
@@ -1561,7 +1561,7 @@ describe('Tools', () => {
     });
   });
 
-  // #945 item 2: `{{context:<key>}}` in a tool's headers, resolved per call from
+  // `{{context:<key>}}` in a tool's headers, resolved per call from
   // the effective `tool_context`. Deliberately a **headers-only** affordance —
   // the token is how a tool declares the header shape its credential goes in,
   // and a caller-controlled value must not be able to steer the outbound URL.
@@ -1734,7 +1734,7 @@ describe('Tools', () => {
     });
   });
 
-  // #945 item 3: `context_keys` bounds which `tool_context` keys egress to this
+  // `context_keys` bounds which `tool_context` keys egress to this
   // tool as prefixed context headers. Absent means "forward all" — the
   // behavior every existing tool has.
   describe('context_keys allowlist', () => {
@@ -2069,7 +2069,7 @@ describe('Tools', () => {
 
     test('creating a soat tool with an operationId-style action name is rejected with a kebab-case suggestion', async () => {
       // A common mistake: using the OpenAPI operationId (camelCase, e.g. "searchKnowledge")
-      // instead of the MCP tool name (kebab-case, e.g. "search-knowledge"). See #358.
+      // instead of the MCP tool name (kebab-case, e.g. "search-knowledge").
       const createRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')
         .send({
@@ -2158,7 +2158,7 @@ describe('Tools', () => {
 
     // A tool the server itself reported as failed reached the server and was
     // answered, so it is a `502` naming the failure — not the `500` an
-    // unmapped throw would be, and not the `200` it used to be.
+    // unmapped throw would be, and not a `200` carrying an error body.
     test('calling an mcp tool the server answers isError returns 502', async () => {
       const createRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')
@@ -2413,7 +2413,7 @@ describe('Tools', () => {
       expect(callRes.body).toEqual({ text: 'Hi!', language: 'en' });
     });
 
-    test('output_mapping can echo a field of the request via input.* (#819)', async () => {
+    test('output_mapping can echo a field of the request via input.*', async () => {
       const createRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')
         .send({
@@ -2442,7 +2442,7 @@ describe('Tools', () => {
       });
     });
 
-    test('output_mapping input.* reflects the caller-supplied input, not just preset_parameters (#819)', async () => {
+    test('output_mapping input.* reflects the caller-supplied input, not just preset_parameters', async () => {
       const createRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')
         .send({
@@ -2501,7 +2501,7 @@ describe('Tools', () => {
       expect(callRes.body).toBe('Hi!');
     });
 
-    test("a pipeline tool's top-level output_mapping input.* reflects the caller's input to the pipeline call (#819)", async () => {
+    test("a pipeline tool's top-level output_mapping input.* reflects the caller's input to the pipeline call", async () => {
       const stepToolRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')
         .send({
@@ -2777,7 +2777,7 @@ describe('Tools', () => {
     });
   });
 
-  // #1151: `/call` is the direct path — the CLI's `call-tool`, the smoke tests,
+  // `/call` is the direct path — the CLI's `call-tool`, the smoke tests,
   // and anyone poking a tool to see whether it works. Without a bag on the
   // request, a `{{context:}}` tool was unreachable through it and could only be
   // exercised by binding it to an agent and driving a generation.
@@ -2884,7 +2884,7 @@ describe('Tools', () => {
     // This route has no session, so there is no server-derived identity to
     // stamp — which is exactly why the reserved keys must be stripped rather
     // than forwarded. A caller reaching them here would forge the identity
-    // headers a downstream tool trusts (#843/#850/#851).
+    // headers a downstream tool trusts.
     test('strips caller-supplied reserved identity keys', async () => {
       const id = await createContextTool('call-ctx-reserved-tool');
 
@@ -2963,8 +2963,9 @@ describe('Tools', () => {
       expect(lastCtxRequest.headers['x-soat-context-tenant']).toBeUndefined();
     });
 
-    // #1148 put `{{context:}}` in `preset_parameters`; the bag reaching this
-    // route has to resolve those too, or the route covers only half the surface.
+    // `preset_parameters` is a place `{{context:}}` is resolved, so the bag
+    // reaching this route has to resolve those too, or the route covers only
+    // half the surface.
     test('resolves a {{context:...}} preset parameter from the call bag', async () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')

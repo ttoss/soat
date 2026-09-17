@@ -1,10 +1,10 @@
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
- * A formation used to be authorized once, as `formations:CreateFormation` on the
- * request, so every resource a template declared was applied with no per-action
- * check of its own (#1181) — and a template could name another project's secret,
- * because the module's id lookup was not scoped to the project (#1180).
+ * Authorizing a formation once, as `formations:CreateFormation` on the request,
+ * would apply every resource a template declares with no per-action check of
+ * its own — and an id lookup not scoped to the project would let a template
+ * name another project's secret.
  */
 describe('Formation resource authorization', () => {
   let adminToken: string;
@@ -60,7 +60,7 @@ describe('Formation resource authorization', () => {
     const me =
       await authenticatedTestClient(adminToken).get('/api/v1/users/me');
     // The bootstrap admin creates the projects, so it is the billing owner an
-    // `api_key` resource used to be minted under.
+    // `api_key` resource would be minted under.
     ownerUserId = me.body.id;
 
     const projectRes = await authenticatedTestClient(adminToken)
@@ -201,7 +201,7 @@ describe('Formation resource authorization', () => {
 
     // An `api_key` resource mints under the caller, as `POST /api-keys` does,
     // so the key it produces can never exceed the permissions of whoever
-    // deployed it — that is what makes the type safe to declare (#1181).
+    // deployed it — that is what makes the type safe to declare.
     test('an api_key resource is minted under the caller, not the project owner', async () => {
       const res = await authenticatedTestClient(deployToken)
         .post('/api/v1/formations')
@@ -491,7 +491,6 @@ describe('Formation resource authorization', () => {
     });
   });
 
-  // #1180
   describe('cross-project references', () => {
     test('a template cannot link a secret from another project', async () => {
       const secret = await authenticatedTestClient(adminToken)

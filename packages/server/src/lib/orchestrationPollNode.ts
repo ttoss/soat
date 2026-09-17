@@ -51,7 +51,7 @@ export const executePollNode = async (args: {
   authHeader?: string;
   attempt?: number;
   // The run's `tool_context` — a poll node is the run calling a tool on its own
-  // behalf, so it carries the run's context like a `tool` node does (#345).
+  // behalf, so it carries the run's context like a `tool` node does.
   toolContext?: Record<string, string>;
 }): Promise<NodeExecutionResult> => {
   const { node, state, projectIds, authHeader, toolContext } = args;

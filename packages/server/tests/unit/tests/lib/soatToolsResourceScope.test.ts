@@ -7,7 +7,7 @@ import { soatTools } from 'src/lib/soatTools';
 
 /**
  * `x-soat-resource` is what lets an agent's `boundary_policy` be evaluated
- * against the resource a builtin call names rather than against `*` (#1323).
+ * against the resource a builtin call names rather than against `*`.
  * An operation that grows a path parameter and no annotation is not an
  * oversight anyone would notice at runtime — the check simply keeps answering
  * about `*` — so the annotation is enforced here per spec file.

@@ -284,7 +284,7 @@ export const runToolCallContinuation = async (args: {
     // An expiry means nobody was at the wheel, so by default there is nobody to
     // report to and nothing a turn would add: the `expired` row, the
     // `approvals.expired` event and the auto-filed exception are already the
-    // whole record. Continuing instead is what compounded #1161 — under a
+    // whole record. Continuing instead compounds a runaway chain — under a
     // forcing `tool_choice` the reported-to turn can only propose more gated
     // calls, which expire, which continue again.
     if (

@@ -131,7 +131,7 @@ export {
  *
  * `resource` is the SRN the call acts on and `context` the condition inputs for
  * it (`buildResourceTagContext`), so a boundary can scope a grant to a single
- * resource the way a human's policy does on the REST path (#1323). Both fall
+ * resource the way a human's policy does on the REST path. Both fall
  * back to the resource-less shape — `'*'` and no condition inputs — which is
  * what a list or a create-in-project means, and all a caller that cannot name
  * its resource may claim.
@@ -370,7 +370,7 @@ const resolveAuthSecrets = async (args: {
 
 // Resolved at the point of use, so the stored config keeps the reference.
 // The url and auth take `{{secret:...}}` only; headers also take
-// `{{context:...}}` (#945) — a caller-supplied value may not steer the
+// `{{context:...}}` — a caller-supplied value may not steer the
 // outbound url.
 const resolveHttpRequestTemplates = async (args: {
   url: string;
@@ -477,7 +477,7 @@ const buildHttpRequestInit = (args: {
   remainingArgs: Record<string, unknown>;
   toolContext?: Record<string, string>;
   // The tool's `context_keys` allowlist: which `tool_context` keys may be
-  // forwarded as prefixed context headers (#945). Absent forwards all.
+  // forwarded as prefixed context headers. Absent forwards all.
   contextKeys?: string[] | null;
   // Verbatim headers merged last (e.g. `Idempotency-Key`), not context-prefixed.
   extraHeaders?: Record<string, string>;
@@ -587,7 +587,7 @@ export const buildHttpToolExecute = (
     contextKeys?: string[] | null;
     presetParameters?: object | null;
     // The tool's own `parameters` schema, so a `{{context:}}`-resolved preset is
-    // retyped to the field's declared type before it is merged (#345).
+    // retyped to the field's declared type before it is merged.
     parameterSchema?: unknown;
     // Verbatim request headers (e.g. `Idempotency-Key`) merged last, after
     // execute headers and context headers.
@@ -1212,7 +1212,7 @@ const resolveReferenceBinding = async (args: {
     toolGuardrailIds: typedTool.guardrailIds,
     // The gate classifies the *effective* arguments, so it must see the values
     // the dispatch will actually send — a guardrail comparing a pinned account
-    // against `{{context:ocaAdAccountId}}` gates nothing (#345).
+    // against `{{context:ocaAdAccountId}}` gates nothing.
     presetParameters: resolvePresetParametersForGate({
       presetParameters: typedTool.presetParameters,
       toolContext: args.resolveArgs.toolContext,

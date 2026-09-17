@@ -30,7 +30,7 @@ export const resolveGenerationInputMessages = async (args: {
   agentBoundaryPolicy?: unknown;
   // The generation's identity-pinned `tool_context`, so a `tool_output` block
   // resolves its tool's `{{context:}}` headers and presets from the same bag
-  // the model's own tool calls use (#345).
+  // the model's own tool calls use.
   toolContext?: Record<string, string>;
 }): Promise<Array<{ role: string; content: unknown }>> => {
   const resolved = await Promise.all(

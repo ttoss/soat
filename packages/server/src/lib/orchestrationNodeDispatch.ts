@@ -25,8 +25,8 @@ import { executeWebhookNode } from './orchestrationWebhookNode';
  * It and `orchestrationBatchResults.ts` were one file called
  * `orchestrationExecutors.ts`, which executed nothing either and re-exported a
  * third module's graph helpers on top — a name and a boundary that told a
- * reader nothing about which of the two "executors" modules they wanted
- * (#910). Importers now name the seam they actually depend on.
+ * reader nothing about which of the two "executors" modules they wanted.
+ * Importers now name the seam they actually depend on.
  */
 
 type DispatchArgs = {
@@ -40,7 +40,7 @@ type DispatchArgs = {
   // and stamped onto in-run generations' usage events for per-run roll-up.
   runPublicId?: string;
   // The run's own nesting depth, so a `loop`/`sub_orchestration` child is
-  // started one deeper and the bound is checked before it exists (#1185).
+  // started one deeper and the bound is checked before it exists.
   runDepth?: number;
   // The trigger firing (if any) that started the run — propagated onto in-run
   // generations' usage events for in-run trigger attribution.

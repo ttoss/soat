@@ -32,7 +32,7 @@ export const AUTOMATION_STATUS_NONE = 'none';
  * `null` is one of them — a task that never entered a state with an automation
  * holds it, so the half of a board carrying it would otherwise be unaskable.
  * `IN (…, NULL)` never matches a NULL row, so that half is its own predicate
- * rather than another element of the list (#1242).
+ * rather than another element of the list.
  */
 export const automationStatusWhere = (
   statuses: (TaskAutomationStatus | null)[]

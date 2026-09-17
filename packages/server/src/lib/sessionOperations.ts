@@ -134,8 +134,8 @@ export const generateSessionResponse = async (args: {
   model?: string;
   toolContext?: Record<string, string>;
   // Only request-less callers set it: an approved tool call's continuation
-  // re-mints one from the principal on the generation that proposed the call
-  // (#894). A turn driven by a real request leaves it unset.
+  // re-mints one from the principal on the generation that proposed the call. A
+  // turn driven by a real request leaves it unset.
   authHeader?: string;
   // The generation this turn continues, when a resumption drove it (an
   // approval's continuation). Declares the chain so it is bounded and linked;
@@ -180,7 +180,7 @@ export const generateSessionResponse = async (args: {
   ).agent;
   // Both layers are caller-owned and a request value wins. The server-derived
   // identity keys are deliberately not pinned here — they are stamped at the
-  // generation chokepoint, which covers every entry point uniformly (#850);
+  // generation chokepoint, which covers every entry point uniformly;
   // the per-path pin that lived here left the sibling paths open.
   const mergedToolContext = {
     ...(session.toolContext ?? {}),

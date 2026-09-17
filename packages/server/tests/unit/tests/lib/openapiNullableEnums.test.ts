@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { load } from 'js-yaml';
 
 /**
- * Drift guardrail (#861) — pure validation with no REST entry point.
+ * Drift guardrail — pure validation with no REST entry point.
  *
  * A property declared `nullable: true` **and** given an `enum` that omits
  * `null` generates a non-nullable SDK type: hey-api derives the type from the

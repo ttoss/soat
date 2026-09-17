@@ -6,7 +6,7 @@ import { authenticatedTestClient } from '../../testClient';
  *
  * Sessions advertised `tags` in the spec and the docs long before IAM could
  * read them: every route authorized at project level only, against no SRN and
- * no tag context, so a conditioned statement was silently ignored (#1278).
+ * no tag context, so a conditioned statement was silently ignored.
  *
  * The two halves are reached by different policy shapes, the same way they are
  * for actors and documents: an item route evaluates the statement against the

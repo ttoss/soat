@@ -35,7 +35,7 @@ const expectInvalid = (
 };
 
 // The conversion must be an explicit field-by-field mapper, not a key-blind
-// recursive transform (#852): only named structural keys change case, and every
+// recursive transform: only named structural keys change case, and every
 // author-owned value is copied verbatim.
 describe('workflowCollectionToCamel / workflowCollectionToSnake', () => {
   test('renames the structural keys and leaves author-owned bags verbatim', () => {
@@ -462,7 +462,7 @@ describe('assertWorkflowValid', () => {
     );
   });
 
-  test('accepts a tool dispatch naming a tool_id (#1039)', () => {
+  test('accepts a tool dispatch naming a tool_id', () => {
     expect(() => {
       return assertWorkflowValid({
         states: [

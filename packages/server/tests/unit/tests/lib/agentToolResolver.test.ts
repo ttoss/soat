@@ -384,7 +384,7 @@ describe('resolveAgentTools', () => {
     expect(headers?.['x-soat-context-tenantexternalid']).toBeUndefined();
   });
 
-  // #945 item 2: `{{context:<key>}}` in a tool's headers. `tool_context` alone
+  // `{{context:<key>}}` in a tool's headers. `tool_context` alone
   // can only produce `X-Soat-Context-*` headers — a security invariant that must
   // not be relaxed — so the tool declares where its credential goes, and the
   // caller only supplies the value.
@@ -666,7 +666,7 @@ describe('resolveAgentTools', () => {
       }
     });
 
-    // #945 item 3: which keys egress to THIS tool. Asserted against a live
+    // Which keys egress to THIS tool. Asserted against a live
     // endpoint because the only thing that matters is what arrived on the wire.
     describe('context_keys allowlist', () => {
       test('forwards every key when the tool declares no allowlist', async () => {
@@ -1172,8 +1172,8 @@ describe('resolveAgentTools', () => {
   });
 
   // A preset is a pin, not a default: it wins over the model's value and is not
-  // offered to the model at all. `http` and `client` tools used to ignore
-  // presets outright, so an operator-fixed value was chosen by the model.
+  // offered to the model at all. A tool type that ignores presets hands the
+  // model a value the operator fixed.
   describe('preset_parameters', () => {
     const startBodyCaptureServer = async () => {
       const bodies: unknown[] = [];
@@ -1463,7 +1463,7 @@ describe('buildContextHeaders', () => {
     expect(result['X-Soat-Context-c']).toBe('3');
   });
 
-  // #945 item 3 — `contextKeys` is the per-tool allowlist. `undefined`/`null`
+  // `contextKeys` is the per-tool allowlist. `undefined`/`null`
   // means "forward all", which is what every tool created before it existed has.
   test('forwards everything when contextKeys is null or undefined', () => {
     const toolContext = { a: '1', b: '2' };
@@ -2461,9 +2461,9 @@ describe('resolveAgentTools - mcp and soat types', () => {
       'execute' in soatTool && typeof soatTool.execute === 'function'
     ).toBe(true);
 
-    // Since #888 the action runs in this process, so the assertion is the real
-    // listing the platform returned rather than the shape of an outgoing
-    // request. Nothing is listening on a port here.
+    // The action runs in this process, so the assertion is the real listing the
+    // platform returned rather than the shape of an outgoing request. Nothing
+    // is listening on a port here.
     const result = await soatTool.execute!({}, {} as never);
     expect(Array.isArray((result as { data?: unknown[] }).data)).toBe(true);
   });
@@ -2480,9 +2480,10 @@ describe('resolveAgentTools - mcp and soat types', () => {
 
     const tools = await resolveAgentTools({
       toolIds: [deniedSoatRes.body.id],
-      // This used to read `files:ListFiles`, which names no real permission,
-      // and still passed because the boundary was evaluated against the tool
-      // name and denied everything. The message must name a targetable action.
+      // A real permission, not a name like `files:ListFiles` that no action
+      // answers to: a boundary evaluated against the tool name would deny
+      // everything and pass regardless. The message must name a targetable
+      // action.
       boundaryPolicy: {
         statement: [{ effect: 'Deny', action: ['files:GetFile'] }],
       },
@@ -2745,7 +2746,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
     );
   });
 
-  // #345: `{{context:<key>}}` inside `preset_parameters`. A pin is already
+  // `{{context:<key>}}` inside `preset_parameters`. A pin is already
   // un-overridable by the model; resolving context in it is what lets the pinned
   // value be the *run's* value — the ad account this run may act on — instead of
   // one frozen at tool-creation time.
@@ -2903,8 +2904,8 @@ describe('resolveAgentTools - mcp and soat types', () => {
           })
         ).rejects.toThrow(/ocaAdAccountId/);
 
-        // The literal placeholder reaching the target as a resource id comes
-        // back as an opaque "not found", which is the failure this replaces.
+        // The literal placeholder reaching the target as a resource id would
+        // come back as an opaque "not found".
         expect(srv.bodies).toHaveLength(0);
       } finally {
         await srv.close();
@@ -3215,10 +3216,10 @@ describe('executeSoatTool - direct', () => {
   test('an uncredentialed action fails the tool call and reports it', async () => {
     const logToolCallingError = jest.fn();
 
-    // Since #888 the action is served in-process, so there is no network error
-    // left to simulate — the failure that matters is the real one: no
-    // `authHeader`, so the app's own auth middleware refuses the call. Sharing
-    // a process must never imply sharing authority.
+    // The action is served in-process, so there is no network error to
+    // simulate — the failure that matters is the real one: no `authHeader`, so
+    // the app's own auth middleware refuses the call. Sharing a process must
+    // never imply sharing authority.
     await expect(
       executeSoatTool({
         toolName: 'test',
@@ -3265,7 +3266,7 @@ describe('withCallTimeout', () => {
   });
 });
 
-describe('buildSoatRequestBody - trace field injection scoping (issue #371)', () => {
+describe('buildSoatRequestBody - trace field injection scoping', () => {
   test('does not inject parent_trace_id/root_trace_id/max_call_depth for actions whose schema does not declare them', () => {
     const body = buildSoatRequestBody({
       def: soatDef('search-knowledge'),
@@ -3313,7 +3314,7 @@ describe('buildSoatRequestBody - trace field injection scoping (issue #371)', ()
     });
   });
 
-  // #945 item 3: this body is how a `soat` tool hands the bag to whatever it
+  // This body is how a `soat` tool hands the bag to whatever it
   // starts, so the tool's allowlist has to bound it here too — otherwise a
   // credential excluded from the tool's own headers still reaches every tool of
   // the nested generation.

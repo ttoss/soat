@@ -124,7 +124,7 @@ export const emitActivityEntry = async (
     return mapped;
   } catch (error) {
     // Guardrails gate on this table, so a swallowed failure silently loosens
-    // the limit the entry was supposed to count against (#1130). Still returns
+    // the limit the entry was supposed to count against. Still returns
     // `null` for the fire-and-forget caller, but the loss is counted.
     recordDroppedEvent({
       stage: 'activity_write',
@@ -333,7 +333,7 @@ const fileApprovalActivity = async (args: {
 };
 
 // Filed on creation so a pending approval is discoverable from the feed the
-// way a created exception is (ttoss/soat#1259).
+// way a created exception is.
 const fileApprovalCreatedActivity = async (event: SoatEvent): Promise<void> => {
   await fileApprovalActivity({
     event,

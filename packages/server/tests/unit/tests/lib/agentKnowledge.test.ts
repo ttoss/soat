@@ -407,7 +407,7 @@ describe('buildKnowledgeMessages', () => {
   });
 
   // `knowledge_config.query` was in no OpenAPI schema, so every wire surface
-  // rejected it — now deleted (#1063). A turn with no message and no filters
+  // rejected it — now deleted. A turn with no message and no filters
   // injects nothing.
   test('injects nothing when no user message exists and no filters are set', async () => {
     const result = await buildKnowledgeMessages({

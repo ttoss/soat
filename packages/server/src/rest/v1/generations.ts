@@ -25,7 +25,7 @@ export const generationsRouter = new Router<Context>();
 /**
  * Every `/generations/:generation_id` route authorizes against the generation's
  * own SRN rather than the project wildcard a statement naming one generation can
- * never match (#1339).
+ * never match.
  */
 const generationAccess = makeItemRouteAuthorizer({
   findScope: generations.findScope,
@@ -150,7 +150,7 @@ generationsRouter.get(
     // caller must be allowed to read both — otherwise `GetGeneration` alone
     // would silently widen to cover trace content reachable today only through
     // `GET /traces/{id}`. Deriving authority from exactly the two resources
-    // projected also keeps it from drifting from them later (#1012); each is
+    // projected also keeps it from drifting from them later; each is
     // now named by its own SRN.
     //
     // A refusal here stays `403` rather than hiding: the generation read above

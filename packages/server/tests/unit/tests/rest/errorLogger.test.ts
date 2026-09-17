@@ -144,12 +144,10 @@ describe('errorLogger middleware', () => {
 /**
  * The error contract has exactly one shape, with no exceptions.
  *
- * #913 collapsed the 349 hand-written `{ error: "some string" }` bodies onto
- * `{ error: { code, message } }` but left the 500 catch-all as a bare string,
- * so a client still had to test the type of `error` before reading it — the
- * single branch the convergence was supposed to remove. A catch-all is exactly
- * the response a client is least able to special-case, since it is the one that
- * shows up unannounced.
+ * Every body is `{ error: { code, message } }`. One left as a bare
+ * `{ error: "some string" }` makes a client test the type of `error` before
+ * reading it, and a catch-all is exactly the response a client is least able to
+ * special-case, since it is the one that shows up unannounced.
  */
 describe('every error response carries the object shape', () => {
   const appAnswering = (thrown: unknown) => {

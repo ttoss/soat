@@ -404,10 +404,9 @@ describe('Orchestration tool-node guardrails', () => {
       expect(getRes.body.error.message).toMatch(/405/);
     });
 
-    // Regression (#655): the node-origin approval must record the governing
-    // guardrail's version, matching the agent tool-call path and the exception
-    // path. Previously `policyVersion` was always null for orchestration
-    // tool-node approvals.
+    // The node-origin approval must record the governing guardrail's version,
+    // matching the agent tool-call path and the exception path — never a null
+    // `policyVersion` because the approval came from a tool node.
     test('the filed approval records the governing guardrail version', async () => {
       const guardrailId = await createGuardrail({
         name: 'Versioned Approval',

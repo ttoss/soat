@@ -96,7 +96,7 @@ export const quotaBreachError = (breach: QuotaBreach): DomainError => {
         limit: breach.limit,
         window: breach.window,
         // The operator's next action is to price exactly these. Without them
-        // the refusal reports that a price is missing but not which (#1213).
+        // the refusal reports that a price is missing but not which.
         unpriced_rows: breach.unpricedRows ?? [],
       }
     );

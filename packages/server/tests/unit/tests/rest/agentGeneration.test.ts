@@ -209,13 +209,13 @@ describe('Agent Generation Routes', () => {
     });
 
     /**
-     * An agent's system prompt is its `instructions` field. A system message in
-     * the request used to be handled by position: `instructions` was taken from
-     * the *first* system message of the combined history, so a caller's system
-     * message won on an agent whose `instructions` was empty and was silently
-     * discarded on one where it was set. Whether a request could replace an
-     * agent's system prompt therefore depended on how the agent happened to be
-     * configured, and either outcome was invisible to the caller.
+     * An agent's system prompt is its `instructions` field, and a system message
+     * in the request is refused rather than handled by position. Taking
+     * `instructions` from the *first* system message of the combined history
+     * lets a caller's system message win on an agent whose `instructions` is
+     * empty and be silently discarded on one where it is set — so whether a
+     * request can replace an agent's system prompt would depend on how the
+     * agent happens to be configured, with either outcome invisible.
      *
      * Refusing it mirrors the AI SDK, which defaults `allowSystemInMessages` to
      * false and throws `InvalidPromptError` for the same reason: a system
@@ -257,7 +257,7 @@ describe('Agent Generation Routes', () => {
       // Exercises the depth-guard branch's own agent lookup/not-found throw,
       // a separate code path from the normal (non-depth-guard) not-found
       // case covered above. The caller is authorized — an unauthorized one is
-      // now refused at the preamble and never reaches this branch (#1029).
+      // now refused at the preamble and never reaches this branch.
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/agents/agent_missing/generate?wait=true')
         .send({
@@ -693,9 +693,9 @@ describe('Agent Generation Routes', () => {
       expect(pendingGenerations.has('gen_stub_pending')).toBe(false);
     });
 
-    // Pausing used to persist recovery state by replacing the metadata bag,
-    // where attribution lived — so every paused generation metered
-    // unattributed. Attribution is a column now, out of that write's reach.
+    // Attribution is a column, out of reach of the write that persists recovery
+    // state on a pause. Sharing the metadata bag with it would leave every
+    // paused generation metering unattributed.
     test('a generation that pauses on a client tool keeps its usage attribution', async () => {
       nextToolCall = { name: 'show_dialog', args: { message: 'confirm?' } };
 
@@ -927,8 +927,8 @@ describe('Agent Generation Routes', () => {
     });
 
     // The continuation completes down a different path than a direct
-    // completion, and only the latter used to meter usage — so a generation
-    // that paused for a client tool never got a usage event.
+    // completion, and both must meter usage — otherwise a generation that
+    // paused for a client tool never gets a usage event.
     test('tool-outputs continuation records usage — meters and receipt reflect it', async () => {
       await createGenerationRecord({
         publicId: 'gen_usage_metered',
@@ -995,7 +995,7 @@ describe('Agent Generation Routes', () => {
       expect(receiptRes.body.totals.output_tokens).toBe(1);
     });
 
-    // A model narrating its tool call as assistant text used to be
+    // A model narrating its tool call as assistant text is otherwise
     // indistinguishable from a real answer — completed, no error, the JSON blob
     // as content, and the tool never executed.
     describe('a tool call written out as text', () => {
@@ -1170,11 +1170,11 @@ describe('Agent Generation Routes', () => {
     });
   });
 
-  // ── Streaming provider rejections (#1084) ─────────────────────────────────
+  // ── Streaming provider rejections ─────────────────────────────────
 
   /**
-   * A forced `tool_choice` used to be dropped on the resumed segment, so the
-   * config an author wrote and the request that went out disagreed. The turn
+   * A forced `tool_choice` dropped on the resumed segment would leave the
+   * config an author wrote and the request that goes out disagreeing. The turn
    * is the agent's on both sides of the pause — which is only safe because the
    * step budget is the turn's too, and the same one on both sides.
    */
@@ -1649,9 +1649,9 @@ describe('Agent Generation Routes', () => {
 
     /**
      * `streamText` hands a provider failure to `onError` and then closes the
-     * stream cleanly, so before #1084 this answered `200` with nothing but
-     * `data: [DONE]` — an aborted generation the caller could not tell apart
-     * from a model that legitimately produced no text.
+     * stream cleanly. Unhandled, that answers `200` with nothing but
+     * `data: [DONE]` — an aborted generation the caller cannot tell apart from
+     * a model that legitimately produced no text.
      */
     test('a provider rejection arrives as a terminal SSE error frame', async () => {
       const response = await streamGeneration();

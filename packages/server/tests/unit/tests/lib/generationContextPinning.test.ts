@@ -4,7 +4,7 @@ import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 // The identity keys were once pinned only on the session path, so the
 // direct-agent and conversation paths forwarded a caller-forged identity into
-// outbound headers and the guardrail context (#850/#851). The pin now lives at
+// outbound headers and the guardrail context. The pin now lives at
 // the shared chokepoint, which no entry point can forget.
 describe('buildGenerationContext — server identity pinning', () => {
   let agentId: string;

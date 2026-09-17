@@ -8,7 +8,7 @@ import type {
 
 // The write half of the module-dispatch seam. The pipelines already normalize
 // upstream; normalizing again here is idempotent and makes the guarantee hold
-// for any caller, so no module has to remember (#901).
+// for any caller, so no module has to remember.
 
 // ── Public API ────────────────────────────────────────────────────────────
 

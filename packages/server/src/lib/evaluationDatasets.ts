@@ -249,10 +249,10 @@ export const findDatasetItemById = async (args: {
 
 /**
  * The bytes a fixture adds to the project's footprint, in the three columns the
- * storage snapshot sums for a `dataset_items` row (#1250).
+ * storage snapshot sums for a `dataset_items` row.
  *
  * A dataset item is a corpus write like a document or a memory, so the
- * project's `storage_bytes` cap bounds it (#1249). An `eval_results` row is
+ * project's `storage_bytes` cap bounds it. An `eval_results` row is
  * not: those are written while a run executes, where a refusal would abandon a
  * run already under way — the same reason a conversation message and a
  * mid-turn memory write are exempt.
@@ -315,7 +315,7 @@ export const createDatasetItem = async (args: {
 };
 
 /**
- * Curates a real, completed generation into a dataset item (#1003).
+ * Curates a real, completed generation into a dataset item.
  *
  * The platform already stored what a fixture needs, but only as observability
  * records; this is the one operation that makes them addressable as a

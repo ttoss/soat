@@ -11,7 +11,7 @@ import { join, relative } from 'node:path';
  * runtime: a spawn that omits it is not an error, it is a brand-new root, which
  * is exactly what an unbounded chain looks like from the inside.
  *
- * Three of the four paths that spawn one had omitted it (#1161). The one that
+ * Three of the four paths that spawn one had omitted it. The one that
  * got it right did so by convention, and the convention is what lost: a
  * continuation reads like an ordinary `createGeneration` call, so the wrong
  * version is both shorter and the one there were more examples of. Hence a

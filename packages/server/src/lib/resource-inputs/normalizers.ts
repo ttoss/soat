@@ -87,8 +87,8 @@ export const snakeToCamelKey = (key: string): string => {
  *
  * There is deliberately no recursive counterpart. A key-blind transform that
  * descends into a bag rewrites keys the platform does not own, which is the
- * single shape behind every case-transform incident this project has had
- * (#651/#690/#729/#737); `.claude/rules/case-convention.md` bans it outright.
+ * single shape behind every case-transform incident this project has had;
+ * `.claude/rules/case-convention.md` bans it outright.
  * Map nested config field by field instead.
  */
 export const convertKeys = (

@@ -46,7 +46,7 @@ export const wakeDueRuns = createSweep({
           // Guarded on the status too, not just `wakeAt`: an operator pause
           // parks a sleeping run as `awaiting_input` while keeping its wake, so
           // without this the claim would flip a paused run to `running` and
-          // drive it (#1237).
+          // drive it.
           status: 'sleeping',
           wakeAt: { [Op.ne]: null },
         },

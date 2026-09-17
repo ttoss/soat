@@ -27,7 +27,7 @@ describe('command help output', () => {
       'Module docs: https://soat.ttoss.dev/docs/modules/actors'
     );
     // Flags are displayed kebab-case (the documented canonical convention),
-    // matching the generated docs pages, not the underlying snake_case (#610).
+    // matching the generated docs pages, not the underlying snake_case.
     expect(output).toContain('--project-id  <string>');
     expect(output).not.toContain('--project_id');
     expect(output).toContain('--limit  <integer>');
@@ -73,7 +73,7 @@ describe('command help output', () => {
       'Module docs: https://soat.ttoss.dev/docs/modules/formations'
     );
     // project_id is optional: it defaults to the project bound to a
-    // project-scoped API key (see issue #267). Displayed kebab-case (#610).
+    // project-scoped API key. Displayed kebab-case.
     expect(output).toContain('--project-id  <string>');
     expect(output).not.toContain('--project-id  <string> [required]');
     expect(output).not.toContain('--project_id');

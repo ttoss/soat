@@ -65,7 +65,7 @@ const withMaxCallDepth = (args: {
  * body, plus the ambient fields the action's schema declares it accepts —
  * `tool_context`, the trace lineage, and the remaining call depth. Exported for
  * direct testing: which fields get injected into which action is a per-action
- * rule with a large input space (#371), and the schema check that enforces it is
+ * rule with a large input space, and the schema check that enforces it is
  * invisible from the outside once the body has been sent.
  */
 export const buildSoatRequestBody = (args: {

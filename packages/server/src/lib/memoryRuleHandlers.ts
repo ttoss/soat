@@ -172,9 +172,9 @@ const runToolHandler = async (args: {
  * completed, so there is no request left to fail — and a store's ingestion
  * policy must never be able to break the agent it reads.
  *
- * Because #1322 removed the LLM merge, an agent handler and a tool handler are
- * identical once they return: there is no consolidation step needing an agent
- * context, so a tool handler is not a degraded path.
+ * With no LLM merge, an agent handler and a tool handler are identical once
+ * they return: there is no consolidation step needing an agent context, so a
+ * tool handler is not a degraded path.
  */
 export const runRuleHandler = async (args: {
   handler:

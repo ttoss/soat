@@ -150,7 +150,7 @@ const handleEvent = (event: SoatEvent): void => {
     : undefined;
   if (!filer) return;
   // Was a bare `.catch(log)`, so a blip on the insert silently dropped the
-  // auto-filed exception with nothing left to retry it (#1130).
+  // auto-filed exception with nothing left to retry it.
   retryOrRecordDrop({
     stage: 'exception_file',
     label: 'handleEvent.fileException',

@@ -248,7 +248,7 @@ describe('resolveMessageContent', () => {
     });
   });
 
-  // #345: a `tool_output` block is the generation calling a tool on its own
+  // A `tool_output` block is the generation calling a tool on its own
   // behalf, before the model runs, so it carries the generation's
   // `tool_context` like every other tool call the generation makes.
   test('resolves a {{context:}} preset from the generation tool_context', async () => {

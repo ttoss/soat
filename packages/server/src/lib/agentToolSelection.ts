@@ -13,8 +13,8 @@ import { db } from '../db';
  * `active_tool_ids` restriction (`modules/agents.md` — Active Tools). Shared by
  * the generation and recovery paths so a resumed run is restricted identically.
  *
- * Fails open on absent/empty (agents stored `[]` while the field was inert
- * (#811), so honouring it would strip their tools on upgrade) and on a
+ * Fails open on absent/empty (agents stored `[]` while the field was inert, so
+ * honouring it would strip their tools on upgrade) and on a
  * non-array (the column is untyped JSON). Inline tool definitions carry no id,
  * so they can never be named here and stay active.
  */
@@ -36,7 +36,7 @@ export const narrowToActiveTools = (args: {
 
 /**
  * Resolves persisted tool ids to their names, for `step_rules[].active_tool_ids`
- * (`modules/agents.md` — Step Rules, #809). The AI SDK's `activeTools` option is
+ * (`modules/agents.md` — Step Rules). The AI SDK's `activeTools` option is
  * keyed by tool **name**, while the persisted rule holds tool **ids** — this is
  * the id→name map `buildPrepareStep` needs to translate one into the other.
  *

@@ -1,15 +1,12 @@
 /**
  * `step_rules` — the per-step `tool_choice` / `active_tool_ids` overrides an
- * agent can declare (`modules/agents.md` — Step Rules, #809) — compiled into
- * the AI SDK's `prepareStep` callback.
+ * agent can declare (`modules/agents.md` — Step Rules) — compiled into the AI
+ * SDK's `prepareStep` callback.
  *
- * `buildPrepareStep` existed twice: a private copy in `agentGenerationHelpers`
- * that hardcoded `(stream)` in its log lines, and an exported copy in
- * `agentNonStreamGeneration` that took the log context as a parameter — the
- * second being literally the generalization of the first, with the `StepRule`
- * type declared verbatim in both. The duplication existed only because the
- * helper module could not import the non-stream module (the non-stream module
- * imports it), so the rule lives in this leaf instead and both call it.
+ * A leaf module, so both the streaming and non-streaming paths can call one
+ * `buildPrepareStep`: `agentGenerationHelpers` cannot import
+ * `agentNonStreamGeneration`, which imports it, so a copy in either would be
+ * duplicated in the other along with the `StepRule` type.
  */
 import type { Tool, ToolChoice } from 'ai';
 import createDebug from 'debug';
@@ -117,7 +114,7 @@ export const resolveStepActiveTools = (args: {
  * Under `prompt_caching` it stops being one. The tool block sits inside the
  * cached prefix, so a trimmed step writes its own cache entry and the next
  * step — back to the full block — writes another: the prefix is bought twice
- * to save it once (#1301). An `active_tool_ids` the author wrote is a
+ * to save it once. An `active_tool_ids` the author wrote is a
  * capability restriction and narrows either way; this synthesized one is not.
  */
 const forcedToolActiveTools = (args: {

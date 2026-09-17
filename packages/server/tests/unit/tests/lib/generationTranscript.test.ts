@@ -127,7 +127,7 @@ describe('projectTranscriptSteps', () => {
   test('ignores the getter-backed fields a stored step never carries', () => {
     // `text`, `toolCalls` and `toolResults` are prototype getters, absent from
     // every stored trace. A projection reading them typechecks and passes
-    // against live SDK objects while returning nothing for real data (#1012).
+    // against live SDK objects while returning nothing for real data.
     const steps = [
       {
         finishReason: 'stop',
@@ -243,8 +243,8 @@ describe('projectTranscriptSteps', () => {
       },
     ];
 
-    // Read straight out of the stored step, so this works on generations
-    // recorded long before the field was projected.
+    // Read straight out of the stored step, so no projection has to have
+    // recorded it separately.
     expect(projectTranscriptSteps(steps)[0].usage).toEqual({
       cost_usd: null,
       input_tokens: 412,
@@ -302,7 +302,7 @@ describe('projectTranscriptSteps', () => {
 });
 
 /**
- * Scoping a transcript to its own generation's slice of a grouped trace (#1024).
+ * Scoping a transcript to its own generation's slice of a grouped trace.
  *
  * Since grouping appends, one steps object can hold several generations' steps
  * concatenated, indexed by `Trace.stepSegments`. A transcript that projected the
@@ -349,9 +349,8 @@ describe('sliceGenerationSteps', () => {
   });
 
   test('returns the whole object when the trace has no segment index', () => {
-    // A trace written before the index existed: its bytes cannot be attributed
-    // to a generation, and the whole object is the best available answer — the
-    // behaviour every pre-#1024 trace already had.
+    // Without an index the bytes cannot be attributed to a generation, so the
+    // whole object is the best available answer.
     expect(
       textsOf(
         sliceGenerationSteps({ steps, segments: [], generationId: 'gen_a' })

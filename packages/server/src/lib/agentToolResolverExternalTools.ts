@@ -1,8 +1,8 @@
 /**
  * Resolving a `builtin` (SOAT platform action) tool binding, and calling one.
  *
- * The `mcp` half it used to share this file with is in
- * `agentToolResolverMcp.ts`; the two share only `externalToolCall.ts`.
+ * The `mcp` half lives in `agentToolResolverMcp.ts`; the two share only
+ * `externalToolCall.ts`.
  */
 import type { JSONSchema7, Tool } from 'ai';
 import { jsonSchema, tool } from 'ai';
@@ -30,7 +30,7 @@ const log = createDebug('soat:tools');
 /**
  * Invokes a SOAT platform action on behalf of a `soat` tool.
  *
- * Served in-process via `dispatchApiRequest` rather than over loopback (#888):
+ * Served in-process via `dispatchApiRequest` rather than over loopback:
  * the app's real middleware chain still runs, so permission checks, validation,
  * audit, metering and the response contract are unchanged — only the socket is
  * gone. `authHeader` keeps its meaning; a call without one is refused by the
@@ -53,7 +53,7 @@ export const executeSoatTool = async (args: {
   logToolCallingError: LogToolCallingError;
 }) => {
   // Path *and* query string: `def.path(...)` alone substitutes path parameters
-  // only, discarding every `in: query` parameter the action advertises (#924).
+  // only, discarding every `in: query` parameter the action advertises.
   const path = buildSoatActionTarget({ def: args.def, args: args.rawArgs });
   const body = buildSoatRequestBody({
     def: args.def,

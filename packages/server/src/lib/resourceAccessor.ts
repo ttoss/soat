@@ -111,7 +111,7 @@ export type ResourceAccessor<TRow> = {
  * The accessor never receives, inspects or emits a **field name** — it moves
  * whole rows and builds a `where` out of column names. Each module keeps its own
  * explicit `mapX` and calls `mapActor(await actors.reload(row))`. That is the
- * hard constraint from #912: no key-rewriting surface is added here
+ * hard constraint: no key-rewriting surface is added here
  * (`.claude/rules/case-convention.md`), confirmable from this signature alone.
  *
  * `TRow` is the module's loaded-row type. A Sequelize `findOne` result is typed

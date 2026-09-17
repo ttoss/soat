@@ -9,9 +9,9 @@
  * full project → provider → agent → tools fixture plus a stubbed provider call
  * per case, with the failure signal buried in a `generateText` argument.
  *
- * These cases were split across `agentGenerationHelpers.test.ts` and
- * `agentNonStreamGeneration.test.ts` while `buildPrepareStep` existed in both
- * modules; they cover one module now, so they live in one file (#911).
+ * `buildPrepareStep` lives in one module, so its cases live in one file rather
+ * than split across `agentGenerationHelpers.test.ts` and
+ * `agentNonStreamGeneration.test.ts`.
  */
 import {
   buildPrepareStep,
@@ -211,7 +211,7 @@ describe('buildPrepareStep', () => {
 
   test('buildPrepareStep leaves the tool block whole for a forced tool under prompt caching', () => {
     // The tool block is inside the cached prefix, so narrowing it to the forced
-    // tool costs a cache entry to save tokens `toolChoice` already saves (#1301).
+    // tool costs a cache entry to save tokens `toolChoice` already saves.
     const prepareStep = buildPrepareStep({
       stepRules: [
         { step: 1, tool_choice: { type: 'tool', tool_name: 'lookup' } },
@@ -251,7 +251,7 @@ describe('buildPrepareStep', () => {
     // `active_tool_ids` on a step rule holds persisted tool ids
     // (`modules/agents.md` — Step Rules), while the AI SDK's `activeTools`
     // takes tool names — the caller resolves the id→name map (via
-    // `resolveToolIdsToNames`) and hands it in here (#809).
+    // `resolveToolIdsToNames`) and hands it in here.
     const prepareStep = buildPrepareStep({
       stepRules: [{ step: 1, active_tool_ids: ['tool_abc'] }],
       logContext: 'non_stream',

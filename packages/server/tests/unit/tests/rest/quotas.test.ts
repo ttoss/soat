@@ -17,8 +17,7 @@ const QUOTA_ACTIONS = [
 
 /**
  * The window every quota that a **counted request sequence** runs against must
- * use. Not a detail — picking `rolling_1m` here is what made this file flaky
- * (#1049).
+ * use. Not a detail — picking `rolling_1m` here is what made this file flaky.
  *
  * `requests` windows are fixed windows keyed by a truncated wall-clock stamp
  * (`quotaWindows.ts`), so a `rolling_1m` counter resets at every minute
@@ -641,7 +640,7 @@ describe('Quotas', () => {
     });
 
     // A read the caller may not perform is indistinguishable from absence, now
-    // that the route authorizes against the quota's own SRN (#1339); the write
+    // that the route authorizes against the quota's own SRN; the write
     // routes keep `403`.
     test('project-scoped API key without GetQuota returns 404', async () => {
       const key = await createRestrictedApiKey('quotas:GetQuota');
@@ -840,7 +839,7 @@ describe('Quotas', () => {
 
     // The id has to name a real quota: the route resolves it before
     // authorizing, so a missing one would answer `404` and never reach the
-    // refusal this test is about (#1339). Any quota in the project will do —
+    // refusal this test is about. Any quota in the project will do —
     // hence a listing rather than a create, which collides with whichever
     // metric/window pair another test in this file already holds.
     test('project-scoped API key without DeleteQuota returns 403', async () => {
@@ -1081,8 +1080,8 @@ describe('Quotas', () => {
       }
     });
 
-    // #749 (was the documented #742 exemption): an unscoped key has no bound
-    // project at auth time, so attribution waits until the route itself
+    // An unscoped key has no bound project at auth time, so attribution waits
+    // until the route itself
     // resolves *and authorizes* a single project — then the request counts and
     // blocks exactly like a project-scoped key's.
     test('unscoped API key requests are counted and blocked once the route resolves one project', async () => {
@@ -1123,7 +1122,7 @@ describe('Quotas', () => {
       expect(blocked.headers['retry-after']).toBeDefined();
     });
 
-    // The concurrent twin of the test above (#1049): a sequential sequence says
+    // The concurrent twin of the test above: a sequential sequence says
     // nothing about the N+1th request evaluated while the Nth is in flight. It
     // holds because counting and checking are one statement, so a request is
     // compared against a count already including itself. Split that into a read
@@ -1245,9 +1244,9 @@ describe('Quotas', () => {
       expect(blocked.body.error.meta.scope ?? 'api_key').toBe('api_key');
     });
 
-    // The route class the #749 investigation flagged as needing per-route
-    // review: `GET /actors/:id` never calls `resolveProjectIds` — it loads the
-    // actor, derives the project from it, and authorizes with `isAllowed`.
+    // The route class that needs per-route review: `GET /actors/:id` never
+    // calls `resolveProjectIds` — it loads the actor, derives the project from
+    // it, and authorizes with `isAllowed`.
     // Wrapping the authorizer covers it with no change to the route.
     test('a route that authorizes only via isAllowed is counted and blocked', async () => {
       const { enfProjectId } = await setupEnforcementProject(
@@ -1301,8 +1300,8 @@ describe('Quotas', () => {
       expect(blocked.body.error.code).toBe('QUOTA_EXCEEDED');
     });
 
-    // The DoS vector #742 rejected: naming a project you hold no permission on
-    // must never touch its counter. The positive control is the permitted key
+    // The DoS vector: naming a project you hold no permission on must never
+    // touch its counter. The positive control is the permitted key
     // below — it still gets its full allowance, proving the denied requests
     // incremented nothing.
     test('a request denied on the named project never touches its counter', async () => {
@@ -1437,8 +1436,8 @@ describe('Quotas', () => {
       expect(blocked.status).toBe(429);
     });
 
-    // The residual exemption #749 leaves in place: a request that resolves to
-    // *every* project (an unscoped admin key with no attached policies, no
+    // The one residual exemption: a request that resolves to *every* project
+    // (an unscoped admin key with no attached policies, no
     // `project_id` filter) names no single project to count against.
     test('an unscoped key resolving to no single project is still exempt', async () => {
       const { enfProjectId } = await setupEnforcementProject(

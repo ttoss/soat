@@ -49,7 +49,7 @@ export type ActiveDispatch = {
   /**
    * 1-based attempt number, present only while a state's `on_enter.retry`
    * policy is in effect — so a dispatch with no retry keeps exactly the shape it
-   * had before retries existed (#822).
+   * had before retries existed.
    */
   attempt?: number;
 };
@@ -148,7 +148,7 @@ export const listTasks = async (args: {
   state?: string;
   status?: string;
   // ORed, `null` included. `status=open` narrows a board; it does not say which
-  // of those cards has an automation still dispatching (#1242).
+  // of those cards has an automation still dispatching.
   automationStatuses?: (TaskAutomationStatus | null)[];
   assignee?: string;
   limit?: number;
@@ -270,7 +270,7 @@ export const dispatchOnEnter = (args: {
 
 /**
  * Resolves a task's entry state: the named `state` when given (an alternate
- * entry point, #821), otherwise the workflow's `initial` state. Throws
+ * entry point), otherwise the workflow's `initial` state. Throws
  * `TASK_STATE_NOT_FOUND` when `state` names no declared state.
  */
 const resolveEntryState = (args: {
@@ -351,13 +351,13 @@ export const createTask = async (args: {
   state?: string | null;
   /**
    * Caller context for the automation dispatches this task makes, forwarded as
-   * `X-Soat-Context-*` headers on their tool calls (#950). Creation is the first
+   * `X-Soat-Context-*` headers on their tool calls. Creation is the first
    * move, so this is the bag the entry state's `on_enter` runs with; each later
    * transition may replace it.
    */
   toolContext?: Record<string, string> | null;
   /**
-   * Caller-owned annotations stored on the task and returned verbatim (#342).
+   * Caller-owned annotations stored on the task and returned verbatim.
    * Never read by a guard or written by a `payload_writes`, which is what makes
    * it the place for an attribution label rather than `payload`.
    */
@@ -397,7 +397,7 @@ export const createTask = async (args: {
   const task = await db.Task.create({
     projectId: args.projectId,
     workflowId: workflow.id as number,
-    // The pin (#882): the task runs on this version of the state machine for its
+    // The pin: the task runs on this version of the state machine for its
     // whole life, however long the workflow is edited around it.
     workflowVersion: workflow.version,
     title: args.title,
@@ -459,14 +459,14 @@ export const updateTask = async (args: {
   if (args.payload !== undefined) {
     // PATCH semantics: a caller setting one key must not discard the others,
     // including any `payload_writes` the workflow declared. The automation
-    // result lives in `last_result`, which no patch can reach (#846).
+    // result lives in `last_result`, which no patch can reach.
     const merged = {
       ...((task.payload as Record<string, unknown> | null) ?? {}),
       ...args.payload,
     };
     // Validated against the schema the task entered on, not the live one: a
     // schema tightened after the task was created would otherwise make an
-    // in-flight task unpatchable (#882).
+    // in-flight task unpatchable.
     const { payloadSchema } = await resolveTaskDefinition({
       task,
       workflow: task.workflow!,

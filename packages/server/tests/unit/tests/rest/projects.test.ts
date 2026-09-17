@@ -578,8 +578,8 @@ describe('Projects', () => {
     });
 
     test('a new project stores content with retention disabled', async () => {
-      // The shipped defaults must change nothing for an existing tenant:
-      // retention is opt-in and content is stored, exactly as before #837/#838.
+      // The defaults must cost an existing tenant nothing: retention is opt-in
+      // and content is stored.
       const res = await authenticatedTestClient(adminToken).get(
         `/api/v1/projects/${projectId}`
       );
@@ -996,7 +996,7 @@ describe('Projects', () => {
 
     // Each holds rows whose `projectId` FK is NO ACTION, so a project holding
     // only them counted 0 dependents and took the bare `destroy()` path — a raw
-    // 500 from the constraint, which `force` did not help (#1079).
+    // 500 from the constraint, which `force` did not help.
 
     /** Creates a dataset + eval pair (evaluations), a workflow + task
      * (automation), a trigger, a guardrail and a quota in `project`. */
@@ -1565,7 +1565,7 @@ describe('Projects', () => {
 
       // Nothing has been priced against a (provider, model, component) with no
       // rows, so a first write may take effect now rather than leaving the
-      // project unpriced until a future timestamp lands (#1196).
+      // project unpriced until a future timestamp lands.
       test('accepts a past effective_from on a first write, then refuses to back-date it', async () => {
         const effectiveFrom = new Date(Date.now() - 1000).toISOString();
         const first = await authenticatedTestClient(priceUserToken)

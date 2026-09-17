@@ -7,7 +7,7 @@ import type { OrchestrationEdge, OrchestrationNode } from './orchestrations';
 const log = createDebug('soat:orchestrations');
 
 /**
- * Resolves the graph a run executes (#872).
+ * Resolves the graph a run executes.
  *
  * A run is pinned to an orchestration version at start, and every later
  * execution — first drive, wake from `sleeping`, human or approval resume,
@@ -15,9 +15,9 @@ const log = createDebug('soat:orchestrations');
  * the live row, so `update-orchestration` can rewire freely and a run parked for
  * days still finishes on the graph it started on.
  *
- * The single seam matters as much as the pinning: before this, four call sites
- * each cast `orch.nodes`, so missing one would look correct in review and leave
- * the bug in the path a parked run takes.
+ * The single seam matters as much as the pinning: a call site casting
+ * `orch.nodes` for itself looks correct in review, and missing one leaves the
+ * defect in the path a parked run takes.
  */
 
 export type RunGraph = {

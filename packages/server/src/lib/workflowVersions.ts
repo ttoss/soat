@@ -17,7 +17,7 @@ import { workflowCollectionToCamel } from './workflowsWire';
 import { workflowVersionStore } from './workflowVersionSnapshot';
 
 /**
- * Workflow state-machine version history (issue #882).
+ * Workflow state-machine version history.
  *
  * The archive mechanics live in `resourceVersions.ts` and are shared with agents,
  * guardrails and orchestrations; this module supplies the workflow-specific
@@ -28,7 +28,7 @@ import { workflowVersionStore } from './workflowVersionSnapshot';
  * Workflows have no release/canary layer: a task is pinned at creation and stays
  * on that version for its whole life, which can be weeks. A workflow release
  * would mean "the version new tasks are created into", with no mid-life
- * reassignment (#877); nothing has asked for it (#883), and the mechanism is
+ * reassignment; nothing has asked for it, and the mechanism is
  * already extracted and pure in `releaseAssignment.ts` for when something does.
  */
 

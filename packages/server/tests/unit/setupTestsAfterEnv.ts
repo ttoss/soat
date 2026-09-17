@@ -8,10 +8,8 @@ beforeEach(() => {
   jest.spyOn(console, 'error').mockImplementation(() => {});
 });
 
-// Spies on the module that *defines* `createGeneration`. It used to name
-// `src/lib/agents`, which only re-exported it; that barrel closed three import
-// cycles and is gone (#911), and pointing the spy at the definition is what
-// every caller now imports anyway.
+// Spies on the module that *defines* `createGeneration`, which is what every
+// caller imports. A spy on a re-export of it would not be reached.
 export const mockCreateGeneration = jest.spyOn(
   agentGenerationModule,
   'createGeneration'

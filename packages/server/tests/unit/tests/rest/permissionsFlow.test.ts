@@ -1,9 +1,9 @@
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 // A policy granting an action on one specific resource must deny a sibling in
-// the same project. By-id handlers used to probe with the project-wildcard SRN,
-// so a single-resource policy could never match and resource-level statements
-// were unenforceable.
+// the same project. A by-id handler probing with the project-wildcard SRN is a
+// probe a single-resource policy can never match, which makes resource-level
+// statements unenforceable.
 
 describe('Group 15: JWT — policy scoped to a single resource SRN is enforced per-resource', () => {
   let adminToken: string;
@@ -1233,7 +1233,7 @@ describe('Group 12: Admin API key with full-access policy is not 403', () => {
 
 // The same project-scoped SRN pattern that works for files 403'd on memory stores,
 // ai-providers and memories by-id routes, whose handlers called
-// `isAllowed` with no `resource` field (#355).
+// `isAllowed` with no `resource` field.
 
 describe('Group 13: API key with project-scoped SRN policy — memoryStores, ai-providers, memories', () => {
   let adminToken: string;
@@ -1376,7 +1376,7 @@ describe('Group 13: API key with project-scoped SRN policy — memoryStores, ai-
 });
 
 // The same pattern again for `formations`: its by-id routes called `isAllowed`
-// with no `resource`, so a project-scoped SRN policy never matched (#380).
+// with no `resource`, so a project-scoped SRN policy never matched.
 
 describe('Group 14: API key with project-scoped SRN policy — formations', () => {
   let adminToken: string;

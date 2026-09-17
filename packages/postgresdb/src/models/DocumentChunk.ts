@@ -21,7 +21,7 @@ import { Document } from './Document';
     },
     {
       // Without it a semantic search scans every vector in scope: the read
-      // pattern is only ever `ORDER BY embedding <=> $query LIMIT n` (#1220).
+      // pattern is only ever `ORDER BY embedding <=> $query LIMIT n`.
       // Cosine, because that is the operator both search paths order on.
       name: 'document_chunks_embedding_hnsw_idx',
       using: 'hnsw',

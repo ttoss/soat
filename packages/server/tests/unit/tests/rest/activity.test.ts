@@ -244,7 +244,7 @@ describe('Activity', () => {
     // deterministically (sanctioned in tests.md for exactly this shape).
     test('emitActivityEntry returns null once a write failure outlives its retries', async () => {
       // Not `…Once`: a single rejection is retried and the entry written after
-      // all (#1130), so only a failure persisting across every attempt reaches
+      // all, so only a failure persisting across every attempt reaches
       // the null-returning branch.
       const spy = jest
         .spyOn(db.ActivityEntry, 'create')

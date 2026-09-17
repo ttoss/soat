@@ -74,7 +74,7 @@ export const mapTrace = (row: TraceRow): Trace => {
     error: row.error,
     // A purged trace still reads back as a skeleton rather than a 404, so the
     // erasure is provable instead of indistinguishable from a resource that
-    // never existed (#836).
+    // never existed.
     content_redacted_at: row.contentRedactedAt,
     content_redacted_by_principal_type: row.contentRedactedByPrincipalType,
     content_redacted_by_principal_id: row.contentRedactedByPrincipalId,

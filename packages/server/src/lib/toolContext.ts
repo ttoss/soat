@@ -18,10 +18,10 @@ import { DomainError } from '../errors';
  * configurable prefix, since prefix + key must be one valid header name.
  *
  * Exported as a character class rather than only a finished regex because
- * `toolTemplates.ts` composes it into the `{{context:<key>}}` token grammar (#945
- * item 2): the key inside a template token is the same key that becomes a header,
- * so the three checks — key, prefix, token — must not be able to disagree about
- * which characters exist.
+ * `toolTemplates.ts` composes it into the `{{context:<key>}}` token grammar:
+ * the key inside a template token is the same key that becomes a header, so the
+ * three checks — key, prefix, token — must not be able to disagree about which
+ * characters exist.
  */
 export const TOOL_CONTEXT_KEY_CHARS = "A-Za-z0-9!#$%&'*+\\-.^_`|~";
 
@@ -37,7 +37,7 @@ export const DEFAULT_TOOL_CONTEXT_HEADER_PREFIX = 'X-Soat-Context-';
 /**
  * The prefix is deployment configuration, not a caller input: a platform
  * fronting SOAT must be able to keep the substrate's name out of the requests
- * its agents send to third-party tool providers (#945).
+ * its agents send to third-party tool providers.
  *
  * Read per call rather than captured at module load, so the value a deployment
  * sets is the value used regardless of when the module graph was loaded — the
@@ -47,7 +47,7 @@ export const DEFAULT_TOOL_CONTEXT_HEADER_PREFIX = 'X-Soat-Context-';
  * It deliberately cannot *remove* the prefix: an unprefixed key would let a
  * caller-supplied `tool_context` entry land on an arbitrary header name —
  * `Authorization` included — which is precisely the invariant the prefix exists
- * to hold (#843/#850/#851).
+ * to hold.
  */
 const getContextHeaderPrefix = (): string => {
   const configured = process.env.TOOL_CONTEXT_HEADER_PREFIX;
@@ -75,7 +75,7 @@ const getContextHeaderPrefix = (): string => {
  * lands on, and caller keys take precedence over the session's, so it could
  * rewrite the identity an `http` tool authorizes against; uppercasing one
  * character avoided that but kept the shape of a transform this project has
- * already paid for four times (#651, #690, #729, #737). It was never observable
+ * already paid for four times. It was never observable
  * either — header names are case-insensitive (RFC 9110 §5.1) and HTTP/2
  * lowercases them (RFC 9113 §8.2.1).
  */
@@ -185,7 +185,7 @@ export const assertValidToolContextAllowlist = (
  * session record and its actor) and stamped at the generation chokepoint
  * (`buildGenerationContext`), so a caller cannot address them from any
  * generation entry point — direct agent, conversation, session, trigger,
- * orchestration or nested `soat` tool call (#843, #850, #851).
+ * orchestration or nested `soat` tool call.
  */
 export const RESERVED_TOOL_CONTEXT_KEYS = [
   'session_id',
@@ -251,7 +251,7 @@ export const pinServerIdentityToolContext = (args: {
  * The strip is the whole point. Where a generation runs, `buildGenerationContext`
  * stamps the trusted identity over the caller's; where nothing does — a task row,
  * a direct `POST /tools/{id}/call` — there is nothing to overwrite a forged
- * `session_id` with, so it must be removed rather than trusted (#843/#850/#851).
+ * `session_id` with, so it must be removed rather than trusted.
  * That is also why this cannot live inside `callTool`: a generation-driven call
  * arrives with identity already pinned, and stripping it there would delete the
  * server's own keys.
@@ -273,10 +273,10 @@ export const sanitizeCallerToolContext = (
 };
 
 /**
- * Narrows a `tool_context` bag to what one tool may receive (#945 item 3).
- * `undefined`/`null` `contextKeys` forwards everything, so every tool authored
- * before the allowlist keeps its behavior; an empty list forwards nothing but
- * the identity keys.
+ * Narrows a `tool_context` bag to what one tool may receive.
+ * `undefined`/`null` `contextKeys` forwards everything, so a tool that declares
+ * no allowlist is unrestricted; an empty list forwards nothing but the identity
+ * keys.
  *
  * Matching is case-insensitive because an entry names an outbound header (RFC
  * 9110 §5.1) — `assertValidToolContextKeys` refuses two keys differing only in

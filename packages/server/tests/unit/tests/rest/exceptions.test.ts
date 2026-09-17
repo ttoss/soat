@@ -535,8 +535,8 @@ describe('Exceptions', () => {
     test('a filer rejection is swallowed by handleEvent, not raised as an unhandled rejection', async () => {
       // A nonexistent internal project id makes the filer's insert fail the
       // projects FK deterministically — the only way to drive handleEvent's
-      // .catch resilience branch, which was previously covered (or not) by
-      // whichever unrelated test happened to produce a filing failure.
+      // .catch resilience branch deterministically, rather than leaving it to
+      // whichever unrelated test happens to produce a filing failure.
       const unhandled: unknown[] = [];
       const onUnhandled = (reason: unknown) => {
         unhandled.push(reason);

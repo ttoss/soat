@@ -5,7 +5,7 @@ import { AGENT_SCALAR_FIELDS } from 'src/lib/agents';
 
 // Two agent config fields have shipped accepted-but-inert: the API took them,
 // the version snapshot archived them, and nothing at runtime read them —
-// `active_tool_ids` (#811) and `stop_conditions` (#1167). Both looked correct
+// `active_tool_ids` and `stop_conditions`. Both looked correct
 // from every read surface, which is why neither was caught by the tests that
 // existed. This pins the third from happening the same way.
 //

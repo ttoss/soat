@@ -3,10 +3,10 @@
  * step and tool call, each tool result, and how it ended.
  *
  * Assembled at read time; there is no transcript table, column or write. The
- * inversion against the dataset-item slice (#1012, which copies) is deliberate:
- * an item must outlive its source, a transcript must die with it. Storing one
+ * inversion against the dataset-item slice, which copies, is deliberate: an
+ * item must outlive its source, a transcript must die with it. Storing one
  * would create a second unpoliced copy of the content `traceContentPolicy` and
- * `contentRetention` erase, reviving the gap #835/#836 closed.
+ * `contentRetention` erase.
  *
  * The three halves live in three places, which is why this module exists: the
  * input is a generation column, the steps a File on the trace, the outcome the
@@ -80,7 +80,7 @@ export type GenerationTranscript = {
  * and `serializeSteps` goes through `JSON.stringify`, which copies own
  * enumerable properties only — so those three fields are absent from every
  * stored trace. Reading them would typecheck, pass against live SDK objects,
- * and return nothing for real data (the #1012 failure mode).
+ * and return nothing for real data.
  */
 const contentParts = (
   step: Record<string, unknown>
@@ -233,8 +233,8 @@ const deriveOutput = (
  * that belongs to `DELETE /traces/{id}/content`. The turn's answer and its tool
  * payloads live in both places, so projecting the file after the generation was
  * purged would hand back the content the purge erased, in a response whose own
- * `content_redacted_at` says it is gone — the gap #835/#836 closed, and why
- * this slice references rather than copies.
+ * `content_redacted_at` says it is gone — which is why this slice references
+ * rather than copies.
  */
 const resolveTranscriptContent = async (
   generation: GenerationWithTrace
@@ -302,7 +302,7 @@ export const getGenerationTranscript = async (args: {
     completed_at: generation.completedAt,
     // A counter, not `steps.length`: part of the skeleton a purge preserves, so
     // it still reports the size of a turn whose content is gone. This turn's
-    // own count — a trace grouping several would report all of them (#1024).
+    // own count — a trace grouping several would report all of them.
     step_count: generationStepCount(generation),
     input,
     steps,

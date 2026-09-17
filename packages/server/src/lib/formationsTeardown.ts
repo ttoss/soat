@@ -78,14 +78,14 @@ export const buildDeleteOrder = (
  * nothing.
  *
  * Teardown is ordered and not transactional, so a refusal discovered by
- * attempting a delete leaves everything ordered ahead of it destroyed — the
- * unrecoverable partial teardown #985 reported. Asking first turns that into a
- * teardown that fails having changed nothing.
+ * attempting a delete leaves everything ordered ahead of it destroyed — an
+ * unrecoverable partial teardown. Asking first turns that into a teardown that
+ * fails having changed nothing.
  *
  * Only predictable refusals are reported: a `retain` resource is never deleted,
  * one with no physical id has nothing to delete, and a type declaring no
  * blocker contributes nothing. So this never invents a failure the delete would
- * not have hit — it can only miss one, which falls through as before.
+ * not have hit — it can only miss one, which the delete itself then reports.
  */
 export const collectDeletionBlockers = async (
   orderedResources: ResourceRow[]
@@ -129,7 +129,7 @@ export const performResourceDeletions = async (args: {
   const events: FormationEvent[] = [];
   let hasError = false;
 
-  // A replacement whose disposal failed earlier is swept with the stack (#1193)
+  // A replacement whose disposal failed earlier is swept with the stack
   // — it is the last operation that will ever name it. Its failure is recorded
   // but never fails the teardown: the resource is already outside the ledger's
   // current state, and wedging the stack in `delete_failed` over one would
@@ -272,7 +272,7 @@ export const deleteFormation = async (args: {
   );
 
   // A teardown is a delete per resource, so it needs the delete action for each
-  // — the same per-resource check an apply runs (#1181). Ahead of the deletion
+  // — the same per-resource check an apply runs. Ahead of the deletion
   // pre-flight, since a refusal here is about the caller, not the stack.
   await assertResourceActionsAuthorized({
     authorize: args.authorize,
@@ -310,7 +310,7 @@ export const deleteFormation = async (args: {
   if (hasError) {
     // A wedged stack answers `409` here, but the row survives the request — so
     // the same failure is stored, and a later `get-formation` explains the
-    // `delete_failed` it reports instead of just naming it (#1028).
+    // `delete_failed` it reports instead of just naming it.
     const failure = buildDeletionFailure({ formationId: args.id, events });
     const error = buildFormationError({
       code: failure.code,

@@ -23,8 +23,8 @@ const SUPERSEDE_MARGIN = 0.03;
 
 /**
  * How far apart the query may score two twins before relevance, not age, is
- * what separates them. The shipped pairs all sit under 0.005; the lexically
- * divergent rewrites #1333 measured move it by 0.10–0.27 and fail this.
+ * what separates them. The committed pairs all sit under 0.005; a lexically
+ * divergent rewrite of one twin moves it by 0.10–0.27 and fails this.
  */
 const AMBIGUITY_MAX = 0.02;
 
@@ -93,7 +93,7 @@ describe('knowledge eval golden set', () => {
   test('carries frozen, non-empty content on every document fixture', () => {
     // The corpus is static text, never a pointer into the module docs: a
     // fixture read at seed time makes the baseline a function of
-    // documentation prose as well as ranking code (#1345).
+    // documentation prose as well as ranking code.
     for (const document of golden.corpus.documents) {
       expect({
         key: document.key,
@@ -248,10 +248,9 @@ describe('knowledge eval golden set', () => {
     // The blend only ever demotes, so a freshness query measures nothing
     // without an aged near-twin for the decay to overtake.
     //
-    // Both twins share one container. They used to be split across two on the
-    // premise that `writeMemory` would dedup them — measured false in #1333,
-    // and the split was not free: a twin parked in a second store measures an
-    // unscoped search across a current/archive pair, which `memory_store_ids`
+    // Both twins share one container, because `writeMemory` does not dedup
+    // them, and the split is not free: a twin parked in a second store measures
+    // an unscoped search across a current/archive pair, which `memory_store_ids`
     // already answers, rather than what the write path itself produces.
     //
     // The twin is the answer's key suffixed `-superseded`: pairing them by name
@@ -345,10 +344,10 @@ describe('knowledge eval golden set', () => {
 
   test('exercises twin age gaps a bounded decay cannot all reach', () => {
     // A multiplicative blend demotes a twin by a factor of its age, so a corpus
-    // of far-apart twins is the easy case: every gap here was 240 days or more
-    // until #1298 measured that a 40-day one flips at no setting that leaves
-    // the other kinds intact. Keeping a small gap labeled is what stops a
-    // ranking change from reading as a win on the easy half alone.
+    // of far-apart twins is the easy case: a 240-day gap flips at almost any
+    // setting, while a 40-day one flips at none that leaves the other kinds
+    // intact. Keeping a small gap labeled is what stops a ranking change from
+    // reading as a win on the easy half alone.
     const gaps = freshnessTwins.map((twin) => {
       return twin.gapDays;
     });
@@ -358,9 +357,9 @@ describe('knowledge eval golden set', () => {
   });
 
   test('labels a freshness answer that is itself aged', () => {
-    // Every answer sat at age zero until #1298: decay factors there are exactly
-    // `1`, so the corpus never covered the ordinary case where both twins have
-    // aged and the blend has to separate two decayed scores rather than one.
+    // An answer at age zero decays by exactly `1`, so a corpus of them never
+    // covers the ordinary case where both twins have aged and the blend has to
+    // separate two decayed scores rather than one.
     const aged = freshnessTwins.filter((twin) => {
       return (twin.fresh.age_days ?? 0) > 0;
     });

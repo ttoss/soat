@@ -1,6 +1,6 @@
 /**
- * A real HTTP handler for an operator-registered formation resource type
- * (#1078), on localhost.
+ * A real HTTP handler for an operator-registered formation resource type, on
+ * localhost.
  *
  * The seam under test is the HTTP boundary, so the request is genuinely
  * serialized and signed and the signature is verifiable by independent HMAC —

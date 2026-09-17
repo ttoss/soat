@@ -9,12 +9,12 @@ import {
 import { validateFormationTemplate } from 'src/lib/formationsValidation';
 import { camelToSnakeKey } from 'src/lib/resource-inputs/normalizers';
 
-// Two rules that were restated per resource type and drifted: the declarable
-// type set (#900, a literal one entry behind the registry) and camelCase key
-// acceptance (#901, missing in four of 24 modules). Both are now derived, so
-// these run table-driven over every registered type and a 25th module cannot
-// reintroduce either gap. A `lib/` test per the keep-list rule — REST's bare
-// "Unknown field" would not say which type regressed.
+// Two rules a resource type must not restate for itself: the declarable type
+// set, and camelCase key acceptance. A literal type set falls behind the
+// registry, and per-module key normalization goes missing from some of them.
+// Both are derived, so these run table-driven over every registered type and
+// the next module cannot reintroduce either gap. A `lib/` test per the
+// keep-list rule — REST's bare "Unknown field" would not say which type broke.
 
 const SPEC_PATH = path.resolve(
   __dirname,
@@ -54,19 +54,19 @@ const schemaNameFor = (resourceType: string): string => {
   return `${pascal}ResourceProperties`;
 };
 
-// Built-ins only. A deployment may also register custom resource types
-// (#1078), and neither rule below holds for those: their schema comes from the
+// Built-ins only. A deployment may also register custom resource types, and
+// neither rule below holds for those: their schema comes from the
 // operator's registration file rather than `formations.yaml`, and they are not
 // registered in this process at all.
 const RESOURCE_TYPES = [...builtInResourceTypes()].sort();
 
-// ── #900 — the type allowlist is the registry ───────────────────────────────
+// ── The type allowlist is the registry ──────────────────────────────────────
 
 describe('supported formation resource types', () => {
   test('every registered module is a declarable resource type', () => {
-    // The literal that used to live in `formationsTypes.ts` omitted
-    // `model_route`; deriving the set from the registry is what makes
-    // registration the single step to add a type.
+    // A hand-written literal drops an entry like `model_route`; deriving the
+    // set from the registry is what makes registration the single step to add
+    // a type.
     expect(RESOURCE_TYPES).toContain('model_route');
     for (const resourceType of RESOURCE_TYPES) {
       expect(getFormationModule({ resourceType })).toBeDefined();
@@ -123,7 +123,7 @@ describe('supported formation resource types', () => {
   });
 });
 
-// ── #901 — camelCase keys are accepted for every resource type ──────────────
+// ── CamelCase keys are accepted for every resource type ─────────────────────
 
 const SAMPLE_VALUE: Record<string, unknown> = {
   string: 'sample',

@@ -58,7 +58,7 @@ export class Orchestration extends Model {
    * Incremented on every write that changes the graph (`nodes`, `edges`,
    * `stateSchema`, `inputSchema`); each version is archived as an
    * `OrchestrationVersion`. A run pins the version it started on, so editing the
-   * graph never re-shapes a run already in flight (#872) — which makes these
+   * graph never re-shapes a run already in flight — which makes these
    * columns a *draft* for runs started from now on, not a live rewrite of the
    * ones already executing. Metadata-only edits leave it untouched.
    */

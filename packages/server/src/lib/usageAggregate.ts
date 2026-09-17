@@ -99,7 +99,7 @@ export type UsageAggregate = {
   // Paginated: a dimension like `orchestration_run` has one entry per run in
   // the window, so the collection is walked rather than returned whole.
   // `total` is the number of distinct buckets — bucket cardinality, never an
-  // entity count (#1216): read `totals.distinct` for that.
+  // entity count: read `totals.distinct` for that.
   groups: PaginatedResult<UsageAggregateGroup>;
   // Always the whole `[from, to]` window, never the page above it. A
   // page-scoped total read against an allowance would understate spend by

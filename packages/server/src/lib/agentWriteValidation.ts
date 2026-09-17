@@ -22,8 +22,8 @@ import { validateAgentTraceContentMode } from './traceContentPolicy';
  * Rejects an `active_tool_ids` entry that names no tool in the project, so a
  * typo surfaces as a `400` on write instead of silently narrowing the agent's
  * tool surface at generation time. Mirrors `assertGuardrailsExist` — both
- * fields are declared references (`x-soat-ref`) and only one of them used to
- * be checked (#811). A null/empty list is a no-op: it clears the restriction.
+ * fields are declared references (`x-soat-ref`), so both are checked. A
+ * null/empty list is a no-op: it clears the restriction.
  */
 const assertActiveToolsExist = async (args: {
   activeToolIds: string[] | null | undefined;
@@ -59,7 +59,7 @@ const assertActiveToolsExist = async (args: {
  */
 /**
  * Enforces the project's zero-retention floor: an agent may tighten to `none`
- * but never loosen a `none` project back to `full` (#838). Checked on every
+ * but never loosen a `none` project back to `full`. Checked on every
  * write path (create and update alike), so a project-wide mandate cannot be
  * escaped by an agent created afterwards.
  */

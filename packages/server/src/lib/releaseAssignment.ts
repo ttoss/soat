@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
  *
  * Pure by design — no DB, no clock, and nothing agent-specific: the mechanism is
  * "split traffic between two version numbers on a stable identity key", which is
- * the same whatever the versions describe (issue #877, layer 2). A consumer
+ * the same whatever the versions describe. A consumer
  * resolves an identity key and asks this module which version to serve, so the
  * split is reproducible in tests and identical across server processes.
  *

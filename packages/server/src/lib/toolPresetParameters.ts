@@ -109,7 +109,7 @@ const coerceScalar = (args: { value: string; type: string }): unknown => {
 
 /**
  * Retypes preset values that came from a `{{context:<key>}}` token to what the
- * target's schema declares (#345).
+ * target's schema declares.
  *
  * A `tool_context` value is a string — every entry must survive the trip to an
  * HTTP header — while the same identity is a string on one action and a number

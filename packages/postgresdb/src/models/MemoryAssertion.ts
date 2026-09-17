@@ -19,10 +19,10 @@ import { MemoryStore } from './MemoryStore';
  * `principalType`/`principalId`, and on both agent doors that is the agent.
  *
  * `rule` names the post-turn pass over a finished turn. It is deliberately not
- * `extraction`: today that pass is the built-in extractor configured on the
- * agent, and #1324 turns it into a `memory_rules` row with a pluggable handler.
- * Naming the value after the current implementation would schedule its own
- * rename — the `source_type: orchestration` pattern this design exists to stop.
+ * `extraction`: the pass is a `memory_rules` row with a pluggable handler, of
+ * which the built-in extractor is one. Naming the value after a single handler
+ * would schedule its own rename — the `source_type: orchestration` pattern this
+ * design exists to stop.
  */
 export const MEMORY_ASSERTION_MECHANISMS = [
   'tool',

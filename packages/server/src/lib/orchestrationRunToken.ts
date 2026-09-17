@@ -26,7 +26,7 @@ export const signRunToken = (payload: {
   projectPublicId: string;
   /**
    * The durable work this token acts for: an orchestration run, or the task
-   * whose `on_enter` automation dispatched an agent generation (#884). Carried
+   * whose `on_enter` automation dispatched an agent generation. Carried
    * in `orn`, whose *presence* is what marks a run-as token; the value itself
    * is a provenance breadcrumb and is never an authorization input.
    */
@@ -53,7 +53,7 @@ export const signRunToken = (payload: {
 /**
  * Resolves a persisted principal into an `Authorization` header for the platform
  * self-calls the work's `soat` tools make — an orchestration run's tool nodes,
- * or a workflow-dispatched agent's `soat` tool (#884).
+ * or a workflow-dispatched agent's `soat` tool.
  *
  * Returns undefined when there is no principal, or when the principal no longer
  * resolves (a deleted user, a revoked key). The work then proceeds exactly as it

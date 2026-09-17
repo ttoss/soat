@@ -46,7 +46,7 @@ const evaluationsRouter = new Router<Context>();
  * A dataset **item** and an eval **run** carry no project of their own, so they
  * authorize through the parent the path names — the way a memory authorizes
  * through its store. That parent is also the resource a policy author names:
- * `srn:<project>:dataset:<dataset_id>` covers every item in it (#1339).
+ * `srn:<project>:dataset:<dataset_id>` covers every item in it.
  *
  * Which refusal each route answers is decided by what its action *does*, not by
  * which helper it happened to reach for: a read hides the resource (`404`), a

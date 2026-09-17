@@ -171,7 +171,7 @@ Use it to answer "why is this here?" without a harness — a result you expected
 | `min_similarity` | none | Minimum raw cosine a **vector** candidate must reach to be ranked at all, applied before fusion |
 | `rrf_k` | `KNOWLEDGE_RRF_K`, itself `60` | The `k` in `1 / (k + rank)`; smaller weights the top of each ranking more heavily |
 | `recency_half_life_days` | `KNOWLEDGE_RECENCY_HALF_LIFE_DAYS`, itself `0` (off) | Half-life of a decay applied to **memory** results after fusion; `0` disables it |
-| `min_score` | none | **Deprecated** alias for `min_similarity`, removed in v2 |
+| `min_score` | none | **Deprecated** alias for `min_similarity` |
 
 `min_similarity` filters cosine, never `score`. A floor on a fused value would be a rank cutoff wearing a similarity knob's clothes.
 

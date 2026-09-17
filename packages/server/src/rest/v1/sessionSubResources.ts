@@ -182,7 +182,7 @@ sessionSubResourcesRouter.post(
     // `agents:CreateSession` alone would be a way to read history a principal
     // cannot fetch through `GET /sessions/{id}`. Both halves name the *parent*
     // session's SRN — the fork's own id does not exist yet, and the parent is
-    // the resource whose history the call reaches (#1339).
+    // the resource whose history the call reaches.
     const { agentId } = await checkSessionAccess(ctx, 'agents:GetSession');
     await checkSessionAccess(ctx, 'agents:CreateSession');
 

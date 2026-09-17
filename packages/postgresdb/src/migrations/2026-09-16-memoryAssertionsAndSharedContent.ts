@@ -63,13 +63,12 @@ const POINT_AT_CONTENT_SQL = `
 `;
 
 /**
- * The assertion ledger, created empty. Historical writes cannot be
- * reconstructed — a skip left no row and a merge left no trace, which is the
- * problem this change fixes, not a gap here.
+ * The assertion ledger, created empty. A write made before the ledger exists
+ * leaves no row and no trace, so there is nothing to backfill it from.
  *
- * `rule_id` is a plain integer, not a foreign key: `memory_rules` does not
- * exist yet (#1324 adds the table, the constraint, and the values). Null means
- * the built-in extractor.
+ * `rule_id` is a plain integer, not a foreign key: `memory_rules` is created by
+ * `2026-09-16-memory-rules-from-agent-extraction`, which adds the constraint
+ * and the values with it. Null means the built-in extractor.
  */
 const ASSERTIONS_SQL = `
   CREATE TABLE IF NOT EXISTS memory_assertions (

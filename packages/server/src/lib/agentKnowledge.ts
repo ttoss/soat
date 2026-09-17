@@ -28,8 +28,8 @@ export type KnowledgeConfig = {
   /**
    * The store the `write_memory` tool may write to — a capability grant on the
    * agent, and all that is left here of memory writing. What a store *accepts*
-   * from a finished turn is its own ingestion policy, a `memory_rules` row
-   * (#1324), so `extraction` is gone rather than accepted and ignored.
+   * from a finished turn is its own ingestion policy, a `memory_rules` row, so
+   * `extraction` is gone rather than accepted and ignored.
    */
   writeMemoryStoreId?: string;
 };
@@ -298,7 +298,7 @@ export const buildKnowledgeMessages = async (args: {
  * `Deny action:["*"]`) blocks the tool fail-closed.
  *
  * Both are evaluated against the target store's SRN and tags, the same pair
- * `rest/v1/memories.ts` checks a human against (#1323): this tool writes
+ * `rest/v1/memories.ts` checks a human against: this tool writes
  * in-process, so the boundary is the only gate there is, and an operator must
  * be able to say "this agent may write to this store only".
  */

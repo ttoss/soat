@@ -131,7 +131,7 @@ describe('guardrailEvaluation', () => {
     // json-logic-engine coerces a `null` var to 0 for numeric comparisons, so
     // `{ var: 'runtime.activity.actions_24h' }` on the *left* of `<` would
     // otherwise evaluate `null < 100` as `true` and pass the guard — the
-    // opposite of the documented fail-closed invariant (issue #666).
+    // opposite of the documented fail-closed invariant.
     test('a guard referencing an unresolvable runtime.* var fails closed for <', () => {
       const result = evaluateGuardrail({
         guardrail: attach({
@@ -247,7 +247,7 @@ describe('guardrailEvaluation', () => {
     // Same null → 0 coercion bug as the guard case, but here it would let a `<`
     // comparison over an unresolvable runtime.* var pick the "A" branch of an
     // `if`, which is itself a valid class — so the existing "invalid result"
-    // check alone can't catch it (issue #666).
+    // check alone can't catch it.
     test('a class expression using an unresolvable runtime.* var falls back to default_class', () => {
       const result = evaluateGuardrail({
         guardrail: attach({

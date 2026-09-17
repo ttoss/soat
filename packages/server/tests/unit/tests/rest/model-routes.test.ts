@@ -361,7 +361,7 @@ describe('Model Routes', () => {
 
       // A key bound to `projectId` gets its own binding error, with the
       // remedy in the message, rather than the opaque answer a project-filtered
-      // lookup produced (the #906 class, #1339). It still never returns a body.
+      // lookup produced. It still never returns a body.
       const scopedKey = await createRestrictedApiKey('model-routes:NoneOfThem');
       const res = await authenticatedTestClient(scopedKey).get(
         `/api/v1/model-routes/${created.body.id}`
@@ -371,7 +371,7 @@ describe('Model Routes', () => {
     });
 
     // A read the caller may not perform is indistinguishable from absence, now
-    // that the route authorizes against the route's own SRN (#1339). The id has
+    // that the route authorizes against the route's own SRN. The id has
     // to name a real route for the check to be reached at all — a made-up one
     // answers `404` before any policy is consulted.
     test('project-scoped key without GetModelRoute returns 404', async () => {
@@ -465,7 +465,7 @@ describe('Model Routes', () => {
     });
 
     // The id has to name a real route: it is resolved before the policy check,
-    // so a made-up one answers `404` and never reaches the refusal (#1339).
+    // so a made-up one answers `404` and never reaches the refusal.
     test('project-scoped key without UpdateModelRoute returns 403', async () => {
       const created = await createRoute(userToken, {
         name: 'unwritable-route',

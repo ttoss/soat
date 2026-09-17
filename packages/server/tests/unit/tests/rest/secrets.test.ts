@@ -156,10 +156,9 @@ describe('Secrets', () => {
       expect(response.body.value).toBeUndefined();
     });
 
-    // #906: a project-scoped credential reaching another project's secret gets
+    // A project-scoped credential reaching another project's secret gets
     // its own binding error, with the remedy in the message, rather than the
-    // opaque `Forbidden` this route answered before it shared the preamble
-    // (#1339).
+    // opaque `Forbidden` this route answered before it shared the preamble.
     test('a key scoped to another project reports the binding', async () => {
       const keyRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/api-keys')

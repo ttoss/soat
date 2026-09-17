@@ -499,8 +499,8 @@ describe('formationsApply', () => {
 
   test('processResourceChange treats a deleted logical id as a fresh create, not an update', async () => {
     const logicalId = uniqueName('CreateTheme');
-    // A previously-deleted row with a stale physical id must be re-created, not
-    // diffed as an update against the gone resource.
+    // A row marked deleted, carrying a stale physical id, must be re-created
+    // rather than diffed as an update against the resource that is gone.
     const existing = await db.FormationResource.create({
       formationId,
       logicalId,

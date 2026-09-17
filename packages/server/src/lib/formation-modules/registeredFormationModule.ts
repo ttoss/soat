@@ -1,5 +1,5 @@
 /**
- * Builds a `FormationModule` for an operator-registered resource type (#1078).
+ * Builds a `FormationModule` for an operator-registered resource type.
  *
  * The counterpart to `defineFormationModule`: that factory backs a type with an
  * in-process lib call, this one with a signed HTTP round trip to the registered

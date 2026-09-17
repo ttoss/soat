@@ -7,7 +7,7 @@ import { join } from 'node:path';
  * empty result". A route that loads one resource and checks its project must
  * use `requireProjectAccess` instead, where "an empty scope is a `403`".
  *
- * Thirteen write routes used the read helper anyway (#1029). The consequence is
+ * Thirteen write routes used the read helper anyway. The consequence is
  * not an authorization hole — the scoped lookup still finds nothing — but the
  * denial arrives as `404 RESOURCE_NOT_FOUND` instead of `403`, from routes whose
  * `GET` twin answers `200` for the same caller at the same instant. Worse, an

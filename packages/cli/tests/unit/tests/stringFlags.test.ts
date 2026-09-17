@@ -1,9 +1,9 @@
 import { createCliTestClient } from '../testClient';
 
 // A `type: string` flag must reach the server as a string whatever its content
-// looks like. Coercion used to be type-blind, parsing anything JSON-shaped —
-// which made `--value "$(cat service-account.json)"` arrive as an object and
-// answer 500 instead of storing the secret.
+// looks like. Type-blind coercion parses anything JSON-shaped, which makes
+// `--value "$(cat service-account.json)"` arrive as an object and answer 500
+// instead of storing the secret.
 describe('string-typed flags are not JSON-coerced', () => {
   const cli = createCliTestClient();
 

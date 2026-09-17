@@ -74,7 +74,7 @@ export const sweepStalledTasks = createSweep<TaskInstance>({
  * Recovers tasks whose dispatch outcome nobody was left to hear.
  *
  * A dispatch is awaited in-process while the run it waits on is durable and
- * scheduler-owned (#855). A restart while the run is `sleeping` loses the
+ * scheduler-owned. A restart while the run is `sleeping` loses the
  * awaiter but not the run: the run finishes, and without this sweep nothing
  * routes `on_complete`, stranding the task at `automation_status: 'running'`.
  *

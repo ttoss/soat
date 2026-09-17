@@ -319,7 +319,7 @@ type ToolUpdateArgs = {
  *
  * `preset_parameters` is checked on its own, not only alongside an `execute` /
  * `mcp` change: a PATCH that touches nothing but the presets is exactly the
- * write that introduces a malformed token there (#345).
+ * write that introduces a malformed token there.
  */
 const validateToolUpdateTemplates = async (params: {
   args: ToolUpdateArgs;
@@ -434,7 +434,7 @@ export const callTool = async (args: {
   // so a redelivered orchestration node call can be deduped downstream.
   idempotencyKey?: string;
   // An orchestration `tool`/`poll` node passes the run's bag, so a tool reached
-  // with no agent in between still resolves its `{{context:}}` tokens (#345). A
+  // with no agent in between still resolves its `{{context:}}` tokens. A
   // direct `POST /tools/{id}/call` passes none.
   toolContext?: Record<string, string>;
 }): Promise<unknown> => {

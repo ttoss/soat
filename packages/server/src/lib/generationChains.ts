@@ -2,11 +2,11 @@
  * The continuation chain as a first-class, readable record.
  *
  * A chain is the population of generations descending from one root through
- * `initiator_generation_id` declarations. Before this it existed only as a value
+ * `initiator_generation_id` declarations. Without the row it is only a value
  * repeated on its members (`generations.root_generation_id`), so "how big is
- * this chain, is it still alive, and why did it stop?" could only be answered by
- * a `COUNT` plus inference from stop reasons — which is why #1161 ran for 17
- * days before anyone named the runaway as one thing.
+ * this chain, is it still alive, and why did it stop?" can be answered only by
+ * a `COUNT` plus inference from stop reasons — and a runaway chain has nothing
+ * naming it as one thing to stop.
  *
  * Two rules hold everything else together:
  *

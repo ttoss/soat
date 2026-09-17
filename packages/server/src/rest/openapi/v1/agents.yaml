@@ -1109,7 +1109,7 @@ components:
           type: string
           nullable: true
           # `null` is a real value here (inherit the project), so it belongs in
-          # the enum — otherwise the generated SDK type omits it (#861).
+          # the enum — otherwise the generated SDK type omits it.
           enum: [full, none, null]
           description: >-
             Agent-scope zero-retention setting. `null` (the default) inherits
@@ -1121,7 +1121,7 @@ components:
           type: string
           nullable: true
           # `null` is a real value here (the terminating default), so it belongs
-          # in the enum — otherwise the generated SDK type omits it (#861).
+          # in the enum — otherwise the generated SDK type omits it.
           enum: [terminate, react, null]
           description: >-
             What happens when one of this agent's held tool calls expires
@@ -1474,7 +1474,7 @@ components:
           type: string
           nullable: true
           # `null` is a real value here (inherit the project), so it belongs in
-          # the enum — otherwise the generated SDK type omits it (#861).
+          # the enum — otherwise the generated SDK type omits it.
           enum: [full, none, null]
           description: >-
             Zero-retention opt-in for this agent. `null` inherits the project's
@@ -1485,7 +1485,7 @@ components:
           type: string
           nullable: true
           # `null` is a real value here (the terminating default), so it belongs
-          # in the enum — otherwise the generated SDK type omits it (#861).
+          # in the enum — otherwise the generated SDK type omits it.
           enum: [terminate, react, null]
           description: >-
             What happens when one of this agent's held tool calls expires
@@ -1664,7 +1664,7 @@ components:
           type: string
           nullable: true
           # `null` is a real value here (inherit the project), so it belongs in
-          # the enum — otherwise the generated SDK type omits it (#861).
+          # the enum — otherwise the generated SDK type omits it.
           enum: [full, none, null]
           description: >-
             Zero-retention opt-in for this agent. `null` inherits the project's
@@ -1675,7 +1675,7 @@ components:
           type: string
           nullable: true
           # `null` is a real value here (the terminating default), so it belongs
-          # in the enum — otherwise the generated SDK type omits it (#861).
+          # in the enum — otherwise the generated SDK type omits it.
           enum: [terminate, react, null]
           description: >-
             What happens when one of this agent's held tool calls expires

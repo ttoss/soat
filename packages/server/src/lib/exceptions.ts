@@ -370,4 +370,4 @@ export const resolveException = async (args: {
 };
 
 // The event-driven auto-filing producers live in `exceptionAutoFile.ts`, split
-// out to stay under this file's `max-lines` limit (#1130).
+// out to stay under this file's `max-lines` limit.

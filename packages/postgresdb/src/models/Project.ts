@@ -52,7 +52,7 @@ export class Project extends Model {
   // engine refuses to start the next child, `null` to defer to the
   // deployment-wide ceiling. Like `maxChainGenerations`, every ceiling can only
   // make the bound smaller, so this is the operator's bound on a self-
-  // referencing graph that a graph author cannot opt out of (#1185).
+  // referencing graph that a graph author cannot opt out of.
   @Column({ type: DataType.INTEGER, allowNull: true })
   declare maxOrchestrationRunDepth: number | null;
 
@@ -70,7 +70,7 @@ export class Project extends Model {
   declare auditReadsEnabled: boolean;
 
   // `null` disables retention, so shipping this destroyed nothing already
-  // stored — a tenant opts in (#837). Scoped to the project, not the agent: a
+  // stored — a tenant opts in. Scoped to the project, not the agent: a
   // purge cascades down the trace subtree, and nested calls create child traces
   // owned by other agents, so a per-agent window would let a short-window root
   // purge a child that asked for a longer one.
@@ -78,7 +78,7 @@ export class Project extends Model {
   declare traceContentRetentionDays: number | null;
 
   // `'none'` means content is never written at all, for every agent in the
-  // project (#838). An agent may tighten to `'none'`, never loosen — the same
+  // project. An agent may tighten to `'none'`, never loosen — the same
   // "project sets the floor, the agent narrows" shape as `guardrailIds`.
   @Column({
     type: DataType.STRING(16),

@@ -10,7 +10,7 @@ import type { Transaction } from './dbTransaction';
  * through a required join to `files.project_id`, memories through
  * `memory_store_id` and `invalidated_at` — so a selective scope can discard the whole
  * candidate list and return short, or empty, while matching rows sit further
- * down the graph. Nothing errors; recall just collapses (#1220). An iterative
+ * down the graph. Nothing errors; recall just collapses. An iterative
  * scan keeps widening the search until the limit is satisfied after filtering.
  *
  * `strict_order`, not `relaxed_order`: the knowledge and memories contracts

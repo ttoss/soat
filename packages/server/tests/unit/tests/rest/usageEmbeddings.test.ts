@@ -4,9 +4,9 @@ import { authenticatedTestClient, testClient } from '../../testClient';
 // Every embedding the server makes reaches the provider through one function, so
 // these assertions drive the entry points that reach it and read the meter back:
 // the stateless endpoint, document ingestion, a memory store write, and a knowledge
-// search (#1208). The stub embedding provider reports one token per word, and
+// search. The stub embedding provider reports one token per word, and
 // the rate comes from `EMBEDDING_INPUT_1M_TOKEN_PRICE_USD` rather than the price
-// book (#1213).
+// book.
 
 type MeterRow = {
   meter_type: string;

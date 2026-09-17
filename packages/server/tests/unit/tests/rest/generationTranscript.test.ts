@@ -12,7 +12,7 @@ import {
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 /**
- * Reading a generation back as a transcript (#1021).
+ * Reading a generation back as a transcript.
  *
  * The generations under test are **real**: the agent's AI provider points at a
  * local OpenAI-compatible stub, so the whole path runs and the steps object on
@@ -318,7 +318,7 @@ describe('GET /api/v1/generations/:generation_id/transcript', () => {
     // The whole reason this test runs a real turn: these shapes are written by
     // `ai@7`, not by a fixture. `toolCalls` / `toolResults` are prototype
     // getters there, so they never reach disk — a projection reading them would
-    // return nothing here while passing against live SDK objects (#1012).
+    // return nothing here while passing against live SDK objects.
     stubResponses = [toolCallCompletion(), textCompletion(ASSISTANT_TEXT)];
     const generation = await runGeneration({ agentId: toolAgentId });
 
@@ -357,7 +357,7 @@ describe('GET /api/v1/generations/:generation_id/transcript', () => {
 
   test('returns a 200 skeleton for a zero-retention generation', async () => {
     // Never a 404 and never invented content: the erasure must be provable,
-    // which is what distinguishes it from a resource that never existed (#836).
+    // which is what distinguishes it from a resource that never existed.
     const generation = await runGeneration({ agentId: zeroRetentionAgentId });
 
     const res = await transcript(generation.id);
@@ -377,7 +377,7 @@ describe('GET /api/v1/generations/:generation_id/transcript', () => {
   test('returns a 200 skeleton carrying the purging principal', async () => {
     // A generation purge leaves the trace's steps file alone, and the turn's
     // answer lives in both — so the transcript must not project the file back,
-    // serving erased content in a response that reports it erased (#835/#836).
+    // serving erased content in a response that reports it erased.
     const generation = await runGeneration({});
 
     const purge = await asUser().delete(
@@ -431,7 +431,7 @@ describe('GET /api/v1/generations/:generation_id/transcript', () => {
   });
 
   // The generation half is a read, so a caller who may not perform it sees
-  // absence rather than a refusal (#1339). The trace half below stays `403`:
+  // absence rather than a refusal. The trace half below stays `403`:
   // the generation read has already succeeded there, so the turn's existence is
   // no longer a secret and a plain refusal is the more useful answer.
   test('a user without generations:GetGeneration gets 404', async () => {
@@ -450,7 +450,7 @@ describe('GET /api/v1/generations/:generation_id/transcript', () => {
   });
 
   test('is scoped to its own generation when a trace_id is grouped', async () => {
-    // Grouping appends (#1024), so one steps object holds both turns
+    // Grouping appends, so one steps object holds both turns
     // concatenated. Each transcript must return only its own segment —
     // projecting the whole object would report the other turn's steps here, and
     // step_count, which counts every grouped turn, would agree with it.
@@ -493,9 +493,9 @@ describe('GET /api/v1/generations/:generation_id/transcript', () => {
     expect(traceRes.body.step_count).toBe(2);
   });
 
-  // `RESOURCE_NOT_FOUND`, the code this module's other routes already answer
-  // for a missing generation — the transcript used to be the one that differed,
-  // and the preamble it now shares with them settles it (#913's shape rule).
+  // `RESOURCE_NOT_FOUND`, the code this module's other routes answer for a
+  // missing generation. The transcript shares their preamble, so it cannot
+  // differ.
   test('an unknown generation returns 404', async () => {
     const res = await transcript('gen_does_not_exist');
     expect(res.status).toBe(404);

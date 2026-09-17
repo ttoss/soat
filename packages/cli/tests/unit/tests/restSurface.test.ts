@@ -5,12 +5,12 @@ import { routes } from '../../../src/generated/routes';
  *
  * The specs it generates from also describe the OAuth 2.1 protocol endpoints,
  * whose paths the RFCs fix and which `@ttoss/auth-core` mounts at the root, so
- * a client can discover the flow without a live host to probe (#1099). A
- * command for them would be broken, not merely unused.
+ * a client can discover the flow without a live host to probe. A command for
+ * them would be broken, not merely unused.
  *
- * `scripts/generate.ts` drops them by path prefix; this asserts the drop
- * happened, since a stale filter would surface as a command that fails at its
- * first request rather than as a generation error.
+ * `scripts/generate.ts` drops them by path prefix; this asserts the drop, since
+ * a stale filter surfaces as a command that fails at its first request rather
+ * than as a generation error.
  */
 describe('generated command surface covers the REST API only', () => {
   test('no command wraps an OAuth protocol endpoint', () => {

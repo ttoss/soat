@@ -4,10 +4,10 @@
  *
  * `deleteProject` decides between `409 PROJECT_HAS_DEPENDENTS`, a bare
  * `project.destroy()` and the force cascade from two hand-listed sets of
- * models. #1079 is what happens when a module lands a project-scoped table and
- * neither list learns about it: `countProjectDependents` returned `0`, the bare
- * destroy tripped the foreign key, and every delete of a project holding a
- * dataset — with or without `force` — answered `500`.
+ * models. A project-scoped table missing from both lists makes
+ * `countProjectDependents` return `0`, the bare destroy trip the foreign key,
+ * and every delete of a project holding one — with or without `force` —
+ * answer `500`.
  *
  * So the lists are derived here from `information_schema`: every foreign key
  * pointing at `projects` decides, by its own delete rule, which list its model

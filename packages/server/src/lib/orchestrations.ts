@@ -94,7 +94,7 @@ export type OrchestrationNode = {
   parallelism?: number;
   // loop / sub_orchestration node — narrows the run's `tool_context` before it
   // is handed to the child run, the way a tool's `contextKeys` narrows what
-  // egresses to it (#1153). `undefined`/`null` inherits everything.
+  // egresses to it. `undefined`/`null` inherits everything.
   contextKeys?: string[] | null;
   // poll node — reuses the tool fields above; `exitCondition` is JSON Logic,
   // truthy to stop.
@@ -192,7 +192,7 @@ export type MappedOrchestrationRun = {
   id: string;
   orchestration_id: string;
   // The orchestration version this run executes, fixed when the run started.
-  // Null for runs created before pinning existed (#872), which execute the live
+  // Null for runs created before pinning existed, which execute the live
   // graph — the only thing there is to fall back to.
   orchestration_version: number | null;
   project_id: string;
@@ -205,7 +205,7 @@ export type MappedOrchestrationRun = {
   /**
    * When an operator pause was requested, and why. Set independently of
    * `status`: a `running` run keeps running until its next checkpoint, and a run
-   * parked on a node keeps that node's `required_action` (#1237).
+   * parked on a node keeps that node's `required_action`.
    */
   pause_requested_at: Date | null;
   pause_reason: string | null;
@@ -226,7 +226,7 @@ export type MappedOrchestrationRun = {
   parent_orchestration_run_id: string | null;
   parent_node_id: string | null;
   // `loop` / `sub_orchestration` edges between this run and the one a caller
-  // started; 0 for a caller-started run. What the depth bound counts (#1185).
+  // started; 0 for a caller-started run. What the depth bound counts.
   orchestration_run_depth: number;
   node_executions: MappedNodeExecution[];
   // Usage roll-up (tokens + cost_usd) summed across every metered generation the
@@ -303,7 +303,7 @@ export const mapRequiredAction = (raw: unknown): object | null => {
 
   const optional = Object.entries({
     // A node pause names the node it waits at; an operator pause has no node of
-    // its own and carries a `reason` instead (#1237), so these are per-kind
+    // its own and carries a `reason` instead, so these are per-kind
     // rather than universal.
     node_id: field('nodeId', 'node_id'),
     prompt: action.prompt,
@@ -632,7 +632,7 @@ export const findOrchestrationRun = async (args: {
   if (!run) return null;
 
   // `usage` is the subtree figure and `usage_own` the run's own nodes — both
-  // from one pass, so the split costs no extra query (#1135).
+  // from one pass, so the split costs no extra query.
   const rollups = await getOrchestrationRunUsageRollups({
     runInternalId: run.id as number,
     runPublicId: run.publicId as string,
@@ -644,14 +644,14 @@ export const findOrchestrationRun = async (args: {
 export const listOrchestrationRuns = async (args: {
   orchestrationPublicId?: string;
   // Without this a caller holding a parent could not name its children, which
-  // let a parent's total read as complete when it was not (#1135).
+  // let a parent's total read as complete when it was not.
   parentRunId?: string;
   // Makes an aggregate over runs safe: `usage` is transitive, so summing it
   // across a list mixing parents and children counts the children twice.
   nested?: boolean;
   // ORed. Without it, finding the runs still driving means paging every run the
   // project ever started: a long-running old run sits behind any number of
-  // newer terminal ones, so an early exit on the newest page is unsound (#1242).
+  // newer terminal ones, so an early exit on the newest page is unsound.
   statuses?: OrchestrationRunStatus[];
   projectIds?: number[];
   limit?: number;

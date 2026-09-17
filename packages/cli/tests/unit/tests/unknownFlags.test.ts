@@ -1,9 +1,9 @@
 import { createCliTestClient } from '../testClient';
 
 /**
- * A flag matching no parameter of the resolved command used to be forwarded
- * rather than reported: on a GET it became a query param the server ignores, so
- * `--limitt 1` returned every row instead of one — the filter failed **open**,
+ * A flag matching no parameter of the resolved command is reported, never
+ * forwarded. Forwarding one on a GET makes it a query param the server ignores,
+ * so `--limitt 1` returns every row instead of one — the filter fails **open**,
  * with exit 0 and no warning.
  *
  * The gate is deliberately limited to that case. Request bodies already fail

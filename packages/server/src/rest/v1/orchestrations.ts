@@ -60,7 +60,7 @@ const resolveAuth = async (
   requireAuth(ctx);
   // `requireProjectAccess`, not the read helper: a caller permitted in zero
   // projects cannot create here, and an empty scope must say so with a `403`
-  // rather than falling through to "project_id is required" (#1029).
+  // rather than falling through to "project_id is required".
   const projectIds = await requireProjectAccess({
     ctx,
     projectPublicId,

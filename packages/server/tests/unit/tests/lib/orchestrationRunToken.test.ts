@@ -211,7 +211,7 @@ describe('orchestration run-as token', () => {
   });
 
   /**
-   * What a generation records as having started it (#894). The two exclusions
+   * What a generation records as having started it. The two exclusions
    * below are the security-relevant half and are the reason this is tested
    * directly: reaching the trigger and OAuth branches through an entry point
    * means standing up a trigger dispatch or a consented OAuth token *and* an

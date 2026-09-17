@@ -1,6 +1,6 @@
 /**
  * Replacement disposal on a formation deploy: when it runs, and what happens
- * when it fails (#1193, #1194).
+ * when it fails.
  *
  * Driven through a registered resource type because replacement is only
  * reachable there — a handler answering an `update` with a different
@@ -28,7 +28,7 @@ import {
   startFakeFormationHandler,
 } from '../../fixtures/formationHandler';
 
-// An operator-registered type has no SOAT action to authorize (#1181).
+// An operator-registered type has no SOAT action to authorize.
 const neverAsked: FormationAuthorizer = (request) => {
   throw new Error(
     `unexpected authorization request for ${request.resourceType}`
@@ -150,7 +150,7 @@ describe('a replaced resource is disposed of at the end of the deploy', () => {
     });
 
     // The desired state is realised, so the deploy succeeds; the leak is
-    // reported on the formation rather than rolled back (#1193).
+    // reported on the formation rather than rolled back.
     expect(updated.status).toBe('active');
     expect(updated.resources?.[0].physical_resource_id).toBe('chn_301');
     expect(updated.error?.code).toBe('FORMATION_REPLACE_CLEANUP_FAILED');
@@ -257,7 +257,7 @@ describe('a replaced resource is disposed of at the end of the deploy', () => {
   });
 
   test('a replaced resource is disposed of only after its dependents are re-pointed', async () => {
-    // #1194: the old resource is still referenced while a dependent points at
+    // The old resource is still referenced while a dependent points at
     // it, and a type whose delete refuses over live references can never be
     // cleaned up if the disposal runs first.
     handler.replies.create = (request) => {

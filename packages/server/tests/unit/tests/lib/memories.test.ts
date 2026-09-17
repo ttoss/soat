@@ -557,7 +557,7 @@ describe('writeMemory', () => {
       expect(assertions[0].publicId).toMatch(/^massert_/);
     });
 
-    // A skip is the outcome that left no record at all before this table.
+    // A skip is the outcome the ledger is the only record of.
     test('points a skipped assertion at the memory that matched', async () => {
       const memoryStoreId = await createMemoryStoreId('Assertion Skip Target');
       const first = await seedAt({

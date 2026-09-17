@@ -133,9 +133,9 @@ describe('releaseAssignment', () => {
           ?.promotion_gate
       ).toBe('eval_abc');
 
-      // Every release stored before the gate existed lacks the key entirely.
-      // Reading that as "no gate" is what keeps a running rollout parseable —
-      // returning null here would drop its traffic back to the live config.
+      // A stored release may lack the key entirely. Reading that as "no gate"
+      // is what keeps a running rollout parseable — returning null here would
+      // drop its traffic back to the live config.
       const { promotion_gate: _gate, ...ungated } = release;
       expect(parseActiveRelease(ungated)).toEqual({
         stable_version: 3,

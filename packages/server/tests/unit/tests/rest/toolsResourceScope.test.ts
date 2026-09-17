@@ -5,11 +5,11 @@ import { authenticatedTestClient, loginAs } from '../../testClient';
  * Tools authorize per tool, not per project: a policy naming one tool's SRN
  * reaches that tool and refuses its siblings, on every route that acts on one.
  *
- * `tools:CallTool` is why this is the module the audit put first — the route
- * *executes*. `approvals.ts` already checks `CallTool` against the tool's own
- * SRN, so before this a per-tool policy was honored on the approval path and
- * ignored on the direct route: the same grant answered two different questions
- * depending on which door the call came through (#1339).
+ * `tools:CallTool` is what makes this module the sharpest case — the route
+ * *executes*. `approvals.ts` checks `CallTool` against the tool's own SRN, so a
+ * direct route authorizing per project would honour a per-tool policy on the
+ * approval path and ignore it here: the same grant answering two different
+ * questions depending on which door the call came through.
  */
 describe('a policy scoped to one tool does not reach another', () => {
   let adminToken: string;
@@ -146,7 +146,7 @@ describe('a policy scoped to one tool does not reach another', () => {
     // The listing is project-scoped for every module: it probes the caller's
     // policy with `srn:<project>:tool:*`, which a statement naming one tool
     // cannot match. Narrowing a listing by resource is a shared-IAM change,
-    // so it is deliberately not this one (#1336).
+    // so it is deliberately not this one.
     test('a policy scoped to one tool cannot list tools', async () => {
       const response = await authenticatedTestClient(scopedToken).get(
         `/api/v1/tools?project_id=${projectId}`
@@ -162,7 +162,7 @@ describe('a policy scoped to one tool does not reach another', () => {
    *
    * A sibling in a project the caller *does* reach is `403`: they can see the
    * project, so being told plainly that this tool is off limits tells them
-   * nothing they could not already work out (#1029). A tool in a project they
+   * nothing they could not already work out. A tool in a project they
    * reach not at all is `404`: there, a `403` would confirm its existence to
    * someone with no business knowing it exists.
    */

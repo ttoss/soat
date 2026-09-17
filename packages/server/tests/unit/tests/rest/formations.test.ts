@@ -95,7 +95,7 @@ describe('Formations', () => {
                 'agents:DeleteAgent',
                 'memories:GetMemoryStore',
                 // Per-resource actions: a formation may only do what the caller
-                // could do directly (#1181), so deploying these types needs the
+                // could do directly, so deploying these types needs the
                 // same actions a direct call would. `policy` is deliberately
                 // absent — it gates on the admin role.
                 'api-keys:CreateApiKey',
@@ -215,9 +215,9 @@ outputs:
       expect(res.status).toBe(401);
     });
 
-    // #900: the resource-type allowlist used to be a hand-written literal that
-    // had fallen behind the module registry, so `model_route` — a fully
-    // implemented resource type — was unreachable through the API.
+    // The resource-type allowlist is derived from the module registry. A
+    // hand-written literal falls behind it, leaving a fully implemented
+    // resource type like `model_route` unreachable through the API.
     test('a model_route resource is a declarable type', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/formations/validate')
@@ -242,9 +242,9 @@ outputs:
       expect(res.body.errors).toEqual([]);
     });
 
-    // #901: camelCase keys were normalized by 20 of 24 modules. `tool` was one
-    // of the four that skipped it, so the same spelling that worked elsewhere
-    // in a template was reported as an unknown field here.
+    // CamelCase keys are normalized for every module. A module that skips the
+    // step reports the same spelling that works elsewhere in a template as an
+    // unknown field.
     test('a tool resource accepts camelCase property keys', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/formations/validate')
@@ -572,8 +572,8 @@ resources:
 
     // A deploy answers 2xx even when it fails — the operation ran, and partial
     // failure is state on the resource. That is only defensible if the response
-    // the caller already holds says *why*; before #1028 the reason lived solely
-    // on a `list-formation-events` call the caller had to know to make.
+    // the caller already holds says *why*, rather than leaving the reason on a
+    // `list-formation-events` call the caller has to know to make.
     test('a failed deploy explains itself on the response body', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/formations')
@@ -1391,7 +1391,7 @@ resources:
       expect(getRes.status).toBe(200);
       expect(getRes.body.status).toBe('delete_failed');
       // The 409 is gone once the request is over; the wedged stack still has
-      // to say why it is wedged when someone reads it back (#1028).
+      // to say why it is wedged when someone reads it back.
       expect(getRes.body.error).toEqual({
         code: 'FORMATION_DELETE_FAILED',
         message: expect.stringContaining('CorruptedResource'),
@@ -1405,7 +1405,7 @@ resources:
 
     // Teardown is ordered and not transactional, so discovering this refusal by
     // attempting the delete destroyed everything ordered ahead of the agent and
-    // wedged the stack in `delete_failed` (#985).
+    // wedged the stack in `delete_failed`.
     test('an agent with generation history blocks teardown before anything is deleted', async () => {
       const aiProvRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/ai-providers')
@@ -2633,7 +2633,7 @@ resources:
       expect(toolResource.status).toBe('updated');
     });
 
-    // #945 item 3: a template can declare the per-tool context allowlist, and
+    // A template can declare the per-tool context allowlist, and
     // the read-back view reports it (no explicit `read` — the schema field is
     // picked up from the lib mapper).
     test('applies a tool resource declaring context_keys and reads it back', async () => {
@@ -4231,7 +4231,7 @@ resources:
       expect(res.body.valid).toBe(false);
     });
 
-    // #945 item 2: the formation validator shares the token rules with the REST
+    // The formation validator shares the token rules with the REST
     // write path, so a template cannot author a tool the API would reject.
     test('validate accepts a {{context:...}} token in a tool header', async () => {
       const res = await authenticatedTestClient(adminToken)

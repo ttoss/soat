@@ -6,8 +6,7 @@ import {
 } from 'src/lib/traceStepSegments';
 
 /**
- * The index that divides a trace's steps object between grouped generations
- * (#1024).
+ * The index that divides a trace's steps object between grouped generations.
  *
  * Tested directly (keep-list rule 1): it is a pure algorithm whose input space
  * — how many generations, in what order, which one is rewriting, whether the

@@ -793,9 +793,8 @@ describe('Evaluations', () => {
       ).id;
     });
 
-    // Phase 1 required `wait` precisely so this default could arrive without
-    // changing any existing caller's behavior: omitting it used to be a 400, so
-    // no caller can have been relying on it meaning "synchronous".
+    // The documented default is the queued path, so a caller that omits `wait`
+    // must not be handed a synchronous run.
     test('omitting `wait` queues the run, matching the documented default', async () => {
       const res = await asUser().post(`/api/v1/evals/${evalId}/runs`).send({});
 
@@ -885,10 +884,9 @@ describe('Evaluations', () => {
       expect(res.body.error.message).toContain('agent_version 99');
     });
 
-    // #342 (same gap, second module): an eval run is caller-started, durable and
-    // queued by default, and until now had no caller-settable field at all —
-    // every field on the request was platform-owned. A CI system scoring one run
-    // per commit had nowhere to record which commit.
+    // An eval run is caller-started, durable and queued by default, and every
+    // other field on the request is platform-owned. Without this one, a CI
+    // system scoring one run per commit has nowhere to record which commit.
     describe('metadata', () => {
       test('round-trips verbatim on create, single read and list', async () => {
         const metadata = { commit_sha: 'abc123', pr_number: 1129 };
@@ -931,7 +929,7 @@ describe('Evaluations', () => {
       });
     });
 
-    // #1150: an eval scores the agent you are about to ship. An agent whose
+    // An eval scores the agent you are about to ship. An agent whose
     // tools authorize through `tool_context` could not be scored as it runs in
     // production — every item failed with `MISSING_TOOL_CONTEXT_KEY`, or worse,
     // a tool that tolerates a missing key evaluated a different configuration
@@ -1398,7 +1396,7 @@ describe('Evaluations', () => {
       expect(mockCreateGeneration).not.toHaveBeenCalled();
     });
 
-    // #1150: the queued path is why the bag lives on the run row rather than on
+    // The queued path is why the bag lives on the run row rather than on
     // the starting request. `wait: false` is the default and a trigger-fired run
     // is always background, so the process that drives the items has no request
     // to read a bag from.

@@ -45,8 +45,8 @@ const MODULE_DOCS_BASE_URL = 'https://soat.ttoss.dev/docs/modules';
  * `generateCliRouteManifest` defaults a missing type to `"string"`, and
  * `parseFlagValue` never JSON-coerces a declared-string flag (deliberately, so
  * a JSON key file survives `create-secret --value "$(cat key.json)"`), so the
- * object form reached the server as literal text and forcing was silently
- * dropped at every layer (#955).
+ * object form would reach the server as literal text, with forcing silently
+ * dropped at every layer.
  *
  * `'any'` puts these flags on the permissive path, where a `{`/`[` value is
  * parsed as JSON and a bare word stays a string. In JSON Schema an absent

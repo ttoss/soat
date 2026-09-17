@@ -219,8 +219,8 @@ describe('agentToolApprovalContinuation (tool_call resolution)', () => {
   });
 
   test('the continuation carries the principal persisted on the proposing generation', async () => {
-    // The durability property #894 turns on: the identity survives the hop, so
-    // a further approval re-mints from the continuation's own row. That the
+    // The durability property: the identity survives the hop, so a further
+    // approval re-mints from the continuation's own row. That the
     // credential authenticates is asserted in `rest/soatSelfCall.test.ts`.
     const agent = await db.Agent.findOne({
       where: { publicId: agentPublicId },
@@ -275,8 +275,8 @@ describe('agentToolApprovalContinuation (tool_call resolution)', () => {
   test('a proposing generation that no longer exists leaves the continuation without a credential', async () => {
     // `ApprovalItem.generationId` is a stored public id, not a foreign key, so
     // the row it names can be gone by the time a days-old item is resolved.
-    // That must degrade to the pre-#894 behaviour — an unauthenticated
-    // continuation — not fail the resolution.
+    // That must degrade to an unauthenticated continuation, not fail the
+    // resolution.
     const item = buildToolCallItem({
       id: 'apr_missing_gen_test',
       generation_id: 'gen_doesnotexist0',

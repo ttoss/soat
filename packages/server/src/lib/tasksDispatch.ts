@@ -20,7 +20,7 @@ export const NON_SUCCESS_TERMINAL_STATUSES: ReadonlySet<
   MappedOrchestrationRun['status']
 > = new Set(['failed', 'cancelled', 'expired']);
 
-// `sleeping` is a durable, scheduler-owned wait, not in flight (#855).
+// `sleeping` is a durable, scheduler-owned wait, not in flight.
 // Exported so the reconciler decides "settled" by the same rule as the
 // in-process awaiter below.
 export const RUN_IN_FLIGHT_STATUSES: ReadonlySet<
@@ -47,7 +47,7 @@ const pollIntervalMs = (): number => {
  * `orchestrationScheduler.ts` exactly like any other orchestration run
  * (`persistScheduledWait` → `sleeping` → the scheduler wakes it) — this loop
  * only checks whether that durable machinery has reached a resting point yet,
- * it never itself holds a `setTimeout` open for the wait's duration (#855).
+ * it never itself holds a `setTimeout` open for the wait's duration.
  */
 const waitForOrchestrationRunSettlement = async (args: {
   orchestrationRunId: string;
@@ -81,7 +81,7 @@ export type DispatchResult = {
   /**
    * Set only by a `tool` dispatch, which produces neither a generation nor a
    * run. It is that kind's provenance: every automation move must record a
-   * machine-readable cause (#792), and for a tool call the tool is it.
+   * machine-readable cause, and for a tool call the tool is it.
    */
   toolId: string | null;
 };
@@ -110,9 +110,9 @@ const buildAgentMessages = (
  * it and there is no inbound request to borrow a credential from. So it re-mints
  * the same run-as token, keyed to the task, or the agent's `soat` tools reach
  * the loopback unauthenticated and the model is handed a 401 in place of a tool
- * result (#884). The header is `undefined` when the chain has no principal — a
+ * result. The header is `undefined` when the chain has no principal — a
  * trigger- or OAuth-started task deliberately records none, and the generation
- * then behaves exactly as it did before, self-calls included (see
+ * then runs unauthenticated, self-calls included (see
  * `orchestrationRunToken.ts`).
  */
 const runAgentDispatch = async (args: {
@@ -172,7 +172,7 @@ const runToolDispatch = async (args: {
   principal?: RequestPrincipal;
   // A `tool` dispatch carries the same bag its `agent`/`orchestration` siblings
   // do; without it a tool naming a `{{context:}}` header or preset cannot be
-  // dispatched from a workflow at all (#345).
+  // dispatched from a workflow at all.
   toolContext?: Record<string, string>;
 }): Promise<DispatchResult> => {
   const authHeader = await buildRunAuthHeader({
@@ -235,14 +235,14 @@ export const runDispatch = async (args: {
   principal?: RequestPrincipal;
   /**
    * The task's caller context, forwarded as `X-Soat-Context-*` headers on the
-   * tool calls this dispatch makes (#950). For an orchestration dispatch it is
+   * tool calls this dispatch makes. For an orchestration dispatch it is
    * handed to the run, which carries it to every agent node — and to every child
-   * run a `loop` or `sub_orchestration` node starts (#945 item 1).
+   * run a `loop` or `sub_orchestration` node starts.
    */
   toolContext?: Record<string, string>;
   // Called as soon as a dispatch id is known but before the (blocking) wait
   // completes. For orchestration dispatches this fires at run creation, so the
-  // run id can be persisted while the run is still in flight (#606).
+  // run id can be persisted while the run is still in flight.
   onDispatchStarted?: (ids: {
     generationId: string | null;
     orchestrationRunId: string | null;
@@ -274,7 +274,7 @@ export const runDispatch = async (args: {
 
   // Durable mode, never `wait: true`: the in-process `inlineWaits` path would
   // sleep a poll/delay node's whole interval here instead of parking
-  // `sleeping` for the scheduler (#855). `runDispatch` still resolves once the
+  // `sleeping` for the scheduler. `runDispatch` still resolves once the
   // run settles, so callers are unaffected.
   const started = await startOrchestrationRun({
     orchestrationPublicId: args.dispatch.orchestrationId!,
@@ -323,7 +323,7 @@ export const runDispatch = async (args: {
  * the `generation_id` (see `recordGenerationFailure`), written snake_case
  * to match the external REST contract. This lets the
  * on_failure-driven transition link the causing record, mirroring the
- * on_complete path's `id: generationId ?? orchestrationRunId` provenance (#607).
+ * on_complete path's `id: generationId ?? orchestrationRunId` provenance.
  */
 export const failedDispatchIds = (
   error: unknown

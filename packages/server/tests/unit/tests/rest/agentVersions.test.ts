@@ -448,7 +448,7 @@ describe('Agent versions', () => {
         `/api/v1/agents/${agentId}/versions/1/restore`
       );
       // A write refuses an empty scope outright — the `GET` twin above still
-      // answers 404, but a restore the caller may not perform is a 403 (#1029).
+      // answers 404, but a restore the caller may not perform is a 403.
       expect(res.status).toBe(404);
 
       // The write must not have landed: the agent is still on version 1.
@@ -665,7 +665,7 @@ describe('Agent versions', () => {
         .send({ stable_version: 1, canary_version: 2, canary_percent: 10 });
 
       // 403, not 404: the caller may write in no project at all, and the
-      // denial is decided before the body is even validated (#1029).
+      // denial is decided before the body is even validated.
       expect(res.status).toBe(404);
 
       // What matters is that no release was created.

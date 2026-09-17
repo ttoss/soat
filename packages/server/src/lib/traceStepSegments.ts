@@ -6,7 +6,7 @@
  * concatenation of one segment per generation, in the order they first wrote.
  * Both sides of that layout live here: `traceWrite` places a write inside it,
  * and `generationTurn` reads one generation's slice back out. Splitting them
- * across two modules is how the object and the index drift apart (#1024).
+ * across two modules is how the object and the index drift apart.
  */
 import createDebug from 'debug';
 
@@ -83,9 +83,8 @@ export const totalSegmentSteps = (segments: StepSegment[]): number => {
 /**
  * The steps belonging to one generation, out of a trace's whole steps object.
  *
- * An **unindexed** object — every trace written before the index existed — is
- * returned whole: its steps were one generation's, which is what a trace held
- * before grouping worked, so a turn reader keeps reading it exactly as it did.
+ * An **unindexed** object is returned whole: it carries one generation's steps
+ * and nothing else, so there is no segment to take.
  *
  * An indexed object with no segment for this generation yields nothing. Note
  * this is the opposite of what `locateSegment` alone would say: that answers

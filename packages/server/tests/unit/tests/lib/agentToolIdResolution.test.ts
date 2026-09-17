@@ -2,7 +2,7 @@ import { db } from 'src/db';
 import { resolveToolIdsToNames } from 'src/lib/agentToolSelection';
 
 // The generation-flow tests stub this out to avoid a DB round trip per
-// prepareStep case, so it is exercised for real here (#809).
+// prepareStep case, so it is exercised for real here.
 
 describe('resolveToolIdsToNames', () => {
   let projectId: number;

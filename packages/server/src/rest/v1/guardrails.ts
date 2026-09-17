@@ -32,7 +32,7 @@ export const guardrailsRouter = new Router<Context>();
 /**
  * Every `/guardrails/:guardrail_id` route — the guardrail itself, its dry-run
  * evaluation and its version history — authorizes against the guardrail's own
- * SRN rather than the project wildcard (#1339).
+ * SRN rather than the project wildcard.
  */
 const guardrailAccess = makeItemRouteAuthorizer({
   findScope: guardrails.findScope,
@@ -73,7 +73,7 @@ const resolveGuardrailProjectId = async (
   requireAuth(ctx);
   // `requireProjectAccess`, not the read helper: a caller permitted in zero
   // projects cannot create here, and an empty scope must say so with a `403`
-  // rather than falling through to "project_id is required" (#1029).
+  // rather than falling through to "project_id is required".
   const projectIds = await requireProjectAccess({
     ctx,
     projectPublicId,

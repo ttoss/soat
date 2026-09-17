@@ -193,7 +193,7 @@ Each attempt is signed when sent, so a retry carries a fresh timestamp.
 
 #### The deprecated `X-Soat-Signature`
 
-`X-Soat-Signature: sha256=<hex>` signs the bare body with no timestamp, so it cannot bound a replay. It is still sent during the deprecation window; migrate to `X-Soat-Signature-V2`.
+`X-Soat-Signature: sha256=<hex>` signs the bare body with no timestamp, so it cannot bound a replay. It is sent alongside `X-Soat-Signature-V2`; verify the V2 header instead.
 
 ```js
 // Deprecated — no replay bound.

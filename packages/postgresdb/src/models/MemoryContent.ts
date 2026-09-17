@@ -36,7 +36,7 @@ import { MemoryStore } from './MemoryStore';
     },
     {
       // Moved here from `memories` with the vector itself: the read pattern is
-      // still `ORDER BY embedding <=> $query LIMIT n` (#1220), now reached
+      // still `ORDER BY embedding <=> $query LIMIT n`, now reached
       // through the memory's `content_id` so the validity filter stays on the
       // memory row.
       name: 'memory_contents_embedding_hnsw_idx',

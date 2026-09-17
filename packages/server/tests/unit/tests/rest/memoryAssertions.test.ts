@@ -50,7 +50,7 @@ describe('MemoryAssertions', () => {
         content: 'Customer prefers email',
       });
       // A restatement of a fact already known lands on the same memory as a
-      // skip — the outcome that left no record at all before this table.
+      // skip — the outcome the ledger is the only record of.
       await writeMemory({
         memoryStoreId,
         content: 'The customer would rather be emailed',

@@ -118,7 +118,7 @@ export class Trace extends Model {
   // How the steps object divides between the generations under this trace, in
   // first-write order. The object is the concatenation of these segments, so a
   // reused `trace_id` appends rather than replacing the first generation's
-  // steps (#1024), and a re-writing generation rewrites only its own slice.
+  // steps, and a re-writing generation rewrites only its own slice.
   // Skeleton, not content, but reset by a purge because the object it indexes
   // is deleted.
   @Column({ type: DataType.JSONB, allowNull: false, defaultValue: [] })

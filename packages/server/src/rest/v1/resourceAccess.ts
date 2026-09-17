@@ -1,14 +1,13 @@
 /**
  * The authorization preamble every route that acts on **one** resource shares.
  *
- * Twelve modules used to authorize their item routes at project level: the
- * caller's policy was probed with `srn:<project>:<type>:*`, which a statement
- * naming one resource can never match, so a policy scoped to one tool or one
- * eval reached *nothing* while an action-only one reached every sibling in the
- * project. The check now names the resource, the way actors, conversations and
- * memory stores already did — which is also what lets an agent
- * `boundary_policy` be scoped to one of them, since a boundary may only promise
- * the granularity the caller path enforces (#1323, #1339).
+ * The check names the resource, never the project wildcard. Probing a policy
+ * with `srn:<project>:<type>:*` is something a statement naming one resource
+ * can never match, so a policy scoped to one tool or one eval would reach
+ * *nothing* while an action-only one reached every sibling in the project.
+ * Naming the resource is also what lets an agent `boundary_policy` be scoped to
+ * one of them, since a boundary may only promise the granularity the caller
+ * path enforces.
  *
  * The two refusals are a deliberate contract rather than an accident of which
  * helper each route reached for:
@@ -17,7 +16,7 @@
  *   they cannot see — or one their policy does not name — does not announce its
  *   existence;
  * - a **write** is `403`, so a caller who can read a resource is told plainly
- *   that changing it is refused (#1029) — unless the resource is in a project
+ *   that changing it is refused — unless the resource is in a project
  *   they reach for nothing, where that would leak existence and it is `404`
  *   instead. See {@link beyondReach}.
  *
@@ -32,7 +31,7 @@
  * `actors.ts` and `secrets.ts` are the exception, and say so at their own call
  * sites: they were already per-resource and already answered `403` on a denied
  * read, so they share the preamble at their existing shape. What they gain from
- * it is the `assertCredentialProjectScope` they were missing (#906).
+ * it is the `assertCredentialProjectScope` they were missing.
  */
 import type { Context } from 'src/Context';
 import { DomainError, type ErrorCode } from 'src/errors';
@@ -60,7 +59,7 @@ export type ResourceAccess = { projectIds: number[]; projectPublicId: string };
  * oracle: `403` for a resource that is there, `404` for an id that is not. That
  * is the right trade *inside* a project the caller's policies concern — being
  * told plainly that a tool is off limits tells them nothing they could not
- * already work out (#1029) — and the wrong one across a tenant boundary, where
+ * already work out — and the wrong one across a tenant boundary, where
  * it confirms a resource exists to someone with no business knowing it does.
  *
  * The question is which **project** the caller's policy set is about, not which
@@ -68,7 +67,7 @@ export type ResourceAccess = { projectIds: number[]; projectPublicId: string };
  * stand in for the first: a statement naming one tool matches no type-level
  * probe, so it reports zero reachable projects while plainly concerning the
  * project that tool is in. Reading that as a tenant boundary would hide a
- * sibling the caller *can* see — the very refusal #1029 wants stated plainly.
+ * sibling the caller *can* see — the very refusal that must be stated plainly.
  *
  * `extractProjectIdsFromPolicies` asks the first question directly, over the
  * effective documents for this request, and answers `undefined` for a statement
@@ -79,10 +78,10 @@ export type ResourceAccess = { projectIds: number[]; projectPublicId: string };
  * privileged caller there is gets the same `404` as a made-up id.
  *
  * The net effect is that a denied write never says more than a denied read of
- * the same resource would. That is what #1029 asked for — its bug was the two
- * *disagreeing*, a write answering `404` while the caller's own `GET` answered
- * `200`, not the `403` itself, and a caller who can read a resource still gets
- * that `403` when they may not change it.
+ * the same resource would. What must never happen is the two *disagreeing* — a
+ * write answering `404` while the caller's own `GET` answers `200`. The `403`
+ * itself is not the problem: a caller who can read a resource still gets it
+ * when they may not change it.
  *
  * Asked only once a call is already refused, so the permitted path pays nothing
  * for it.

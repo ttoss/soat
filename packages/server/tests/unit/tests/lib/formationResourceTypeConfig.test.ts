@@ -355,7 +355,7 @@ describe('loadFormationResourceTypeConfig', () => {
 
   test('returns nothing when no config file is named', () => {
     // The overwhelmingly common case: a deployment that registers no custom
-    // types must behave exactly as it did before they existed.
+    // types runs on the built-in resource types alone.
     expect(
       loadFormationResourceTypeConfig({ builtInTypes: BUILT_INS, env: {} })
     ).toEqual([]);

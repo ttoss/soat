@@ -82,7 +82,7 @@ export const planFormation = async (args: {
   });
 
   // A plan is read-only, so it *reports* what an apply would refuse rather than
-  // becoming a refusal itself (#1181) — naming every action at once beats an
+  // becoming a refusal itself — naming every action at once beats an
   // apply that fails at resource seven and rolls the rest back.
   const unauthorizedActions = await collectAuthorizationDenials({
     authorize: args.authorize,
@@ -92,8 +92,8 @@ export const planFormation = async (args: {
     }),
   });
 
-  // Omitted rather than empty, so a plan a caller may fully apply is byte
-  // identical to what it was before this field existed.
+  // Omitted rather than empty, so a plan a caller may fully apply carries no
+  // field at all rather than an empty list to interpret.
   return {
     changes: redactPlanChanges({ changes: [...changes, ...orphanedChanges] }),
     ...(unauthorizedActions.length > 0 ? { unauthorizedActions } : {}),

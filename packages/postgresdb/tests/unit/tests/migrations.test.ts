@@ -456,8 +456,8 @@ describe('2026-09-16-memory-assertions-and-shared-content', () => {
     ).toBeUndefined();
   });
 
-  // Historical writes cannot be reconstructed: a skip left no row and a merge
-  // left no trace, which is the problem this change fixes, not a gap here.
+  // A write made before the ledger exists leaves no row and no trace, so there
+  // is nothing to backfill it from.
   test('the assertion ledger is created empty', async () => {
     expect(await tableExists({ client, table: 'memory_assertions' })).toBe(
       true

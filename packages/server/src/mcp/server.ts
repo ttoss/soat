@@ -85,7 +85,7 @@ registerToolFromSchema(mcpServer, {
 const mcpRouter = createMcpRouter(mcpServer, {
   aliases: ['/'],
   // No `apiBaseUrl`: it configures the framework's own `apiCall`, and no tool
-  // here calls the API over HTTP any more (#888). Leaving a loopback URL in
+  // here calls the API over HTTP any more. Leaving a loopback URL in
   // place would be a live-looking template for the next tool someone adds.
   getApiHeaders: (ctx) => {
     const authorization = (ctx.headers.authorization as string) ?? '';

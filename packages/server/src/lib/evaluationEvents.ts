@@ -25,7 +25,7 @@ export const EVAL_RUN_FAILED_EVENT = 'eval_run.failed';
  * Fires one eval run lifecycle event.
  *
  * Best-effort by construction: `emitResourceEvent` dispatches fire-and-forget
- * and owns the project-lookup rejection handler (#903), so a subscriber being
+ * and owns the project-lookup rejection handler, so a subscriber being
  * down — or a transient DB blip in the lookup — never changes the run's recorded
  * outcome. Called from the single finalize path, which both the synchronous and
  * the queued run funnel through, so a run cannot fire twice or (worse, for a

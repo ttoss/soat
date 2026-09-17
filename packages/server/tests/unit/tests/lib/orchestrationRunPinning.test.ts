@@ -8,7 +8,7 @@ import { authenticatedTestClient } from '../../testClient';
 
 /**
  * A run executes the graph it started on, not the graph the orchestration holds
- * now (issue #872).
+ * now.
  *
  * Each test drives one of the four execution entry points against the real
  * database, with the orchestration edited **after** the run was created:
@@ -208,9 +208,8 @@ describe('a run woken from `sleeping`', () => {
   });
 
   test('a run with no pinned version executes the live graph', async () => {
-    // Runs created before pinning existed carry a null version. The live row is
-    // the only graph they ever had, so they keep the pre-#872 behaviour rather
-    // than being stranded.
+    // A run with a null version has no pin to resolve, so the live row is the
+    // only graph it can execute — it is driven rather than stranded.
     const orch = await createOrchestration(
       [DELAY_NODE, markerNode('v1')],
       EDGES

@@ -6,7 +6,7 @@ import { buildDatabaseConfig, syncSchemaWithAdvisoryLock } from './db';
 import { schemaRunnerOptions } from './schema';
 
 /**
- * The schema step a deploy runs before the service rolls (#548).
+ * The schema step a deploy runs before the service rolls.
  *
  * `runMigrationsCli` from `@ttoss/postgresdb` rather than the `migrate` command
  * of `@ttoss/postgresdb-cli`: that command bundles the project's sources on

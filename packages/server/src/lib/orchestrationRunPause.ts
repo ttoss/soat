@@ -7,8 +7,7 @@ import type { ScheduledWait } from './orchestrationNodeTypes';
 const log = createDebug('soat:orchestrations');
 
 /**
- * An operator pause: the stop a run in flight has that `cancel` cannot be
- * (#1237).
+ * An operator pause: the stop a run in flight has that `cancel` cannot be.
  *
  * Cancelling discards a run's work, so a long run stopped at its 40th of 50
  * nodes for a reason that clears minutes later has to start over. A pause parks

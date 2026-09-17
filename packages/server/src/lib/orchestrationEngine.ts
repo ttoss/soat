@@ -549,7 +549,7 @@ const resolveRunParent = (
 /**
  * The nesting depth a new run starts at, resolved before its row exists — so a
  * descent past the bound leaves nothing queued behind and the throw fails the
- * run that chose to descend (#1185). A caller-started run declares no parent and
+ * run that chose to descend. A caller-started run declares no parent and
  * is the root of its own tree.
  */
 const resolveNewRunDepth = async (args: {
@@ -590,7 +590,7 @@ const createRunRecord = async (args: {
   return db.OrchestrationRun.create({
     orchestrationId: args.orchestration.id as number,
     // Pin the run to the graph it starts on, so an `update-orchestration` that
-    // lands while it is parked cannot re-shape it (#872).
+    // lands while it is parked cannot re-shape it.
     orchestrationVersion: args.orchestration.version,
     projectId: args.projectId,
     // Synchronous mode enters `running` immediately (it drives in-process);
@@ -607,7 +607,7 @@ const createRunRecord = async (args: {
     triggerId: args.triggerId ?? null,
     // The run and node that spawned this one, when it is a `loop` /
     // `sub_orchestration` child. What makes a parent's spend reachable from the
-    // parent instead of only from the project's aggregate (#1135).
+    // parent instead of only from the project's aggregate.
     ...resolveRunParent(args.parent),
     orchestrationRunDepth: runDepth,
     ...resolveRunPrincipal({
@@ -616,7 +616,7 @@ const createRunRecord = async (args: {
     }),
     // A child of a paused parent is born paused, so it parks at its own first
     // checkpoint rather than running a whole graph its parent was already
-    // stopped from entering (#1237). The tree walk at pause time cannot reach
+    // stopped from entering. The tree walk at pause time cannot reach
     // it — this row does not exist yet then.
     ...(await inheritedPause({ parentRunId: args.parent?.runId })),
     startedAt: new Date(),
@@ -636,7 +636,7 @@ export const startOrchestrationRun = async (args: {
   // before its first node executes, so a key that could not become a header has
   // to be rejected while the caller is still listening.
   toolContext?: Record<string, string>;
-  // Caller-owned annotations stored on the run and returned verbatim (#342).
+  // Caller-owned annotations stored on the run and returned verbatim.
   // Never merged into run state, so a graph's `input_schema` stays free to
   // reject anything that is not part of the run's business payload.
   metadata?: Record<string, unknown>;
@@ -651,7 +651,7 @@ export const startOrchestrationRun = async (args: {
   principal?: RequestPrincipal;
   // Fires as soon as the run row exists, before any blocking execution, so a
   // caller can persist the id — a workflow task records `active_dispatch.id`
-  // here so cancellation-on-exit can reach a still-running run (#606).
+  // here so cancellation-on-exit can reach a still-running run.
   onRunCreated?: (args: { orchestrationRunId: string }) => Promise<void> | void;
   // Set by `startNestedRun` only — see the starter's own type for why.
   parent?: NestedRunParent;
@@ -699,7 +699,7 @@ export const startOrchestrationRun = async (args: {
   });
 
   // Surface the run id before any (blocking, in `wait` mode) execution begins,
-  // so a caller can record it while the run is still in flight (#606).
+  // so a caller can record it while the run is still in flight.
   if (args.onRunCreated) {
     await args.onRunCreated({
       orchestrationRunId: runRecord.publicId as string,
@@ -770,8 +770,8 @@ const runAuthHeader = async (args: {
  * The single terminal state for a run whose orchestration has been deleted
  * underneath it.
  *
- * Three entry points wrote this failure and each wrote a different field set
- * (#907): `driveQueuedRun` cleared the lease but not the wake, `wakeRun` cleared
+ * Three entry points wrote this failure and each wrote a different field set:
+ * `driveQueuedRun` cleared the lease but not the wake, `wakeRun` cleared
  * the wake but not the lease — so the reaper kept seeing an active lease on a
  * terminal run — and only `redriveRun` cleared both. The superset is the correct
  * semantics: a failed run holds neither a lease nor a pending wake.
@@ -1150,8 +1150,8 @@ export const resumeOrchestrationRunExecution = async (args: {
   });
 
   // `resume` is the only thing that lifts an operator pause — a human payload or
-  // an approval decision must not, or a tenant could walk past the stop
-  // (#1237). Cleared before the drive, so the loop does not re-park on the flag
+  // an approval decision must not, or a tenant could walk past the stop.
+  // Cleared before the drive, so the loop does not re-park on the flag
   // it just read.
   if (args.liftPause) {
     await clearRunPause({ runRecord: run });
@@ -1344,7 +1344,7 @@ const resumeRunForApproval = async (args: {
   if (!run || run.status !== 'awaiting_input') return;
   // An operator pause outranks the decision: resolving an approval would drive
   // the run the pause exists to stop. The item stays resolved and `resume`
-  // re-drives the parked node, which files a fresh proposal (#1237).
+  // re-drives the parked node, which files a fresh proposal.
   if (isRunPaused(run)) {
     log('resumeRunForApproval: run %s is paused, not resuming', run.publicId);
     return;

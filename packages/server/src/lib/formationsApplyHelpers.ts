@@ -124,7 +124,7 @@ export const applyCreateChange = async (args: {
  * Walks back the resources this operation created, newest first.
  *
  * An apply that stopped at the first failure left everything it had already
- * created live and unmanaged (#999), so a corrected re-apply could collide with
+ * created live and unmanaged, so a corrected re-apply could collide with
  * it. Reversing `sortedOrder` is the order `deleteFormation` uses, so a
  * dependency is only removed after its dependents.
  *
@@ -231,7 +231,7 @@ export const failFormationOperation = async (args: {
   if (args.rollbackEvents) args.events.push(...args.rollbackEvents);
   // The same bag on both records: the operation is the history, the formation
   // is what the deploy response returns, and a caller reading either gets the
-  // failure in the platform's `{ code, message, meta }` shape (#1028).
+  // failure in the platform's `{ code, message, meta }` shape.
   const error = buildFormationError({
     code: args.errorCode,
     message: args.errorMessage,

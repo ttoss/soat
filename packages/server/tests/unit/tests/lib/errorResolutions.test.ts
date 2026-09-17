@@ -99,11 +99,11 @@ describe('error resolutions', () => {
   });
 
   /**
-   * The property #1126 is about: a deployment that fronts SOAT and relays its
-   * error envelope must be able to point `hint` and `docs_url` at its own
-   * documentation instead of soat.ttoss.dev. `SOAT_DOCS_BASE_URL` is the
-   * existing self-hosting knob for the MCP docs tools (`src/lib/docs.ts`);
-   * this pins that the error envelope now reads the same one.
+   * A deployment that fronts SOAT and relays its error envelope must be able
+   * to point `hint` and `docs_url` at its own documentation instead of
+   * soat.ttoss.dev. `SOAT_DOCS_BASE_URL` is the self-hosting knob for the MCP
+   * docs tools (`src/lib/docs.ts`); this pins that the error envelope reads
+   * the same one.
    */
   describe('with SOAT_DOCS_BASE_URL set', () => {
     const ORIGINAL_ENV = process.env.SOAT_DOCS_BASE_URL;
@@ -137,14 +137,13 @@ describe('error resolutions', () => {
    * Every hint the registry serves must be relayable by a deployment that
    * fronts SOAT — naming the product or hardcoding a URL that is not derived
    * from `SOAT_DOCS_BASE_URL` would leak the substrate onto that deployment's
-   * own error responses (ttoss/soat#1126). This is the guard that keeps the
-   * property true as the registry grows: it fails on the *next* hint that
-   * names SOAT, not just the ones fixed here.
+   * own error responses. This is the guard that keeps the property true as the
+   * registry grows: it fails on the *next* hint that names SOAT.
    */
   test('no hint names SOAT or hardcodes a URL', () => {
     // The default base legitimately contains "soat", so checking it would flag
-    // the configured case too. A non-default base isolates what #1126 is about:
-    // text a deployment cannot relocate.
+    // the configured case too. A non-default base isolates the property: text a
+    // deployment cannot relocate.
     const original = process.env.SOAT_DOCS_BASE_URL;
     process.env.SOAT_DOCS_BASE_URL = 'https://docs.example.com';
     let allHints: string[];

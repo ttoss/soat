@@ -191,9 +191,9 @@ describe('formationsApplyHelpers', () => {
     );
   });
 
-  // #902: `plan-formation` previews `update-formation`, so the two must reach
-  // the same verdict. Both divergences below used to make apply see a change
-  // that plan reported as a no-op.
+  // `plan-formation` previews `update-formation`, so the two must reach the
+  // same verdict. Either divergence below makes apply see a change that plan
+  // reports as a no-op.
   describe.each([
     [
       'a stored key the template no longer declares',
@@ -460,7 +460,7 @@ describe('formationsApplyHelpers', () => {
     expect(operation.events).toEqual(events);
     expect(formation.status).toBe('failed');
     // The same bag lands on the formation, so the deploy response explains its
-    // own `status: 'failed'` without a second call (#1028).
+    // own `status: 'failed'` without a second call.
     expect(formation.error).toEqual(error);
   });
 });

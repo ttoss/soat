@@ -7,7 +7,7 @@
  * `failed` run and the node took `output ?? {}` from it and carried on. The
  * parent then succeeded on an empty artifact, which made every child failure a
  * silent stop; a depth-bounded run at the bottom of a recursing tree would have
- * been reported to the caller as a success (#1185).
+ * been reported to the caller as a success.
  *
  * The same semantics a workflow `on_enter` dispatch already has
  * (`ORCHESTRATION_DISPATCH_FAILED`): a non-success *terminal* status is the

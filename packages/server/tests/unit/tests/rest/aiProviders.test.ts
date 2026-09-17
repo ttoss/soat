@@ -884,7 +884,7 @@ describe('AI Providers', () => {
   // A price for a (model, component) nothing has priced yet may take effect
   // immediately: there is no row to rewrite and no frozen cost to protect, and
   // a mandatory future date leaves the provider live and unpriced until it
-  // lands — a generation in that window is metered at zero forever (#1196).
+  // lands — a generation in that window is metered at zero forever.
   describe('first-write prices take effect immediately', () => {
     let providerId: string;
 
@@ -940,7 +940,7 @@ describe('AI Providers', () => {
     });
 
     // A PUT carries a batch, so the refusal has to say which row it is about:
-    // reading that out of the message is the only alternative (#1203).
+    // reading that out of the message is the only alternative.
     test('names the refused row in meta', async () => {
       const effectiveFrom = new Date(Date.now() - 500).toISOString();
       const res = await authenticatedTestClient(userToken)

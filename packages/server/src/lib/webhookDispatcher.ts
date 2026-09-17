@@ -373,7 +373,7 @@ const handleEvent = async (event: SoatEvent) => {
     });
   } catch (error) {
     // Was a bare `catch { return }`: a blip on this one read silently unhooked
-    // every subscription in the project for that event (#1130).
+    // every subscription in the project for that event.
     recordDroppedEvent({
       stage: 'webhook_lookup',
       type: event.type,
@@ -403,7 +403,7 @@ const handleEvent = async (event: SoatEvent) => {
 
     // Separated deliberately: a failed *attempt* is on the row and retried by
     // the sweep, while a failed *row write* leaves the sweep nothing to find.
-    // Only the second is a lost event, and only it is counted (#1130).
+    // Only the second is a lost event, and only it is counted.
     void retryTransient({
       label: 'handleEvent.enqueueDelivery',
       operation: () => {

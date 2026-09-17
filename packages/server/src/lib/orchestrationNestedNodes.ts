@@ -68,7 +68,7 @@ const runLoopBatches = async (args: {
           // Already narrowed by the node's `contextKeys` in `executeLoopNode`.
           toolContext,
           // Every item's run is attributable to the node that fanned it out, so
-          // the loop's real cost is the sum of its children (#1135).
+          // the loop's real cost is the sum of its children.
           parent,
           // Nested runs must complete synchronously so their output can be
           // aggregated into this loop node's artifact.
@@ -143,13 +143,13 @@ export const executeSubOrchestrationNode = async (args: {
     input,
     authHeader,
     // A child run is still this run's work, so it inherits the parent's context
-    // rather than starting with none (#945) — narrowed to the node's
-    // `contextKeys` when it sets one (#1153).
+    // rather than starting with none — narrowed to the node's
+    // `contextKeys` when it sets one.
     toolContext: filterToolContext({
       toolContext,
       contextKeys: node.contextKeys,
     }),
-    // The child is this node's work: its spend rolls up to this run (#1135).
+    // The child is this node's work: its spend rolls up to this run.
     parent: { runId: runPublicId, nodeId: node.id, runDepth: args.runDepth },
     // A sub-orchestration is a synchronous child: its terminal output feeds this
     // node's artifact, so it must run to completion before continuing.

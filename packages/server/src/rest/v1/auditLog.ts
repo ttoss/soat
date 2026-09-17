@@ -17,7 +17,7 @@ const auditLogRouter = new Router<Context>();
 
 /**
  * Every `/audit-log/:entry_id` route authorizes against the entry's own SRN rather than the
- * project wildcard a statement naming one entry can never match (#1339).
+ * project wildcard a statement naming one entry can never match.
  */
 const auditEntryAccess = makeItemRouteAuthorizer({
   findScope: auditEntries.findScope,
@@ -28,7 +28,7 @@ const auditEntryAccess = makeItemRouteAuthorizer({
 
 // Absent is not invalid: an unsupplied filter is simply not applied, but a
 // supplied unparseable one throws — it must never widen a query into "every
-// entry" without the caller knowing (#691).
+// entry" without the caller knowing.
 const parseDateParam = (args: {
   value: unknown;
   paramName: string;
@@ -48,7 +48,7 @@ const parseDateParam = (args: {
 
 // Mirrors parseDateParam: absent stays undefined (the default applies further
 // down), but a supplied, non-numeric value throws rather than reaching
-// Sequelize as `NaN`, which the driver rejects with a bare 500 (audit-log#707).
+// Sequelize as `NaN`, which the driver rejects with a bare 500.
 const parseIntParam = (args: {
   value: unknown;
   paramName: string;

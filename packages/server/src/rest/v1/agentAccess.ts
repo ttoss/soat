@@ -1,10 +1,9 @@
 /**
  * The agent's binding of the shared item-route preamble.
  *
- * Agents were the first module moved off the project-level probe (#1336) and
- * the shape held for every other one, so the decision itself now lives in
- * `resourceAccess.ts`. What stays here is only what is agent-specific: the
- * accessor the scope comes from, the SRN's type, and the noun a `404` names.
+ * The decision itself lives in `resourceAccess.ts`, shared with every other
+ * module. What stays here is only what is agent-specific: the accessor the
+ * scope comes from, the SRN's type, and the noun a `404` names.
  */
 import { agents } from 'src/lib/agentAccessor';
 

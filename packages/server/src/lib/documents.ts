@@ -242,7 +242,7 @@ export const getDocumentStatus = async (args: { id: string }) => {
       doc.status === 'failed' ? (doc.failureReason ?? undefined) : undefined,
     // For the route's permission check, not the public response shape. Named
     // snake_case like every lib return — a camelCase twin here silently
-    // resolves to `undefined` (#801).
+    // resolves to `undefined`.
     project_id: mapped.project_id,
     path: mapped.path,
     tags: mapped.tags,

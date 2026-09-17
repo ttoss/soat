@@ -23,8 +23,7 @@ export const QUOTA_MODES = ['enforce', 'monitor'] as const;
 /**
  * The metrics that measure a **stock** rather than a flow. A flow accumulates
  * inside a window and empties when it rolls; a stock is what the project holds
- * right now, so it carries `window: 'current'` and none of the window math
- * (#1249).
+ * right now, so it carries `window: 'current'` and none of the window math.
  */
 export const QUOTA_STOCK_METRICS = ['storage_bytes'] as const;
 

@@ -6,7 +6,7 @@ import {
 } from 'src/lib/toolTemplates';
 
 /**
- * `{{context:<key>}}` inside `preset_parameters` (#345). A pin is the operator's
+ * `{{context:<key>}}` inside `preset_parameters`. A pin is the operator's
  * fixed value for a parameter; resolving context tokens in it is what lets that
  * pin express a **per-run** boundary — the ad account a run may act on — instead
  * of a value frozen when the tool was created.

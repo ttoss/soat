@@ -6,7 +6,7 @@
  * come off. Both live here, as lists of model names rather than as one
  * hand-written `count`/`destroy` line per model, because the hand-written form
  * is what silently omitted eight models and answered `500` for any project
- * holding one (#1079).
+ * holding one.
  */
 
 import createDebug from 'debug';
@@ -30,9 +30,8 @@ const collectIds = (rows: { id?: number }[]): number[] => {
  *
  * The single source of truth for the cascade — every counted model draws from
  * it, and `lib/projectDependentsContract.test.ts` checks both lists against the
- * live schema, so a new project-scoped table cannot silently repeat #1079,
- * where eight models appeared in neither list and every delete of a project
- * holding one answered `500`.
+ * live schema. A project-scoped table missing from both lists makes every
+ * delete of a project holding one answer `500`.
  *
  * A model reached only through its parent is absent because the DB cascades it;
  * the few whose parent FK is RESTRICT are destroyed by parent id in
@@ -103,7 +102,7 @@ export const PROJECT_CASCADE_ORDER = [
   'ApiKey',
 
   // UsageComponent cascades from UsageEvent at the DB level; force=true is the
-  // deliberate opt-in to erase billing history (see #834).
+  // deliberate opt-in to erase billing history.
   'UsageThreshold',
   'UsageEvent',
 ] as const satisfies readonly (keyof typeof db)[];
@@ -118,7 +117,7 @@ type ProjectScopedModelName = (typeof PROJECT_CASCADE_ORDER)[number];
  * `onDelete: 'CASCADE'` like Webhook/ApiKey (which stay excluded, since they
  * carry no financial meaning), but it is the project's billing history:
  * counting it forces `force=true` before a project with usage history can be
- * deleted, so the cascade can no longer happen invisibly (see #834).
+ * deleted, so the cascade cannot happen invisibly.
  *
  * AuditEntry is absent for the opposite reason — its `projectId` is nullable
  * and `ON DELETE SET NULL`, so the audit trail deliberately outlives the
@@ -377,6 +376,6 @@ export const forceDeleteProjectWithDependents = async (args: {
 
   // Storage cleanup happens after the transaction commits, once the File rows
   // are truly gone — a failed object delete is logged and retryable, never a
-  // reason to roll back the DB (see #835).
+  // reason to roll back the DB.
   await deleteStorageObjects(ids.files);
 };

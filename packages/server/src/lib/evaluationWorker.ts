@@ -213,7 +213,7 @@ const handleEvalItemTask = async (args: {
     scorers,
     item,
     // Re-read from the row per item: this process has no request behind it, and
-    // the bag is what makes the item's generation match production (#1150).
+    // the bag is what makes the item's generation match production.
     toolContext:
       (run.toolContext as Record<string, string> | null) ?? undefined,
   });
