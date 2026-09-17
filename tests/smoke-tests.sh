@@ -967,6 +967,10 @@ if [ "$LEXICAL_HIT" -lt 1 ]; then
 fi
 echo "Exact-token search reached the chunk below the similarity floor: OK"
 
+# The baseline ranking the checks below compare against: this same query and
+# floor with nothing else set.
+CURRENT_IDS=$(printf '%s\n' "$LEXICAL_SEARCH_RESP" | jq -c '[.results[].chunk_id]')
+
 # The recency blend ships off, and 0 is its disable sentinel at either level,
 # so naming it explicitly must return exactly what omitting it returns.
 RECENCY_OFF_RESP=$($SOAT_CLI search-knowledge \
