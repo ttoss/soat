@@ -25,6 +25,8 @@ type KnowledgeSearchBody = {
   document_paths?: string[] | string;
   document_ids?: string[] | string;
   tags?: unknown;
+  include_documents?: boolean;
+  include_memories?: boolean;
 };
 
 /**
@@ -129,6 +131,16 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
     );
   }
 
+  // Refused rather than answered `[]`: a search of no stores is a request the
+  // caller cannot have meant, and an empty result would read as "nothing
+  // matched".
+  if (body.include_documents === false && body.include_memories === false) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'include_documents and include_memories cannot both be false'
+    );
+  }
+
   const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId: body.project_id,
@@ -158,6 +170,8 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
     documentIds: toStringArray(body.document_ids),
     memoryStoreIds: toStringArray(body.memory_store_ids),
     tags,
+    includeDocuments: body.include_documents,
+    includeMemories: body.include_memories,
   });
   ctx.body = { results };
 });
