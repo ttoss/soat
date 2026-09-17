@@ -686,8 +686,7 @@ describe('Conversations', () => {
     });
   });
 
-  // Actors in a conversation are now derived via GET /actors?conversation_id=
-  // (the former GET /conversations/:id/actors was removed).
+  // Actors in a conversation are derived via GET /actors?conversation_id=.
   describe('GET /api/v1/actors?conversation_id=', () => {
     let conversationId: string;
     let secondActorIdForActorsTest: string;

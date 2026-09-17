@@ -95,7 +95,8 @@ const inputStateKeys = (
 // ── Node-level validation ─────────────────────────────────────────────────
 
 /**
- * A tool node uses `operationId`, not `action`; flag the legacy field name.
+ * A tool node uses `operationId`, not `action`; name the field a graph got
+ * wrong rather than reporting `operationId` as merely missing.
  */
 const toolNodeShapeIssues = (args: {
   node: OrchestrationNode;

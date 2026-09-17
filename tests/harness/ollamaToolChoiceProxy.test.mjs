@@ -279,7 +279,7 @@ describe('ollamaToolChoiceProxy', () => {
 
   // Forcing an allowlisted tool the request does not offer is a wiring break,
   // not a model decision. Forwarding it hands the outcome back to the sandbox
-  // model and revives the #774 coin flip with no trace of why.
+  // model, which turns the step into a coin flip with no trace of why.
   test('rejects a forced allowlisted tool the request does not offer', async () => {
     const before = upstreamRequests.length;
 

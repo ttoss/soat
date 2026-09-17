@@ -1440,8 +1440,8 @@ describe('Agents', () => {
       expect(res.body.tool_bindings).toHaveLength(2);
       expect(res.body.tool_bindings[0].tool_id).toBe(httpToolId);
       expect(res.body.tool_bindings[1].tool.name).toBe('inline-lookup');
-      // `tool_bindings` is the only attachment field on the wire — the
-      // `tool_ids`/`tools` shorthands were removed for v1.
+      // `tool_bindings` is the only attachment field on the wire; neither
+      // `tool_ids` nor `tools` is part of it.
       expect(res.body.tool_ids).toBeUndefined();
       expect(res.body.tools).toBeUndefined();
     });
@@ -1994,9 +1994,8 @@ describe('Agents', () => {
   });
 
   // ── Actor linked to an agent (via POST /actors + agent_id) ─────────────
-  // The former POST /agents/:id/actors was removed; an actor is now linked to
-  // an agent by passing agent_id to the top-level /actors collection, and
-  // listed back with the ?agent_id= filter.
+  // An actor is linked to an agent by passing agent_id to the top-level
+  // /actors collection, and listed back with the ?agent_id= filter.
 
   describe('actor ↔ agent link via /actors', () => {
     let agentId: string;

@@ -161,10 +161,9 @@ const config: Config = {
             to: '/docs/advanced/choosing-an-automation-model',
           },
           // The reference route is the spec's filename and the page slug is
-          // the operationId, so renaming the entry spec to `memories.yaml`
-          // (#1318) moved five live operation pages a second time. Both the
-          // original `memoryEntries` route and the `memory-entries` one it
-          // was redirected to point at the final page.
+          // the operationId, so a page moves with either one. The
+          // `memoryEntries` and `memory-entries` routes both point at the
+          // `memories` pages.
           ...Object.entries({
             'list-memory-entries': 'list-memories',
             'create-memory-entry': 'create-memory',

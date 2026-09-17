@@ -61,7 +61,7 @@ export const isolateMemory = async (args: {
  *
  * For suites that need a specific stored vector (a crowded ANN index, a byte
  * measurement) rather than whatever the stub embedder returns. `db.Memory` on
- * its own can no longer express one: the text and the vector live on the shared
+ * its own cannot express one: the text and the vector live on the shared
  * content row, and `content_id` is `NOT NULL`.
  */
 export const seedMemory = async (args: {

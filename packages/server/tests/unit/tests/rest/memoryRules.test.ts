@@ -464,7 +464,7 @@ describe('Memory Rules API', () => {
     });
   });
 
-  describe('agents no longer carry an extraction config', () => {
+  describe('an agent carries no extraction config', () => {
     test('knowledge_config.extraction is rejected as an unknown field', async () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/agents')

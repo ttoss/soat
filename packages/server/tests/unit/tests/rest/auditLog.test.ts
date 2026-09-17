@@ -354,10 +354,10 @@ describe('Audit Log — read API filters', () => {
     }
   });
 
-  test('?resource_srn= also finds rows written under the retired soat: prefix', async () => {
-    // Append-only rows written before the `srn:` rename keep the old prefix
-    // forever, so a prefix query must still reach them or every audit search
-    // loses its history. Seeded directly — no client can write it now.
+  test('?resource_srn= also finds rows stored under the soat: prefix', async () => {
+    // Rows are append-only, so a row carrying the `soat:` prefix keeps it
+    // forever and a prefix query must still reach it, or an audit search loses
+    // part of the ledger. Seeded directly — no client can write that prefix.
     const project = await db.Project.findOne({
       where: { publicId: projectId },
     });

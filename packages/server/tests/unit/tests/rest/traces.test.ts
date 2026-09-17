@@ -363,8 +363,7 @@ describe('Traces REST API', () => {
     });
   });
 
-  // Generations for a trace are now listed via GET /api/v1/generations?trace_id=
-  // (the former GET /traces/:trace_id/generations was removed).
+  // Generations for a trace are listed via GET /api/v1/generations?trace_id=.
   describe('GET /api/v1/generations?trace_id=', () => {
     test('unauthenticated request returns 401', async () => {
       const res = await testClient.get(

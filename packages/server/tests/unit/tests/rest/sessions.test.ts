@@ -4,9 +4,9 @@ import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
-// Session messages are read through the session's underlying conversation
-// (the session-scoped message-list endpoint was removed). Resolve the
-// conversation_id from the session, then list the conversation's messages.
+// Session messages are read through the session's underlying conversation:
+// resolve the conversation_id from the session, then list the conversation's
+// messages.
 const listSessionMessages = async (token: string, sessionId: string) => {
   const sessionRes = await authenticatedTestClient(token).get(
     `/api/v1/sessions/${sessionId}`

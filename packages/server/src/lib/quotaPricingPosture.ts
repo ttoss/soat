@@ -15,9 +15,8 @@ export type QuotaOnUnpriced = (typeof QUOTA_ON_UNPRICED)[number];
 /**
  * The posture an evaluation holds a `cost_usd` quota to when its window is an
  * unpriced blackout. `block` is the default — a cap that cannot measure the
- * spend it caps refuses it — and is also what a row stored before the column
- * existed carries, so legacy quotas are held to the safe posture rather than
- * the silent one.
+ * spend it caps refuses it — and is what a row carrying no value reads as, so
+ * an unset quota is held to the safe posture rather than the silent one.
  */
 export const resolveOnUnpriced = (value: unknown): QuotaOnUnpriced => {
   return value === 'allow' ? 'allow' : 'block';

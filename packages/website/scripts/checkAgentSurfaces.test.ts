@@ -77,7 +77,7 @@ test('the published bundle must declare the standard discovery endpoints', () =>
 
   // An audit that cannot probe a live host reads the description instead; a
   // bundle that omits the OAuth metadata endpoints reports "OAuth mentioned but
-  // no standard endpoints found", which is what #1099 recorded.
+  // no standard endpoints found".
   assert.deepEqual(publishedPathProblems(bundle(['/api/v1/projects'])), [
     '/openapi.json does not declare /.well-known/oauth-authorization-server',
     '/openapi.json does not declare /.well-known/oauth-protected-resource',
@@ -88,8 +88,8 @@ test('the published bundle must declare the standard discovery endpoints', () =>
 });
 
 test('the homepage must declare an og:type', () => {
-  // Three of the four entity-resolution signals were already emitted; og:type
-  // was the one Docusaurus does not add, so it went missing silently (#1113).
+  // Docusaurus does not add og:type, so it is the one entity-resolution signal
+  // that goes missing silently.
   assert.deepEqual(
     openGraphTypeProblems(
       '<head><meta property="og:type" content="website"/></head>'

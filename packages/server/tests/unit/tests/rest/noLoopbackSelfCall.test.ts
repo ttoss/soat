@@ -31,7 +31,7 @@ const SRC_DIR = join(__dirname, '../../../../src');
 
 /**
  * Files that own how a tool surface reaches SOAT. A self-call would be written
- * here, next to the dispatch it replaced, which is what makes a path list
+ * here, next to the in-process dispatch, which is what makes a path list
  * enough — and keeps the check from flagging outbound calls elsewhere.
  */
 const TOOL_SURFACE_FILES = [
@@ -46,8 +46,7 @@ const TOOL_SURFACE_FILES = [
 
 /**
  * A URL pointing back at this process: an explicit loopback host, or a
- * template whose host is built from `PORT` (`http://localhost:${PORT}` was the
- * exact former shape).
+ * template whose host is built from `PORT` (`http://localhost:${PORT}`).
  */
 const SELF_CALL_URL =
   /(['"`])https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\$\{[^}]*(?:PORT|port)[^}]*\})/;
@@ -56,7 +55,7 @@ const readSource = (relativePath: string): string => {
   return readFileSync(join(SRC_DIR, relativePath), 'utf8');
 };
 
-/** Strips comments so prose *describing* the old loopback is not a violation. */
+/** Strips comments so prose *describing* a loopback call is not a violation. */
 const stripComments = (source: string): string => {
   return source
     .replace(/\/\*[\s\S]*?\*\//g, '')

@@ -2,10 +2,9 @@
  * Generates packages/website/docs/webhook-events.md from the event registry in
  * packages/server/src/lib/soatEvents.ts.
  *
- * The list of events the platform emits used to exist only as string literals
- * scattered across ~38 emit sites, which meant the documentation was whatever a
- * human last remembered to write down. Registering an event and documenting it
- * are now the same edit.
+ * The registry is the one list of events the platform emits, so registering an
+ * event and documenting it are a single edit rather than an emit site and
+ * whatever a human last remembered to write down.
  *
  * Run with: pnpm tsx scripts/generateWebhookEventsPage.ts
  */

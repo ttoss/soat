@@ -130,7 +130,7 @@ if [ "$(printf '%s\n' "$PROJECT_CHAIN_CLEARED" | jq -r '.max_chain_generations')
 fi
 echo "Project chain ceiling set/cleared: OK"
 
-# 3a-ii-a-bis. Set the per-project orchestration nesting bound (#1185). Same
+# 3a-ii-a-bis. Set the per-project orchestration nesting bound. Same
 # shape as the chain ceiling: null by default, and cleared back to it so the
 # nested-run steps later in the suite are not run under a bound they did not ask
 # for.
@@ -157,7 +157,7 @@ if [ "$(printf '%s\n' "$PROJECT_DEPTH_CLEARED" | jq -r '.max_orchestration_run_d
 fi
 echo "Project run-depth bound set/cleared: OK"
 
-# 3a-ii-b. Trace-content lifecycle settings (#837/#838). Retention is opt-in,
+# 3a-ii-b. Trace-content lifecycle settings. Retention is opt-in,
 # so a fresh project must start with the window disabled and content stored.
 echo "--- Project trace-content lifecycle settings ---"
 PROJECT_LIFECYCLE_DEFAULTS=$($SOAT_CLI get-project --project-id "$PROJECT_PUBLIC_ID")
@@ -246,7 +246,7 @@ fi
 # Attach policy to admin user
 $SOAT_CLI attach-user-policies --user-id "$ADMIN_USER_ID" --policy_ids "[\"$POLICY_READ_ID\",\"$POLICY_WRITE_ID\"]"
 
-# List the policies attached to the user (replaces removed get-user-policies)
+# List the policies attached to the user
 USER_POLICIES_RESP=$($SOAT_CLI list-policies --user-id "$ADMIN_USER_ID")
 if ! printf '%s\n' "$USER_POLICIES_RESP" | jq -e '.data | type == "array"' >/dev/null 2>&1; then
   echo "ERROR: list-policies --user-id did not return an array" >&2
@@ -420,8 +420,7 @@ fi
 expect_cli_error_status 400 call-tool --tool-id "$CONTEXT_REF_TOOL_ID"
 
 # With one, the value lands in the header the tool declared: the tool calls the
-# server's own projects route, which answers 200 only for a real bearer token
-# (#1151).
+# server's own projects route, which answers 200 only for a real bearer token.
 CONTEXT_CALL_RESP=$($SOAT_CLI call-tool \
   --tool-id "$CONTEXT_REF_TOOL_ID" \
   --tool-context "{\"ocaToken\":\"$TOKEN\"}")
@@ -1021,7 +1020,7 @@ if [ -z "$PDF_DOC_ID" ] || [ "$PDF_DOC_ID" = "null" ]; then
   echo "ERROR: ingest-document did not return a document id" >&2
   exit 1
 fi
-# The document echoes the source file's media type (#1041), so a caller does
+# The document echoes the source file's media type, so a caller does
 # not have to fetch the file to tell what it ingested.
 PDF_DOC_CONTENT_TYPE=$(printf '%s\n' "$PDF_DOC_RESP" | jq -r '.content_type')
 if [ "$PDF_DOC_CONTENT_TYPE" != "application/pdf" ]; then
@@ -1030,7 +1029,7 @@ if [ "$PDF_DOC_CONTENT_TYPE" != "application/pdf" ]; then
 fi
 echo "PDF ingestion: OK"
 
-# 12b-1. Re-ingesting the same file_id is rejected cleanly (issue #797)
+# 12b-1. Re-ingesting the same file_id is rejected cleanly
 echo "--- Re-ingesting the same file_id returns a clean conflict ---"
 set +e
 DUP_INGEST_RESP=$($SOAT_CLI ingest-document \
@@ -1105,12 +1104,13 @@ if [ "$REINGEST_STATUS" != "ready" ]; then
 fi
 echo "Re-ingest: OK"
 
-# 12f. Both of the above again with an UNSCOPED api-key (#801).
+# 12f. Both of the above again with an UNSCOPED api-key.
 #
 # Every step so far runs as a login JWT, which is exempt from request
-# attribution and so never exercises the deferred path an unscoped key takes —
-# which is how #801 reached production with both routes already covered. Worth a
-# pass of its own on any route deriving its project from a parent resource.
+# attribution and so never exercises the deferred path an unscoped key takes, so
+# a route can be covered twice over and still be broken for an unscoped key.
+# Worth a pass of its own on any route deriving its project from a parent
+# resource.
 echo "--- Re-checking document status/re-ingest with an unscoped api-key ---"
 DOC_UNSCOPED_KEY_RESP=$($SOAT_CLI create-api-key --name smoke-docs-unscoped-key)
 DOC_UNSCOPED_KEY_ID=$(printf '%s\n' "$DOC_UNSCOPED_KEY_RESP" | jq -r '.id')
@@ -1969,7 +1969,7 @@ if ! printf '%s\n' "$ORCH_UPDATE_RESP" | jq -e '.description == "Smoke orchestra
 fi
 echo "Update orchestration: OK"
 
-# Graph versioning (#872). The version endpoints are exercised here; that a
+# Graph versioning. The version endpoints are exercised here; that a
 # parked run keeps executing its pinned graph is covered by the unit suite,
 # which can park a run without waiting on a real timer.
 echo "--- Listing orchestration versions ---"
@@ -2290,7 +2290,7 @@ NESTED_PARENT_RUN=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration
 # `context_keys` bounds what a child run inherits from the parent's bag. Asserted
 # here as a contract — that it round-trips on the node and that a typo'd entry is
 # a rejected write, not a key that never matches — while the unit suite pins
-# which keys actually reach the child's generations (#1153).
+# which keys actually reach the child's generations.
 NESTED_SCOPED_ORCH=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name "smoke-orchestration-nested-scoped" \
@@ -2317,7 +2317,7 @@ if ! printf '%s\n' "$NESTED_CHILDREN" | jq -e --arg parent "$NESTED_PARENT_RUN" 
 fi
 
 # A graph naming itself is a cycle no intra-graph validator can see, so the run
-# tree is bounded by depth instead (#1185). The refusal must fail the run a
+# tree is bounded by depth instead. The refusal must fail the run a
 # caller started, naming the bound — not time out or exhaust the queue. The
 # self-reference needs an update: at create time the graph has no id to name.
 SELF_REF_ORCH=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration \
@@ -2364,7 +2364,7 @@ fi
 echo "Nested run attribution: OK"
 
 # The filter a consumer of the pause needs: the runs still driving, without
-# paging every run the project ever started (#1242).
+# paging every run the project ever started.
 LIVE_RUNS=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestration-runs \
   --status queued --status running --status sleeping --status awaiting_input \
   --limit 100)
@@ -2419,7 +2419,7 @@ if [ "$HUMAN_RUN_STATUS" != "awaiting_input" ] || [ "$HUMAN_NODE_ID" != "approva
 fi
 # JSON Logic input_mapping: literal passthrough, {var} from run input, computed
 # expression. The mapping keys are the author's own (`documentId`), so they come
-# back exactly as written — nothing rewrites them (#737).
+# back exactly as written — nothing rewrites them.
 if ! printf '%s\n' "$HUMAN_RUN_RESP" | jq -e '.required_action.context.language == "pt-BR" and .required_action.context.documentId == "ood_123" and .required_action.context.label == "Tema: Verao"' >/dev/null 2>&1; then
   echo "Human node input_mapping did not resolve JSON Logic as expected"
   printf '%s\n' "$HUMAN_RUN_RESP"
@@ -2459,7 +2459,7 @@ if ! printf '%s\n' "$HUMAN_RESUME_RESP" | jq -e '.status == "awaiting_input" and
 fi
 echo "Resume run: OK"
 
-echo "--- Pausing and resuming a run (#1237) ---"
+echo "--- Pausing and resuming a run ---"
 PAUSE_CANDIDATE_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
   --orchestration-id "$HUMAN_ORCH_ID" \
   --input '{}' \
@@ -2823,7 +2823,7 @@ if [ "$(printf '%s\n' "$INHERITED_CHAT_RESP" | jq -r '.object')" != "chat.comple
   exit 1
 fi
 
-# The route is now referenced twice over: by the project default and by the
+# The route is referenced twice over: by the project default and by the
 # consumers inheriting it. Both guards must hold.
 echo "--- Project default model route: delete and clear guards ---"
 expect_cli_error_status 409 delete-model-route --route-id "$MODEL_ROUTE_ID"
@@ -2896,11 +2896,11 @@ echo "Agent Tool id: $TOOL_ID"
 # 19b. A pipeline chaining one HTTP tool twice and mapping both step outputs.
 # Step `b`'s input and the pipeline `output` nest a `var` marker inside a plain
 # object, to exercise recursive JSON Logic resolution at depth, not just at the
-# top level (#321).
+# top level.
 #
 # The marker rides on `offset` because an `http` tool with no body turns every
 # leftover input key into a query parameter, and the target here is this API,
-# where an undeclared parameter is now a 400 (#1265). `offset` is declared on
+# where an undeclared parameter is a 400. `offset` is declared on
 # the projects listing and parses a non-numeric value back to its default, so
 # the call still exercises the nesting without asserting anything about
 # pagination.
@@ -2940,7 +2940,7 @@ echo "Pipeline call OK (nested JSON Logic resolution verified)"
 
 # 19c2. A pipeline `output` that is itself a bare JSON Logic expression (e.g.
 # `{"var": "steps.a.count"}`) must resolve to a bare scalar, not the literal
-# unevaluated expression object (see issue #335).
+# unevaluated expression object.
 echo "--- Creating pipeline tool with a bare-scalar output mapping ---"
 BARE_OUTPUT_PIPELINE_RESP=$($SOAT_CLI create-tool \
   --project_id "$PROJECT_PUBLIC_ID" \
@@ -2968,7 +2968,7 @@ echo "Bare-scalar pipeline output OK"
 
 # 19d. A universal `output_mapping` field reshapes a tool's raw result at call
 # time, for every tool type — without wrapping it in a `pipeline` tool just to
-# extract or reshape a field (see issue #346).
+# extract or reshape a field.
 echo "--- Creating an http tool with output_mapping ---"
 OUTPUT_MAPPING_TOOL_RESP=$($SOAT_CLI create-tool \
   --project_id "$PROJECT_PUBLIC_ID" \
@@ -3000,7 +3000,7 @@ $SOAT_CLI delete-tool --tool-id "$BARE_OUTPUT_PIPELINE_ID"
 # 19d. Cleanup — delete the pipeline tool (keep list-projects for the agent below)
 $SOAT_CLI delete-tool --tool-id "$PIPELINE_TOOL_ID"
 
-# 19e. Multipart http tool (issue #329) — body_mode:multipart must build a real
+# 19e. Multipart http tool — body_mode:multipart must build a real
 # multipart/form-data body with a base64 file field decoded into a file part.
 # The tool uploads a file to the SOAT server's multipart endpoint; a returned
 # file id proves the multipart request reached and was parsed by the server.
@@ -3652,7 +3652,7 @@ $SOAT_CLI delete-tool --tool-id "$ACT_TOOL_ID" >/dev/null 2>&1 || true
 $SOAT_CLI delete-guardrail --guardrail-id "$ACT_GUARDRAIL_ID" >/dev/null 2>&1 || true
 echo "Activity recording flow cleanup: OK"
 
-# 23. Generated agents are now delete-blocked by dependent generations/traces
+# 23. An agent with dependent generations/traces is delete-blocked
 echo "--- Verifying agent delete-block after generation ---"
 expect_cli_error_status 409 delete-agent --agent-id "$AGENT_ID"
 echo "Agent delete-block: OK (409 as expected)"
@@ -4028,7 +4028,7 @@ if [ -n "$CLIENT_TRACE_ID" ] && [ "$CLIENT_TRACE_ID" != "null" ]; then
   fi
   echo "Generation retrieval endpoint: OK (status: $GENERATION_RETURNED_STATUS)"
 
-  # 34a1a2. Chains (#1165) — the continuation-chain record. Nothing here drives a
+  # 34a1a2. Chains — the continuation-chain record. Nothing here drives a
   # continuation (that needs an approval decided after the fact), so the
   # assertions are the wiring: the route answers, the page is well-formed, and a
   # generation that is not part of a chain reports `chain_id: null` rather than
@@ -4050,7 +4050,7 @@ if [ -n "$CLIENT_TRACE_ID" ] && [ "$CLIENT_TRACE_ID" != "null" ]; then
   fi
   echo "Generation chain_id field: OK ($GENERATION_CHAIN_ID)"
 
-  # 34a1b. Transcript (#1021) — the turn read back step by step, projected from
+  # 34a1b. Transcript — the turn read back step by step, projected from
   # the trace's steps object at read time. Structural assertions only: the step
   # texts are whatever the sandbox model produced.
   TRANSCRIPT_RESP=$($SOAT_CLI get-generation-transcript --generation-id "$FIRST_GENERATION_ID" | sanitize_json)
@@ -4079,7 +4079,7 @@ if [ -n "$CLIENT_TRACE_ID" ] && [ "$CLIENT_TRACE_ID" != "null" ]; then
   fi
   echo "Generation transcript endpoint: OK ($TRANSCRIPT_STEPS steps)"
 
-  # 34b2. Grouping generations under one trace_id (#1024) — a second generation
+  # 34b2. Grouping generations under one trace_id — a second generation
   # sent with an existing trace_id must ADD its steps to the trace, not replace
   # the earlier generation's. `step_count` on the trace is the observable: it
   # counts every grouped turn, so it can only grow.
@@ -4126,7 +4126,7 @@ if [ -n "$CLIENT_TRACE_ID" ] && [ "$CLIENT_TRACE_ID" != "null" ]; then
   fi
   echo "Transcript stays turn-scoped under grouping: OK"
 
-  # 34a2. Content purge (#836) — the trace's steps bytes are deleted from
+  # 34a2. Content purge — the trace's steps bytes are deleted from
   # storage and the content purge cascades to the trace's generations, while
   # the auditable skeleton (ids, counters, usage attribution) survives.
   echo "--- Purging trace content for $CLIENT_TRACE_ID ---"
@@ -4205,7 +4205,7 @@ if [ -n "$CLIENT_TRACE_ID" ] && [ "$CLIENT_TRACE_ID" != "null" ]; then
   fi
   echo "Trace content purge is idempotent: OK"
 
-  # 34a2b. Zero-retention (#838) — an agent tightened to `none` never writes
+  # 34a2b. Zero-retention — an agent tightened to `none` never writes
   # its content in the first place, so there is nothing to purge afterwards.
   echo "--- Zero-retention agent ---"
   ZR_AGENT_RESP=$($SOAT_CLI create-agent \
@@ -4325,8 +4325,8 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
 
   # 34b-ii-c. Embedding coverage — an embedding reaches the provider with no
   # Generation and no AI provider record behind it, so it must still be metered,
-  # under its own `embedding` source (#1208). Its cost comes from
-  # EMBEDDING_INPUT_1M_TOKEN_PRICE_USD rather than the price book (#1213); the
+  # under its own `embedding` source. Its cost comes from
+  # EMBEDDING_INPUT_1M_TOKEN_PRICE_USD rather than the price book; the
   # stack sets a non-zero rate, so a positive cost_usd is what proves the
   # per-million conversion ran end to end.
   $SOAT_CLI create-embeddings \
@@ -4415,7 +4415,7 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
   # 34b-iii-e. Counting entities, which `groups.total` does not answer: it is
   # bucket cardinality, and a null key is a real bucket, so a project whose
   # traffic is standalone generations reports one `orchestration_run` bucket
-  # whatever its volume. `include=distinct` is the counter (#1216), and it is
+  # whatever its volume. `include=distinct` is the counter, and it is
   # absent unless asked for.
   USAGE_DISTINCT_RESP=$($SOAT_CLI get-usage-aggregate \
     --project-id "$PROJECT_PUBLIC_ID" \
@@ -4813,7 +4813,7 @@ if [ -z "$SOAT_TOOL_ID" ] || [ "$SOAT_TOOL_ID" = "null" ]; then
 fi
 echo "SOAT Agent Tool id: $SOAT_TOOL_ID"
 
-# 37b. A soat action's query string must reach the route (#924): the path was
+# 37b. A soat action's query string must reach the route: the path was
 # once built from path parameters alone, so every `in: query` parameter was
 # dropped and a `list-*` action always answered the default page. `limit` is
 # echoed back, so both a caller-supplied and a preset value are observable.
@@ -4932,12 +4932,12 @@ else
   echo "WARNING: SOAT Agent output may not contain exact project names (LLM response varies), but generation completed successfully."
 fi
 
-# Regression check for issue #371: mid-turn soat-type tool calls used to fail
-# with "Unknown field(s): parent_trace_id, root_trace_id, max_call_depth"
-# because those fields were injected into every soat action's request body,
-# even ones whose schema (like list-projects) doesn't declare them.
+# A mid-turn soat-type tool call must not answer "Unknown field(s):
+# parent_trace_id, root_trace_id, max_call_depth": injecting those fields into
+# every soat action's request body reaches ones whose schema (like list-projects)
+# doesn't declare them.
 if echo "$SOAT_GEN_CONTENT" | grep -qi "VALIDATION_FAILED\|Unknown field"; then
-  echo "ERROR: SOAT agent output leaked a tool validation error (regression of #371)" >&2
+  echo "ERROR: SOAT agent output leaked a tool validation error" >&2
   exit 1
 fi
 echo "SOAT agent mid-turn tool call did not leak a validation error: OK"
@@ -5527,7 +5527,7 @@ if ! printf '%s\n' "$VALIDATE_RESP" | jq -e '.valid == true' >/dev/null 2>&1; th
 fi
 echo "Formation template validated."
 
-# Validate template with a --parameter override (regression: issue #319)
+# Validate template with a --parameter override
 echo "--- Validating formation template with a --parameter override ---"
 VALIDATE_PARAM_RESP=$($SOAT_CLI validate-formation \
   --template '{"parameters":{"MemoryStoreName":{"type":"string"}},"resources":{"myMemoryStore":{"type":"memory_store","properties":{"name":{"param":"MemoryStoreName"}}}}}' \
@@ -5565,7 +5565,7 @@ if [ -z "$FORMATION_ID" ] || [ "$FORMATION_ID" = "null" ]; then
 fi
 echo "Formation created: $FORMATION_ID"
 
-# A formation may only do what the caller could do directly (#1181): the deploy
+# A formation may only do what the caller could do directly: the deploy
 # path authorizes every resource a template declares, and a plan reports the
 # refusals instead of becoming one. Driven through an API key whose boundary
 # policy allows the formation actions and nothing else — the key boundary
@@ -5886,7 +5886,7 @@ if ! printf '%s\n' "$FORMATION_UPDATE_RESP" | jq -e --arg id "$FORMATION_ID" '.i
 fi
 echo "Formation updated."
 
-# #1028: a deploy that fails to reconcile answers 2xx with `status: "failed"`.
+# A deploy that fails to reconcile answers 2xx with `status: "failed"`.
 # The body must carry the reason, and the CLI must exit non-zero so an `&&`
 # chain does not report a deploy that deployed nothing.
 echo "--- Verifying a failed deploy is reported as a failure ---"
@@ -6277,9 +6277,8 @@ DEL_AGENT_RESP=$($SOAT_CLI create-agent \
   --name smoke-delete-agent)
 DEL_AGENT_ID=$(printf '%s\n' "$DEL_AGENT_RESP" | jq -r '.id')
 
-# Resources from the modules that landed after the delete cascade was first
-# written (#1079): each one used to be missing from both the dependent count and
-# the cascade, so a project holding any of them answered 500 either way.
+# Every module's resources must appear in both the dependent count and the
+# cascade: a project holding one that either of them misses answers 500.
 DEL_DATASET_ID=$(printf '%s\n' "$($SOAT_CLI create-dataset \
   --project_id "$DEL_PROJECT_ID" --name smoke-delete-dataset)" | jq -r '.id')
 
@@ -6415,7 +6414,7 @@ if [ "$TASK_ID" = "null" ] || [ "$TASK_STATE" != "triage" ]; then
 fi
 echo "Task created in initial state: $TASK_ID"
 
-# Alternate entry point (#821): `state` places a new task directly in a named
+# Alternate entry point: `state` places a new task directly in a named
 # non-initial state, skipping the workflow's `initial` state entirely.
 ALT_ENTRY_RESP=$($SOAT_CLI create-task \
   --project-id "$PROJECT_PUBLIC_ID" \
@@ -6459,7 +6458,7 @@ fi
 $SOAT_CLI transition-task --task-id "$TASK_ID" --transition to_review >/dev/null
 echo "Backward move: OK (review -> drafting -> review)"
 
-# Operator pause (#1237): a paused task still transitions, and the pause is
+# Operator pause: a paused task still transitions, and the pause is
 # lifted only by resume-task.
 PAUSE_TASK_RESP=$($SOAT_CLI pause-task --task-id "$TASK_ID" --reason "smoke: operator stop")
 if ! printf '%s\n' "$PAUSE_TASK_RESP" | jq -e '.pause_requested_at != null and .pause_reason == "smoke: operator stop"' >/dev/null 2>&1; then
@@ -6532,7 +6531,7 @@ echo "Transition history principal_kind: OK"
 $SOAT_CLI list-tasks --project-id "$PROJECT_PUBLIC_ID" --workflow-id "$WORKFLOW_ID" --status closed >/dev/null
 
 # Which of the open cards has an automation of its own under way — the question
-# `status` cannot answer (#1242). `none` names the cards that never entered a
+# `status` cannot answer. `none` names the cards that never entered a
 # state with one.
 IDLE_TASKS=$($SOAT_CLI list-tasks --project-id "$PROJECT_PUBLIC_ID" --workflow-id "$WORKFLOW_ID" --automation-status none --limit 100)
 if ! printf '%s\n' "$IDLE_TASKS" | jq -e 'all(.data[]; .automation_status == null)' >/dev/null 2>&1; then
@@ -6548,7 +6547,7 @@ if ! printf '%s\n' "$DRIVING_TASKS" | jq -e 'all(.data[]; .automation_status | I
 fi
 echo "Task automation_status filter: OK"
 
-# ── on_enter tool dispatch (#1039) ──
+# ── on_enter tool dispatch ──
 # A state whose work is a single tool call dispatches it directly, with no
 # orchestration in between. A `builtin` tool is used so the call exercises the
 # run-as token the dispatch mints for itself, with no external dependency.
@@ -6618,7 +6617,7 @@ if [ "$TOOL_HIST_OK" != "true" ]; then
 fi
 echo "Workflow tool dispatch: OK (task routed, tool_id recorded as the cause)"
 
-# ── Definition versioning and task pinning (#882) ──
+# ── Definition versioning and task pinning ──
 echo "--- Workflow versions ---"
 WF_VER_LIST=$($SOAT_CLI list-workflow-versions --workflow-id "$WORKFLOW_ID")
 if ! printf '%s\n' "$WF_VER_LIST" | jq -e '.total == 1 and .data[0].version == 1' >/dev/null 2>&1; then
@@ -6658,7 +6657,7 @@ if ! printf '%s\n' "$WF_BUMP_RESP" | jq -e '.version == 2' >/dev/null 2>&1; then
   exit 1
 fi
 
-# The pinned task still fires the removed transition — it runs on v1.
+# The pinned task still fires the transition v2 drops — it runs on v1.
 PINNED_MOVE=$($SOAT_CLI transition-task --task-id "$PINNED_TASK_ID" --transition start)
 if ! printf '%s\n' "$PINNED_MOVE" | jq -e '.state == "drafting"' >/dev/null 2>&1; then
   echo "ERROR: pinned task could not fire a transition its own version declares" >&2
@@ -6757,7 +6756,7 @@ $SOAT_CLI delete-task --task-id "$OPEN_TASK_ID" >/dev/null
 $SOAT_CLI delete-task --task-id "$TASK_ID" >/dev/null
 $SOAT_CLI delete-workflow --workflow-id "$WORKFLOW_ID" >/dev/null
 
-# ── A run that transitions its own task (#886) ───────────────────────────────
+# ── A run that transitions its own task ───────────────────────────────
 #
 # A workflow state dispatches an orchestration, and that run moves the task on
 # through a `builtin` tool node. A task-dispatched run is always durable, so the
@@ -6765,8 +6764,8 @@ $SOAT_CLI delete-workflow --workflow-id "$WORKFLOW_ID" >/dev/null
 # run-as token minted from the principal persisted on the run.
 #
 # Four behaviours meet on this path with no live-stack coverage before it: the
-# run→task edge (#879), the chain budget bounding it (#885), the principal
-# attribution riding it (#887), and the in-process dispatch carrying it (#888).
+# run→task edge, the chain budget bounding it, the principal
+# attribution riding it, and the in-process dispatch carrying it.
 # The tool node calls no model, so this adds no inference time.
 echo "--- Self-advancing task: workflow -> orchestration -> transition-task ---"
 
@@ -6807,7 +6806,7 @@ fi
 # `--tool-context` rides along on this task rather than in a block of its own:
 # the orchestration dispatch is the only path where the bag becomes observable
 # through the public API, since the run echoes what the task handed it while the
-# task itself never returns its own (#950).
+# task itself never returns its own.
 SELF_TASK_RESP=$($SOAT_CLI create-task \
   --project-id "$PROJECT_PUBLIC_ID" \
   --workflow-id "$SELF_WF_ID" \
@@ -6849,7 +6848,7 @@ if [ "$SELF_TASK_DONE" != "1" ]; then
 fi
 echo "Run transitioned its own task: OK"
 
-# #885: the run's move is a chain hop, not a person's. The budget can only see
+# The run's move is a chain hop, not a person's. The budget can only see
 # that because the transition arrived carrying a run-as token — a depth of 0
 # here means the marker was lost somewhere on the path and the composed cycle
 # is no longer bounded.
@@ -6861,9 +6860,9 @@ if [ "$SELF_CHAIN_DEPTH" != "1" ]; then
 fi
 echo "Automation chain depth counted the hop: OK"
 
-# #887: attribution is asserted on the *finish* row, not the task's first — the
+# Attribution is asserted on the *finish* row, not the task's first — the
 # creation row names whoever called create-task directly, which is an ordinary
-# request-bound credential and was never the gap.
+# request-bound credential and says nothing about the chain.
 SELF_HISTORY=$($SOAT_CLI get-task-history --task-id "$SELF_TASK_ID")
 if ! printf '%s\n' "$SELF_HISTORY" | jq -e --arg uid "$ADMIN_USER_ID" \
   'map(select(.transition == "finish")) | length == 1 and (.[0].principal_kind == "user") and (.[0].principal_id == $uid)' >/dev/null 2>&1; then
@@ -6874,10 +6873,10 @@ fi
 echo "Automated transition attribution: OK"
 
 # The dispatched run carries the task's tool_context, so its agent nodes call
-# tools with the credential the task was moved with (#950). The run is where the
+# tools with the credential the task was moved with. The run is where the
 # bag is readable; the task never returns it. The run id comes from the run list,
 # not the task history — this flow's `finish` row is recorded as the user that
-# started the chain with no run id attached (#786/#887).
+# started the chain with no run id attached.
 SELF_RUNS=$($SOAT_CLI list-orchestration-runs --orchestration-id "$SELF_ORCH_ID")
 SELF_RUN_ID=$(printf '%s\n' "$SELF_RUNS" | jq -r '.data[0].id // empty')
 if [ -z "$SELF_RUN_ID" ]; then
@@ -6947,9 +6946,9 @@ $SOAT_CLI delete-task --task-id "$CTX_TASK_ID" >/dev/null
 $SOAT_CLI delete-workflow --workflow-id "$CTX_WF_ID" >/dev/null
 echo "Task tool_context validation: OK (400 as expected on both entry points)"
 
-# #879: a `builtin` node whose action answers non-2xx fails the run. Before that
-# the error body was stored as the node's artifact and the run carried on as
-# though the action had happened.
+# A `builtin` node whose action answers non-2xx fails the run: storing the error
+# body as the node's artifact instead would carry the run on as though the action
+# had happened.
 SELF_FAIL_ORCH_ID=$($SOAT_CLI create-orchestration \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name smoke-soat-node-failure \
@@ -7045,7 +7044,7 @@ fi
 $SOAT_CLI delete-guardrail --guardrail-id "$UNPRICED_CEILING_ID" >/dev/null
 echo "Cost ceiling over an unpriced window (fail-closed): OK"
 
-# Per-run cumulative ceiling (#486): the run-scoped usage keys must be in the
+# Per-run cumulative ceiling: the run-scoped usage keys must be in the
 # runtime.* catalog (an uncatalogued key is rejected at write time with 400), and
 # must fail closed outside a run — the dry-run has no run in scope, so the guard
 # fails and class B trips rather than reading the counter as 0 and passing.
@@ -7294,7 +7293,7 @@ $SOAT_CLI delete-actor --actor-id "$QUOTA_ACTOR_ID"
 $SOAT_CLI delete-quota --quota-id "$QUOTA_ID"
 expect_cli_error_status 404 get-quota --quota-id "$QUOTA_ID"
 
-# requests-quota enforcement for an UNSCOPED key (#749). Confined to a
+# requests-quota enforcement for an UNSCOPED key. Confined to a
 # throwaway project so a limit of 1 cannot block the rest of this run: the
 # quota is project-scoped, and nothing else here touches that project.
 echo "--- requests-quota enforcement (unscoped key) ---"
@@ -7313,8 +7312,8 @@ QUOTA_ENF_KEY=$($SOAT_CLI create-api-key \
 # window is a fixed bucket keyed by a truncated timestamp despite the `rolling_`
 # prefix. With a minute-sized bucket the assertion holds only while both requests
 # land in the same minute — straddling :00, the second opens a fresh bucket and
-# is allowed, failing the step having found nothing wrong (seen on #1094). Same
-# trap as #1049. The project is created fresh above, so its bucket starts empty.
+# is allowed, failing the step having found nothing wrong. The project is created
+# fresh above, so its bucket starts empty.
 QUOTA_ENF_QUOTA_ID=$($SOAT_CLI create-quota \
   --project-id "$QUOTA_ENF_PROJECT_ID" --scope project --metric requests \
   --window calendar_month --limit 1 | jq -r '.id')
@@ -7461,8 +7460,7 @@ echo "Eval id: $EVAL_ID"
 echo "--- Queuing an asynchronous run and polling to terminal ---"
 # `--metadata` and `--tool-context` ride along on the queued run: the worker
 # that settles it reads both off the row, never from the request that started
-# it. They differ on the way back — a label is readable, a credential is not
-# (#1150).
+# it. They differ on the way back — a label is readable, a credential is not.
 EVAL_ASYNC_RESP=$($SOAT_CLI start-eval-run --eval_id "$EVAL_ID" --wait false \
   --metadata '{"commit_sha":"smoke-9f2c1ab"}' \
   --tool-context '{"ocaToken":"smoke-eval-token"}')

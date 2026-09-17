@@ -11,7 +11,7 @@
  *
  * Every entry mirrors the `isAllowed` call its module's routes already make;
  * the two must agree, or the agent boundary and the caller policy would answer
- * different questions about the same call. That agreement is now structural
+ * different questions about the same call. That agreement is structural
  * rather than careful: both sides read the **same** `accessor.findScope`, the
  * route through `rest/v1/resourceAccess.ts` and the boundary through here, so
  * there is no second projection of a row to drift.
@@ -19,7 +19,7 @@
  * A module whose item routes still authorize at project level has no entry
  * here: a boundary scoped there would enforce a granularity the caller path
  * does not have, and the place to fix that is the route
- * (`errorShapeContract.test.ts` now fails such a route outright).
+ * (`errorShapeContract.test.ts` fails such a route outright).
  */
 import { actors } from './actors';
 import { agents } from './agentAccessor';

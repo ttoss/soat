@@ -15,7 +15,7 @@ const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
  * The module ceiling is only a ceiling if the way over it is countable. The
  * exemptions are one list in `eslint.config.js`, and these hold that list to
  * "only shrinks": nothing joins it quietly, nothing stays on it once the file
- * fits, and no file can exempt itself past it (#1301).
+ * fits, and no file can exempt itself past it.
  */
 describe('module ceiling', () => {
   /**

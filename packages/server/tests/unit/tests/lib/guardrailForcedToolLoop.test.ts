@@ -177,12 +177,11 @@ describe('guardrail-held tool calls under tool_choice: "required"', () => {
   type Fixture = { projectId: number; agentPublicId: string };
 
   /**
-   * The abandoned QA fixture from the report: forced tool choice, one bound
-   * tool, that tool gated by a guardrail that routes every call to approval.
+   * The shape that strands an agent: forced tool choice, one bound tool, that
+   * tool gated by a guardrail that routes every call to approval.
    *
-   * `onApprovalExpiry: 'react'` is what the incident's agent effectively ran
-   * with — an expiry reported back to the agent — and it is now opt-in, so the
-   * tests that exercise the continuation chain declare it.
+   * `onApprovalExpiry: 'react'` — an expiry reported back to the agent — is
+   * opt-in, so the tests that exercise the continuation chain declare it.
    */
   const createFixture = async (args: {
     name: string;

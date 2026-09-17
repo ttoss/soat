@@ -121,11 +121,11 @@ services:
       cache_to:
         - type=gha,mode=max
     # The API tier does not exit on SIGTERM within Compose's default 10s grace
-    # period, so teardown waited the full timeout for it (and for both Ollama
+    # period, so teardown waits the full timeout for it (and for both Ollama
     # services below). This is a throwaway stack — nothing here needs to drain.
     stop_grace_period: 2s
     # The schema step runs to completion before the server process starts, as a
-    # deploy does it (#548) — `exec` so the server still receives signals. It
+    # deploy does it — `exec` so the server still receives signals. It
     # cannot be a service of its own here: `--exit-code-from`, which both
     # stacks use, implies `--abort-on-container-exit`, and Compose tears the
     # whole stack down when ANY container exits, a completed one-shot task

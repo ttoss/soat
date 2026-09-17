@@ -133,10 +133,10 @@ while IFS= read -r line; do
   # rather than dispatching as its own — which is what lets a tutorial spread a
   # JSON argument over several lines.
   #
-  # This used to count every `'` and call an odd total "open". A counter cannot
-  # tell a quote from an apostrophe: one `Alice's` in a double-quoted argument
-  # made the total odd, so the runner swallowed every later line and died on
-  # `unexpected EOF` blaming a command that had already run fine.
+  # Tracked as state, never counted: a counter cannot tell a quote from an
+  # apostrophe, so one `Alice's` in a double-quoted argument makes the total odd
+  # and the runner swallows every later line, dying on `unexpected EOF` and
+  # blaming a command that already ran fine.
   _open_quote() {
     printf '%s' "$CURRENT_CMD" | awk '
       BEGIN { q = "" }

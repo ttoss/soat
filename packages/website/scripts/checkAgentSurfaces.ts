@@ -68,10 +68,10 @@ export const MIN_TRUST_PAGE_TEXT = 500;
  * client is expected to find without being told where to look.
  *
  * `soat.ttoss.dev` hosts no API, so an agent-readiness audit that cannot probe a
- * live host falls back to reading `/openapi.json` — and reported "OAuth
- * mentioned but no standard endpoints found" while the OAuth metadata endpoints
- * existed in every deployment and in no spec (#1099). They live in
- * `packages/server/src/rest/openapi/v1/oauth.yaml` now; this keeps them there.
+ * live host falls back to reading `/openapi.json`: an endpoint that exists in
+ * every deployment and in no spec reads to such an audit as "OAuth mentioned
+ * but no standard endpoints found". The OAuth metadata endpoints are declared
+ * in `packages/server/src/rest/openapi/v1/oauth.yaml`; this keeps them there.
  */
 export const DISCOVERY_PATHS = [
   '/.well-known/oauth-authorization-server',

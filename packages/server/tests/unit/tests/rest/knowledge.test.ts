@@ -119,7 +119,7 @@ describe('Knowledge', () => {
 
     test('matches a document stored via a path lacking a leading slash', async () => {
       // Documents persisted without a leading slash must still be reachable by
-      // a leading-slash prefix, which the stored path is now normalized to.
+      // a leading-slash prefix — the shape the stored path is normalized to.
       await authenticatedTestClient(userToken).post('/api/v1/documents').send({
         project_id: projectId,
         content: 'A slash-less playbook document.',

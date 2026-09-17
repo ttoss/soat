@@ -221,8 +221,8 @@ describe('REST handlers signal errors with DomainError', () => {
  * response. Hence a static check — the same
  * argument that makes the error *shape* a static test rather than a status
  * assertion. A route that names a resource authorizes against that resource,
- * through `resourceAccess.ts`; reaching for a project-level helper there is now
- * a failing test rather than something an auditor has to rediscover.
+ * through `resourceAccess.ts`; reaching for a project-level helper there is a
+ * failing test rather than something an auditor has to rediscover.
  *
  * A listing (`GET /tools?project_id=`) and a create take no `:x_id`, so they
  * stay project-scoped and are untouched by this.

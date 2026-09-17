@@ -15,9 +15,8 @@ import * as url from 'node:url';
  *
  * The site's own `Organization` JSON-LD names `npmjs.com/org/soat` in `sameAs`
  * — as evidence that the name "SOAT" belongs to this project. That evidence has
- * to exist: when this check was written, the published `@soat/cli` and
- * `@soat/server` had no description, no homepage and no keywords at all, so the
- * corroborating pages corroborated nothing (ttoss/soat#1099, item 3).
+ * to exist: a published package with no description, no homepage and no
+ * keywords corroborates nothing, and the `sameAs` points at a dead end.
  *
  * The shared phrase matters as much as its presence. "SOAT" collides with the
  * mandatory vehicle-insurance scheme in Colombia, Peru and Ecuador and with the
@@ -37,7 +36,7 @@ export const CANONICAL_PHRASE =
 /** Where every published package points back to. */
 export const CANONICAL_HOMEPAGE = 'https://soat.ttoss.dev';
 
-/** The wording this replaced. Kept only so it can be checked for. */
+/** A wording no SOAT-owned property may carry, checked for by name. */
 export const RETIRED_TAGLINE = 'Infrastructure for AI Apps';
 
 /** The files that state what SOAT is to a crawler, a registry, or an agent. */

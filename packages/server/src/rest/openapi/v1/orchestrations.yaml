@@ -958,8 +958,7 @@ components:
           description: >-
             For loop and sub_orchestration nodes — allowlist of the run's
             `tool_context` keys the child run inherits. When `null` (the
-            default), the child inherits the parent's whole bag — the behavior
-            of every graph authored before this field existed. When set, only
+            default), the child inherits the parent's whole bag. When set, only
             the listed keys are handed down, so a run holding a broad
             credential can delegate one step to a shared sub-graph without
             passing on what that sub-graph does not need; `[]` hands down
