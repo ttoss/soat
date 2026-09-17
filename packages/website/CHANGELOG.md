@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.53.0](https://github.com/ttoss/soat/compare/v0.52.0...v0.53.0) (2026-09-17)
+
+* feat(webhooks)!: sign deliveries under X-Soat-Signature, not X-Soat-Signature-V2 (#1357) ([eb57022](https://github.com/ttoss/soat/commit/eb57022827db5f8c39f59d1e9ea27ef143a85cc8)), closes [#1357](https://github.com/ttoss/soat/issues/1357)
+
+### BREAKING CHANGES
+
+* outbound webhook deliveries are signed under
+  X-Soat-Signature (t=<unix>,v1=<hex>) instead of X-Soat-Signature-V2.
+
 # [0.52.0](https://github.com/ttoss/soat/compare/v0.51.0...v0.52.0) (2026-09-17)
 
 * feat(memories)!: replace agent-side extraction with memory rules on the store (#1328) ([c3a4ed9](https://github.com/ttoss/soat/commit/c3a4ed9c5adb1486fae082ac7f09ac1c6758d03d)), closes [#1328](https://github.com/ttoss/soat/issues/1328)
