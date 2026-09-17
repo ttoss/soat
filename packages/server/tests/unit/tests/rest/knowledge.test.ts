@@ -450,6 +450,85 @@ describe('Knowledge', () => {
       expect(memResult.content).toBe('The sky is blue on a clear day.');
     });
 
+    test('searches both stores when only a query is given', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send({ project_id: projectId, query: 'anything' });
+
+      expect(response.status).toBe(200);
+      const sources = new Set(
+        response.body.results.map((r: { source_type: string }) => {
+          return r.source_type;
+        })
+      );
+      // A caller who names no store means "everything I can see". Documents
+      // alone was a silent half-answer: the project's memories were never read.
+      expect(sources).toContain('document');
+      expect(sources).toContain('memory');
+    });
+
+    test('include_memories false restricts a query to documents', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send({
+          project_id: projectId,
+          query: 'anything',
+          include_memories: false,
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.results.length).toBeGreaterThan(0);
+      for (const result of response.body.results) {
+        expect(result.source_type).toBe('document');
+      }
+    });
+
+    test('include_documents false restricts a query to memories', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send({
+          project_id: projectId,
+          query: 'anything',
+          include_documents: false,
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.results.length).toBeGreaterThan(0);
+      for (const result of response.body.results) {
+        expect(result.source_type).toBe('memory');
+        expect(result.similarity_score).toBeDefined();
+      }
+    });
+
+    test('excluding both stores returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send({
+          project_id: projectId,
+          query: 'anything',
+          include_documents: false,
+          include_memories: false,
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('include_documents false still honours a document-only filter by returning nothing', async () => {
+      // The flag is the caller's, not a hint: a path filter cannot re-enable a
+      // store the request switched off.
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send({
+          project_id: projectId,
+          document_paths: ['/docs/'],
+          include_documents: false,
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.results).toEqual([]);
+    });
+
     test('returns score alongside similarity_score for both source types', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/knowledge/search')

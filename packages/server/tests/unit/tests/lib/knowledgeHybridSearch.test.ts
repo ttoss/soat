@@ -339,9 +339,12 @@ describe('hybrid knowledge search', () => {
       });
 
       expect(both).toBeDefined();
-      // The only fixture carrying this token, so it leads the lexical list; it
-      // is merely second-nearest by cosine, which is what fusion overturns.
-      expect(both!.signals).toEqual({ vector: 2, lexical: 1 });
+      // The only fixture carrying this token, so it leads the lexical list.
+      // By cosine it sits third: a bare `query` reaches memories too, and both
+      // `NEAR_VECTOR` fixtures — one document, one entry — are closer. That the
+      // two stores interleave in one channel's ranking is the point of
+      // `mergeSignalShards`; fusion is what overturns the cosine order here.
+      expect(both!.signals).toEqual({ vector: 3, lexical: 1 });
     });
 
     test('omits the channel that did not rank a result', async () => {

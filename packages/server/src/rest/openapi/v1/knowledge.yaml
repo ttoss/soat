@@ -111,6 +111,25 @@ paths:
                     refused.
                   minimum: 1
                   example: 10
+                include_documents:
+                  type: boolean
+                  default: true
+                  description: >-
+                    Set `false` to leave the document store out of this search.
+                    A `query` names no store, so it reaches both; the
+                    store-specific filters narrow *within* a store rather than
+                    choosing between them. This is the switch, and a filter
+                    naming the other store never overrides it. `false` for both
+                    stores is `400`.
+                  example: false
+                include_memories:
+                  type: boolean
+                  default: true
+                  description: >-
+                    Set `false` to leave the memory store out of this search.
+                    The mirror of `include_documents`, for a caller that wants
+                    documents alone.
+                  example: false
                 memory_store_ids:
                   x-soat-ref: memory-stores
                   type: array
@@ -135,8 +154,8 @@ paths:
                   description: >-
                     Filter results to documents and memories whose `tags`
                     contain every one of these key-value pairs (exact,
-                    case-sensitive match). The only filter that scopes both
-                    stores, so passing it alone searches both. For memories it
+                    case-sensitive match). Scopes both stores, so passing it
+                    alone searches both — as `query` does. For memories it
                     matches at memory granularity: a memory is returned when
                     its parent memory store's tags match or its own do.
                   allOf:

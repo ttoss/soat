@@ -78,11 +78,27 @@ The [`POST /knowledge/search`](/docs/api/knowledge/search-knowledge) filters (at
 | `memory_store_ids` | `string[]` | Search memories within these specific memory stores                                        |
 | `document_paths` | `string[]` | Filter document results to paths starting with these prefixes                              |
 | `document_ids`   | `string[]` | Filter document results to specific document IDs                                           |
-| `tags`           | `object`   | Filter **both** stores to results whose `tags` contain every one of these key-value pairs (exact, case-sensitive). The only filter that scopes documents and memories at once |
+| `tags`           | `object`   | Filter **both** stores to results whose `tags` contain every one of these key-value pairs (exact, case-sensitive) |
+| `include_documents` | `boolean` | Default `true`. `false` leaves the document store out of this search |
+| `include_memories`  | `boolean` | Default `true`. `false` leaves the memory store out of this search |
 
 With `query`, results carry `score` and `similarity_score`, ordered by descending `score`; `min_similarity`, `rrf_k` and `limit` apply. Walkthrough: [Agent with Persistent Memory — Step 12 (Query the knowledge layer directly)](/docs/tutorials/memories-agent#step-12--query-the-knowledge-layer-directly).
 
-Sources follow from the filters: documents when `query`, `document_paths`, or `document_ids` is passed; memories when `memory_store_ids` is. `tags` turns on **both**. A `query` plus a memory-store filter searches both, ranked together before `limit`.
+### Which stores a search reads
+
+`query` and `tags` name no store, so they reach **both**. The store-specific filters narrow *within* a store: `document_paths` and `document_ids` for documents, `memory_store_ids` for memories.
+
+| Request | Documents | Memories |
+| --- | --- | --- |
+| `query` alone | ✅ | ✅ |
+| `tags` alone | ✅ | ✅ |
+| `query` + `memory_store_ids` | ✅ (project-wide) | ✅ (those stores) |
+| `document_paths` alone | ✅ (those paths) | — |
+| `memory_store_ids` alone | — | ✅ (those stores) |
+
+`include_documents: false` and `include_memories: false` take a store out, and a filter naming the other store never overrides them — `{ document_paths, include_documents: false }` returns nothing rather than quietly re-enabling documents. Both `false` is `400 VALIDATION_FAILED`.
+
+Results from both stores are ranked together before `limit` applies, so a search reaching both does not reserve slots for either.
 
 `tags` is a key-value object, the same shape every tagged resource stores and the same one the IAM `soat:ResourceTag/<key>` condition reads. All pairs must match (JSONB containment), exact and case-sensitive:
 

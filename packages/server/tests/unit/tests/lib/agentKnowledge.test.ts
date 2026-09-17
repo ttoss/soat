@@ -581,6 +581,25 @@ describe('buildKnowledgeMessages', () => {
     );
   });
 
+  test('excludes memory search when only document filters are configured, even with a chat message', async () => {
+    mockSearchKnowledge.mockResolvedValueOnce([]);
+    await buildKnowledgeMessages({
+      billingProjectId: null,
+      knowledgeConfig: { documentPaths: ['/handbook/'], limit: 50 },
+      messages: [{ role: 'user', content: 'what is the CPA cap?' }],
+    });
+    // The mirror of the case above. A bare `query` reaches both stores at the
+    // search endpoint, but here it is derived from the chat message every turn,
+    // so a document-scoped config must not start injecting every project memory.
+    expect(mockSearchKnowledge).toHaveBeenCalledWith(
+      expect.objectContaining({
+        paths: ['/handbook/'],
+        query: 'what is the CPA cap?',
+        includeMemories: false,
+      })
+    );
+  });
+
   test('still searches documents when memory_store_ids is combined with explicit document scoping', async () => {
     mockSearchKnowledge.mockResolvedValueOnce([]);
     await buildKnowledgeMessages({
@@ -608,10 +627,14 @@ describe('buildKnowledgeMessages', () => {
       knowledgeConfig: { limit: 5 },
       messages: [{ role: 'user', content: 'general question' }],
     });
+    // A config that scopes neither store asked for project-wide knowledge, so
+    // the chat message reaches both — the same rule the search endpoint applies
+    // to a bare `query`.
     expect(mockSearchKnowledge).toHaveBeenCalledWith(
       expect.objectContaining({
         query: 'general question',
         includeDocuments: true,
+        includeMemories: true,
       })
     );
   });
@@ -642,7 +665,9 @@ describe('buildKnowledgeMessages', () => {
       // cosine floor, which is what `minSimilarity` is.
       minSimilarity: 0.5,
       limit: 5,
+      // `tags` scopes both stores, so neither is switched off.
       includeDocuments: true,
+      includeMemories: true,
     });
   });
 

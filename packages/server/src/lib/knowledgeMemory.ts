@@ -356,7 +356,16 @@ const buildEntrySelection = async (args: {
     selectionClauses.push({ tags: tagContainment(config.tags!) });
   }
 
-  if (selectionClauses.length === 0) return null;
+  if (selectionClauses.length === 0) {
+    // Two different nothings. A request that *named* containers and resolved
+    // none of them selects nothing: the ids are absent, in another project, or
+    // unreadable, and widening to the whole project would answer a question
+    // nobody asked. A request that named none selects every memory the caller
+    // can see — `memoryStoreWhere` already bounds that by project and policy.
+    const namedContainers =
+      Array.isArray(config.memoryStoreIds) && config.memoryStoreIds.length > 0;
+    return namedContainers ? null : {};
+  }
 
   if (selectionClauses.length === 1) {
     return selectionClauses[0] as Record<string, unknown>;
@@ -431,11 +440,10 @@ export const resolveMemoryStoreSearchLists = async (args: {
   const empty: SearchCandidates<MemoryKnowledgeResult> = config.search
     ? { ranked: true, vector: [], lexical: [] }
     : { ranked: false, results: [] };
-  const hasOriginalMemoryStoreIds =
-    Array.isArray(config.memoryStoreIds) && config.memoryStoreIds.length > 0;
 
-  if (!hasOriginalMemoryStoreIds && !hasTagFilter(config.tags)) return empty;
-
+  // Whether this store is read at all is `searchKnowledge`'s decision, not
+  // this function's: it used to refuse any request naming neither a container
+  // nor a tag, which is what kept a bare `query` from ever reaching a memory.
   const selection = await buildEntrySelection({ config, projectIds });
   if (!selection) return empty;
 
