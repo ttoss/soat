@@ -38,7 +38,7 @@ export interface Wrapper {
    * operation that ran and failed (a formation deploy reconciles, so a
    * resource failure is state, not a bad request). The exit code is the only
    * thing a shell reads, so without this `update-formation && echo deployed`
-   * prints `deployed` for a deploy that deployed nothing (#1028).
+   * prints `deployed` for a deploy that deployed nothing.
    */
   failureMessage?(args: { commandName: string; data: unknown }): string | null;
 }

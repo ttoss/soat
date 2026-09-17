@@ -1,11 +1,11 @@
 import { createCliTestClient } from '../testClient';
 
 // A property the spec declares with no `type` accepts more than one shape —
-// OpenAPI 3.0 has no union `type`, so the schema omits it and the generator used
-// to default to `"string"`. That broke forcing: a string-typed flag is never
-// JSON-coerced, so the object form arrived as text and mapped to `undefined`.
-// The agent was created, `get-agent` echoed the value back, and the model was
-// never forced — silently, at every layer (#955).
+// OpenAPI 3.0 has no union `type`, so the schema omits it. Defaulting such a
+// property to `"string"` breaks forcing: a string-typed flag is never
+// JSON-coerced, so the object form arrives as text and maps to `undefined`.
+// The agent is created, `get-agent` echoes the value back, and the model is
+// never forced — silently, at every layer.
 describe('union-typed flags (no `type` in the spec) accept both shapes', () => {
   const cli = createCliTestClient();
 

@@ -1,8 +1,8 @@
 import { createCliTestClient } from '../testClient';
 
-// Array-typed body flags must serialize as JSON arrays. The dispatcher used to
-// send only the last scalar per flag, so the server received a string, ran
-// `paths.map(...)` on it and answered 500 — the "matches nothing" bug.
+// Array-typed body flags must serialize as JSON arrays. A dispatcher sending
+// only the last scalar per flag hands the server a string, which it runs
+// `paths.map(...)` over and answers 500 to.
 describe('array-typed body flags are sent as arrays', () => {
   const cli = createCliTestClient();
 

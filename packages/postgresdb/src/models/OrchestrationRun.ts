@@ -57,7 +57,7 @@ export class OrchestrationRun extends Model {
   declare orchestration: Orchestration;
 
   // Stamped at start and never changed, so editing the orchestration cannot
-  // re-shape a run already in flight (#872). Every execution entry point
+  // re-shape a run already in flight. Every execution entry point
   // resolves the graph through this rather than the live row. Null for runs
   // predating pinning, which fall back to the live row.
   @Column({ type: DataType.INTEGER, allowNull: true })
@@ -117,8 +117,8 @@ export class OrchestrationRun extends Model {
   declare traceId: string | null;
 
   // Set only on a child run spawned by a `loop` / `sub_orchestration` node. A
-  // child meters its own usage, so the parent's cost roll-up needs this link
-  // (#1135). Denormalized public ids, so the descendant walk needs no join and
+  // child meters its own usage, so the parent's cost roll-up needs this link.
+  // Denormalized public ids, so the descendant walk needs no join and
   // survives a deleted parent.
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare parentRunId: string | null;
@@ -130,7 +130,7 @@ export class OrchestrationRun extends Model {
   // a caller started: 0 for a caller-started run, parent + 1 for a child.
   // Bounds a graph that names itself, directly or through a cycle of two, which
   // no intra-graph validator can see — `detectCycleExcludingLoopNodes` is
-  // intra-graph by construction and excludes loop nodes deliberately (#1185).
+  // intra-graph by construction and excludes loop nodes deliberately.
   // A stored counter rather than an ancestor walk, so the check costs nothing
   // at the depth where it matters most.
   @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 0 })
@@ -168,8 +168,8 @@ export class OrchestrationRun extends Model {
   // Set while an operator pause is in force, and the single answer to "is this
   // run paused?" — the run loop reads it at each checkpoint and parks, and the
   // queued/wake/redrive drivers read it before driving. It outlives the park
-  // itself so satisfying a human node cannot lift a pause the operator has not
-  // (#1237); `resume` is the only thing that clears it.
+  // itself so satisfying a human node cannot lift a pause the operator has
+  // not; `resume` is the only thing that clears it.
   @Column({ type: DataType.DATE, allowNull: true })
   declare pauseRequestedAt: Date | null;
 
@@ -180,7 +180,7 @@ export class OrchestrationRun extends Model {
   declare input: object | null;
 
   // Forwarded as `X-Soat-Context-*` headers on the tool calls of every
-  // generation the run spawns (#945). Persisted rather than threaded from the
+  // generation the run spawns. Persisted rather than threaded from the
   // request because the resume/wake/redrive paths carry no request body.
   @Column({
     type: DataType.JSONB,
@@ -191,7 +191,7 @@ export class OrchestrationRun extends Model {
   declare toolContext: Record<string, string> | null;
 
   // Caller-owned labels (tenant, batch, ticket), round-tripped verbatim and
-  // never read by the engine (#342). A column of its own rather than part of
+  // never read by the engine. A column of its own rather than part of
   // `input`, whose `input_schema` may legitimately reject unknown keys.
   @Column({ type: DataType.JSONB, allowNull: true, defaultValue: null })
   declare metadata: Record<string, unknown> | null;

@@ -2,15 +2,14 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 
 /**
  * Verification of the signature headers SOAT puts on an outbound webhook
- * delivery, for the local `soat listen` listener. Two schemes are in play
- * during the deprecation window:
+ * delivery, for the local `soat listen` listener. Two schemes are accepted:
  *
  * - `X-Soat-Signature-V2: t=<unix>,v1=<hex>` — digest over `<t>.<raw body>`, so
  *   the timestamp is authenticated and a subscriber can bound a replay by age.
  * - `X-Soat-Signature: sha256=<hex>` — deprecated, digest over the bare body.
  *
  * V2 wins when both are present; the fallback keeps `soat listen` working
- * against a server that has not been upgraded yet.
+ * against a server that sends the v1 header alone.
  */
 
 export type SignatureScheme = 'v1' | 'v2';

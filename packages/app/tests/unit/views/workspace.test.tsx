@@ -62,8 +62,8 @@ describe('Workspace', () => {
   test('lists modules as a flat list without collapsible groups', async () => {
     renderWorkspace();
 
-    // Modules that previously lived in collapsed groups are visible
-    // immediately, with no group header to expand first.
+    // Every module is reachable immediately, with no group header to expand
+    // first.
     expect(
       await screen.findByRole('button', { name: 'Webhooks' })
     ).toBeInTheDocument();
@@ -71,7 +71,7 @@ describe('Workspace', () => {
       screen.getByRole('button', { name: 'Api Keys' })
     ).toBeInTheDocument();
 
-    // Group header toggles no longer exist.
+    // A group name is never itself a button.
     expect(
       screen.queryByRole('button', { name: 'Orchestration' })
     ).not.toBeInTheDocument();

@@ -15,7 +15,7 @@ import { User } from './User';
  * Immutable archive of an orchestration's graph at a given version. A new row is
  * written by the shared lib write path on every write that actually changes the
  * graph; existing rows are never mutated, so a run can be pinned to the exact
- * topology it started on (issue #872) and `node_executions` always reference node
+ * topology it started on and `node_executions` always reference node
  * ids from a graph that still exists. A restore appends a new version rather than
  * rewinding the counter, so there is no `updatedAt`.
  *

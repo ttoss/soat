@@ -24,7 +24,7 @@ export const kebabToSnake = (s: string) => {
  * (e.g. project_id → project-id). Kebab-case is the documented canonical CLI
  * flag convention (see the generated docs pages and tutorials); the parser is
  * lenient and accepts snake/kebab/camel alike via `toCanonical`, so this only
- * affects how flags are printed (#610).
+ * affects how flags are printed.
  */
 export const toKebab = (s: string) => {
   return s

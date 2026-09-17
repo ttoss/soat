@@ -228,7 +228,7 @@ describe('FormView — array x-soat-ref field (multi-select picker)', () => {
       await screen.findByRole('option', { name: 'Read Only' })
     ).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Admin' })).toBeInTheDocument();
-    // It is a select, not the free-form textarea it used to be.
+    // A reference field is a select, never a free-form text box.
     expect(
       screen.queryByRole('textbox', { name: /policy ids/i })
     ).not.toBeInTheDocument();

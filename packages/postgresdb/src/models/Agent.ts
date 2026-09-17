@@ -136,7 +136,7 @@ export class Agent extends Model {
   declare guardrailIds: string[] | null;
 
   /**
-   * Agent-scope zero-retention setting (#838). `null` (the default) inherits
+   * Agent-scope zero-retention setting. `null` (the default) inherits
    * the project's `traceContentMode`; `'none'` opts this agent out of content
    * persistence even when the project stores content.
    *

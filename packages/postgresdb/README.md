@@ -94,9 +94,10 @@ models' indexes mid-way calls `context.sync()` itself.
    deleting one that has run anywhere makes the runner refuse to start.
 3. Write `isApplied`. It reads the migration's own change back out of the
    schema, so a database that already carries it — one `sync` has just built,
-   or one migrated before the ledger existed — records it instead of replaying
-   it. `tests/unit/tests/migrations.test.ts` fails on a migration without one,
-   which is what keeps a new install from ever needing an operator `baseline`.
+   or one an operator brought to the same shape by hand — records it instead of
+   replaying it. `tests/unit/tests/migrations.test.ts` fails on a migration
+   without one, which is what keeps a new install from ever needing an operator
+   `baseline`.
 4. Make it idempotent. The ledger records what _finished_: a migration that
    throws leaves no row and is retried from the top.
 5. There is no `down`. Roll forward with a new migration.
@@ -193,7 +194,7 @@ Declare every index in `@Table`, where it demonstrably works.
 
 `sync({ alter: true })` has no teardown step for indexes: it creates what the models declare and **never drops** what they stopped declaring. There is no automated cleanup — renaming or removing an index leaves the old one in the catalog of every database the schema has ever been synced against, and it stays there until somebody drops it by hand.
 
-That matters most when a rename **widens a unique index**: the narrower predecessor survives and goes on rejecting rows the new index exists to allow, citing a name that appears nowhere in this repo. `price_books` did exactly this between #561 and its manual cleanup.
+That matters most when a rename **widens a unique index**: the narrower predecessor survives and goes on rejecting rows the new index exists to allow, citing a name that appears nowhere in this repo.
 
 So a rename is a schema change with a manual follow-up. In the same change, write down the previous name — in the PR description and, if the environment is long-lived, wherever your team tracks operational steps. Then drop it in each environment:
 

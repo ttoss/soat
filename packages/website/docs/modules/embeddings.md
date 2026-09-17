@@ -103,8 +103,6 @@ The embedding stack is per deployment, not an AI provider record, so there is no
 
 An embedding is never named in a `QUOTA_UNENFORCEABLE` refusal's `unpriced_rows` and never counts towards one.
 
-Existing price book rows for an embedding model explain costs frozen before this behaviour changed; they price nothing new.
-
 ### 503 when unconfigured
 
 Without `EMBEDDING_PROVIDER` or `EMBEDDING_MODEL`, the server returns `503 EMBEDDING_NOT_CONFIGURED` (a configuration error).

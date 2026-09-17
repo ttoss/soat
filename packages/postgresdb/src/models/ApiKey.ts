@@ -42,7 +42,7 @@ export class ApiKey extends Model {
   declare userId: number;
 
   // CASCADE: without it the default blocking constraint made `delete-user` 500
-  // for any user that owned a key (#611).
+  // for any user that owned a key.
   @BelongsTo(
     () => {
       return User;

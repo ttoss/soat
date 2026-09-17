@@ -2,9 +2,9 @@ import type { MigrationContext } from '@ttoss/postgresdb';
 import { defineMigration } from '@ttoss/postgresdb';
 
 /**
- * The two tables that carried a `text[]` tags column, under the names they had
- * before `2026-09-16-memories-rename-and-provenance` renamed both. It runs
- * first, so it always meets that vocabulary.
+ * The two tables that carry a `text[]` tags column, under the names they hold
+ * before `2026-09-16-memories-rename-and-provenance` renames both. This
+ * migration runs first, so it always meets that vocabulary.
  */
 const TAGGED_TABLES = ['memories', 'memory_entries'] as const;
 

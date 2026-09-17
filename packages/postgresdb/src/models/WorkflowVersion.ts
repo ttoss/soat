@@ -15,7 +15,7 @@ import { Workflow } from './Workflow';
  * Immutable archive of a workflow's state machine at a given version. A new row
  * is written by the shared lib write path on every write that actually changes
  * the definition; existing rows are never mutated, so a task can be pinned to the
- * exact machine it entered on (issue #882) and a task parked for weeks still
+ * exact machine it entered on and a task parked for weeks still
  * transitions on states and transitions that still exist. A restore appends a new
  * version rather than rewinding the counter, so there is no `updatedAt`.
  *

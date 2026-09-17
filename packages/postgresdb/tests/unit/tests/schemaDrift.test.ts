@@ -266,9 +266,9 @@ describe('schema drift after sync({ alter: true })', () => {
   });
 
   test('a second sync adds no indexes', async () => {
-    // Pins the #710 regression directly: before it, three consecutive alter
-    // passes took the index count 150 -> 205 -> 260, because a column-level
-    // `unique` is re-added every time Sequelize fails to recognize it.
+    // A column-level `unique` Sequelize fails to recognize is re-added on
+    // every pass, so the index count climbs with each sync — 150 -> 205 -> 260
+    // over three.
     const before = (await listCatalogIndexes()).length;
 
     await sequelize.sync({ alter: true });

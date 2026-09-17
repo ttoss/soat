@@ -164,12 +164,10 @@ const derivedNameOf = (args: { table: string; index: ModelIndex }) => {
 
 describe('every index name is written, not derived', () => {
   /**
-   * The rule that closes the loop this package kept going round.
-   *
    * A derived name is a function of the field list, so *editing the fields
    * renames the index* — and `sync({ alter: true })` responds to a rename by
    * creating the new name and keeping the old one forever, while the diff shows
-   * only a changed `fields:` array. #508 and #561 both landed that way.
+   * only a changed `fields:` array.
    *
    * With an explicit name the change is visible, and `schemaDrift.test.ts`
    * catches it against a real catalog if it is missed.
@@ -371,7 +369,7 @@ describe('vector columns carry an ANN index', () => {
     // Without an ANN index a semantic search is `ORDER BY embedding <=> $q
     // LIMIT n` over every vector in scope, so its cost grows linearly with the
     // corpus — and silently, because the buffer cache hides it until the
-    // corpus outgrows the instance's memory (#1220). Both search paths order on
+    // corpus outgrows the instance's memory. Both search paths order on
     // `<=>`, so the operator class has to be the cosine one: an index built for
     // another distance is simply not used by that ordering.
     const missing = vectorColumns

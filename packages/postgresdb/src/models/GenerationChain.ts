@@ -14,11 +14,11 @@ import { Project } from './Project';
  * A continuation chain as a first-class row: the population of generations that
  * descend from one root through `initiator_generation_id` declarations.
  *
- * Before this the chain existed only as a value repeated on its members
- * (`generations.root_generation_id`), so the only way to ask "how large is this
- * chain, is it still running, and did it end because it was refused?" was a
- * `COUNT` plus inference from stop reasons. #1161 ran for 17 days precisely
- * because nothing named the runaway as one thing.
+ * Without the row a chain is only a value repeated on its members
+ * (`generations.root_generation_id`), so "how large is this chain, is it still
+ * running, and did it end because it was refused?" takes a `COUNT` plus
+ * inference from stop reasons — and a runaway chain has nothing naming it as
+ * one thing to stop.
  *
  * `status` is **observability, not a gate**: enforcement still counts member
  * rows by `root_generation_id`, which is the value this table is keyed on rather
@@ -79,7 +79,7 @@ export class GenerationChain extends Model {
    * Public id of the agent whose continuation opened the chain. Deliberately
    * **not** a foreign key, for the same reason as
    * `Generation.rootGenerationId`: the chain is the record of a runaway, and
-   * `deleteAgent`'s cleanup must not be able to rewrite or remove it (#1161).
+   * `deleteAgent`'s cleanup must not be able to rewrite or remove it.
    * A chain can also span agents, so this names the one that opened it, not an
    * owner.
    */

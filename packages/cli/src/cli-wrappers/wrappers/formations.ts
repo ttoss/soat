@@ -197,7 +197,7 @@ const describeDeployReason = (args: {
  * The server answers 2xx here on purpose — the operation ran, and partial
  * failure is modelled on the resource — so the body's `status` is the only
  * signal that anything went wrong. Turning it into a non-zero exit is what
- * stops `&&` chains from reporting a deploy that deployed nothing (#1028).
+ * stops `&&` chains from reporting a deploy that deployed nothing.
  */
 const describeFailedDeploy = (args: {
   commandName: string;

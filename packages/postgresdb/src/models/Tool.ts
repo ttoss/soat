@@ -70,7 +70,7 @@ export class Tool extends Model {
   declare deniedActions: string[] | null;
 
   // `null` forwards every key (pre-existing rows); `[]` forwards none. The
-  // server-pinned identity keys are always forwarded regardless (#945).
+  // server-pinned identity keys are always forwarded regardless.
   @Column({ type: DataType.JSONB, allowNull: true })
   declare contextKeys: string[] | null;
 

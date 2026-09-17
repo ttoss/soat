@@ -119,12 +119,12 @@ export class EvalRun extends Model {
   /**
    * Caller-owned key/value annotations supplied when the run was started, for
    * attributing a measurement to whatever the caller's own system knows about
-   * it — the commit or PR being scored, the release candidate, the CI job
-   * (#342). Round-trips verbatim; the platform reads nothing from it.
+   * it — the commit or PR being scored, the release candidate, the CI job.
+   * Round-trips verbatim; the platform reads nothing from it.
    *
    * Every other field on the start request is platform-owned
-   * (`agent_version`, `baseline_run_id`, `wait`), so before this column a CI
-   * caller had nowhere at all to record what a run was measuring.
+   * (`agent_version`, `baseline_run_id`, `wait`), so without this column a CI
+   * caller has nowhere to record what a run is measuring.
    */
   @Column({ type: DataType.JSONB, allowNull: true, defaultValue: null })
   declare metadata: Record<string, unknown> | null;
@@ -132,7 +132,7 @@ export class EvalRun extends Model {
   /**
    * The `tool_context` the run's item generations carry, so an agent whose
    * tools authorize through it is scored against the configuration it actually
-   * runs in production (#1150).
+   * runs in production.
    *
    * On the row rather than the starting request because a run outlives its
    * request: `wait: false` is the default and a trigger-fired run is always

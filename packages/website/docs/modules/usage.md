@@ -190,7 +190,7 @@ An event bills against the provider that served it: the target a [model route](.
 
 ### End-user attribution
 
-An event carries the [actor](./actors.md) and [session](./sessions.md) it was produced for, copied from the generation at write time and **frozen**; renaming or deleting either never rewrites spend. Set on the session path only; direct agent generations, trigger-initiated work, orchestration nodes, and standalone completions record `null` for both. The actor is **derived from the session**, never from the request (`tool_context` is caller-writable and not read). Events recorded before this shipped carry `null`.
+An event carries the [actor](./actors.md) and [session](./sessions.md) it was produced for, copied from the generation at write time and **frozen**; renaming or deleting either never rewrites spend. Set on the session path only; direct agent generations, trigger-initiated work, orchestration nodes, and standalone completions record `null` for both. The actor is **derived from the session**, never from the request (`tool_context` is caller-writable and not read).
 
 | Question | Read |
 | --- | --- |

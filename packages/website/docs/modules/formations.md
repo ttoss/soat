@@ -368,7 +368,7 @@ resources:
 
 Validation, `plan-formation`, `create-formation` and `update-formation` answer `400 VALIDATION_FAILED` naming the attribute. Read it from its permission-gated route: [`GET /api/v1/webhooks/{webhook_id}/secret`](/docs/api/webhooks/get-webhook-secret) or [`GET /api/v1/triggers/{trigger_id}/secret`](/docs/api/triggers/get-trigger-secret).
 
-Formations deployed before this refusal wrote the plaintext secret into `outputs`; it is dropped from every API response but the row still holds it. Clear the rows once, then **rotate every trigger and webhook secret a formation published**:
+A stored `outputs` row may still hold a plaintext secret, dropped from every API response but present on the row. Clear the rows once, then **rotate every trigger and webhook secret a formation published**:
 
 ```bash
 PURGE_DRY_RUN=1 pnpm --filter @soat/server purge-formation-secret-outputs

@@ -67,7 +67,7 @@ export class Workflow extends Model {
    * Incremented on every write that changes the state machine (`states`,
    * `transitions`, `payloadSchema`); each version is archived as a
    * `WorkflowVersion`. A task pins the version it entered on, so editing a
-   * workflow never re-shapes a task already in flight (#882) — which makes these
+   * workflow never re-shapes a task already in flight — which makes these
    * columns a *draft* for tasks created from now on, not a live rewrite of the
    * ones already living in it. Metadata-only edits leave it untouched.
    */

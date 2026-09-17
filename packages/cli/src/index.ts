@@ -305,8 +305,8 @@ program
     const repeatedFlags = wrapped.flags.repeated;
 
     // So array-typed body params serialize as JSON arrays, not a bare scalar:
-    // `--document_paths /playbooks/` used to reach the API as a string and
-    // blow up server-side array handling.
+    // `--document_paths /playbooks/` would otherwise reach the API as a string
+    // and blow up server-side array handling.
     const flagTypeByCanonical = new Map<string, string>(
       route.flags.map((f) => {
         return [toCanonical(f.name), f.type];
