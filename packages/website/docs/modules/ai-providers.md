@@ -77,6 +77,7 @@ Valid values for the `provider` field:
 | `vertex`    | Google Vertex AI           |
 | `gateway`   | Generic API gateway        |
 | `custom`    | Custom / self-hosted model |
+| `typesafe`  | TypeSafe System One (Jev) — see [Deciders](./deciders.md) |
 
 A local `ollama` provider needs no linked secret; it uses the server's `OLLAMA_BASE_URL`. See [Chat with an LLM - Step 3 (Create a local AI provider)](/docs/tutorials/chat-with-llm#step-3--create-a-local-ai-provider).
 

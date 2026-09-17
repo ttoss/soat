@@ -145,7 +145,7 @@ export const updateAiProvider = async (args: {
 // rather than an unbounded blob; the counts still report true totals.
 const DEPENDENT_ID_SAMPLE_CAP = 20;
 
-// Hard references (chats/agents) always block deletion — removing a provider
+// Hard references (chats/agents/deciders) always block deletion — removing a provider
 // must never cascade into deleting someone's work. Soft dependents are
 // bookkeeping meaningful only relative to the provider, so `force` clears them.
 const collectAiProviderDependents = async (args: {
@@ -157,9 +157,10 @@ const collectAiProviderDependents = async (args: {
   const where = { aiProviderId };
   const attributes = ['publicId'];
 
-  const [chats, agents, modelRoutes] = await Promise.all([
+  const [chats, agents, deciders, modelRoutes] = await Promise.all([
     db.Chat.findAll({ where, attributes }),
     db.Agent.findAll({ where, attributes }),
+    db.Decider.findAll({ where, attributes }),
     // A route target names its provider inside JSONB, so no FK protects it —
     // the reference is live all the same (see `modelRouteReferences`).
     findModelRoutesReferencingProvider({
@@ -173,7 +174,8 @@ const collectAiProviderDependents = async (args: {
     db.UsageEvent.count({ where }),
   ]);
 
-  const hardCount = chats.length + agents.length + modelRoutes.length;
+  const hardCount =
+    chats.length + agents.length + deciders.length + modelRoutes.length;
   const softCount = priceOverrideCount + usageEventCount;
 
   const sample = (rows: { publicId: string }[]): string[] => {
@@ -187,6 +189,8 @@ const collectAiProviderDependents = async (args: {
     chatIds: sample(chats),
     agentCount: agents.length,
     agentIds: sample(agents),
+    deciderCount: deciders.length,
+    deciderIds: sample(deciders),
     modelRouteCount: modelRoutes.length,
     modelRouteIds: sample(modelRoutes),
     priceOverrideCount,
@@ -199,6 +203,7 @@ const collectAiProviderDependents = async (args: {
   return {
     chats,
     agents,
+    deciders,
     modelRoutes,
     hardCount,
     softCount,
@@ -215,7 +220,7 @@ export const deleteAiProvider = async (args: {
   });
   if (!instance) return null;
 
-  const { chats, agents, modelRoutes, hardCount, softCount, meta } =
+  const { chats, agents, deciders, modelRoutes, hardCount, softCount, meta } =
     await collectAiProviderDependents({
       aiProviderId: instance.id,
       aiProviderPublicId: instance.publicId,
@@ -226,6 +231,7 @@ export const deleteAiProvider = async (args: {
     const parts = [
       chats.length > 0 ? `${chats.length} chat(s)` : null,
       agents.length > 0 ? `${agents.length} agent(s)` : null,
+      deciders.length > 0 ? `${deciders.length} decider(s)` : null,
       modelRoutes.length > 0 ? `${modelRoutes.length} model route(s)` : null,
     ].filter(Boolean);
     throw new DomainError(

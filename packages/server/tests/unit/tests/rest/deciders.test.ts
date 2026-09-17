@@ -19,6 +19,9 @@ const PROVIDER_ACTIONS = [
   'secrets:CreateSecret',
   'api-keys:CreateApiKey',
   'policies:CreatePolicy',
+  'ai-providers:DeleteAiProvider',
+  'chats:CreateChat',
+  'chats:CreateChatCompletion',
 ];
 
 // The canonical support-triage question set from the TypeSafe quickstart: one
@@ -1051,6 +1054,57 @@ describe('Deciders', () => {
         .delete(`/api/v1/deciders/${deciderId}`)
         .send();
       expect([403, 404]).toContain(res.status);
+    });
+  });
+
+  describe('the typesafe provider outside deciders', () => {
+    test('cannot back a chat completion', async () => {
+      const chat = await authenticatedTestClient(userToken)
+        .post('/api/v1/chats')
+        .send({ project_id: projectId, ai_provider_id: aiProviderId });
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/chat/completions')
+        .send({
+          chat_id: chat.body.id,
+          messages: [{ role: 'user', content: 'Hello' }],
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('AI_PROVIDER_MISCONFIGURED');
+    });
+
+    test('cannot be deleted while a decider references it', async () => {
+      const secret = await authenticatedTestClient(userToken)
+        .post('/api/v1/secrets')
+        .send({ project_id: projectId, name: 'Blocked Key', value: 'k' });
+
+      const provider = await authenticatedTestClient(userToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: 'TypeSafe Referenced',
+          provider: 'typesafe',
+          default_model: 'jev-latest',
+          secret_id: secret.body.id,
+        });
+
+      await authenticatedTestClient(userToken)
+        .post('/api/v1/deciders')
+        .send({
+          project_id: projectId,
+          name: 'Holds The Provider',
+          ai_provider_id: provider.body.id,
+          questions: { a: { type: 'noul', instructions: 'A?' } },
+        });
+
+      const res = await authenticatedTestClient(userToken)
+        .delete(`/api/v1/ai-providers/${provider.body.id}`)
+        .send();
+
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe('AI_PROVIDER_HAS_DEPENDENTS');
+      expect(res.body.error.meta.deciderCount).toBe(1);
     });
   });
 

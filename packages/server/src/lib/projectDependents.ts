@@ -63,6 +63,11 @@ export const PROJECT_CASCADE_ORDER = [
   'Quota',
   'Guardrail',
 
+  // A decision records what a decider answered; nothing references it. The
+  // decider itself must precede AiProvider, which its NO ACTION FK points at.
+  'Decision',
+  'Decider',
+
   'OrchestrationRun',
   'Orchestration',
 
@@ -133,6 +138,8 @@ export const PROJECT_COUNTED_MODELS = [
   'Chat',
   'Conversation',
   'Dataset',
+  'Decider',
+  'Decision',
   'Eval',
   'ExceptionItem',
   'File',

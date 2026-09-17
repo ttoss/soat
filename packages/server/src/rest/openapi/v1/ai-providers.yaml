@@ -82,6 +82,7 @@ paths:
                               vertex,
                               gateway,
                               custom,
+                              typesafe,
                             ]
                         default_model:
                           type: string
@@ -165,6 +166,7 @@ paths:
                       vertex,
                       gateway,
                       custom,
+                      typesafe,
                     ]
                   description: LLM provider
                   example: openai
@@ -307,6 +309,7 @@ paths:
                       vertex,
                       gateway,
                       custom,
+                      typesafe,
                     ]
                   description: LLM provider
                   example: openai

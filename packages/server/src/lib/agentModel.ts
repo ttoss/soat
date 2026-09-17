@@ -354,6 +354,19 @@ const PROVIDER_BUILDERS: Partial<Record<AiProviderSlug, ProviderBuilder>> = {
   ollama: buildOllamaModel,
   gateway: buildSimpleOpenAiCompatModel,
   custom: buildSimpleOpenAiCompatModel,
+  /**
+   * A System One provider has no language model to build. It answers typed
+   * questions against a state and returns distributions, so there is no token
+   * stream for a generation to consume — pointing an agent, chat or model
+   * route at one is a configuration mistake, refused here with the module that
+   * can use it rather than as an opaque failure deeper in the turn.
+   */
+  typesafe: () => {
+    throw new DomainError(
+      'AI_PROVIDER_MISCONFIGURED',
+      'A `typesafe` AI provider serves a System One model, which answers typed questions rather than generating text. It cannot back an agent, chat or model route; use it from a decider instead.'
+    );
+  },
 };
 
 export const buildModel = (args: BuildModelArgs): LanguageModel => {

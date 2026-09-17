@@ -91,6 +91,7 @@ const sidebars: SidebarsConfig = {
             'modules/sessions',
             'modules/conversations',
             'modules/chats',
+            'modules/deciders',
             'modules/actors',
             'modules/generations',
             'modules/chains',

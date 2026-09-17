@@ -2,27 +2,23 @@
 description: 'Reusable, versioned question sets evaluated by a System One model — typed answers your code branches on directly, with no generated text to parse.'
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Deciders
 
-Reusable, versioned question sets evaluated by a System One model. Evaluating a
-decider produces a **decision**: typed answers your code acts on directly.
+Reusable, versioned question sets evaluated by a System One model.
 
 ## Overview
 
-A decider is to a System One model what an [agent](./agents.md) is to an LLM —
-the named, versioned configuration a caller invokes, rather than the call
-itself.
-
-An LLM produces text for a person to read. When the thing you need is a
-judgment your *code* consumes, that text has to be coaxed into a shape and
-parsed back out. A System One model skips that: it evaluates typed questions
-against a state and returns typed values and probability distributions. Your
-code branches on them.
+A decider is to a System One model what an [agent](./agents.md) is to an LLM:
+the named, versioned configuration a caller invokes. Evaluating one against a
+state produces a **decision** — typed values and probability distributions
+rather than generated text, so calling code branches on the answer directly.
 
 Deciders hold the questions; [AI Providers](./ai-providers.md) hold the
-credential. A decider must point at a provider whose `provider` is `typesafe`;
-any other slug is refused on write, because a text-generation endpoint cannot
-serve this call at all.
+credential. A decider's provider must carry the `typesafe` slug; any other is
+refused with `VALIDATION_FAILED` on write.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings
 > for this module.
@@ -109,56 +105,134 @@ validated when the decider is written, not when it is evaluated.
 
 ### Ask one thing per question
 
-A System One model answers the kind of judgment a knowledgeable person makes in
-a second. "Does this message convey urgency?" is such a question; "analyse this
-and determine the best course of action" is not.
-
-When a judgment depends on several independent factors, make each factor its own
-question and combine the answers in your own code, with weights you control.
-Changing a priority then means changing a coefficient, not rewriting a prompt.
+A question asks for one snap judgment: "Does this message convey urgency?",
+not "analyse this and determine the best course of action". A judgment that
+depends on several independent factors becomes one question per factor,
+combined with weights in calling code.
 
 Every question in a decider is evaluated in parallel and in isolation against
-the same state, so adding questions barely changes the response time and one
-question's answer is never hidden context for another. Asking a question you
-might not need is close to free — evaluate it and let your code ignore the
-answers that turned out not to matter.
+the same state. Adding questions barely changes the response time, and one
+question's answer is never context for another.
 
 ### Answers
 
-Answers are constrained to what you supplied: the model returns a distribution
-over your options or levels, never a value outside them. A Choice maps onto
-branches, a Score onto a threshold, a Noul onto an `if`.
+An answer is constrained to the supplied options: the model returns a
+distribution over them, never a value outside them.
 
-`confidence` summarises how peaked a distribution is, and is a second axis from
-the answer itself: the answer says *what*, confidence says whether to act on it
-or escalate. A Noul has no separate confidence — its value is already a
-probability, where near 0.5 means the model gives yes and no equal weight.
+`confidence` reports how peaked that distribution is, separately from the answer
+itself. A Noul carries no `confidence` — its value is already a probability,
+and near 0.5 means yes and no are given equal weight.
 
 ### State
 
-The state is whatever is being judged: a string, or a JSON object whose parts
-the questions address by path (`` Does `ticket.messages[0].text` request a
-refund? ``). It is passed to the model as given.
+The state is what is being judged: a string, or a JSON object whose parts the
+questions address by path (`` Does `ticket.messages[0].text` request a refund?
+``). It reaches the model as given.
 
-The state is **not stored** on the decision. It is arbitrary caller content —
-a ticket, a résumé, a message thread — and keeping it would put that content in
-a table with no retention or purge path of its own. The answers are the durable
-record; pair a decision with your own record of the input if you need both.
+The state is **not stored** on the decision — this table has no retention or
+purge path of its own. A caller that needs the input kept records it alongside
+the decision id.
 
 ### Versioning
 
 `version` starts at 1 and is incremented whenever `questions` is written.
-Renaming a decider, or repointing it at another provider or model, leaves the
-version alone.
+Renaming a decider, or repointing it at another provider or model, leaves it
+alone.
 
-Every decision names the `decider_version` that produced it, so a rubric level
-reworded a month later never silently reinterprets last month's answers.
+Every decision names the `decider_version` that produced it, so rewording a
+level never reinterprets answers recorded before the change.
+
+### The provider cannot back an agent
+
+A `typesafe` provider returns no token stream, so it cannot back an
+[agent](./agents.md), a [chat](./chats.md) or a
+[model route](./model-routes.md): those fail with
+`AI_PROVIDER_MISCONFIGURED`.
+
+A decider referencing a provider blocks that provider's deletion, as a chat or
+an agent does. `force` does not override it.
 
 ### Deletion
 
 Deleting a decider keeps the decisions it produced. Each holds the decider's ID
-as a dangling reference: the record still names what was evaluated, the same way
-a [guardrail evaluation](./guardrails.md) outlives its guardrail.
+as a dangling reference, as a [guardrail evaluation](./guardrails.md) outlives
+its guardrail.
+
+## Examples
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI">
+
+```bash
+# Create a decider from a question set
+soat create-decider --project_id proj_01 --name "Support Triage" \
+  --ai_provider_id aip_01 \
+  --questions '{"is_urgent":{"type":"noul","instructions":"The message conveys urgency"}}'
+
+# Evaluate it against a state
+soat evaluate-decider --decider_id dcd_01 \
+  --state "Our API has returned 500 on every request for 20 minutes."
+
+# Read the decider and the decisions it produced
+soat get-decider --decider_id dcd_01
+soat list-decisions --project_id proj_01 --decider_id dcd_01
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: decider } = await client.POST('/api/v1/deciders', {
+  body: {
+    project_id: 'proj_01',
+    name: 'Support Triage',
+    ai_provider_id: 'aip_01',
+    questions: {
+      is_urgent: {
+        type: 'noul',
+        instructions: 'The message conveys urgency',
+      },
+    },
+  },
+});
+
+const { data: decision } = await client.POST(
+  '/api/v1/deciders/{decider_id}/evaluate',
+  {
+    params: { path: { decider_id: decider!.id } },
+    body: { state: 'Our API has returned 500 for 20 minutes.' },
+  }
+);
+
+if (decision!.answers.is_urgent.noul > 0.9) {
+  await page(onCall);
+}
+
+const { data: decisions } = await client.GET('/api/v1/decisions', {
+  params: { query: { decider_id: decider!.id } },
+});
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST -H "Authorization: Bearer $SOAT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"project_id":"proj_01","name":"Support Triage","ai_provider_id":"aip_01","questions":{"is_urgent":{"type":"noul","instructions":"The message conveys urgency"}}}' \
+  "$SOAT_BASE_URL/api/v1/deciders"
+
+curl -X POST -H "Authorization: Bearer $SOAT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"state":"Our API has returned 500 for 20 minutes."}' \
+  "$SOAT_BASE_URL/api/v1/deciders/dcd_01/evaluate"
+
+curl -H "Authorization: Bearer $SOAT_TOKEN" \
+  "$SOAT_BASE_URL/api/v1/decisions?decider_id=dcd_01"
+```
+
+</TabItem>
+</Tabs>
 
 ## Errors
 
