@@ -78,7 +78,8 @@ One row per write attempt, append-only, whatever the write resolved to.
 | `principal_type` | `string` | Who claimed it, in the vocabulary a [generation](./generations.md) records its starter with, plus `agent` |
 | `principal_id` | `string` | The principal's public ID                             |
 | `outcome`    | `string` | `created`, `superseded` or `skipped`                    |
-| `similarity` | `number \| null` | The top match's cosine — the number that chose the outcome; `null` when there was nothing to compare against |
+| `similarity` | `number \| null` | The cosine the outcome was decided against — the top match's, or the declared target's when `declared` is true; `null` when there was nothing to compare against |
+| `declared`   | `boolean` | Whether the caller named the memory this write replaced (`supersedes`) instead of the thresholds choosing one |
 | `created_at` | `string` | ISO 8601 creation timestamp                             |
 
 ## Key Concepts
@@ -128,6 +129,23 @@ On a **supersede**, the retired memory's `tags` and `metadata` are shallow-merge
 
 Below `supersede_threshold`, cosine covers both "same fact, changed" and "related but distinct" (*prefers email* vs *prefers Portuguese*), and embeddings sit close on negations. `created` is the outcome there because a near-duplicate stays searchable while a wrongly retired fact does not.
 
+#### Declaring the supersede
+
+The bands retire a contradiction only when the two texts are near-identical. *The office is in Lisbon* and *We closed the Lisbon office* contradict each other and score nowhere near `supersede_threshold`, so both would stay live and searchable. Lowering the threshold to catch that would start retiring merely-related facts.
+
+`supersedes` on [`POST /api/v1/memories`](/docs/api/memories/create-memory) names the memory a write replaces. The declaration **outranks the bands in both directions**: the named memory is retired and the outcome is `superseded` whether the two texts score above `duplicate_threshold` or far below `supersede_threshold`. A declaration is not a similarity question, so the top-match search is not run at all — nothing else in the store is touched.
+
+| The declaration | Result |
+| --- | --- |
+| A still-valid memory in the same store, and the caller may update it | `200`, `superseded` — the target is retired and the response is the replacement |
+| A memory in another store | `400 VALIDATION_FAILED` |
+| A memory already superseded | `400 VALIDATION_FAILED` — no chaining; supersede the replacement instead |
+| No memory with that id | `404 RESOURCE_NOT_FOUND` |
+
+Authorization is the write grant **plus** the target's: `memories:CreateMemory` on the store, and `memories:UpdateMemory` on the memory named — evaluated through the same two tag bags [`PUT /api/v1/memories/{memory_id}`](/docs/api/memories/update-memory) uses, so `soat:ResourceTag` conditions apply to the target as on any update. A declaration therefore says no more, and does no more, than updating that memory directly would.
+
+The replacement inherits the retired memory's `tags` and `metadata` exactly as a threshold supersede does, and the [assertion](#assertions) records `declared: true` with the cosine to the target — which decides nothing here, and is the number that says how far apart the two statements were.
+
 ### Where the thresholds come from
 
 Three layers, resolved request → store → constant, each value independently; the first non-null wins.
@@ -156,7 +174,7 @@ The response always includes an `action` field alongside the memory:
 
 A memory row is **state**. The write that produced it is an **event**, recorded separately: one `memory_assertion` per write attempt, appended whatever the outcome, including the writes that changed nothing.
 
-An assertion names the content as asserted (not always the memory's text), the outcome and the similarity that chose it, the principal who claimed the fact, the mechanism it came through, and — for anything an agent wrote — the generation it happened in.
+An assertion names the content as asserted (not always the memory's text), the outcome and the similarity that chose it, whether the supersede was `declared` by the caller rather than chosen by the thresholds, the principal who claimed the fact, the mechanism it came through, and — for anything an agent wrote — the generation it happened in.
 
 #### Mechanism
 
@@ -219,7 +237,8 @@ Invalidated memories are excluded from:
 They stay readable by ID ([`GET /api/v1/memories/{memory_id}`](/docs/api/memories/get-memory)),
 with their original text and their own [assertions](#assertions), for audit.
 
-Superseding is the write outcome that produces an invalidation. `DELETE` remains the way to
+Superseding is the write outcome that produces an invalidation, whether the thresholds chose the
+memory or the caller [declared it](#declaring-the-supersede). `DELETE` remains the way to
 remove a memory outright.
 
 ### Tag Filtering

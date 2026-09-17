@@ -114,6 +114,7 @@ const mapAssertion = (
     principal_id: instance.principalId,
     outcome: instance.outcome,
     similarity: instance.similarity ?? null,
+    declared: instance.declared,
     created_at: instance.createdAt,
   };
 };
@@ -179,6 +180,8 @@ export const recordMemoryAssertion = async (args: {
   memoryId: number | null;
   outcome: MemoryAssertionOutcome;
   similarity: number | null;
+  /** Whether the caller named the memory this write replaced. */
+  declared?: boolean;
   source: MemoryAssertionSource;
 }): Promise<void> => {
   log(
@@ -200,6 +203,7 @@ export const recordMemoryAssertion = async (args: {
     principalId: args.source.principalId,
     outcome: args.outcome,
     similarity: args.similarity,
+    declared: args.declared ?? false,
   });
 };
 

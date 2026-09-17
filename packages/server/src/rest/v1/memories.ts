@@ -100,6 +100,48 @@ const assertThresholdOrder = async (args: {
   }
 };
 
+/**
+ * The provenance pair as one read. It is the whole contract: `conversation`
+ * means `source_id` names the conversation, `manual` means there is nothing to
+ * name. Accepting either half alone would store a provenance that says one
+ * thing and points at another.
+ */
+const readSourcePair = (body: {
+  source_type?: string;
+  source_id?: string;
+}): MemorySource => {
+  const sourceType = normalizeSourceType(body.source_type) ?? 'manual';
+  if (sourceType === 'conversation' && !body.source_id) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      "source_id is required when source_type is 'conversation'"
+    );
+  }
+  if (sourceType !== 'conversation' && body.source_id) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      "source_id is only accepted when source_type is 'conversation'"
+    );
+  }
+  return sourceType;
+};
+
+/**
+ * The declared supersede target, as a memory id. Narrowed here rather than
+ * trusted from the body: the value reaches a `where` clause on `public_id`, and
+ * JSON can put an object where a string belongs.
+ */
+const readSupersedes = (value: unknown): string | undefined => {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string' || value === '') {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'supersedes must be a memory id'
+    );
+  }
+  return value;
+};
+
 const isPlainObject = (value: unknown): value is Record<string, unknown> => {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 };
@@ -281,6 +323,7 @@ memoriesRouter.post('/memories', async (ctx: Context) => {
     metadata?: unknown;
     duplicate_threshold?: unknown;
     supersede_threshold?: unknown;
+    supersedes?: unknown;
   };
 
   const validationError = validateTagsMetadata(body, { allowNull: false });
@@ -288,29 +331,24 @@ memoriesRouter.post('/memories', async (ctx: Context) => {
     throw new DomainError('VALIDATION_FAILED', validationError);
   }
 
-  const sourceType = normalizeSourceType(body.source_type) ?? 'manual';
-  // The pair is the whole contract: `conversation` means `source_id` names the
-  // conversation, `manual` means there is nothing to name. Accepting either
-  // half alone would store a provenance that says one thing and points at
-  // another.
-  if (sourceType === 'conversation' && !body.source_id) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      "source_id is required when source_type is 'conversation'"
-    );
-  }
-  if (sourceType !== 'conversation' && body.source_id) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      "source_id is only accepted when source_type is 'conversation'"
-    );
-  }
+  const sourceType = readSourcePair(body);
 
   const { memoryStoreRowId } = await resolveMemoryStoreForAction(
     ctx,
     body.memory_store_id,
     'memories:CreateMemory'
   );
+
+  // A declared supersede retires a memory the write grant alone does not
+  // authorize touching, so the target is resolved through the same two-bag
+  // check `PUT /memories/:id` uses: a declaration says no more, and does no
+  // more, than updating that memory directly would. Only after the store check,
+  // so the field cannot probe memories in a store the caller cannot reach at
+  // all.
+  const supersedes = readSupersedes(body.supersedes);
+  if (supersedes) {
+    await resolveEntryForAction(ctx, supersedes, 'memories:UpdateMemory');
+  }
 
   const duplicateThreshold = readThreshold({
     value: body.duplicate_threshold,
@@ -336,6 +374,7 @@ memoriesRouter.post('/memories', async (ctx: Context) => {
     content: body.content,
     sourceType,
     sourceConversationPublicId: body.source_id,
+    supersedes,
     tags: isStringRecord(body.tags) ? body.tags : undefined,
     metadata: isPlainObject(body.metadata) ? body.metadata : undefined,
     // This is the only door that takes per-request thresholds: a caller

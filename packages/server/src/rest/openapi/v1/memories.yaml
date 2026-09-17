@@ -98,8 +98,9 @@ paths:
         already holds), compared against the most similar currently-valid
         memory, and resolved to exactly one of three outcomes — `skipped` at or
         above `duplicate_threshold`, `superseded` at or above
-        `supersede_threshold`, `created` below it. Every call records one
-        assertion, whatever the outcome.
+        `supersede_threshold`, `created` below it. `supersedes` overrides that
+        comparison entirely, retiring the memory it names. Every call records
+        one assertion, whatever the outcome.
       operationId: createMemory
       x-soat-resource:
         kind: memory_store
@@ -149,6 +150,19 @@ paths:
                   additionalProperties: true
                   description: Arbitrary structured metadata attached to the memory
                   example: { evidence: high, quarter: Q3 }
+                supersedes:
+                  type: string
+                  description: >-
+                    The memory this write replaces, named outright. The
+                    declaration outranks the thresholds in both directions: the
+                    target is retired and the write returns `superseded` however
+                    similar or distant the two texts are. This is what reaches a
+                    contradiction cosine cannot see ("The office is in Lisbon"
+                    then "We closed the Lisbon office"). The target must be a
+                    still-valid memory in the same memory store, and the caller
+                    needs `memories:UpdateMemory` on it as well as
+                    `memories:CreateMemory` on the store.
+                  example: mem_V1StGXR8Z5jdHi6B
                 duplicate_threshold:
                   type: number
                   description: >-
@@ -191,15 +205,18 @@ paths:
                 $ref: '#/components/schemas/MemoryWriteResult'
         '400':
           description: >-
-            Bad request — a missing required field, or a threshold pair whose
+            Bad request — a missing required field, a threshold pair whose
             effective values are not `supersede_threshold <
-            duplicate_threshold`.
+            duplicate_threshold`, or a `supersedes` that is not a memory id, or
+            names a memory in another memory store or one already superseded.
         '401':
           description: Unauthorized
         '403':
-          description: Forbidden
+          description: >-
+            Forbidden — the caller may not write to the memory store, or may not
+            update the memory named by `supersedes`.
         '404':
-          description: Memory store not found
+          description: Memory store not found, or no memory matches `supersedes`
         '409':
           description: >-
             The project's `storage_bytes` quota is exceeded
