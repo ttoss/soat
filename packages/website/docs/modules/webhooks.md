@@ -82,7 +82,7 @@ A matching event is delivered as an HTTP POST with these headers:
 | --------------------- | -------------------------------------------------------------------------- |
 | `X-Soat-Event`        | The event type (e.g., `files.created`)                                     |
 | `X-Soat-Delivery`     | Unique delivery ID                                                         |
-| `X-Soat-Signature-V2` | Timestamped signature, `t=<unix>,v1=<hex>` — see [Signature verification](#secret-and-signature-verification) |
+| `X-Soat-Signature`    | Timestamped signature, `t=<unix>,v1=<hex>` — see [Signature verification](#secret-and-signature-verification) |
 
 Deliveries are retried up to three times; each attempt is recorded in the delivery log. See [Chat with an LLM - Step 11 (Verify delivery)](/docs/tutorials/chat-with-llm#step-11---verify-delivery-and-final-assistant-message). Test locally with [`soat listen`](../cli/usage.md#testing-webhooks-locally).
 
@@ -149,12 +149,12 @@ It is stored AES-256-GCM encrypted like [secrets](./secrets.md), keyed by `SECRE
 
 A stored secret that is not valid ciphertext (encrypted under a changed `SECRETS_ENCRYPTION_KEY`) is refused: `GET .../secret` answers `500 SECRET_NOT_DECRYPTABLE`, and a delivery is recorded `failed` with the reason and `attempts: 0` rather than sent unsigned. Rotate the secret or restore the key.
 
-#### Verifying `X-Soat-Signature-V2`
+#### Verifying `X-Soat-Signature`
 
 The header carries two comma-separated elements: `t`, the Unix timestamp (in seconds) at which the attempt was signed, and `v1`, the HMAC-SHA256 hex digest of `<t>.<raw body>`.
 
 ```
-X-Soat-Signature-V2: t=1769865600,v1=5257a869e7ecebeda32affa62cdca3fa51cad7e77a0e56ff536d0ce8e108d8bd
+X-Soat-Signature: t=1769865600,v1=5257a869e7ecebeda32affa62cdca3fa51cad7e77a0e56ff536d0ce8e108d8bd
 ```
 
 The timestamp bounds replay: reject a `t` outside your tolerance window. Verify **before** trusting the body, with a constant-time compare.

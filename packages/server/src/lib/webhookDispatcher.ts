@@ -6,7 +6,7 @@ import { DomainError } from '../errors';
 import type { SoatEvent } from './eventBus';
 import { onEvent, recordDroppedEvent } from './eventBus';
 import { evaluateEventPolicy, matchesEvent } from './eventMatching';
-import { timestampedSignature } from './hmacSignature';
+import { SIGNATURE_HEADER, timestampedSignature } from './hmacSignature';
 import { createScheduler, createSweep } from './scheduler';
 import { fetchWithEgressGuard } from './toolEgress';
 import { retryTransient } from './transientRetry';
@@ -36,8 +36,6 @@ const MAX_BACKOFF_MS = 60_000;
  * trade-off between duplicate sends (too short) and slow recovery (too long).
  */
 const LEASE_MS = 60_000;
-
-const SIGNATURE_HEADER = 'X-Soat-Signature-V2';
 
 type DeliveryRow = InstanceType<(typeof db)['WebhookDelivery']>;
 

@@ -265,7 +265,7 @@ describe('webhook delivery outbox', () => {
       { body: string; headers: HeadersInit },
     ];
 
-    const header = new Headers(init.headers).get('X-Soat-Signature-V2') ?? '';
+    const header = new Headers(init.headers).get('X-Soat-Signature') ?? '';
     expect(header).toMatch(/^t=\d+,v1=[0-9a-f]{64}$/);
 
     const [timestampPart, signaturePart] = header.split(',');
@@ -285,10 +285,10 @@ describe('webhook delivery outbox', () => {
     expect(skewSeconds).toBeLessThan(120);
   });
 
-  test('a delivery carries one signature, and it is the timestamped one', async () => {
-    // A second header signing the bare body offers a subscriber a scheme that
-    // cannot bound a replay, and a subscriber that verifies it gets no replay
-    // protection while believing the delivery is signed.
+  test('a delivery carries one signature, under the header every SOAT signer uses', async () => {
+    // A second, differently-named header signing the same or a weaker scheme
+    // offers a subscriber a name to guess wrong, and a bare-body scheme carries
+    // no replay bound at all.
     const url = 'https://example.com/outbox-one-signature';
     await createWebhook({ name: 'One Signature', url });
 
@@ -304,8 +304,8 @@ describe('webhook delivery outbox', () => {
     ];
 
     const headers = new Headers(init.headers);
-    expect(headers.get('X-Soat-Signature-V2')).toMatch(/^t=\d+,v1=[0-9a-f]{64}$/);
-    expect(headers.get('X-Soat-Signature')).toBeNull();
+    expect(headers.get('X-Soat-Signature')).toMatch(/^t=\d+,v1=[0-9a-f]{64}$/);
+    expect(headers.get('X-Soat-Signature-V2')).toBeNull();
   });
 
   test('each attempt re-signs, so a retry never ships a stale timestamp', async () => {
@@ -338,7 +338,7 @@ describe('webhook delivery outbox', () => {
         { headers: HeadersInit },
       ];
       return Number(
-        (new Headers(init.headers).get('X-Soat-Signature-V2') ?? '')
+        (new Headers(init.headers).get('X-Soat-Signature') ?? '')
           .split(',')[0]
           .slice('t='.length)
       );
