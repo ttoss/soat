@@ -2,22 +2,23 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 
 /**
  * Verification of the signature on a payload the local `soat listen` listener
- * receives. The listener takes two kinds, each with its own scheme:
+ * receives. The listener takes two kinds, both under `X-Soat-Signature`,
+ * distinguished by the value's own prefix rather than by header name:
  *
- * - A **webhook delivery** carries `X-Soat-Signature-V2: t=<unix>,v1=<hex>` — a
- *   digest over `<t>.<raw body>`, so the timestamp is authenticated and a
- *   subscriber can bound a replay by age.
- * - A **trigger** payload carries `X-Soat-Signature: sha256=<hex>`, a digest
- *   over the bare body, which is the scheme a webhook-type trigger's sender
- *   signs with.
- *
- * V2 wins when both are present.
+ * - A **webhook delivery** carries `t=<unix>,v1=<hex>` — a digest over
+ *   `<t>.<raw body>`, so the timestamp is authenticated and a subscriber can
+ *   bound a replay by age.
+ * - A **trigger** payload carries `sha256=<hex>`, a digest over the bare
+ *   body, which is the scheme a webhook-type trigger's sender signs with.
  */
+
+/** Only the timestamped scheme starts this way; everything else is bare-body. */
+const TIMESTAMPED_PREFIX = 't=';
 
 export type SignatureScheme = 'v1' | 'v2';
 
 export type SignatureInspection = {
-  /** The header value that was checked, or `''` when neither header is present. */
+  /** The header value that was checked, or `''` when the header is absent. */
   signature: string;
   scheme: SignatureScheme;
   /** `null` when no secret was supplied, so nothing was verified. */
@@ -88,11 +89,10 @@ export const inspectDeliverySignature = (args: {
   payload: string;
   headers: Record<string, string | string[] | undefined>;
 }): SignatureInspection => {
-  const timestamped = headerValue(args.headers['x-soat-signature-v2']);
-  const bareBody = headerValue(args.headers['x-soat-signature']);
-
-  const scheme: SignatureScheme = timestamped ? 'v2' : 'v1';
-  const signature = timestamped || bareBody;
+  const signature = headerValue(args.headers['x-soat-signature']);
+  const scheme: SignatureScheme = signature.startsWith(TIMESTAMPED_PREFIX)
+    ? 'v2'
+    : 'v1';
 
   if (!args.secret) {
     return { signature, scheme, valid: null };
@@ -103,12 +103,12 @@ export const inspectDeliverySignature = (args: {
       ? verifyTimestampedSignature({
           secret: args.secret,
           payload: args.payload,
-          header: timestamped,
+          header: signature,
         })
       : verifyBareBodySignature({
           secret: args.secret,
           payload: args.payload,
-          header: bareBody,
+          header: signature,
         });
 
   return { signature, scheme, valid };
