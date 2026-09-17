@@ -285,7 +285,7 @@ describe('webhook delivery outbox', () => {
     expect(skewSeconds).toBeLessThan(120);
   });
 
-  test('the legacy signature header is still sent during the deprecation window', async () => {
+  test('the legacy signature header is sent alongside the v2 one', async () => {
     const url = 'https://example.com/outbox-legacy-signature';
     const webhook = await createWebhook({ name: 'Legacy Signature', url });
 

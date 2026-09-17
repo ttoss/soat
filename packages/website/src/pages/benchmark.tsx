@@ -118,7 +118,7 @@ const TOGGLE_KEYS = new Set(['Enter', ' ', 'Spacebar']);
  * The whole card is the comparison toggle, not just a button inside it. A
  * selectable card therefore *is* a button: it renders as one (rather than an
  * `<article>` wearing `role="button"`, which would claim article semantics it
- * no longer has), takes focus, answers Enter and Space, and reports state
+ * does not have), takes focus, answers Enter and Space, and reports state
  * through `aria-pressed`. That is also why the pill inside it is a `span` — a
  * real button firing the same action would just be a duplicate tab stop nested
  * in this one.

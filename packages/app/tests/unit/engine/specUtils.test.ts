@@ -551,7 +551,7 @@ describe('getListItemSchema — record from list responses', () => {
       'id',
       'project_id',
     ]);
-    // The x-soat-ref is now reachable, so the field becomes linkable.
+    // The x-soat-ref resolves through the $ref, so the field is linkable.
     expect(extractRefFields(item, spec)).toEqual({ project_id: 'projects' });
   });
 

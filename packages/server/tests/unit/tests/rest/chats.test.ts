@@ -945,9 +945,8 @@ describe('Chats', () => {
   });
 
   // ── Actor linked to a chat (via POST /actors + chat_id) ─────────────────
-  // The former POST /chats/:id/actors was removed; an actor is now linked to a
-  // chat by passing chat_id to the top-level /actors collection, and listed
-  // back with the ?chat_id= filter.
+  // An actor is linked to a chat by passing chat_id to the top-level /actors
+  // collection, and listed back with the ?chat_id= filter.
 
   describe('actor ↔ chat link via /actors', () => {
     let chatId: string;

@@ -917,9 +917,8 @@ describe('resolveAgentTools', () => {
     fetchMock.mockRestore();
   });
 
-  // An `execute` persisted as a JSON string was tolerated for rows written
-  // before single-casing. A string is no longer a valid config: it is reported
-  // as invalid rather than silently parsed.
+  // An `execute` persisted as a JSON string is not a valid config: it is
+  // reported as invalid rather than silently parsed.
   test('http tool execute stored as a JSON string is rejected as invalid', async () => {
     const stringExecuteRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/tools')

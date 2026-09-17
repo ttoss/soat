@@ -210,9 +210,9 @@ describe('validateRequestBody', () => {
         });
       });
       // `foo` is not in the schema; `targets` is required and absent.
-      // Under the old dual-casing kernel this case was self-contradictory —
-      // a field counted as unknown *and* its camelCase spelling as missing,
-      // for a body that spelled the field exactly as the spec declares it.
+      // The two lists must never contradict each other: a body spelling a
+      // field exactly as the spec declares it cannot have that field counted
+      // as unknown *and* another spelling of it as missing.
       expect(error.meta).toEqual({
         unknownFields: ['foo'],
         missingFields: ['targets'],

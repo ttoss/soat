@@ -29,9 +29,8 @@ export type {
  *
  * Each stage is a database read or write that the pipeline retries (see
  * {@link retryTransient}); this counter records the events that did not survive
- * even that. It exists because the alternative — the `catch {}` and the
- * swallowed rejection this replaced — made a lost event indistinguishable from
- * an event nobody subscribed to.
+ * even that. Without it — a bare `catch {}`, a swallowed rejection — a lost
+ * event is indistinguishable from an event nobody subscribed to.
  */
 export type EventDropStage =
   | 'project_lookup'

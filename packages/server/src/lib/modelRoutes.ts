@@ -320,9 +320,8 @@ const MAX_DEPENDENT_SAMPLE = 5;
  * A referenced route cannot be dropped. An agent referencing it has no pinned
  * provider to fall back on (exclusivity), so a dangling reference would break
  * every one of its generations; a project defaulting to it would strand every
- * consumer inheriting the default. Agents reference routes from day one, so this
- * guard ships with them; the project reference was added by the project-default
- * amendment.
+ * consumer inheriting the default. Both references are counted here, so
+ * neither kind can be left dangling.
  */
 const assertNoDependents = async (args: {
   routeDbId: number;

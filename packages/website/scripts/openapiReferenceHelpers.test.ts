@@ -20,7 +20,7 @@ const specWithToolBinding = (): OpenApiSpec => {
   };
 };
 
-test('getMcpTypeLabel matches the live MCP server for patch-agent arguments (#775)', () => {
+test('getMcpTypeLabel matches the live MCP server for patch-agent arguments', () => {
   // max_context_messages: `type: integer, nullable: true` -> server advertises ["number","null"]
   const maxContextMessages: JsonSchema = { type: 'integer', nullable: true };
   assert.equal(

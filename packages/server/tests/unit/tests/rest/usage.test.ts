@@ -3584,7 +3584,7 @@ describe('Usage', () => {
       expect(old.body.error.code).toBe('VALIDATION_FAILED');
     });
 
-    test('the old collection and root aggregate paths are gone', async () => {
+    test('the collection and root aggregate paths answer 404', async () => {
       const meters = await authenticatedTestClient(adminToken).get(
         '/api/v1/usage/meters'
       );
@@ -3596,9 +3596,10 @@ describe('Usage', () => {
       expect(root.status).toBe(404);
     });
 
-    test('the new paths are gated by the new IAM actions', async () => {
-      // A principal granted only the renamed actions reaches both routes; the
-      // old action names no longer name a permission at all.
+    test('the paths are gated by the usage IAM actions', async () => {
+      // A principal granted only `usage:ListEvents` and `usage:GetAggregate`
+      // reaches both routes, and a policy naming `usage:GetUsage` is refused
+      // because no such permission exists.
       const scoped = await createScopedPrincipal({
         adminToken,
         projectId,
@@ -3630,11 +3631,11 @@ describe('Usage', () => {
   /**
    * `totals.distinct` — the counters a "how many X this cycle" question reads.
    *
-   * The dimension the old spec pointed at (`groups.total` under
-   * `group_by=orchestration_run`) counts *buckets*, and a null key is a real bucket, so a
-   * project whose traffic is standalone generations reported 1 whatever the
-   * volume. These pin the distinction: the bucket count stays what it
-   * is, and the entity counts live on `totals` behind `include=distinct`.
+   * `groups.total` under `group_by=orchestration_run` counts *buckets*, and a
+   * null key is a real bucket, so a project whose traffic is standalone
+   * generations reports 1 whatever the volume. These pin the distinction: the
+   * bucket count stays what it is, and the entity counts live on `totals`
+   * behind `include=distinct`.
    */
   describe('GET /api/v1/usage/aggregate — totals.distinct', () => {
     let standaloneProjectId: string;
@@ -3720,8 +3721,8 @@ describe('Usage', () => {
       expect(distinct.generations).toBe(DIRECT_GENERATIONS + 1);
       expect(distinct.orchestration_runs).toBe(0);
 
-      // The figure the old spec pointed at, unchanged and still not a count of
-      // anything: every event here collapses into the single null bucket.
+      // The bucket count, which counts nothing here: every event collapses
+      // into the single null bucket.
       const res = await authenticatedTestClient(userToken).get(
         `/api/v1/usage/aggregate?project_id=${standaloneProjectId}&group_by=orchestration_run`
       );

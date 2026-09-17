@@ -170,7 +170,7 @@ describe('continuation chain lineage and budget', () => {
     const continuation = await generate(root.id);
     const continuationTrace = await traceOf(continuation.id);
 
-    // Derived from the initiator, never passed in: the hop is now part of one
+    // Derived from the initiator, never passed in: the hop is part of one
     // tree instead of minting an unrelated root.
     expect(continuationTrace?.parentTraceId).toBe(rootTrace?.id);
     expect(continuationTrace?.rootTraceId).toBe(rootTrace?.id);

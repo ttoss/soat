@@ -1404,8 +1404,8 @@ resources:
     });
 
     // Teardown is ordered and not transactional, so discovering this refusal by
-    // attempting the delete destroyed everything ordered ahead of the agent and
-    // wedged the stack in `delete_failed`.
+    // attempting the delete would destroy everything ordered ahead of the agent
+    // and wedge the stack in `delete_failed`.
     test('an agent with generation history blocks teardown before anything is deleted', async () => {
       const aiProvRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/ai-providers')
@@ -1433,7 +1433,7 @@ resources:
                 },
               },
               // Depends on the agent, so teardown removes this one *first* and
-              // the agent last — the ordering that made the old failure
+              // the agent last — the ordering under which a late refusal is
               // unrecoverable.
               CompanionMemoryStore: {
                 type: 'memory_store',
@@ -3206,8 +3206,8 @@ resources:
         }
       );
       expect(docResource).toBeDefined();
-      // Documents are no longer immutable on update: the changed content is a
-      // real diff, so the resource is updated (not a no-op).
+      // A document is mutable on update: the changed content is a real diff,
+      // so the resource is updated (not a no-op).
       expect(docResource.status).toBe('updated');
 
       // Restore the original content so the subsequent no-op plan test — which

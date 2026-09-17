@@ -48,8 +48,8 @@ type DeliveryRow = InstanceType<(typeof db)['WebhookDelivery']>;
  * The v2 header is the shared `timestampedSignature` scheme (`hmacSignature.ts`)
  * — it signs `<timestamp>.<body>` and ships the timestamp alongside the digest,
  * so a subscriber can reject a replayed body by age. The legacy header signs the
- * bare body, which carries no such bound; it is still sent during the
- * deprecation window and is documented as deprecated.
+ * bare body, which carries no such bound; it is sent alongside the v2 header
+ * and is documented as deprecated.
  */
 const signatureHeaders = (args: { payload: string; secret: string }) => {
   return {

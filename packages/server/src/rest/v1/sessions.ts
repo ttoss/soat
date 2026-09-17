@@ -26,10 +26,10 @@ export const sessionsRouter = new Router<Context>();
  *
  * The session is loaded *before* the policy is evaluated, which is what makes
  * `soat:ResourceTag/<key>` work: a conditioned statement can only match once
- * the tags it names are known. The project-level probe this replaced asked
- * `srn:<project>:session:*` with no context, so a conditioned statement never
- * matched and the resource segment of a policy was never compared at all —
- * sessions advertised tag-based access control they did not enforce.
+ * the tags it names are known. A project-level probe for
+ * `srn:<project>:session:*` carries no context, so no conditioned statement
+ * would match and the resource segment of a policy would never be compared at
+ * all — tag-based access control advertised and not enforced.
  *
  * Throws `DomainError` with codes:
  *  - `UNAUTHORIZED`       – no authenticated user

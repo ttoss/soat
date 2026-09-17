@@ -2,8 +2,8 @@
 //
 // Ollama's OpenAI-compatible endpoint does not implement `tool_choice` and drops
 // it silently, so a forcing agent gets no forcing at all in CI — whether a run
-// pauses on a client tool depends on whether `qwen2.5:0.5b` volunteers one. That
-// is the flake behind #774, which failed a release pipeline.
+// pauses on a client tool depends on whether `qwen2.5:0.5b` volunteers one —
+// a coin flip that can fail a release pipeline.
 //
 // This implements exactly that missing field, for the tools in
 // `TOOL_CHOICE_TOOLS`, and nothing else:
@@ -11,7 +11,7 @@
 //   * forcing an allowlisted tool → a synthesized `tool_calls` response; the
 //     model is never called, so the forced call is deterministic.
 //   * forcing one the request does not offer → `400`. That is a wiring break,
-//     and forwarding it revives the flake downstream where it no longer looks
+//     and forwarding it moves the flake downstream, where it no longer looks
 //     like one.
 //   * everything else is forwarded to Ollama verbatim.
 //
@@ -177,9 +177,9 @@ const forcedToolName = (toolChoice) => {
  * The `reject` case exists because this shim's only purpose is to make a forced
  * **allowlisted** call deterministic. If such a call arrives and the tool is not
  * in `tools`, something upstream is misconfigured — and forwarding would hand
- * the outcome back to the sandbox model, reviving the #774 coin flip with no
- * trace of why. Fail closed so a wiring break reads as a wiring break instead of
- * as a flaky assertion three steps later.
+ * the outcome back to the sandbox model, turning the step into a coin flip with
+ * no trace of why. Fail closed so a wiring break reads as a wiring break rather
+ * than as a flaky assertion three steps later.
  */
 const resolveDecision = (args) => {
   const { body, toolNames } = args;

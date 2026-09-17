@@ -442,8 +442,8 @@ export const resolveMemoryStoreSearchLists = async (args: {
     : { ranked: false, results: [] };
 
   // Whether this store is read at all is `searchKnowledge`'s decision, not
-  // this function's: it used to refuse any request naming neither a container
-  // nor a tag, which is what kept a bare `query` from ever reaching a memory.
+  // this function's: a request naming neither a container nor a tag reaches
+  // every memory the caller can see rather than being refused here.
   const selection = await buildEntrySelection({ config, projectIds });
   if (!selection) return empty;
 

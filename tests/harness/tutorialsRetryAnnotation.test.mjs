@@ -121,7 +121,7 @@ describe('tutorials-tests.sh retry annotation', () => {
 
   // The container buffers its output, so log timestamps collapse to the flush
   // and give no way to tell "broken" from "needed 12 more seconds". Reporting
-  // elapsed wall-clock makes the next budget a measurement, not a guess (#1112).
+  // elapsed wall-clock makes the next budget a measurement, not a guess.
   test('reports the elapsed wall-clock when the budget is exhausted', async () => {
     const [cmd] = flakyCommand('never-passes-timed', 99);
     const file = await writeTutorial(

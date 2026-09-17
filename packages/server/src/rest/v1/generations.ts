@@ -61,8 +61,7 @@ const requireResolved = <T>(args: { value: T | null; ctx: Context }): T => {
  * operationId: listGenerations
  * Lists generations the caller can access, optionally filtered by agent_id,
  * trace_id, session_id, actor_id, chain_id, orchestration_run_id, node_id, and
- * status. An id naming nothing in scope yields an empty page. Replaces
- * the former GET /traces/{trace_id}/generations.
+ * status. An id naming nothing in scope yields an empty page.
  */
 generationsRouter.get('/generations', async (ctx: Context) => {
   requireAuth(ctx);

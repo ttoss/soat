@@ -13,29 +13,27 @@ const log = createDebug('soat:responseContract');
 type Next = () => Promise<void>;
 
 /**
- * The one job the deleted `caseTransform` middleware did well — keep responses
- * on the documented contract — expressed as a check instead of a rewrite.
+ * Keeps responses on the documented contract as a check, never a rewrite.
  *
- * Every response body is now serialized field by field in a lib mapper, so a
- * mapper emitting `projectId` where the spec says `project_id` is a plain bug.
- * This turns it into a deterministic failure, using the route's OpenAPI
- * response schema to decide what a key should have been called.
+ * Every response body is serialized field by field in a lib mapper, so a mapper
+ * emitting `projectId` where the spec says `project_id` is a plain bug. This
+ * turns it into a deterministic failure, using the route's OpenAPI response
+ * schema to decide what a key should have been called.
  *
  * It only ever *reads* the body, and two properties follow:
  *
  * - **Opaque bags are untouchable.** A guardrail `document`, a `tool_context`,
  *   a `tags` map — anything the spec models as an open object — is a *value*
- *   here. There is no skip list to forget a bag from, because bags were never
+ *   here. There is no skip list to forget a bag from, because a bag is never
  *   at risk.
- * - **Failures are loud, not silent.** A key-blind rewrite made a mismatched
+ * - **Failures are loud, not silent.** A key-blind rewrite makes a mismatched
  *   key look correct; this makes it fail.
  *
  * Two severities on purpose. A **camelCase key** is a hard failure: under a
  * snake_case wire contract it can only mean a mapper skipped serialization. A
- * **snake_case key the spec does not declare** is logged, because that is
- * pre-existing spec drift — ~1900 cases, documented in
- * `tests/unit/openapiContract.ts` — and throwing would silently expand this
- * change into that burn-down.
+ * **snake_case key the spec does not declare** is logged, because it is spec
+ * drift — ~1900 cases, documented in `tests/unit/openapiContract.ts` — and
+ * throwing would turn this check into a burn-down of all of them.
  */
 
 /** Statuses whose bodies are error envelopes, not the documented resource. */

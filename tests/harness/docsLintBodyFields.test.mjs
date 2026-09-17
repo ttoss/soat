@@ -8,10 +8,10 @@ import { objectEntriesAt } from '../../scripts/docs-lint.mjs';
  * it reads the top-level keys of one object literal in a doc example.
  *
  * It is pinned here because both of its failure modes are silent in the *noisy*
- * direction: an over-broad read reported 180 violations that did not exist, and a
- * string-blind read reported a field named `https` for every `url: 'https://…'`.
- * A check that cries wolf gets deleted, which would put the drift class it
- * guards (a documented body field no endpoint accepts) back where #992 found it.
+ * direction: an over-broad read reports violations that do not exist, and a
+ * string-blind read reports a field named `https` for every `url: 'https://…'`.
+ * A check that cries wolf gets deleted, and the drift class it guards (a
+ * documented body field no endpoint accepts) goes unguarded with it.
  *
  * The keys are what the check compares against the OpenAPI-derived allowlist, so
  * the contract is: exactly the object's own keys, never a value, never a

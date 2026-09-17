@@ -1435,7 +1435,7 @@ describe('Tools', () => {
   });
 
   describe('Invalid template tokens ({{...}}) in tool configs', () => {
-    // `preset_parameters` is now a place `{{context:...}}` is resolved, so
+    // `preset_parameters` is a place `{{context:...}}` is resolved, so
     // it is also a place a malformed token must be caught at write time rather
     // than shipped verbatim to the target as a parameter value.
     test('creating a tool with a {{context:...}} preset parameter is accepted', async () => {

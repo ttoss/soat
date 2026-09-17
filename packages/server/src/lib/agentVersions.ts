@@ -114,10 +114,10 @@ const agentRef = (agent: AgentInstance) => {
  * rather than inheriting whatever the live row happens to hold. That is what
  * makes a restore a real rollback instead of a merge.
  *
- * Only `tool_bindings` is replayed. A version archived before the `tool_ids` /
- * `tools` shorthands were removed still carries them, but they were derived
- * views of this same list, so replaying them too would duplicate every tool —
- * and they are no longer accepted on a write at all.
+ * Only `tool_bindings` is replayed. An archived config may carry the
+ * `tool_ids` / `tools` shorthands, but they are derived views of this same
+ * list, so replaying them too would duplicate every tool — and a write does
+ * not accept them.
  */
 const archivedConfigToUpdateArgs = (config: AgentConfigSnapshot) => {
   return {

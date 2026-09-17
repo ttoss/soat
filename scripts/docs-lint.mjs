@@ -14,8 +14,8 @@
 //      cannot see, read from the specs the pages are generated from.
 //
 // Checks 4 and 5 are existence checks against the in-repo sources of truth,
-// covering all three tabs every module example ships — guarding one language is
-// what let three of the four examples #992 reported stay broken after the fix.
+// covering all three tabs every module example ships: guarding one language
+// leaves a broken example on either of the other two.
 //
 // Usage: node scripts/docs-lint.mjs
 
@@ -96,7 +96,7 @@ const CHECKS = [
     label: "stale toggle: '?async=' (the sync/async toggle is 'wait')",
     re: /[?&]async=|--async\b|\basync:\s*(true|false)\b/,
   },
-  // Fields removed for v1 (#997, #1005). `\btool_ids\b` does not match
+  // Fields no endpoint accepts. `\btool_ids\b` does not match
   // `active_tool_ids`, still a real field, since `_` is a word character. The
   // `tools` shorthand gets no entry: too common to denylist, and a documented
   // `--tools` flag is already caught by the CLI-flag check below.
@@ -104,7 +104,7 @@ const CHECKS = [
     label: "removed field: 'tool_ids' (agents attach tools via tool_bindings)",
     re: /\btool_ids\b/,
   },
-  // Stored shapes that are no longer read (#1005): the camelCase spellings of
+  // Stored shapes nothing reads: the camelCase spellings of
   // step-rule keys, a forced tool's name, and an http tool's body mode. The wire
   // — and documented — spellings are tool_choice / active_tool_ids / tool_name /
   // body_mode.
@@ -317,14 +317,13 @@ const checkCliFlags = (files, commandFlags) => {
 
 // ── Check 5: documented SDK / curl body fields must exist ───────────────────
 //
-// Check 4 covers CLI tabs only, which is how three of the four examples #992
-// reported stayed broken after being "fixed" — every module example ships three
-// languages, so guarding one leaves two thirds unguarded and a reader on the SDK
-// tab with nothing that works.
+// Check 4 covers CLI tabs only, and every module example ships three languages,
+// so guarding one leaves two thirds unguarded and a reader on the SDK tab with
+// nothing that works.
 //
-// Scope is deliberately the top-level fields of a JSON body, where every
-// reported instance lived: the CLI manifest flattens a body to its top-level
-// flags, so nested schemas are not available from the same static source.
+// Scope is deliberately the top-level fields of a JSON body: the CLI manifest
+// flattens a body to its top-level flags, so nested schemas are not available
+// from the same static source.
 
 const OPENAPI_DIR = join(ROOT, 'packages/server/src/rest/openapi/v1');
 

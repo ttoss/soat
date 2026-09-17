@@ -260,7 +260,7 @@ describe('Orchestration run depth', () => {
       expect(cleared.body.max_orchestration_run_depth).toBeNull();
     });
 
-    test('the old max_run_depth spelling is rejected', async () => {
+    test('an unknown max_run_depth field is rejected', async () => {
       const res = await authenticatedTestClient(adminToken)
         .patch(`/api/v1/projects/${projectId}`)
         .send({ max_run_depth: 3 });

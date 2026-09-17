@@ -9,11 +9,10 @@ const log = createDebug('soat:knowledge');
 /**
  * Embeds a search query, or reports that the provider could not be reached.
  *
- * Before hybrid retrieval an unreachable embedding provider failed the whole
- * search, because the vector query was the only query there was. There is now a
- * second channel that needs nothing from the provider, so the search answers
- * from the lexical one instead — degraded, and visibly so: every result of such
- * a search carries no `similarity_score`, which is the one case the contract
+ * Hybrid retrieval has a second channel that needs nothing from the provider,
+ * so an unreachable one degrades the search rather than failing it: the answer
+ * comes from the lexical channel alone, and visibly so — every result of such a
+ * search carries no `similarity_score`, which is the one case the contract
  * leaves that field absent.
  *
  * A misconfiguration is not that case. `EMBEDDING_NOT_CONFIGURED` is raised

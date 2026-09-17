@@ -1296,9 +1296,9 @@ describe('agentsFormationModule tool_bindings', () => {
     expect(read).not.toHaveProperty('tool_ids');
   });
 
-  // `tool_ids` was removed for v1. `formations.yaml` is the sole allowlist for
-  // template properties, so dropping it there makes the field an unknown one.
-  test('validateProperties rejects the removed tool_ids field', () => {
+  // `formations.yaml` is the sole allowlist for template properties, and
+  // `tool_ids` is not on it, which makes the field an unknown one.
+  test('validateProperties rejects a tool_ids field', () => {
     const errors = readModule('agent').validateProperties?.({
       properties: {
         ai_provider_id: aiProviderId,

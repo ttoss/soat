@@ -1,9 +1,9 @@
 // Command-boundary detection in tests/tutorials-tests.sh.
 //
-// The runner joins multi-line commands by tracking unclosed single quotes. The
-// check used to count every `'`, which cannot tell a quote from an apostrophe —
-// one `Alice's` made the count odd, so the runner swallowed every later line and
-// died on `unexpected EOF` naming a command that had already run fine.
+// The runner joins multi-line commands by tracking unclosed single quotes, as
+// state rather than a count: a count of every `'` cannot tell a quote from an
+// apostrophe, so one `Alice's` makes it odd, and the runner swallows every later
+// line and dies on `unexpected EOF` naming a command that already ran fine.
 //
 // Driven against throwaway markdown, so no server or LLM is involved.
 // Run: pnpm run test:harness
@@ -146,10 +146,10 @@ describe('command boundaries and quoting', () => {
   });
 
   test('an apostrophe followed by a multi-line filter keeps both intact', async () => {
-    // The two shapes interleaved, as `memories-agent.md` had them when #1046
-    // fired. Neither alone reproduces it: the apostrophe leaves the old counter
-    // odd and the next opening quote brings it back to even, so the runner
-    // flushed a blob whose quote was still open.
+    // The two shapes interleaved, as `memories-agent.md` carries them. Neither
+    // alone breaks a counter: the apostrophe leaves it odd and the next opening
+    // quote brings it back to even, so the runner flushes a blob whose quote is
+    // still open.
     const file = await writeTutorial(
       'apostrophe-then-multiline',
       [

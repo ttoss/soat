@@ -34,8 +34,8 @@ paths:
       summary: List generations
       description: >
         Returns generations the caller can access, optionally filtered by agent,
-        trace, orchestration run, node, and status. Replaces the former
-        per-trace generations endpoint (use the trace_id query filter).
+        trace, orchestration run, node, and status. The generations of one
+        trace are the `trace_id` filter.
 
 
         Filtering by `orchestration_run_id` is the supported way to get from an

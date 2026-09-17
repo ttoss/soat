@@ -112,7 +112,7 @@ USER node
 EXPOSE 5047
 
 # Schema changes are a discrete step this image also carries, run to completion
-# before the service rolls (#548):
+# before the service rolls:
 #
 #   docker run --rm <image> node packages/server/dist/migrate.mjs run
 #

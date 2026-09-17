@@ -670,9 +670,8 @@ components:
             Optional allowlist of `tool_context` keys that may be forwarded to
             this tool as prefixed context headers (`X-Soat-Context-<key>` by
             default). When `null`, every key in the caller's
-            `tool_context` is forwarded — the behavior of every tool created
-            before this field existed. When set, only the listed keys are, so a
-            per-user credential in `tool_context` can be confined to the tools
+            `tool_context` is forwarded. When set, only the listed keys are, so
+            a per-user credential in `tool_context` can be confined to the tools
             that need it; `[]` forwards none. The server-pinned identity keys
             (`session_id`, `actor_id`, `actor_external_id`) are always forwarded.
             A key consumed by a `{{context:<key>}}` token in this tool's own
@@ -862,9 +861,8 @@ components:
             Optional allowlist of `tool_context` keys that may be forwarded to
             this tool as prefixed context headers (`X-Soat-Context-<key>` by
             default). When `null` or omitted, every key in the caller's
-            `tool_context` is forwarded — the behavior of every tool created
-            before this field existed. When set, only the listed keys are, so a
-            per-user credential in `tool_context` can be confined to the tools
+            `tool_context` is forwarded. When set, only the listed keys are, so
+            a per-user credential in `tool_context` can be confined to the tools
             that need it; `[]` forwards none. The server-pinned identity keys
             (`session_id`, `actor_id`, `actor_external_id`) are always forwarded.
             A key consumed by a `{{context:<key>}}` token in this tool's own
@@ -1025,9 +1023,8 @@ components:
             Optional allowlist of `tool_context` keys that may be forwarded to
             this tool as prefixed context headers (`X-Soat-Context-<key>` by
             default). When `null` or omitted, every key in the caller's
-            `tool_context` is forwarded — the behavior of every tool created
-            before this field existed. When set, only the listed keys are, so a
-            per-user credential in `tool_context` can be confined to the tools
+            `tool_context` is forwarded. When set, only the listed keys are, so
+            a per-user credential in `tool_context` can be confined to the tools
             that need it; `[]` forwards none. The server-pinned identity keys
             (`session_id`, `actor_id`, `actor_external_id`) are always forwarded.
             A key consumed by a `{{context:<key>}}` token in this tool's own
