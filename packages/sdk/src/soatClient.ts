@@ -13,6 +13,7 @@ import {
   Chains as ChainsSdk,
   Chats as ChatsSdk,
   Conversations as ConversationsSdk,
+  Deciders as DecidersSdk,
   Documents as DocumentsSdk,
   Embeddings as EmbeddingsSdk,
   Evaluations as EvaluationsSdk,
@@ -123,6 +124,7 @@ export class SoatClient {
   readonly chains: typeof ChainsSdk;
   readonly chats: typeof ChatsSdk;
   readonly conversations: typeof ConversationsSdk;
+  readonly deciders: typeof DecidersSdk;
   readonly documents: typeof DocumentsSdk;
   readonly embeddings: typeof EmbeddingsSdk;
   readonly evaluations: typeof EvaluationsSdk;
@@ -175,6 +177,7 @@ export class SoatClient {
     this.chains = bindResource(ChainsSdk, httpClient);
     this.chats = bindResource(ChatsSdk, httpClient);
     this.conversations = bindResource(ConversationsSdk, httpClient);
+    this.deciders = bindResource(DecidersSdk, httpClient);
     this.documents = bindResource(DocumentsSdk, httpClient);
     this.embeddings = bindResource(EmbeddingsSdk, httpClient);
     this.evaluations = bindResource(EvaluationsSdk, httpClient);
