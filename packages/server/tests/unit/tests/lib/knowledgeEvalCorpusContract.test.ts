@@ -1,0 +1,130 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { join, relative } from 'node:path';
+
+/**
+ * The retrieval eval seeds its corpus from committed fixtures, never from a
+ * file it reads out of the repository at seed time.
+ *
+ * 22 document fixtures used to carry a `source` + `section` pointer and were
+ * lifted out of the live module docs when the corpus was seeded. That made the
+ * baseline a function of documentation prose as well as ranking code: editing a
+ * seeded section moved the numbers, and a ranking change that documented itself
+ * could not read its own eval diff. The recorded cost was an IAM change failing
+ * the eval because it rewrote one `iam.md` section, at one CI round and a first
+ * diagnosis that blamed the base branch (#1345).
+ *
+ * `parseGoldenSet` refuses that pointer now, so the coupling cannot return
+ * through the data. It can still return through the code: one `readFileSync`
+ * reaching up out of `tests/eval` re-couples the corpus without touching
+ * `golden.json` at all. That is the half this test closes.
+ *
+ * Static, because the failure is silent. A corpus seeded from live prose still
+ * seeds, still scores and still passes; nothing goes red until an unrelated
+ * edit moves a rank, in a different pull request, where the number reads as a
+ * ranking regression.
+ */
+
+const EVAL_DIR = join(__dirname, '../../../eval');
+
+const SOURCE_FILE = /\.(?:ts|mjs|cjs)$/;
+
+type EvalSource = { file: string; lines: string[] };
+
+const evalSources = (): EvalSource[] => {
+  return readdirSync(EVAL_DIR, { withFileTypes: true, recursive: true })
+    .filter((entry) => {
+      return entry.isFile() && SOURCE_FILE.test(entry.name);
+    })
+    .map((entry) => {
+      const absolute = join(entry.parentPath, entry.name);
+      return {
+        file: relative(EVAL_DIR, absolute),
+        lines: readFileSync(absolute, 'utf8').split('\n'),
+      };
+    });
+};
+
+/** A path into a workspace package — the shape the retired pointer took. */
+const PACKAGE_PATH = /packages\/[a-z][a-z-]*\//;
+
+/**
+ * A quoted path that climbs out of its own directory: `'../…'`, `'a/../b'`.
+ *
+ * Matched as one construct rather than by enumerating string literals, which a
+ * regex cannot do over TypeScript — an apostrophe in a comment ("the corpus's
+ * store") opens a literal that swallows the rest of the file, and the first
+ * draft of this test passed against a deliberately reintroduced
+ * `path.resolve(__dirname, '../../../../..')` for exactly that reason. Newlines
+ * are excluded so a stray quote cannot span lines and hide the next one.
+ */
+const CLIMBING_PATH = /['"`][^'"`\n]*\.\.\//;
+
+/**
+ * Only files that reach the filesystem are checked for a climbing path. The
+ * others carry `..` for reasons that move no corpus: `jest.config.ts` points
+ * Jest at the unit suite's database lifecycle, and several modules import a
+ * sibling as `'../updateBaseline'`.
+ */
+const readsTheFilesystem = (args: { source: EvalSource }): boolean => {
+  return args.source.lines.some((line) => {
+    return line.includes(`from 'node:fs'`);
+  });
+};
+
+const offendingLines = (args: {
+  source: EvalSource;
+  pattern: RegExp;
+}): string[] => {
+  return args.source.lines.flatMap((line, index) => {
+    return args.pattern.test(line)
+      ? [`${args.source.file}:${index + 1}: ${line.trim()}`]
+      : [];
+  });
+};
+
+describe('the knowledge eval corpus is decoupled from the repository', () => {
+  const sources = evalSources();
+
+  const readers = sources.filter((source) => {
+    return readsTheFilesystem({ source });
+  });
+
+  test('the walk reaches the eval sources that read the filesystem', () => {
+    // A walk that silently found nothing would pass every check below.
+    expect(
+      readers
+        .map((source) => {
+          return source.file;
+        })
+        .sort()
+    ).toEqual([
+      join('knowledge', 'goldenSet.ts'),
+      join('knowledge', 'report.ts'),
+    ]);
+  });
+
+  test('no eval source names a path into a workspace package', () => {
+    const offenders = sources.flatMap((source) => {
+      return offendingLines({ source, pattern: PACKAGE_PATH });
+    });
+
+    expect(offenders).toEqual([]);
+  });
+
+  test('no path an eval source reads climbs out of the eval tree', () => {
+    const offenders = readers.flatMap((source) => {
+      return offendingLines({ source, pattern: CLIMBING_PATH });
+    });
+
+    expect(offenders).toEqual([]);
+  });
+
+  test('no eval source anchors a path it reads on the working directory', () => {
+    // `process.cwd()` is the one way out of the directory that needs no `..`.
+    const offenders = readers.flatMap((source) => {
+      return offendingLines({ source, pattern: /process\.cwd\(/ });
+    });
+
+    expect(offenders).toEqual([]);
+  });
+});
