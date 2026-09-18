@@ -179,6 +179,7 @@ describe('agent-generation tool activity (resolver dispatch path)', () => {
       summary: string;
       detail: Record<string, unknown> | null;
       agentId: string | null;
+      generationId: string | null;
       refId: string | null;
       orchestrationRunId: string | null;
     }>;
@@ -186,13 +187,11 @@ describe('agent-generation tool activity (resolver dispatch path)', () => {
     expect(rows[0].kind).toBe('action_executed');
     expect(rows[0].severity).toBe('info');
     expect(rows[0].agentId).toBe(agentPublicId);
+    expect(rows[0].generationId).toBe('gen_tool_activity');
     expect(rows[0].refId).toBe(httpToolId);
     expect(rows[0].orchestrationRunId).toBeNull();
     expect(rows[0].summary).toContain('refund');
-    expect(rows[0].detail).toMatchObject({
-      action: 'refund',
-      generationId: 'gen_tool_activity',
-    });
+    expect(rows[0].detail).toMatchObject({ action: 'refund' });
   });
 
   test('a call blocked by a guardrail records no entry', async () => {

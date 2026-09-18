@@ -3,6 +3,8 @@ import {
   parseOrchestrationNodes,
 } from 'src/lib/orchestrationGraphWire';
 
+import { DomainError } from '../../errors';
+
 /**
  * Request-body parsing for the orchestrations routes.
  *
@@ -75,10 +77,34 @@ export const parseUpdateBody = (body: RawUpdateBody) => {
   };
 };
 
+/** The `orchestration_runs.idempotency_key` column's width. */
+const IDEMPOTENCY_KEY_MAX_LENGTH = 255;
+
 export const parseRunInput = (
   raw: unknown
 ): Record<string, unknown> | undefined => {
   return raw != null && typeof raw === 'object' && !Array.isArray(raw)
     ? (raw as Record<string, unknown>)
     : undefined;
+};
+
+/**
+ * The run's deduplication key. Refused rather than coerced: a caller whose key
+ * arrived as a number wanted at-most-once and would silently get at-least-once.
+ */
+export const parseIdempotencyKey = (raw: unknown): string | undefined => {
+  if (raw === undefined || raw === null) return undefined;
+  if (typeof raw !== 'string' || raw.trim() === '') {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'idempotency_key must be a non-empty string.'
+    );
+  }
+  if (raw.length > IDEMPOTENCY_KEY_MAX_LENGTH) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      `idempotency_key must be at most ${IDEMPOTENCY_KEY_MAX_LENGTH} characters.`
+    );
+  }
+  return raw;
 };

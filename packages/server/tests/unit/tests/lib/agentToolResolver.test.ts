@@ -2118,10 +2118,10 @@ describe('resolveAgentTools - mcp and soat types', () => {
     expect(entry).toBeTruthy();
     expect(entry!.severity).toBe('warning');
     expect(entry!.agentId).toBe('agent_resolverfail01');
+    expect(entry!.generationId).toBe('gen_resolverfail01');
     expect(entry!.detail).toMatchObject({
       toolType: 'mcp',
       toolName: 'myMcpServer',
-      generationId: 'gen_resolverfail01',
     });
   });
 

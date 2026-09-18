@@ -20,6 +20,7 @@ import {
 } from './agentToolGuardrail';
 import { resolveSoatTools } from './agentToolResolverExternalTools';
 import { resolveMcpTools } from './agentToolResolverMcp';
+import type { UnavailableToolSink } from './agentToolUnavailable';
 import { HttpToolError } from './httpToolError';
 import { applyToolOutputMapping } from './jsonLogicMapping';
 import { isPlainObject } from './plainObject';
@@ -762,11 +763,34 @@ const resolveClientTool = (
   });
 };
 
-const resolveMcpToolEntry = async (
-  typedTool: AgentToolRow,
-  toolContext?: Record<string, string>,
-  activity?: ActivityCallContext
-): Promise<Record<string, Tool>> => {
+/**
+ * Records a binding that contributed nothing, on both surfaces it has to reach:
+ * the activity feed keeps the operator-grade reason, the turn is told only that
+ * the tool is unavailable.
+ */
+const reportBindingUnavailable = (args: {
+  typedTool: AgentToolRow;
+  reason: string;
+  activity?: ActivityCallContext;
+  unavailable?: UnavailableToolSink;
+}): void => {
+  recordToolResolutionFailure({
+    toolId: args.typedTool.publicId,
+    toolType: args.typedTool.type,
+    toolName: args.typedTool.name,
+    reason: args.reason,
+    activity: args.activity,
+  });
+  args.unavailable?.({ toolName: args.typedTool.name });
+};
+
+const resolveMcpToolEntry = async (args: {
+  typedTool: AgentToolRow;
+  toolContext?: Record<string, string>;
+  activity?: ActivityCallContext;
+  unavailable?: UnavailableToolSink;
+}): Promise<Record<string, Tool>> => {
+  const { typedTool, toolContext, activity, unavailable } = args;
   if (!typedTool.mcp?.url) return {};
   try {
     // Resolve {{secret:...}} tokens right before connecting to the MCP
@@ -794,13 +818,7 @@ const resolveMcpToolEntry = async (
       buildContextHeaders,
       logToolCallingError,
       reportResolutionFailure: ({ reason }) => {
-        recordToolResolutionFailure({
-          toolId: typedTool.publicId,
-          toolType: typedTool.type,
-          toolName: typedTool.name,
-          reason,
-          activity,
-        });
+        reportBindingUnavailable({ typedTool, reason, activity, unavailable });
       },
     });
   } catch (error) {
@@ -817,12 +835,11 @@ const resolveMcpToolEntry = async (
     // unresolvable `{{secret:...}}` in the URL or a header template. Dropped
     // like an unreachable server, and recorded for the same reason: from every
     // read surface it is indistinguishable from an agent with no tools.
-    recordToolResolutionFailure({
-      toolId: typedTool.publicId,
-      toolType: typedTool.type,
-      toolName: typedTool.name,
+    reportBindingUnavailable({
+      typedTool,
       reason: error instanceof Error ? error.message : String(error),
       activity,
+      unavailable,
     });
     return {};
   }
@@ -991,6 +1008,7 @@ const resolveToolByType = async (
     remainingDepth?: number;
     projectPublicId?: string;
     activity?: ActivityCallContext;
+    unavailable?: UnavailableToolSink;
   }
 ): Promise<Record<string, Tool>> => {
   const toolType = typedTool.type;
@@ -1024,7 +1042,12 @@ const resolveToolByType = async (
         }),
       };
     case 'mcp':
-      return resolveMcpToolEntry(typedTool, args.toolContext, args.activity);
+      return resolveMcpToolEntry({
+        typedTool,
+        toolContext: args.toolContext,
+        activity: args.activity,
+        unavailable: args.unavailable,
+      });
     case 'builtin':
       return resolveSoatTools({
         typedTool,
@@ -1111,6 +1134,7 @@ export const resolveEphemeralAgentTool = async (args: {
   remainingDepth?: number;
   guardrail?: ResolverGuardrailContext;
   activity?: ActivityCallContext;
+  unavailable?: UnavailableToolSink;
 }): Promise<Record<string, Tool>> => {
   assertEphemeralTypeSupported(args.definition);
 
@@ -1160,6 +1184,7 @@ type ResolveToolByTypeArgs = {
   rootTraceId?: string | null;
   remainingDepth?: number;
   activity?: ActivityCallContext;
+  unavailable?: UnavailableToolSink;
 };
 
 // Resolves one persisted-tool binding into its (output-mapped, optionally
@@ -1249,6 +1274,9 @@ export const resolveAgentTools = async (args: {
   // Identity a successful tool call is attributed to on the activity feed
   // (approvals PRD Phase 4). Omitted by callers with no agent in scope.
   activity?: ActivityCallContext;
+  // Reports each binding that contributed nothing, so the turn can be told the
+  // tool exists and could not be reached.
+  unavailable?: UnavailableToolSink;
 }): Promise<Record<string, Tool>> => {
   const resolvedTools: Record<string, Tool> = {};
 
@@ -1279,6 +1307,7 @@ export const resolveAgentTools = async (args: {
         remainingDepth: args.remainingDepth,
         guardrail: args.guardrail,
         activity: args.activity,
+        unavailable: args.unavailable,
       });
       Object.assign(resolvedTools, ephemeralTools);
     }

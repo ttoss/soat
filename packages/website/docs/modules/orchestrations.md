@@ -68,6 +68,7 @@ An orchestration is a pipeline that ends; a [workflow](./workflows.md) is a stat
 | `input`            | object \| null | Initial input provided at run creation                            |
 | `tool_context`     | object \| null | Caller context forwarded as `X-Soat-Context-*` headers on the tool calls of the run — every `agent` node's generation, and every `tool` / `poll` node's call (see [Run Tool Context](#run-tool-context)) |
 | `metadata`         | object \| null | Caller-owned annotations supplied at run creation and returned verbatim; never merged into `state` (see [Run Metadata](#run-metadata)) |
+| `idempotency_key`  | string \| null | Deduplication key supplied at run creation, unique within the project (see [Starting a run at most once](#starting-a-run-at-most-once)) |
 | `output`           | object \| null | Terminal node artifact(s) when the run has `succeeded`            |
 | `parent_orchestration_run_id` | string \| null | The run whose node started this one — set only on a `loop` / `sub_orchestration` child, null for a run a caller started |
 | `parent_node_id`   | string \| null | The node within `parent_orchestration_run_id` that started this run |
@@ -282,6 +283,22 @@ Postgres needs no extra infrastructure. A backoff longer than SQS's 15-minute ma
 **Synchronous (compatibility) mode.** `wait: true` on `start-orchestration-run` blocks until the run is terminal (`succeeded`/`failed`) or `awaiting_input`. Nested `loop` / `sub_orchestration` runs always execute synchronously so their output can be aggregated. See [Synchronous vs Asynchronous Execution](../advanced/sync-and-async.md).
 
 **Lifecycle events** ([Webhooks](./webhooks.md)): `orchestration_runs.started`, `orchestration_runs.awaiting_input`, `orchestration_runs.succeeded`, `orchestration_runs.failed`.
+
+#### Starting a run at most once
+
+Starting a run spends model tokens, so an ambiguous network failure on [`POST /api/v1/orchestration-runs`](/docs/api/orchestrations/start-orchestration-run) is the one worth being able to retry. Pass an `idempotency_key`:
+
+```bash
+soat start-orchestration-run \
+  --orchestration-id "$ORCH_ID" \
+  --idempotency-key "dispatch-2026-09-18-activation-42"
+```
+
+The first request under a key starts the run and answers `201`. Every later request carrying the same key answers `200` with that same run, in whatever state it has reached — including a retry that arrives while the original request is still in flight, which is the case a timeout produces. The key is scoped to the project and claimed by the run record for as long as that record exists, so it never expires out from under a caller and lets a second run through.
+
+`orchestration_id`, `input`, `tool_context` and `metadata` are the request a key names. Reusing a key with any of them changed is `409 IDEMPOTENCY_KEY_REUSED` and starts nothing — a caller that changed the body and kept the key has a bug, and replaying a run that does something else would hide it. `wait` is not part of that comparison: it says how the caller waits, not what the run is.
+
+A run the platform starts — a [trigger](./triggers.md) firing, a [workflow](./workflows.md) task dispatch, a `loop` / `sub_orchestration` child — carries no key; there is no ambiguous caller timeout to recover from.
 
 #### Idempotency of node execution
 
@@ -606,6 +623,7 @@ An `approval` node proposes a guarded tool call, files an [ApprovalItem](./appro
 | `ORCHESTRATION_POLL_EXHAUSTED`     | —      | A `poll` node's `max_iterations` was reached with `failOnTimeout: true`                       | Raise `max_iterations`/`interval`, or handle `conditionMet: false` downstream instead of setting `failOnTimeout` — see [Polling](#polling) |
 | `ORCHESTRATION_RUN_DEPTH_LIMIT`    | `409`  | Starting the next `loop` / `sub_orchestration` child would nest past the effective bound — usually a graph naming itself, directly or through a cycle of two graphs | Walk `parent_orchestration_run_id` up from the failed run to find the node that re-enters a graph already in the chain; raise the project's `max_orchestration_run_depth` only if the composition is legitimately that deep — see [Nesting depth](#nesting-depth) |
 | `ORCHESTRATION_NESTED_RUN_FAILED`  | `422`  | A `loop` / `sub_orchestration` child settled `failed`/`cancelled`/`expired` carrying no code of its own | Read the child run (`parent_orchestration_run_id` points back at this one) — a child that *does* carry a code fails its parent under that code instead — see [A child run's failure fails its parent](#a-child-runs-failure-fails-its-parent) |
+| `IDEMPOTENCY_KEY_REUSED`           | `409`  | An `idempotency_key` was reused with a different `orchestration_id`, `input`, `tool_context` or `metadata`                    | Send the changed request under a new key; repeating the original body under this key replays the run it already names — see [Starting a run at most once](#starting-a-run-at-most-once) |
 | `ORCHESTRATION_RUN_NOT_PAUSABLE`   | `409`  | The run has already settled, so there is nothing left to pause                                | Nothing to do — a settled run keeps its result; pause only applies while a run is `queued`, `running`, `sleeping` or `awaiting_input` — see [Pausing a run](#pausing-a-run) |
 | `ORCHESTRATION_RUN_PAUSED`         | `409`  | `submit-human-input` was called while an operator pause is in force                           | Resume the run first, then submit the payload — an operator pause is not liftable by satisfying the node behind it — see [Pausing a run](#pausing-a-run) |
 

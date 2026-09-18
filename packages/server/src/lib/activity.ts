@@ -63,6 +63,7 @@ export const mapActivityEntry = (instance: ActivityInstance) => {
     detail: mapActivityDetail(instance.detail),
     orchestration_run_id: instance.orchestrationRunId,
     agent_id: instance.agentId,
+    generation_id: instance.generationId,
     ref_id: instance.refId,
     created_at: instance.createdAt,
   };
@@ -90,6 +91,7 @@ export type EmitActivityEntryArgs = {
   severity?: ActivitySeverity;
   orchestrationRunId?: string | null;
   agentId?: string | null;
+  generationId?: string | null;
   refId?: string | null;
 };
 
@@ -115,6 +117,7 @@ export const emitActivityEntry = async (
           detail: args.detail,
           orchestrationRunId: args.orchestrationRunId,
           agentId: args.agentId,
+          generationId: args.generationId,
           refId: args.refId,
         });
       },
@@ -223,10 +226,18 @@ export type ListActivityResult = {
  * is append-only and high-volume: an offset page shifts under a fast-moving
  * feed, a keyset cursor never does.
  */
+/**
+ * Every filter is a conjunction, matching what `kind` and `severity` already
+ * mean together: an entry carries one agent, one generation and one run, so a
+ * caller naming two of them is asking for the rows where both hold.
+ */
 export const listActivity = async (args: {
   projectIds: number[];
   kind?: string;
   severity?: string;
+  agentId?: string;
+  generationId?: string;
+  orchestrationRunId?: string;
   cursor?: string;
   limit?: number;
 }): Promise<ListActivityResult> => {
@@ -234,6 +245,11 @@ export const listActivity = async (args: {
   const where: Record<string, unknown> = { projectId: args.projectIds };
   if (args.kind) where.kind = args.kind;
   if (args.severity) where.severity = args.severity;
+  if (args.agentId) where.agentId = args.agentId;
+  if (args.generationId) where.generationId = args.generationId;
+  if (args.orchestrationRunId) {
+    where.orchestrationRunId = args.orchestrationRunId;
+  }
 
   let finalWhere: Record<string, unknown> = where;
   if (args.cursor) {

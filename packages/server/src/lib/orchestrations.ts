@@ -219,6 +219,8 @@ export type MappedOrchestrationRun = {
   // never merged into `state`. An opaque bag: copied as a value, its keys never
   // re-cased, and no key reserved — the engine reads nothing from here.
   metadata: Record<string, unknown> | null;
+  // The caller's deduplication key, claimed for this run's lifetime.
+  idempotency_key: string | null;
   output: Record<string, unknown> | null;
   // Set only on a `loop` / `sub_orchestration` child. Qualified by its
   // resource, like every other run id on the wire: SOAT has three unrelated
@@ -350,6 +352,7 @@ export const mapOrchestrationRun = (
     input: run.input as Record<string, unknown> | null,
     tool_context: run.toolContext ?? null,
     metadata: run.metadata ?? null,
+    idempotency_key: run.idempotencyKey ?? null,
     output: run.output as Record<string, unknown> | null,
     parent_orchestration_run_id: run.parentRunId,
     parent_node_id: run.parentNodeId,

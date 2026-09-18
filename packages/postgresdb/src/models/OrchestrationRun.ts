@@ -27,6 +27,15 @@ import { Project } from './Project';
       name: 'orchestration_runs_parent_run_id_idx',
       fields: ['parent_run_id'],
     },
+    // The at-most-once guarantee itself: a caller retrying an ambiguous
+    // timeout races its own first request, and only the database can settle
+    // that. Null keys do not conflict in Postgres, so a run started without
+    // one claims nothing.
+    {
+      name: 'orchestration_runs_project_id_idempotency_key_unique',
+      unique: true,
+      fields: ['project_id', 'idempotency_key'],
+    },
   ],
   hooks: {
     beforeValidate: (instance: OrchestrationRun) => {
@@ -195,6 +204,10 @@ export class OrchestrationRun extends Model {
   // `input`, whose `input_schema` may legitimately reject unknown keys.
   @Column({ type: DataType.JSONB, allowNull: true, defaultValue: null })
   declare metadata: Record<string, unknown> | null;
+
+  // The caller's deduplication key, claimed for as long as this row exists.
+  @Column({ type: DataType.STRING(255), allowNull: true })
+  declare idempotencyKey: string | null;
 
   @Column({ type: DataType.JSONB, allowNull: true })
   declare output: object | null;

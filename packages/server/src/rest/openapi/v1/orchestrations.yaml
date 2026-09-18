@@ -431,6 +431,14 @@ paths:
             schema:
               $ref: '#/components/schemas/StartOrchestrationRunRequest'
       responses:
+        '200':
+          description: >-
+            Duplicate request — the run the `idempotency_key` already names is
+            returned and no second run is started.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrchestrationRun'
         '201':
           description: Run created and executed
           content:
@@ -440,13 +448,19 @@ paths:
         '400':
           description: >-
             Validation error (e.g. a `tool_context` key that cannot become a
-            header, or `metadata` that is not a JSON object). No run is created.
+            header, `metadata` that is not a JSON object, or an
+            `idempotency_key` that is not a non-empty string of at most 255
+            characters). No run is created.
         '401':
           description: Unauthorized
         '403':
           description: Forbidden
         '404':
           description: Orchestration not found
+        '409':
+          description: >-
+            `IDEMPOTENCY_KEY_REUSED` — the key is already claimed by a run
+            started from a different request. No run is created.
 
     get:
       tags:
@@ -1373,6 +1387,14 @@ components:
           example:
             tenant_account_id: '42'
             dispatch_batch: nightly-2026-08-25
+        idempotency_key:
+          type: string
+          nullable: true
+          description: >-
+            The deduplication key the run was started under, unique within the
+            project and claimed for as long as the run record exists. Null for a
+            run started without one, which every platform-started run is.
+          example: dispatch-2026-09-18-activation-42
         parent_orchestration_run_id:
           x-soat-ref: orchestration-runs
           type: string
@@ -1672,6 +1694,29 @@ components:
           example:
             tenant_account_id: '42'
             dispatch_batch: nightly-2026-08-25
+        idempotency_key:
+          type: string
+          maxLength: 255
+          description: >-
+            Deduplication key, unique within the project, that makes a retry of
+            an ambiguous failure safe. The first request under a key starts the
+            run and answers `201`; any later request carrying the same key
+            answers `200` with that same run, whatever state it has reached —
+            including a retry that arrives while the original is still running.
+
+
+            The key is claimed by the run record and stays claimed for as long
+            as the record exists, so it never silently expires and lets a
+            second run through.
+
+
+            `orchestration_id`, `input`, `tool_context` and `metadata` are the
+            request the key names: reusing a key with any of them changed is
+            `409 IDEMPOTENCY_KEY_REUSED` rather than a replay of a run that
+            does something else. `wait` is not part of that comparison — it
+            says how the caller waits, not what the run is — so a retry may
+            flip it.
+          example: dispatch-2026-09-18-activation-42
         wait:
           type: boolean
           default: false

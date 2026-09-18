@@ -41,6 +41,7 @@ import {
   resolveStartRunScope,
 } from './orchestrationAuth';
 import {
+  parseIdempotencyKey,
   parseRunInput,
   parseUpdateBody,
   parseVersionLabel,
@@ -254,6 +255,7 @@ orchestrationsRouter.post('/orchestration-runs', async (ctx: Context) => {
     input?: unknown;
     tool_context?: unknown;
     metadata?: unknown;
+    idempotency_key?: unknown;
     wait?: unknown;
   };
   const orchestrationId =
@@ -263,6 +265,7 @@ orchestrationsRouter.post('/orchestration-runs', async (ctx: Context) => {
   if (!orchestrationId) {
     throw new DomainError('VALIDATION_FAILED', 'orchestration_id is required');
   }
+  const idempotencyKey = parseIdempotencyKey(body.idempotency_key);
 
   const scope = await resolveStartRunScope(ctx);
   if (!scope) return;
@@ -291,10 +294,12 @@ orchestrationsRouter.post('/orchestration-runs', async (ctx: Context) => {
     // principal; the request's own header only reaches `wait` mode.
     principal: requestPrincipalFromCtx(ctx),
     wait: body.wait === true,
+    idempotencyKey,
   });
 
-  ctx.status = 201;
-  ctx.body = result;
+  const { idempotent, ...run } = result;
+  ctx.status = idempotent ? 200 : 201;
+  ctx.body = run;
 });
 /**
  * @openapi

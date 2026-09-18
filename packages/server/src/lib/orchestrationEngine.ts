@@ -36,6 +36,8 @@ import {
   restoreRunFromCheckpoint,
   updateRunRecord,
 } from './orchestrationRunHelpers';
+import type { StartedOrchestrationRun } from './orchestrationRunIdempotency';
+import { replayIdempotentRun } from './orchestrationRunIdempotency';
 import { executeRunLoop, type RunLoopResult } from './orchestrationRunLoop';
 import {
   clearRunPause,
@@ -61,6 +63,7 @@ import {
 import { kickWorker } from './orchestrationWorker';
 import type { RequestPrincipal } from './principals';
 import { assertValidToolContextKeys } from './toolContext';
+import { isUniqueViolation } from './uniqueViolation';
 
 const log = createDebug('soat:orchestrations');
 
@@ -580,6 +583,7 @@ const createRunRecord = async (args: {
   authHeader?: string;
   wait?: boolean;
   parent?: NestedRunParent;
+  idempotencyKey?: string;
 }): Promise<InstanceType<typeof db.OrchestrationRun>> => {
   const runDepth = await resolveNewRunDepth({
     projectId: args.projectId,
@@ -604,6 +608,7 @@ const createRunRecord = async (args: {
     // Written alongside `input`, never into `state`: the label is the caller's,
     // the state is the graph's.
     metadata: args.metadata ?? null,
+    idempotencyKey: args.idempotencyKey ?? null,
     triggerId: args.triggerId ?? null,
     // The run and node that spawned this one, when it is a `loop` /
     // `sub_orchestration` child. What makes a parent's spend reachable from the
@@ -627,7 +632,47 @@ const createRunRecord = async (args: {
   });
 };
 
-export const startOrchestrationRun = async (args: {
+/**
+ * The run row to drive, or the replay of the one this key already names.
+ *
+ * The insert is attempted even after the read finds nothing, because only the
+ * unique index settles the race the key exists for: a retry provoked by a
+ * timeout arrives while the original insert is still in flight.
+ */
+const claimRunRecord = async (args: {
+  create: Parameters<typeof createRunRecord>[0];
+}): Promise<
+  | { record: InstanceType<typeof db.OrchestrationRun> }
+  | { replay: StartedOrchestrationRun }
+> => {
+  const { idempotencyKey, projectId } = args.create;
+  if (!idempotencyKey) return { record: await createRunRecord(args.create) };
+
+  const claim = {
+    projectId,
+    idempotencyKey,
+    request: {
+      orchestrationId: args.create.orchestration.id as number,
+      input: args.create.input,
+      toolContext: args.create.toolContext,
+      metadata: args.create.metadata,
+    },
+  };
+
+  const replayed = await replayIdempotentRun(claim);
+  if (replayed) return { replay: replayed };
+
+  try {
+    return { record: await createRunRecord(args.create) };
+  } catch (error) {
+    if (!isUniqueViolation(error)) throw error;
+    const raced = await replayIdempotentRun(claim);
+    if (!raced) throw error;
+    return { replay: raced };
+  }
+};
+
+export type StartOrchestrationRunArgs = {
   orchestrationPublicId: string;
   projectId?: number;
   projectIds?: number[];
@@ -655,7 +700,15 @@ export const startOrchestrationRun = async (args: {
   onRunCreated?: (args: { orchestrationRunId: string }) => Promise<void> | void;
   // Set by `startNestedRun` only — see the starter's own type for why.
   parent?: NestedRunParent;
-}): Promise<MappedOrchestrationRun> => {
+  // Caller-supplied deduplication key, unique per project. Only the start-run
+  // route sets it; every platform-started run has no ambiguous timeout to
+  // recover from.
+  idempotencyKey?: string;
+};
+
+export const startOrchestrationRun = async (
+  args: StartOrchestrationRunArgs
+): Promise<StartedOrchestrationRun> => {
   log('startOrchestrationRun %o', {
     orchestrationPublicId: args.orchestrationPublicId,
     wait: args.wait,
@@ -676,20 +729,25 @@ export const startOrchestrationRun = async (args: {
 
   const { state, artifacts } = seedRunState(args.input);
 
-  const runRecord = await createRunRecord({
-    orchestration: orch,
-    projectId: effectiveProjectId,
-    state,
-    artifacts,
-    input: args.input,
-    toolContext: args.toolContext,
-    metadata: args.metadata,
-    triggerId: args.triggerId,
-    principal: args.principal,
-    authHeader: args.authHeader,
-    wait: args.wait,
-    parent: args.parent,
+  const claimed = await claimRunRecord({
+    create: {
+      orchestration: orch,
+      projectId: effectiveProjectId,
+      state,
+      artifacts,
+      input: args.input,
+      toolContext: args.toolContext,
+      metadata: args.metadata,
+      triggerId: args.triggerId,
+      principal: args.principal,
+      authHeader: args.authHeader,
+      wait: args.wait,
+      parent: args.parent,
+      idempotencyKey: args.idempotencyKey,
+    },
   });
+  if ('replay' in claimed) return claimed.replay;
+  const runRecord = claimed.record;
 
   const startMapped = await mapRunWithIncludes(runRecord.id as number);
   emitRunLifecycleEvent({

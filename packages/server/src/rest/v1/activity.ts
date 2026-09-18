@@ -25,6 +25,9 @@ activityRouter.get('/activity', async (ctx: Context) => {
     projectIds: projectIds ?? [],
     kind: ctx.query.kind as string | undefined,
     severity: ctx.query.severity as string | undefined,
+    agentId: ctx.query.agent_id as string | undefined,
+    generationId: ctx.query.generation_id as string | undefined,
+    orchestrationRunId: ctx.query.orchestration_run_id as string | undefined,
     cursor: ctx.query.cursor as string | undefined,
     limit,
   });

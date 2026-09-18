@@ -18,6 +18,26 @@ describe('recoverPendingFromDb (real DB)', () => {
   let agentWithToolsId: string;
   let agentNoToolsId: string;
   let agentWithMemoryStoreId: string;
+  let agentWithDeadMcpId: string;
+
+  // `PendingGeneration.messages` is `unknown[]` — it carries AI SDK response
+  // messages alongside the prompt — so the note is narrowed rather than asserted.
+  const systemMessages = (
+    messages: unknown[]
+  ): Array<{ role: string; content: string }> => {
+    return messages.filter(
+      (message): message is { role: string; content: string } => {
+        return (
+          typeof message === 'object' &&
+          message !== null &&
+          'role' in message &&
+          message.role === 'system' &&
+          'content' in message &&
+          typeof message.content === 'string'
+        );
+      }
+    );
+  };
 
   const buildPendingState = () => {
     return {
@@ -100,6 +120,28 @@ describe('recoverPendingFromDb (real DB)', () => {
         knowledge_config: { write_memory_store_id: memoryStoreRes.body.id },
       });
     agentWithMemoryStoreId = agentWithMemoryStoreRes.body.id;
+
+    // Port 1 refuses the connection, so the listing fails at the transport —
+    // the same path a rejected credential takes, without a server to run.
+    const deadMcpToolRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/tools')
+      .send({
+        name: 'deadDesk',
+        type: 'mcp',
+        project_id: projectPublicId,
+        mcp: { url: 'http://127.0.0.1:1/mcp' },
+      });
+
+    const agentWithDeadMcpRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/agents')
+      .send({
+        project_id: projectPublicId,
+        ai_provider_id: aiProvRes.body.id,
+        name: 'Recovery Agent With Dead MCP',
+        model: 'gpt-4o',
+        tool_bindings: [{ tool_id: deadMcpToolRes.body.id }],
+      });
+    agentWithDeadMcpId = agentWithDeadMcpRes.body.id;
   });
 
   const seedGeneration = async (args: {
@@ -189,6 +231,55 @@ describe('recoverPendingFromDb (real DB)', () => {
 
     expect(result).toBeDefined();
     expect(Object.keys(result!.resolvedTools)).toContain('write_memory');
+  });
+
+  // A binding can go unreachable between the turn starting and resuming, so
+  // the note is derived from the surface this segment resolved, not from the
+  // one the persisted history was written against.
+  test('notes a binding that went unavailable while the generation was parked', async () => {
+    await seedGeneration({
+      publicId: 'gen_recover_deadmcp',
+      agentId: agentWithDeadMcpId,
+      traceId: 'trc_recover_deadmcp',
+      withPendingState: true,
+    });
+
+    const result = await recoverPendingFromDb({
+      generationId: 'gen_recover_deadmcp',
+      agentId: agentWithDeadMcpId,
+    });
+
+    expect(result).toBeDefined();
+    expect(result!.resolvedTools).toEqual({});
+    const note = systemMessages(result!.messages)[0];
+    expect(note).toBeDefined();
+    expect(note.content).toContain('deadDesk');
+    expect(note.content).toContain('unavailable');
+  });
+
+  test('recovering twice leaves one note, not two', async () => {
+    await seedGeneration({
+      publicId: 'gen_recover_deadmcp_twice',
+      agentId: agentWithDeadMcpId,
+      traceId: 'trc_recover_deadmcp_twice',
+      withPendingState: true,
+    });
+
+    const first = await recoverPendingFromDb({
+      generationId: 'gen_recover_deadmcp_twice',
+      agentId: agentWithDeadMcpId,
+    });
+    await updateGenerationRecord({
+      publicId: 'gen_recover_deadmcp_twice',
+      pendingState: { ...buildPendingState(), messages: first!.messages },
+    });
+
+    const second = await recoverPendingFromDb({
+      generationId: 'gen_recover_deadmcp_twice',
+      agentId: agentWithDeadMcpId,
+    });
+
+    expect(systemMessages(second!.messages)).toHaveLength(1);
   });
 
   test('returns undefined when the generation record does not exist', async () => {
