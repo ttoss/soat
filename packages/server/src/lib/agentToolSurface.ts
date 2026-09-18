@@ -19,6 +19,17 @@ import { readAgentToolBindings, splitToolBindings } from './agentToolBindings';
 import { buildResolverGuardrailContext } from './agentToolGuardrail';
 import { resolveAgentTools } from './agentToolResolver';
 import { narrowToActiveTools } from './agentToolSelection';
+import { collectUnavailableTools } from './agentToolUnavailable';
+
+/**
+ * The tools the turn runs with, and the bindings that contributed none — the
+ * second half being what the turn's prompt needs so the model can say it could
+ * not reach a tool rather than that it has none.
+ */
+export type ResolvedToolSurface = {
+  tools: Record<string, Tool>;
+  unavailableToolNames: string[];
+};
 
 export const resolveAgentToolSurface = async (args: {
   agentId: string;
@@ -44,8 +55,9 @@ export const resolveAgentToolSurface = async (args: {
    * caller typed.
    */
   sessionId?: string | null;
-}): Promise<Record<string, Tool>> => {
+}): Promise<ResolvedToolSurface> => {
   const projectId = args.typedAgent.project.id as number;
+  const unavailable = collectUnavailableTools();
 
   // No branch on presence — resolveAgentTools no-ops on empty input, so this
   // covers "no tools at all".
@@ -90,6 +102,7 @@ export const resolveAgentToolSurface = async (args: {
       agentId: args.agentId,
       generationId: args.generationId,
     },
+    unavailable: unavailable.sink,
   });
 
   // Mutates `resolvedTools` in place, adding the tools derived from the agent's
@@ -105,5 +118,5 @@ export const resolveAgentToolSurface = async (args: {
     resolvedTools,
   });
 
-  return resolvedTools;
+  return { tools: resolvedTools, unavailableToolNames: unavailable.names };
 };

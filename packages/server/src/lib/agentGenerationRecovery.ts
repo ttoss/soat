@@ -8,6 +8,7 @@ import {
 } from './agentGenerationTypes';
 import { resolveAgentModel } from './agentModelResolution';
 import { resolveAgentToolSurface } from './agentToolSurface';
+import { withUnavailableToolsNote } from './agentToolUnavailable';
 import { getGenerationPendingState } from './generationPendingState';
 import { getGeneration, updateGenerationRecord } from './generations';
 import { saveTrace } from './traces';
@@ -133,7 +134,7 @@ const buildPendingFromState = async (args: {
   const resolution = await resolveAgentModel(args.typedAgent);
   if (resolution.failure) return undefined;
 
-  const resolvedTools = await resolveAgentToolSurface({
+  const { tools, unavailableToolNames } = await resolveAgentToolSurface({
     agentId: args.agentId,
     generationId: args.generationId,
     projectIds: args.projectIds,
@@ -161,12 +162,19 @@ const buildPendingFromState = async (args: {
       };
     }),
     syntheticToolResults: args.pendingState.syntheticToolResults ?? [],
-    messages: args.pendingState.messages,
+    // Re-derived for this segment rather than trusted from the persisted
+    // history: a binding that resolved when the turn started can be gone by the
+    // time it resumes, and the resumed segment would otherwise run without it
+    // silently. An unchanged note is not repeated.
+    messages: withUnavailableToolsNote({
+      messages: args.pendingState.messages,
+      unavailableToolNames,
+    }),
     steps: args.pendingState.steps ?? [],
     resolvedModel: resolution.model,
     aiProviderId: args.typedAgent.aiProvider?.publicId ?? null,
     agentConfig: toAgentConfig(args.typedAgent),
-    resolvedTools,
+    resolvedTools: tools,
     initiatorGenerationId: null,
     projectPublicId: args.typedAgent.project.publicId,
   };

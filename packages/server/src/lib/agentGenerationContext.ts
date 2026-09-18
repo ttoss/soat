@@ -17,6 +17,7 @@ import { resolveServedAgentVersion } from './agentServedVersion';
 import { normalizeToolChoice, type TurnToolChoice } from './agentStepRules';
 import { readAgentToolBindings, splitToolBindings } from './agentToolBindings';
 import { resolveAgentToolSurface } from './agentToolSurface';
+import { withUnavailableToolsNote } from './agentToolUnavailable';
 import { resolveServerToolContextIdentity } from './generationAttribution';
 import {
   type GenerationInputMessage,
@@ -100,6 +101,7 @@ const assembleContextMessages = async (args: {
   typedAgent: TypedAgent;
   resolvedMessages: Array<{ role: string; content: unknown }>;
   knowledgeConfig?: object;
+  unavailableToolNames: string[];
 }): Promise<Array<{ role: string; content: unknown }>> => {
   // `TypedAgent.project.id` is `unknown` — the row is built from several
   // sources — so it is narrowed rather than asserted: a non-number leaves the
@@ -129,10 +131,15 @@ const assembleContextMessages = async (args: {
   // instead of re-deriving one from an agent that may since have been edited.
   const allMessages = withPromptCacheBreakpoint({
     promptCaching: args.typedAgent.promptCaching,
-    messages: buildAllMessages(args.typedAgent.instructions, [
-      ...knowledgeMessages,
-      ...args.resolvedMessages,
-    ]),
+    // The note goes in before the breakpoint is placed: the mark belongs at the
+    // end of the system block, and the note is part of it.
+    messages: withUnavailableToolsNote({
+      messages: buildAllMessages(args.typedAgent.instructions, [
+        ...knowledgeMessages,
+        ...args.resolvedMessages,
+      ]),
+      unavailableToolNames: args.unavailableToolNames,
+    }),
   });
 
   log('assembleContextMessages: allMessages=%o', allMessages);
@@ -218,7 +225,7 @@ export const buildGenerationContext = async (
   // back to this generation via `initiator_generation_id`.
   const generationId = generatePublicId(PUBLIC_ID_PREFIXES.generation);
 
-  const resolvedTools = await resolveAgentToolSurface({
+  const toolSurface = await resolveAgentToolSurface({
     agentId: args.agentId,
     generationId,
     projectIds: args.projectIds,
@@ -232,6 +239,7 @@ export const buildGenerationContext = async (
     guardrailContext: args.guardrailContext,
     sessionId: args.sessionId,
   });
+  const resolvedTools = toolSurface.tools;
 
   const allMessages = await assembleContextMessages({
     agentId: args.agentId,
@@ -239,6 +247,7 @@ export const buildGenerationContext = async (
     typedAgent,
     resolvedMessages,
     knowledgeConfig: args.knowledgeConfig,
+    unavailableToolNames: toolSurface.unavailableToolNames,
   });
 
   return {

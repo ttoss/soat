@@ -121,7 +121,7 @@ One producer per kind:
 
   The last two are not transport failures, but the turn still ran without the tools the agent is configured to have, which is the outcome worth monitoring.
 
-  The binding is dropped rather than failing the turn — one flaky server must not take an agent down — so the generation **completes, with no error and no warning of its own**, having answered with fewer tools than it was configured to have. The only place the absence shows is the prompt, which nobody reads; this entry is the signal that distinguishes a turn whose tools were dropped from an agent that had none to begin with. SOAT never routes or filters tools per turn, so a turn missing its tools is always this, never a decision the platform made.
+  The binding is dropped rather than failing the turn — one flaky server must not take an agent down — so the generation **completes, with no error and no warning of its own**, having answered with fewer tools than it was configured to have. This entry is the operator's signal, and it is the only one that carries the `reason`: the turn itself is told only that the named tools are unavailable (see [A binding that cannot be resolved](./agents.md#a-binding-that-cannot-be-resolved)), so an upstream status code never becomes text the model can repeat to an end user. SOAT never routes or filters tools per turn, so a turn missing its tools is always this, never a decision the platform made.
 
 Every producer is fire-and-forget: a recording failure is logged and never disturbs the action, as in the [audit log](./audit-log.md).
 
