@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.54.0](https://github.com/ttoss/soat/compare/v0.53.0...v0.54.0) (2026-09-18)
+
+### Features
+
+* **server:** activity filters, run-start idempotency, and unavailable-tool notes ([#1364](https://github.com/ttoss/soat/issues/1364)) ([ef27dcf](https://github.com/ttoss/soat/commit/ef27dcfd35f39ae6e50acc45551a55543bc1097a))
+
 # [0.53.0](https://github.com/ttoss/soat/compare/v0.52.0...v0.53.0) (2026-09-17)
 
 **Note:** Version bump only for package @soat/postgresdb
