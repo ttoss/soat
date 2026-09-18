@@ -2028,6 +2028,27 @@ if [ "$ORCH_RUN_VERSION" != "3" ]; then
 fi
 echo "Completed run: OK"
 
+echo "--- Idempotent run start ---"
+ORCH_IDEM_KEY="smoke-dispatch-$$"
+ORCH_IDEM_FIRST=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
+  --orchestration-id "$ORCH_ID" \
+  --input '{"theme":"idempotent"}' \
+  --idempotency-key "$ORCH_IDEM_KEY" \
+  --wait true)
+ORCH_IDEM_FIRST_ID=$(printf '%s\n' "$ORCH_IDEM_FIRST" | jq -r '.id')
+ORCH_IDEM_RETRY=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
+  --orchestration-id "$ORCH_ID" \
+  --input '{"theme":"idempotent"}' \
+  --idempotency-key "$ORCH_IDEM_KEY" \
+  --wait true)
+ORCH_IDEM_RETRY_ID=$(printf '%s\n' "$ORCH_IDEM_RETRY" | jq -r '.id')
+if [ "$ORCH_IDEM_FIRST_ID" != "$ORCH_IDEM_RETRY_ID" ]; then
+  echo "ERROR: a retry under the same idempotency_key started a second run" >&2
+  printf '%s\n' "$ORCH_IDEM_RETRY" >&2
+  exit 1
+fi
+echo "Idempotent run start: OK"
+
 # Worker-fleet coverage: the API tier runs with ORCHESTRATION_WORKER_DISABLED,
 # so nothing drains the queue except the standalone `worker` compose service.
 # An async run (no --wait) therefore only reaches `succeeded` if that separate

@@ -16,6 +16,7 @@ describe('Orchestrations', () => {
   let userToken: string;
   let projectId: string;
   let noPermToken: string;
+  let otherProjectId: string;
   let orchestrationId: string;
 
   const simpleOrchestration = {
@@ -128,11 +129,13 @@ describe('Orchestrations', () => {
         'orchestrations:SubmitHumanInput',
         'orchestrations:ResumeRun',
       ],
+      createOtherProject: true,
     });
 
     adminToken = setup.adminToken;
     userToken = setup.userToken;
     projectId = setup.projectId;
+    otherProjectId = setup.otherProjectId as string;
     noPermToken = setup.noPermToken as string;
   });
 
@@ -735,6 +738,123 @@ describe('Orchestrations', () => {
       expect(response.status).toBe(201);
       expect(response.body.id).toBeDefined();
       expect(response.body.status).toBe('succeeded');
+    });
+
+    test('idempotency_key replays the original run with 200 instead of starting a second', async () => {
+      const key = `dispatch-${Date.now()}-a`;
+      const first = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({
+          wait: true,
+          orchestration_id: orchestrationId,
+          input: { greeting: 'once' },
+          idempotency_key: key,
+        });
+      expect(first.status).toBe(201);
+
+      const retry = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({
+          wait: true,
+          orchestration_id: orchestrationId,
+          input: { greeting: 'once' },
+          idempotency_key: key,
+        });
+      expect(retry.status).toBe(200);
+      expect(retry.body.id).toBe(first.body.id);
+      expect(retry.body.idempotent).toBeUndefined();
+      expect(retry.body.idempotency_key).toBe(key);
+    });
+
+    test('a run started without a key reads back a null idempotency_key', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: orchestrationId, input: {} });
+      expect(response.status).toBe(201);
+      expect(response.body.idempotency_key).toBeNull();
+    });
+
+    test('reusing an idempotency_key with a different body returns 409', async () => {
+      const key = `dispatch-${Date.now()}-b`;
+      const first = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({
+          wait: true,
+          orchestration_id: orchestrationId,
+          input: { greeting: 'first' },
+          idempotency_key: key,
+        });
+      expect(first.status).toBe(201);
+
+      const reused = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({
+          wait: true,
+          orchestration_id: orchestrationId,
+          input: { greeting: 'second' },
+          idempotency_key: key,
+        });
+      expect(reused.status).toBe(409);
+      expect(reused.body.error.code).toBe('IDEMPOTENCY_KEY_REUSED');
+    });
+
+    test('an idempotency_key claimed in another project does not collide', async () => {
+      const key = `dispatch-${Date.now()}-c`;
+      const mine = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({
+          wait: true,
+          orchestration_id: orchestrationId,
+          input: {},
+          idempotency_key: key,
+        });
+      expect(mine.status).toBe(201);
+
+      const otherOrch = await authenticatedTestClient(adminToken)
+        .post('/api/v1/orchestrations')
+        .send({ ...simpleOrchestration, project_id: otherProjectId });
+      expect(otherOrch.status).toBe(201);
+
+      const theirs = await authenticatedTestClient(adminToken)
+        .post('/api/v1/orchestration-runs')
+        .send({
+          wait: true,
+          orchestration_id: otherOrch.body.id,
+          input: {},
+          idempotency_key: key,
+        });
+      expect(theirs.status).toBe(201);
+      expect(theirs.body.id).not.toBe(mine.body.id);
+    });
+
+    test('two concurrent requests sharing an idempotency_key produce one run', async () => {
+      const key = `dispatch-${Date.now()}-d`;
+      const body = {
+        orchestration_id: orchestrationId,
+        input: { greeting: 'concurrent' },
+        idempotency_key: key,
+      };
+      const [a, b] = await Promise.all([
+        authenticatedTestClient(userToken)
+          .post('/api/v1/orchestration-runs')
+          .send(body),
+        authenticatedTestClient(userToken)
+          .post('/api/v1/orchestration-runs')
+          .send(body),
+      ]);
+      expect([a.status, b.status].sort()).toEqual([200, 201]);
+      expect(a.body.id).toBe(b.body.id);
+    });
+
+    test('a non-string idempotency_key returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({
+          orchestration_id: orchestrationId,
+          input: {},
+          idempotency_key: 42,
+        });
+      expect(response.status).toBe(400);
     });
 
     test('run on non-existent orchestration returns 404', async () => {
