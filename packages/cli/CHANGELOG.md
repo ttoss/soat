@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.54.0](https://github.com/ttoss/soat/compare/v0.53.0...v0.54.0) (2026-09-18)
+
+**Note:** Version bump only for package @soat/cli
+
 # [0.53.0](https://github.com/ttoss/soat/compare/v0.52.0...v0.53.0) (2026-09-17)
 
 * feat(webhooks)!: sign deliveries under X-Soat-Signature, not X-Soat-Signature-V2 (#1357) ([eb57022](https://github.com/ttoss/soat/commit/eb57022827db5f8c39f59d1e9ea27ef143a85cc8)), closes [#1357](https://github.com/ttoss/soat/issues/1357)
