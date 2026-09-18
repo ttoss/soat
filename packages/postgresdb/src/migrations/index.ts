@@ -5,6 +5,7 @@ import { memoriesRenameAndProvenance } from './2026-09-16-memoriesRenameAndProve
 import { memoryAssertionsAndSharedContent } from './2026-09-16-memoryAssertionsAndSharedContent';
 import { memoryRulesFromAgentExtraction } from './2026-09-16-memoryRulesFromAgentExtraction';
 import { memoryAssertionsDeclared } from './2026-09-17-memoryAssertionsDeclared';
+import { activityEntryGenerationId } from './2026-09-18-activityEntryGenerationId';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
@@ -31,4 +32,5 @@ export const MIGRATIONS: Migration[] = [
   memoryAssertionsAndSharedContent,
   memoryRulesFromAgentExtraction,
   memoryAssertionsDeclared,
+  activityEntryGenerationId,
 ];

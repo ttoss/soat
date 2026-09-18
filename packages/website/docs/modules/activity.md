@@ -28,13 +28,14 @@ No public create endpoint; entries are platform-written. The feed is read-only, 
 | `kind` | string | `action_executed`, `approval_created`, `approval_resolved`, `exception_created`, `schedule_fired`, `tool_resolution_failed` |
 | `severity` | string | `info`, `warning`, `critical` |
 | `summary` | string | Human-readable one-line description |
-| `detail` | object \| null | Kind-specific structured context (tool id, node id, generation id, guardrail policy version) |
+| `detail` | object \| null | Kind-specific structured context (tool id, node id, guardrail policy version) |
 | `orchestration_run_id` | string \| null | Originating orchestration run, if any |
 | `agent_id` | string \| null | Associated agent, if any |
+| `generation_id` | string \| null | Agent generation the entry was produced during, if any |
 | `ref_id` | string \| null | Producer-specific reference (the approval, exception, or trigger id the entry came from, or the executed tool's id) |
 | `created_at` | string | Append-only timestamp |
 
-`orchestration_run_id` / `agent_id` / `guardrail_version` are bare public ids, not foreign keys, matching [Exceptions](./exceptions.md#exceptionitem). Node id, generation id, and guardrail policy version live in `detail`; only fields every kind shares (`orchestration_run_id`, `agent_id`, `ref_id`) are indexed columns.
+`orchestration_run_id` / `agent_id` / `generation_id` / `guardrail_version` are bare public ids, not foreign keys, matching [Exceptions](./exceptions.md#exceptionitem). Node id and guardrail policy version live in `detail`; the provenance every kind may share (`orchestration_run_id`, `agent_id`, `generation_id`, `ref_id`) are indexed columns.
 
 ## Key Concepts
 
@@ -80,6 +81,12 @@ Severity defaults per kind, and a producer may override it:
 
 `exception_created` **inherits the filed [exception](./exceptions.md#severity)'s severity**, so a `run_failed` exception (`critical`) records a `critical` entry; the `warning` default applies only when the event carries no recognized severity. This is the only path that writes `critical`, so `severity=critical` surfaces entries a `kind` filter cannot.
 
+### Filtering
+
+`kind`, `severity`, `agent_id`, `generation_id` and `orchestration_run_id` are all query parameters on [`GET /api/v1/activity`](/docs/api/activity/list-activity), and all compose: an entry carries one agent, one generation and one run, so naming two narrows to the entries where both hold.
+
+`generation_id` is what makes `tool_resolution_failed` usable during an incident rather than merely alertable — the warning for one suspect turn is a single query, not a scan of the project's feed. `action_executed` carries the same id, so "everything this turn did" is the same query without a `kind`.
+
 ### Cursor pagination
 
 [`GET /api/v1/activity`](/docs/api/activity/list-activity) returns `next_cursor`; pass it back as `cursor`. `null` means no more data. The cursor is an opaque keyset token over `(created_at, id)`, so a page never shifts as entries arrive.
@@ -101,7 +108,7 @@ One producer per kind:
 - **`approval_resolved`** — subscribes to `approvals.approved` / `approvals.rejected`.
 - **`exception_created`** — subscribes to `exceptions.created` ([Exceptions](./exceptions.md#producers)).
 - **`schedule_fired`** — from the trigger scheduler's due-firing sweep, `source === 'schedule'` only; a manual or webhook [trigger](./triggers.md) fire does not produce it.
-- **`tool_resolution_failed`** — from the agent tool resolver, when a [tool](./tools.md) binding contributed no tool to the turn. `detail` carries `tool_id`, `tool_type`, `tool_name`, `reason` and `generation_id`. The `reason` separates the cases:
+- **`tool_resolution_failed`** — from the agent tool resolver, when a [tool](./tools.md) binding contributed no tool to the turn. `detail` carries `tool_id`, `tool_type`, `tool_name` and `reason`, and the entry's `generation_id` names the turn. The `reason` separates the cases:
 
   | `reason` | What happened |
   | --- | --- |
@@ -140,6 +147,9 @@ Every producer is fire-and-forget: a recording failure is logged and never distu
 ```bash
 soat list-activity --project-id proj_01 --kind exception_created
 
+# Everything one generation did, warnings included
+soat list-activity --project-id proj_01 --generation-id gen_01
+
 # Follow with the returned cursor to page forward
 soat list-activity --project-id proj_01 --cursor <next_cursor>
 ```
@@ -152,7 +162,7 @@ import { SoatClient } from '@soat/sdk';
 const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
 
 const { data, error } = await soat.activity.listActivity({
-  query: { project_id: 'proj_01', severity: 'warning' },
+  query: { project_id: 'proj_01', generation_id: 'gen_01' },
 });
 if (error) throw new Error(JSON.stringify(error));
 ```
@@ -161,7 +171,7 @@ if (error) throw new Error(JSON.stringify(error));
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -X GET "https://api.example.com/api/v1/activity?project_id=proj_01&kind=schedule_fired" \
+curl -X GET "https://api.example.com/api/v1/activity?project_id=proj_01&generation_id=gen_01" \
   -H "Authorization: Bearer <token>"
 ```
 

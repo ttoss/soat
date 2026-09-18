@@ -37,6 +37,21 @@ import { Project } from './Project';
       name: 'activity_entries_project_id_created_at_public_id_idx',
       fields: ['project_id', 'created_at', 'public_id'],
     },
+    // One per provenance filter. Each carries the whole keyset order after the
+    // filtered column, so a filtered page is a range scan rather than a scan of
+    // the project's feed followed by a sort.
+    {
+      name: 'activity_entries_project_agent_keyset_idx',
+      fields: ['project_id', 'agent_id', 'created_at', 'public_id'],
+    },
+    {
+      name: 'activity_entries_project_generation_keyset_idx',
+      fields: ['project_id', 'generation_id', 'created_at', 'public_id'],
+    },
+    {
+      name: 'activity_entries_project_run_keyset_idx',
+      fields: ['project_id', 'orchestration_run_id', 'created_at', 'public_id'],
+    },
   ],
   hooks: {
     beforeValidate: (instance: ActivityEntry) => {
@@ -104,6 +119,12 @@ export class ActivityEntry extends Model {
 
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare agentId: string | null;
+
+  // A column rather than a `detail` key, so "what happened during this
+  // generation?" is one indexed predicate instead of a JSONB probe the feed's
+  // indexes cannot serve.
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare generationId: string | null;
 
   // Whichever public id the `kind` implies. Untyped beyond "some public id" so
   // a new kind never needs a schema change.

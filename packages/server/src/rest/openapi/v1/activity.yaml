@@ -34,7 +34,8 @@ paths:
       summary: List activity feed entries
       description: >-
         Returns activity entries for a project, newest first, filterable by
-        kind and severity. Paginated with an opaque cursor rather than
+        kind, severity, agent, generation and orchestration run — every filter
+        composable with the rest. Paginated with an opaque cursor rather than
         offset/limit — pass the previous page's `next_cursor` to fetch the
         next one; a `null` `next_cursor` means there is no more data.
       operationId: listActivity
@@ -65,6 +66,31 @@ paths:
           schema:
             type: string
             enum: [info, warning, critical]
+        - name: agent_id
+          in: query
+          description: >-
+            Filter to entries produced by one agent. Composable with every
+            other filter — entries carry one agent, one generation and one run,
+            so naming two narrows to the rows where both hold.
+          schema:
+            type: string
+            example: agent_V1StGXR8Z5jdHi6B
+        - name: generation_id
+          in: query
+          description: >-
+            Filter to entries produced during one agent generation. This is
+            what turns `tool_resolution_failed` from alertable into usable: the
+            warning for a suspect turn is one query rather than a scan of the
+            project's feed.
+          schema:
+            type: string
+            example: gen_V1StGXR8Z5jdHi6B
+        - name: orchestration_run_id
+          in: query
+          description: Filter to entries produced during one orchestration run.
+          schema:
+            type: string
+            example: orch_run_V1StGXR8Z5jdHi
         - name: cursor
           in: query
           description: Opaque cursor from a previous page's `next_cursor`
@@ -149,7 +175,7 @@ components:
           nullable: true
           description: >-
             Kind-specific structured context (tool, args digest, node id,
-            generation id, guardrail policy version)
+            guardrail policy version)
         orchestration_run_id:
           type: string
           nullable: true
@@ -158,6 +184,13 @@ components:
           type: string
           nullable: true
           description: Associated agent, if any
+        generation_id:
+          type: string
+          nullable: true
+          description: >-
+            The agent generation the entry was produced during, if any. Filter
+            on it with the `generation_id` query parameter to read everything
+            one turn did.
         ref_id:
           type: string
           nullable: true

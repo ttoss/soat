@@ -99,6 +99,7 @@ describe('Activity', () => {
         detail: { toolId: 'tool_abc' },
         orchestrationRunId: 'orch_run_seed0000000',
         agentId: 'agent_seed00000000',
+        generationId: 'gen_seed0000000000',
         refId: 'tool_abc',
       });
 
@@ -117,6 +118,7 @@ describe('Activity', () => {
       expect(found.detail).toEqual({ tool_id: 'tool_abc' });
       expect(found.orchestration_run_id).toBe('orch_run_seed0000000');
       expect(found.agent_id).toBe('agent_seed00000000');
+      expect(found.generation_id).toBe('gen_seed0000000000');
       expect(found.ref_id).toBe('tool_abc');
       expect(found.created_at).toBeDefined();
     });
@@ -168,6 +170,105 @@ describe('Activity', () => {
           return e.summary === 'severity-filter-probe';
         })
       ).toBe(true);
+    });
+
+    test('filters by agent_id', async () => {
+      const mine = await emitActivityEntry({
+        projectId: projectInternalId,
+        kind: 'action_executed',
+        summary: 'agent-filter-probe',
+        agentId: 'agent_filterprobe01',
+      });
+      const other = await emitActivityEntry({
+        projectId: projectInternalId,
+        kind: 'action_executed',
+        summary: 'agent-filter-other',
+        agentId: 'agent_filterprobe02',
+      });
+
+      const res = await listActivity('&agent_id=agent_filterprobe01');
+      expect(res.status).toBe(200);
+      const ids = res.body.data.map((e: { id: string }) => {
+        return e.id;
+      });
+      expect(ids).toContain(mine!.id);
+      expect(ids).not.toContain(other!.id);
+    });
+
+    test('filters by generation_id', async () => {
+      const mine = await emitActivityEntry({
+        projectId: projectInternalId,
+        kind: 'tool_resolution_failed',
+        summary: 'generation-filter-probe',
+        generationId: 'gen_filterprobe0001',
+      });
+      const other = await emitActivityEntry({
+        projectId: projectInternalId,
+        kind: 'tool_resolution_failed',
+        summary: 'generation-filter-other',
+        generationId: 'gen_filterprobe0002',
+      });
+
+      const res = await listActivity('&generation_id=gen_filterprobe0001');
+      expect(res.status).toBe(200);
+      const ids = res.body.data.map((e: { id: string }) => {
+        return e.id;
+      });
+      expect(ids).toContain(mine!.id);
+      expect(ids).not.toContain(other!.id);
+      expect(res.body.data[0].generation_id).toBe('gen_filterprobe0001');
+    });
+
+    test('filters by orchestration_run_id', async () => {
+      const mine = await emitActivityEntry({
+        projectId: projectInternalId,
+        kind: 'action_executed',
+        summary: 'run-filter-probe',
+        orchestrationRunId: 'orch_run_probe00001',
+      });
+      const other = await emitActivityEntry({
+        projectId: projectInternalId,
+        kind: 'action_executed',
+        summary: 'run-filter-other',
+        orchestrationRunId: 'orch_run_probe00002',
+      });
+
+      const res = await listActivity(
+        '&orchestration_run_id=orch_run_probe00001'
+      );
+      expect(res.status).toBe(200);
+      const ids = res.body.data.map((e: { id: string }) => {
+        return e.id;
+      });
+      expect(ids).toContain(mine!.id);
+      expect(ids).not.toContain(other!.id);
+    });
+
+    test('filters compose: an entry matching only one of two is left out', async () => {
+      const both = await emitActivityEntry({
+        projectId: projectInternalId,
+        kind: 'action_executed',
+        summary: 'compose-both',
+        agentId: 'agent_compose00001',
+        generationId: 'gen_compose00000001',
+      });
+      const agentOnly = await emitActivityEntry({
+        projectId: projectInternalId,
+        kind: 'action_executed',
+        summary: 'compose-agent-only',
+        agentId: 'agent_compose00001',
+        generationId: 'gen_compose00000002',
+      });
+
+      const res = await listActivity(
+        '&agent_id=agent_compose00001&generation_id=gen_compose00000001'
+      );
+      expect(res.status).toBe(200);
+      const ids = res.body.data.map((e: { id: string }) => {
+        return e.id;
+      });
+      expect(ids).toContain(both!.id);
+      expect(ids).not.toContain(agentOnly!.id);
     });
 
     test("an entry scoped to another project never leaks into this project's list", async () => {

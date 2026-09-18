@@ -49,10 +49,10 @@ const buildRecordedExecute = (args: {
       detail: {
         action: args.action,
         toolId: args.toolId,
-        generationId: args.activity.generationId ?? null,
       },
       orchestrationRunId: args.activity.orchestrationRunId ?? null,
       agentId: args.activity.agentId,
+      generationId: args.activity.generationId ?? null,
       refId: args.toolId,
     });
     return result;
@@ -150,10 +150,10 @@ export const recordToolResolutionFailure = (args: {
       toolType: args.toolType,
       toolName: args.toolName,
       reason: args.reason,
-      generationId: activity.generationId ?? null,
     },
     orchestrationRunId: activity.orchestrationRunId ?? null,
     agentId: activity.agentId,
+    generationId: activity.generationId ?? null,
     refId: args.toolId,
   });
 };
