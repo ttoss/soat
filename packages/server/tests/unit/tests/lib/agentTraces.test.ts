@@ -1,4 +1,5 @@
 import { db } from 'src/db';
+import { systemPath } from 'src/lib/filePaths';
 import { upsertFileByPath } from 'src/lib/files';
 import { readFileBuffer } from 'src/lib/fileStorage';
 import { createGenerationRecord } from 'src/lib/generations';
@@ -391,7 +392,7 @@ describe('saveTrace groups generations under one trace_id', () => {
     await upsertFileByPath({
       projectId,
       projectPublicId,
-      path: `/traces/${traceId}.json`,
+      path: systemPath({ module: 'traces', leaf: `${traceId}.json` }),
       fileBuffer: Buffer.from('{ not json', 'utf8'),
       contentType: 'application/json',
     });

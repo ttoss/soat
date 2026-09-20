@@ -32,6 +32,7 @@ Each message references a [Document](./documents.md), has a `role`, and optional
 | `name`       | string | Optional human-readable title for the conversation                 |
 | `status`     | string | Conversation status: `open` or `closed`                            |
 | `actor_id`   | string | Optional ID of the Actor who **owns** this conversation (nullable) |
+| `retrieval`  | string | `embed`, `none`, or `null` to inherit the project — see [Retrieval](#retrieval) |
 | `tags`       | object | Free-form string tags                                              |
 | `created_at` | string | ISO 8601 creation timestamp                                        |
 | `updated_at` | string | ISO 8601 last-updated timestamp                                    |
@@ -67,6 +68,30 @@ Messages are ordered Document references with a `role` and optional `actor_id`. 
 Listed messages carry the document's full `content`, `role`, `actor_id`, and `agent_id` (set on `assistant` messages produced by [`POST /conversations/:id/generate`](/docs/api/conversations/generate-conversation-message), `null` otherwise). Example: [Chat with an LLM - Step 7 (View the conversation history)](/docs/tutorials/chat-with-llm#step-7--view-the-conversation-history).
 
 Removing a message also deletes its Document and File.
+
+### Retrieval
+
+Each message is stored as a [Document](./documents.md) under
+`/.system/conversations/{conversation_id}/{document_id}.txt` — see
+[the reserved root](./files.md#the-reserved-system-root). `retrieval` decides
+whether those turns are embedded for vector search:
+
+| Value | Effect |
+| --- | --- |
+| `none` | Turns are stored and chunked, so they stay readable by id, in the message list, and through the full-text channel of [knowledge search](./knowledge.md). No embedding is made or billed. |
+| `embed` | Turns are embedded as well, so the vector channel ranks them. |
+| `null` | Inherits the project's `default_conversation_retrieval` (itself `none` by default). |
+
+A turn is embedded because someone asked for the conversation to be
+retrievable, never merely because it was said. Setting `retrieval` to `embed`
+on [`PATCH /conversations/{conversation_id}`](/docs/api/conversations/update-conversation)
+embeds the turns already in the conversation, so the whole conversation becomes
+retrievable rather than only what is said next; setting it back to `none` stops
+new turns being embedded and leaves the vectors already paid for in place.
+
+Either way a message document is the runtime's: it is read-only through the
+document API, and an unfiltered document list or a bare knowledge query leaves
+it out unless the request names `/.system/conversations/`.
 
 ### Tags
 

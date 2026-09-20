@@ -244,6 +244,16 @@ paths:
                     Opt the project into read auditing. When true, `GET`
                     requests that name this project are recorded in the audit
                     log alongside mutations. Defaults to `false`.
+                default_conversation_retrieval:
+                  type: string
+                  enum: [embed, none]
+                  example: none
+                  description: >-
+                    What a conversation that names no `retrieval` of its own
+                    does. `none` by default: a turn is embedded because someone
+                    asked for the conversation to be retrievable, never merely
+                    because it was said. Turns are stored and chunked on both
+                    settings.
                 trace_content_retention_days:
                   type: integer
                   nullable: true
@@ -483,6 +493,13 @@ components:
             Whether `GET` requests naming this project are recorded in the
             audit log. `false` by default — v1 audits mutations only.
           example: false
+        default_conversation_retrieval:
+          type: string
+          enum: [embed, none]
+          description: >-
+            What a conversation that names no `retrieval` of its own does.
+            `none` by default.
+          example: none
         trace_content_retention_days:
           type: integer
           nullable: true

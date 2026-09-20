@@ -2,7 +2,7 @@
   "name": "@soat/server",
   "version": "0.54.0",
   "private": true,
-  "description": "SOAT server — open-source infrastructure for production-ready AI agents.",
+  "description": "SOAT server \u2014 open-source infrastructure for production-ready AI agents.",
   "keywords": [
     "ai-agents",
     "ai-infrastructure",
@@ -21,19 +21,20 @@
   "license": "Apache-2.0",
   "main": "dist/server.mjs",
   "scripts": {
+    "backfill-system-paths": "tsx scripts/backfillSystemPaths.ts",
     "build": "tsdown",
+    "db-dev:logs": "docker compose -f docker-compose.db.yml logs -f",
+    "db-dev:rm": "docker compose -f docker-compose.db.yml down -v",
     "db-dev:start": "docker compose -f docker-compose.db.yml up -d",
     "db-dev:stop": "docker compose -f docker-compose.db.yml down",
-    "db-dev:rm": "docker compose -f docker-compose.db.yml down -v",
-    "db-dev:logs": "docker compose -f docker-compose.db.yml logs -f",
     "dev": "tsx watch src/server.ts",
     "eval:knowledge": "node tests/eval/runEval.mjs",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tests/tsconfig.json",
     "lint": "pnpm run lint-openapi && eslint src",
     "lint-openapi": "spectral lint src/rest/openapi/**/*.yaml",
     "purge-formation-secret-outputs": "tsx scripts/purgeFormationSecretOutputs.ts",
     "queue-soak": "tsx scripts/orchestrationQueueSoak.ts",
-    "test": "jest --projects tests/unit"
+    "test": "jest --projects tests/unit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tests/tsconfig.json"
   },
   "type": "module",
   "dependencies": {

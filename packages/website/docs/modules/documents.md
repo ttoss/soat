@@ -67,6 +67,20 @@ Chunks are not exposed directly; they are returned joined with newlines as `cont
 
 `path` defaults to `/<filename>`. Paths are absolute (start with `/`) and normalized (`.` and `..` resolved); `project_id + path` is unique. [`PATCH /documents/{document_id}`](/docs/api/documents/update-document) accepts `path` to move a document.
 
+### Platform-written documents
+
+A document the platform writes on your behalf — today, each
+[conversation](./conversations.md) message — is filed under
+[the reserved root](./files.md#the-reserved-system-root) at
+`/.system/conversations/{conversation_id}/{document_id}.txt`.
+
+It is read-only: `PATCH`, a path move and a tag write are refused with
+`400 RESERVED_PATH`, and the owning module deletes it. A read by `id` returns
+it as normal, but a list or a [knowledge search](./knowledge.md) leaves it out
+unless the request names a directory inside the root.
+
+Writing your own document under `/.system/` is refused with the same code.
+
 ### Listing a Directory
 
 [`GET /api/v1/documents`](/docs/api/documents/list-documents) accepts `path_prefix` to return one directory:
@@ -75,7 +89,7 @@ Chunks are not exposed directly; they are returned joined with newlines as `cont
 soat list-documents --project-id proj_ABC --path-prefix /reports/
 ```
 
-The prefix is a **path boundary, not a substring**: `/reports` matches `/reports/q1.txt`, never `/reports-archive/q1.txt`. `reports`, `/reports` and `/reports/` are the same filter; `/` selects the whole project; `%` and `_` are literal. The filter runs in SQL with the policy filter, so `total` and pagination stay accurate per group.
+The prefix is a **path boundary, not a substring**: `/reports` matches `/reports/q1.txt`, never `/reports-archive/q1.txt`. `reports`, `/reports` and `/reports/` are the same filter; `%` and `_` are literal. `/` selects the whole project apart from the reserved root, which only a prefix naming it returns. The filter runs in SQL with the policy filter, so `total` and pagination stay accurate per group.
 
 ## Key Concepts
 

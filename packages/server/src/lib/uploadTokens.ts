@@ -4,6 +4,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { assertCallerPath } from './filePaths';
 import { buildPath } from './files';
 
 const log = createDebug('soat:upload-tokens');
@@ -49,7 +50,9 @@ export const createPresignedUrl = async (args: {
     projectId: args.projectId,
     filename: args.filename,
     contentType: args.contentType,
-    path: buildPath({ prefix: args.prefix, filename: args.filename }),
+    path: assertCallerPath(
+      buildPath({ prefix: args.prefix, filename: args.filename })
+    ),
     expiresAt,
   });
 

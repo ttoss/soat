@@ -1,4 +1,5 @@
 import { db } from '../db';
+import { conversationEmbedsTurns } from './conversationRetrieval';
 import { type Transaction } from './dbTransaction';
 import { createDocument, deleteDocument } from './documents';
 import { emitResourceEvent } from './eventBus';
@@ -266,6 +267,11 @@ export const addConversationMessage = async (args: {
   const createdDoc = await createDocument({
     projectId: conversation.projectId,
     content: args.message,
+    system: { module: 'conversations', dir: args.conversationId },
+    embed: await conversationEmbedsTurns({
+      conversationId: conversation.id as number,
+      projectId: conversation.projectId,
+    }),
   });
 
   const document = await db.Document.findOne({

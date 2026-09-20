@@ -1,14 +1,19 @@
 import path from 'node:path';
 
+import { Op } from '@ttoss/postgresdb';
+
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { emitResourceEvent, resolveProjectPublicId } from './eventBus';
 import {
+  assertCallerPath,
   buildPath,
   filenameFromPath,
   normalizePath,
+  pathPrefixPattern,
   prefixFromPath,
   rebuildKey,
+  type SystemPath,
 } from './filePaths';
 import { getActiveStorageProvider, getStorageProvider } from './fileStorage';
 import { categoryFromPath, persistFileBytes } from './fileStorageLayout';
@@ -20,6 +25,7 @@ import {
 } from './policyCompiler';
 import { hasPolicyConstraints } from './policyWhere';
 import { assertStorageQuota } from './quotaStorage';
+import { nonSystemPathWhere } from './systemPathScope';
 import { applyTagFilter, mergeTags } from './tags';
 import { rethrowAsConflict } from './uniqueViolation';
 
@@ -60,6 +66,8 @@ export const listFiles = async (args: {
   projectIds?: number[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   policyWhere?: Record<string, any>;
+  /** Only files under this directory (see `pathPrefixPattern`). */
+  pathPrefix?: string;
   tags?: Record<string, string>;
   limit?: number;
   offset?: number;
@@ -75,6 +83,12 @@ export const listFiles = async (args: {
     where.projectId = args.projectIds;
   }
   applyTagFilter({ where, tags: args.tags });
+
+  if (args.pathPrefix !== undefined) {
+    where.path = { [Op.like]: pathPrefixPattern(args.pathPrefix) };
+  } else {
+    Object.assign(where, nonSystemPathWhere());
+  }
 
   if (hasPolicyConstraints(args.policyWhere)) {
     Object.assign(where, args.policyWhere);
@@ -138,10 +152,11 @@ export const uploadFile = async (args: {
 
   const provider = getActiveStorageProvider();
 
-  const normalizedPath =
+  const normalizedPath = assertCallerPath(
     args.path !== undefined
       ? normalizePath(args.path)
-      : buildPath({ prefix: args.prefix, filename: args.filename });
+      : buildPath({ prefix: args.prefix, filename: args.filename })
+  );
 
   const filename = args.filename ?? filenameFromPath(normalizedPath);
 
@@ -198,10 +213,16 @@ export const uploadFile = async (args: {
  *
  * This is an internal helper used by trace persistence.
  */
+/**
+ * Writes (or rewrites) the object at a reserved-root location. `path` is a
+ * {@link SystemPath} because every caller of this is a module writing on the
+ * caller's behalf: a hand-spelled string does not typecheck, which is what
+ * keeps the reserved root the only place such a write can land.
+ */
 export const upsertFileByPath = async (args: {
   projectId: number;
   projectPublicId: string;
-  path: string;
+  path: SystemPath;
   fileBuffer: Buffer;
   contentType: string;
   filename?: string;
@@ -287,6 +308,8 @@ export const updateFileMetadata = async (args: {
     return null;
   }
 
+  assertCallerPath(file.path);
+
   const updates: Record<string, unknown> = {};
   if (args.metadata !== undefined) {
     updates.metadata = args.metadata;
@@ -300,7 +323,7 @@ export const updateFileMetadata = async (args: {
       prefix: args.prefix,
       filename: args.filename,
     });
-    updates.path = rebuilt.path;
+    updates.path = assertCallerPath(rebuilt.path);
     updates.filename = rebuilt.filename;
   }
 
@@ -339,10 +362,9 @@ export const createFile = async (args: {
 
   // A metadata-only record carries the active backend's storageType with an
   // empty storagePath, filled in when bytes are uploaded.
-  const normalizedPath = buildPath({
-    prefix: args.prefix,
-    filename: args.filename,
-  });
+  const normalizedPath = assertCallerPath(
+    buildPath({ prefix: args.prefix, filename: args.filename })
+  );
   const provider = getActiveStorageProvider();
   let file;
   try {
@@ -432,6 +454,8 @@ export const updateFileTags = async (args: {
   if (!file) {
     return null;
   }
+
+  assertCallerPath(file.path);
 
   const newTags = mergeTags({
     current: file.tags,

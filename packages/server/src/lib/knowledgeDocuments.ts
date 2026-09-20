@@ -3,6 +3,7 @@ import { Op } from '@ttoss/postgresdb';
 import { db } from '../db';
 import { mapDocument } from './documentMapper';
 import type { EmbeddingBillingProjectId } from './embedding';
+import { buildFileInclude } from './knowledgeDocumentScope';
 import { distanceExpression, embedQueryOrDegrade } from './knowledgeEmbedding';
 import {
   lexicalMatchWhere,
@@ -63,34 +64,6 @@ export type QueryDocumentResult = {
 };
 
 // ── Private helpers ──────────────────────────────────────────────────────
-
-const buildFileInclude = (args: {
-  projectIds?: number[];
-  paths?: string[];
-}) => {
-  const conditions: unknown[] = [];
-  if (args.projectIds !== undefined) {
-    conditions.push({ projectId: args.projectIds });
-  }
-  if (args.paths && args.paths.length > 0) {
-    conditions.push({
-      [Op.or]: args.paths.map((p) => {
-        // Stored paths are leading-slash normalized, so a prefix without one
-        // must be too or the `LIKE` never fires. The trailing slash stays, to
-        // keep folder-prefix semantics.
-        const prefix = p.startsWith('/') ? p : `/${p}`;
-        return { path: { [Op.like]: `${prefix}%` } };
-      }),
-    });
-  }
-  const where = conditions.length > 0 ? { [Op.and]: conditions } : undefined;
-  return {
-    model: db.File,
-    as: 'file',
-    where: where as Record<string, unknown> | undefined,
-    include: [{ model: db.Project, as: 'project' }],
-  };
-};
 
 /** Sequelize fragment types `@ttoss/postgresdb` does not re-export. */
 type Literal = ReturnType<typeof db.sequelize.literal>;
@@ -455,7 +428,11 @@ export const resolveDocumentSearchLists = async (args: {
     ? args.policyWhere
     : undefined;
 
-  const fileInclude = buildFileInclude({ projectIds, paths: config.paths });
+  const fileInclude = buildFileInclude({
+    projectIds,
+    paths: config.paths,
+    namesDocuments: (config.documentIds?.length ?? 0) > 0,
+  });
   const docWhere = buildDocWhere({
     documentIds: config.documentIds,
     tags: config.tags,

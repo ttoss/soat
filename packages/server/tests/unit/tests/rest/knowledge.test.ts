@@ -643,7 +643,11 @@ describe('Knowledge', () => {
       // A floor above any achievable cosine filters everything out.
       const below = await authenticatedTestClient(userToken)
         .post('/api/v1/knowledge/search')
-        .send({ project_id: projectId, query: 'anything', min_similarity: 1.5 });
+        .send({
+          project_id: projectId,
+          query: 'anything',
+          min_similarity: 1.5,
+        });
       expect(below.status).toBe(200);
       expect(below.body.results).toHaveLength(0);
     });

@@ -58,6 +58,15 @@ export class Conversation extends Model {
   })
   declare status: string;
 
+  /**
+   * Whether this conversation's turns are embedded for vector retrieval.
+   * `null` inherits `Project.defaultConversationRetrieval`. Turns are chunked
+   * either way — `none` only leaves the vector off, so a turn stays readable
+   * and lexically searchable without being paid for as an embedding.
+   */
+  @Column({ type: DataType.STRING(8), allowNull: true })
+  declare retrieval: 'embed' | 'none' | null;
+
   @Column({
     type: DataType.JSONB,
     allowNull: true,

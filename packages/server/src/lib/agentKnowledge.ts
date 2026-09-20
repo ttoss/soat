@@ -186,6 +186,23 @@ const hasDocumentFilters = (config: KnowledgeConfig): boolean => {
 };
 
 /**
+ * The conversation a runtime-written message document belongs to, read back out
+ * of its reserved-root key. A chat turn injected as `Document: document.txt`
+ * tells the model nothing about where the text came from.
+ */
+const conversationOfPath = (path: string | undefined): string | undefined => {
+  const match = path?.match(/^\/\.system\/conversations\/([^/]+)\//);
+  return match?.[1];
+};
+
+const documentLabel = (r: { path?: string; filename?: string }): string => {
+  const conversationId = conversationOfPath(r.path);
+  return conversationId
+    ? `Conversation: ${conversationId}`
+    : `Document: ${r.path ?? r.filename}`;
+};
+
+/**
  * Renders the source tag that precedes each injected result.
  *
  * The tag carries enough provenance to trace an injected claim back to the
@@ -201,7 +218,7 @@ const formatResult = (
 ): string => {
   if (r.source_type === 'document') {
     const page = r.page === undefined ? '' : ` (page ${r.page})`;
-    return `[Document: ${r.path ?? r.filename}${page}]\n${r.content}`;
+    return `[${documentLabel(r)}${page}]\n${r.content}`;
   }
   return `[Memory store: ${r.memory_store_name} (${r.memory_id})]\n${r.content}`;
 };

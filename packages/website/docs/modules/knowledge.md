@@ -84,6 +84,22 @@ The [`POST /knowledge/search`](/docs/api/knowledge/search-knowledge) filters (at
 
 With `query`, results carry `score` and `similarity_score`, ordered by descending `score`; `min_similarity`, `rrf_k` and `limit` apply. Walkthrough: [Agent with Persistent Memory — Step 12 (Query the knowledge layer directly)](/docs/tutorials/memories-agent#step-12--query-the-knowledge-layer-directly).
 
+### Platform-written documents
+
+Each [conversation](./conversations.md) turn is a document under
+`/.system/conversations/`, so a bare `query` would rank chat history against
+the knowledge a project deliberately uploaded. It does not: a search leaves
+[the reserved root](./files.md#the-reserved-system-root) out unless
+`document_paths` names a directory inside it.
+
+```json
+{ "query": "refund policy", "document_paths": ["/.system/conversations/"] }
+```
+
+Turns reach the vector channel only when their conversation's
+[`retrieval`](./conversations.md#retrieval) is `embed`; otherwise they are
+still matched by the full-text channel.
+
 ### Which stores a search reads
 
 `query` and `tags` name no store, so they reach **both**. The store-specific filters narrow *within* a store: `document_paths` and `document_ids` for documents, `memory_store_ids` for memories.

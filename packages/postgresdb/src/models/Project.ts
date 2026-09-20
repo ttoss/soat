@@ -64,6 +64,16 @@ export class Project extends Model {
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare defaultModelRouteId: string | null;
 
+  // What a conversation that names no `retrieval` of its own does. `none` by
+  // default: a turn is embedded because someone asked for it to be retrievable,
+  // never merely because it was said.
+  @Column({
+    type: DataType.STRING(8),
+    allowNull: false,
+    defaultValue: 'none',
+  })
+  declare defaultConversationRetrieval: 'embed' | 'none';
+
   // Opts into auditing `GET`s alongside mutations. Off by default — reads are
   // high-volume and low-value.
   @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })

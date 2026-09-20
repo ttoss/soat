@@ -58,7 +58,7 @@ Both use the layout `{projectPublicId}/{category}/{fileId}{ext}`:
 | Segment           | Description                                                                                        |
 | ----------------- | -------------------------------------------------------------------------------------------------- |
 | `projectPublicId` | Public project ID (e.g. `proj_ABC`) — isolates files by project                                    |
-| `category`        | Derived from the first segment of the file's logical `path` (e.g., `/traces/foo.json` → `traces/`) |
+| `category`        | Derived from the first segment of the file's logical `path` (e.g., `/reports/q1.txt` → `reports/`) |
 | `fileId`          | The file's public ID                                                                               |
 | `ext`             | File extension from the original filename                                                          |
 
@@ -68,14 +68,33 @@ Without a `path`, the category is `files/`. Local: a path under `FILES_STORAGE_D
 
 ```
 # local:   {FILES_STORAGE_DIR}/{projectPublicId}/{category}/{fileId}{ext}
-/data/files/proj_1a123a/traces/trace_abc123.json
+/data/files/proj_1a123a/reports/file_abc123.txt
 /data/files/proj_1a123a/documents/doc_xyz.md
 
 # s3:      s3://{FILES_S3_BUCKET}/{FILES_S3_KEY_PREFIX}/{projectPublicId}/{category}/{fileId}{ext}
-s3://my-bucket/proj_1a123a/traces/trace_abc123.json
+s3://my-bucket/proj_1a123a/reports/file_abc123.txt
 ```
 
-Traces persist raw steps in `traces/`; see [Debug Session, Generation, and Trace History - Step 6 (Download raw trace steps)](/docs/tutorials/debug-session-generation-trace-history#step-6---download-raw-trace-steps-using-file_id).
+### The reserved `/.system/` root {#the-reserved-system-root}
+
+Every module that saves a file or document on your behalf files it under
+`/.system/<module>/`, one directory per module:
+
+| Path | Written by |
+| --- | --- |
+| `/.system/conversations/{conversation_id}/{document_id}.txt` | Each [conversation](./conversations.md) message |
+| `/.system/traces/{trace_id}.json` | Each [trace](./traces.md)'s raw steps |
+
+The root is yours to read and not to write. A `POST`, a path move or a tag write
+that lands under it is refused with `400 RESERVED_PATH`, so the marker cannot be
+edited off a row; the owning module deletes what it wrote.
+
+A list leaves the root out unless you ask for it: [`GET /api/v1/files`](/docs/api/files/list-files)
+and [`GET /api/v1/documents`](/docs/api/documents/list-documents) return
+platform-written rows only when `path_prefix` names a directory inside it, and
+[knowledge search](./knowledge.md) ranks them only when `document_paths` does.
+A read by `id` always returns one — the tutorial that downloads raw trace steps
+by `file_id` needs no prefix. See [Debug Session, Generation, and Trace History - Step 6 (Download raw trace steps)](/docs/tutorials/debug-session-generation-trace-history#step-6---download-raw-trace-steps-using-file_id).
 
 ### Path-Based SRNs
 
