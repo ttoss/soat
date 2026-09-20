@@ -1,3 +1,4 @@
+import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
@@ -9,15 +10,21 @@ import {
   createDocumentTextFile,
   readFileContent,
 } from './documentContent';
+import { type DocumentFiling, resolveDocumentFiling } from './documentFiling';
 import { mapDocument } from './documentMapper';
 import { emitResourceEvent } from './eventBus';
-import { pathPrefixPattern } from './filePaths';
+import {
+  assertCallerPath,
+  normalizePath,
+  pathPrefixPattern,
+} from './filePaths';
 import { getStorageProvider } from './fileStorage';
 import { recoverStaleDocument } from './ingestionCallback';
 import { emptyPage, paginatedList } from './pagination';
 import { registerResourceFieldMap } from './policyCompiler';
 import { hasPolicyConstraints, referencesAssociation } from './policyWhere';
 import type { SoatEventTypeFor } from './soatEvents';
+import { nonSystemPathWhere } from './systemPathScope';
 import { applyTagFilter, mergeTags } from './tags';
 
 export {
@@ -38,16 +45,6 @@ registerResourceFieldMap({
   pathColumn: { column: 'path', alias: 'file' },
   tagsColumn: { column: 'tags' },
 });
-
-const normalizePath = (filePath: string): string => {
-  if (!filePath) return '/';
-  let normalized = filePath.trim();
-  if (!normalized.startsWith('/')) normalized = '/' + normalized;
-  normalized = normalized.replace(/\/+/g, '/');
-  if (normalized !== '/' && normalized.endsWith('/'))
-    normalized = normalized.slice(0, -1);
-  return normalized;
-};
 
 type LoadedDoc = InstanceType<(typeof db)['Document']> & {
   file?: InstanceType<(typeof db)['File']> & {
@@ -105,8 +102,10 @@ const buildDocumentQueryOptions = (args: {
   if (args.projectIds !== undefined) file.projectId = args.projectIds;
   if (args.pathPrefix !== undefined) {
     file.path = { [Op.like]: pathPrefixPattern(args.pathPrefix) };
+  } else {
+    Object.assign(file, nonSystemPathWhere());
   }
-  const fileWhere = Object.keys(file).length > 0 ? file : undefined;
+  const fileWhere = Reflect.ownKeys(file).length > 0 ? file : undefined;
   return {
     topLevelWhere,
     fileWhere,
@@ -296,18 +295,32 @@ export const createDocument = async (args: {
   chunkStrategy?: ChunkStrategy;
   chunkSize?: number;
   chunkOverlap?: number;
+  /** Files the document under the reserved root. See {@link DocumentFiling}. */
+  system?: DocumentFiling;
+  /** Off stores the chunks without vectors. See `persistChunks`. */
+  embed?: boolean;
 }) => {
   log('createDocument: projectId=%d', args.projectId);
 
-  const rawPath = args.path ?? args.filename ?? null;
+  // Minted here rather than by the model hook: the reserved-root key contains
+  // it, and the backing File row is written first.
+  const publicId = generatePublicId(PUBLIC_ID_PREFIXES.document);
+  const filing = resolveDocumentFiling({
+    system: args.system,
+    path: args.path,
+    filename: args.filename,
+    publicId,
+  });
+
   const file = await createDocumentTextFile({
     projectId: args.projectId,
     content: args.content,
-    normalizedPath: rawPath === null ? null : normalizePath(rawPath),
-    filename: args.filename,
+    normalizedPath: filing.normalizedPath,
+    filename: filing.filename,
   });
 
   const doc = await db.Document.create({
+    publicId,
     fileId: file.id,
     title: args.title ?? null,
     metadata: args.metadata ? JSON.stringify(args.metadata) : null,
@@ -324,6 +337,7 @@ export const createDocument = async (args: {
     chunkStrategy: args.chunkStrategy,
     chunkSize: args.chunkSize,
     chunkOverlap: args.chunkOverlap,
+    embed: args.embed,
   });
 
   const created = await fetchDocumentByIdWithContext(doc.id as number);
@@ -401,6 +415,11 @@ export const updateDocument = async (args: {
 
   if (!doc) return null;
 
+  // Runtime-written documents are read-only for callers: their content is the
+  // record another module keeps, and editing it would rewrite that module's
+  // history behind its back.
+  assertCallerPath(doc.file?.path);
+
   await applyDocumentChunkChanges({
     doc,
     content: args.content,
@@ -410,7 +429,9 @@ export const updateDocument = async (args: {
   });
 
   if (args.path !== undefined && doc.file) {
-    const normalizedPath = args.path === null ? null : normalizePath(args.path);
+    const normalizedPath = assertCallerPath(
+      args.path === null ? null : normalizePath(args.path)
+    );
     await doc.file.update({ path: normalizedPath });
   }
 
@@ -445,6 +466,10 @@ export const updateDocumentTags = async (args: {
   const doc = await fetchDocumentWithContext(args.id);
 
   if (!doc) return null;
+
+  // A document the runtime filed is its record of a turn, not a caller's bag
+  // to relabel — and a replaceable tag would not be a marker at all.
+  assertCallerPath(doc.file?.path);
 
   const newTags = mergeTags({
     current: doc.tags,

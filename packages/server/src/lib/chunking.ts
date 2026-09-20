@@ -125,6 +125,12 @@ export const persistChunks = async (args: {
   projectId: number;
   chunks: PreparedChunk[];
   concurrency?: number;
+  /**
+   * Off leaves every chunk's vector null: the text is still stored, still read
+   * back and still reachable by the lexical channel, and no embedding is
+   * billed. Defaults on, which is what an uploaded document wants.
+   */
+  embed?: boolean;
   onProgress?: (completed: number) => Promise<void> | void;
 }): Promise<void> => {
   const concurrency = args.concurrency ?? DEFAULT_EMBEDDING_CONCURRENCY;
@@ -140,13 +146,15 @@ export const persistChunks = async (args: {
   await runBounded(args.chunks.length, concurrency, async (i) => {
     const chunk = args.chunks[i];
     let embedding: number[] | null = null;
-    try {
-      embedding = await getEmbedding({
-        text: chunk.content,
-        projectId: args.projectId,
-      });
-    } catch {
-      // embedding is optional — continue without it
+    if (args.embed !== false) {
+      try {
+        embedding = await getEmbedding({
+          text: chunk.content,
+          projectId: args.projectId,
+        });
+      } catch {
+        // embedding is optional — continue without it
+      }
     }
 
     await db.DocumentChunk.create({

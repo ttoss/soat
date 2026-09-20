@@ -2,6 +2,7 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
+import { readRetrievalMode } from 'src/lib/conversationRetrieval';
 import {
   createConversation,
   deleteConversation,
@@ -106,6 +107,7 @@ conversationsRouter.post('/conversations', async (ctx: Context) => {
     status?: string;
     name?: string | null;
     actor_id?: string | null;
+    retrieval?: unknown;
   };
 
   const targetProjectId = await resolveWriteProjectId({
@@ -130,6 +132,10 @@ conversationsRouter.post('/conversations', async (ctx: Context) => {
     status: body.status,
     name: body.name ?? null,
     actorId: resolvedActorId,
+    retrieval:
+      body.retrieval === undefined || body.retrieval === null
+        ? null
+        : readRetrievalMode(body.retrieval),
   });
   ctx.status = 201;
   ctx.body = conversation;
@@ -140,12 +146,20 @@ conversationsRouter.patch(
   async (ctx: Context) => {
     requireAuth(ctx);
 
-    const body = ctx.request.body as { status?: string; name?: string | null };
+    const body = ctx.request.body as {
+      status?: string;
+      name?: string | null;
+      retrieval?: unknown;
+    };
 
-    if (body.status === undefined && body.name === undefined) {
+    if (
+      body.status === undefined &&
+      body.name === undefined &&
+      body.retrieval === undefined
+    ) {
       throw new DomainError(
         'VALIDATION_FAILED',
-        'At least one of status or name is required'
+        'At least one of status, name or retrieval is required'
       );
     }
 
@@ -171,6 +185,12 @@ conversationsRouter.patch(
       id: ctx.params.conversation_id,
       status: body.status,
       name: body.name,
+      retrieval:
+        body.retrieval === undefined
+          ? undefined
+          : body.retrieval === null
+            ? null
+            : readRetrievalMode(body.retrieval),
     });
 
     ctx.body = updated;

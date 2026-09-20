@@ -93,6 +93,7 @@ export const chunkDocumentText = async (args: {
   chunkStrategy?: ChunkStrategy;
   chunkSize?: number;
   chunkOverlap?: number;
+  embed?: boolean;
 }) => {
   const chunks = chunkPages({
     pages: [{ text: args.content }],
@@ -104,6 +105,7 @@ export const chunkDocumentText = async (args: {
     documentId: args.documentId,
     projectId: args.projectId,
     chunks,
+    embed: args.embed,
   });
 };
 

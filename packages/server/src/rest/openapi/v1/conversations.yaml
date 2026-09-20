@@ -120,6 +120,11 @@ paths:
                   nullable: true
                   description: Actor ID to associate with this conversation
                   example: 'actor_V1StGXR8Z5jdHi6B'
+                retrieval:
+                  type: string
+                  enum: [embed, none, null]
+                  nullable: true
+                  description: Whether this conversation's turns are embedded for vector retrieval. Turns are stored and chunked either way, so `none` leaves them readable and reachable by full-text search without paying for an embedding. `null` (the default) inherits the project's `default_conversation_retrieval`.
       responses:
         '201':
           description: Conversation created
@@ -221,6 +226,14 @@ paths:
                   type: string
                   nullable: true
                   description: New conversation name
+                retrieval:
+                  type: string
+                  enum: [embed, none, null]
+                  nullable: true
+                  description: >-
+                    Whether this conversation's turns are embedded for vector retrieval. Turns are stored and chunked either way, so `none` leaves them readable and reachable by full-text search without paying for an embedding. `null` (the default) inherits the project's `default_conversation_retrieval`. Switching it on embeds the turns already in the
+                    conversation, so the whole conversation becomes retrievable
+                    rather than only what is said next.
       responses:
         '200':
           description: Conversation updated
@@ -796,6 +809,11 @@ components:
           nullable: true
           description: Actor ID associated with this conversation
           example: 'actor_V1StGXR8Z5jdHi6B'
+        retrieval:
+          type: string
+          enum: [embed, none, null]
+          nullable: true
+          description: Whether this conversation's turns are embedded for vector retrieval. Turns are stored and chunked either way, so `none` leaves them readable and reachable by full-text search without paying for an embedding. `null` (the default) inherits the project's `default_conversation_retrieval`.
     ConversationMessageRecord:
       type: object
       properties:

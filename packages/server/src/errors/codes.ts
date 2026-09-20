@@ -152,6 +152,11 @@ export const ERROR_CODES = {
     description:
       'The project has one or more dependent resources (agents, ai providers, tools, etc.) and cannot be deleted. Use force=true to delete dependents as well.',
   },
+  RESERVED_PATH: {
+    httpStatus: 400,
+    description:
+      "The path is under '/.system/', which is reserved for files and documents the platform writes on your behalf. Choose a path outside it.",
+  },
   FILE_HAS_DEPENDENTS: {
     httpStatus: 409,
     description:

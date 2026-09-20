@@ -24,6 +24,9 @@ ttoss ecosystem conventions: https://ttoss.dev/ttoss-instructions.txt
 ## Implementation checklist
 
 1. Business logic in `packages/server/src/lib/<module>.ts`; all DB access there.
+   A module that saves a file or document on the caller's behalf files it under
+   `/.system/<module>/` through `systemPath` (`lib/filePaths.ts`), never a
+   caller path; every caller-supplied path goes through `assertCallerPath`.
 2. Routes in `packages/server/src/rest/v1/<module>.ts` with `@openapi` JSDoc;
    spec in `packages/server/src/rest/openapi/v1/<module>.yaml` kept in sync.
    After a spec change: `pnpm --filter @soat/sdk generate` and

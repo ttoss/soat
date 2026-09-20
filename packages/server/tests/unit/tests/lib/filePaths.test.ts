@@ -1,9 +1,12 @@
 import {
+  assertCallerPath,
   buildPath,
   filenameFromPath,
+  isSystemPath,
   normalizePath,
   prefixFromPath,
   rebuildKey,
+  systemPath,
 } from 'src/lib/filePaths';
 
 describe('filePaths', () => {
@@ -132,6 +135,67 @@ describe('filePaths', () => {
           filename: 'fresh.txt',
         })
       ).toEqual({ path: '/fresh.txt', filename: 'fresh.txt' });
+    });
+  });
+});
+
+describe('the reserved system root', () => {
+  describe('systemPath', () => {
+    test('files a module write under /.system/<module>/', () => {
+      expect(systemPath({ module: 'traces', leaf: 'trace_abc.json' })).toBe(
+        '/.system/traces/trace_abc.json'
+      );
+    });
+
+    test('keeps a nested leaf, so a module may group by owner', () => {
+      expect(
+        systemPath({ module: 'conversations', leaf: 'conv_1/doc_2.txt' })
+      ).toBe('/.system/conversations/conv_1/doc_2.txt');
+    });
+
+    test('refuses a leaf that climbs out of its module directory', () => {
+      expect(() => {
+        return systemPath({ module: 'traces', leaf: '../../etc/passwd' });
+      }).toThrow(/escapes/i);
+    });
+
+    test('refuses a module that is not a single plain segment', () => {
+      expect(() => {
+        return systemPath({ module: 'a/b', leaf: 'x.txt' });
+      }).toThrow(/single path segment/);
+    });
+  });
+
+  describe('isSystemPath', () => {
+    test.each([
+      ['/.system/traces/t.json', true],
+      ['/.system', true],
+      ['/traces/t.json', false],
+      ['/.systemic/t.json', false],
+      [null, false],
+    ])('%s → %s', (path, expected) => {
+      expect(isSystemPath(path)).toBe(expected);
+    });
+  });
+
+  describe('assertCallerPath', () => {
+    test('returns a caller path unchanged', () => {
+      expect(assertCallerPath('/reports/q1.txt')).toBe('/reports/q1.txt');
+      expect(assertCallerPath(null)).toBeNull();
+    });
+
+    test('refuses a write into the reserved root', () => {
+      expect(() => {
+        return assertCallerPath('/.system/traces/t.json');
+      }).toThrow(/reserved/i);
+    });
+
+    test('refuses the un-normalized spellings of it too', () => {
+      for (const path of ['.system/x', '/a/../.system/x', '//.system//x']) {
+        expect(() => {
+          return assertCallerPath(path);
+        }).toThrow(/reserved/i);
+      }
     });
   });
 });

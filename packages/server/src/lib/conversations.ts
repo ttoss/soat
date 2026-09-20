@@ -1,5 +1,10 @@
 import { db } from '../db';
 import { mapMessage } from './conversationMessages';
+import {
+  conversationEmbedsTurns,
+  embedConversationBacklog,
+  type RetrievalMode,
+} from './conversationRetrieval';
 import { emitResourceEvent } from './eventBus';
 import { emptyPage, paginatedList } from './pagination';
 import {
@@ -45,6 +50,7 @@ const mapConversation = (conversation: ConversationRow) => {
     actor_id: conversation.actor?.publicId ?? null,
     name: conversation.name ?? null,
     status: conversation.status,
+    retrieval: conversation.retrieval ?? null,
     tags: conversation.tags ?? undefined,
     created_at: conversation.createdAt,
     updated_at: conversation.updatedAt,
@@ -126,12 +132,14 @@ export const createConversation = async (args: {
   status?: string;
   name?: string | null;
   actorId?: number | null;
+  retrieval?: RetrievalMode | null;
 }) => {
   const conversation = await db.Conversation.create({
     projectId: args.projectId,
     status: args.status ?? 'open',
     name: args.name ?? null,
     actorId: args.actorId ?? null,
+    retrieval: args.retrieval ?? null,
   });
 
   const conversationWithAssociations = await conversations.reload(conversation);
@@ -154,6 +162,7 @@ export const updateConversation = async (args: {
   id: string;
   name?: string | null;
   status?: string;
+  retrieval?: RetrievalMode | null;
 }) => {
   const conversation = await db.Conversation.findOne({
     where: { publicId: args.id },
@@ -170,8 +179,27 @@ export const updateConversation = async (args: {
   if (args.status !== undefined) {
     updates.status = args.status;
   }
+  if (args.retrieval !== undefined) {
+    updates.retrieval = args.retrieval;
+  }
 
   await conversation.update(updates);
+
+  // Switching retrieval on makes the whole conversation retrievable, not just
+  // what is said next — otherwise the turns that prompted the switch stay
+  // invisible to the vector channel forever.
+  if (
+    args.retrieval !== undefined &&
+    (await conversationEmbedsTurns({
+      conversationId: conversation.id as number,
+      projectId: conversation.projectId,
+    }))
+  ) {
+    await embedConversationBacklog({
+      conversationId: conversation.id as number,
+      projectId: conversation.projectId,
+    });
+  }
 
   const updated = await db.Conversation.findOne({
     where: { publicId: args.id },

@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { systemPath } from './filePaths';
 import { upsertFileByPath } from './files';
 import { readFileBuffer } from './fileStorage';
 import {
@@ -387,7 +388,10 @@ const writeTrace = async (args: SaveTraceArgs): Promise<void> => {
   });
 
   const content = Buffer.from(JSON.stringify(mergedSteps), 'utf8');
-  const filePath = `/traces/${args.traceId}.json`;
+  const filePath = systemPath({
+    module: 'traces',
+    leaf: `${args.traceId}.json`,
+  });
 
   const fileRecord = await upsertFileByPath({
     projectId: args.projectId,
@@ -412,8 +416,8 @@ const writeTrace = async (args: SaveTraceArgs): Promise<void> => {
 
 /**
  * Upserts a Trace row in the DB and writes trace content (steps) to disk
- * via the File system. The file is stored at `/traces/{traceId}.json` under
- * the project's storage directory.
+ * via the File system. The file is stored at `/.system/traces/{traceId}.json`,
+ * the reserved root every runtime-written file shares.
  *
  * The object is the concatenation of one segment per generation grouped under
  * the trace, indexed by `Trace.stepSegments`. A call rewrites only its own

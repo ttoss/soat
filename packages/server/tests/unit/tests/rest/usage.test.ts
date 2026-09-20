@@ -125,6 +125,13 @@ describe('Usage', () => {
     noPermToken = setup.noPermToken as string;
     projectId = setup.projectId;
 
+    // Session turns are conversation messages, and this project meters their
+    // embeddings — which is what puts a second model in the rollup the
+    // `?model=` filter narrows.
+    await authenticatedTestClient(adminToken)
+      .patch(`/api/v1/projects/${projectId}`)
+      .send({ default_conversation_retrieval: 'embed' });
+
     const aiProvRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/ai-providers')
       .send({

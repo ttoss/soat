@@ -4,6 +4,7 @@ import type { AuthUser } from '../Context';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { invalidateReadAuditCache } from './auditLog';
+import { type RetrievalMode } from './conversationRetrieval';
 import { assertGuardrailsExist } from './guardrails';
 import {
   assertDefaultModelRouteInProject,
@@ -32,6 +33,7 @@ const mapProject = (project: InstanceType<(typeof db)['Project']>) => {
     max_chain_generations: project.maxChainGenerations,
     max_orchestration_run_depth: project.maxOrchestrationRunDepth,
     audit_reads_enabled: project.auditReadsEnabled,
+    default_conversation_retrieval: project.defaultConversationRetrieval,
     trace_content_retention_days: project.traceContentRetentionDays,
     trace_content_mode: project.traceContentMode,
     created_at: project.createdAt,
@@ -231,6 +233,7 @@ const PROJECT_UPDATABLE_FIELDS = [
   'maxChainGenerations',
   'maxOrchestrationRunDepth',
   'auditReadsEnabled',
+  'defaultConversationRetrieval',
   'traceContentRetentionDays',
   'traceContentMode',
 ] as const;
@@ -278,6 +281,7 @@ export const updateProject = async (args: {
   maxChainGenerations?: number | null;
   maxOrchestrationRunDepth?: number | null;
   auditReadsEnabled?: boolean;
+  defaultConversationRetrieval?: RetrievalMode;
   traceContentRetentionDays?: number | null;
   traceContentMode?: string;
 }) => {

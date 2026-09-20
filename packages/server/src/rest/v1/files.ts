@@ -47,11 +47,20 @@ const listFilesWithPolicy = async (args: {
   authUser: NonNullable<Context['authUser']>;
   projectPublicId: string;
   projectIds: number[];
+  pathPrefix?: string;
   tags?: Record<string, string>;
   limit?: number;
   offset?: number;
 }) => {
-  const { authUser, projectPublicId, projectIds, tags, limit, offset } = args;
+  const {
+    authUser,
+    projectPublicId,
+    projectIds,
+    pathPrefix,
+    tags,
+    limit,
+    offset,
+  } = args;
   const policies = await authUser.getPolicies(projectPublicId);
   const { where: policyWhere, hasAccess } = compilePolicy({
     policies,
@@ -64,13 +73,21 @@ const listFilesWithPolicy = async (args: {
     return { data: [], total: 0, limit: limit ?? 50, offset: offset ?? 0 };
   }
 
-  return listFiles({ projectIds, policyWhere, tags, limit, offset });
+  return listFiles({
+    projectIds,
+    policyWhere,
+    pathPrefix,
+    tags,
+    limit,
+    offset,
+  });
 };
 
 filesRouter.get('/files', async (ctx: Context) => {
   requireAuth(ctx);
 
   const projectPublicId = (ctx.query as Record<string, string>).project_id;
+  const pathPrefix = (ctx.query as Record<string, string>).path_prefix;
   const tags = readTagQuery(ctx.query.tags);
   const limit = ctx.query.limit
     ? parseInt(ctx.query.limit as string, 10)
@@ -91,6 +108,7 @@ filesRouter.get('/files', async (ctx: Context) => {
       authUser: ctx.authUser,
       projectPublicId,
       projectIds: projectIds ?? [],
+      pathPrefix,
       tags,
       limit,
       offset,
@@ -100,6 +118,7 @@ filesRouter.get('/files', async (ctx: Context) => {
 
   ctx.body = await listFiles({
     projectIds: projectIds ?? undefined,
+    pathPrefix,
     tags,
     limit,
     offset,

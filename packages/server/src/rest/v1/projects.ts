@@ -1,6 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import { readRetrievalMode } from 'src/lib/conversationRetrieval';
 import { listProjectPrices, upsertProjectPrices } from 'src/lib/priceBook';
 import {
   createProject,
@@ -128,6 +129,10 @@ const parseProjectPatchFields = (body: Record<string, unknown>) => {
       typeof body.audit_reads_enabled === 'boolean'
         ? body.audit_reads_enabled
         : undefined,
+    defaultConversationRetrieval:
+      body.default_conversation_retrieval === undefined
+        ? undefined
+        : readRetrievalMode(body.default_conversation_retrieval),
     // An explicit `null` disables retention. Any other non-conforming value is
     // forwarded so the lib rejects it with a 400 rather than being dropped.
     traceContentRetentionDays: Object.prototype.hasOwnProperty.call(
@@ -158,6 +163,7 @@ projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
     maxOrchestrationRunDepth,
     defaultModelRouteId,
     auditReadsEnabled,
+    defaultConversationRetrieval,
     traceContentRetentionDays,
     traceContentMode,
   } = fields;
@@ -169,7 +175,7 @@ projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
   ) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      'name, guardrail_ids, max_concurrent_runs, max_chain_generations, max_orchestration_run_depth, default_model_route_id, audit_reads_enabled, trace_content_retention_days, or trace_content_mode is required'
+      'name, guardrail_ids, max_concurrent_runs, max_chain_generations, max_orchestration_run_depth, default_model_route_id, audit_reads_enabled, default_conversation_retrieval, trace_content_retention_days, or trace_content_mode is required'
     );
   }
 
@@ -195,6 +201,7 @@ projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
     maxOrchestrationRunDepth,
     defaultModelRouteId,
     auditReadsEnabled,
+    defaultConversationRetrieval,
     traceContentRetentionDays,
     traceContentMode,
   });

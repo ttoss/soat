@@ -1,4 +1,5 @@
 import { db } from 'src/db';
+import { systemPath } from 'src/lib/filePaths';
 import {
   createGenerationRecord,
   updateGenerationRecord,
@@ -143,7 +144,12 @@ describe('zero-retention mode', () => {
       // Not merely absent from the row: never created. A File row would mean
       // bytes on disk, which is exactly what this mode promises not to do.
       const files = await db.File.findAll({
-        where: { path: `/traces/${seeded.traceId}.json` },
+        where: {
+          path: systemPath({
+            module: 'traces',
+            leaf: `${seeded.traceId}.json`,
+          }),
+        },
       });
       expect(files).toHaveLength(0);
     });
