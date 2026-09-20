@@ -49,6 +49,7 @@ describe('Triggers', () => {
         'evaluations:RunEval',
         'evaluations:GetEval',
         'secrets:CreateSecret',
+        'formations:CreateFormation',
       ],
       createOtherProject: true,
       createNoPermUser: true,
@@ -1183,6 +1184,68 @@ describe('Triggers', () => {
           toolContext: { advertiserId: 'adv_999', locale: 'pt-BR' },
         })
       );
+    });
+
+    test('a formation-declared trigger carries the bag', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `ctx-formation-${Date.now()}`,
+          template: {
+            resources: {
+              CtxTrigger: {
+                type: 'trigger',
+                properties: {
+                  name: `ctx-tpl-${Date.now()}`,
+                  type: 'manual',
+                  target_type: 'agent',
+                  target_id: agentId,
+                  tool_context: { advertiserId: 'adv_tpl' },
+                },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('active');
+      expect(res.body.resources[0].status).toBe('created');
+
+      const read = await authenticatedTestClient(userToken).get(
+        `/api/v1/triggers/${res.body.resources[0].physical_resource_id}`
+      );
+      expect(read.status).toBe(200);
+      expect(read.body.tool_context).toBeUndefined();
+    });
+
+    // The template walk reaches the same validation a direct create does, which
+    // is what shows the bag is forwarded rather than dropped on the way.
+    test('a formation-declared bag is held to the same key rule', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `ctx-formation-bad-${Date.now()}`,
+          template: {
+            resources: {
+              CtxBadTrigger: {
+                type: 'trigger',
+                properties: {
+                  name: `ctx-tpl-bad-${Date.now()}`,
+                  type: 'manual',
+                  target_type: 'agent',
+                  target_id: agentId,
+                  tool_context: { 'bad key': 'v' },
+                },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('failed');
+      expect(res.body.resources[0].status).toBe('failed');
     });
   });
 
