@@ -75,7 +75,7 @@ Without a `path`, the category is `files/`. Local: a path under `FILES_STORAGE_D
 s3://my-bucket/proj_1a123a/reports/file_abc123.txt
 ```
 
-### The reserved `/.system/` root {#the-reserved-system-root}
+### The reserved `/.system/` root
 
 Every module that saves a file or document on your behalf files it under
 `/.system/<module>/`, one directory per module:
