@@ -61,6 +61,8 @@ export type TypedAgent = {
     publicId: string;
     guardrailIds?: string[] | null;
     maxChainGenerations?: number | null;
+    /** Absent on a config rebuilt without the project row; only `true` gates. */
+    requirePricedModel?: boolean;
   };
   // Exactly one of these is set (enforced on every agent write path by
   // `validateModelRouteExclusivity`): a pinned provider, or a model route whose

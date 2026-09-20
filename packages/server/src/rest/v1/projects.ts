@@ -86,67 +86,57 @@ projectsRouter.get('/projects/:project_id', async (ctx: Context) => {
   ctx.body = result;
 });
 
-/** Parses the optional fields of a project PATCH body. Every field distinguishes
- * "absent" (leave as-is) from a value; extracted so the handler stays under the
- * cyclomatic-complexity limit. */
+/**
+ * A field the body may omit: present means write it, absent means leave the
+ * column as it is. Values are forwarded unvalidated so a malformed one is a
+ * `400` from the lib rather than a field silently dropped here.
+ */
+const provided = <T>(
+  body: Record<string, unknown>,
+  key: string
+): T | undefined => {
+  return Object.prototype.hasOwnProperty.call(body, key)
+    ? (body[key] as T)
+    : undefined;
+};
+
+/** Parses the optional fields of a project PATCH body, in the camelCase the lib
+ * takes. Extracted so the handler stays under the cyclomatic-complexity limit. */
 const parseProjectPatchFields = (body: Record<string, unknown>) => {
   return {
     name: typeof body.name === 'string' ? body.name : undefined,
     guardrailIds: parseGuardrailIds(body.guardrail_ids),
-    // An explicit `null` clears the limit. Any non-null, non-integer value is
-    // forwarded so the lib rejects it with a 400 rather than being silently
-    // dropped here.
-    maxConcurrentRuns: Object.prototype.hasOwnProperty.call(
-      body,
-      'max_concurrent_runs'
-    )
-      ? (body.max_concurrent_runs as number | null)
-      : undefined,
+    // An explicit `null` clears the limit.
+    maxConcurrentRuns: provided<number | null>(body, 'max_concurrent_runs'),
     // An explicit `null` clears the project's chain ceiling, leaving the
-    // deployment-wide one. Forwarded unvalidated for the same reason as above.
-    maxChainGenerations: Object.prototype.hasOwnProperty.call(
-      body,
-      'max_chain_generations'
-    )
-      ? (body.max_chain_generations as number | null)
-      : undefined,
+    // deployment-wide one.
+    maxChainGenerations: provided<number | null>(body, 'max_chain_generations'),
     // An explicit `null` clears the project's run-depth bound, leaving the
-    // deployment-wide one. Forwarded unvalidated for the same reason as above.
-    maxOrchestrationRunDepth: Object.prototype.hasOwnProperty.call(
+    // deployment-wide one.
+    maxOrchestrationRunDepth: provided<number | null>(
       body,
       'max_orchestration_run_depth'
-    )
-      ? (body.max_orchestration_run_depth as number | null)
-      : undefined,
-    // An explicit `null` clears the project default route; absent leaves it.
-    defaultModelRouteId: Object.prototype.hasOwnProperty.call(
+    ),
+    // An explicit `null` clears the project default route.
+    defaultModelRouteId: provided<string | null>(
       body,
       'default_model_route_id'
-    )
-      ? (body.default_model_route_id as string | null)
-      : undefined,
+    ),
     auditReadsEnabled:
       typeof body.audit_reads_enabled === 'boolean'
         ? body.audit_reads_enabled
         : undefined,
+    requirePricedModel: provided<boolean>(body, 'require_priced_model'),
     defaultConversationRetrieval:
       body.default_conversation_retrieval === undefined
         ? undefined
         : readRetrievalMode(body.default_conversation_retrieval),
-    // An explicit `null` disables retention. Any other non-conforming value is
-    // forwarded so the lib rejects it with a 400 rather than being dropped.
-    traceContentRetentionDays: Object.prototype.hasOwnProperty.call(
+    // An explicit `null` disables retention.
+    traceContentRetentionDays: provided<number | null>(
       body,
       'trace_content_retention_days'
-    )
-      ? (body.trace_content_retention_days as number | null)
-      : undefined,
-    traceContentMode: Object.prototype.hasOwnProperty.call(
-      body,
-      'trace_content_mode'
-    )
-      ? (body.trace_content_mode as string)
-      : undefined,
+    ),
+    traceContentMode: provided<string>(body, 'trace_content_mode'),
   };
 };
 
@@ -163,6 +153,7 @@ projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
     maxOrchestrationRunDepth,
     defaultModelRouteId,
     auditReadsEnabled,
+    requirePricedModel,
     defaultConversationRetrieval,
     traceContentRetentionDays,
     traceContentMode,
@@ -175,7 +166,7 @@ projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
   ) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      'name, guardrail_ids, max_concurrent_runs, max_chain_generations, max_orchestration_run_depth, default_model_route_id, audit_reads_enabled, default_conversation_retrieval, trace_content_retention_days, or trace_content_mode is required'
+      'name, guardrail_ids, max_concurrent_runs, max_chain_generations, max_orchestration_run_depth, default_model_route_id, audit_reads_enabled, require_priced_model, default_conversation_retrieval, trace_content_retention_days, or trace_content_mode is required'
     );
   }
 
@@ -201,6 +192,7 @@ projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
     maxOrchestrationRunDepth,
     defaultModelRouteId,
     auditReadsEnabled,
+    requirePricedModel,
     defaultConversationRetrieval,
     traceContentRetentionDays,
     traceContentMode,

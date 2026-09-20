@@ -4697,6 +4697,21 @@ expect_cli_error_status 400 update-ai-provider-prices \
   --prices "[{\"model\":\"smoke-first-write-model\",\"component\":\"input_tokens\",\"unit\":\"token\",\"unit_price\":0.000012,\"effective_from\":\"2020-01-01T00:00:00.000Z\"}]"
 echo "First-write price effective immediately, back-dating refused: OK"
 
+# 34d-quinquies. require_priced_model — the project refuses a model no price
+# row covers, before the provider is called. The rows written above are
+# future-dated, so nothing the agent runs on is priced yet.
+echo "--- Verifying require_priced_model ---"
+$SOAT_CLI update-project --project-id "$PROJECT_PUBLIC_ID" --require_priced_model true > /dev/null
+expect_cli_error_status 409 create-agent-generation --wait true --agent-id "$AGENT_ID" \
+  --messages '[{"role":"user","content":"hello"}]'
+PRICED_MODEL_OFF=$($SOAT_CLI update-project --project-id "$PROJECT_PUBLIC_ID" --require_priced_model false)
+if [ "$(printf '%s\n' "$PRICED_MODEL_OFF" | jq -r '.require_priced_model')" != "false" ]; then
+  echo "ERROR: update-project did not clear require_priced_model" >&2
+  echo "$PRICED_MODEL_OFF" >&2
+  exit 1
+fi
+echo "Priced-model requirement refuses an unpriced model: OK"
+
 # 34d-ter. Model listing — the smoke stack's provider is `ollama`, whose model
 # list is whatever that host pulled rather than what the provider can run, so
 # the documented 400 is the correct end-to-end answer here. This still exercises

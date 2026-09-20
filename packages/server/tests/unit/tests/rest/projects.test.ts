@@ -565,6 +565,55 @@ describe('Projects', () => {
 
       expect(response.status).toBe(403);
     });
+
+    test('defaults to running unpriced models', async () => {
+      const res = await authenticatedTestClient(adminToken).get(
+        `/api/v1/projects/${projectId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.require_priced_model).toBe(false);
+    });
+
+    test('admin can set and clear require_priced_model', async () => {
+      const set = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/projects/${projectId}`)
+        .send({ require_priced_model: true });
+
+      expect(set.status).toBe(200);
+      expect(set.body.require_priced_model).toBe(true);
+
+      const getRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/projects/${projectId}`
+      );
+      expect(getRes.body.require_priced_model).toBe(true);
+
+      const cleared = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/projects/${projectId}`)
+        .send({ require_priced_model: false });
+
+      expect(cleared.status).toBe(200);
+      expect(cleared.body.require_priced_model).toBe(false);
+    });
+
+    test.each(['true', 1, null])(
+      'rejects require_priced_model %p with 400',
+      async (value) => {
+        const response = await authenticatedTestClient(adminToken)
+          .patch(`/api/v1/projects/${projectId}`)
+          .send({ require_priced_model: value });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      }
+    );
+
+    test('a non-admin cannot set require_priced_model', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/projects/${projectId}`)
+        .send({ require_priced_model: true });
+
+      expect(response.status).toBe(403);
+    });
   });
 
   describe('trace content lifecycle settings', () => {

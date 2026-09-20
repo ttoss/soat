@@ -153,7 +153,8 @@ paths:
         (`max_chain_generations`), its orchestration nesting bound
         (`max_orchestration_run_depth`), its inherited model route
         (`default_model_route_id`), its read-auditing opt-in
-        (`audit_reads_enabled`), its trace-content retention window
+        (`audit_reads_enabled`), its priced-model requirement
+        (`require_priced_model`), its trace-content retention window
         (`trace_content_retention_days`), and/or its zero-retention setting
         (`trace_content_mode`). At least one field is required. Requires admin
         role. Detaching a guardrail (removing an id) additionally requires
@@ -244,6 +245,17 @@ paths:
                     Opt the project into read auditing. When true, `GET`
                     requests that name this project are recorded in the audit
                     log alongside mutations. Defaults to `false`.
+                require_priced_model:
+                  type: boolean
+                  example: true
+                  description: >-
+                    Refuse a generation whose model carries no price row for
+                    every billable token component, with `409
+                    MODEL_NOT_PRICED`. Defaults to `false`, where an unpriced
+                    model runs and meters at `cost_usd: null`. The check runs
+                    before the provider is called, so a refused turn spends
+                    nothing, and covers every target of a model route the turn
+                    may fail over to.
                 default_conversation_retrieval:
                   type: string
                   enum: [embed, none]
@@ -492,6 +504,13 @@ components:
           description: >-
             Whether `GET` requests naming this project are recorded in the
             audit log. `false` by default — v1 audits mutations only.
+          example: false
+        require_priced_model:
+          type: boolean
+          description: >-
+            Whether a generation whose model carries no price row is refused
+            with `409 MODEL_NOT_PRICED`. `false` by default, where an unpriced
+            model runs and meters at `cost_usd: null`.
           example: false
         default_conversation_retrieval:
           type: string
