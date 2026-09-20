@@ -3,6 +3,21 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.55.0](https://github.com/ttoss/soat/compare/v0.54.0...v0.55.0) (2026-09-20)
+
+* feat(documents)!: reserve /.system/ for runtime-written files and make conversation embedding opt-in (#1369) ([2a9c9f3](https://github.com/ttoss/soat/commit/2a9c9f3852ab4d6c8b44be6f3adff8f66f3ed7f9)), closes [#1369](https://github.com/ttoss/soat/issues/1369) [#1366](https://github.com/ttoss/soat/issues/1366) [#1368](https://github.com/ttoss/soat/issues/1368)
+
+### BREAKING CHANGES
+
+* a bare knowledge query, an unfiltered GET /documents and an
+  unfiltered GET /files no longer return runtime-written rows; name a path prefix
+  under /.system/ to include them. Conversation turns are no longer embedded
+  unless the conversation or its project opts in. Trace objects move from
+  /traces/ to /.system/traces/. Rows written before this are not migrated: a
+  trace object already at /traces/ stays there and is still reached by
+  `file_id`, and a conversation message document written earlier keeps its null
+  path, so both keep appearing in an unfiltered listing.
+
 # [0.54.0](https://github.com/ttoss/soat/compare/v0.53.0...v0.54.0) (2026-09-18)
 
 ### Features
