@@ -18,7 +18,7 @@ import type {
 import { fuseCandidates } from './knowledgeRanking';
 import { hasPolicyConstraints, referencesAssociation } from './policyWhere';
 import { clampKnowledgeSearchLimit } from './requestBounds';
-import { applyTagFilter } from './tags';
+import { applyTagFilter, hasSystemTagFilter } from './tags';
 import { withIterativeVectorScan } from './vectorSearch';
 
 /**
@@ -432,6 +432,7 @@ export const resolveDocumentSearchLists = async (args: {
     projectIds,
     paths: config.paths,
     namesDocuments: (config.documentIds?.length ?? 0) > 0,
+    namesSystemTags: hasSystemTagFilter(config.tags),
   });
   const docWhere = buildDocWhere({
     documentIds: config.documentIds,

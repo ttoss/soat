@@ -114,6 +114,8 @@ describe('memory rule dispatch', () => {
     where?: ProjectScope;
     /** Omit the recorded messages, as a zero-retention project does. */
     withoutInputMessages?: boolean;
+    /** The conversation the turn ran in, as a conversation-backed one has. */
+    conversationPublicId?: string;
   }): Promise<string> => {
     const where = args.where ?? scope;
     seq += 1;
@@ -124,11 +126,17 @@ describe('memory rule dispatch', () => {
       projectId: where.internalProjectId,
       agentId: agent!.id,
     });
+    const conversation = args.conversationPublicId
+      ? await db.Conversation.findOne({
+          where: { publicId: args.conversationPublicId },
+        })
+      : null;
     await db.Generation.create({
       publicId,
       projectId: where.internalProjectId,
       agentId: agent!.id,
       traceId: trace.id,
+      conversationId: conversation ? conversation.id : null,
       status: 'completed',
       startedAt: new Date(),
       source: args.source ?? null,
@@ -613,6 +621,78 @@ describe('memory rule dispatch', () => {
       expect(String(handlerCall.messages[0].content)).toContain(
         'Your renewal is confirmed.'
       );
+    });
+  });
+
+  describe('a fact carries the conversation it was learned in', () => {
+    test('stamped with the conversation and its owner, handler keys dropped', async () => {
+      const where = await createProject('Provenance Project');
+      const storeId = await createStore('Provenance Store', where);
+      const sourceAgentId = await createAgent('ProvenanceAgent', where);
+      const handlerAgentId = await createAgent('ProvenanceHandler', where);
+      await createRule({
+        memory_store_id: storeId,
+        on: 'conversations.message.generated',
+        source_agent_ids: [sourceAgentId],
+        agent_id: handlerAgentId,
+      });
+
+      const actorRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/actors')
+        .send({ project_id: where.projectId, name: 'Provenance Owner' });
+      expect(actorRes.status).toBe(201);
+
+      const convRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/conversations')
+        .send({ project_id: where.projectId, actor_id: actorRes.body.id });
+      expect(convRes.status).toBe(201);
+      const messageRes = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/conversations/${convRes.body.id}/messages`)
+        .send({ role: 'assistant', message: 'Renewal confirmed.' });
+      expect(messageRes.status).toBe(201);
+
+      const generationId = await seedGeneration({
+        agentId: sourceAgentId,
+        userMessage: 'Did my renewal go through?',
+        where,
+        conversationPublicId: convRes.body.id,
+      });
+
+      // The handler proposes a reserved key alongside its own; only its own
+      // survives, because a handler is model-authored.
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: 'gen_provenance_handler',
+        traceId: 'trace_provenance_handler',
+        status: 'completed',
+        output: {
+          model: 'test-model',
+          content:
+            '{"facts":[{"content":"The renewal is confirmed","tags":{"topic":"billing","system.actor":"actor_impostor"}}]}',
+          finishReason: 'stop',
+        },
+      });
+
+      await dispatchMemoryRules({
+        type: 'conversations.message.generated',
+        projectId: where.internalProjectId,
+        projectPublicId: where.projectId,
+        resourceType: 'conversation_message',
+        resourceId: messageRes.body.document_id,
+        data: {
+          conversationId: convRes.body.id,
+          agentId: sourceAgentId,
+          generationId,
+        },
+        timestamp: new Date().toISOString(),
+      });
+
+      const memories = await listMemories(storeId);
+      expect(memories).toHaveLength(1);
+      expect(memories[0].tags).toEqual({
+        topic: 'billing',
+        'system.conversation': convRes.body.id,
+        'system.actor': actorRes.body.id,
+      });
     });
   });
 

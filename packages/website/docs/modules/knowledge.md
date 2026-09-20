@@ -100,6 +100,19 @@ Turns reach the vector channel only when their conversation's
 [`retrieval`](./conversations.md#retrieval) is `embed`; otherwise they are
 still matched by the full-text channel.
 
+Each turn is stamped with the conversation, its owner, the agent and the role
+([what a turn is stamped with](./conversations.md#what-a-turn-is-stamped-with)),
+so `tags` selects them without naming a path:
+
+| Question | Request |
+| --- | --- |
+| What did this customer say before? | `tags: { "system.actor": "actor_…" }` — turns and the facts distilled from them |
+| Earlier in this conversation, past the context window | `tags: { "system.conversation": "conv_…" }` |
+| Where did users mention refund delays? | `query` + `tags: { "system.role": "user" }` |
+
+A `system.*` key in `tags` reaches the reserved root on its own, so it composes
+with `query` without `document_paths`.
+
 ### Which stores a search reads
 
 `query` and `tags` name no store, so they reach **both**. The store-specific filters narrow *within* a store: `document_paths` and `document_ids` for documents, `memory_store_ids` for memories.

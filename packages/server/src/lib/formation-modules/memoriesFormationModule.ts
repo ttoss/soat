@@ -14,6 +14,7 @@ import {
   toNullableStringRecord,
   toOptionalString,
 } from '../resource-inputs/normalizers';
+import { assertNoSystemTagKeys } from '../tags';
 import { defineFormationModule } from './defineFormationModule';
 import { isObjectRecord } from './formationSpecLoader';
 
@@ -42,7 +43,8 @@ export const memoriesFormationModule = defineFormationModule({
       sourceType: toOptionalString(properties.source_type) as
         MemorySource | undefined,
       sourceId: toOptionalString(properties.source_id) ?? null,
-      tags: toNullableStringRecord(properties.tags) ?? null,
+      tags:
+        assertNoSystemTagKeys(toNullableStringRecord(properties.tags)) ?? null,
       metadata: isObjectRecord(properties.metadata)
         ? properties.metadata
         : null,
@@ -73,7 +75,8 @@ export const memoriesFormationModule = defineFormationModule({
       tags:
         properties.tags === undefined
           ? undefined
-          : (toNullableStringRecord(properties.tags) ?? null),
+          : (assertNoSystemTagKeys(toNullableStringRecord(properties.tags)) ??
+            null),
       metadata:
         properties.metadata === undefined
           ? undefined

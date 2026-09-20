@@ -152,6 +152,11 @@ export const ERROR_CODES = {
     description:
       'The project has one or more dependent resources (agents, ai providers, tools, etc.) and cannot be deleted. Use force=true to delete dependents as well.',
   },
+  RESERVED_TAG_KEY: {
+    httpStatus: 400,
+    description:
+      "The tag key is reserved: keys starting with 'system.' are written by the platform to record which conversation, actor, agent and role a row came from, and cannot be set by a caller.",
+  },
   RESERVED_PATH: {
     httpStatus: 400,
     description:

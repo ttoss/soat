@@ -4,6 +4,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { readGeneratedMessageContent } from './conversationMessages';
+import { conversationProvenanceTags } from './conversationSystemTags';
 import type { SoatEvent } from './eventBus';
 import { onEvent, recordDroppedEvent } from './eventBus';
 import { updateGenerationRecord } from './generations';
@@ -16,6 +17,7 @@ import {
 } from './memoryRuleHandlers';
 import { findHandlerAgentIds, findMemoryRulesForEvent } from './memoryRules';
 import { isPlainObject } from './plainObject';
+import { stripSystemTagKeys } from './tags';
 
 const log = createDebug('soat:memoryRules');
 
@@ -134,6 +136,12 @@ const writeCandidates = async (args: {
 }): Promise<RuleFiringSummary> => {
   const summary = emptySummary(args.facts.length);
   const memoryStoreId = args.rule.memoryStoreId;
+  // Stamped once for the firing, not per fact: a fact learned in an actor's
+  // conversation answers to the same `system.actor` filter its raw turns do,
+  // so one request returns both.
+  const provenance = await conversationProvenanceTags({
+    conversationPublicId: args.turn.conversationPublicId,
+  });
 
   for (const fact of args.facts) {
     try {
@@ -141,7 +149,9 @@ const writeCandidates = async (args: {
       const result = await writeMemory({
         memoryStoreId,
         content: fact.content,
-        tags: fact.tags ?? null,
+        // A handler is model-authored, so a `system.*` key it proposed is
+        // dropped rather than trusted; the runtime's own stamp wins.
+        tags: { ...stripSystemTagKeys(fact.tags ?? {}), ...provenance },
         sourceConversationPublicId: args.turn.conversationPublicId,
         // No thresholds: the rule door always uses the store's effective pair.
         assertion: {

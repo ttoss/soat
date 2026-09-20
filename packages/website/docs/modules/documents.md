@@ -79,7 +79,11 @@ It is read-only: `PATCH`, a path move and a tag write are refused with
 it as normal, but a list or a [knowledge search](./knowledge.md) leaves it out
 unless the request names a directory inside the root.
 
-Writing your own document under `/.system/` is refused with the same code.
+Writing your own document under `/.system/` is refused with the same code, and
+so is any tag key starting with `system.` — those record which conversation,
+actor, agent and role a row came from, and are the platform's to write
+(`400 RESERVED_TAG_KEY`). See
+[what a turn is stamped with](./conversations.md#what-a-turn-is-stamped-with).
 
 ### Listing a Directory
 

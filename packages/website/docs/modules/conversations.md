@@ -93,6 +93,42 @@ Either way a message document is the runtime's: it is read-only through the
 document API, and an unfiltered document list or a bare knowledge query leaves
 it out unless the request names `/.system/conversations/`.
 
+### What a turn is stamped with
+
+Every message [document](./documents.md) carries the provenance of the turn in
+its tags, written by the platform:
+
+| Key | Value |
+| --- | --- |
+| `system.conversation` | This conversation's id |
+| `system.actor` | The conversation's **owner** (`actor_id`), absent when it has none |
+| `system.agent` | The [agent](./agents.md) that generated the message, absent on a user turn |
+| `system.role` | `user` or `assistant` |
+
+`system.actor` is the owner rather than the message's author, because the owner
+is stable for the whole conversation and is what an isolation rule names;
+per-message authorship stays on the message's own `actor_id`.
+
+These keys are read-only. A write naming any key starting with `system.` — on a
+create, a tag sub-endpoint or a [formation](./formations.md) template — is
+refused with `400 RESERVED_TAG_KEY`: a caller who could set `system.actor`
+could make their own rows answer to another actor's filter.
+
+They are ordinary tags otherwise, so one filter selects an actor's turns:
+
+```json
+{ "query": "refund policy", "tags": { "system.actor": "actor_V1StGXR8Z5jdHi6B" } }
+```
+
+Naming a `system.*` key is also what reaches
+[the reserved root](./files.md#the-reserved-system-root), so the filter needs no
+`document_paths` beside it. A [memory](./memories.md) a
+[memory rule](./memories.md#memory-rules) extracted from a conversation carries
+the same `system.conversation` and `system.actor`, so that one filter returns
+the actor's raw turns and the facts distilled from them together. To fence one
+actor's turns from another, put the same key in an IAM condition — see
+[IAM — Tags](iam.md#tags).
+
 ### Tags
 
 Key-value string pairs managed via the tag sub-endpoints and matched by `soat:ResourceTag/<key>`. [`GET /api/v1/conversations`](/docs/api/conversations/list-conversations) filters by pair with `?tags=key:value` (repeatable, all must match). See [IAM — Tags](iam.md#tags).

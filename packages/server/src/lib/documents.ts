@@ -25,7 +25,7 @@ import { registerResourceFieldMap } from './policyCompiler';
 import { hasPolicyConstraints, referencesAssociation } from './policyWhere';
 import type { SoatEventTypeFor } from './soatEvents';
 import { nonSystemPathWhere } from './systemPathScope';
-import { applyTagFilter, mergeTags } from './tags';
+import { applyTagFilter, hasSystemTagFilter, mergeTags } from './tags';
 
 export {
   enqueueDocumentIngestion,
@@ -102,7 +102,7 @@ const buildDocumentQueryOptions = (args: {
   if (args.projectIds !== undefined) file.projectId = args.projectIds;
   if (args.pathPrefix !== undefined) {
     file.path = { [Op.like]: pathPrefixPattern(args.pathPrefix) };
-  } else {
+  } else if (!hasSystemTagFilter(args.tags)) {
     Object.assign(file, nonSystemPathWhere());
   }
   const fileWhere = Reflect.ownKeys(file).length > 0 ? file : undefined;

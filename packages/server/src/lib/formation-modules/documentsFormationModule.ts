@@ -12,6 +12,7 @@ import {
   toNullableObject,
   toOptionalString,
 } from '../resource-inputs/normalizers';
+import { assertNoSystemTagKeys } from '../tags';
 import { defineFormationModule } from './defineFormationModule';
 
 const CHUNK_STRATEGIES: readonly ChunkStrategy[] = ['page', 'whole', 'size'];
@@ -47,8 +48,10 @@ export const documentsFormationModule = defineFormationModule({
       title: toOptionalString(properties.title) ?? undefined,
       metadata: (toNullableObject(properties.metadata) ?? undefined) as
         Record<string, unknown> | undefined,
-      tags: (toNullableObject(properties.tags) ?? undefined) as
-        Record<string, string> | undefined,
+      tags: assertNoSystemTagKeys(
+        (toNullableObject(properties.tags) ?? undefined) as
+          Record<string, string> | undefined
+      ),
       chunkStrategy: toChunkStrategy(properties.chunk_strategy),
       chunkSize: toNullableNumber(properties.chunk_size) ?? undefined,
       chunkOverlap: toNullableNumber(properties.chunk_overlap) ?? undefined,
@@ -66,8 +69,10 @@ export const documentsFormationModule = defineFormationModule({
       title: toOptionalString(properties.title) ?? undefined,
       metadata: (toNullableObject(properties.metadata) ?? undefined) as
         Record<string, unknown> | undefined,
-      tags: (toNullableObject(properties.tags) ?? undefined) as
-        Record<string, string> | undefined,
+      tags: assertNoSystemTagKeys(
+        (toNullableObject(properties.tags) ?? undefined) as
+          Record<string, string> | undefined
+      ),
       chunkStrategy: toChunkStrategy(properties.chunk_strategy),
       chunkSize: toNullableNumber(properties.chunk_size) ?? undefined,
       chunkOverlap: toNullableNumber(properties.chunk_overlap) ?? undefined,

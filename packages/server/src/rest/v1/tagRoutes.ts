@@ -1,7 +1,7 @@
 import type { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
-import { isStringRecord } from 'src/lib/tags';
+import { assertNoSystemTagKeys, isStringRecord } from 'src/lib/tags';
 
 import { type AuthenticatedContext, requireAuth } from './helpers';
 
@@ -53,7 +53,11 @@ export const registerTagRoutes = <TResource>(args: {
           'tags must be an object of string values'
         );
       }
-      ctx.body = await args.writeTags({ resource, tags: body, merge });
+      ctx.body = await args.writeTags({
+        resource,
+        tags: assertNoSystemTagKeys(body),
+        merge,
+      });
     };
   };
 
