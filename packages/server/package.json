@@ -21,7 +21,6 @@
   "license": "Apache-2.0",
   "main": "dist/server.mjs",
   "scripts": {
-    "backfill-system-paths": "tsx scripts/backfillSystemPaths.ts",
     "build": "tsdown",
     "db-dev:logs": "docker compose -f docker-compose.db.yml logs -f",
     "db-dev:rm": "docker compose -f docker-compose.db.yml down -v",
