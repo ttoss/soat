@@ -47,6 +47,7 @@ type DriverHarness = {
   newRunId: () => Promise<number>;
   now: () => Date;
   claim: (limit: number) => Promise<ClaimedTask[]>;
+  extendLease: (task: ClaimedTask) => Promise<void>;
   advance: (ms: number) => void;
   reset: () => Promise<void>;
 };
@@ -116,6 +117,12 @@ describe('Orchestration queue driver conformance', () => {
           now: new Date(Date.now() + postgresOffsetMs),
         });
       },
+      extendLease: (task) => {
+        return postgresQueueDriver.extendLease({
+          task,
+          now: new Date(Date.now() + postgresOffsetMs),
+        });
+      },
       advance: (ms) => {
         postgresOffsetMs += ms;
       },
@@ -144,6 +151,9 @@ describe('Orchestration queue driver conformance', () => {
       },
       claim: (limit) => {
         return sqsDriver.claim({ limit });
+      },
+      extendLease: (task) => {
+        return sqsDriver.extendLease({ task });
       },
       advance: (ms) => {
         fakeSqs.advance(ms);
@@ -225,6 +235,21 @@ describe('Orchestration queue driver conformance', () => {
       expect(redelivered.orchestrationRunId).toBe(orchestrationRunId);
       expect(redelivered.kind).toBe('wake');
       expect(redelivered.attempts).toBe(2);
+    });
+
+    // A drive that outlives one lease must not have its task handed to a second
+    // worker: the two would drive the same run at once, and every side effect
+    // the run issues — a billed generation among them — happens twice.
+    test('an extended lease holds a task past its original expiry', async () => {
+      const orchestrationRunId = await h().newRunId();
+      await h().driver.enqueue({ orchestrationRunId, kind: 'continue' });
+
+      const [task] = await h().claim(10);
+      h().advance(LEASE_TTL_MS / 2);
+      await h().extendLease(task);
+      h().advance(LEASE_TTL_MS * 0.75);
+
+      expect(await h().claim(10)).toHaveLength(0);
     });
 
     test('an acked task is never delivered again', async () => {

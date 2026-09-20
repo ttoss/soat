@@ -41,6 +41,13 @@ export class OrchestrationNodeExecution extends Model {
   @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 1 })
   declare attempt: number;
 
+  // Every dispatch of this attempt, including the first. A redelivered task
+  // that takes over a `running` row re-runs the node's side effect under the
+  // same key and the same `attempt`, so a count above 1 is work the run issued
+  // — and paid for — more than once.
+  @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 1 })
+  declare dispatches: number;
+
   // `{run}:{node}:{attempt}`, where `attempt` is the node retry attempt, NOT
   // the queue delivery counter. Written `running` before a side-effecting node
   // dispatches, so a redelivered task finding a `completed` row reuses its

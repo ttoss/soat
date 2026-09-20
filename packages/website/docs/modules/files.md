@@ -87,7 +87,11 @@ Every module that saves a file or document on your behalf files it under
 
 The root is yours to read and not to write. A `POST`, a path move or a tag write
 that lands under it is refused with `400 RESERVED_PATH`, so the marker cannot be
-edited off a row; the owning module deletes what it wrote.
+edited off a row; the owning module deletes what it wrote — deleting a
+conversation deletes its turn documents, and so on.
+
+Deleting is the one write that is yours: `DELETE` on a document or file inside
+the root is served, so a row whose owner is gone can still be cleared.
 
 A list leaves the root out unless you ask for it: [`GET /api/v1/files`](/docs/api/files/list-files)
 and [`GET /api/v1/documents`](/docs/api/documents/list-documents) return

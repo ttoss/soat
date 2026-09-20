@@ -21,6 +21,10 @@ import {
 } from 'src/lib/orchestrationQueueMetrics';
 import { getPostgresQueueStats } from 'src/lib/orchestrationQueueStats';
 import {
+  leaseHeartbeatMs,
+  withTaskLeaseHeld,
+} from 'src/lib/orchestrationTaskLease';
+import {
   drainQueueOnce,
   effectiveClaimLimit,
   handleRunTask,
@@ -459,6 +463,35 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       expect(execs).toHaveLength(1);
       expect(execs[0].status).toBe('completed');
       expect(execs[0].idempotencyKey).toBe(key);
+      // The side effect ran twice under one key — one row and one `attempt`
+      // would otherwise report a run that dispatched once.
+      expect(execs[0].dispatches).toBe(2);
+    });
+
+    test('a node dispatched once reports one dispatch', async () => {
+      const toolId = await createEchoTool();
+      const orchPk = await orchPkOf(
+        await createOrchestration({
+          name: 'Single Dispatch Count',
+          nodes: [{ id: 'call', type: 'tool', tool_id: toolId }],
+          edges: [],
+        })
+      );
+      const run = await createRunRow(orchPk);
+
+      await executeAndRecordNode({
+        nodeId: 'call',
+        runRecord: run,
+        nodes: [{ id: 'call', type: 'tool' as const, toolId }],
+        state: {},
+        projectIds: [projectPk],
+        traceId: null,
+      });
+
+      const exec = await db.OrchestrationNodeExecution.findOne({
+        where: { orchestrationRunId: run.id as number, nodeId: 'call' },
+      });
+      expect(exec?.dispatches).toBe(1);
     });
   });
 
@@ -582,6 +615,120 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
         where: { orchestrationRunId: runPk },
       });
       expect(remaining).toHaveLength(0);
+    });
+  });
+
+  describe('a drive that outlives its lease', () => {
+    test('the lease is heartbeaten while the drive runs, so the task is not redelivered', async () => {
+      const started = await startOrchestrationRun({
+        orchestrationPublicId: await createOrchestration({
+          name: 'Lease Heartbeat',
+          nodes: [{ id: 'start', type: 'transform', expression: 'done' }],
+          edges: [],
+        }),
+        projectId: projectPk,
+        projectIds: [projectPk],
+        input: {},
+      });
+      const runPk = (
+        await db.OrchestrationRun.findOne({ where: { publicId: started.id } })
+      )?.id as number;
+
+      const [task] = await postgresQueueDriver.claim({ limit: 10 });
+      const taskPk = Number(task.handle);
+      const claimedLease = (
+        await db.OrchestrationRunTask.findByPk(taskPk)
+      )?.leaseExpiresAt?.getTime() as number;
+
+      let release = (): void => {};
+      const driving = new Promise<string>((resolve) => {
+        release = () => {
+          return resolve('driven');
+        };
+      });
+
+      const held = withTaskLeaseHeld({
+        task,
+        intervalMs: 5,
+        run: () => {
+          return driving;
+        },
+      });
+
+      // Bounded poll on the side effect the heartbeat has: the row's lease
+      // moving forward while the drive is still running.
+      let extendedLease = claimedLease;
+      for (let attempt = 0; attempt < 100 && extendedLease <= claimedLease;) {
+        const row = await db.OrchestrationRunTask.findByPk(taskPk);
+        extendedLease = row?.leaseExpiresAt?.getTime() ?? claimedLease;
+        attempt += 1;
+      }
+      expect(extendedLease).toBeGreaterThan(claimedLease);
+
+      // The lease it now holds runs past the one it was claimed under, so a
+      // claim taken at the original expiry finds nothing.
+      const claimAtOriginalExpiry = await postgresQueueDriver.claim({
+        limit: 10,
+        now: new Date(claimedLease),
+      });
+      expect(
+        claimAtOriginalExpiry.some((t) => {
+          return Number(t.handle) === taskPk;
+        })
+      ).toBe(false);
+
+      release();
+      expect(await held).toBe('driven');
+
+      await postgresQueueDriver.ack({ task });
+      await db.OrchestrationRun.destroy({ where: { id: runPk } });
+    });
+
+    // Sanctioned spy: the only way to drive the heartbeat's `.catch()` is to
+    // make the lease write fail, and the drive itself still runs for real.
+    test('a failed heartbeat does not fail the drive', async () => {
+      const task = {
+        id: 'task_heartbeat_failure',
+        handle: '0',
+        orchestrationRunId: 0,
+        kind: 'continue' as const,
+        attempts: 1,
+      };
+
+      let release = (): void => {};
+      const driving = new Promise<string>((resolve) => {
+        release = () => {
+          return resolve('driven');
+        };
+      });
+
+      const beaten = new Promise<void>((resolve) => {
+        jest
+          .spyOn(postgresQueueDriver, 'extendLease')
+          .mockImplementation(() => {
+            resolve();
+            return Promise.reject(new Error('lease write failed'));
+          });
+      });
+
+      try {
+        const held = withTaskLeaseHeld({
+          task,
+          intervalMs: 5,
+          run: () => {
+            return driving;
+          },
+        });
+        await beaten;
+        release();
+        expect(await held).toBe('driven');
+      } finally {
+        jest.restoreAllMocks();
+      }
+    });
+
+    test('the heartbeat interval leaves room for a lost beat', () => {
+      expect(leaseHeartbeatMs()).toBeLessThan(60_000 / 2);
     });
   });
 

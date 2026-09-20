@@ -53,6 +53,8 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'The MCP server answered the call with a failure rather than a result — `meta.mcp_tool` names the tool and `meta.mcp_url` the server. The message carries what the server said; fix the arguments or the server-side condition it names, then retry. The call reached the server, so this is not a connectivity or allowlist problem.',
   AI_PROVIDER_ERROR:
     'The upstream model provider failed, not this server. Check the provider credential and the account behind it (credits, rate limits, model access), then retry with backoff.',
+  OUTPUT_SCHEMA_VALIDATION_FAILED:
+    'The model answered and the answer does not satisfy `output_schema` — the violated field is named in the message. Retrying the same request bills a second call to reach the same answer; loosen the schema, or make the instructions name the shape the model keeps missing.',
   AI_PROVIDER_MISCONFIGURED:
     "The provider record is missing something it needs to make a call — usually the API key secret or the base URL. A `bedrock` or `vertex` record linking no credential is this too: it would sign with the deployment's own, which only an operator may allow. Update the AI provider and retry.",
   EMBEDDING_NOT_CONFIGURED:

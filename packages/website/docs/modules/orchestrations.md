@@ -87,6 +87,7 @@ One entry per node execution, in chronological order.
 | `node_id`      | string         | ID of the executed node                                  |
 | `node_type`    | string \| null | Node type (`agent`, `transform`, …)                      |
 | `attempt`      | integer        | 1-based attempt number (a retried node yields one record per attempt) |
+| `dispatches`   | integer        | How many times this attempt was dispatched, including the first — above 1 means a redelivered task re-ran the node, and the run paid for the work twice |
 | `status`       | string         | `running` \| `completed` \| `failed` \| `requires_action` \| `skipped` (`running` is the transient pre-completion state of a side-effecting node) |
 | `input`        | object \| null | Resolved `input_mapping` the node received               |
 | `output`       | object \| null | Output artifact the node produced (`null` when failed)   |
@@ -123,7 +124,7 @@ Every completed node produces an **artifact**: what `state_mapping` reads as `ou
 
 | Type | Artifact |
 | ---- | -------- |
-| `agent` | `{ content }`. With an `output_schema`, the artifact becomes **that object** instead — see [Agent node output_schema](#agent-node-output_schema). |
+| `agent` | `{ content, object }` — the text response, and the parsed value when a schema applied (`null` otherwise). See [Agent node output_schema](#agent-node-output_schema). |
 | `tool` | **The tool's result object itself**, not a wrapper — a tool returning `{"status":"ok"}` yields `{"status":"ok"}`, read as `{"var": "output.status"}`. Only a **non-object** result (string, number) is wrapped as `{ result }`. A guardrail-blocked call yields `{ status: "blocked", reason }` instead — see [Guardrail interception](#guardrail-interception-on-tool-nodes). |
 | `transform` | `{ result }` — the evaluated `expression`. |
 | `condition` | No artifact; the node emits a branch label. Its namespace entry is `{ label }`, read as `{"var": "nodes.<id>.label"}`. |
@@ -140,7 +141,11 @@ On a `tool` node returning a JSON object, `{"var": "output.result"}` resolves to
 
 #### Agent node `output_schema`
 
-With an `output_schema`, an `agent` node's artifact resolves in order: (1) the provider's structured output, when the agent's own `output_schema` reaches it as a generation-time constraint ([Agents](./agents.md)); (2) the raw text parsed as JSON after stripping one markdown code fence; (3) `{ content }`, the node still completing. A mismatch never fails the run (a `soat:orchestrations` debug log records the parse failure). It is a parsing aid, not a validation gate: a parsed object is accepted whether or not it satisfies the schema, and a node-level `output_schema` differing from the agent's is not forwarded to the model.
+An `agent` node's artifact has the same two keys either way, so `{"var": "output.content"}` reads a node whether or not a schema is in play and `{"var": "output.object.<field>"}` reads the structured answer.
+
+`object` is filled from the provider's structured output whenever there is one — the [agent's own `output_schema`](./agents.md) produces it wherever that agent generates, and the node needs to declare nothing. Declaring `output_schema` on the node covers the agent that carries none: the raw text is then parsed as JSON, after stripping one markdown code fence, and `object` is `null` when it does not parse (a `soat:orchestrations` debug log records why). A node declaring no schema never re-reads the text, so prose that happens to be JSON stays prose.
+
+A mismatch never fails the run. The node-level schema is a parsing aid, not a validation gate: a parsed object is accepted whether or not it satisfies the schema, and one differing from the agent's is not forwarded to the model.
 
 > **Tip:** a `state_mapping` that writes `null` usually read a field the artifact lacks; every artifact is visible under `state.nodes.<id>` in `get-orchestration-run`.
 
@@ -225,7 +230,7 @@ The event carries `resource_type: "orchestration_run"` and the run's id as `reso
 
 Any node can declare `retry`. On a **transient** error with attempts left, the run parks as `sleeping` and re-executes the node after a backoff on the scheduler (survives a restart, holds no worker). Absent, or `max_attempts <= 1`, is fail-fast.
 
-Retriable: infrastructure errors (network, timeouts, provider SDK throws) and upstream `5xx`. Terminal: `4xx` business errors (validation, not found, conflict), which fail the run at once without consuming attempts. Each attempt writes its own `node_executions` record with an incrementing `attempt`.
+Retriable: infrastructure errors (network, timeouts, provider SDK throws) and upstream `5xx`. Terminal: `4xx` business errors (validation, not found, conflict), which fail the run at once without consuming attempts — and `OUTPUT_SCHEMA_VALIDATION_FAILED`, whose `502` says the model answered, not that the provider is down: the same answer fails the same schema on a retry. Each attempt writes its own `node_executions` record with an incrementing `attempt`.
 
 | Field | Type | Description |
 | --- | --- | --- |
@@ -266,7 +271,7 @@ Runs execute in a **queue-backed durable worker**, detached from the starting re
 
 Nested `loop` / `sub_orchestration` children inherit the parent's identity; a [workflow](./workflows.md)-dispatched agent gets the same, keyed to the task.
 
-**Queue driver.** `enqueue` / `claim` / `ack` / `retry`, selected with `ORCHESTRATION_QUEUE_DRIVER`. Both drivers are at-least-once with lease-based redelivery:
+**Queue driver.** `enqueue` / `claim` / `ack` / `extend_lease` / `retry`, selected with `ORCHESTRATION_QUEUE_DRIVER`. Both drivers are at-least-once with lease-based redelivery:
 
 | | `postgres` (default) | `sqs` |
 | --- | --- | --- |
@@ -275,6 +280,8 @@ Nested `loop` / `sub_orchestration` children inherit the parent's identity; a [w
 | `oldest_queued_age_seconds`, `per_project` stats | reported | `null` / empty |
 
 Postgres needs no extra infrastructure. A backoff longer than SQS's 15-minute maximum delay becomes 15 minutes; the persisted `wake_at` still decides whether there is work. An unrecognized `ORCHESTRATION_QUEUE_DRIVER`, or `sqs` without a queue URL, fails with `QUEUE_DRIVER_MISCONFIGURED` (no fallback to Postgres).
+
+A worker holds the lease for as long as its drive takes, re-arming it every third of `ORCHESTRATION_TASK_LEASE_TTL_MS`, so a node slower than one lease is not handed to a second worker. Redelivery is reserved for a worker that stopped; when one does, `dispatches` on the node's execution record counts the side effects the run issued twice.
 
 **Separate worker process.** `node dist/worker.js` runs only the scheduler tick + worker loop (no HTTP listener); set `ORCHESTRATION_WORKER_DISABLED=true` on the request-only API tier. On `SIGTERM`/`SIGINT` it stops claiming, finishes claimed tasks and leaves the rest un-acked for redelivery. It writes a heartbeat file after every **successful** claim (`ORCHESTRATION_WORKER_HEARTBEAT_FILE`); `workerHealthcheck.mjs` exits `0` only while that file is younger than `ORCHESTRATION_WORKER_HEARTBEAT_STALE_MS`.
 
@@ -528,7 +535,7 @@ Usage is metered as each generation settles: read the roll-up from `get-orchestr
 
 ### Reaching an agent node's generation
 
-An `agent` node's `node_executions` artifact is the final answer (`{ content }`, or the parsed object with an `output_schema`); reasoning, tool calls and token usage live on the [generation](./generations.md), which is stamped with `orchestration_run_id`, `node_id` and `node_attempt`. Filter the generations list:
+An `agent` node's `node_executions` artifact is the final answer (`{ content, object }`); reasoning, tool calls and token usage live on the [generation](./generations.md), which is stamped with `orchestration_run_id`, `node_id` and `node_attempt`. Filter the generations list:
 
 ```bash
 # every generation this run's agent nodes produced
@@ -666,7 +673,7 @@ Listing orchestrations and runs stays project-scoped: [`GET /api/v1/orchestratio
 | `ORCHESTRATION_SCHEDULER_INTERVAL_MS` | No | Scheduler tick interval in ms (default `5000`). |
 | `ORCHESTRATION_RUN_LEASE_TTL_MS` | No | How long a `running` run's lease is valid before the reaper may reclaim it, in ms (default `600000`). Must exceed the longest single round of node execution. |
 | `ORCHESTRATION_WORKER_INTERVAL_MS` | No | Worker loop tick interval in ms (default `5000`). |
-| `ORCHESTRATION_TASK_LEASE_TTL_MS` | No | How long a claimed queue task's lease is valid before it may be redelivered, in ms (default `60000`). |
+| `ORCHESTRATION_TASK_LEASE_TTL_MS` | No | How long a claimed queue task's lease is valid before it may be redelivered, in ms (default `60000`). A worker re-arms it every third of this while it drives, so the figure bounds how long a stopped worker's task waits, not how long a node may take. |
 | `ORCHESTRATION_WORKER_DISABLED` | No | Set to `true` to keep the API process request-only, leaving the queue to a dedicated worker. |
 | `ORCHESTRATION_WORKER_BATCH` | No | Maximum tasks a worker claims per tick (default `10`). |
 | `ORCHESTRATION_WORKER_CONCURRENCY` | No | Global cap on simultaneously claimed, unacked tasks per worker process (unset = no cap). See [Concurrency limits](#concurrency-limits). |

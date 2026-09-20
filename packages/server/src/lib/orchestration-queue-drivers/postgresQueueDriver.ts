@@ -2,6 +2,7 @@ import {
   ackRunTask,
   claimRunTasks,
   enqueueRunTask,
+  extendRunTaskLease,
   retryRunTask,
   type RunTaskInstance,
 } from '../orchestrationQueue';
@@ -50,6 +51,13 @@ export const postgresQueueDriver: OrchestrationQueueDriver = {
 
   ack: async (args) => {
     await ackRunTask({ id: Number(args.task.handle) });
+  },
+
+  extendLease: async (args) => {
+    await extendRunTaskLease({
+      id: Number(args.task.handle),
+      now: args.now,
+    });
   },
 
   retry: async (args) => {

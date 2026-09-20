@@ -225,6 +225,25 @@ const sqsAck = async (ctx: SqsContext, task: ClaimedTask): Promise<void> => {
   );
 };
 
+/**
+ * Re-arms the message's visibility timeout to a full lease, which is what SQS
+ * calls a heartbeat: the drive is still running, so the delivery must not
+ * become visible to another worker.
+ */
+const sqsExtendLease = async (
+  ctx: SqsContext,
+  task: ClaimedTask
+): Promise<void> => {
+  log('sqs.extendLease: id=%s', task.id);
+  await ctx.client().send(
+    new ChangeMessageVisibilityCommand({
+      QueueUrl: ctx.queueUrl(),
+      ReceiptHandle: task.handle,
+      VisibilityTimeout: Math.max(1, Math.ceil(taskLeaseTtlMs() / 1000)),
+    })
+  );
+};
+
 const sqsRetry = async (
   ctx: SqsContext,
   args: { task: ClaimedTask; availableAt: Date }
@@ -278,6 +297,7 @@ const sqsStats = async (
  * | `enqueue`       | `SendMessage` (`DelaySeconds` for a future `availableAt`)  |
  * | `claim`         | `ReceiveMessage` — the visibility timeout **is** the lease |
  * | `ack`           | `DeleteMessage`                                           |
+ * | `extendLease`   | `ChangeMessageVisibility` (a fresh full lease)            |
  * | `retry`         | `ChangeMessageVisibility` (the backoff delay)             |
  * | `failed`        | the queue's redrive policy → dead-letter queue            |
  *
@@ -317,6 +337,9 @@ export const createSqsQueueDriver = (args?: {
     },
     ack: (ackArgs) => {
       return sqsAck(ctx, ackArgs.task);
+    },
+    extendLease: (extendArgs) => {
+      return sqsExtendLease(ctx, extendArgs.task);
     },
     retry: (retryArgs) => {
       return sqsRetry(ctx, retryArgs);

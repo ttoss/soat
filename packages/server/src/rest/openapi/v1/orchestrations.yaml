@@ -952,9 +952,18 @@ components:
             `{ "summary": {"var": "output.content"} }` writes the artifact's
             `content` field to `state.summary`. The same evaluator as
             input_mapping/transform/condition; only the context differs.
+            An `agent` node's artifact always carries both `content` (the text
+            response) and `object` (the parsed value when a schema applied,
+            `null` otherwise), so `output.content` reads the same whether or
+            not the node declares an `output_schema`.
         output_schema:
           type: object
-          description: For agent nodes — JSON Schema for structured output parsing.
+          description: >
+            For agent nodes — JSON Schema the model's answer is parsed into,
+            reaching the artifact as `object`. Declaring it here is only needed
+            for an agent that carries no `output_schema` of its own: the
+            agent's schema already produces the artifact's `object` wherever
+            that agent generates.
         collection:
           type: string
           description: For loop nodes — state path to the collection to iterate over.
@@ -1505,6 +1514,7 @@ components:
       required:
         - node_id
         - attempt
+        - dispatches
         - status
         - created_at
       properties:
@@ -1520,6 +1530,13 @@ components:
           description: >
             1-based attempt number. A node with a retry policy produces one
             record per attempt (failed attempts followed by a final record).
+        dispatches:
+          type: integer
+          description: >
+            How many times this attempt was dispatched, including the first.
+            A worker that stops mid-node leaves its task to be redelivered, and
+            the redelivery re-runs the node under this same record — so a count
+            above 1 is work the run issued, and was billed for, more than once.
         status:
           type: string
           enum: [running, completed, failed, requires_action, skipped]

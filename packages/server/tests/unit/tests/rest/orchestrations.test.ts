@@ -2334,7 +2334,10 @@ describe('Orchestrations', () => {
             return e.node_id === 'ask';
           }
         );
-        expect(nodeExec.output).toEqual({ city: 'Paris' });
+        expect(nodeExec.output).toEqual({
+          content: '```json\n{"city": "Paris"}\n```',
+          object: { city: 'Paris' },
+        });
       } finally {
         generationSpy.mockRestore();
       }

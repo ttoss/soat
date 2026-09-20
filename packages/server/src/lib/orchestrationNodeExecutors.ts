@@ -77,12 +77,12 @@ export const applyStateMapping = (
  * Fallback for when the AI SDK's own structured output is unavailable: parses
  * `content` itself, stripping a markdown code fence first — the shape a model
  * commonly wraps JSON in even when told to return it bare, which a plain
- * `JSON.parse` rejects outright. A parse failure is logged rather
- * than silently reverting to `{ content }` with no signal, though the
- * artifact still degrades to `{ content }` so a run never fails on account of
- * the model's prose not being JSON.
+ * `JSON.parse` rejects outright. A parse failure is logged and read as `null`,
+ * so a run never fails on account of the model's prose not being JSON.
  */
-const parseAgentOutputContent = (content: string): Record<string, unknown> => {
+const parseAgentOutputContent = (
+  content: string
+): Record<string, unknown> | null => {
   try {
     const parsed: unknown = JSON.parse(stripMarkdownJsonFence(content));
     if (isPlainObject(parsed)) return parsed;
@@ -96,38 +96,39 @@ const parseAgentOutputContent = (content: string): Record<string, unknown> => {
       error instanceof Error ? error.message : String(error)
     );
   }
-  return { content };
+  return null;
 };
 
 /**
- * Builds an `agent` node's artifact. Without an `output_schema` the artifact
- * is always `{ content }` — the model's raw text response.
+ * Builds an `agent` node's artifact, which always has the same two keys:
+ * `content` is the model's text response and `object` the parsed value when a
+ * schema applied, `null` otherwise. One shape means one `state_mapping` reads
+ * a node whether or not a schema is in play, and `output.content` never stops
+ * resolving because a schema was added.
  *
- * With an `output_schema` configured, prefer the AI SDK's own structured
- * output (`generation.output.object`, produced by `buildStructuredOutput` at
- * generation time) — when the provider honors it, this is already a parsed,
- * schema-validated object and needs no further work. Only when that is
- * absent (a provider/model that ignores structured-output mode) does this
- * fall back to {@link parseAgentOutputContent}.
+ * `generation.output.object` is preferred wherever it exists: whichever schema
+ * asked for it — the agent's own or the node's — `buildStructuredOutput`
+ * already parsed and validated it at generation time. Only a node that
+ * declares a schema and got no object back (a provider/model that ignores
+ * structured-output mode) re-reads the text through
+ * {@link parseAgentOutputContent}; a node that declares none never does, since
+ * prose that happens to be JSON is not an answer anyone asked for.
  */
 const parseAgentOutput = (
   output: { content: unknown; object?: unknown } | undefined,
   outputSchema: object | undefined
 ): Record<string, unknown> => {
-  const content = output?.content;
-  if (!outputSchema) {
-    return { content: content ?? null };
-  }
+  const content = output?.content ?? null;
 
   if (isPlainObject(output?.object)) {
-    return output!.object as Record<string, unknown>;
+    return { content, object: output.object };
   }
 
-  if (typeof content !== 'string') {
-    return { content: content ?? null };
+  if (!outputSchema || typeof content !== 'string') {
+    return { content, object: null };
   }
 
-  return parseAgentOutputContent(content);
+  return { content, object: parseAgentOutputContent(content) };
 };
 
 export const executeAgentNode = async (args: {

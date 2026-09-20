@@ -63,6 +63,12 @@ export type OrchestrationQueueDriver = {
   claim: (args: { limit: number; now?: Date }) => Promise<ClaimedTask[]>;
   /** Acknowledges a delivered task as done; it is never delivered again. */
   ack: (args: { task: ClaimedTask }) => Promise<void>;
+  /**
+   * Pushes a delivered task's lease out by another full TTL, so a drive that
+   * takes longer than one lease is not handed to a second worker while it is
+   * still running.
+   */
+  extendLease: (args: { task: ClaimedTask; now?: Date }) => Promise<void>;
   /** Releases a delivered task back to the queue, claimable at `availableAt`. */
   retry: (args: { task: ClaimedTask; availableAt: Date }) => Promise<void>;
   /** A snapshot of the queue for the operator stats endpoint. */

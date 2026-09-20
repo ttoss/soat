@@ -5,6 +5,7 @@ import {
   embedConversationBacklog,
   type RetrievalMode,
 } from './conversationRetrieval';
+import { deleteDocument } from './documents';
 import { emitResourceEvent } from './eventBus';
 import { emptyPage, paginatedList } from './pagination';
 import {
@@ -220,6 +221,47 @@ export const updateConversation = async (args: {
   return mapped;
 };
 
+// A conversation holds as many turn documents as it has messages, so they are
+// walked a page at a time rather than loaded at once.
+const TURN_DOCUMENT_BATCH = 50;
+
+/**
+ * Deletes the turn documents a conversation's messages own.
+ *
+ * The message rows cascade off the conversation, but their documents — and the
+ * files and chunks behind them — do not, and a caller cannot reach them
+ * afterwards: the reserved root they sit under is read-only and the id in their
+ * path no longer resolves. Each batch drops its message rows before its
+ * documents, because `conversation_messages.document_id` refuses a delete while
+ * it still points at one.
+ */
+const deleteTurnDocuments = async (args: {
+  conversationId: number;
+}): Promise<void> => {
+  for (;;) {
+    const messages = await db.ConversationMessage.findAll({
+      where: { conversationId: args.conversationId },
+      include: [{ model: db.Document, as: 'document' }],
+      order: [['id', 'ASC']],
+      limit: TURN_DOCUMENT_BATCH,
+    });
+    if (messages.length === 0) return;
+
+    await db.ConversationMessage.destroy({
+      where: {
+        id: messages.map((message) => {
+          return message.id as number;
+        }),
+      },
+    });
+
+    for (const message of messages) {
+      const publicId = message.document?.publicId;
+      if (publicId) await deleteDocument({ id: publicId });
+    }
+  }
+};
+
 export const deleteConversation = async (args: { id: string }) => {
   const conversation = await db.Conversation.findOne({
     where: { publicId: args.id },
@@ -230,6 +272,8 @@ export const deleteConversation = async (args: { id: string }) => {
   }
 
   const projectId = conversation.projectId;
+
+  await deleteTurnDocuments({ conversationId: conversation.id as number });
 
   await conversation.destroy();
 

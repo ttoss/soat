@@ -427,7 +427,7 @@ ORCH_NODES='[
     "agent_id": "'"$TITLE_AGENT_ID"'",
     "input_mapping": {"theme": {"var": "input.theme"}},
     "output_schema": {"type": "object", "required": ["title"], "properties": {"title": {"type": "string"}}},
-    "state_mapping":{"state.title":{"var":"output.title"}}
+    "state_mapping":{"state.title":{"var":"output.object.title"}}
   },
   {
     "id": "generate-stanza-1",
@@ -435,7 +435,7 @@ ORCH_NODES='[
     "agent_id": "'"$STANZA1_AGENT_ID"'",
     "input_mapping": {"theme": {"var": "input.theme"}, "title": {"var": "title"}},
     "output_schema": {"type": "object", "required": ["stanza"], "properties": {"stanza": {"type": "string"}}},
-    "state_mapping":{"state.stanza1":{"var":"output.stanza"}}
+    "state_mapping":{"state.stanza1":{"var":"output.object.stanza"}}
   },
   {
     "id": "generate-stanza-2",
@@ -443,7 +443,7 @@ ORCH_NODES='[
     "agent_id": "'"$STANZA2_AGENT_ID"'",
     "input_mapping": {"theme": {"var": "input.theme"}, "title": {"var": "title"}, "stanza1": {"var": "stanza1"}},
     "output_schema": {"type": "object", "required": ["stanza"], "properties": {"stanza": {"type": "string"}}},
-    "state_mapping":{"state.stanza2":{"var":"output.stanza"}}
+    "state_mapping":{"state.stanza2":{"var":"output.object.stanza"}}
   },
   {
     "id": "generate-stanza-3",
@@ -451,7 +451,7 @@ ORCH_NODES='[
     "agent_id": "'"$STANZA3_AGENT_ID"'",
     "input_mapping": {"theme": {"var": "input.theme"}, "title": {"var": "title"}, "stanza1": {"var": "stanza1"}, "stanza2": {"var": "stanza2"}},
     "output_schema": {"type": "object", "required": ["stanza"], "properties": {"stanza": {"type": "string"}}},
-    "state_mapping":{"state.stanza3":{"var":"output.stanza"}}
+    "state_mapping":{"state.stanza3":{"var":"output.object.stanza"}}
   },
   {
     "id": "generate-stanza-4",
@@ -459,7 +459,7 @@ ORCH_NODES='[
     "agent_id": "'"$STANZA4_AGENT_ID"'",
     "input_mapping": {"theme": {"var": "input.theme"}, "title": {"var": "title"}, "stanza1": {"var": "stanza1"}, "stanza2": {"var": "stanza2"}, "stanza3": {"var": "stanza3"}},
     "output_schema": {"type": "object", "required": ["stanza"], "properties": {"stanza": {"type": "string"}}},
-    "state_mapping":{"state.stanza4":{"var":"output.stanza"}}
+    "state_mapping":{"state.stanza4":{"var":"output.object.stanza"}}
   },
   {
     "id": "assemble-poem",
@@ -521,7 +521,7 @@ const { data: orchestration } =
             required: ['title'],
             properties: { title: { type: 'string' } },
           },
-          state_mapping: { 'state.title': { var: 'output.title' } },
+          state_mapping: { 'state.title': { var: 'output.object.title' } },
         },
         {
           id: 'generate-stanza-1',
@@ -533,7 +533,7 @@ const { data: orchestration } =
             required: ['stanza'],
             properties: { stanza: { type: 'string' } },
           },
-          state_mapping: { 'state.stanza1': { var: 'output.stanza' } },
+          state_mapping: { 'state.stanza1': { var: 'output.object.stanza' } },
         },
         {
           id: 'generate-stanza-2',
@@ -549,7 +549,7 @@ const { data: orchestration } =
             required: ['stanza'],
             properties: { stanza: { type: 'string' } },
           },
-          state_mapping: { 'state.stanza2': { var: 'output.stanza' } },
+          state_mapping: { 'state.stanza2': { var: 'output.object.stanza' } },
         },
         {
           id: 'generate-stanza-3',
@@ -566,7 +566,7 @@ const { data: orchestration } =
             required: ['stanza'],
             properties: { stanza: { type: 'string' } },
           },
-          state_mapping: { 'state.stanza3': { var: 'output.stanza' } },
+          state_mapping: { 'state.stanza3': { var: 'output.object.stanza' } },
         },
         {
           id: 'generate-stanza-4',
@@ -584,7 +584,7 @@ const { data: orchestration } =
             required: ['stanza'],
             properties: { stanza: { type: 'string' } },
           },
-          state_mapping: { 'state.stanza4': { var: 'output.stanza' } },
+          state_mapping: { 'state.stanza4': { var: 'output.object.stanza' } },
         },
         {
           id: 'assemble-poem',
@@ -638,7 +638,7 @@ const ORCHESTRATION_ID = orchestration.id;
 CREATE_ORCHESTRATION_RESP=$(curl -s -X POST "$SOAT_URL/api/v1/orchestrations" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"Direct Sonnet Orchestration\",\"description\":\"Direct agent-node sonnet pipeline\",\"nodes\":[{\"id\":\"generate-title\",\"type\":\"agent\",\"agent_id\":\"$TITLE_AGENT_ID\",\"input_mapping\":{\"theme\":{\"var\": \"input.theme\"}},\"output_schema\":{\"type\":\"object\",\"required\":[\"title\"],\"properties\":{\"title\":{\"type\":\"string\"}}},\"state_mapping\":{\"state.title\":{\"var\":\"output.title\"}}},{\"id\":\"generate-stanza-1\",\"type\":\"agent\",\"agent_id\":\"$STANZA1_AGENT_ID\",\"input_mapping\":{\"theme\":{\"var\": \"input.theme\"},\"title\":{\"var\": \"title\"}},\"output_schema\":{\"type\":\"object\",\"required\":[\"stanza\"],\"properties\":{\"stanza\":{\"type\":\"string\"}}},\"state_mapping\":{\"state.stanza1\":{\"var\":\"output.stanza\"}}},{\"id\":\"generate-stanza-2\",\"type\":\"agent\",\"agent_id\":\"$STANZA2_AGENT_ID\",\"input_mapping\":{\"theme\":{\"var\": \"input.theme\"},\"title\":{\"var\": \"title\"},\"stanza1\":{\"var\": \"stanza1\"}},\"output_schema\":{\"type\":\"object\",\"required\":[\"stanza\"],\"properties\":{\"stanza\":{\"type\":\"string\"}}},\"state_mapping\":{\"state.stanza2\":{\"var\":\"output.stanza\"}}},{\"id\":\"generate-stanza-3\",\"type\":\"agent\",\"agent_id\":\"$STANZA3_AGENT_ID\",\"input_mapping\":{\"theme\":{\"var\": \"input.theme\"},\"title\":{\"var\": \"title\"},\"stanza1\":{\"var\": \"stanza1\"},\"stanza2\":{\"var\": \"stanza2\"}},\"output_schema\":{\"type\":\"object\",\"required\":[\"stanza\"],\"properties\":{\"stanza\":{\"type\":\"string\"}}},\"state_mapping\":{\"state.stanza3\":{\"var\":\"output.stanza\"}}},{\"id\":\"generate-stanza-4\",\"type\":\"agent\",\"agent_id\":\"$STANZA4_AGENT_ID\",\"input_mapping\":{\"theme\":{\"var\": \"input.theme\"},\"title\":{\"var\": \"title\"},\"stanza1\":{\"var\": \"stanza1\"},\"stanza2\":{\"var\": \"stanza2\"},\"stanza3\":{\"var\": \"stanza3\"}},\"output_schema\":{\"type\":\"object\",\"required\":[\"stanza\"],\"properties\":{\"stanza\":{\"type\":\"string\"}}},\"state_mapping\":{\"state.stanza4\":{\"var\":\"output.stanza\"}}},{\"id\":\"assemble-poem\",\"type\":\"transform\",\"expression\":{\"cat\":[{\"var\":\"title\"},\"\\n\\n\",{\"var\":\"stanza1\"},\"\\n\\n\",{\"var\":\"stanza2\"},\"\\n\\n\",{\"var\":\"stanza3\"},\"\\n\\n\",{\"var\":\"stanza4\"}]},\"state_mapping\":{\"state.poem\":{\"var\":\"output.result\"}}},{\"id\":\"persist-poem\",\"type\":\"tool\",\"tool_id\":\"$WRITE_POEM_TOOL_ID\",\"operation_id\":\"update-document\",\"input_mapping\":{\"content\":{\"var\": \"poem\"}}},{\"id\":\"return-poem\",\"type\":\"transform\",\"expression\":{\"var\":\"poem\"}}],\"edges\":[{\"from\":\"generate-title\",\"to\":\"generate-stanza-1\"},{\"from\":\"generate-stanza-1\",\"to\":\"generate-stanza-2\"},{\"from\":\"generate-stanza-2\",\"to\":\"generate-stanza-3\"},{\"from\":\"generate-stanza-3\",\"to\":\"generate-stanza-4\"},{\"from\":\"generate-stanza-4\",\"to\":\"assemble-poem\"},{\"from\":\"assemble-poem\",\"to\":\"persist-poem\"},{\"from\":\"assemble-poem\",\"to\":\"return-poem\"}]}" )
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"Direct Sonnet Orchestration\",\"description\":\"Direct agent-node sonnet pipeline\",\"nodes\":[{\"id\":\"generate-title\",\"type\":\"agent\",\"agent_id\":\"$TITLE_AGENT_ID\",\"input_mapping\":{\"theme\":{\"var\": \"input.theme\"}},\"output_schema\":{\"type\":\"object\",\"required\":[\"title\"],\"properties\":{\"title\":{\"type\":\"string\"}}},\"state_mapping\":{\"state.title\":{\"var\":\"output.object.title\"}}},{\"id\":\"generate-stanza-1\",\"type\":\"agent\",\"agent_id\":\"$STANZA1_AGENT_ID\",\"input_mapping\":{\"theme\":{\"var\": \"input.theme\"},\"title\":{\"var\": \"title\"}},\"output_schema\":{\"type\":\"object\",\"required\":[\"stanza\"],\"properties\":{\"stanza\":{\"type\":\"string\"}}},\"state_mapping\":{\"state.stanza1\":{\"var\":\"output.object.stanza\"}}},{\"id\":\"generate-stanza-2\",\"type\":\"agent\",\"agent_id\":\"$STANZA2_AGENT_ID\",\"input_mapping\":{\"theme\":{\"var\": \"input.theme\"},\"title\":{\"var\": \"title\"},\"stanza1\":{\"var\": \"stanza1\"}},\"output_schema\":{\"type\":\"object\",\"required\":[\"stanza\"],\"properties\":{\"stanza\":{\"type\":\"string\"}}},\"state_mapping\":{\"state.stanza2\":{\"var\":\"output.object.stanza\"}}},{\"id\":\"generate-stanza-3\",\"type\":\"agent\",\"agent_id\":\"$STANZA3_AGENT_ID\",\"input_mapping\":{\"theme\":{\"var\": \"input.theme\"},\"title\":{\"var\": \"title\"},\"stanza1\":{\"var\": \"stanza1\"},\"stanza2\":{\"var\": \"stanza2\"}},\"output_schema\":{\"type\":\"object\",\"required\":[\"stanza\"],\"properties\":{\"stanza\":{\"type\":\"string\"}}},\"state_mapping\":{\"state.stanza3\":{\"var\":\"output.object.stanza\"}}},{\"id\":\"generate-stanza-4\",\"type\":\"agent\",\"agent_id\":\"$STANZA4_AGENT_ID\",\"input_mapping\":{\"theme\":{\"var\": \"input.theme\"},\"title\":{\"var\": \"title\"},\"stanza1\":{\"var\": \"stanza1\"},\"stanza2\":{\"var\": \"stanza2\"},\"stanza3\":{\"var\": \"stanza3\"}},\"output_schema\":{\"type\":\"object\",\"required\":[\"stanza\"],\"properties\":{\"stanza\":{\"type\":\"string\"}}},\"state_mapping\":{\"state.stanza4\":{\"var\":\"output.object.stanza\"}}},{\"id\":\"assemble-poem\",\"type\":\"transform\",\"expression\":{\"cat\":[{\"var\":\"title\"},\"\\n\\n\",{\"var\":\"stanza1\"},\"\\n\\n\",{\"var\":\"stanza2\"},\"\\n\\n\",{\"var\":\"stanza3\"},\"\\n\\n\",{\"var\":\"stanza4\"}]},\"state_mapping\":{\"state.poem\":{\"var\":\"output.result\"}}},{\"id\":\"persist-poem\",\"type\":\"tool\",\"tool_id\":\"$WRITE_POEM_TOOL_ID\",\"operation_id\":\"update-document\",\"input_mapping\":{\"content\":{\"var\": \"poem\"}}},{\"id\":\"return-poem\",\"type\":\"transform\",\"expression\":{\"var\":\"poem\"}}],\"edges\":[{\"from\":\"generate-title\",\"to\":\"generate-stanza-1\"},{\"from\":\"generate-stanza-1\",\"to\":\"generate-stanza-2\"},{\"from\":\"generate-stanza-2\",\"to\":\"generate-stanza-3\"},{\"from\":\"generate-stanza-3\",\"to\":\"generate-stanza-4\"},{\"from\":\"generate-stanza-4\",\"to\":\"assemble-poem\"},{\"from\":\"assemble-poem\",\"to\":\"persist-poem\"},{\"from\":\"assemble-poem\",\"to\":\"return-poem\"}]}" )
 
 ORCHESTRATION_ID=$(printf '%s\n' "$CREATE_ORCHESTRATION_RESP" | jq -r '.id')
 echo "ORCHESTRATION_ID: $ORCHESTRATION_ID"
