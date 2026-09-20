@@ -11,6 +11,7 @@ import {
 import { getAgent } from 'src/lib/agents';
 import { applyCreateResource } from 'src/lib/formationsResourceHandlers';
 import * as knowledgeModule from 'src/lib/knowledge';
+import { clampKnowledgeSearchLimit } from 'src/lib/requestBounds';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
@@ -669,6 +670,27 @@ describe('buildKnowledgeMessages', () => {
       includeDocuments: true,
       includeMemories: true,
     });
+  });
+
+  // The figures the agents docs quote for `knowledge_config`. Omitting either
+  // key is not the same as sending a conservative value: no `min_score` means
+  // no floor at all, so every one of the `limit` nearest chunks is injected
+  // however weak it is.
+  test('omitting min_score and limit forwards neither, so no floor applies', async () => {
+    mockSearchKnowledge.mockResolvedValueOnce([]);
+    await buildKnowledgeMessages({
+      billingProjectId: 7,
+      knowledgeConfig: { documentPaths: ['/handbook/'] },
+      projectIds: [1],
+      messages: [{ role: 'user', content: 'test' }],
+    });
+    expect(mockSearchKnowledge).toHaveBeenCalledWith(
+      expect.objectContaining({ minSimilarity: undefined, limit: undefined })
+    );
+  });
+
+  test('a forwarded undefined limit resolves to ten results', () => {
+    expect(clampKnowledgeSearchLimit(undefined)).toBe(10);
   });
 
   test('combines multiple results into single message', async () => {
