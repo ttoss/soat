@@ -3,6 +3,20 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.56.0](https://github.com/ttoss/soat/compare/v0.55.0...v0.56.0) (2026-09-20)
+
+### Bug Fixes
+
+* five defects across knowledge, conversations and orchestrations ([#1379](https://github.com/ttoss/soat/issues/1379)) ([ad473c2](https://github.com/ttoss/soat/commit/ad473c2278d54de425240a6c1e7e8c425faf53f4)), closes [#1374](https://github.com/ttoss/soat/issues/1374) [#1375](https://github.com/ttoss/soat/issues/1375) [#1376](https://github.com/ttoss/soat/issues/1376) [#1377](https://github.com/ttoss/soat/issues/1377) [#1378](https://github.com/ttoss/soat/issues/1378) [#1374](https://github.com/ttoss/soat/issues/1374) [#1375](https://github.com/ttoss/soat/issues/1375) [#1376](https://github.com/ttoss/soat/issues/1376) [#1377](https://github.com/ttoss/soat/issues/1377) [#1378](https://github.com/ttoss/soat/issues/1378)
+
+### BREAKING CHANGES
+
+* an `agent` node with an `output_schema` produced the parsed
+  object as its artifact; it now produces `{ content, object }`. A
+  `state_mapping` or `nodes.<id>` read of `{"var": "output.<field>"}` on such a
+  node becomes `{"var": "output.object.<field>"}`. A node without a schema keeps
+  `output.content` and gains `output.object`.
+
 # [0.55.0](https://github.com/ttoss/soat/compare/v0.54.0...v0.55.0) (2026-09-20)
 
 * feat(documents)!: reserve /.system/ for runtime-written files and make conversation embedding opt-in (#1369) ([2a9c9f3](https://github.com/ttoss/soat/commit/2a9c9f3852ab4d6c8b44be6f3adff8f66f3ed7f9)), closes [#1369](https://github.com/ttoss/soat/issues/1369) [#1366](https://github.com/ttoss/soat/issues/1366) [#1368](https://github.com/ttoss/soat/issues/1368)
