@@ -22,12 +22,3 @@ export const nonSystemPathWhere = (): Record<symbol, unknown> => {
     [Op.or]: [{ path: null }, { path: { [Op.notLike]: SYSTEM_PATH_PATTERN } }],
   };
 };
-
-/** Whether a request named the reserved root and so opted into seeing it. */
-export const namesSystemPath = (
-  paths: Array<string | undefined> | undefined
-): boolean => {
-  return (paths ?? []).some((path) => {
-    return path !== undefined && path.trim() !== '';
-  });
-};
