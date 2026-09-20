@@ -240,6 +240,16 @@ const chunkAttributes = (args: {
   return include.length > 0 ? { include } : undefined;
 };
 
+/**
+ * The vector channel's candidate list.
+ *
+ * `embedding IS NOT NULL` is what keeps it a *vector* list: a chunk with no
+ * vector has a NULL distance, which sorts last rather than being excluded, so
+ * without the guard it is ranked — and consumes a `limit` slot a real candidate
+ * would have filled — in any scope holding fewer embedded chunks than `limit`.
+ * A project whose conversation retrieval is `none` chunks every turn without a
+ * vector, which makes that scope the common one rather than the exotic one.
+ */
 const findChunksByVector = async (args: {
   distanceLiteral: Literal;
   docInclude: ChunkIncludes;
@@ -250,7 +260,7 @@ const findChunksByVector = async (args: {
   return withIterativeVectorScan({
     run: ({ transaction }) => {
       return db.DocumentChunk.findAll({
-        where: args.topLevelWhere,
+        where: { ...args.topLevelWhere, embedding: { [Op.ne]: null } },
         attributes: chunkAttributes({ distanceLiteral: args.distanceLiteral }),
         include: args.docInclude,
         order: args.distanceLiteral,

@@ -197,6 +197,14 @@ const toLexicalCandidate = (
   };
 };
 
+/**
+ * The vector channel's candidate list. `embedding IS NOT NULL` on the shared
+ * content row is what keeps it one: a NULL embedding yields a NULL distance,
+ * which sorts last rather than being excluded, so an unembedded entry is
+ * otherwise ranked as a vector hit whenever the scope holds fewer embedded
+ * entries than `limit`. The column is reachable from the top-level `where`
+ * because this query joins in the main statement (`subQuery: false`).
+ */
 const findEntriesByVector = async (args: {
   entryWhere: Record<string, unknown>;
   memoryStoreWhere: Record<string, unknown>;
@@ -206,7 +214,7 @@ const findEntriesByVector = async (args: {
   const entries = await withIterativeVectorScan({
     run: ({ transaction }) => {
       return db.Memory.findAll({
-        where: args.entryWhere,
+        where: { ...args.entryWhere, '$content.embedding$': { [Op.ne]: null } },
         attributes: entryAttributes({ distanceLiteral: args.distanceLiteral }),
         include: memoryStoreInclude({
           memoryStoreWhere: args.memoryStoreWhere,

@@ -7,6 +7,7 @@ import { memoryRulesFromAgentExtraction } from './2026-09-16-memoryRulesFromAgen
 import { memoryAssertionsDeclared } from './2026-09-17-memoryAssertionsDeclared';
 import { activityEntryGenerationId } from './2026-09-18-activityEntryGenerationId';
 import { orchestrationRunIdempotencyKey } from './2026-09-18-orchestrationRunIdempotencyKey';
+import { orchestrationNodeExecutionDispatches } from './2026-09-20-orchestrationNodeExecutionDispatches';
 
 /**
  * The schema changes `sync` cannot make, in the order they run. Order is a
@@ -35,4 +36,5 @@ export const MIGRATIONS: Migration[] = [
   memoryAssertionsDeclared,
   activityEntryGenerationId,
   orchestrationRunIdempotencyKey,
+  orchestrationNodeExecutionDispatches,
 ];

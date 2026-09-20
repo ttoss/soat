@@ -121,6 +121,9 @@ const reserveKeyedRunningRow = async (args: {
         error: null,
         startedAt: args.startedAt,
         completedAt: null,
+        // The side effect is about to run a second time under one key and one
+        // `attempt`, which is the only place a run records that it did.
+        dispatches: (existing.dispatches ?? 1) + 1,
       });
       return { kind: 'row', row: existing };
     }

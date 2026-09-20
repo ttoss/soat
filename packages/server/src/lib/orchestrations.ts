@@ -161,6 +161,7 @@ export type MappedNodeExecution = {
   node_id: string;
   node_type: string | null;
   attempt: number;
+  dispatches: number;
   status: 'running' | 'completed' | 'failed' | 'requires_action' | 'skipped';
   input: Record<string, unknown> | null;
   output: Record<string, unknown> | null;
@@ -275,6 +276,7 @@ const mapNodeExecution = (
     node_id: exec.nodeId,
     node_type: exec.nodeType,
     attempt: exec.attempt,
+    dispatches: exec.dispatches,
     status: exec.status,
     input: exec.input as Record<string, unknown> | null,
     output: exec.output as Record<string, unknown> | null,

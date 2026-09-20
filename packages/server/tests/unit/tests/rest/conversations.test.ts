@@ -829,6 +829,40 @@ describe('Conversations', () => {
     });
   });
 
+  describe('Conversation deletion cleans up turn documents', () => {
+    let conversationId: string;
+    let documentIds: string[];
+
+    beforeAll(async () => {
+      const convRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/conversations')
+        .send({ project_id: projectId });
+      conversationId = convRes.body.id;
+
+      documentIds = [];
+      for (const message of ['First turn', 'Second turn']) {
+        const msgRes = await authenticatedTestClient(userToken)
+          .post(`/api/v1/conversations/${conversationId}/messages`)
+          .send({ message, role: 'user', actor_id: actorId });
+        documentIds.push(msgRes.body.document_id);
+      }
+    });
+
+    test('deleting a conversation also deletes every turn document', async () => {
+      const deleteRes = await authenticatedTestClient(userToken).delete(
+        `/api/v1/conversations/${conversationId}`
+      );
+      expect(deleteRes.status).toBe(204);
+
+      for (const documentId of documentIds) {
+        const docAfter = await authenticatedTestClient(userToken).get(
+          `/api/v1/documents/${documentId}`
+        );
+        expect(docAfter.status).toBe(404);
+      }
+    });
+  });
+
   describe('Conversation name', () => {
     test('creates conversation with a name and exposes it on GET', async () => {
       const createRes = await authenticatedTestClient(userToken)

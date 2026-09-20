@@ -285,6 +285,23 @@ export const ackRunTask = async (args: { id: number }): Promise<void> => {
 };
 
 /**
+ * Pushes a claimed task's lease out by another full TTL. Called while a worker
+ * is still driving the run, so the redelivery a lapsed lease triggers is
+ * reserved for a worker that actually stopped.
+ */
+export const extendRunTaskLease = async (args: {
+  id: number;
+  now?: Date;
+}): Promise<void> => {
+  const now = args.now ?? new Date();
+  log('extendRunTaskLease: id=%d', args.id);
+  await db.OrchestrationRunTask.update(
+    { leaseExpiresAt: new Date(now.getTime() + taskLeaseTtlMs()) },
+    { where: { id: args.id } }
+  );
+};
+
+/**
  * Releases a claimed task so it can be re-claimed later — clears the claim and
  * sets `availableAt` (a backoff delay). The delivery `attempts` counter, already
  * incremented at claim time, is left as-is.

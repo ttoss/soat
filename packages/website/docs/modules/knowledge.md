@@ -148,6 +148,8 @@ A `query` runs **two** searches over each store, in parallel:
 
 Neither channel can answer for the other. A chunk that literally contains `SKU-4711` may sit far from the query in embedding space, and a chunk that answers a paraphrased question may share no token with it.
 
+A row carrying no embedding is not a vector candidate: it is reachable through the lexical channel only, whatever the scope, and it never takes a vector slot from a row that has one.
+
 **The lexical channel is an exact-token and exact-phrase channel, by design.** The default text search configuration is `simple`, which removes no stopwords and does no stemming, and `websearch_to_tsquery` requires *every* term it produces. So a natural-language question almost never matches lexically — identifiers, error codes, product names and SKUs do. The vector channel carries the rest. Set `KNOWLEDGE_TEXT_SEARCH_CONFIG` to a language-specific configuration (`english`, `portuguese`, …) where the deployment's language is known and stemming is wanted; the trade is that the channel stops being exact.
 
 If the lexical query fails — a text search configuration that does not exist is the realistic case — the search answers from the vector channel alone. If the embedding provider is unreachable, it answers from the lexical channel alone, and every result comes back without `similarity_score`.

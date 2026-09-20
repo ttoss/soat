@@ -88,6 +88,16 @@ describe('orchestrationRetry', () => {
       ).toBe(true);
     });
 
+    // The 502 says the fault came from upstream, not that it is transient: the
+    // model answered, and it will answer the same way on identical input.
+    test('treats a schema violation as terminal despite its 502', () => {
+      expect(
+        isRetriableError(
+          new DomainError('OUTPUT_SCHEMA_VALIDATION_FAILED', 'x')
+        )
+      ).toBe(false);
+    });
+
     test('falls back to the DomainError httpStatus when tool_status_code is absent or not a number', () => {
       expect(isRetriableError(new DomainError('TOOL_HTTP_ERROR', 'x'))).toBe(
         true

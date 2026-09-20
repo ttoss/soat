@@ -6,6 +6,7 @@ import {
   getOrchestrationQueueDriver,
 } from './orchestration-queue-drivers';
 import { driveQueuedRun, redriveRun, wakeRun } from './orchestrationEngine';
+import { withTaskLeaseHeld } from './orchestrationTaskLease';
 import { writeWorkerHeartbeat } from './orchestrationWorkerHealth';
 import { createScheduler } from './scheduler';
 
@@ -158,9 +159,10 @@ export const handleRunTask = async (args: {
 
 /**
  * Claims one batch of due tasks and drives each to its next resting point,
- * acking on completion. Tasks in a batch are driven concurrently; a task whose
- * handler throws is left un-acked (its lease expires → redelivery) while the
- * rest still ack. Returns the number of tasks claimed this call.
+ * acking on completion. Tasks in a batch are driven concurrently, each with its
+ * lease heartbeaten for the length of its drive; a task whose handler throws is
+ * left un-acked (its lease expires → redelivery) while the rest still ack.
+ * Returns the number of tasks claimed this call.
  */
 export const drainQueueOnce = async (args?: {
   limit?: number;
@@ -196,7 +198,14 @@ export const drainQueueOnce = async (args?: {
   await Promise.all(
     tasks.map(async (task) => {
       try {
-        await handleRunTask({ task });
+        // The lease is held for the whole drive: redelivery is for a worker
+        // that stopped, and a node slower than one lease is not that.
+        await withTaskLeaseHeld({
+          task,
+          run: () => {
+            return handleRunTask({ task });
+          },
+        });
         await driver.ack({ task });
       } catch (error) {
         // Leave the task un-acked so its lease expires and it is redelivered.

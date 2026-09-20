@@ -2228,8 +2228,9 @@ if ! printf '%s\n' "$ORCH_RUN_GET_RESP" | jq -e --arg id "$ORCH_RUN_ID" '.id == 
   printf '%s\n' "$ORCH_RUN_GET_RESP"
   exit 1
 fi
-# Per-node execution records: every node that ran is traceable with a status.
-if ! printf '%s\n' "$ORCH_RUN_GET_RESP" | jq -e '(.node_executions | type) == "array" and (.node_executions | length) >= 1 and (.node_executions | all(.status == "completed"))' >/dev/null 2>&1; then
+# Per-node execution records: every node that ran is traceable with a status,
+# and each carries the dispatch count that makes a redelivered execution visible.
+if ! printf '%s\n' "$ORCH_RUN_GET_RESP" | jq -e '(.node_executions | type) == "array" and (.node_executions | length) >= 1 and (.node_executions | all(.status == "completed")) and (.node_executions | all(.dispatches == 1))' >/dev/null 2>&1; then
   echo "get-orchestration-run did not include completed node_executions"
   printf '%s\n' "$ORCH_RUN_GET_RESP"
   exit 1

@@ -67,7 +67,7 @@ Messages are ordered Document references with a `role` and optional `actor_id`. 
 
 Listed messages carry the document's full `content`, `role`, `actor_id`, and `agent_id` (set on `assistant` messages produced by [`POST /conversations/:id/generate`](/docs/api/conversations/generate-conversation-message), `null` otherwise). Example: [Chat with an LLM - Step 7 (View the conversation history)](/docs/tutorials/chat-with-llm#step-7--view-the-conversation-history).
 
-Removing a message also deletes its Document and File.
+Removing a message also deletes its Document and File, and deleting a conversation deletes every turn it holds.
 
 ### Retrieval
 

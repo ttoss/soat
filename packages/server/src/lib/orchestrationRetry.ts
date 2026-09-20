@@ -43,11 +43,20 @@ export const resolveRetryPolicy = (
 };
 
 /**
+ * Codes whose `5xx` says the fault came from upstream, not that it is
+ * transient. A schema violation is the model's own answer failing the schema —
+ * deterministic on identical input, which is why the generation layer refuses
+ * to re-issue the call on it either (`agentNonStreamGeneration`).
+ */
+const TERMINAL_UPSTREAM_CODES = new Set(['OUTPUT_SCHEMA_VALIDATION_FAILED']);
+
+/**
  * Classifies whether a thrown error is worth retrying. Transient failures —
  * unexpected/infrastructure errors (network, timeouts, provider SDK throws,
  * which surface as non-`DomainError`s) and upstream `5xx` `DomainError`s — are
  * retriable. Deliberate business errors with a `4xx` status (validation, not
- * found, conflict) are terminal: retrying cannot change the outcome.
+ * found, conflict) are terminal: retrying cannot change the outcome, and so is
+ * every code in {@link TERMINAL_UPSTREAM_CODES}.
  *
  * `TOOL_HTTP_ERROR` always wraps a tool's non-2xx response as `httpStatus 502`
  * (see `toHttpToolDomainError`), so the wrapper status can never tell a
@@ -56,6 +65,7 @@ export const resolveRetryPolicy = (
  */
 export const isRetriableError = (error: unknown): boolean => {
   if (error instanceof DomainError) {
+    if (TERMINAL_UPSTREAM_CODES.has(error.code)) return false;
     const upstreamStatus = error.meta?.tool_status_code;
     if (typeof upstreamStatus === 'number') {
       return upstreamStatus >= 500;
