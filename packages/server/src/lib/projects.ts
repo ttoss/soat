@@ -33,6 +33,7 @@ const mapProject = (project: InstanceType<(typeof db)['Project']>) => {
     max_chain_generations: project.maxChainGenerations,
     max_orchestration_run_depth: project.maxOrchestrationRunDepth,
     audit_reads_enabled: project.auditReadsEnabled,
+    require_priced_model: project.requirePricedModel,
     default_conversation_retrieval: project.defaultConversationRetrieval,
     trace_content_retention_days: project.traceContentRetentionDays,
     trace_content_mode: project.traceContentMode,
@@ -75,6 +76,18 @@ const validateMaxOrchestrationRunDepth = (value: unknown): string | null => {
   if (value === null) return null;
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
     return 'max_orchestration_run_depth must be an integer >= 1, or null to clear it.';
+  }
+  return null;
+};
+
+/**
+ * Validates a `requirePricedModel` value. A boolean only: the field decides
+ * whether a generation runs at all, so a truthy string must not switch it on by
+ * accident.
+ */
+const validateRequirePricedModel = (value: unknown): string | null => {
+  if (typeof value !== 'boolean') {
+    return 'require_priced_model must be a boolean.';
   }
   return null;
 };
@@ -233,6 +246,7 @@ const PROJECT_UPDATABLE_FIELDS = [
   'maxChainGenerations',
   'maxOrchestrationRunDepth',
   'auditReadsEnabled',
+  'requirePricedModel',
   'defaultConversationRetrieval',
   'traceContentRetentionDays',
   'traceContentMode',
@@ -259,6 +273,7 @@ const PROJECT_SCALAR_VALIDATORS: Partial<
   maxConcurrentRuns: validateMaxConcurrentRuns,
   maxChainGenerations: validateMaxChainGenerations,
   maxOrchestrationRunDepth: validateMaxOrchestrationRunDepth,
+  requirePricedModel: validateRequirePricedModel,
   traceContentRetentionDays: validateTraceContentRetentionDays,
   traceContentMode: validateTraceContentMode,
 };
@@ -281,6 +296,7 @@ export const updateProject = async (args: {
   maxChainGenerations?: number | null;
   maxOrchestrationRunDepth?: number | null;
   auditReadsEnabled?: boolean;
+  requirePricedModel?: boolean;
   defaultConversationRetrieval?: RetrievalMode;
   traceContentRetentionDays?: number | null;
   traceContentMode?: string;

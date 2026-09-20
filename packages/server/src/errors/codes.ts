@@ -652,6 +652,11 @@ export const ERROR_CODES = {
     description:
       'A quota with the same (project, scope, scope_ref, metric, window) already exists. The all-enforce precedence rule makes duplicates pure redundancy, so a duplicate is rejected instead of stored.',
   },
+  MODEL_NOT_PRICED: {
+    httpStatus: 409,
+    description:
+      'The project runs with `require_priced_model` and no price-book row covers a billable token component of the model this generation would run on, so the spend it would incur could not be measured. The check runs before the provider is called: nothing is sent, spent or metered. `meta.unpriced_rows` names each `(provider, model, component)` to price. An agent bound to a model route is held to every target it may fail over to, not just the first. Price the rows, or clear `require_priced_model` on the project to accept unmeasurable spend.',
+  },
   MODEL_ROUTE_NOT_FOUND: {
     httpStatus: 400,
     description: 'A referenced model route does not exist in the project.',

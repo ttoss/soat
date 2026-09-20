@@ -34,6 +34,7 @@ Access is policy-based, with no membership table: the [policies](./policies.md) 
 | `max_chain_generations` | integer \| null | Generations one [continuation chain](./chains.md#bounding-a-chain) in this project may hold before the platform stops resuming it. `null` (default) means no project ceiling, leaving the deployment-wide one; otherwise an integer ≥ 1. The effective budget is the smallest of the deployment's ceiling, this one, and the agent's own `maxChainGenerations`. Settable/clearable via `update-project`. |
 | `max_orchestration_run_depth` | integer \| null | `loop` / `sub_orchestration` [nesting levels](./orchestrations.md#nesting-depth) a run tree in this project may reach before the engine refuses to start the next child. `null` (default) means no project bound, leaving the deployment-wide one; otherwise an integer ≥ 1. The effective bound is the smaller of the two. Settable/clearable via `update-project`. |
 | `audit_reads_enabled` | boolean | Opts the project into [read auditing](./audit-log.md#read-auditing): when `true`, `GET` requests naming this project are recorded in the audit log alongside mutations. `false` by default. Settable via `update-project`. |
+| `require_priced_model` | boolean | Refuses a generation whose model carries no [price-book](./usage.md#pricing) row with `409 MODEL_NOT_PRICED`. `false` by default. Settable via `update-project`. See [Priced models](#priced-models). |
 | `default_conversation_retrieval` | string | What a [conversation](./conversations.md) that names no `retrieval` of its own does: `embed` or `none` (default). |
 | `trace_content_retention_days` | integer \| null | Days of [trace/generation content retention](./traces.md#retention-policy) before the daily sweep purges it. `null` (default) disables retention; otherwise an integer ≥ 1. Settable/clearable via `update-project`. |
 | `trace_content_mode` | string | `full` (default) or `none`. `none` is [zero-retention](./traces.md#zero-retention-mode): trace and generation content is never written for any agent in the project. Settable via `update-project`. |
@@ -84,6 +85,38 @@ soat update-project --project-id proj_… --default_model_route_id route_…
 
 The route must belong to the project. An explicit binding always wins. Repointing is free; **clearing** returns `409 PROJECT_DEFAULT_ROUTE_INHERITED` while any consumer inherits it, and deleting the route itself returns `409 MODEL_ROUTE_HAS_DEPENDENTS`. Governed by `projects:UpdateProject`.
 
+### Priced models
+
+`require_priced_model` refuses a generation whose model no price row covers,
+before the provider is called:
+
+```bash
+soat update-project --project-id proj_ABC --require_priced_model true
+```
+
+The refusal is `409 MODEL_NOT_PRICED`, and `error.meta.unpriced_rows` names each
+`(provider, model, component)` to price. It is raised before the generation
+record exists, so a refused turn is neither recorded nor metered.
+
+- Both billable token components are checked, `input_tokens` and
+  `output_tokens`: a model priced for one and not the other meters a cost that
+  understates itself. The cache components fall back to the `input_tokens` rate
+  and need no row of their own.
+- An agent bound to a [model route](./model-routes.md) is held to **every**
+  target, not just the first: a failover bills whichever target answers.
+- Prices resolve through the usual tiers, so a per-provider override or a
+  project rate satisfies the gate — see [Usage — Pricing](./usage.md#pricing).
+- The check reads the configured model name. A provider that answers under a
+  more specific id meters under that id; the
+  [`quota_unpriced` exception](./quotas.md#unpriced-usage) names it.
+- [Embeddings](./embeddings.md#pricing-embeddings) are not gated: their rate is
+  deployment configuration, outside every price-book tier.
+
+`false` (the default) runs the model and meters it at `cost_usd: null`. A
+`cost_usd` [quota](./quotas.md#unpriced-usage) answers the same gap from the
+other side: it reads a window the meter already wrote, so it refuses spend that
+has already happened, where this refuses spend before it starts.
+
 ### Deletion
 
 Deleting a project with any dependent resource returns `409 Conflict`, code `PROJECT_HAS_DEPENDENTS`. Every project-scoped resource counts, including those accumulated while running:
@@ -106,6 +139,7 @@ The [audit log](./audit-log.md) is the exception: entries outlive the project wi
 | `403`  | `{ "error": "Forbidden" }`                       | [`GET /projects/{id}`](/docs/api/projects/get-project) (or a nested resource route) with a policy/API key that doesn't cover this project's SRN — e.g. a project key created for a **different** project | Check the caller's attached policies cover `srn:<this-project-id>:*:*`, or use a key scoped to this project — see [Project Access via Policies](#project-access-via-policies) |
 | `404`  | —                                                | The project ID doesn't exist, or the caller can't see it because no policy grants access to it (existence isn't leaked) | Verify the ID; if it should exist, confirm a policy grants visibility — see [Visibility Rules](#visibility-rules) |
 | `409`  | `{ "error": { "code": "PROJECT_HAS_DEPENDENTS" } }` | Deleting a project that still has dependent resources                                                  | Pass `?force=true`, or delete the dependent resources first — see [Deletion](#deletion)                   |
+| `409`  | `{ "error": { "code": "MODEL_NOT_PRICED" } }` | A generation on a project with `require_priced_model` whose model carries no price row | Price the `(provider, model, component)` rows in `error.meta.unpriced_rows`, or set `require_priced_model` to `false` — see [Priced models](#priced-models) |
 | `409`  | `{ "error": { "code": "PROJECT_DEFAULT_ROUTE_INHERITED" } }` | Clearing `default_model_route_id` while consumers that bind nothing inherit it — they would be left with no resolvable model | Bind those consumers explicitly (`meta.sample` names some), or repoint the default to another route, which is always allowed — see [Project default route](./model-routes.md#project-default-route) |
 
 ## Examples

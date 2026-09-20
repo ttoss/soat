@@ -79,6 +79,12 @@ export class Project extends Model {
   @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
   declare auditReadsEnabled: boolean;
 
+  // Refuses a generation whose model carries no price row, so spend this
+  // project cannot measure is never started. Off by default: a deployment that
+  // keeps no price book at all meters at `cost_usd = null` and still runs.
+  @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
+  declare requirePricedModel: boolean;
+
   // `null` disables retention, so shipping this destroyed nothing already
   // stored — a tenant opts in. Scoped to the project, not the agent: a
   // purge cascades down the trace subtree, and nested calls create child traces

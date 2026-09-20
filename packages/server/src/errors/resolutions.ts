@@ -45,6 +45,8 @@ export const ERROR_RESOLUTIONS: Record<string, string> = {
     'Wait until the window resets — `Retry-After` (seconds) and `meta.resets_at` both carry the time — or raise the quota with `PATCH /api/v1/quotas/{quota_id}`.',
   QUOTA_UNENFORCEABLE:
     'Add price book entries covering the models this project runs (`POST /api/v1/prices`), so the cost quota has something to aggregate. To accept unmeasurable spend instead, set `on_unpriced: "allow"` on the quota with `PATCH /api/v1/quotas/{quota_id}` (or switch it to `monitor` mode to stop blocking entirely).',
+  MODEL_NOT_PRICED:
+    'Add price book rows for every `(provider, model, component)` in `meta.unpriced_rows` — globally with `PUT /api/v1/usage/prices`, or for one provider instance with `PUT /api/v1/ai-providers/{ai_provider_id}/prices`. To run unpriced models again, set `require_priced_model` to `false` with `PATCH /api/v1/projects/{project_id}`.',
   QUOTA_STORAGE_EXCEEDED:
     'Delete stored content — files, documents, or memories — until the project is back under the cap; `meta.current_bytes` and `meta.limit` say by how much. Waiting does not help: a storage quota caps a stored total, not a rate. Alternatively raise the cap with `PATCH /api/v1/quotas/{quota_id}`, or switch it to `monitor` mode to stop blocking while you measure.',
   TOOL_EGRESS_BLOCKED:
