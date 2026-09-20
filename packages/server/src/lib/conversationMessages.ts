@@ -1,5 +1,9 @@
 import { db } from '../db';
 import { conversationEmbedsTurns } from './conversationRetrieval';
+import {
+  conversationMessageTags,
+  ownerActorPublicId,
+} from './conversationSystemTags';
 import { type Transaction } from './dbTransaction';
 import { createDocument, deleteDocument } from './documents';
 import { emitResourceEvent } from './eventBus';
@@ -242,6 +246,9 @@ export const addConversationMessage = async (args: {
 }) => {
   const conversation = await db.Conversation.findOne({
     where: { publicId: args.conversationId },
+    // The owner rides along: every turn is stamped with it, so a per-actor
+    // knowledge filter and an IAM condition both have something to name.
+    include: [{ model: db.Actor, as: 'actor' }],
   });
 
   if (!conversation) {
@@ -268,6 +275,12 @@ export const addConversationMessage = async (args: {
     projectId: conversation.projectId,
     content: args.message,
     system: { module: 'conversations', dir: args.conversationId },
+    tags: conversationMessageTags({
+      conversationPublicId: args.conversationId,
+      ownerActorPublicId: ownerActorPublicId(conversation),
+      agentPublicId: args.agentId,
+      role: args.role,
+    }),
     embed: await conversationEmbedsTurns({
       conversationId: conversation.id as number,
       projectId: conversation.projectId,

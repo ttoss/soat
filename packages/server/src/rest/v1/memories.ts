@@ -21,6 +21,7 @@ import { getMemoryStore } from 'src/lib/memoryStores';
 import { getMemoryTags, updateMemoryTags } from 'src/lib/memoryTags';
 import { compilePolicy } from 'src/lib/policyCompiler';
 import {
+  assertNoSystemTagKeys,
   buildResourceTagContext,
   isStringRecord,
   readTagQuery,
@@ -375,7 +376,9 @@ memoriesRouter.post('/memories', async (ctx: Context) => {
     sourceType,
     sourceConversationPublicId: body.source_id,
     supersedes,
-    tags: isStringRecord(body.tags) ? body.tags : undefined,
+    tags: assertNoSystemTagKeys(
+      isStringRecord(body.tags) ? body.tags : undefined
+    ),
     metadata: isPlainObject(body.metadata) ? body.metadata : undefined,
     // This is the only door that takes per-request thresholds: a caller
     // addressing the corpus directly may tune one write, an agent or a rule
@@ -456,10 +459,11 @@ memoriesRouter.put('/memories/:memory_id', async (ctx: Context) => {
   ctx.body = await updateMemory({
     id: ctx.params.memory_id,
     content: body.content,
-    tags:
+    tags: assertNoSystemTagKeys(
       body.tags === undefined
         ? undefined
-        : (body.tags as Record<string, string> | null),
+        : (body.tags as Record<string, string> | null)
+    ),
     metadata:
       body.metadata === undefined
         ? undefined

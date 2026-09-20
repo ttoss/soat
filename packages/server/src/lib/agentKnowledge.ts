@@ -195,11 +195,27 @@ const conversationOfPath = (path: string | undefined): string | undefined => {
   return match?.[1];
 };
 
-const documentLabel = (r: { path?: string; filename?: string }): string => {
-  const conversationId = conversationOfPath(r.path);
-  return conversationId
-    ? `Conversation: ${conversationId}`
-    : `Document: ${r.path ?? r.filename}`;
+/**
+ * A chat turn injected as `Document: document.txt` tells the model nothing
+ * about where the text came from. The stamped tags carry it; the path is the
+ * fallback for a turn written before they existed.
+ */
+const documentLabel = (r: {
+  path?: string;
+  filename?: string;
+  tags?: Record<string, string>;
+  created_at?: Date;
+}): string => {
+  const conversationId =
+    r.tags?.['system.conversation'] ?? conversationOfPath(r.path);
+  if (!conversationId) return `Document: ${r.path ?? r.filename}`;
+
+  const said = [r.tags?.['system.role'], r.created_at?.toISOString()]
+    .filter(Boolean)
+    .join(', ');
+  return said
+    ? `Conversation ${conversationId} — ${said}`
+    : `Conversation ${conversationId}`;
 };
 
 /**

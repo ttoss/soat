@@ -160,3 +160,70 @@ export const applyTagFilter = (args: {
   if (!hasTagFilter(args.tags)) return;
   args.where.tags = tagContainment(args.tags);
 };
+
+/**
+ * The runtime's half of every tag bag.
+ *
+ * A `system.*` pair says which conversation, actor, agent and role a row came
+ * from. It is what a knowledge search filters an actor's turns by and what an
+ * IAM `soat:ResourceTag/system.actor` condition fences them with, so a caller
+ * who could write one could make their own rows answer to another actor's
+ * filter. Callers therefore read these keys and never write them.
+ *
+ * A dot rather than a colon: `parseTagPairs` splits a `?tags=` pair on the
+ * first colon, so `system:actor:actor_1` would parse as the key `system`.
+ */
+export const SYSTEM_TAG_PREFIX = 'system.';
+
+export const isSystemTagKey = (key: string): boolean => {
+  return key.startsWith(SYSTEM_TAG_PREFIX);
+};
+
+/**
+ * Gate for a caller-supplied tag bag on a write. Returns it unchanged, or
+ * refuses the whole write naming the first reserved key it found — a bag
+ * silently stripped would leave the caller believing they had labelled a row.
+ */
+export const assertNoSystemTagKeys = <
+  T extends Record<string, string> | null | undefined,
+>(
+  tags: T
+): T => {
+  const reserved = Object.keys(tags ?? {}).find(isSystemTagKey);
+  if (reserved) {
+    throw new DomainError(
+      'RESERVED_TAG_KEY',
+      `'${reserved}' is reserved: tag keys starting with '${SYSTEM_TAG_PREFIX}' are written by the platform and cannot be set.`
+    );
+  }
+  return tags;
+};
+
+/**
+ * `assertNoSystemTagKeys` for a bag that was proposed rather than requested —
+ * a memory rule's handler output. A handler is model-authored, so a reserved
+ * key there is dropped rather than failing the firing around it.
+ */
+export const stripSystemTagKeys = <
+  T extends Record<string, string> | null | undefined,
+>(
+  tags: T
+): T => {
+  if (!tags) return tags;
+  return Object.fromEntries(
+    Object.entries(tags).filter(([key]) => {
+      return !isSystemTagKey(key);
+    })
+  ) as T;
+};
+
+/**
+ * Whether a *filter* names a reserved key. A search that asks for an actor's
+ * turns has said where it wants to look, so it reaches the reserved root that
+ * a bare query is kept out of.
+ */
+export const hasSystemTagFilter = (
+  tags: Record<string, string> | undefined
+): boolean => {
+  return Object.keys(tags ?? {}).some(isSystemTagKey);
+};

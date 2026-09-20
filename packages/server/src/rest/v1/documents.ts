@@ -17,6 +17,7 @@ import { buildSrn } from 'src/lib/iam';
 import { compilePolicy } from 'src/lib/policyCompiler';
 import { assertStorageQuota, contentBytes } from 'src/lib/quotaStorage';
 import {
+  assertNoSystemTagKeys,
   buildResourceTagContext,
   readTagBag,
   readTagQuery,
@@ -204,7 +205,7 @@ documentsRouter.post('/documents', async (ctx: Context) => {
     filename: body.filename,
     title: body.title,
     metadata: body.metadata,
-    tags: readTagBag(body.tags),
+    tags: assertNoSystemTagKeys(readTagBag(body.tags)),
     chunkStrategy: body.chunk_strategy,
     chunkSize: body.chunk_size,
     chunkOverlap: body.chunk_overlap,
@@ -259,7 +260,7 @@ documentsRouter.patch('/documents/:document_id', async (ctx: Context) => {
     title: body.title,
     path: body.path,
     metadata: body.metadata,
-    tags: readTagBag(body.tags),
+    tags: assertNoSystemTagKeys(readTagBag(body.tags)),
   });
   ctx.body = updated;
 });
@@ -345,7 +346,7 @@ documentsRouter.post('/documents/ingest', async (ctx: Context) => {
     fileId: body.file_id,
     projectId: Number(targetProjectId),
     pathPrefix: body.path_prefix,
-    tags: readTagBag(body.tags),
+    tags: assertNoSystemTagKeys(readTagBag(body.tags)),
     chunkStrategy: body.chunk_strategy,
     chunkSize: body.chunk_size,
     chunkOverlap: body.chunk_overlap,

@@ -10,6 +10,7 @@ import {
   toNullableStringRecord,
   toOptionalString,
 } from '../resource-inputs/normalizers';
+import { assertNoSystemTagKeys } from '../tags';
 import { defineFormationModule } from './defineFormationModule';
 
 /**
@@ -54,7 +55,9 @@ export const memoryStoresFormationModule = defineFormationModule({
       projectId,
       name: properties.name as string,
       description: toOptionalString(properties.description) ?? undefined,
-      tags: toNullableStringRecord(properties.tags) ?? undefined,
+      tags:
+        assertNoSystemTagKeys(toNullableStringRecord(properties.tags)) ??
+        undefined,
       duplicateThreshold: readThreshold(properties.duplicate_threshold),
       supersedeThreshold: readThreshold(properties.supersede_threshold),
     });
@@ -65,7 +68,7 @@ export const memoryStoresFormationModule = defineFormationModule({
       id: physicalResourceId,
       name: toOptionalString(properties.name) ?? undefined,
       description: toNullableString(properties.description),
-      tags: toNullableStringRecord(properties.tags),
+      tags: assertNoSystemTagKeys(toNullableStringRecord(properties.tags)),
       duplicateThreshold: readThreshold(properties.duplicate_threshold),
       supersedeThreshold: readThreshold(properties.supersede_threshold),
     });

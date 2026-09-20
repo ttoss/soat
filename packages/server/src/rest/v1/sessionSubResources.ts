@@ -9,6 +9,7 @@ import {
   submitSessionToolOutputs,
   updateSessionTags,
 } from 'src/lib/sessions';
+import { assertNoSystemTagKeys } from 'src/lib/tags';
 
 import { type AuthenticatedContext } from './helpers';
 import { checkSessionAccess } from './sessions';
@@ -201,7 +202,7 @@ sessionSubResourcesRouter.post(
       forkAtPosition: body.fork_at_position,
       agentPublicId: body.agent_id,
       name: body.name,
-      tags: body.tags,
+      tags: assertNoSystemTagKeys(body.tags),
       toolContext: body.tool_context,
     });
   }

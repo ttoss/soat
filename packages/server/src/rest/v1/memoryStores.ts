@@ -24,7 +24,12 @@ import {
   updateMemoryStoreTags,
 } from 'src/lib/memoryStores';
 import { compilePolicy } from 'src/lib/policyCompiler';
-import { readNullableTagBag, readTagBag, readTagQuery } from 'src/lib/tags';
+import {
+  assertNoSystemTagKeys,
+  readNullableTagBag,
+  readTagBag,
+  readTagQuery,
+} from 'src/lib/tags';
 
 import {
   type AuthenticatedContext,
@@ -182,7 +187,7 @@ memoryStoresRouter.post('/memory-stores', async (ctx: Context) => {
     supersede_threshold?: unknown;
   };
 
-  const tags = readTagBag(body.tags);
+  const tags = assertNoSystemTagKeys(readTagBag(body.tags));
   const duplicateThreshold = readThreshold({
     value: body.duplicate_threshold,
     field: 'duplicate_threshold',
@@ -251,7 +256,7 @@ memoryStoresRouter.put(
       id: ctx.params.memory_store_id,
       name: body.name,
       description: body.description,
-      tags: readNullableTagBag(body.tags),
+      tags: assertNoSystemTagKeys(readNullableTagBag(body.tags)),
       duplicateThreshold,
       supersedeThreshold,
     });

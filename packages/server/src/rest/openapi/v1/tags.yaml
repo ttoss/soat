@@ -24,6 +24,12 @@ components:
         Matched by JSONB containment wherever tags are read: the `?tags=`
         filter, knowledge search, and the IAM `soat:ResourceTag/<key>`
         condition.
+
+
+        Keys beginning `system.` are reserved: the platform writes them to
+        record which conversation, actor, agent and role a row came from, and a
+        write naming one is refused with `400 RESERVED_TAG_KEY`. They are read
+        and filtered like any other tag.
       example: { team: 'finance', env: 'prod' }
     NullableTagBag:
       type: object

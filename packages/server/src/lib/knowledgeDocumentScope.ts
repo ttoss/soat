@@ -26,13 +26,18 @@ export const buildFileInclude = (args: {
   paths?: string[];
   /** A search naming documents by id reaches them wherever they are filed. */
   namesDocuments?: boolean;
+  /**
+   * A `system.*` tag filter has said which conversation, actor or role it
+   * wants, so it reaches the reserved root a bare query is kept out of.
+   */
+  namesSystemTags?: boolean;
 }): KnowledgeFileInclude => {
   const conditions: unknown[] = [];
   if (args.projectIds !== undefined) {
     conditions.push({ projectId: args.projectIds });
   }
   const namesPaths = Boolean(args.paths && args.paths.length > 0);
-  if (!namesPaths && !args.namesDocuments) {
+  if (!namesPaths && !args.namesDocuments && !args.namesSystemTags) {
     conditions.push(nonSystemPathWhere());
   }
   if (namesPaths) {
