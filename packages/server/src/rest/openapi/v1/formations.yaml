@@ -798,7 +798,13 @@ components:
                 - $ref: './tags.yaml#/components/schemas/TagBag'
             min_score:
               type: number
-              description: Minimum similarity score (0–1) for retrieved chunks
+              description: Minimum raw cosine similarity (0–1) a vector candidate must reach to be ranked. Omitted, there is no floor.
+            rrf_k:
+              type: integer
+              description: The `k` in the fusion term `1 / (k + rank)`; smaller weights the top of each ranking more heavily
+            recency_half_life_days:
+              type: number
+              description: Half-life in days of the decay applied to memory results after fusion; `0` disables it
             limit:
               type: integer
               description: Maximum number of chunks to inject
@@ -1428,6 +1434,17 @@ components:
           type: object
           nullable: true
           description: Static input shallow-merged under each firing's runtime input
+        tool_context:
+          type: object
+          nullable: true
+          additionalProperties:
+            type: string
+          description: >-
+            Caller context every firing forwards to the run it starts, so an
+            agent whose tools authorize through `{{context:<key>}}` can be
+            scheduled. Write-only. A value may be a `{{secret:...}}` reference,
+            which is what a template should carry — the credential stays in the
+            secret store and only its name is checked in
         cron:
           type: string
           nullable: true

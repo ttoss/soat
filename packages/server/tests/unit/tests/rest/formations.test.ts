@@ -4096,7 +4096,7 @@ resources:
           message:
             "Unknown agent field 'knowledge_config.extraction'. Allowed: " +
             'memory_store_ids, document_ids, document_paths, tags, min_score, ' +
-            'limit, write_memory_store_id',
+            'rrf_k, recency_half_life_days, limit, write_memory_store_id',
         },
       ]);
     });

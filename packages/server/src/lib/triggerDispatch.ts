@@ -8,6 +8,7 @@ import type { GenerationInputMessage } from './generationInputMessages';
 import { buildSrn } from './iam';
 import { startOrchestrationRun } from './orchestrationEngine';
 import { createJwtIsAllowed } from './permissions';
+import { resolveSecretRefsInString } from './secrets';
 import { callTool } from './tools';
 import {
   createFiringRecord,
@@ -130,75 +131,89 @@ export const validateOrchestrationInput = (args: {
   }
 };
 
-const dispatchToTarget = async (args: {
+type DispatchArgs = {
   targetType: string;
   targetId: string;
   action: string | null;
   projectId: number;
   input: Record<string, unknown>;
+  toolContext?: Record<string, string>;
   authHeader: string;
   triggerId: string;
-}): Promise<Record<string, unknown>> => {
-  if (args.targetType === 'orchestration') {
-    const run = await startOrchestrationRun({
-      orchestrationPublicId: args.targetId,
-      projectIds: [args.projectId],
-      input: args.input,
-      authHeader: args.authHeader,
-      wait: true,
-      triggerId: args.triggerId,
-    });
-    return {
-      target_type: 'orchestration',
-      result_id: run.id,
-      status: run.status,
-      output: truncateOutput(run.output),
-    };
-  }
+};
 
-  if (args.targetType === 'agent') {
-    const generation = await createGeneration({
-      agentId: args.targetId,
-      projectIds: [args.projectId],
-      messages: buildAgentMessages(args.input),
-      stream: false,
-      authHeader: args.authHeader,
-      triggerId: args.triggerId,
-    });
-    // stream:false always resolves to a GenerationResult.
-    const result = generation as {
-      id: string;
-      status: string;
-      output?: { content?: string };
-    };
-    return {
-      target_type: 'agent',
-      result_id: result.id,
-      status: result.status,
-      output: truncateOutput(result.output?.content),
-    };
-  }
+const dispatchToOrchestration = async (
+  args: DispatchArgs
+): Promise<Record<string, unknown>> => {
+  const run = await startOrchestrationRun({
+    orchestrationPublicId: args.targetId,
+    projectIds: [args.projectId],
+    input: args.input,
+    toolContext: args.toolContext,
+    authHeader: args.authHeader,
+    wait: true,
+    triggerId: args.triggerId,
+  });
+  return {
+    target_type: 'orchestration',
+    result_id: run.id,
+    status: run.status,
+    output: truncateOutput(run.output),
+  };
+};
 
-  if (args.targetType === 'eval') {
-    // Always background: an eval is one generation per dataset item with no cap
-    // on the count, so blocking a scheduler tick on it is the case
-    // `sync-async.md` rules out. The firing records the run id to poll.
-    const run = await startEvalRun({
-      evalId: args.targetId,
-      projectIds: [args.projectId],
-      wait: false,
-      agentVersion: args.input.agent_version,
-      baselineRunId: args.input.baseline_run_id,
-      triggerId: args.triggerId,
-    });
-    return {
-      target_type: 'eval',
-      result_id: run.id,
-      status: run.status,
-      output: null,
-    };
-  }
+const dispatchToAgent = async (
+  args: DispatchArgs
+): Promise<Record<string, unknown>> => {
+  const generation = await createGeneration({
+    agentId: args.targetId,
+    projectIds: [args.projectId],
+    messages: buildAgentMessages(args.input),
+    stream: false,
+    toolContext: args.toolContext,
+    authHeader: args.authHeader,
+    triggerId: args.triggerId,
+  });
+  // stream:false always resolves to a GenerationResult.
+  const result = generation as {
+    id: string;
+    status: string;
+    output?: { content?: string };
+  };
+  return {
+    target_type: 'agent',
+    result_id: result.id,
+    status: result.status,
+    output: truncateOutput(result.output?.content),
+  };
+};
 
+const dispatchToEval = async (
+  args: DispatchArgs
+): Promise<Record<string, unknown>> => {
+  // Always background: an eval is one generation per dataset item with no cap
+  // on the count, so blocking a scheduler tick on it is the case
+  // `sync-async.md` rules out. The firing records the run id to poll.
+  const run = await startEvalRun({
+    evalId: args.targetId,
+    projectIds: [args.projectId],
+    wait: false,
+    agentVersion: args.input.agent_version,
+    baselineRunId: args.input.baseline_run_id,
+    toolContext: args.toolContext,
+    triggerId: args.triggerId,
+  });
+  return {
+    target_type: 'eval',
+    result_id: run.id,
+    status: run.status,
+    output: null,
+  };
+};
+
+const dispatchToTool = async (
+  args: DispatchArgs
+): Promise<Record<string, unknown>> => {
   const output = await callTool({
     // A firing is a call of this tool, so its guardrails decide it — a trigger
     // is not a way to reach a tool the project has classified as forbidden.
@@ -207,6 +222,7 @@ const dispatchToTarget = async (args: {
     projectIds: [args.projectId],
     action: args.action ?? undefined,
     input: args.input,
+    toolContext: args.toolContext,
     authHeader: args.authHeader,
   });
   return {
@@ -215,6 +231,22 @@ const dispatchToTarget = async (args: {
     status: 'completed',
     output: truncateOutput(output),
   };
+};
+
+const TARGET_DISPATCHERS: Record<
+  string,
+  (args: DispatchArgs) => Promise<Record<string, unknown>>
+> = {
+  orchestration: dispatchToOrchestration,
+  agent: dispatchToAgent,
+  eval: dispatchToEval,
+};
+
+const dispatchToTarget = async (
+  args: DispatchArgs
+): Promise<Record<string, unknown>> => {
+  const dispatch = TARGET_DISPATCHERS[args.targetType] ?? dispatchToTool;
+  return dispatch(args);
 };
 
 /**
@@ -268,6 +300,37 @@ const resolveRunAsAuthHeader = async (args: {
   })}`;
 };
 
+/**
+ * The context bag a firing forwards: the trigger's stored bag, overridden per
+ * key by a manual fire's, with every `{{secret:...}}` resolved.
+ *
+ * Resolved here rather than stored resolved, so rotating the secret changes
+ * what the next firing sends without touching the trigger, and the plaintext
+ * never rests outside the secret store.
+ */
+const resolveFiringToolContext = async (args: {
+  stored: Record<string, string> | null;
+  fired?: Record<string, string> | null;
+  projectId: number;
+}): Promise<Record<string, string> | undefined> => {
+  const merged = { ...(args.stored ?? {}), ...(args.fired ?? {}) };
+  const keys = Object.keys(merged);
+  if (keys.length === 0) return undefined;
+
+  const resolved = await Promise.all(
+    keys.map(async (key): Promise<[string, string]> => {
+      return [
+        key,
+        await resolveSecretRefsInString({
+          value: merged[key],
+          projectId: args.projectId,
+        }),
+      ];
+    })
+  );
+  return Object.fromEntries(resolved);
+};
+
 /** Pre-flight input validation per target type (throws 400 before any record). */
 const assertFireInputValid = async (args: {
   trigger: InstanceType<(typeof db)['Trigger']>;
@@ -294,6 +357,8 @@ export type PreparedFiring = {
   firing: InstanceType<(typeof db)['TriggerFiring']>;
   trigger: InstanceType<(typeof db)['Trigger']>;
   effectiveInput: Record<string, unknown>;
+  /** Resolved at fire time, so a rotated secret takes effect on the next firing. */
+  effectiveToolContext?: Record<string, string>;
   authHeader: string;
 };
 
@@ -308,6 +373,7 @@ export const prepareFiring = async (args: {
   triggerPublicId: string;
   source: string;
   fireInput?: Record<string, unknown> | null;
+  fireToolContext?: Record<string, string> | null;
 }): Promise<PreparedFiring> => {
   log('prepareFiring: trigger=%s source=%s', args.triggerPublicId, args.source);
 
@@ -340,6 +406,12 @@ export const prepareFiring = async (args: {
   };
   await assertFireInputValid({ trigger, input: effectiveInput });
 
+  const effectiveToolContext = await resolveFiringToolContext({
+    stored: trigger.toolContext,
+    fired: args.fireToolContext,
+    projectId: trigger.projectId as number,
+  });
+
   const firing = await createFiringRecord({
     triggerId: trigger.id as number,
     projectId: trigger.projectId as number,
@@ -347,7 +419,7 @@ export const prepareFiring = async (args: {
     input: effectiveInput,
   });
 
-  return { firing, trigger, effectiveInput, authHeader };
+  return { firing, trigger, effectiveInput, effectiveToolContext, authHeader };
 };
 
 /**
@@ -360,7 +432,8 @@ export const prepareFiring = async (args: {
 export const runFiringDispatch = async (
   prepared: PreparedFiring
 ): Promise<ReturnType<typeof mapTriggerFiring>> => {
-  const { firing, trigger, effectiveInput, authHeader } = prepared;
+  const { firing, trigger, effectiveInput, effectiveToolContext, authHeader } =
+    prepared;
 
   // Everything is guarded so this never rejects — callers can `void` it as a
   // fire-and-forget background task (webhook/schedule) or await it (manual).
@@ -374,6 +447,7 @@ export const runFiringDispatch = async (
       action: (trigger.action as string | null) ?? null,
       projectId: trigger.projectId as number,
       input: effectiveInput,
+      toolContext: effectiveToolContext,
       authHeader,
       triggerId: trigger.publicId as string,
     });
@@ -401,6 +475,7 @@ export const fireTriggerNow = async (args: {
   triggerPublicId: string;
   source: string;
   fireInput?: Record<string, unknown> | null;
+  fireToolContext?: Record<string, string> | null;
 }) => {
   const prepared = await prepareFiring(args);
   return runFiringDispatch(prepared);

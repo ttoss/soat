@@ -48,6 +48,7 @@ describe('Triggers', () => {
         'ai-providers:CreateAiProvider',
         'evaluations:RunEval',
         'evaluations:GetEval',
+        'secrets:CreateSecret',
       ],
       createOtherProject: true,
       createNoPermUser: true,
@@ -1012,6 +1013,176 @@ describe('Triggers', () => {
         `/api/v1/triggers/${webhookTriggerId}/rotate-secret`
       );
       expect(res.status).toBe(403);
+    });
+  });
+
+  // A scheduled firing has no caller to attach a credential to, so the bag is
+  // stored on the trigger. It is write-only, like an eval run's: accepted on
+  // write, never read back, so the record cannot be used to recover a value.
+  describe('tool_context on a trigger', () => {
+    test('is accepted on create and never returned', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/triggers')
+        .send({
+          project_id: projectId,
+          name: `ctx-create-${Date.now()}`,
+          type: 'manual',
+          target_type: 'orchestration',
+          target_id: orchestrationId,
+          tool_context: { advertiserId: 'adv_123' },
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.tool_context).toBeUndefined();
+
+      const read = await authenticatedTestClient(userToken).get(
+        `/api/v1/triggers/${res.body.id}`
+      );
+      expect(read.status).toBe(200);
+      expect(read.body.tool_context).toBeUndefined();
+    });
+
+    test('a key that cannot become a header is refused', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/triggers')
+        .send({
+          project_id: projectId,
+          name: `ctx-badkey-${Date.now()}`,
+          type: 'manual',
+          target_type: 'orchestration',
+          target_id: orchestrationId,
+          tool_context: { 'bad key': 'v' },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_TOOL_CONTEXT_KEY');
+    });
+
+    test('a {{secret:...}} reference to a secret that does not exist is refused at create', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/triggers')
+        .send({
+          project_id: projectId,
+          name: `ctx-badsecret-${Date.now()}`,
+          type: 'manual',
+          target_type: 'orchestration',
+          target_id: orchestrationId,
+          tool_context: { token: '{{secret:sec_doesnotexist}}' },
+        });
+
+      // Refused here rather than at fire time — the point of allowing a stored
+      // reference is that a firing nobody is watching does not discover it.
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('SECRET_NOT_FOUND');
+    });
+
+    test('a firing forwards the stored bag to the run it starts', async () => {
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/triggers')
+        .send({
+          project_id: projectId,
+          name: `ctx-fire-${Date.now()}`,
+          type: 'manual',
+          target_type: 'agent',
+          target_id: agentId,
+          input: { message: 'go' },
+          tool_context: { advertiserId: 'adv_123' },
+        });
+      expect(created.status).toBe(201);
+
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: 'gen_ctx1',
+        traceId: 'trc_ctx1',
+        status: 'completed',
+        output: { model: 'llama3.2', content: 'done', finishReason: 'stop' },
+      });
+
+      const fired = await authenticatedTestClient(userToken)
+        .post(`/api/v1/triggers/${created.body.id}/fire`)
+        .send({});
+      expect(fired.status).toBe(200);
+
+      expect(mockCreateGeneration).toHaveBeenCalledWith(
+        expect.objectContaining({
+          toolContext: { advertiserId: 'adv_123' },
+        })
+      );
+    });
+
+    // The point of allowing a stored bag: the credential lives in the secret
+    // store and the trigger holds only its name, resolved per firing so a
+    // rotation takes effect without touching the trigger.
+    test('a {{secret:...}} value is resolved at fire time', async () => {
+      const secret = await authenticatedTestClient(userToken)
+        .post('/api/v1/secrets')
+        .send({
+          project_id: projectId,
+          name: `trigger-ctx-${Date.now()}`,
+          value: 'the-real-token',
+        });
+      expect(secret.status).toBe(201);
+
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/triggers')
+        .send({
+          project_id: projectId,
+          name: `ctx-secret-${Date.now()}`,
+          type: 'manual',
+          target_type: 'agent',
+          target_id: agentId,
+          input: { message: 'go' },
+          tool_context: { ocaToken: `{{secret:${secret.body.id}}}` },
+        });
+      expect(created.status).toBe(201);
+
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: 'gen_ctx3',
+        traceId: 'trc_ctx3',
+        status: 'completed',
+        output: { model: 'llama3.2', content: 'done', finishReason: 'stop' },
+      });
+
+      const fired = await authenticatedTestClient(userToken)
+        .post(`/api/v1/triggers/${created.body.id}/fire`)
+        .send({});
+      expect(fired.status).toBe(200);
+
+      expect(mockCreateGeneration).toHaveBeenCalledWith(
+        expect.objectContaining({ toolContext: { ocaToken: 'the-real-token' } })
+      );
+    });
+
+    test('a fire-time bag overrides the stored one per key', async () => {
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/triggers')
+        .send({
+          project_id: projectId,
+          name: `ctx-override-${Date.now()}`,
+          type: 'manual',
+          target_type: 'agent',
+          target_id: agentId,
+          input: { message: 'go' },
+          tool_context: { advertiserId: 'adv_123', locale: 'pt-BR' },
+        });
+      expect(created.status).toBe(201);
+
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: 'gen_ctx2',
+        traceId: 'trc_ctx2',
+        status: 'completed',
+        output: { model: 'llama3.2', content: 'done', finishReason: 'stop' },
+      });
+
+      const fired = await authenticatedTestClient(userToken)
+        .post(`/api/v1/triggers/${created.body.id}/fire`)
+        .send({ tool_context: { advertiserId: 'adv_999' } });
+      expect(fired.status).toBe(200);
+
+      expect(mockCreateGeneration).toHaveBeenCalledWith(
+        expect.objectContaining({
+          toolContext: { advertiserId: 'adv_999', locale: 'pt-BR' },
+        })
+      );
     });
   });
 

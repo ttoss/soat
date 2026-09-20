@@ -689,6 +689,26 @@ describe('buildKnowledgeMessages', () => {
     );
   });
 
+  // The two knobs knowledge search takes that an agent could not express, so
+  // `knowledge_config` is now the search request minus the query rather than
+  // nearly it.
+  test('forwards rrf_k and recency_half_life_days to searchKnowledge', async () => {
+    mockSearchKnowledge.mockResolvedValueOnce([]);
+    await buildKnowledgeMessages({
+      billingProjectId: 7,
+      knowledgeConfig: {
+        documentPaths: ['/handbook/'],
+        rrfK: 20,
+        recencyHalfLifeDays: 30,
+      },
+      projectIds: [1],
+      messages: [{ role: 'user', content: 'test' }],
+    });
+    expect(mockSearchKnowledge).toHaveBeenCalledWith(
+      expect.objectContaining({ rrfK: 20, recencyHalfLifeDays: 30 })
+    );
+  });
+
   test('a forwarded undefined limit resolves to ten results', () => {
     expect(clampKnowledgeSearchLimit(undefined)).toBe(10);
   });
@@ -831,6 +851,8 @@ describe('readKnowledgeConfig', () => {
       document_paths: ['/docs/'],
       tags: { team: 'finance' },
       min_score: 0.5,
+      rrf_k: 20,
+      recency_half_life_days: 30,
       limit: 50,
       write_memory_store_id: 'mstore_1',
     });
@@ -840,6 +862,8 @@ describe('readKnowledgeConfig', () => {
       documentPaths: ['/docs/'],
       tags: { team: 'finance' },
       minScore: 0.5,
+      rrfK: 20,
+      recencyHalfLifeDays: 30,
       limit: 50,
       writeMemoryStoreId: 'mstore_1',
     });

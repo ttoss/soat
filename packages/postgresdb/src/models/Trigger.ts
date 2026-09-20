@@ -106,6 +106,19 @@ export class Trigger extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare input: Record<string, unknown> | null;
 
+  /**
+   * Caller context every firing forwards to the run it starts, so a tool
+   * authorizing through `{{context:<key>}}` can be reached on a schedule — a
+   * firing has no request to carry one.
+   *
+   * Write-only: accepted on write and never mapped onto a read, so the record
+   * cannot be used to recover a value. A value may be a `{{secret:...}}`
+   * reference, which keeps the credential in the secret store and leaves only
+   * its name here.
+   */
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare toolContext: Record<string, string> | null;
+
   // 5-field cron expression (UTC); present only for schedule triggers.
   @Column({ type: DataType.STRING, allowNull: true })
   declare cron: string | null;
