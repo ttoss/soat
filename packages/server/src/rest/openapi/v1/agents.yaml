@@ -1069,8 +1069,16 @@ components:
                 - $ref: './tags.yaml#/components/schemas/TagBag'
             min_score:
               type: number
+              description: >
+                Minimum raw cosine similarity (0–1) a vector candidate must
+                reach to be ranked, the floor the search endpoint spells
+                `min_similarity`. No default: omitted means no floor at all,
+                and every one of the `limit` nearest chunks is injected however
+                weak it is.
             limit:
               type: integer
+              description: >
+                Maximum number of results to inject. Omitted, 10 are injected.
             write_memory_store_id:
               x-soat-ref: memory-stores
               type: string
@@ -1439,8 +1447,16 @@ components:
                 - $ref: './tags.yaml#/components/schemas/TagBag'
             min_score:
               type: number
+              description: >
+                Minimum raw cosine similarity (0–1) a vector candidate must
+                reach to be ranked, the floor the search endpoint spells
+                `min_similarity`. No default: omitted means no floor at all,
+                and every one of the `limit` nearest chunks is injected however
+                weak it is.
             limit:
               type: integer
+              description: >
+                Maximum number of results to inject. Omitted, 10 are injected.
             write_memory_store_id:
               x-soat-ref: memory-stores
               type: string
@@ -1629,8 +1645,16 @@ components:
                 - $ref: './tags.yaml#/components/schemas/TagBag'
             min_score:
               type: number
+              description: >
+                Minimum raw cosine similarity (0–1) a vector candidate must
+                reach to be ranked, the floor the search endpoint spells
+                `min_similarity`. No default: omitted means no floor at all,
+                and every one of the `limit` nearest chunks is injected however
+                weak it is.
             limit:
               type: integer
+              description: >
+                Maximum number of results to inject. Omitted, 10 are injected.
             write_memory_store_id:
               x-soat-ref: memory-stores
               type: string
@@ -1836,8 +1860,16 @@ components:
                 - $ref: './tags.yaml#/components/schemas/TagBag'
             min_score:
               type: number
+              description: >
+                Minimum raw cosine similarity (0–1) a vector candidate must
+                reach to be ranked, the floor the search endpoint spells
+                `min_similarity`. No default: omitted means no floor at all,
+                and every one of the `limit` nearest chunks is injected however
+                weak it is.
             limit:
               type: integer
+              description: >
+                Maximum number of results to inject. Omitted, 10 are injected.
 
     ToolOutputMessageContent:
       type: object
