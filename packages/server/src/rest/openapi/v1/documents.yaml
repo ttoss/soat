@@ -118,7 +118,11 @@ paths:
                   example: 'The quick brown fox jumps over the lazy dog.'
                 path:
                   type: string
-                  description: Logical path within the project (e.g. /reports/q1.txt). Defaults to /filename if omitted.
+                  description: >-
+                    Logical path within the project (e.g. /reports/q1.txt).
+                    Defaults to `/<filename>`, or to `/<document_id>.txt` when
+                    neither is given — a document with no path is reachable
+                    only by its id, since a prefix filter never matches null.
                   example: '/reports/q1.txt'
                 filename:
                   type: string

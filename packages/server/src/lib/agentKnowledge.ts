@@ -187,8 +187,7 @@ const hasDocumentFilters = (config: KnowledgeConfig): boolean => {
 
 /**
  * The conversation a runtime-written message document belongs to, read back out
- * of its reserved-root key. A chat turn injected as `Document: document.txt`
- * tells the model nothing about where the text came from.
+ * of its reserved-root key.
  */
 const conversationOfPath = (path: string | undefined): string | undefined => {
   const match = path?.match(/^\/\.system\/conversations\/([^/]+)\//);
@@ -196,9 +195,9 @@ const conversationOfPath = (path: string | undefined): string | undefined => {
 };
 
 /**
- * A chat turn injected as `Document: document.txt` tells the model nothing
- * about where the text came from. The stamped tags carry it; the path is the
- * fallback for a turn written before they existed.
+ * A chat turn injected under its file key tells the model nothing about where
+ * the text came from. The stamped tags carry it; the path is the fallback for a
+ * turn written before they existed.
  */
 const documentLabel = (r: {
   path?: string;
