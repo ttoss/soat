@@ -28,8 +28,19 @@ export const resolveDocumentFiling = (args: {
     };
   }
   const rawPath = assertCallerPath(args.path ?? args.filename ?? null);
+  if (rawPath === null) {
+    // A document with no path is reachable only by its id, because every
+    // prefix read is a `LIKE` and `LIKE` never matches null — so listing `/`
+    // would not be the whole project. Its own id is the one leaf that is
+    // unique without asking the caller for a name, which `project_id + path`
+    // requires.
+    return {
+      normalizedPath: `/${args.publicId}.txt`,
+      filename: `${args.publicId}.txt`,
+    };
+  }
   return {
-    normalizedPath: rawPath === null ? null : normalizePath(rawPath),
+    normalizedPath: normalizePath(rawPath),
     filename: args.filename,
   };
 };
