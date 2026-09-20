@@ -514,11 +514,11 @@ components:
 
 
             A value may be a `{{secret:...}}` reference, which keeps the
-            credential in the [secret](./secrets.yaml) store and leaves only its
-            name on the trigger; it is resolved at fire time, so rotating the
-            secret changes the next firing without touching the trigger. A
-            reference naming a secret that does not exist in this project is
-            refused here rather than at fire time.
+            credential in the [secret](/docs/modules/secrets) store and leaves
+            only its name on the trigger; it is resolved at fire time, so
+            rotating the secret changes the next firing without touching the
+            trigger. A reference naming a secret that does not exist in this
+            project is refused here rather than at fire time.
         cron:
           type: string
           description: 5-field cron expression (UTC). Required when type is schedule
