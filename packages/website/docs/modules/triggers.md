@@ -357,7 +357,9 @@ The bag is **write-only** — accepted on create and update, never returned by a
 read — so the record cannot be used to recover a value. A manual
 [`fire`](/docs/api/triggers/fire-trigger) may pass its own `tool_context`,
 shallow-merged per key over the stored one, which is the one path that can
-supply a value without storing it.
+supply a value without storing it. A fire-time value is forwarded exactly as
+written: only the stored bag resolves `{{secret:...}}`, so firing a trigger is
+not a way to read a secret the caller could not read already.
 
 The credential a firing sends is bounded by what the trigger's
 [run-as identity](#run-as-identity) may already do; `tool_context` decides what

@@ -308,27 +308,34 @@ const resolveRunAsAuthHeader = async (args: {
  * what the next firing sends without touching the trigger, and the plaintext
  * never rests outside the secret store.
  */
+/**
+ * Only the stored bag is secret-resolved. A stored value is a declaration whose
+ * refs were checked against this project when it was written; a firing's own
+ * bag is caller data on a live request, and resolving it would let anyone who
+ * may fire a trigger name any secret in the project and have the server hand
+ * the plaintext to the target. A fired key still wins, forwarded as written.
+ */
 const resolveFiringToolContext = async (args: {
   stored: Record<string, string> | null;
   fired?: Record<string, string> | null;
   projectId: number;
 }): Promise<Record<string, string> | undefined> => {
-  const merged = { ...(args.stored ?? {}), ...(args.fired ?? {}) };
-  const keys = Object.keys(merged);
-  if (keys.length === 0) return undefined;
-
-  const resolved = await Promise.all(
-    keys.map(async (key): Promise<[string, string]> => {
-      return [
-        key,
-        await resolveSecretRefsInString({
-          value: merged[key],
-          projectId: args.projectId,
-        }),
-      ];
-    })
+  const resolvedStored = await Promise.all(
+    Object.entries(args.stored ?? {}).map(
+      async ([key, value]): Promise<[string, string]> => {
+        return [
+          key,
+          await resolveSecretRefsInString({ value, projectId: args.projectId }),
+        ];
+      }
+    )
   );
-  return Object.fromEntries(resolved);
+
+  const merged = {
+    ...Object.fromEntries(resolvedStored),
+    ...(args.fired ?? {}),
+  };
+  return Object.keys(merged).length === 0 ? undefined : merged;
 };
 
 /** Pre-flight input validation per target type (throws 400 before any record). */

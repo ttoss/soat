@@ -599,6 +599,11 @@ components:
             stored `tool_context`. A manual fire has a caller, so this is the
             one path that can supply a value without storing it.
 
+
+            Forwarded exactly as written: a `{{secret:...}}` reference is
+            resolved only in the trigger's stored bag, never in one supplied
+            here.
+
     TriggerSecretResponse:
       type: object
       properties:

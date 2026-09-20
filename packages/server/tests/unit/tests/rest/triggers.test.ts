@@ -1153,6 +1153,50 @@ describe('Triggers', () => {
       );
     });
 
+    // The stored bag is a declaration its author is validated against; a
+    // fire-time bag is caller data on a live request. Resolving the latter
+    // would let anyone who may fire name any secret in the project and have
+    // the server hand its plaintext to the target.
+    test('a {{secret:...}} supplied at fire time is not resolved', async () => {
+      const secret = await authenticatedTestClient(userToken)
+        .post('/api/v1/secrets')
+        .send({
+          project_id: projectId,
+          name: `trigger-ctx-fired-${Date.now()}`,
+          value: 'must-not-leak',
+        });
+      expect(secret.status).toBe(201);
+
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/triggers')
+        .send({
+          project_id: projectId,
+          name: `ctx-fired-secret-${Date.now()}`,
+          type: 'manual',
+          target_type: 'agent',
+          target_id: agentId,
+          input: { message: 'go' },
+        });
+      expect(created.status).toBe(201);
+
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: 'gen_ctx4',
+        traceId: 'trc_ctx4',
+        status: 'completed',
+        output: { model: 'llama3.2', content: 'done', finishReason: 'stop' },
+      });
+
+      const ref = `{{secret:${secret.body.id}}}`;
+      const fired = await authenticatedTestClient(userToken)
+        .post(`/api/v1/triggers/${created.body.id}/fire`)
+        .send({ tool_context: { ocaToken: ref } });
+      expect(fired.status).toBe(200);
+
+      expect(mockCreateGeneration).toHaveBeenCalledWith(
+        expect.objectContaining({ toolContext: { ocaToken: ref } })
+      );
+    });
+
     test('a fire-time bag overrides the stored one per key', async () => {
       const created = await authenticatedTestClient(userToken)
         .post('/api/v1/triggers')
