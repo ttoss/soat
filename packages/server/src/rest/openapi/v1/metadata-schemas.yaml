@@ -1,0 +1,492 @@
+openapi: 3.0.3
+info:
+  title: SOAT Metadata Schemas API
+  version: 1.0.0
+  description: >-
+    Declare what a resource's `metadata` must satisfy in a project. A write
+    whose metadata violates the declaration in force is refused by the
+    resource's own write path, so the rule holds whichever door the write came
+    through.
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+servers:
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
+    variables:
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
+tags:
+  - name: Metadata Schemas
+    description: Declare the structure a resource's metadata must satisfy
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/metadata-schemas:
+    get:
+      tags:
+        - Metadata Schemas
+      summary: List metadata schemas
+      description: >-
+        Returns the declarations in scope, oldest first. `resource_type`
+        narrows them to one governed resource.
+      operationId: listMetadataSchemas
+      parameters:
+        - name: project_id
+          in: query
+          required: false
+          description: Project public ID (proj_ prefix)
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
+        - name: resource_type
+          in: query
+          required: false
+          description: Return only the declarations governing this resource.
+          schema:
+            type: string
+            enum: [document]
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          description: Number of results to skip
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: The declarations in scope
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - total
+                  - limit
+                  - offset
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MetadataSchemaRecord'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+    post:
+      tags:
+        - Metadata Schemas
+      summary: Declare a metadata schema
+      description: >
+        Declares what `metadata` must satisfy for one resource type under one
+        selector. A document is selected by `path_prefix`, matched on a path
+        boundary: `/reports` covers `/reports/q1.txt` and never
+        `/reports-archive/q1.txt`.
+
+
+        The schema is compiled here, so one JSON Schema cannot parse is refused
+        rather than stored — a stored one would be a rule that silently governs
+        nothing. One selector has one schema per resource type; a second
+        declaration of the same one is `409 NAME_CONFLICT`. The reserved root
+        `/.system` cannot be governed: a platform-written document carries no
+        caller metadata.
+      operationId: createMetadataSchema
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - resource_type
+                - schema
+              properties:
+                project_id:
+                  x-soat-ref: projects
+                  type: string
+                  description: >-
+                    Project the declaration governs. Optional for a
+                    project-scoped API key, which supplies it.
+                  example: proj_V1StGXR8Z5jdHi6B
+                resource_type:
+                  type: string
+                  enum: [document]
+                  description: >-
+                    The resource whose metadata this declaration governs. A type
+                    appears here once its write path reads the registry, so a
+                    declaration always has a door that enforces it.
+                  example: document
+                path_prefix:
+                  type: string
+                  description: >-
+                    The selector a `document` declaration must carry: the
+                    directory it governs.
+                  example: /reports
+                schema:
+                  type: object
+                  description: >-
+                    A JSON Schema. Its keywords are its own vocabulary and are
+                    stored as written.
+                  example:
+                    type: object
+                    required: [quarter]
+                    properties:
+                      quarter: { type: string }
+      responses:
+        '201':
+          description: The declaration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetadataSchemaRecord'
+        '400':
+          description: >-
+            Bad Request — unknown `resource_type`, a missing or unusable
+            selector, the reserved root, or a schema that is not valid JSON
+            Schema
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: Conflict — this selector is already declared for this type
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/metadata-schemas/validate:
+    post:
+      tags:
+        - Metadata Schemas
+      summary: Check metadata against what is declared
+      description: >
+        Answers what a write would be told, without writing: a caller preparing
+        a batch learns which declaration would refuse it, and why, before it
+        sends anything.
+
+
+        It reports; it does not enforce. The refusal itself lives in each
+        resource's own write path, because a check a writer has to call is
+        advisory and the writer who skips it is the one the rule exists for.
+      operationId: validateMetadata
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - path
+              properties:
+                project_id:
+                  x-soat-ref: projects
+                  type: string
+                  example: proj_V1StGXR8Z5jdHi6B
+                path:
+                  type: string
+                  description: >-
+                    The path the document would be filed at, which decides
+                    which declaration governs it.
+                  example: /reports/q1.txt
+                metadata:
+                  type: object
+                  nullable: true
+                  additionalProperties: true
+                  description: The bag to judge. Absent or `null` is judged as an empty bag.
+                  example: { quarter: Q1 }
+      responses:
+        '200':
+          description: The verdict
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - valid
+                  - resource_type
+                  - metadata_schema_id
+                  - path_prefix
+                  - error
+                properties:
+                  valid:
+                    type: boolean
+                    description: Whether a write of this metadata at this path would be accepted.
+                    example: false
+                  resource_type:
+                    type: string
+                    enum: [document]
+                    example: document
+                  metadata_schema_id:
+                    type: string
+                    nullable: true
+                    description: >-
+                      The declaration that would refuse it; `null` when the
+                      metadata is accepted or nothing governs the path.
+                    example: mdschema_V1StGXR8Z5jdHi6B
+                  path_prefix:
+                    type: string
+                    nullable: true
+                    description: The refusing declaration's selector.
+                    example: /reports
+                  error:
+                    type: string
+                    nullable: true
+                    description: What the metadata violates, field by field.
+                    example: /quarter must be equal to one of the allowed values
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/metadata-schemas/{metadata_schema_id}:
+    get:
+      tags:
+        - Metadata Schemas
+      summary: Get a metadata schema
+      operationId: getMetadataSchema
+      x-soat-resource:
+        kind: metadata_schema
+        from: metadata_schema_id
+      x-iam-action: metadata-schemas:GetMetadataSchema
+      parameters:
+        - name: metadata_schema_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: mdschema_V1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: The declaration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetadataSchemaRecord'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+    patch:
+      tags:
+        - Metadata Schemas
+      summary: Update a metadata schema
+      description: >-
+        Changes the schema, the selector, or both. `resource_type` is fixed at
+        creation: it decides the selector's spelling and which write path reads
+        the row, so changing it would silently repoint the declaration at a
+        different door — delete it and declare again instead.
+      operationId: updateMetadataSchema
+      x-soat-resource:
+        kind: metadata_schema
+        from: metadata_schema_id
+      x-iam-action: metadata-schemas:UpdateMetadataSchema
+      parameters:
+        - name: metadata_schema_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: mdschema_V1StGXR8Z5jdHi6B
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                path_prefix:
+                  type: string
+                  description: The declaration's new selector.
+                  example: /reports/quarterly
+                schema:
+                  type: object
+                  description: Replaces the declared JSON Schema.
+                  example:
+                    type: object
+                    required: [quarter, owner]
+                    properties:
+                      quarter: { type: string }
+                      owner: { type: string }
+      responses:
+        '200':
+          description: The declaration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetadataSchemaRecord'
+        '400':
+          description: Bad Request — an unusable selector, or a schema that is not valid JSON Schema
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: Conflict — this selector is already declared for this type
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Metadata Schemas
+      summary: Delete a metadata schema
+      description: >-
+        Removes the declaration. Documents already stored keep the metadata they
+        hold — the rule governed writes, not rows.
+      operationId: deleteMetadataSchema
+      x-soat-resource:
+        kind: metadata_schema
+        from: metadata_schema_id
+      x-iam-action: metadata-schemas:DeleteMetadataSchema
+      parameters:
+        - name: metadata_schema_id
+          in: path
+          required: true
+          schema:
+            type: string
+            example: mdschema_V1StGXR8Z5jdHi6B
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: './errors.yaml#/components/schemas/ErrorResponse'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    MetadataSchemaRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Public ID (mdschema_ prefix)
+          example: mdschema_V1StGXR8Z5jdHi6B
+        project_id:
+          x-soat-ref: projects
+          type: string
+          example: proj_V1StGXR8Z5jdHi6B
+        resource_type:
+          type: string
+          enum: [document]
+          description: The resource whose metadata this declaration governs.
+          example: document
+        path_prefix:
+          type: string
+          description: >-
+            The selector, in the field its resource type is addressed by. A
+            document's is the directory it is filed under.
+          example: /reports
+        schema:
+          type: object
+          description: The declared JSON Schema, as written.
+          example:
+            type: object
+            required: [quarter]
+            properties:
+              quarter: { type: string }
+        created_at:
+          type: string
+          format: date-time
+          example: '2024-01-01T00:00:00.000Z'
+        updated_at:
+          type: string
+          format: date-time
+          example: '2024-01-01T00:00:00.000Z'

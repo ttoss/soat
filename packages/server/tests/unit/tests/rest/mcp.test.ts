@@ -1138,6 +1138,65 @@ describe('MCP tools - happy path', () => {
     });
   });
 
+  // ── Metadata schemas ─────────────────────────────────────────────────────
+
+  describe('Metadata schema tools', () => {
+    test('the declaration governs what create-document may store', async () => {
+      const schema = {
+        type: 'object',
+        required: ['quarter'],
+        properties: { quarter: { type: 'string' } },
+      };
+
+      const declared = parseResult(
+        await mcpCall('create-metadata-schema', {
+          project_id: projectId,
+          resource_type: 'document',
+          path_prefix: '/mcp-reports',
+          schema,
+        })
+      );
+      expect(declared.id).toMatch(/^mdschema_/);
+      expect(declared.schema).toEqual(schema);
+
+      const listed = parseResult(
+        await mcpCall('list-metadata-schemas', { project_id: projectId })
+      );
+      expect(
+        (listed.data as { id: string }[]).map((entry) => {
+          return entry.id;
+        })
+      ).toContain(declared.id);
+
+      const verdict = parseResult(
+        await mcpCall('validate-metadata', {
+          project_id: projectId,
+          path: '/mcp-reports/report.txt',
+          metadata: { owner: 'finance' },
+        })
+      );
+      expect(verdict.valid).toBe(false);
+      expect(verdict.metadata_schema_id).toBe(declared.id);
+
+      const refused = await mcpCall('create-document', {
+        project_id: projectId,
+        content: 'Revenue is up.',
+        filename: 'mcp-report.txt',
+        path: '/mcp-reports/mcp-report.txt',
+        metadata: { owner: 'finance' },
+      });
+      expect(refused.body.result.isError).toBe(true);
+      expect(refused.body.result.content[0].text).toContain(
+        "schema declared for '/mcp-reports'"
+      );
+
+      const deleted = await mcpCall('delete-metadata-schema', {
+        metadata_schema_id: declared.id,
+      });
+      expect(deleted.status).toBe(200);
+    });
+  });
+
   // ── Secrets ──────────────────────────────────────────────────────────────
 
   describe('Secrets tools', () => {

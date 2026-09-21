@@ -34,6 +34,7 @@ import { ingestionRules } from './ingestionRules';
 import { getMemory } from './memories';
 import { getMemoryRule } from './memoryRules';
 import { memoryStores } from './memoryStores';
+import { metadataSchemas } from './metadataSchemas';
 import { modelRoutes } from './modelRoutes';
 import {
   findRunOrchestrationId,
@@ -185,6 +186,13 @@ const RESOURCE_KINDS: Record<string, ResourceKind> = {
       return memoryStores;
     },
     resourceType: 'memory_store',
+  },
+
+  metadata_schema: {
+    accessor: () => {
+      return metadataSchemas;
+    },
+    resourceType: 'metadata_schema',
   },
 
   model_route: {

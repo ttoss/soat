@@ -302,6 +302,12 @@ describe('resolveResourceScope', () => {
           contentTypeGlob: 'image/png',
           toolId: tool.id,
         }),
+        metadata_schema: await db.MetadataSchema.create({
+          projectId,
+          resourceType: 'document',
+          selector: '/scopes-kind',
+          schema: { type: 'object' },
+        }),
         audit: await db.AuditEntry.create({
           projectId,
           action: 'scopes:Kind',
@@ -337,6 +343,7 @@ describe('resolveResourceScope', () => {
       ['quota', 'quota'],
       ['model_route', 'model_route'],
       ['ingestionRule', 'ingestionRule'],
+      ['metadata_schema', 'metadata_schema'],
       ['audit', 'audit'],
       ['usage', 'usage'],
     ])(
@@ -371,6 +378,7 @@ describe('resolveResourceScope', () => {
       ['quota', 'quota_absent'],
       ['model_route', 'route_absent'],
       ['ingestionRule', 'igr_absent'],
+      ['metadata_schema', 'mdschema_absent'],
       ['audit', 'audit_absent'],
       ['usage', 'uthr_absent'],
     ])('an id that names no %s resolves to nothing', async (kind, publicId) => {

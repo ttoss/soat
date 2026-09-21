@@ -1,0 +1,35 @@
+{
+  "module": "metadata-schemas",
+  "operations": [
+    {
+      "operationId": "listMetadataSchemas",
+      "action": "metadata-schemas:ListMetadataSchemas",
+      "description": "List the metadata schemas declared in a project"
+    },
+    {
+      "operationId": "validateMetadata",
+      "action": "metadata-schemas:ListMetadataSchemas",
+      "description": "Check metadata against the schemas declared in a project"
+    },
+    {
+      "operationId": "createMetadataSchema",
+      "action": "metadata-schemas:CreateMetadataSchema",
+      "description": "Declare a metadata schema"
+    },
+    {
+      "operationId": "getMetadataSchema",
+      "action": "metadata-schemas:GetMetadataSchema",
+      "description": "Get a metadata schema by ID"
+    },
+    {
+      "operationId": "updateMetadataSchema",
+      "action": "metadata-schemas:UpdateMetadataSchema",
+      "description": "Update a metadata schema"
+    },
+    {
+      "operationId": "deleteMetadataSchema",
+      "action": "metadata-schemas:DeleteMetadataSchema",
+      "description": "Delete a metadata schema"
+    }
+  ]
+}

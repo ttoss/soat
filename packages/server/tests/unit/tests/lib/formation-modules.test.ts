@@ -925,6 +925,69 @@ describe('documentsFormationModule chunking', () => {
   });
 });
 
+// A declaration is unique per (project, resource_type, selector), so it cannot
+// ride the shared round-trip table either.
+
+describe('metadataSchemasFormationModule', () => {
+  test('create → read → update → delete lifecycle', async () => {
+    const schemaId = await applyCreateResource({
+      actingUserId: internalUserId,
+      resourceType: 'metadata_schema',
+      projectId: internalProjectId,
+      resolvedProperties: {
+        resource_type: 'document',
+        path_prefix: '/formation-reports',
+        schema: { type: 'object', required: ['quarter'] },
+      },
+    });
+    expect(schemaId).toMatch(/^mdschema_/);
+
+    const read = await readModule('metadata_schema').read?.({
+      projectId: internalProjectId,
+      physicalResourceId: schemaId,
+    });
+    expect(read).toMatchObject({
+      resource_type: 'document',
+      path_prefix: '/formation-reports',
+      schema: { type: 'object', required: ['quarter'] },
+    });
+
+    await applyUpdateResource({
+      actingUserId: internalUserId,
+      projectId: internalProjectId,
+      resourceType: 'metadata_schema',
+      physicalResourceId: schemaId,
+      resolvedProperties: {
+        resource_type: 'document',
+        path_prefix: '/formation-reports/quarterly',
+        schema: { type: 'object', required: ['quarter', 'owner'] },
+      },
+    });
+    expect(
+      await readModule('metadata_schema').read?.({
+        projectId: internalProjectId,
+        physicalResourceId: schemaId,
+      })
+    ).toMatchObject({
+      path_prefix: '/formation-reports/quarterly',
+      schema: { type: 'object', required: ['quarter', 'owner'] },
+    });
+
+    await applyDeleteResource({
+      actingUserId: internalUserId,
+      projectId: internalProjectId,
+      resourceType: 'metadata_schema',
+      physicalResourceId: schemaId,
+    });
+    expect(
+      await readModule('metadata_schema').read?.({
+        projectId: internalProjectId,
+        physicalResourceId: schemaId,
+      })
+    ).toBeNull();
+  });
+});
+
 // A quota is unique per (project, scope, scope_ref, metric, window), so it
 // cannot ride the shared round-trip table, which re-creates each resource
 // several times in one project.

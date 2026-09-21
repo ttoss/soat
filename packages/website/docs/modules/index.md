@@ -30,6 +30,7 @@ Project-scoped data and semantic search.
 - [Ingestion Rules](./ingestion-rules.md) — automatic processing of uploaded content
 - [Knowledge](./knowledge.md) — unified search across documents and memory entries
 - [Memories](./memories.md) — durable context stores for agents
+- [Metadata Schemas](./metadata-schemas.md) — the structure a resource's metadata must satisfy
 
 ## Agents & Conversations
 

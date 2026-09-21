@@ -44,7 +44,7 @@ See the [Permissions Reference](../permissions.md) for the IAM action strings fo
 | `status`     | string         | Ingestion lifecycle state: `pending` → `processing` → `ready` \| `failed`, plus `withdrawn`. Plain-text documents are always `ready`. |
 | `version`    | number         | Content version, starting at `1` — see [Versioning](#versioning)                                                   |
 | `title`      | string \| null | Human-readable title (auto-set to filename for PDF ingestion)                                                      |
-| `metadata`   | object \| null | Arbitrary caller-supplied JSON metadata — never written or read by the server. Stored as JSON, so the structure written is the structure held; `null` on an update clears it. Key casing is preserved verbatim — unlike other response fields, `metadata` keys are not converted between `snake_case` and `camelCase`. Ingestion progress (`chunk_count`, `total_pages`) and failure info (`error`) live on [`GET /documents/:id/status`](/docs/api/documents/get-document-status) instead — see [Polling Ingestion Status](#polling-ingestion-status). |
+| `metadata`   | object \| null | Caller-supplied JSON metadata — never written by the server, and read only to judge it against the project's [metadata schemas](#metadata-schemas). Stored as JSON, so the structure written is the structure held; `null` on an update clears it. Key casing is preserved verbatim — unlike other response fields, `metadata` keys are not converted between `snake_case` and `camelCase`. Ingestion progress (`chunk_count`, `total_pages`) and failure info (`error`) live on [`GET /documents/:id/status`](/docs/api/documents/get-document-status) instead — see [Polling Ingestion Status](#polling-ingestion-status). |
 | `tags`       | object \| null | Key-value string tags                                                                                              |
 | `content`    | string \| null | Joined chunk content — only present in [`GET /documents/:id`](/docs/api/documents/get-document) responses when `status` is `ready`                     |
 | `chunk_strategy` | string | The chunk strategy the document was last (re-)ingested with (`page` \| `whole` \| `size`). Absent when the default (`whole`) was used — the key is omitted rather than sent as `null`. |
@@ -202,6 +202,37 @@ A snapshot is the whole state, not a diff. What a restore has to reproduce is wh
 Restoring any content version brings it back: the content is re-chunked, the document returns to listings and search, and a `documents.restored` event fires. Restoring the tombstone itself is `400` — it holds no content, so restore the version before it.
 
 Withdrawal does not apply under `/.system/`: a [platform-written document](#platform-written-documents) keeps the owning module's lifecycle. `DELETE` stays what it is — permanent, and it removes the backing file.
+
+### Metadata schemas
+
+A project may declare what a document's `metadata` must satisfy under a path prefix, so a corpus many writers share reads as structured data rather than as whatever each writer happened to attach. The declaration is a [metadata schema](./metadata-schemas.md):
+
+```json
+POST /api/v1/metadata-schemas
+{
+  "project_id": "proj_abc",
+  "resource_type": "document",
+  "path_prefix": "/reports",
+  "schema": {
+    "type": "object",
+    "required": ["quarter"],
+    "properties": {
+      "quarter": { "type": "string", "enum": ["Q1", "Q2", "Q3", "Q4"] },
+      "owner": { "type": "string" }
+    }
+  }
+}
+```
+
+A write that stores metadata violating the declaration in force is refused with `400 VALIDATION_FAILED`, and `error.meta` names the `metadata_schema_id`, the `resource_type` and the `path_prefix` that refused it. Every door is judged the same way — [`POST /api/v1/documents`](/docs/api/documents/create-document), [`PATCH /api/v1/documents/{document_id}`](/docs/api/documents/update-document), a `document` resource in a [formation](./formations.md), and a [restore](#versioning), which is a write like any other and can be refused by a declaration written after the version it restores.
+
+- **A prefix is a path boundary.** `/reports` governs `/reports/q1.txt` and never `/reports-archive/q1.txt`.
+- **The longest matching prefix decides**, and it decides alone: a nested prefix replaces the outer rule rather than adding to it, which is what lets one corner of a corpus be different.
+- **The schema governs the bag, not whether one exists.** A document with no metadata is never refused — [`POST /api/v1/documents/ingest`](/docs/api/documents/ingest-document) files a document before anyone can attach any. Clearing metadata with `"metadata": null` **is** a write of the bag, so a `required` field refuses it.
+- **A move is a write.** Repathing a document into a prefix whose schema its metadata does not satisfy is refused; a write that touches neither `path` nor `metadata` is not re-judged, so tightening a schema does not freeze the documents already stored.
+- **The reserved root cannot be governed.** A `/.system` prefix is refused at declaration — a [platform-written document](#platform-written-documents) carries no caller metadata.
+
+[`POST /api/v1/metadata-schemas/validate`](/docs/api/metadata-schemas/validate-metadata) answers what a write would be told without writing, which is what a batch import wants before it starts.
 
 ### File Ingestion and Chunking
 

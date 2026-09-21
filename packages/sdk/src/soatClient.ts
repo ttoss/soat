@@ -26,6 +26,7 @@ import {
   Memories as MemoriesSdk,
   MemoryRules as MemoryRulesSdk,
   MemoryStores as MemoryStoresSdk,
+  MetadataSchemas as MetadataSchemasSdk,
   ModelRoutes as ModelRoutesSdk,
   Orchestrations as OrchestrationsSdk,
   Policies as PoliciesSdk,
@@ -136,6 +137,7 @@ export class SoatClient {
   readonly memories: typeof MemoriesSdk;
   readonly memoryRules: typeof MemoryRulesSdk;
   readonly memoryStores: typeof MemoryStoresSdk;
+  readonly metadataSchemas: typeof MetadataSchemasSdk;
   readonly modelRoutes: typeof ModelRoutesSdk;
   readonly orchestrations: typeof OrchestrationsSdk;
   readonly policies: typeof PoliciesSdk;
@@ -188,6 +190,7 @@ export class SoatClient {
     this.memories = bindResource(MemoriesSdk, httpClient);
     this.memoryRules = bindResource(MemoryRulesSdk, httpClient);
     this.memoryStores = bindResource(MemoryStoresSdk, httpClient);
+    this.metadataSchemas = bindResource(MetadataSchemasSdk, httpClient);
     this.modelRoutes = bindResource(ModelRoutesSdk, httpClient);
     this.orchestrations = bindResource(OrchestrationsSdk, httpClient);
     this.policies = bindResource(PoliciesSdk, httpClient);
