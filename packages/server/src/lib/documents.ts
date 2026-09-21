@@ -323,7 +323,7 @@ export const createDocument = async (args: {
     publicId,
     fileId: file.id,
     title: args.title ?? null,
-    metadata: args.metadata ? JSON.stringify(args.metadata) : null,
+    metadata: args.metadata ? args.metadata : null,
     tags: args.tags ?? null,
     chunkStrategy: args.chunkStrategy ?? null,
     chunkSize: args.chunkSize ?? null,
@@ -390,8 +390,7 @@ const buildDocumentColumnUpdates = (args: {
 }): Record<string, unknown> => {
   const updates: Record<string, unknown> = {};
   if (args.title !== undefined) updates.title = args.title;
-  if (args.metadata !== undefined)
-    updates.metadata = JSON.stringify(args.metadata);
+  if (args.metadata !== undefined) updates.metadata = args.metadata;
   if (args.tags !== undefined) updates.tags = args.tags;
   if (args.chunkStrategy !== undefined)
     updates.chunkStrategy = args.chunkStrategy;

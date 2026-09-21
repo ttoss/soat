@@ -807,3 +807,104 @@ describe('2026-09-21-durable-event-firings', () => {
     expect(result.applied).toEqual([]);
   });
 });
+
+describe('2026-09-21-document-metadata-jsonb', () => {
+  let client: Sequelize;
+
+  beforeAll(async () => {
+    ({ client } = await freshDatabase());
+
+    // The column as it stands before the change, holding every shape a read
+    // of it distinguishes today.
+    await client.query(`
+      CREATE TABLE documents (
+        id serial PRIMARY KEY,
+        public_id varchar(32) NOT NULL,
+        metadata text
+      );
+
+      INSERT INTO documents (public_id, metadata) VALUES
+        ('doc_object', '{"source":"crm","reviewed":true}'),
+        ('doc_nested', '{"a":{"b":[1,2]}}'),
+        ('doc_scalar', '42'),
+        ('doc_quoted', '"a string"'),
+        ('doc_broken', 'not json at all'),
+        ('doc_truncated', '{"a":'),
+        ('doc_empty', ''),
+        ('doc_literal_null', 'null'),
+        ('doc_absent', NULL);
+    `);
+
+    await runnerFor({ client }).run({
+      names: ['2026-09-21-document-metadata-jsonb'],
+    });
+  });
+
+  afterAll(async () => {
+    await client.close();
+  });
+
+  const metadataOf = async (publicId: string) => {
+    const [row] = await selectRows<{ metadata: unknown }>({
+      client,
+      sql: `SELECT metadata FROM documents WHERE public_id = '${publicId}'`,
+    });
+    return row.metadata;
+  };
+
+  test('the column becomes jsonb', async () => {
+    expect(
+      await columnType({ client, table: 'documents', column: 'metadata' })
+    ).toBe('jsonb');
+  });
+
+  test('a bag becomes the object a read of it already returned', async () => {
+    expect(await metadataOf('doc_object')).toEqual({
+      source: 'crm',
+      reviewed: true,
+    });
+    expect(await metadataOf('doc_nested')).toEqual({ a: { b: [1, 2] } });
+  });
+
+  /**
+   * The column is typed for a bag but nothing validated what reached it, so a
+   * scalar could be stored. It parsed then and it parses now.
+   */
+  test('a stored scalar keeps its parsed value', async () => {
+    expect(await metadataOf('doc_scalar')).toBe(42);
+    expect(await metadataOf('doc_quoted')).toBe('a string');
+  });
+
+  /**
+   * The read already fell back to the raw text rather than failing, so text
+   * that is not JSON becomes the JSON string of itself and reads identically.
+   * `doc_truncated` is the case no pattern match separates from valid JSON.
+   */
+  test('text that is not JSON becomes the string a read of it already returned', async () => {
+    expect(await metadataOf('doc_broken')).toBe('not json at all');
+    expect(await metadataOf('doc_truncated')).toBe('{"a":');
+  });
+
+  test('an empty or null-literal value reads as an absent bag', async () => {
+    expect(await metadataOf('doc_empty')).toBeNull();
+    expect(await metadataOf('doc_literal_null')).toBeNull();
+    expect(await metadataOf('doc_absent')).toBeNull();
+  });
+
+  test('the converted column is queryable by containment', async () => {
+    const rows = await selectRows<{ public_id: string }>({
+      client,
+      sql: `SELECT public_id FROM documents WHERE metadata @> '{"source":"crm"}'`,
+    });
+
+    expect(rows.map((row) => row.public_id)).toEqual(['doc_object']);
+  });
+
+  test('re-running it is a no-op', async () => {
+    const result = await runnerFor({ client }).run({
+      names: ['2026-09-21-document-metadata-jsonb'],
+    });
+
+    expect(result.applied).toEqual([]);
+  });
+});

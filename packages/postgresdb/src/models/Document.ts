@@ -59,11 +59,19 @@ export class Document extends Model {
   })
   declare title: string | null;
 
+  /**
+   * Caller-owned annotations, opaque to the platform: nothing the server owns
+   * is stored here, and no key of it is read.
+   *
+   * JSONB rather than serialized text so a filter can reach inside it — a
+   * stringified bag can only be matched as a whole string, which is not a
+   * filter over the fields it holds.
+   */
   @Column({
-    type: DataType.TEXT,
+    type: DataType.JSONB,
     allowNull: true,
   })
-  declare metadata: string | null;
+  declare metadata: Record<string, unknown> | null;
 
   @Column({
     type: DataType.JSONB,

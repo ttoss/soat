@@ -405,10 +405,12 @@ paths:
                   example: '/reports/q1.txt'
                 metadata:
                   type: object
+                  nullable: true
                   description: >-
-                    Arbitrary metadata object. Unlike other body fields, keys
-                    are stored and returned verbatim in the casing supplied —
-                    they are not converted between snake_case and camelCase.
+                    Arbitrary metadata object, replacing the stored bag; `null`
+                    clears it. Unlike other body fields, keys are stored and
+                    returned verbatim in the casing supplied — they are not
+                    converted between snake_case and camelCase.
                 tags:
                   $ref: './tags.yaml#/components/schemas/TagBag'
       responses:

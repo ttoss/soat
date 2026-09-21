@@ -9,6 +9,7 @@ import { activityEntryGenerationId } from './2026-09-18-activityEntryGenerationI
 import { orchestrationRunIdempotencyKey } from './2026-09-18-orchestrationRunIdempotencyKey';
 import { orchestrationNodeExecutionDispatches } from './2026-09-20-orchestrationNodeExecutionDispatches';
 import { triggerToolContext } from './2026-09-20-triggerToolContext';
+import { documentMetadataJsonb } from './2026-09-21-documentMetadataJsonb';
 import { durableEventFirings } from './2026-09-21-durableEventFirings';
 
 /**
@@ -41,4 +42,5 @@ export const MIGRATIONS: Migration[] = [
   orchestrationNodeExecutionDispatches,
   triggerToolContext,
   durableEventFirings,
+  documentMetadataJsonb,
 ];

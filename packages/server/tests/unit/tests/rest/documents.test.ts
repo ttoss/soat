@@ -428,6 +428,50 @@ describe('Documents', () => {
       expect(response.body.metadata).toEqual({ source: 'test' });
       expect(response.body.tags).toEqual({ tier: 'alpha', stage: 'beta' });
     });
+
+    /**
+     * The bag is stored as JSON, not as the text of it, so the structure a
+     * caller wrote is the structure the column holds — which is what a filter
+     * over its fields needs and what a whole-string match cannot give.
+     */
+    test('a nested bag is stored and returned by structure', async () => {
+      const bag = {
+        source: 'crm',
+        reviewed: true,
+        counts: [1, 2, 3],
+        owner: { team: 'ops', on_call: null },
+      };
+
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents')
+        .send({
+          project_id: projectId,
+          content: 'Nested metadata.',
+          filename: 'nested-metadata.txt',
+          metadata: bag,
+        });
+
+      expect(created.status).toBe(201);
+      expect(created.body.metadata).toEqual(bag);
+
+      const read = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents/${created.body.id as string}`
+      );
+      expect(read.body.metadata).toEqual(bag);
+    });
+
+    test('a document written without a bag reports none', async () => {
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents')
+        .send({
+          project_id: projectId,
+          content: 'No metadata.',
+          filename: 'no-metadata.txt',
+        });
+
+      expect(created.status).toBe(201);
+      expect(created.body.metadata).toBeUndefined();
+    });
   });
 
   describe('PATCH /api/v1/documents/:id (FEAT-2)', () => {
@@ -480,6 +524,25 @@ describe('Documents', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.metadata).toEqual({ updated: true });
+    });
+
+    test('`null` clears the bag', async () => {
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents')
+        .send({
+          project_id: projectId,
+          content: 'Metadata to clear.',
+          filename: 'clear-metadata.txt',
+          metadata: { source: 'crm' },
+        });
+      expect(created.status).toBe(201);
+
+      const cleared = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/documents/${created.body.id as string}`)
+        .send({ metadata: null });
+
+      expect(cleared.status).toBe(200);
+      expect(cleared.body.metadata).toBeUndefined();
     });
 
     test('returns 404 for non-existent document', async () => {
