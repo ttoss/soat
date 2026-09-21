@@ -25,45 +25,63 @@ const LIB_DIR = path.resolve(__dirname, '../../../../src/lib');
  * stop condition is matched) — which is also why the scanner tracks them: a
  * comment opener inside one is content, not a comment.
  */
+type ScanMode = 'code' | 'line' | 'block' | "'" | '"' | '`';
+
+/** One scanner step: the mode to continue in, characters consumed, output emitted. */
+type ScanStep = { mode: ScanMode; consumed: number; emit: string };
+
+const stepInCode = (source: string, i: number): ScanStep => {
+  const pair = source.slice(i, i + 2);
+  if (pair === '//') return { mode: 'line', consumed: 2, emit: '' };
+  if (pair === '/*') return { mode: 'block', consumed: 2, emit: '' };
+
+  const char = source[i];
+  const mode: ScanMode =
+    char === "'" || char === '"' || char === '`' ? char : 'code';
+  return { mode, consumed: 1, emit: char };
+};
+
+const stepInLineComment = (source: string, i: number): ScanStep => {
+  const char = source[i];
+  return char === '\n'
+    ? { mode: 'code', consumed: 1, emit: char }
+    : { mode: 'line', consumed: 1, emit: '' };
+};
+
+const stepInBlockComment = (source: string, i: number): ScanStep => {
+  const isClose = source.slice(i, i + 2) === '*/';
+  return isClose
+    ? { mode: 'code', consumed: 2, emit: '' }
+    : { mode: 'block', consumed: 1, emit: '' };
+};
+
+/** Inside a string or template literal: copy verbatim, honor escapes. */
+const stepInLiteral = (source: string, i: number, mode: ScanMode): ScanStep => {
+  const char = source[i];
+  if (char === '\\') {
+    return { mode, consumed: 2, emit: source.slice(i, i + 2) };
+  }
+  return char === mode
+    ? { mode: 'code', consumed: 1, emit: char }
+    : { mode, consumed: 1, emit: char };
+};
+
+const nextScanStep = (source: string, i: number, mode: ScanMode): ScanStep => {
+  if (mode === 'code') return stepInCode(source, i);
+  if (mode === 'line') return stepInLineComment(source, i);
+  if (mode === 'block') return stepInBlockComment(source, i);
+  return stepInLiteral(source, i, mode);
+};
+
 const stripComments = (source: string): string => {
   let out = '';
   let i = 0;
-  let mode: 'code' | 'line' | 'block' | "'" | '"' | '`' = 'code';
+  let mode: ScanMode = 'code';
   while (i < source.length) {
-    const pair = source.slice(i, i + 2);
-    const char = source[i];
-    if (mode === 'code') {
-      if (pair === '//') {
-        mode = 'line';
-        i += 2;
-      } else if (pair === '/*') {
-        mode = 'block';
-        i += 2;
-      } else {
-        if (char === "'" || char === '"' || char === '`') mode = char;
-        out += char;
-        i += 1;
-      }
-    } else if (mode === 'line') {
-      if (char === '\n') {
-        mode = 'code';
-        out += char;
-      }
-      i += 1;
-    } else if (mode === 'block') {
-      if (pair === '*/') mode = 'code';
-      i += pair === '*/' ? 2 : 1;
-    } else {
-      // Inside a string or template literal: copy verbatim, honor escapes.
-      if (char === '\\') {
-        out += source.slice(i, i + 2);
-        i += 2;
-      } else {
-        if (char === mode) mode = 'code';
-        out += char;
-        i += 1;
-      }
-    }
+    const step = nextScanStep(source, i, mode);
+    out += step.emit;
+    i += step.consumed;
+    mode = step.mode;
   }
   return out;
 };

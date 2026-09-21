@@ -18,9 +18,11 @@ describe('conversation system tags', () => {
   };
 
   const createActor = async (externalId: string) => {
-    const res = await client()
-      .post('/api/v1/actors')
-      .send({ project_id: projectId, name: externalId, external_id: externalId });
+    const res = await client().post('/api/v1/actors').send({
+      project_id: projectId,
+      name: externalId,
+      external_id: externalId,
+    });
     expect(res.status).toBe(201);
     return res.body.id as string;
   };
@@ -124,12 +126,14 @@ describe('conversation system tags', () => {
     });
 
     test('a document create carrying one is refused', async () => {
-      const res = await client().post('/api/v1/documents').send({
-        project_id: projectId,
-        content: 'mine',
-        path: '/mine/b.txt',
-        tags: { 'system.conversation': 'conv_impostor' },
-      });
+      const res = await client()
+        .post('/api/v1/documents')
+        .send({
+          project_id: projectId,
+          content: 'mine',
+          path: '/mine/b.txt',
+          tags: { 'system.conversation': 'conv_impostor' },
+        });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('RESERVED_TAG_KEY');

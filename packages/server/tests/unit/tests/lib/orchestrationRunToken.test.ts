@@ -18,6 +18,13 @@ import { authenticatedTestClient } from '../../testClient';
  * been deleted or revoked *after* the run started, and tokens minted by other
  * parts of the platform that must not be mistaken for run tokens.
  */
+
+// A trigger run-as token, as an internal caller would forward it: it must not
+// become a starting principal on the `authHeader` path either.
+const bearerTriggerToken = (publicId: string, prj: string): string => {
+  return `Bearer ${jwt.sign({ publicId, role: 'user', prj, trg: 'trg_abc' }, JWT_SECRET, { expiresIn: '5m' })}`;
+};
+
 describe('orchestration run-as token', () => {
   let adminToken: string;
   let projectId: string;
@@ -300,9 +307,3 @@ describe('orchestration run-as token', () => {
     });
   });
 });
-
-// A trigger run-as token, as an internal caller would forward it: it must not
-// become a starting principal on the `authHeader` path either.
-const bearerTriggerToken = (publicId: string, prj: string): string => {
-  return `Bearer ${jwt.sign({ publicId, role: 'user', prj, trg: 'trg_abc' }, JWT_SECRET, { expiresIn: '5m' })}`;
-};

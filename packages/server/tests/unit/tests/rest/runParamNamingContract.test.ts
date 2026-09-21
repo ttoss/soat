@@ -70,42 +70,76 @@ const resolveParameter = (args: {
   return (key ? doc.components?.parameters?.[key] : undefined) ?? param;
 };
 
+/** The named parameters one operation declares, inline or via `$ref`. */
+const parametersInOperation = (args: {
+  label: string;
+  pathItem: PathItem;
+  operation: OperationSpec;
+  doc: SpecDocument;
+}): Array<{ label: string; name: string }> => {
+  const { label, pathItem, operation, doc } = args;
+  const declared = [
+    ...(pathItem.parameters ?? []),
+    ...(operation.parameters ?? []),
+  ];
+
+  return declared
+    .map((declaredParam) => {
+      return resolveParameter({ param: declaredParam, doc });
+    })
+    .filter((param): param is ParameterSpec & { name: string } => {
+      return Boolean(param.name);
+    })
+    .map((param) => {
+      return { label, name: param.name };
+    });
+};
+
+/** Every named parameter across one path's methods. */
+const parametersInPathItem = (args: {
+  file: string;
+  path: string;
+  pathItem: PathItem;
+  doc: SpecDocument;
+}): Array<{ label: string; name: string }> => {
+  const { file, path, pathItem, doc } = args;
+
+  return Object.entries(pathItem)
+    .filter(([method]) => {
+      return HTTP_METHODS.has(method);
+    })
+    .flatMap(([method, value]) => {
+      const operation = asOperation(value);
+      if (!operation) return [];
+      return parametersInOperation({
+        label: `${method.toUpperCase()} ${path} (${file})`,
+        pathItem,
+        operation,
+        doc,
+      });
+    });
+};
+
+/** Every declared parameter in one spec file, flattened with its origin. */
+const parametersInFile = (
+  file: string
+): Array<{ label: string; name: string }> => {
+  const doc = parseYaml(
+    readFileSync(join(SPEC_DIR, file), 'utf-8')
+  ) as SpecDocument;
+
+  return Object.entries(doc.paths ?? {}).flatMap(([path, pathItem]) => {
+    return parametersInPathItem({ file, path, pathItem, doc });
+  });
+};
+
 /** Every declared parameter across the v1 specs, flattened with its origin. */
 const allParameters = (): Array<{ label: string; name: string }> => {
-  const parameters: Array<{ label: string; name: string }> = [];
-
-  for (const file of readdirSync(SPEC_DIR).filter((name) => {
-    return name.endsWith('.yaml');
-  })) {
-    const doc = parseYaml(
-      readFileSync(join(SPEC_DIR, file), 'utf-8')
-    ) as SpecDocument;
-
-    for (const [path, pathItem] of Object.entries(doc.paths ?? {})) {
-      for (const [method, value] of Object.entries(pathItem)) {
-        if (!HTTP_METHODS.has(method)) continue;
-
-        const operation = asOperation(value);
-        if (!operation) continue;
-
-        const declared = [
-          ...(pathItem.parameters ?? []),
-          ...(operation.parameters ?? []),
-        ];
-
-        for (const declaredParam of declared) {
-          const param = resolveParameter({ param: declaredParam, doc });
-          if (!param.name) continue;
-          parameters.push({
-            label: `${method.toUpperCase()} ${path} (${file})`,
-            name: param.name,
-          });
-        }
-      }
-    }
-  }
-
-  return parameters;
+  return readdirSync(SPEC_DIR)
+    .filter((name) => {
+      return name.endsWith('.yaml');
+    })
+    .flatMap(parametersInFile);
 };
 
 describe('run parameter naming contract', () => {

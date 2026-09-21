@@ -64,7 +64,10 @@ describe('the path a document gets when it is not given one', () => {
   });
 
   test('an explicit path still wins over a filename', async () => {
-    const doc = await create({ path: '/reports/q1.txt', filename: 'other.txt' });
+    const doc = await create({
+      path: '/reports/q1.txt',
+      filename: 'other.txt',
+    });
 
     expect(doc.path).toBe('/reports/q1.txt');
   });

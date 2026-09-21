@@ -264,6 +264,47 @@ const shouldSkip = (path: string): boolean => {
  * Throws (failing the test) on any shape mismatch. No-ops for responses without
  * a documented JSON schema, non-JSON bodies, or excluded paths.
  */
+/**
+ * Records a schema mismatch to `AUDIT_FILE` instead of failing, when one is
+ * configured (pre-existing drift a run is auditing rather than gating); else
+ * throws, failing the test that produced the response.
+ */
+const recordOrThrowViolation = (args: {
+  method: string;
+  template: string;
+  status: number;
+  validator: ValidateFunction;
+}): void => {
+  const { method, template, status, validator } = args;
+  if (!AUDIT_FILE) {
+    throw new Error(
+      `OpenAPI contract violation: ${method.toUpperCase()} ${template} → ${status}\n${formatErrors(
+        validator.errors
+      )}`
+    );
+  }
+
+  const record = {
+    method: method.toUpperCase(),
+    template,
+    status,
+    errors: (validator.errors ?? []).map((e) => {
+      return {
+        instancePath: e.instancePath,
+        keyword: e.keyword,
+        message: e.message,
+        params: e.params,
+      };
+    }),
+  };
+  appendFileSync(AUDIT_FILE, `${JSON.stringify(record)}\n`);
+};
+
+/**
+ * Validates a single supertest response against its OpenAPI response schema.
+ * Throws (failing the test) on any shape mismatch. No-ops for responses without
+ * a documented JSON schema, non-JSON bodies, or excluded paths.
+ */
 export const assertResponseMatchesSpec = (args: {
   method: string;
   path: string;
@@ -290,29 +331,11 @@ export const assertResponseMatchesSpec = (args: {
 
   for (const validator of validators) {
     if (validator(args.body)) continue;
-
-    if (AUDIT_FILE) {
-      const record = {
-        method: method.toUpperCase(),
-        template,
-        status: args.status,
-        errors: (validator.errors ?? []).map((e) => {
-          return {
-            instancePath: e.instancePath,
-            keyword: e.keyword,
-            message: e.message,
-            params: e.params,
-          };
-        }),
-      };
-      appendFileSync(AUDIT_FILE, `${JSON.stringify(record)}\n`);
-      continue;
-    }
-
-    throw new Error(
-      `OpenAPI contract violation: ${method.toUpperCase()} ${template} → ${
-        args.status
-      }\n${formatErrors(validator.errors)}`
-    );
+    recordOrThrowViolation({
+      method,
+      template,
+      status: args.status,
+      validator,
+    });
   }
 };

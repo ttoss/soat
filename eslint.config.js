@@ -28,6 +28,48 @@ export const MAX_LINES_EXEMPT = [
   'packages/website/scripts/generateCliCommandsDocs.ts',
 ];
 
+/**
+ * The test-file ceiling, in code lines. Wider than `MODULE_CEILING`: a test
+ * file legitimately carries fixture setup and one `describe` per surface, so
+ * `@ttoss/eslint-config` already sizes it differently from `src` — stated
+ * here, the same reason `MODULE_CEILING` is not left implicit either, now
+ * that a package's `lint` script can point at `tests` and have this checked.
+ */
+export const TEST_MODULE_CEILING = 1000;
+
+/**
+ * Test files over the ceiling today. **This list only shrinks**, the same
+ * contract `MAX_LINES_EXEMPT` holds for `src`: `tests/harness/moduleCeiling.test.mjs`
+ * holds it to that. A file joins this list only by being over the ceiling
+ * before `lint` first checked it — a file that grows past it afterward is a
+ * new violation, not a new entry.
+ */
+export const TEST_MAX_LINES_EXEMPT = [
+  'packages/server/tests/unit/tests/lib/agentToolResolver.test.ts',
+  'packages/server/tests/unit/tests/lib/formation-modules.test.ts',
+  'packages/server/tests/unit/tests/lib/formationsValidation.test.ts',
+  'packages/server/tests/unit/tests/lib/orchestrationNodeExecutors.test.ts',
+  'packages/server/tests/unit/tests/rest/agentGeneration.test.ts',
+  'packages/server/tests/unit/tests/rest/agents.test.ts',
+  'packages/server/tests/unit/tests/rest/auditLog.test.ts',
+  'packages/server/tests/unit/tests/rest/conversations.test.ts',
+  'packages/server/tests/unit/tests/rest/documents.test.ts',
+  'packages/server/tests/unit/tests/rest/evaluations.test.ts',
+  'packages/server/tests/unit/tests/rest/formations.test.ts',
+  'packages/server/tests/unit/tests/rest/ingestionRules.test.ts',
+  'packages/server/tests/unit/tests/rest/mcp.test.ts',
+  'packages/server/tests/unit/tests/rest/orchestrationQueue.test.ts',
+  'packages/server/tests/unit/tests/rest/orchestrations.test.ts',
+  'packages/server/tests/unit/tests/rest/permissionsFlow.test.ts',
+  'packages/server/tests/unit/tests/rest/projects.test.ts',
+  'packages/server/tests/unit/tests/rest/quotas.test.ts',
+  'packages/server/tests/unit/tests/rest/sessions.test.ts',
+  'packages/server/tests/unit/tests/rest/tasks.test.ts',
+  'packages/server/tests/unit/tests/rest/tools.test.ts',
+  'packages/server/tests/unit/tests/rest/triggers.test.ts',
+  'packages/server/tests/unit/tests/rest/usage.test.ts',
+];
+
 export default [
   {
     ignores: ['**/src/generated/**'],
@@ -51,8 +93,7 @@ export default [
     },
   },
   {
-    // Source only: a test suite runs long legitimately, and the shared config
-    // already sizes those separately.
+    // Source only: a test file gets the wider TEST_MODULE_CEILING below.
     files: ['**/*.{js,jsx,ts,tsx}'],
     ignores: ['**/tests/**', '**/*.test.{js,jsx,ts,tsx}'],
     rules: {
@@ -64,6 +105,21 @@ export default [
   },
   {
     files: MAX_LINES_EXEMPT,
+    rules: {
+      'max-lines': 'off',
+    },
+  },
+  {
+    files: ['**/tests/**/*.{js,jsx,ts,tsx}', '**/*.test.{js,jsx,ts,tsx}'],
+    rules: {
+      'max-lines': [
+        'error',
+        { max: TEST_MODULE_CEILING, skipBlankLines: true, skipComments: true },
+      ],
+    },
+  },
+  {
+    files: TEST_MAX_LINES_EXEMPT,
     rules: {
       'max-lines': 'off',
     },
