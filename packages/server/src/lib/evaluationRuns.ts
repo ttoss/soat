@@ -31,7 +31,7 @@ import { validateToolScorerRefs } from './evaluationToolScorer';
 import { kickEvalWorker } from './evaluationWorker';
 import { isPlainObject } from './plainObject';
 import { parseActiveRelease } from './releaseAssignment';
-import { sanitizeCallerToolContext } from './toolContext';
+import { acceptStoredToolContext } from './toolContextCarrier';
 
 const log = createDebug('soat:evaluations');
 
@@ -332,7 +332,10 @@ export const startEvalRun = async (args: {
 
   // Before `planRun`, so an unusable key is a 400 with no run row behind it: a
   // queued run answers 201 long before its first item would hit the bad key.
-  const toolContext = sanitizeCallerToolContext(args.toolContext);
+  const toolContext = await acceptStoredToolContext({
+    toolContext: args.toolContext,
+    secretRefs: 'verbatim',
+  });
 
   const plan = await planRun({ ...args, wait });
 

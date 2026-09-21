@@ -1644,6 +1644,49 @@ describe('Orchestrations', () => {
         }
       });
 
+      // A `tool` node calls the tool with the run's bag and no generation in
+      // between, so a forged identity key has nothing to overwrite it: the
+      // write drops it instead.
+      test('drops the reserved identity keys from the stored bag', async () => {
+        const createRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestrations')
+          .send({
+            name: 'Run With Reserved Context Keys',
+            nodes: [agentNode('ask')],
+            edges: [],
+            project_id: projectId,
+          });
+        expect(createRes.status).toBe(201);
+
+        const generationSpy = stubGeneration();
+
+        try {
+          const runRes = await authenticatedTestClient(userToken)
+            .post('/api/v1/orchestration-runs')
+            .send({
+              wait: true,
+              orchestration_id: createRes.body.id,
+              input: { question: 'hello' },
+              tool_context: {
+                Session_ID: 'ses_forged',
+                actor_external_id: '+15550000000',
+                tenant: 'acme',
+              },
+            });
+          expect(runRes.status).toBe(201);
+
+          const stored = await db.OrchestrationRun.findOne({
+            where: { publicId: runRes.body.id },
+          });
+          expect(stored?.toolContext).toEqual({ tenant: 'acme' });
+          expect(generationSpy.mock.calls[0]![0].toolContext).toEqual({
+            tenant: 'acme',
+          });
+        } finally {
+          generationSpy.mockRestore();
+        }
+      });
+
       test('a run started without tool_context forwards nothing', async () => {
         const createRes = await authenticatedTestClient(userToken)
           .post('/api/v1/orchestrations')
@@ -2052,7 +2095,7 @@ describe('Orchestrations', () => {
               toolContext: { ocaToken: 'tok_secret', tenant: 'acme' },
             });
 
-            expect(generationSpy.mock.calls[0]![0].toolContext).toEqual({});
+            expect(generationSpy.mock.calls[0]![0].toolContext).toBeUndefined();
           } finally {
             generationSpy.mockRestore();
           }
@@ -2181,8 +2224,9 @@ describe('Orchestrations', () => {
             });
 
             // Nothing caller-supplied survives `[]`, and the identity keys are
-            // stamped downstream rather than carried here.
-            expect(generationSpy.mock.calls[0]![0].toolContext).toEqual({});
+            // stamped downstream rather than carried here. A child left with
+            // nothing carries no bag at all — "no context" has one shape.
+            expect(generationSpy.mock.calls[0]![0].toolContext).toBeUndefined();
           } finally {
             generationSpy.mockRestore();
           }

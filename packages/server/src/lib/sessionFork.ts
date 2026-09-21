@@ -21,7 +21,7 @@ import { emitResourceEvent } from './eventBus';
 import { paginatedList } from './pagination';
 import { sessionIncludes, type SessionRow, sessions } from './sessionAccessor';
 import { mapSession } from './sessionMapper';
-import { assertValidToolContextKeys } from './toolContext';
+import { acceptStoredToolContextUpdate } from './toolContextCarrier';
 
 const log = createDebug('soat:session-fork');
 
@@ -163,6 +163,31 @@ const copyMessagesIntoFork = async (args: {
   );
 };
 
+/** The fork's read shape, announced once its records are committed. */
+const announceFork = async (args: {
+  fork: Parameters<typeof sessions.reload>[0];
+  projectId: number;
+  messageCount: number;
+}) => {
+  const mapped = mapSession(await sessions.reload(args.fork));
+
+  log(
+    'forkSession: created session=%s messages=%d',
+    mapped.id,
+    args.messageCount
+  );
+
+  emitResourceEvent({
+    type: 'sessions.created',
+    projectId: args.projectId,
+    resourceType: 'session',
+    resourceId: mapped.id,
+    data: mapped,
+  });
+
+  return mapped;
+};
+
 export const forkSession = async (args: {
   agentId: number;
   sessionId: string;
@@ -179,7 +204,12 @@ export const forkSession = async (args: {
     args.agentPublicId
   );
 
-  assertValidToolContextKeys(args.toolContext);
+  // `undefined` is the only value that inherits: an explicit bag overrides the
+  // parent's, and an explicit empty one overrides it with nothing.
+  const toolContext = await acceptStoredToolContextUpdate({
+    toolContext: args.toolContext,
+    secretRefs: 'verbatim',
+  });
 
   const parent = await loadParentSession({
     agentId: args.agentId,
@@ -222,7 +252,10 @@ export const forkSession = async (args: {
         // Inert by construction: creating a branch and running it are separate
         // acts, so `POST /fork` never triggers a generation.
         autoGenerate: false,
-        toolContext: args.toolContext ?? parent.toolContext ?? null,
+        toolContext:
+          toolContext === undefined
+            ? (parent.toolContext ?? null)
+            : toolContext,
         inactivityTtlSeconds: parent.inactivityTtlSeconds ?? 0,
         messageDelaySeconds: parent.messageDelaySeconds ?? null,
         lastActivityAt: null,
@@ -242,23 +275,11 @@ export const forkSession = async (args: {
     return created;
   });
 
-  const mapped = mapSession(await sessions.reload(fork));
-
-  log(
-    'forkSession: created session=%s messages=%d',
-    mapped.id,
-    messages.length
-  );
-
-  emitResourceEvent({
-    type: 'sessions.created',
+  return announceFork({
+    fork,
     projectId: parent.projectId,
-    resourceType: 'session',
-    resourceId: mapped.id,
-    data: mapped,
+    messageCount: messages.length,
   });
-
-  return mapped;
 };
 
 /** The sessions forked directly from this one. One level, never a tree. */

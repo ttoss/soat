@@ -26,10 +26,15 @@ const extractSessionFlags = (session: SessionRow) => {
   };
 };
 
+/**
+ * `tool_context` is absent by design: the bag is what a session's tools
+ * authorize with, so it is accepted on a write and never returned on a read —
+ * the rule an eval run, a task, a trigger and an orchestration run already
+ * hold to.
+ */
 const extractSessionOptional = (session: SessionRow) => {
   return {
     tags: session.tags ?? undefined,
-    tool_context: session.toolContext ?? null,
     generating_at: session.generatingAt ?? null,
     inactivity_ttl_seconds: session.inactivityTtlSeconds ?? 0,
     last_activity_at: session.lastActivityAt ?? null,

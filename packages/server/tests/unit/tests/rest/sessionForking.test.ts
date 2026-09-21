@@ -1,3 +1,5 @@
+import { db } from 'src/db';
+
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, testClient } from '../../testClient';
@@ -225,13 +227,41 @@ describe('Session forking', () => {
         .post(`/api/v1/sessions/${parentId}/fork`)
         .send({});
       expect(inherited.status).toBe(201);
-      expect(inherited.body.tool_context).toEqual({ tenant: 'acme' });
+      const inheritedRow = await db.Session.findOne({
+        where: { publicId: inherited.body.id },
+      });
+      expect(inheritedRow?.toolContext).toEqual({ tenant: 'acme' });
 
       const overridden = await authenticatedTestClient(userToken)
         .post(`/api/v1/sessions/${parentId}/fork`)
         .send({ tool_context: { tenant: 'globex' } });
       expect(overridden.status).toBe(201);
-      expect(overridden.body.tool_context).toEqual({ tenant: 'globex' });
+      const overriddenRow = await db.Session.findOne({
+        where: { publicId: overridden.body.id },
+      });
+      expect(overriddenRow?.toolContext).toEqual({ tenant: 'globex' });
+    });
+
+    // Omitting the field is the only thing that inherits. An explicit empty bag
+    // is an override, so a branch can be run without the parent's credential.
+    test('an explicit empty bag overrides the parent instead of inheriting', async () => {
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/sessions')
+        .send({
+          agent_id: agentId,
+          name: 'Fork Tool Context Cleared',
+          tool_context: { tenant: 'acme' },
+        });
+
+      const forked = await authenticatedTestClient(userToken)
+        .post(`/api/v1/sessions/${created.body.id}/fork`)
+        .send({ tool_context: {} });
+
+      expect(forked.status).toBe(201);
+      const stored = await db.Session.findOne({
+        where: { publicId: forked.body.id },
+      });
+      expect(stored?.toolContext).toBeNull();
     });
 
     test('tags are set on the fork', async () => {

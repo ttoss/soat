@@ -6230,6 +6230,30 @@ echo "Duplicate call with idempotency_key returns original message: OK"
 
 echo "add-session-message idempotency_key: OK"
 
+# A session's tool_context is what its tools authorize with, so it is accepted
+# on a write and never returned on a read.
+SESSION_CTX_RESP=$($SOAT_CLI create-session \
+  --agent_id "$AGENT_ID" --name "smoke-session-context" \
+  --tool_context '{"advertiserId":"adv_smoke"}')
+SESSION_CTX_ID=$(printf '%s\n' "$SESSION_CTX_RESP" | jq -r '.id')
+if [ -z "$SESSION_CTX_ID" ] || [ "$SESSION_CTX_ID" = "null" ]; then
+  echo "ERROR: failed to create the session tool_context check session" >&2
+  printf '%s\n' "$SESSION_CTX_RESP" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$SESSION_CTX_RESP" | jq -e 'has("tool_context") | not' >/dev/null 2>&1; then
+  echo "ERROR: create-session returned tool_context, which is write-only" >&2
+  printf '%s\n' "$SESSION_CTX_RESP" >&2
+  exit 1
+fi
+SESSION_CTX_GET=$($SOAT_CLI get-session --session_id "$SESSION_CTX_ID")
+if ! printf '%s\n' "$SESSION_CTX_GET" | jq -e 'has("tool_context") | not' >/dev/null 2>&1; then
+  echo "ERROR: get-session exposed the stored tool_context" >&2
+  printf '%s\n' "$SESSION_CTX_GET" >&2
+  exit 1
+fi
+echo "Session tool_context is write-only: OK"
+
 # session forking
 echo "--- fork-session ---"
 FORK_PARENT_RESP=$($SOAT_CLI create-session --agent_id "$AGENT_ID" --name "smoke-fork-parent")

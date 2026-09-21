@@ -11,13 +11,13 @@ import {
   dispatchOnEnter,
   findTaskInstance,
   mapTask,
-  sanitizeTaskToolContext,
   stateByName,
   type TaskInstance,
   type TaskPrincipal,
 } from './tasks';
 import { parkTransitionForApproval } from './tasksApprovalGate';
 import { resolveTaskDefinition } from './taskWorkflowDefinition';
+import { acceptStoredToolContextUpdate } from './toolContextCarrier';
 import {
   findValidTransition,
   type WorkflowState,
@@ -149,7 +149,7 @@ type TransitionArgs = {
    * — and a bag survives every move that does not speak about it, which is what
    * carries it across an approval gate, a retry and an automation hop.
    *
-   * An explicit `{}` clears it (see `sanitizeTaskToolContext`).
+   * An explicit `{}` clears it.
    */
   toolContext?: Record<string, string> | null;
 };
@@ -411,13 +411,13 @@ export const transitionTask = async (args: TransitionArgs) => {
     );
   }
 
-  // Sanitized before anything is claimed or locked: a key that could not become
+  // Accepted before anything is claimed or locked: a key that could not become
   // a header must be a rejected write the caller is still listening for, not a
   // throw from inside the transaction (or after the approval gate is claimed).
-  const toolContext =
-    args.toolContext === undefined
-      ? undefined
-      : sanitizeTaskToolContext(args.toolContext);
+  const toolContext = await acceptStoredToolContextUpdate({
+    toolContext: args.toolContext,
+    secretRefs: 'verbatim',
+  });
 
   // A `requires_approval` transition parks as an ApprovalItem unless fired by
   // the `approval` principal, i.e. the resolution re-firing it — so guards are

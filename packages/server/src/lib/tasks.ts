@@ -12,7 +12,7 @@ import {
   type TaskAutomationStatus,
 } from './tasksAutomationStatus';
 import { resolveTaskDefinition } from './taskWorkflowDefinition';
-import { sanitizeCallerToolContext } from './toolContext';
+import { acceptStoredToolContext } from './toolContextCarrier';
 import { validatePayload, type WorkflowState } from './workflowsValidation';
 
 export { transitionTask } from './tasksTransition';
@@ -82,20 +82,6 @@ export const mapTask = (instance: TaskInstance) => {
     created_at: instance.createdAt,
     updated_at: instance.updatedAt,
   };
-};
-
-/**
- * {@link sanitizeCallerToolContext} in the shape a task row stores. A task is
- * long-lived and read by operators, so a key the server would overwrite must
- * not be persisted — the record would lie about what the dispatch sends.
- *
- * An empty bag persists as `null`, so "no context" has one representation and a
- * caller can drop a credential from an open task with `tool_context: {}`.
- */
-export const sanitizeTaskToolContext = (
-  toolContext: Record<string, string> | null | undefined
-): Record<string, string> | null => {
-  return sanitizeCallerToolContext(toolContext) ?? null;
 };
 
 /**
@@ -390,7 +376,13 @@ export const createTask = async (args: {
   const payload = (args.payload ?? {}) as Record<string, unknown>;
   validatePayload({ payloadSchema: workflow.payloadSchema, payload });
 
-  const toolContext = sanitizeTaskToolContext(args.toolContext);
+  // A task dispatch forwards the bag as written, so the carrier resolves no
+  // refs; an absent bag and an empty one both store as `null`.
+  const toolContext =
+    (await acceptStoredToolContext({
+      toolContext: args.toolContext,
+      secretRefs: 'verbatim',
+    })) ?? null;
   const closed = entryState.terminal === true;
   const enteredStateAt = new Date();
 

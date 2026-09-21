@@ -5,12 +5,14 @@ import { makeResourceAccessor } from 'src/lib/resourceAccessor';
 
 import { DomainError } from '../errors';
 import {
-  assertSecretRefsExist,
   decryptStoredSecret,
   encryptValue,
   generateSecretValue,
 } from './secrets';
-import { assertValidToolContextKeys } from './toolContext';
+import {
+  acceptStoredToolContext,
+  acceptStoredToolContextUpdate,
+} from './toolContextCarrier';
 import {
   assertTriggerConfigValid,
   computeNextFireAt,
@@ -200,24 +202,6 @@ type CreateTriggerArgs = {
   active?: boolean;
 };
 
-/**
- * A stored context bag is checked the way a tool's own templates are: keys have
- * to survive becoming headers, and a `{{secret:...}}` has to name a secret in
- * this project. Both fail here rather than at 3am on a firing nobody is
- * watching, which is the whole reason the value is allowed to be stored.
- */
-const assertToolContextValid = async (args: {
-  toolContext?: Record<string, string> | null;
-  projectId: number;
-}): Promise<void> => {
-  if (!args.toolContext) return;
-  assertValidToolContextKeys(args.toolContext);
-  await assertSecretRefsExist({
-    value: args.toolContext,
-    projectId: args.projectId,
-  });
-};
-
 /** Derives the type-dependent fields: a secret for webhooks, next fire for schedules. */
 const deriveTypeFields = (args: { type: string; cron?: string | null }) => {
   return {
@@ -267,13 +251,18 @@ export const createTrigger = async (args: CreateTriggerArgs) => {
     cron: args.cron,
     eventPattern: args.eventPattern,
   });
-  await assertToolContextValid({
+  // A firing resolves the stored bag's `{{secret:...}}` tokens, so the trigger
+  // is the carrier that declares `resolved`.
+  const toolContext = await acceptStoredToolContext({
     toolContext: args.toolContext,
     projectId: args.projectId,
+    secretRefs: 'resolved',
   });
   await assertNameAvailable({ projectId: args.projectId, name: args.name });
 
-  const trigger = await db.Trigger.create(buildCreateAttributes(args));
+  const trigger = await db.Trigger.create(
+    buildCreateAttributes({ ...args, toolContext })
+  );
   log('createTrigger: created id=%s', trigger.publicId);
 
   return mapTrigger(await triggers.reload(trigger), {
@@ -366,9 +355,10 @@ export const updateTrigger = async (args: UpdateTriggerArgs) => {
     validateTarget: targetChanged,
   });
 
-  await assertToolContextValid({
+  const toolContext = await acceptStoredToolContextUpdate({
     toolContext: args.toolContext,
     projectId: trigger.projectId as number,
+    secretRefs: 'resolved',
   });
 
   if (args.name !== undefined && args.name !== trigger.name) {
@@ -378,7 +368,7 @@ export const updateTrigger = async (args: UpdateTriggerArgs) => {
     });
   }
 
-  applyUpdateFields(trigger, args);
+  applyUpdateFields(trigger, { ...args, toolContext });
   await trigger.save();
 
   return mapTrigger(await triggers.reload(trigger));

@@ -9,7 +9,10 @@ import { mapSession } from './sessionMapper';
 import { abortSessionGeneration } from './sessionOperations';
 import { createSessionTransaction } from './sessionTransaction';
 import { applyTagFilter } from './tags';
-import { assertValidToolContextKeys } from './toolContext';
+import {
+  acceptStoredToolContext,
+  acceptStoredToolContextUpdate,
+} from './toolContextCarrier';
 import { rollUpUsageTotals } from './usageAggregate';
 
 registerResourceFieldMap({
@@ -92,7 +95,10 @@ export const createSession = async (args: {
   inactivityTtlSeconds?: number;
   messageDelaySeconds?: number | null;
 }) => {
-  assertValidToolContextKeys(args.toolContext);
+  const toolContext = await acceptStoredToolContext({
+    toolContext: args.toolContext,
+    secretRefs: 'verbatim',
+  });
 
   const agent = await db.Agent.findByPk(args.agentId);
   if (!agent) {
@@ -124,7 +130,7 @@ export const createSession = async (args: {
       name: args.name,
       existingActorId,
       autoGenerate: args.autoGenerate,
-      toolContext: args.toolContext,
+      toolContext,
       inactivityTtlSeconds: args.inactivityTtlSeconds,
       messageDelaySeconds: args.messageDelaySeconds,
       transaction: t,
@@ -314,7 +320,10 @@ export const updateSession = async (args: {
   inactivityTtlSeconds?: number;
   messageDelaySeconds?: number | null;
 }) => {
-  assertValidToolContextKeys(args.toolContext);
+  const toolContext = await acceptStoredToolContextUpdate({
+    toolContext: args.toolContext,
+    secretRefs: 'verbatim',
+  });
 
   const session = await db.Session.findOne({
     where: { publicId: args.sessionId, agentId: args.agentId },
@@ -339,8 +348,8 @@ export const updateSession = async (args: {
     session.autoGenerate = args.autoGenerate;
   }
 
-  if (args.toolContext !== undefined) {
-    session.toolContext = args.toolContext;
+  if (toolContext !== undefined) {
+    session.toolContext = toolContext;
   }
 
   if (args.inactivityTtlSeconds !== undefined) {
