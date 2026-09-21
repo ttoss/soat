@@ -2,14 +2,10 @@ import createDebug from 'debug';
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
-import { createGeneration } from './agentGeneration';
-import { startEvalRun } from './evaluationRuns';
 import type { GenerationInputMessage } from './generationInputMessages';
 import { buildSrn } from './iam';
-import { startOrchestrationRun } from './orchestrationEngine';
 import { createJwtIsAllowed } from './permissions';
 import { resolveStoredToolContext } from './toolContextCarrier';
-import { callTool } from './tools';
 import {
   createFiringRecord,
   finalizeFiringFailed,
@@ -17,37 +13,11 @@ import {
   mapTriggerFiring,
   reloadFiring,
 } from './triggerFirings';
+import { dispatchToTarget, toErrorObject } from './triggerTargets';
 import { signTriggerToken } from './triggerToken';
 import { targetStartAction } from './triggerValidation';
 
 const log = createDebug('soat:triggers');
-
-const OUTPUT_MAX_CHARS = 4000;
-
-/** Serializes a target's output and truncates it so firing records stay small. */
-const truncateOutput = (value: unknown): unknown => {
-  if (value === undefined || value === null) return null;
-  let serialized: string;
-  try {
-    serialized = typeof value === 'string' ? value : JSON.stringify(value);
-  } catch {
-    serialized = String(value);
-  }
-  if (serialized.length <= OUTPUT_MAX_CHARS) {
-    return value;
-  }
-  return { truncated: true, preview: serialized.slice(0, OUTPUT_MAX_CHARS) };
-};
-
-const toErrorObject = (err: unknown): Record<string, unknown> => {
-  if (err instanceof DomainError) {
-    return { code: err.code, message: err.message, meta: err.meta ?? null };
-  }
-  if (err instanceof Error) {
-    return { code: 'INTERNAL', message: err.message };
-  }
-  return { code: 'INTERNAL', message: String(err) };
-};
 
 /**
  * Builds the agent message list from the effective input:
@@ -129,124 +99,6 @@ export const validateOrchestrationInput = (args: {
       { mismatches }
     );
   }
-};
-
-type DispatchArgs = {
-  targetType: string;
-  targetId: string;
-  action: string | null;
-  projectId: number;
-  input: Record<string, unknown>;
-  toolContext?: Record<string, string>;
-  authHeader: string;
-  triggerId: string;
-};
-
-const dispatchToOrchestration = async (
-  args: DispatchArgs
-): Promise<Record<string, unknown>> => {
-  const run = await startOrchestrationRun({
-    orchestrationPublicId: args.targetId,
-    projectIds: [args.projectId],
-    input: args.input,
-    toolContext: args.toolContext,
-    authHeader: args.authHeader,
-    wait: true,
-    triggerId: args.triggerId,
-  });
-  return {
-    target_type: 'orchestration',
-    result_id: run.id,
-    status: run.status,
-    output: truncateOutput(run.output),
-  };
-};
-
-const dispatchToAgent = async (
-  args: DispatchArgs
-): Promise<Record<string, unknown>> => {
-  const generation = await createGeneration({
-    agentId: args.targetId,
-    projectIds: [args.projectId],
-    messages: buildAgentMessages(args.input),
-    stream: false,
-    toolContext: args.toolContext,
-    authHeader: args.authHeader,
-    triggerId: args.triggerId,
-  });
-  // stream:false always resolves to a GenerationResult.
-  const result = generation as {
-    id: string;
-    status: string;
-    output?: { content?: string };
-  };
-  return {
-    target_type: 'agent',
-    result_id: result.id,
-    status: result.status,
-    output: truncateOutput(result.output?.content),
-  };
-};
-
-const dispatchToEval = async (
-  args: DispatchArgs
-): Promise<Record<string, unknown>> => {
-  // Always background: an eval is one generation per dataset item with no cap
-  // on the count, so blocking a scheduler tick on it is the case
-  // `sync-async.md` rules out. The firing records the run id to poll.
-  const run = await startEvalRun({
-    evalId: args.targetId,
-    projectIds: [args.projectId],
-    wait: false,
-    agentVersion: args.input.agent_version,
-    baselineRunId: args.input.baseline_run_id,
-    toolContext: args.toolContext,
-    triggerId: args.triggerId,
-  });
-  return {
-    target_type: 'eval',
-    result_id: run.id,
-    status: run.status,
-    output: null,
-  };
-};
-
-const dispatchToTool = async (
-  args: DispatchArgs
-): Promise<Record<string, unknown>> => {
-  const output = await callTool({
-    // A firing is a call of this tool, so its guardrails decide it — a trigger
-    // is not a way to reach a tool the project has classified as forbidden.
-    guardrails: 'apply',
-    id: args.targetId,
-    projectIds: [args.projectId],
-    action: args.action ?? undefined,
-    input: args.input,
-    toolContext: args.toolContext,
-    authHeader: args.authHeader,
-  });
-  return {
-    target_type: 'tool',
-    result_id: null,
-    status: 'completed',
-    output: truncateOutput(output),
-  };
-};
-
-const TARGET_DISPATCHERS: Record<
-  string,
-  (args: DispatchArgs) => Promise<Record<string, unknown>>
-> = {
-  orchestration: dispatchToOrchestration,
-  agent: dispatchToAgent,
-  eval: dispatchToEval,
-};
-
-const dispatchToTarget = async (
-  args: DispatchArgs
-): Promise<Record<string, unknown>> => {
-  const dispatch = TARGET_DISPATCHERS[args.targetType] ?? dispatchToTool;
-  return dispatch(args);
 };
 
 /**
@@ -338,6 +190,79 @@ export type PreparedFiring = {
  * creator, revoked target-start permission, invalid input. The returned handle
  * is executed by {@link runFiringDispatch}.
  */
+type TriggerInstance = InstanceType<(typeof db)['Trigger']>;
+
+/** Loads a trigger a firing may run, refusing one that is gone or switched off. */
+const loadActiveTrigger = async (args: {
+  where: { publicId: string } | { id: number };
+  label: string;
+}): Promise<TriggerInstance> => {
+  const trigger = await db.Trigger.findOne({ where: args.where });
+  if (!trigger) {
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Trigger '${args.label}' not found.`
+    );
+  }
+  if (!trigger.active) {
+    throw new DomainError(
+      'TRIGGER_NOT_ACTIVE',
+      `Trigger '${args.label}' is inactive.`
+    );
+  }
+  return trigger;
+};
+
+/**
+ * The effective input for a firing: the trigger's stored input, overlaid by
+ * whatever the fire supplied. Exported because the event path settles it
+ * before the firing row is written, so the row records what was dispatched.
+ */
+export const mergeFiringInput = (args: {
+  trigger: TriggerInstance;
+  fireInput?: Record<string, unknown> | null;
+}): Record<string, unknown> => {
+  return {
+    ...((args.trigger.input as Record<string, unknown> | null) ?? {}),
+    ...(args.fireInput ?? {}),
+  };
+};
+
+export { assertFireInputValid };
+
+/**
+ * The credentials and context a dispatch needs, resolved at fire time.
+ *
+ * Deliberately not stored on the firing row: a run-as token is short-lived and
+ * a `tool_context` secret may have been rotated, so a firing the sweep
+ * redelivers must mint both again rather than replay the ones its first
+ * attempt held.
+ */
+const resolveDispatchCredentials = async (args: {
+  trigger: TriggerInstance;
+  fireToolContext?: Record<string, string> | null;
+}): Promise<{
+  authHeader: string;
+  effectiveToolContext?: Record<string, string>;
+}> => {
+  const project = await db.Project.findOne({
+    where: { id: args.trigger.projectId as number },
+  });
+
+  const authHeader = await resolveRunAsAuthHeader({
+    trigger: args.trigger,
+    projectPublicId: project?.publicId as string,
+  });
+
+  const effectiveToolContext = await resolveStoredToolContext({
+    stored: args.trigger.toolContext,
+    supplied: args.fireToolContext,
+    projectId: args.trigger.projectId as number,
+  });
+
+  return { authHeader, effectiveToolContext };
+};
+
 export const prepareFiring = async (args: {
   triggerPublicId: string;
   source: string;
@@ -346,21 +271,10 @@ export const prepareFiring = async (args: {
 }): Promise<PreparedFiring> => {
   log('prepareFiring: trigger=%s source=%s', args.triggerPublicId, args.source);
 
-  const trigger = await db.Trigger.findOne({
+  const trigger = await loadActiveTrigger({
     where: { publicId: args.triggerPublicId },
+    label: args.triggerPublicId,
   });
-  if (!trigger) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Trigger '${args.triggerPublicId}' not found.`
-    );
-  }
-  if (!trigger.active) {
-    throw new DomainError(
-      'TRIGGER_NOT_ACTIVE',
-      `Trigger '${args.triggerPublicId}' is inactive.`
-    );
-  }
 
   const project = await db.Project.findOne({
     where: { id: trigger.projectId as number },
@@ -369,10 +283,10 @@ export const prepareFiring = async (args: {
 
   const authHeader = await resolveRunAsAuthHeader({ trigger, projectPublicId });
 
-  const effectiveInput: Record<string, unknown> = {
-    ...((trigger.input as Record<string, unknown> | null) ?? {}),
-    ...(args.fireInput ?? {}),
-  };
+  const effectiveInput = mergeFiringInput({
+    trigger,
+    fireInput: args.fireInput,
+  });
   await assertFireInputValid({ trigger, input: effectiveInput });
 
   const effectiveToolContext = await resolveStoredToolContext({
@@ -432,6 +346,47 @@ export const runFiringDispatch = async (
   } catch {
     // Fall back to the in-memory instance if the re-fetch fails.
     return mapTriggerFiring(firing);
+  }
+};
+
+/**
+ * Runs a firing whose row already exists, and records its outcome on that row.
+ *
+ * This is the durable path: the row was written before any of this was
+ * attempted, so the same call runs whether the firing is being dispatched by
+ * the process that matched the event or redelivered by the sweep after that
+ * process died. Both re-resolve the trigger and its credentials, because
+ * neither survives a restart and both may have changed since.
+ *
+ * Nothing here is raised. A trigger switched off, a deleted creator, a revoked
+ * permission — each is recorded on the row, which is the only place a caller
+ * that is no longer present can read it.
+ */
+export const runReservedFiring = async (args: {
+  firing: InstanceType<(typeof db)['TriggerFiring']>;
+}): Promise<void> => {
+  const { firing } = args;
+  log('runReservedFiring: firing=%s', firing.publicId);
+
+  try {
+    const trigger = await loadActiveTrigger({
+      where: { id: firing.triggerId as number },
+      label: String(firing.triggerId),
+    });
+
+    const { authHeader, effectiveToolContext } =
+      await resolveDispatchCredentials({ trigger });
+
+    await runFiringDispatch({
+      firing,
+      trigger,
+      effectiveInput: (firing.input as Record<string, unknown> | null) ?? {},
+      effectiveToolContext,
+      authHeader,
+    });
+  } catch (error) {
+    await finalizeFiringFailed({ firing, error: toErrorObject(error) });
+    log('runReservedFiring: firing=%s refused %o', firing.publicId, error);
   }
 };
 

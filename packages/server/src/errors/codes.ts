@@ -593,6 +593,11 @@ export const ERROR_CODES = {
     description:
       "A task create request's `state` does not name a declared state of the workflow.",
   },
+  TRIGGER_FIRING_ABANDONED: {
+    httpStatus: 500,
+    description:
+      "An event firing was interrupted without reaching a result, repeatedly, and is not attempted again. `meta.attempts` is how many starts it had. It appears as a firing's recorded `error`, never as a response: by the time it is written there is nobody left to answer.",
+  },
   VERSION_CONFLICT: {
     httpStatus: 409,
     description:
