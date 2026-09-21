@@ -17,6 +17,7 @@ import {
   principalFromAuthUser,
   type RequestPrincipal,
 } from 'src/lib/principals';
+import { toStoredToolContext } from 'src/lib/toolContext';
 import { recordAuthorizationDecision } from 'src/middleware/audit';
 
 /**
@@ -102,14 +103,9 @@ export const assertCredentialProjectScope = (args: {
 export const parseToolContextBody = (
   raw: unknown
 ): Record<string, string> | undefined => {
-  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
-    return undefined;
-  }
-  return Object.fromEntries(
-    Object.entries(raw as Record<string, unknown>).map(([key, value]) => {
-      return [key, String(value)];
-    })
-  );
+  // A route's own call site distinguishes `null` (explicit clear) from
+  // `undefined` (absent) before reaching here; both collapse to `undefined`.
+  return toStoredToolContext(raw) ?? undefined;
 };
 
 export type ProjectOwned = { project_id: string | undefined };

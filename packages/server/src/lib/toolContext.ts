@@ -273,6 +273,32 @@ export const sanitizeCallerToolContext = (
 };
 
 /**
+ * Narrows an arbitrary `tool_context` value — a request body field or a
+ * formation template property, neither typed by its source — to the shape
+ * every carrier accepts: `null` clears the stored bag, `undefined` means "no
+ * value given, leave it as is", and a plain object is stringified entry by
+ * entry rather than rejected, the same leniency every `tool_context` entry
+ * point already gives a non-string value.
+ *
+ * One implementation because a caller-supplied bag and a template-declared one
+ * answer "what does null mean" and "what does a number value become"
+ * independently otherwise, and a formation module that gets either question
+ * wrong turns an explicit clear into a silent no-op, or a stringifiable value
+ * into one `sanitizeCallerToolContext` rejects for not being a string.
+ */
+export const toStoredToolContext = (
+  value: unknown
+): Record<string, string> | null | undefined => {
+  if (value === null) return null;
+  if (typeof value !== 'object' || Array.isArray(value)) return undefined;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, item]) => {
+      return [key, String(item)];
+    })
+  );
+};
+
+/**
  * Narrows a `tool_context` bag to what one tool may receive.
  * `undefined`/`null` `contextKeys` forwards everything, so a tool that declares
  * no allowlist is unrestricted; an empty list forwards nothing but the identity

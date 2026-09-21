@@ -790,7 +790,8 @@ components:
             the same header, are rejected with `400 INVALID_TOOL_CONTEXT_KEY`.
             `session_id`, `actor_id` and `actor_external_id` are server-derived
             and dropped from the stored bag, in any casing.
-            Write-only: no read of a session returns it.
+            Write-only: no read of a session returns it. It also does not
+            outlive the session: closing or expiring it clears the bag.
         inactivity_ttl_seconds:
           type: integer
           default: 0
@@ -835,7 +836,8 @@ components:
             the same header, are rejected with `400 INVALID_TOOL_CONTEXT_KEY`.
             `session_id`, `actor_id` and `actor_external_id` are server-derived
             and dropped from the stored bag, in any casing.
-            Write-only: no read of a session returns it.
+            Write-only: no read of a session returns it. It also does not
+            outlive the session: closing or expiring it clears the bag.
         inactivity_ttl_seconds:
           type: integer
           description: >
