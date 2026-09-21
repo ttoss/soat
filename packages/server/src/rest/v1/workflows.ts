@@ -18,6 +18,7 @@ import {
   requireAuth,
   resolveReadProjectIds,
   resolveWriteProjectId,
+  writePreconditionOf,
 } from './helpers';
 import { workflowVersionsRouter } from './workflowVersions';
 
@@ -137,6 +138,7 @@ workflowsRouter.patch('/workflows/:workflow_id', async (ctx: Context) => {
     ),
     payloadSchema: body.payload_schema,
     versionLabel: parseVersionLabel(body.version_label),
+    expectedVersion: writePreconditionOf(ctx),
     createdByUserId: ctx.authUser?.id,
   });
 });

@@ -21,6 +21,7 @@ import {
   requireAuth,
   requireProjectAccess,
   resolveReadProjectIds,
+  writePreconditionOf,
 } from './helpers';
 
 export const agentsRouter = new Router<Context>();
@@ -215,6 +216,7 @@ const runAgentUpdate = async (args: {
     projectIds,
     id: ctx.params.agent_id,
     ...parsed,
+    expectedVersion: writePreconditionOf(ctx),
     // Attributes the archived version to whoever made the change.
     createdByUserId: ctx.authUser?.id,
   });

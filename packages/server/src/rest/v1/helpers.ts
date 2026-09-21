@@ -18,6 +18,7 @@ import {
   type RequestPrincipal,
 } from 'src/lib/principals';
 import { toStoredToolContext } from 'src/lib/toolContext';
+import { readWritePrecondition } from 'src/lib/writePrecondition';
 import { recordAuthorizationDecision } from 'src/middleware/audit';
 
 /**
@@ -410,4 +411,20 @@ export const parseEnumListQuery = (args: {
   }
 
   return [...new Set(values)];
+};
+
+/**
+ * The version a write states it is changing, read off the request.
+ *
+ * Every write on a resource carrying a `version` counter passes its result to
+ * that resource's update function; `writePreconditionContract.test.ts` holds
+ * the set closed, so a new versioned resource cannot quietly ship without
+ * optimistic concurrency. The parsing itself is transport-agnostic and lives in
+ * `lib/writePrecondition.ts`.
+ */
+export const writePreconditionOf = (ctx: Context): number | null => {
+  return readWritePrecondition({
+    headers: ctx.headers,
+    body: ctx.request?.body,
+  });
 };

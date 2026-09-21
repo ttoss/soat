@@ -1,6 +1,8 @@
 import createDebug from 'debug';
 import { db } from 'src/db';
 import { paginatedList } from 'src/lib/pagination';
+import { toResourceRef } from 'src/lib/resourceVersions';
+import type { VersionedWrite } from 'src/lib/writePrecondition';
 
 import { DomainError } from '../errors';
 import {
@@ -34,10 +36,7 @@ type WorkflowInstance = InstanceType<(typeof db)['Workflow']> & {
  * throughout: a write with no request user behind it (a formation apply, an
  * internal repair) archives a version with a null author rather than none.
  */
-export type WorkflowVersionAuthorship = {
-  createdByUserId?: number | null;
-  versionLabel?: string | null;
-};
+export type WorkflowVersionAuthorship = VersionedWrite;
 
 export const mapWorkflow = (instance: WorkflowInstance) => {
   return {
@@ -238,22 +237,22 @@ export const updateWorkflow = async (args: UpdateWorkflowArgs) => {
     workflow.payloadSchema = args.payloadSchema;
   }
 
-  await workflow.save();
-
   // A definition write bumps the version, so a task pinned to an earlier one
   // still resolves the machine it entered on. Metadata-only edits and
   // re-writing the identical definition leave it untouched — restoring the live
   // definition is a no-op, not a version chain.
-  await workflowVersionStore.archiveConfigChange({
-    resourceDbId: workflow.id as number,
-    currentVersion: workflow.version,
+  await workflowVersionStore.commitConfigChange({
+    resource: toResourceRef(workflow),
+    expectedVersion: args.expectedVersion,
     before: beforeConfig,
-    after: buildWorkflowConfigSnapshot(mapWorkflow(workflow)),
     label: args.versionLabel,
     createdByUserId: args.createdByUserId,
-    bumpVersion: async (nextVersion) => {
-      await workflow.update({ version: nextVersion });
-      log('updateWorkflow: id=%s bumped to version=%d', args.id, nextVersion);
+    applyWrite: async ({ transaction }) => {
+      await workflow.save({ transaction });
+      return {
+        row: workflow,
+        after: buildWorkflowConfigSnapshot(mapWorkflow(workflow)),
+      };
     },
   });
 

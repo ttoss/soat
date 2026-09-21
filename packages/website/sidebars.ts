@@ -144,6 +144,7 @@ const sidebars: SidebarsConfig = {
         'advanced/building-on-soat',
         'advanced/expressions-and-templating',
         'advanced/sync-and-async',
+        'advanced/concurrent-writes',
         'advanced/memory-and-knowledge-engine',
         'advanced/retrieval-quality',
         'advanced/tool-context',

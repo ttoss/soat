@@ -29,6 +29,7 @@ import {
   requireAuth,
   requireProjectAccess,
   resolveReadProjectIds,
+  writePreconditionOf,
 } from './helpers';
 import {
   authorizeOrchestrationRead,
@@ -212,6 +213,7 @@ orchestrationsRouter.patch(
       id: orchestrationId,
       projectIds: projectIds ?? undefined,
       ...parseUpdateBody(body),
+      expectedVersion: writePreconditionOf(ctx),
       createdByUserId: ctx.authUser?.id,
     });
 

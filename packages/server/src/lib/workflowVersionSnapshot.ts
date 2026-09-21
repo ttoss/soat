@@ -71,5 +71,8 @@ export const workflowVersionStore = makeVersionStore({
   versionModel: () => {
     return db.WorkflowVersion;
   },
+  resourceModel: () => {
+    return db.Workflow;
+  },
   foreignKey: 'workflowId',
 });

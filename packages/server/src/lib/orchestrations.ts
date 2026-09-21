@@ -26,8 +26,10 @@ import {
   type PaginatedResult,
   resolvePagination,
 } from './pagination';
+import { toResourceRef } from './resourceVersions';
 import { getOrchestrationRunUsageRollups } from './usageReceipt';
 import type { UsageTotals } from './usageTotals';
+import type { VersionedWrite } from './writePrecondition';
 
 const log = createDebug('soat:orchestrations');
 
@@ -138,10 +140,7 @@ export type OrchestrationEdge = {
  * throughout: a write with no request user behind it (a scheduler-driven apply,
  * an internal repair) archives a version with a null author rather than none.
  */
-export type OrchestrationVersionAuthorship = {
-  createdByUserId?: number | null;
-  versionLabel?: string | null;
-};
+export type OrchestrationVersionAuthorship = VersionedWrite;
 
 export type MappedOrchestration = {
   id: string;
@@ -518,26 +517,22 @@ export const updateOrchestration = async (
   if (args.stateSchema !== undefined) updates['stateSchema'] = args.stateSchema;
   if (args.inputSchema !== undefined) updates['inputSchema'] = args.inputSchema;
 
-  await orch.update(updates);
-
   // A graph write bumps the version, so a run pinned to an earlier one still
   // resolves the topology it started on. Metadata-only edits and re-writing the
   // identical graph leave it untouched — restoring the live graph is a genuine
   // no-op rather than an endless version chain.
-  await orchestrationVersionStore.archiveConfigChange({
-    resourceDbId: orch.id as number,
-    currentVersion: orch.version,
+  await orchestrationVersionStore.commitConfigChange({
+    resource: toResourceRef(orch),
+    expectedVersion: args.expectedVersion,
     before: beforeConfig,
-    after: buildOrchestrationConfigSnapshot(mapOrchestration(asMappable)),
     label: args.versionLabel,
     createdByUserId: args.createdByUserId,
-    bumpVersion: async (nextVersion) => {
-      await orch.update({ version: nextVersion });
-      log(
-        'updateOrchestration: id=%s bumped to version=%d',
-        args.id,
-        nextVersion
-      );
+    applyWrite: async ({ transaction }) => {
+      await orch.update(updates, { transaction });
+      return {
+        row: orch,
+        after: buildOrchestrationConfigSnapshot(mapOrchestration(asMappable)),
+      };
     },
   });
 

@@ -609,6 +609,8 @@ Every generation creates its own trace linked to its parent: [Traces](./traces.m
 
 `version` starts at `1`; each config-changing write increments it and archives an [Agent Version](#agent-version); an unchanged write creates none. `PUT`, `PATCH` and a [formation](./formations.md) apply (attributed to the project's owning identity) leave the same history.
 
+A write may name the version it is changing (`expected_version`, or an `If-Match` header) and is refused with `409 VERSION_CONFLICT` when the resource has moved on — see [Concurrent Writes](../advanced/concurrent-writes.md).
+
 ```bash
 soat list-agent-versions --agent-id agent_V1StGXR8Z5jdHi6B
 soat get-agent-version --agent-id agent_V1StGXR8Z5jdHi6B --version 2

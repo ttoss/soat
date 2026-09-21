@@ -69,5 +69,8 @@ export const orchestrationVersionStore = makeVersionStore({
   versionModel: () => {
     return db.OrchestrationVersion;
   },
+  resourceModel: () => {
+    return db.Orchestration;
+  },
   foreignKey: 'orchestrationId',
 });

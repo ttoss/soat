@@ -42,5 +42,8 @@ export const guardrailVersionStore = makeVersionStore({
   versionModel: () => {
     return db.GuardrailVersion;
   },
+  resourceModel: () => {
+    return db.Guardrail;
+  },
   foreignKey: 'guardrailId',
 });

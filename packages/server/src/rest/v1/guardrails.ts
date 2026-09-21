@@ -23,6 +23,7 @@ import {
   requireAuth,
   requireProjectAccess,
   resolveReadProjectIds,
+  writePreconditionOf,
 } from './helpers';
 import { makeItemRouteAuthorizer } from './resourceAccess';
 import { coerceToJsonObject } from './tools';
@@ -201,6 +202,7 @@ guardrailsRouter.patch('/guardrails/:guardrail_id', async (ctx: Context) => {
     contextToolId: parseNullableString(body.context_tool_id),
     contextMode: parseNullableString(body.context_mode),
     versionLabel: parseStringOrUndefined(body.version_label),
+    expectedVersion: writePreconditionOf(ctx),
     createdByUserId: ctx.authUser?.id,
   });
 });

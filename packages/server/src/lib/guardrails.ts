@@ -11,6 +11,8 @@ import {
 } from './guardrailVersionSnapshot';
 import { paginatedList, type PaginatedResult } from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
+import { toResourceRef } from './resourceVersions';
+import type { VersionedWrite } from './writePrecondition';
 
 const log = createDebug('soat:guardrails');
 
@@ -32,10 +34,7 @@ type GuardrailInstance = InstanceType<(typeof db)['Guardrail']> & {
  * Threaded through every write path so a REST edit, a restore and a formation
  * apply all leave the same history.
  */
-export type GuardrailVersionAuthorship = {
-  createdByUserId?: number | null;
-  versionLabel?: string | null;
-};
+export type GuardrailVersionAuthorship = VersionedWrite;
 
 const getGuardrailIncludes = () => {
   return [{ model: db.Project, as: 'project' }];
@@ -325,21 +324,21 @@ export const updateGuardrail = async (
     updates.document = args.document;
   }
 
-  await guardrail.update(updates);
-
   // A `document` write bumps the version, so the audit chain survives edits.
   // Metadata-only edits and re-writing the identical document leave it
   // untouched — restoring the live policy is a no-op, not a version chain.
-  await guardrailVersionStore.archiveConfigChange({
-    resourceDbId: (guardrail as unknown as { id: number }).id,
-    currentVersion: guardrail.version,
+  await guardrailVersionStore.commitConfigChange({
+    resource: toResourceRef(guardrail),
+    expectedVersion: args.expectedVersion,
     before: beforeConfig,
-    after: buildGuardrailConfigSnapshot({ document: guardrail.document }),
     label: args.versionLabel,
     createdByUserId: args.createdByUserId,
-    bumpVersion: async (nextVersion) => {
-      await guardrail.update({ version: nextVersion });
-      log('updateGuardrail: id=%s bumped to version=%d', args.id, nextVersion);
+    applyWrite: async ({ transaction }) => {
+      await guardrail.update(updates, { transaction });
+      return {
+        row: guardrail,
+        after: buildGuardrailConfigSnapshot({ document: guardrail.document }),
+      };
     },
   });
 

@@ -484,6 +484,8 @@ soat validate-orchestration \
 
 The graph is versioned by the same append-only archive as [agent versions](./agents.md#versioning-and-staged-rollout) and [guardrail versions](./guardrails.md#versioning). Version 1 is written on create; every write that **changes** the graph increments `version` and archives it as an `OrchestrationVersion`. Versioned surface: `nodes`, `edges`, `state_schema`, `input_schema`. Metadata-only edits, structurally identical rewrites and restoring the live version archive nothing. `version_label` on a create or update annotates the archived version; it is not part of the config.
 
+A write may name the version it is changing (`expected_version`, or an `If-Match` header) and is refused with `409 VERSION_CONFLICT` when the resource has moved on — see [Concurrent Writes](../advanced/concurrent-writes.md).
+
 **A run executes the version it started on.** `start-orchestration-run` stamps `version` onto the run as `orchestration_version`; every later step (wake, resume, redrive) resolves its topology from it. Editing never re-shapes a run in flight; the live graph is a **draft** for runs started from now on. To read a run's topology, fetch the version `orchestration_version` names:
 
 ```bash

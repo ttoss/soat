@@ -209,6 +209,7 @@ paths:
         from: orchestration_id
       parameters:
         - $ref: '#/components/parameters/orchestration_id'
+        - $ref: './concurrency.yaml#/components/parameters/IfMatchVersion'
       requestBody:
         required: true
         content:
@@ -1217,6 +1218,11 @@ components:
             archived.
           example: pre-rewire
 
+        expected_version:
+          description: >-
+            Refuses the write unless the resource is at this version.
+          allOf:
+            - $ref: './concurrency.yaml#/components/schemas/ExpectedVersion'
     OrchestrationVersion:
       type: object
       description: >-
