@@ -29,6 +29,56 @@ const log = createDebug('soat:tools');
  */
 export const REST_PATH_PREFIX = '/api/v1/';
 
+/**
+ * A parameter this spec reaches for in a sibling file, as `./tags.yaml#/…`.
+ * Shared components are how a filter's grammar is written once rather than once
+ * per module that serves it.
+ */
+const SHARED_PARAMETER_REF =
+  /"\.\/([^"#]+)#\/components\/parameters\/([^"]+)"/g;
+
+const readSpec = (filePath: string): OpenApiSpec | null => {
+  try {
+    return load(fs.readFileSync(filePath, 'utf-8')) as OpenApiSpec;
+  } catch (error) {
+    log('readSpec: error reading %s error=%o', filePath, error);
+    return null;
+  }
+};
+
+/**
+ * Brings the parameters a spec references from a sibling into its own
+ * components.
+ *
+ * Each spec is parsed on its own, so a cross-file reference resolves to
+ * nothing — and a parameter that resolves to nothing leaves the tool without a
+ * word, which is how a filter comes to be served over REST and be invisible to
+ * every agent. A name the spec already defines wins, so bringing one in can
+ * never shadow it.
+ */
+const withSharedParameters = (args: {
+  spec: OpenApiSpec;
+  specDir: string;
+}): OpenApiSpec => {
+  const references = [
+    ...JSON.stringify(args.spec).matchAll(SHARED_PARAMETER_REF),
+  ];
+  if (references.length === 0) return args.spec;
+
+  const parameters = { ...(args.spec.components?.parameters ?? {}) };
+  for (const [, file, name] of references) {
+    if (parameters[name]) continue;
+    const shared = readSpec(path.join(args.specDir, file));
+    const parameter = shared?.components?.parameters?.[name];
+    if (parameter) parameters[name] = parameter;
+  }
+
+  return {
+    ...args.spec,
+    components: { ...args.spec.components, parameters },
+  };
+};
+
 const loadToolDefinitions = (): ToolDefinition[] => {
   // In tests (ts-jest), __dirname is src/lib/ — specs are at ../rest/openapi/v1.
   // In the production bundle, __dirname is dist/ — specs are copied to rest/openapi/v1.
@@ -48,8 +98,9 @@ const loadToolDefinitions = (): ToolDefinition[] => {
 
   for (const file of files) {
     try {
-      const filePath = path.join(specDir, file);
-      const spec = load(fs.readFileSync(filePath, 'utf-8')) as OpenApiSpec;
+      const loaded = readSpec(path.join(specDir, file));
+      if (!loaded) continue;
+      const spec = withSharedParameters({ spec: loaded, specDir });
       const paths = spec.paths || {};
 
       for (const [pathTemplate, pathItem] of Object.entries(paths)) {
