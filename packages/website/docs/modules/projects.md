@@ -38,6 +38,7 @@ Access is policy-based, with no membership table: the [policies](./policies.md) 
 | `default_conversation_retrieval` | string | What a [conversation](./conversations.md) that names no `retrieval` of its own does: `embed` or `none` (default). |
 | `trace_content_retention_days` | integer \| null | Days of [trace/generation content retention](./traces.md#retention-policy) before the daily sweep purges it. `null` (default) disables retention; otherwise an integer ≥ 1. Settable/clearable via `update-project`. |
 | `trace_content_mode` | string | `full` (default) or `none`. `none` is [zero-retention](./traces.md#zero-retention-mode): trace and generation content is never written for any agent in the project. Settable via `update-project`. |
+| `metadata_schemas` | array \| null | What a [document's](./documents.md#metadata-schemas) `metadata` must look like under a path prefix: `[{ path_prefix, schema }]`. `null` (default) governs nothing. Settable/clearable via `update-project`. |
 | `created_at` | string | ISO 8601 creation timestamp             |
 | `updated_at` | string | ISO 8601 last-updated timestamp         |
 
@@ -140,6 +141,7 @@ The [audit log](./audit-log.md) is the exception: entries outlive the project wi
 | `404`  | —                                                | The project ID doesn't exist, or the caller can't see it because no policy grants access to it (existence isn't leaked) | Verify the ID; if it should exist, confirm a policy grants visibility — see [Visibility Rules](#visibility-rules) |
 | `409`  | `{ "error": { "code": "PROJECT_HAS_DEPENDENTS" } }` | Deleting a project that still has dependent resources                                                  | Pass `?force=true`, or delete the dependent resources first — see [Deletion](#deletion)                   |
 | `409`  | `{ "error": { "code": "MODEL_NOT_PRICED" } }` | A generation on a project with `require_priced_model` whose model carries no price row | Price the `(provider, model, component)` rows in `error.meta.unpriced_rows`, or set `require_priced_model` to `false` — see [Priced models](#priced-models) |
+| `400`  | `{ "error": { "code": "VALIDATION_FAILED" } }` | A `metadata_schemas` entry that is not a `path_prefix` and a `schema`, declares one prefix twice, governs the reserved root `/.system`, or carries a schema JSON Schema cannot compile | Fix the declaration — a schema that cannot compile is refused rather than stored, so it can never be a rule that silently governs nothing. See [Metadata schemas](./documents.md#metadata-schemas) |
 | `409`  | `{ "error": { "code": "PROJECT_DEFAULT_ROUTE_INHERITED" } }` | Clearing `default_model_route_id` while consumers that bind nothing inherit it — they would be left with no resolvable model | Bind those consumers explicitly (`meta.sample` names some), or repoint the default to another route, which is always allowed — see [Project default route](./model-routes.md#project-default-route) |
 
 ## Examples

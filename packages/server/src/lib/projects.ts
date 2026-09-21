@@ -6,6 +6,7 @@ import { DomainError } from '../errors';
 import { invalidateReadAuditCache } from './auditLog';
 import { type RetrievalMode } from './conversationRetrieval';
 import { assertGuardrailsExist } from './guardrails';
+import { validateMetadataSchemas } from './metadataSchemas';
 import {
   assertDefaultModelRouteInProject,
   assertProjectDefaultNotInherited,
@@ -37,6 +38,7 @@ const mapProject = (project: InstanceType<(typeof db)['Project']>) => {
     default_conversation_retrieval: project.defaultConversationRetrieval,
     trace_content_retention_days: project.traceContentRetentionDays,
     trace_content_mode: project.traceContentMode,
+    metadata_schemas: project.metadataSchemas,
     created_at: project.createdAt,
     updated_at: project.updatedAt,
   };
@@ -250,6 +252,7 @@ const PROJECT_UPDATABLE_FIELDS = [
   'defaultConversationRetrieval',
   'traceContentRetentionDays',
   'traceContentMode',
+  'metadataSchemas',
 ] as const;
 
 type ProjectUpdatableField = (typeof PROJECT_UPDATABLE_FIELDS)[number];
@@ -276,6 +279,7 @@ const PROJECT_SCALAR_VALIDATORS: Partial<
   requirePricedModel: validateRequirePricedModel,
   traceContentRetentionDays: validateTraceContentRetentionDays,
   traceContentMode: validateTraceContentMode,
+  metadataSchemas: validateMetadataSchemas,
 };
 
 const assertProjectScalarsValid = (args: ProjectUpdateFields): void => {
@@ -300,6 +304,7 @@ export const updateProject = async (args: {
   defaultConversationRetrieval?: RetrievalMode;
   traceContentRetentionDays?: number | null;
   traceContentMode?: string;
+  metadataSchemas?: object[] | null;
 }) => {
   log('updateProject: id=%s name=%s', args.id, args.name);
 

@@ -1136,6 +1136,41 @@ describe('MCP tools - happy path', () => {
       expect(result.id).toBe(projectId);
       expect(result.name).toBe('MCP Happy Path Renamed');
     });
+
+    test('update-project declares the metadata schemas of a path prefix', async () => {
+      const schema = {
+        type: 'object',
+        required: ['quarter'],
+        properties: { quarter: { type: 'string' } },
+      };
+
+      const res = await mcpCall('update-project', {
+        project_id: projectId,
+        metadata_schemas: [{ path_prefix: '/mcp-reports', schema }],
+      });
+      expect(res.status).toBe(200);
+      expect(parseResult(res).metadata_schemas).toEqual([
+        { path_prefix: '/mcp-reports', schema },
+      ]);
+
+      const refused = await mcpCall('create-document', {
+        project_id: projectId,
+        content: 'Revenue is up.',
+        filename: 'mcp-report.txt',
+        path: '/mcp-reports/mcp-report.txt',
+        metadata: { owner: 'finance' },
+      });
+      expect(refused.body.result.isError).toBe(true);
+      expect(refused.body.result.content[0].text).toContain(
+        "schema declared for '/mcp-reports'"
+      );
+
+      const cleared = await mcpCall('update-project', {
+        project_id: projectId,
+        metadata_schemas: null,
+      });
+      expect(cleared.status).toBe(200);
+    });
   });
 
   // ── Secrets ──────────────────────────────────────────────────────────────

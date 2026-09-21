@@ -137,6 +137,8 @@ const parseProjectPatchFields = (body: Record<string, unknown>) => {
       'trace_content_retention_days'
     ),
     traceContentMode: provided<string>(body, 'trace_content_mode'),
+    // An explicit `null` clears every declared schema.
+    metadataSchemas: provided<object[] | null>(body, 'metadata_schemas'),
   };
 };
 
@@ -157,6 +159,7 @@ projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
     defaultConversationRetrieval,
     traceContentRetentionDays,
     traceContentMode,
+    metadataSchemas,
   } = fields;
 
   if (
@@ -166,7 +169,7 @@ projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
   ) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      'name, guardrail_ids, max_concurrent_runs, max_chain_generations, max_orchestration_run_depth, default_model_route_id, audit_reads_enabled, require_priced_model, default_conversation_retrieval, trace_content_retention_days, or trace_content_mode is required'
+      'name, guardrail_ids, max_concurrent_runs, max_chain_generations, max_orchestration_run_depth, default_model_route_id, audit_reads_enabled, require_priced_model, default_conversation_retrieval, trace_content_retention_days, trace_content_mode, or metadata_schemas is required'
     );
   }
 
@@ -196,6 +199,7 @@ projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
     defaultConversationRetrieval,
     traceContentRetentionDays,
     traceContentMode,
+    metadataSchemas,
   });
 
   ctx.body = project;

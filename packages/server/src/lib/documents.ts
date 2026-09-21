@@ -28,6 +28,10 @@ import {
 } from './filePaths';
 import { getStorageProvider } from './fileStorage';
 import { recoverStaleDocument } from './ingestionCallback';
+import {
+  assertCreatedMetadataValid,
+  assertUpdatedMetadataValid,
+} from './metadataSchemas';
 import { emptyPage, paginatedList } from './pagination';
 import { registerResourceFieldMap } from './policyCompiler';
 import { hasPolicyConstraints, referencesAssociation } from './policyWhere';
@@ -206,6 +210,12 @@ export const createDocument = async (
     publicId,
   });
 
+  await assertCreatedMetadataValid({
+    projectId: args.projectId,
+    path: filing.normalizedPath,
+    metadata: args.metadata,
+  });
+
   const file = await createDocumentTextFile({
     projectId: args.projectId,
     content: args.content,
@@ -311,6 +321,11 @@ const buildDocumentColumnUpdates = (args: {
   return updates;
 };
 
+/** A stated `path`, normalized and refused when it names the reserved root. */
+const normalizeStatedPath = (path: string | null): string | null => {
+  return assertCallerPath(path === null ? null : normalizePath(path));
+};
+
 export const updateDocument = async (
   args: {
     id: string;
@@ -334,6 +349,20 @@ export const updateDocument = async (
   // history behind its back.
   assertCallerPath(doc.file?.path);
 
+  /* istanbul ignore else -- the backing file is optional in the loaded type and
+     always present in practice; without one there is no project to judge
+     against and no path to judge under. */
+  if (doc.file) {
+    await assertUpdatedMetadataValid({
+      projectId: doc.file.projectId,
+      currentPath: doc.file.path ?? null,
+      path:
+        args.path === undefined ? undefined : normalizeStatedPath(args.path),
+      metadata: args.metadata,
+      currentMetadata: doc.metadata ?? null,
+    });
+  }
+
   const before = buildDocumentConfigSnapshot({
     document: mapDocument(doc),
     content: await readFileContent(doc.file),
@@ -352,10 +381,7 @@ export const updateDocument = async (
   });
 
   if (args.path !== undefined && doc.file) {
-    const normalizedPath = assertCallerPath(
-      args.path === null ? null : normalizePath(args.path)
-    );
-    await doc.file.update({ path: normalizedPath });
+    await doc.file.update({ path: normalizeStatedPath(args.path) });
   }
 
   let refreshed = doc;
